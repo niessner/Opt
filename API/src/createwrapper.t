@@ -8,7 +8,15 @@ local C = terralib.includecstring[[
 ]]
 
 local function saveaslibrary(libraryname, terrasourcefile)
-    local apifunctions = assert(terralib.loadfile(terrasourcefile))()
+    local success, tbl = xpcall(function() return assert(terralib.loadfile(terrasourcefile))() end,
+                         function(err) return debug.traceback(err,2) end)
+    if not success then error(tbl,0) end
+    local apifunctions = {}
+    for k,v in pairs(tbl) do
+        if terralib.isfunction(v) then
+            apifunctions[k] = v
+        end
+    end
     local wrappers = {}
     local statename = libraryname.."State"
     local LibraryState = terralib.types.newstruct(statename)
@@ -26,7 +34,9 @@ local function saveaslibrary(libraryname, terrasourcefile)
         return nil
     end
     
-    local terra newstate() : &LibraryState
+    local source = io.open(terrasourcefile):read("*all")
+    local source_sz = source:len()
+    local terra NewState() : &LibraryState
         var S = [&LibraryState](C.malloc(sizeof(LibraryState)))
         var L = C.luaL_newstate();
         S.L = L
@@ -34,8 +44,7 @@ local function saveaslibrary(libraryname, terrasourcefile)
         C.luaL_openlibs(L)
         C.terra_init(L)
     
-        
-        if C.terra_loadfile(L,terrasourcefile) ~= 0 or C.lua_pcall(L, 0, -1, 0) ~= 0 then return doerror(L) end
+        if C.terra_loadbuffer(L,source,source_sz,terrasourcefile) ~= 0 or C.lua_pcall(L, 0, -1, 0) ~= 0 then return doerror(L) end
         
         escape
             for k,v in pairs(apifunctions) do
@@ -51,7 +60,7 @@ local function saveaslibrary(libraryname, terrasourcefile)
         end
         return S
     end
-    wrappers[libraryname.."_newstate"] =  newstate
+    wrappers[libraryname.."_NewState"] =  NewState
     
     for k,v in pairs(apifunctions) do
         local typ = v:gettype()
@@ -64,10 +73,12 @@ local function saveaslibrary(libraryname, terrasourcefile)
     
     local typeemitted = {}
     local function typetostring(T)
-        if T:ispointer() then
+        if T == rawstring then
+            return "const char *" --HACK: make it take strings
+        elseif T:ispointer() then
             local p
             if T.type:isstruct() then
-                p = tostring(T.type)
+                p = tostring(T.type):match("%.?([^.]*)$")
                 if not typeemitted[T.type] then
                     ctypes:insert("typedef struct "..p.." "..p..";\n")
                     typeemitted[T.type] = true
@@ -78,7 +89,7 @@ local function saveaslibrary(libraryname, terrasourcefile)
             return p.." *"
         elseif T:isprimitive() then
             return T:cstring()
-        elseif T == terralib.types.unit then
+        elseif T == terralib.types.unit or T == opaque then
             return "void"
         else
             error("unsupported type: "..tostring(T))
@@ -93,9 +104,12 @@ local function saveaslibrary(libraryname, terrasourcefile)
     for i,l in ipairs(ctypes) do cheader:write(l) end
     for i,l in ipairs(cfunctions) do cheader:write(l) end
     cheader:close()
-    terralib.saveobj(string.format(libraryformat,libraryname),wrappers)
+    local libraryfmtname = string.format(libraryformat,libraryname)
+    local flags = { "-install_name", "@rpath/"..libraryfmtname }
+    terralib.saveobj(libraryfmtname,wrappers,flags)
 end
 
+--[[
 saveaslibrary("mylib","testlib.t")
 
 local C2 = terralib.includec("mylib.h","-I.")
@@ -111,5 +125,7 @@ if require("ffi").os == "OSX" then
 end
 
 terralib.saveobj("dynlib",{main = main},flags)
-
 assert(0 == os.execute("./dynlib"))
+]]
+
+saveaslibrary(arg[1],arg[2])
