@@ -2,8 +2,6 @@ opt = {} --anchor it in global namespace, otherwise it can be collected
 
 local S = require("std")
 
-local malloc = terralib.externfunction("malloc",uint64 -> &opaque)
-
 local function newclass(name)
     local mt = { __name = name }
     mt.__index = mt
@@ -20,7 +18,6 @@ local function newclass(name)
     end
     return mt
 end
-
 
 struct opt.ImageBinding(S.Object) {
     data : &uint8
@@ -41,47 +38,122 @@ terra opt.ImageFree(img : &opt.ImageBinding)
 end
 
 local Problem = newclass("Problem")
+local Dim = newclass("dimension")
+
 
 local ffi = require('ffi')
 
 local problems = {}
 
-function opt.ProblemDefineFromTable(tbl)
-    local p = Problem:new { definition = tbl }
-    problems[#problems+1] = p
-    print("defining problem",#problems)
-    return #problems
+-- this function should do anything it needs to compile an optimizer defined
+-- using the functions in tbl, using the optimizer 'kind' (e.g. kind = gradientdecesnt)
+-- it should generat the field planctor which is the terra function that 
+-- allocates the plan
+local C = terralib.includec("stdio.h")
+
+local function compileproblem(tbl,kind)
+    
+    assert(kind == "gradientdescent")
+    local dims = tbl.dims
+    local dimindex = { [1] = 0 }
+    for i,d in ipairs(dims) do
+        assert(Dim:is(d))
+        dimindex[d] = i -- index into DimList, 0th entry is always 1  
+    end
+        
+    local costdim = tbl.cost.dim
+    local gradtyp = tbl.gradient:gettype()
+    local unknown = gradtyp.parameters[3] -- 3rd argument is the image that is the unknown we are mapping over
+    
+    local graddims = {unknown.metamethods.W,unknown.metamethods.H}
+    
+    local struct PlanData(S.Object) {
+        plan : opt.Plan
+        dims : int64[#dims+1]
+    }
+    
+    local function emitcalltouserfunction(mapdims,actualdims,images,userfn)
+        local typ = userfn:gettype()
+        local di,dj = dimindex[mapdims[1]],dimindex[mapdims[2]]
+        assert(di and dj)
+        local imagewrappers = terralib.newlist()
+        for i = 3,#typ.parameters do
+            local imgtyp = typ.parameters[i]
+            local W,H = imgtyp.metamethods.W,imgtyp.metamethods.H
+            W,H = dimindex[W],dimindex[H]
+            assert(W and H)
+            imagewrappers:insert(`imgtyp { R = actualdims[W], C = actualdims[H], impl = @images[i - 3] })
+        end
+        return `userfn(actualdims[di],actualdims[dj],imagewrappers)
+    end
+    
+    local terra impl(data_ : &opaque, images : &&opt.ImageBinding)
+        var data = [&PlanData](data_)
+        var dims = data.dims
+        [ emitcalltouserfunction(costdim,dims,images,tbl.cost.fn) ]
+        [ emitcalltouserfunction(graddims,dims,images,tbl.gradient) ]
+    end
+    local terra planctor(actualdims : &uint64) : &opt.Plan
+        var pd = PlanData.alloc()
+        pd.plan.data = pd
+        pd.plan.impl = impl
+        pd.dims[0] = 1
+        for i = 0,[#dims] do
+            pd.dims[i+1] = actualdims[i]
+        end
+        return &pd.plan
+    end
+    return Problem:new { planctor = planctor }
 end
-local function problemdefine(filename,result)
-    local success,id = xpcall(function() 
-        filename = ffi.string(filename)
+
+function opt.ProblemDefineFromTable(tbl,kind)
+    local p = compileproblem(tbl,kind)
+    -- store each problem in a table, and assign it an id
+    problems[#problems+1] = p
+    p.id = #problems
+    return p
+end
+local function problemdefine(filename,kind,pt)
+    local success,p = xpcall(function() 
+        filename,kind = ffi.string(filename), ffi.string(kind)
         local tbl = assert(terralib.loadfile(filename))() 
         assert(type(tbl) == "table")
-        return opt.ProblemDefineFromTable(tbl)
+        return opt.ProblemDefineFromTable(tbl,kind)
     end,function(err) return debug.traceback(err,2) end)
-    if not success then error(id,0) end
-    result[0] = id
+    if not success then error(p,0) end
+    pt.id,pt.planctor = p.id,p.planctor:getpointer()
 end
 
-struct opt.Problem {} -- actually &opt.Problems are just integers that point into the problems table
+struct opt.Plan(S.Object) {
+    impl : {&opaque,&&opt.ImageBinding} -> {}
+    data : &opaque
+} 
 
-terra opt.ProblemDefine(filename : rawstring)
-    var result : int
-    problemdefine(filename,&result)
-    return [&opt.Problem](result) --cast integer into pointer for API purposes
+struct opt.Problem(S.Object) {
+    id : int
+    planctor : &uint64 -> &opt.Plan
+}
+
+terra opt.ProblemDefine(filename : rawstring, kind : rawstring)
+    var pt = opt.Problem.alloc()
+    problemdefine(filename,kind,pt)
+    return pt
 end 
 
-local Dim = newclass("dimension")
+terra opt.ProblemDelete(p : &opt.Problem)
+    -- TODO: deallocate any problem state here (remove from the Lua table,etc.)
+    p:delete() 
+end
 
 function opt.Dim(name)
     return Dim:new { name = name }
 end
 
-opt.Unity = opt.Dim("unity") -- represent '1' as a dimension
-
 local newimage = terralib.memoize(function(typ,W,H)
    local struct Image {
         impl : opt.ImageBinding
+        R : uint64
+        C : uint64
    }
    function Image.metamethods.__tostring()
       return string.format("Image(%s,%s,%s)",tostring(typ),W.name, H.name)
@@ -89,31 +161,28 @@ local newimage = terralib.memoize(function(typ,W,H)
    Image.metamethods.__apply = macro(function(self,x,y)
      return `@[&typ](self.impl:get(x,y))
    end)
+   Image.metamethods.W,Image.metamethods.H = W,H
    return Image
 end)
 
 function opt.Image(typ,W,H)
-    if W == 1 then W = opt.Unity end
-    if H == 1 then H = opt.Unity end
-    assert(Dim:is(W) and Dim:is(H))
+    assert(W == 1 or Dim:is(W))
+    assert(H == 1 or Dim:is(H))
     assert(terralib.types.istype(typ))
     return newimage(typ,W,H)
 end
 
-struct opt.Plan(S.Object) {} 
-terra opt.ProblemPlan(problem : &opt.Problem, kind : rawstring, dims : &uint64) : &opt.Plan
-    -- Do allocations for problem here. 
-    -- we need to figure out what form this would take.
-    -- e.g., 'problem' itself might hold the pointer to the thing that allocates its plan.
-    return opt.Plan.alloc()
+terra opt.ProblemPlan(problem : &opt.Problem, dims : &uint64) : &opt.Plan
+    return problem.planctor(dims) -- this is just a wrapper around calling the plan constructor
 end 
 
 terra opt.PlanFree(plan : &opt.Plan)
-    --...
+    -- TODO: plan should also have a free implementation
     plan:delete()
 end
 
-terra opt.ProblemSolve(plan : &opt.Plan, images : &opt.ImageBinding)
+terra opt.ProblemSolve(plan : &opt.Plan, images : &&opt.ImageBinding)
+    return plan.impl(plan.data,images)
 end
 
 return opt

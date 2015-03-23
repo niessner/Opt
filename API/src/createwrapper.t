@@ -11,7 +11,7 @@ local function saveaslibrary(libraryname, terrasourcefile)
     local success, tbl = xpcall(function() return assert(terralib.loadfile(terrasourcefile))() end,
                          function(err) return debug.traceback(err,2) end)
     if not success then error(tbl,0) end
-    local apifunctions = {}
+    local apifunctions = terralib.newlist()
     for k,v in pairs(tbl) do
         if terralib.isfunction(v) then
             apifunctions[k] = v
@@ -95,10 +95,16 @@ local function saveaslibrary(libraryname, terrasourcefile)
             error("unsupported type: "..tostring(T))
         end
     end
-    for k,v in pairs(wrappers) do
+    
+    local names = terralib.newlist()
+    for k,v in pairs(wrappers) do names:insert(k) end
+    names:sort()
+    for i,k in ipairs(names) do
+        local v = wrappers[k]
         local typ = v:gettype()
         cfunctions:insert(string.format("%s %s(%s);\n",typetostring(typ.returntype),k,table.concat(typ.parameters:map(typetostring),",")))
     end
+    
     local cheader = io.open(string.format(headerformat,libraryname),"w")
     cheader:write '#include "terra.h"\n#include <stdint.h>\n'
     for i,l in ipairs(ctypes) do cheader:write(l) end
