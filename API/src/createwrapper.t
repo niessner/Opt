@@ -1,4 +1,10 @@
+local ffi = require("ffi")
+
 local libraryformat = "lib%s.so"
+if ffi.os == "Windows" then
+    libraryformat = "%s.dll"
+end
+
 local headerformat = "%s.h"
 terralib.includepath = terralib.terrahome.."/include"
 local C = terralib.includecstring[[ 
@@ -111,7 +117,13 @@ local function saveaslibrary(libraryname, terrasourcefile)
     for i,l in ipairs(cfunctions) do cheader:write(l) end
     cheader:close()
     local libraryfmtname = string.format(libraryformat,libraryname)
-    local flags = { "-install_name", "@rpath/"..libraryfmtname }
+    
+    local flags = {}
+    if ffi.os == "OSX" then
+        flags = { "-install_name", "@rpath/"..libraryfmtname }
+    elseif ffi.os == "Windows" then
+        flags = { string.format("/IMPLIB:%s.lib",libraryname) }
+    end
     terralib.saveobj(libraryfmtname,wrappers,flags)
 end
 

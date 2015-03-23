@@ -104,6 +104,7 @@ local function compileproblem(tbl,kind)
         return &pd.plan
     end
     return Problem:new { planctor = planctor }
+    
 end
 
 function opt.ProblemDefineFromTable(tbl,kind)
