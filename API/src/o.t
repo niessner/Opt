@@ -87,7 +87,7 @@ local function compileproblem(tbl,kind)
         return `userfn(actualdims[di],actualdims[dj],imagewrappers)
     end
     
-    local terra impl(data_ : &opaque, images : &&opt.ImageBinding)
+    local terra impl(data_ : &opaque, images : &&opt.ImageBinding, params : &opaque)
         var data = [&PlanData](data_)
         var dims = data.dims
         [ emitcalltouserfunction(costdim,dims,images,tbl.cost.fn) ]
@@ -107,14 +107,14 @@ local function compileproblem(tbl,kind)
     
 end
 
-function opt.ProblemDefineFromTable(tbl,kind)
-    local p = compileproblem(tbl,kind)
+function opt.ProblemDefineFromTable(tbl,kind,params)
+    local p = compileproblem(tbl,kind,params)
     -- store each problem in a table, and assign it an id
     problems[#problems+1] = p
     p.id = #problems
     return p
 end
-local function problemdefine(filename,kind,pt)
+local function problemdefine(filename,kind,params,pt)
     local success,p = xpcall(function() 
         filename,kind = ffi.string(filename), ffi.string(kind)
         local tbl = assert(terralib.loadfile(filename))() 
@@ -125,8 +125,12 @@ local function problemdefine(filename,kind,pt)
     pt.id,pt.planctor = p.id,p.planctor:getpointer()
 end
 
+struct opt.GradientDescentPlanParams {
+    nIterations : uint64
+}
+
 struct opt.Plan(S.Object) {
-    impl : {&opaque,&&opt.ImageBinding} -> {}
+    impl : {&opaque,&&opt.ImageBinding,&opaque} -> {}
     data : &opaque
 } 
 
@@ -135,9 +139,9 @@ struct opt.Problem(S.Object) {
     planctor : &uint64 -> &opt.Plan
 }
 
-terra opt.ProblemDefine(filename : rawstring, kind : rawstring)
+terra opt.ProblemDefine(filename : rawstring, kind : rawstring, params : &opaque)
     var pt = opt.Problem.alloc()
-    problemdefine(filename,kind,pt)
+    problemdefine(filename,kind,params,pt)
     return pt
 end 
 
@@ -182,8 +186,8 @@ terra opt.PlanFree(plan : &opt.Plan)
     plan:delete()
 end
 
-terra opt.ProblemSolve(plan : &opt.Plan, images : &&opt.ImageBinding)
-    return plan.impl(plan.data,images)
+terra opt.ProblemSolve(plan : &opt.Plan, images : &&opt.ImageBinding, params : &opaque)
+    return plan.impl(plan.data,images,params)
 end
 
 return opt
