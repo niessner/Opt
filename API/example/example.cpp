@@ -19,10 +19,11 @@ int main() {
     ImageBinding * x = Opt_ImageBind(S,NULL,1,sizeof(double));
     ImageBinding * b = Opt_ImageBind(S,NULL,1,sizeof(double));
     
-    Problem * prob = Opt_ProblemDefine(S,"src/example.t","gradientdescent",NULL);
+    Problem * prob = Opt_ProblemDefine(S,"example.t","gradientdescent",NULL);
     Plan * plan = Opt_ProblemPlan(S,prob,dims);
     
     ImageBinding * images[] = {x,A,b};
     
     Opt_ProblemSolve(S,plan,images,NULL);
+
 }
