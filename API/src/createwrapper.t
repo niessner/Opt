@@ -122,7 +122,11 @@ local function saveaslibrary(libraryname, terrasourcefile)
     if ffi.os == "OSX" then
         flags = { "-install_name", "@rpath/"..libraryfmtname }
     elseif ffi.os == "Windows" then
-        flags = { string.format("/IMPLIB:%s.lib",libraryname) }
+		flags = terralib.newlist { string.format("/IMPLIB:%s.lib",libraryname),terralib.terrahome.."\\terra.lib",terralib.terrahome.."\\lua51.lib" }
+        
+		for i,k in ipairs(names) do
+            flags:insert("/EXPORT:"..k)
+        end
     end
     terralib.saveobj(libraryfmtname,wrappers,flags)
 end
