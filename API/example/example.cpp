@@ -1,7 +1,3 @@
-
-#include "stdafx.h"
-
-
 extern "C" {
 #include "Opt.h"
 }
