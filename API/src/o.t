@@ -187,14 +187,17 @@ local function problemdefine(filename,kind,params,pt)
         filename,kind = ffi.string(filename), ffi.string(kind)
         local tbl = assert(terralib.loadfile(filename))() 
         assert(type(tbl) == "table")
-        return opt.ProblemDefineFromTable(tbl,kind,params)
+        local p = opt.ProblemDefineFromTable(tbl,kind,params)
+		p.planctor:getpointer()
+		return p
     end,function(err) print(debug.traceback(err,2)) end)
     if not success then 
 		pt.planctor = nil
 		return
 	end
-	C.printf("problemdefine end\n")
+	C.printf("problemdefine A\n")
     pt.id,pt.planctor = p.id,p.planctor:getpointer()
+	C.printf("problemdefine end\n")
 end
 
 struct opt.GradientDescentPlanParams {
@@ -245,8 +248,8 @@ local newimage = terralib.memoize(function(typ,W,H)
    terra Image:init(actualW : int,actualH : int)
 		self.W = actualH
 		self.H = actualW
-		self.impl.data = C.malloc(actualW * actualH * sizeof(typ))
-		self.impl.elementsize = sizeof(typ)
+		self.impl.data = [&uint8](C.malloc(actualW * actualH * sizeof(typ)))
+		self.impl.elemsize = sizeof(typ)
 		self.impl.stride = actualW
    end
    Image.metamethods.typ,Image.metamethods.W,Image.metamethods.H = typ,W,H
@@ -261,6 +264,7 @@ function opt.Image(typ,W,H)
 end
 
 terra opt.ProblemPlan(problem : &opt.Problem, dims : &uint64) : &opt.Plan
+	C.printf("opt.ProblemPlan start\n")
     return problem.planctor(dims) -- this is just a wrapper around calling the plan constructor
 end 
 
