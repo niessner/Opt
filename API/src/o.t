@@ -2,6 +2,11 @@ opt = {} --anchor it in global namespace, otherwise it can be collected
 
 local S = require("std")
 
+local C = terralib.includecstring [[
+#include <stdio.h>
+#include <stdlib.h>
+]]
+
 local function newclass(name)
     local mt = { __name = name }
     mt.__index = mt
@@ -53,57 +58,119 @@ local C = terralib.includec("stdio.h")
 
 local function compileproblem(tbl,kind)
     
-    assert(kind == "gradientdescent")
     local dims = tbl.dims
     local dimindex = { [1] = 0 }
-    for i,d in ipairs(dims) do
+    for i, d in ipairs(dims) do
         assert(Dim:is(d))
-        dimindex[d] = i -- index into DimList, 0th entry is always 1  
+        dimindex[d] = i -- index into DimList, 0th entry is always 1
     end
-        
+
     local costdim = tbl.cost.dim
-    local gradtyp = tbl.gradient:gettype()
-    local unknown = gradtyp.parameters[3] -- 3rd argument is the image that is the unknown we are mapping over
+	local costtyp = tbl.cost:gettype()
+    local unknowntyp = costtyp.parameters[3] -- 3rd argument is the image that is the unknown we are mapping over
+
+	local argumenttypes = terralib.newlist()
+	for i = 3,#costtyp.parameters do
+		argumenttypes:insert(costtyp.parameters[i])
+	end
+
+	local graddim = { unknowntyp.metamethods.W, unknowntyp.metamethods.H }
+
+    if kind == "simpleexample" then
+
+		local struct PlanData(S.Object) {
+			plan : opt.Plan
+			dims : int64[#dims+1]
+		}
+
+		local function emitcalltouserfunction(mapdims,actualdims,images,userfn)
+			local typ = userfn:gettype()
+			local di,dj = dimindex[mapdims[1]],dimindex[mapdims[2]]
+			assert(di and dj)
+			local imagewrappers = terralib.newlist()
+			for i = 3,#typ.parameters do
+				local imgtyp = typ.parameters[i]
+				local W,H = imgtyp.metamethods.W,imgtyp.metamethods.H
+				W,H = dimindex[W],dimindex[H]
+				assert(W and H)
+				imagewrappers:insert(`imgtyp { W = actualdims[W], H = actualdims[H], impl = @images[i - 3] })
+			end
+			return `userfn(actualdims[di],actualdims[dj],imagewrappers)
+		end
     
-    local graddims = {unknown.metamethods.W,unknown.metamethods.H}
+		local terra impl(data_ : &opaque, images : &&opt.ImageBinding, params : &opaque)
+			var data = [&PlanData](data_)
+			var dims = data.dims
+			[ emitcalltouserfunction(costdim,dims,images,tbl.cost.fn) ]
+			[ emitcalltouserfunction(graddim,dims,images,tbl.gradient) ]
+		end
+		local terra planctor(actualdims : &uint64) : &opt.Plan
+			var pd = PlanData.alloc()
+			pd.plan.data = pd
+			pd.plan.impl = impl
+			pd.dims[0] = 1
+			for i = 0,[#dims] do
+				pd.dims[i+1] = actualdims[i]
+			end
+			return &pd.plan
+		end
+		return Problem:new { planctor = planctor }
+
+	elseif kind == "gradientdescent" then
+
+        local struct PlanData(S.Object) {
+            plan : opt.Plan
+			gradW : int
+			gradH : int
+			gradStore : unknowntyp
+            dims : int64[#dims + 1]
+        }
+
+		local function getimages(imagebindings,actualdims)
+			local results = terralib.newlist()
+			for i,argumenttyp in ipairs(argumenttyps) do
+			    local Windex,Hindex = dimindex[argumenttyp.metamethods.W],dimindex[argumenttyp.metamethods.H]
+				assert(Windex and Hindex)
+				results:insert(`argumenttyp { W = actualdims[Windex], H = actualdims[Hindex], impl = @imagebindings[i - 1]}) 
+			end
+			return results
+		end
     
-    local struct PlanData(S.Object) {
-        plan : opt.Plan
-        dims : int64[#dims+1]
-    }
-    
-    local function emitcalltouserfunction(mapdims,actualdims,images,userfn)
-        local typ = userfn:gettype()
-        local di,dj = dimindex[mapdims[1]],dimindex[mapdims[2]]
-        assert(di and dj)
-        local imagewrappers = terralib.newlist()
-        for i = 3,#typ.parameters do
-            local imgtyp = typ.parameters[i]
-            local W,H = imgtyp.metamethods.W,imgtyp.metamethods.H
-            W,H = dimindex[W],dimindex[H]
-            assert(W and H)
-            imagewrappers:insert(`imgtyp { R = actualdims[W], C = actualdims[H], impl = @images[i - 3] })
-        end
-        return `userfn(actualdims[di],actualdims[dj],imagewrappers)
-    end
-    
-    local terra impl(data_ : &opaque, images : &&opt.ImageBinding, params : &opaque)
-        var data = [&PlanData](data_)
-        var dims = data.dims
-        [ emitcalltouserfunction(costdim,dims,images,tbl.cost.fn) ]
-        [ emitcalltouserfunction(graddims,dims,images,tbl.gradient) ]
-    end
-    local terra planctor(actualdims : &uint64) : &opt.Plan
-        var pd = PlanData.alloc()
-        pd.plan.data = pd
-        pd.plan.impl = impl
-        pd.dims[0] = 1
-        for i = 0,[#dims] do
-            pd.dims[i+1] = actualdims[i]
-        end
-        return &pd.plan
-    end
-    return Problem:new { planctor = planctor }
+		local terra impl(data_ : &opaque, images : &&opt.ImageBinding, params_ : &opaque)
+			var pd = [&PlanData](data_)
+			var params = [&double](params_)
+			var dims = data.dims
+
+			for h = 0,pd.gradH do
+				for w = 0,pd.gradW do
+					pd.gradStore(w,h) = tbl.gradient(w,h,[getimages(images,dims)])
+					C.printf("%d,%d = %f\n",w,h,pd.gradStore(w,h))
+				end
+			end
+		end
+
+		local gradWIndex = dimIndex[ graddim[1] ]
+		local gradHIndex = dimIndex[ graddim[2] ]
+
+		local terra planctor(actualdims : &uint64) : &opt.Plan
+			var pd = PlanData.alloc()
+
+			pd.plan.data = pd
+			pd.plan.impl = impl
+			pd.dims[0] = 1
+			for i = 0,[#dims] do
+				pd.dims[i+1] = actualdims[i]
+			end
+
+			pd.gradW = pd.dims[gradWIndex]
+			pd.gradH = pd.dims[gradHIndex]
+
+			pd.gradStore:init(pd.gradW, pd.gradH)
+
+			return &pd.plan
+		end
+		return Problem:new { planctor = planctor }
+	end
     
 end
 
@@ -114,12 +181,13 @@ function opt.ProblemDefineFromTable(tbl,kind,params)
     p.id = #problems
     return p
 end
+
 local function problemdefine(filename,kind,params,pt)
     local success,p = xpcall(function() 
         filename,kind = ffi.string(filename), ffi.string(kind)
         local tbl = assert(terralib.loadfile(filename))() 
         assert(type(tbl) == "table")
-        return opt.ProblemDefineFromTable(tbl,kind)
+        return opt.ProblemDefineFromTable(tbl,kind,params)
     end,function(err) return debug.traceback(err,2) end)
     if not success then error(p,0) end
     pt.id,pt.planctor = p.id,p.planctor:getpointer()
@@ -157,8 +225,8 @@ end
 local newimage = terralib.memoize(function(typ,W,H)
    local struct Image {
         impl : opt.ImageBinding
-        R : uint64
-        C : uint64
+        W : uint64
+        H : uint64
    }
    function Image.metamethods.__tostring()
       return string.format("Image(%s,%s,%s)",tostring(typ),W.name, H.name)
@@ -166,7 +234,14 @@ local newimage = terralib.memoize(function(typ,W,H)
    Image.metamethods.__apply = macro(function(self,x,y)
      return `@[&typ](self.impl:get(x,y))
    end)
-   Image.metamethods.W,Image.metamethods.H = W,H
+   terra Image:init(actualW : int,actualH : int)
+		self.W = actualH
+		self.H = actualW
+		self.impl.data = C.malloc(actualW * actualH * sizeof(typ))
+		self.impl.elementsize = sizeof(typ)
+		self.impl.stride = actualW
+   end
+   Image.metamethods.typ,Image.metamethods.W,Image.metamethods.H = typ,W,H
    return Image
 end)
 
