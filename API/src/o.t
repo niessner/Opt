@@ -54,10 +54,8 @@ local problems = {}
 -- using the functions in tbl, using the optimizer 'kind' (e.g. kind = gradientdecesnt)
 -- it should generat the field planctor which is the terra function that 
 -- allocates the plan
-local C = terralib.includec("stdio.h")
 
 local function compileproblem(tbl,kind)
-    
     local dims = tbl.dims
     local dimindex = { [1] = 0 }
     for i, d in ipairs(dims) do
@@ -66,12 +64,12 @@ local function compileproblem(tbl,kind)
     end
 
     local costdim = tbl.cost.dim
-	local costtyp = tbl.cost:gettype()
+	local costtyp = tbl.cost.fn:gettype()
     local unknowntyp = costtyp.parameters[3] -- 3rd argument is the image that is the unknown we are mapping over
 
-	local argumenttypes = terralib.newlist()
+	local argumenttyps = terralib.newlist()
 	for i = 3,#costtyp.parameters do
-		argumenttypes:insert(costtyp.parameters[i])
+		argumenttyps:insert(costtyp.parameters[i])
 	end
 
 	local graddim = { unknowntyp.metamethods.W, unknowntyp.metamethods.H }
@@ -139,7 +137,7 @@ local function compileproblem(tbl,kind)
 		local terra impl(data_ : &opaque, images : &&opt.ImageBinding, params_ : &opaque)
 			var pd = [&PlanData](data_)
 			var params = [&double](params_)
-			var dims = data.dims
+			var dims = pd.dims
 
 			for h = 0,pd.gradH do
 				for w = 0,pd.gradW do
@@ -149,10 +147,11 @@ local function compileproblem(tbl,kind)
 			end
 		end
 
-		local gradWIndex = dimIndex[ graddim[1] ]
-		local gradHIndex = dimIndex[ graddim[2] ]
+		local gradWIndex = dimindex[ graddim[1] ]
+		local gradHIndex = dimindex[ graddim[2] ]
 
 		local terra planctor(actualdims : &uint64) : &opt.Plan
+			C.printf("planctor start\n")
 			var pd = PlanData.alloc()
 
 			pd.plan.data = pd
@@ -183,13 +182,18 @@ function opt.ProblemDefineFromTable(tbl,kind,params)
 end
 
 local function problemdefine(filename,kind,params,pt)
+	C.printf("problemdefine start\n")
     local success,p = xpcall(function() 
         filename,kind = ffi.string(filename), ffi.string(kind)
         local tbl = assert(terralib.loadfile(filename))() 
         assert(type(tbl) == "table")
         return opt.ProblemDefineFromTable(tbl,kind,params)
-    end,function(err) return debug.traceback(err,2) end)
-    if not success then error(p,0) end
+    end,function(err) print(debug.traceback(err,2)) end)
+    if not success then 
+		pt.planctor = nil
+		return
+	end
+	C.printf("problemdefine end\n")
     pt.id,pt.planctor = p.id,p.planctor:getpointer()
 end
 
@@ -210,6 +214,10 @@ struct opt.Problem(S.Object) {
 terra opt.ProblemDefine(filename : rawstring, kind : rawstring, params : &opaque)
     var pt = opt.Problem.alloc()
     problemdefine(filename,kind,params,pt)
+	if pt.planctor == nil then
+		pt:delete()
+		return nil
+	end
     return pt
 end 
 
