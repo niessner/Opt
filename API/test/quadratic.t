@@ -12,6 +12,7 @@ X = opt.Image(double,W,1)
 -- cost = sum_i (r_i^2)
 -- r_i = a * x * x + b * x + c
 -- g_i = 2(ax^2 + bx + c) * (2ax + b)
+-- minimum when 2(ax^2 + bx + c) * (2ax + b) = 0, x = -b / 2a
 -- note that this depends on whether g_i should be the gradient of r_i or r_i^2?
 --
 
@@ -21,6 +22,7 @@ local terra cost(i : uint64, j : uint64, xImage : X, aImage : A, bImage : B, cIm
 	var a = aImage(i, j)
 	var b = bImage(i, j)
 	var c = cImage(i, j)
+	--IO.printf("x=%f, a=%f, b=%f, c=%f\n", x, a, b, c)
 	return a * x * x + b * x + c
 end
 

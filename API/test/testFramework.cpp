@@ -44,7 +44,7 @@ TestExample TestFramework::makeRandomQuadratic(int count)
         const double a = result.images[1](i, 0);
         const double b = result.images[2](i, 0);
         const double c = result.images[3](i, 0);
-        const double x = c - b * b / (4.0 * a);
+        const double x = -b / (2.0 * a);
         const double v = a * x * x + b * x + c;
         minimumSum += v * v;
     }
@@ -57,7 +57,7 @@ void TestFramework::runAllTests()
 {
     optimizerState = Opt_NewState();
 
-    TestExample example = makeRandomQuadratic(2);
+    TestExample example = makeRandomQuadratic(1);
     TestMethod method = TestMethod("gradientdescent","no-params");
 
     for (auto &image : example.images)
