@@ -16,19 +16,19 @@ X = opt.Image(double,W,1)
 --
 
 terra cost(i : uint64, j : uint64, xImage : X, aImage : A, bImage : B, cImage : C)
-    double x = xImage(i, j)
-	double a = aImage(i, j)
-	double b = bImage(i, j)
-	double c = cImage(i, j)
+    var x = xImage(i, j)
+	var a = aImage(i, j)
+	var b = bImage(i, j)
+	var c = cImage(i, j)
 	IO.printf("the cost function")
 	return a * x * x + b * x + c
 end
 
 terra gradient(i : uint64, j : uint64, xImage : X, aImage : A, bImage : B, cImage : C)
-    double x = xImage(i, j)
-	double a = aImage(i, j)
-	double b = bImage(i, j)
-	double c = cImage(i, j)
+    var x = xImage(i, j)
+	var a = aImage(i, j)
+	var b = bImage(i, j)
+	var c = cImage(i, j)
 	IO.printf("the gradient function")
 	return 2.0 * (a * x * x + b * x + c) * (2.0 * a * x + b);
 end
