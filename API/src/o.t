@@ -134,26 +134,42 @@ local function compileproblem(tbl,kind)
 			return results
 		end
     
-		local terra impl(data_ : &opaque, images : &&opt.ImageBinding, params_ : &opaque)
+		local terra impl(data_ : &opaque, imageBindings : &&opt.ImageBinding, params_ : &opaque)
 			var pd = [&PlanData](data_)
 			var params = [&double](params_)
 			var dims = pd.dims
 
-			C.printf("gradientdescent impl start\n")
-			for h = 0,pd.gradH do
-				for w = 0,pd.gradW do
-					pd.gradStore(w,h) = tbl.gradient(w,h,[getimages(images,dims)])
-					C.printf("%d,%d = %f\n",w,h,pd.gradStore(w,h))
+			var learningRate = 0.01
+			var maxIters = 1000
+			
+			for iter = 0,maxIters do
+
+				--
+				-- compute the gradient
+				--
+				for h = 0,pd.gradH do
+					for w = 0,pd.gradW do
+						pd.gradStore(w,h) = tbl.gradient(w,h,[getimages(imageBindings,dims)])
+						--C.printf("%d,%d = %f\n",w,h,pd.gradStore(w,h))
+					end
+				end
+
+				--
+				-- move along the gradient by learningRate
+				--
+				for h = 0,pd.gradH do
+					for w = 0,pd.gradW do
+						pd.gradStore(w,h) = tbl.gradient(w,h,[getimages(imageBindings,dims)])
+						--pd.imageBindings()
+					end
 				end
 			end
-			C.printf("gradientdescent impl end\n")
 		end
 
 		local gradWIndex = dimindex[ graddim[1] ]
 		local gradHIndex = dimindex[ graddim[2] ]
 
 		local terra planctor(actualdims : &uint64) : &opt.Plan
-			C.printf("planctor start\n")
 			var pd = PlanData.alloc()
 
 			pd.plan.data = pd
@@ -167,8 +183,6 @@ local function compileproblem(tbl,kind)
 			pd.gradH = pd.dims[gradHIndex]
 
 			pd.gradStore:init(pd.gradW, pd.gradH)
-
-			C.printf("planctor end\n")
 
 			return &pd.plan
 		end
@@ -261,8 +275,7 @@ function opt.Image(typ,W,H)
 end
 
 terra opt.ProblemPlan(problem : &opt.Problem, dims : &uint64) : &opt.Plan
-	C.printf("opt.ProblemPlan start\n")
-    return problem.planctor(dims) -- this is just a wrapper around calling the plan constructor
+	return problem.planctor(dims) -- this is just a wrapper around calling the plan constructor
 end 
 
 terra opt.PlanFree(plan : &opt.Plan)
@@ -271,8 +284,7 @@ terra opt.PlanFree(plan : &opt.Plan)
 end
 
 terra opt.ProblemSolve(plan : &opt.Plan, images : &&opt.ImageBinding, params : &opaque)
-	C.printf("ProblemSolve start\n")
-    return plan.impl(plan.data,images,params)
+	return plan.impl(plan.data,images,params)
 end
 
 return opt
