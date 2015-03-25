@@ -179,6 +179,7 @@ local function compileproblem(tbl,kind)
 			var learningGain = 1.1
 			var minLearningRate = 1e-25
 
+
 			var learningRate = initialLearningRate
 
 			for iter = 0,maxIters do
@@ -233,8 +234,7 @@ local function compileproblem(tbl,kind)
 
 		local terra planctor(actualdims : &uint64) : &opt.Plan
 			var pd = PlanData.alloc()
-
-			pd.plan.data = pd
+            pd.plan.data = pd
 			pd.plan.impl = impl
 			pd.dims[0] = 1
 			for i = 0,[#dims] do

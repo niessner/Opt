@@ -10,9 +10,16 @@ terralib.includepath = terralib.terrahome.."/include"
 local C,CN = terralib.includecstring[[ 
     #include <stdio.h>
     #include <stdlib.h>
+    #include <string.h>
     #ifndef _WIN32
+    #include <dlfcn.h>
+    #include <libgen.h>
     #include <signal.h>
-	sig_t SIG_DFL_fn() { return SIG_DFL; }
+    sig_t SIG_DFL_fn() { return SIG_DFL; }
+    #else
+    #define NOMINMAX
+    #include <Windows.h>
+    #include <Shlwapi.h>
     #endif
     #include "terra.h"
 ]]
@@ -21,8 +28,17 @@ local C,CN = terralib.includecstring[[
 
 local LUA_GLOBALSINDEX = -10002
 
+local pathforsymbol
+
 if ffi.os == "Windows" then
     libraryformat = "%s.dll"
+    terra setupsigsegv(L : &C.lua_State) end
+    terra directoryforsymbol(sym : &opaque, buf : rawstring, N : int)
+        var mbi : C.MEMORY_BASIC_INFORMATION;
+        C.VirtualQuery(sym, &mbi, sizeof(MEMORY_BASIC_INFORMATION));
+        C.GetModuleFileNameA([C.HINSTANCE](mbi.AllocationBase), buf, N);
+        C.PathRemoveFileSpecA(path);
+    end
     terra setupsigsegv(L : &C.lua_State) end    
 else
     
@@ -46,6 +62,13 @@ else
         C.sigaction(C.SIGSEGV, &sa, nil)
         C.sigaction(C.SIGILL, &sa, nil)
         C.lua_settop(L,-3)
+    end
+    
+    terra directoryforsymbol(sym : &opaque, buf : rawstring, N : int)
+        var info : C.Dl_info
+	    C.dladdr(sym, &info)
+	    var full = C.realpath(info.dli_fname, buf);
+	    buf[C.strlen(C.dirname(full))] = 0
     end
 end
 
@@ -76,9 +99,8 @@ local function saveaslibrary(libraryname, terrasourcefile)
         return nil
     end
     
-    local source = io.open(terrasourcefile):read("*all")
-    local source_sz = source:len()
     
+    local append = "/"..terrasourcefile
     local terra NewState() : &LibraryState
         var S = [&LibraryState](C.malloc(sizeof(LibraryState)))
         var L = C.luaL_newstate();
@@ -89,8 +111,11 @@ local function saveaslibrary(libraryname, terrasourcefile)
         C.terra_initwithoptions(L,&o)
         
         setupsigsegv(L)
-        
-        if C.terra_loadbuffer(L,source,source_sz,terrasourcefile) ~= 0 or C.lua_pcall(L, 0, -1, 0) ~= 0 then return doerror(L) end
+        var path : int8[4096]
+        directoryforsymbol(NewState,path,4096)
+        C.strncat(path,append,4096)
+        C.printf("Loading %s\n",path)
+        if C.terra_loadfile(L,path) ~= 0 or C.lua_pcall(L, 0, -1, 0) ~= 0 then return doerror(L) end
         
         escape
             for k,v in pairs(apifunctions) do
