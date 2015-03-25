@@ -87,7 +87,6 @@
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClInclude Include="main.h" />
-    <ClInclude Include="Opt.h" />
     <ClInclude Include="testFramework.h" />
   </ItemGroup>
   <ItemGroup>

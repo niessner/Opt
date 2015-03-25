@@ -139,12 +139,14 @@ local function compileproblem(tbl,kind)
 			var params = [&double](params_)
 			var dims = pd.dims
 
+			C.printf("gradientdescent impl start\n")
 			for h = 0,pd.gradH do
 				for w = 0,pd.gradW do
 					pd.gradStore(w,h) = tbl.gradient(w,h,[getimages(images,dims)])
 					C.printf("%d,%d = %f\n",w,h,pd.gradStore(w,h))
 				end
 			end
+			C.printf("gradientdescent impl end\n")
 		end
 
 		local gradWIndex = dimindex[ graddim[1] ]
@@ -165,6 +167,8 @@ local function compileproblem(tbl,kind)
 			pd.gradH = pd.dims[gradHIndex]
 
 			pd.gradStore:init(pd.gradW, pd.gradH)
+
+			C.printf("planctor end\n")
 
 			return &pd.plan
 		end
@@ -267,6 +271,7 @@ terra opt.PlanFree(plan : &opt.Plan)
 end
 
 terra opt.ProblemSolve(plan : &opt.Plan, images : &&opt.ImageBinding, params : &opaque)
+	C.printf("ProblemSolve start\n")
     return plan.impl(plan.data,images,params)
 end
 
