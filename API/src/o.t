@@ -128,47 +128,52 @@ local function compileproblem(tbl,kind)
 			local results = terralib.newlist()
 			for i,argumenttyp in ipairs(argumenttyps) do
 			    local Windex,Hindex = dimindex[argumenttyp.metamethods.W],dimindex[argumenttyp.metamethods.H]
+				print(Windex,Hindex)
 				assert(Windex and Hindex)
-				results:insert(`argumenttyp { W = actualdims[Windex], H = actualdims[Hindex], impl = @imagebindings[i - 1]}) 
+				results:insert(`argumenttyp 
+				 { W = actualdims[Windex], 
+				   H = actualdims[Hindex], 
+				   impl = 
+				   @imagebindings[i - 1]}) 
 			end
 			return results
 		end
-    
-		local terra totalCost(data_ : &opaque, imageBindings : &&opt.ImageBinding)
+
+
+		local images = argumenttyps:map(symbol)
+		    
+		local terra totalCost(data_ : &opaque, [images])
 			var pd = [&PlanData](data_)
 			var result = 0.0
 			for h = 0,pd.gradH do
 				for w = 0,pd.gradW do
-					result = result + tbl.cost(w,h,[getimages(imageBindings,dims)])
+					result = result + tbl.cost.fn(w,h,images)
 				end
 			end
 			return result
 		end
 
-		local inc = macro(function(lhs, rhs)
-			return quote
-				lhs = lhs + rhs
-			end
-		end)
 
 		local terra impl(data_ : &opaque, imageBindings : &&opt.ImageBinding, params_ : &opaque)
 			var pd = [&PlanData](data_)
 			var params = [&double](params_)
 			var dims = pd.dims
 
+			var [images] = [getimages(imageBindings,dims)]
+
 			var learningRate = 0.01
-			var maxIters = 1000
+			var maxIters = 10
 			
 			for iter = 0,maxIters do
 
-				var cost = totalCost(data_, imageBindings)
-				C.printf("iteration &d, cost %f: ", iter, cost)
+				var cost = totalCost(data_, images)
+				C.printf("iteration %d, cost %f: \n", iter, cost)
 				--
 				-- compute the gradient
 				--
 				for h = 0,pd.gradH do
 					for w = 0,pd.gradW do
-						pd.gradStore(w,h) = tbl.gradient(w,h,[getimages(imageBindings,dims)])
+						pd.gradStore(w,h) = tbl.gradient(w,h,images)
 						--C.printf("%d,%d = %f\n",w,h,pd.gradStore(w,h))
 					end
 				end
@@ -178,7 +183,8 @@ local function compileproblem(tbl,kind)
 				--
 				for h = 0,pd.gradH do
 					for w = 0,pd.gradW do
-						inc((@imageBindings[0])(w,h), learningRate * pd.gradStore(w,h))
+						var addr = &[ images[1] ](w,h)
+						@addr = @addr + learningRate * pd.gradStore(w,h)
 					end
 				end
 			end
