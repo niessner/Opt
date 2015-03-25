@@ -162,18 +162,18 @@ local function compileproblem(tbl,kind)
 			var [images] = [getimages(imageBindings,dims)]
 
 			var learningRate = 0.01
-			var maxIters = 10
+			var maxIters = 1000
 			
 			for iter = 0,maxIters do
 
 				var cost = totalCost(data_, images)
-				C.printf("iteration %d, cost %f: \n", iter, cost)
+				C.printf("iteration %d, cost %f\n", iter, cost)
 				--
 				-- compute the gradient
 				--
 				for h = 0,pd.gradH do
 					for w = 0,pd.gradW do
-						pd.gradStore(w,h) = tbl.gradient(w,h,images)
+						pd.gradStore(w,h) = -tbl.gradient(w,h,images)
 						--C.printf("%d,%d = %f\n",w,h,pd.gradStore(w,h))
 					end
 				end
