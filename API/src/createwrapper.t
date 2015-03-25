@@ -12,9 +12,9 @@ local C,CN = terralib.includecstring[[
     #include <stdlib.h>
     #ifndef _WIN32
     #include <signal.h>
+	sig_t SIG_DFL_fn() { return SIG_DFL; }
     #endif
     #include "terra.h"
-    sig_t SIG_DFL_fn() { return SIG_DFL; }
 ]]
 
 
@@ -23,7 +23,7 @@ local LUA_GLOBALSINDEX = -10002
 
 if ffi.os == "Windows" then
     libraryformat = "%s.dll"
-    terra setupsigsegv(L : C.lua_State) end    
+    terra setupsigsegv(L : &C.lua_State) end    
 else
     
     local terratraceback = global(&opaque -> {})
