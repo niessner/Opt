@@ -17,18 +17,17 @@ X = opt.Image(double,W,1)
 --
 
 local terra cost(i : uint64, j : uint64, xImage : X, aImage : A, bImage : B, cImage : C)
-    --IO.printf("the cost function")
-	var x = xImage(i, j)
+    var x = xImage(i, j)
 	var a = aImage(i, j)
 	var b = bImage(i, j)
 	var c = cImage(i, j)
-	--IO.printf("x=%f, a=%f, b=%f, c=%f\n", x, a, b, c)
+	--IO.printf("image (%d,%d)\n", xImage.impl.stride, xImage.impl.elemsize)
+	--IO.printf("cost (%d,%d): x=%f, a=%f, b=%f, c=%f\n", i, j, x, a, b, c)
 	return a * x * x + b * x + c
 end
 
 local terra gradient(i : uint64, j : uint64, xImage : X, aImage : A, bImage : B, cImage : C)
-	--IO.printf("the gradient function")
-    var x = xImage(i, j)
+	var x = xImage(i, j)
 	var a = aImage(i, j)
 	var b = bImage(i, j)
 	var c = cImage(i, j)

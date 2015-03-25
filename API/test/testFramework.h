@@ -30,7 +30,7 @@ struct TestImage
     }
     void bind(OptState *optimizerState)
     {
-        terraBinding = Opt_ImageBind(optimizerState, data.data(), dimX, sizeof(double));
+        terraBinding = Opt_ImageBind(optimizerState, data.data(), sizeof(double), dimX * sizeof(double));
     }
     double& operator()(int x, int y)
     {

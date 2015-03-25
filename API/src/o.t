@@ -30,7 +30,7 @@ struct opt.ImageBinding(S.Object) {
     elemsize : uint64
 }
 terra opt.ImageBinding:get(x : uint64, y : uint64) : &uint8
-   return self.data + self.elemsize*(y*self.stride + x)
+   return self.data + y * self.stride + x * self.elemsize
 end
 
 terra opt.ImageBind(data : &opaque, elemsize : uint64, stride : uint64) : &opt.ImageBinding
@@ -138,7 +138,6 @@ local function compileproblem(tbl,kind)
 			return results
 		end
 
-
 		local images = argumenttyps:map(symbol)
 		    
 		local terra totalCost(data_ : &opaque, [images])
@@ -186,6 +185,7 @@ local function compileproblem(tbl,kind)
 
 				var startCost = totalCost(data_, images)
 				C.printf("iteration %d, cost=%f, learningRate=%f\n", iter, startCost, learningRate)
+				
 				--
 				-- compute the gradient
 				--
@@ -323,7 +323,7 @@ local newimage = terralib.memoize(function(typ,W,H)
 		self.H = actualW
 		self.impl.data = [&uint8](C.malloc(actualW * actualH * sizeof(typ)))
 		self.impl.elemsize = sizeof(typ)
-		self.impl.stride = actualW
+		self.impl.stride = actualW * sizeof(typ)
    end
    Image.metamethods.typ,Image.metamethods.W,Image.metamethods.H = typ,W,H
    return Image

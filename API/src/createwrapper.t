@@ -35,11 +35,10 @@ if ffi.os == "Windows" then
     terra setupsigsegv(L : &C.lua_State) end
     terra directoryforsymbol(sym : &opaque, buf : rawstring, N : int)
         var mbi : C.MEMORY_BASIC_INFORMATION;
-        C.VirtualQuery(sym, &mbi, sizeof(MEMORY_BASIC_INFORMATION));
+        C.VirtualQuery(sym, &mbi, sizeof(C.MEMORY_BASIC_INFORMATION));
         C.GetModuleFileNameA([C.HINSTANCE](mbi.AllocationBase), buf, N);
-        C.PathRemoveFileSpecA(path);
-    end
-    terra setupsigsegv(L : &C.lua_State) end    
+        C.PathRemoveFileSpecA(buf);
+    end  
 else
     
     local terratraceback = global(&opaque -> {})
@@ -187,7 +186,7 @@ local function saveaslibrary(libraryname, terrasourcefile)
     if ffi.os == "OSX" then
         flags = { "-install_name", "@rpath/"..libraryfmtname }
     elseif ffi.os == "Windows" then
-		flags = terralib.newlist { string.format("/IMPLIB:%s.lib",libraryname),terralib.terrahome.."\\terra.lib",terralib.terrahome.."\\lua51.lib" }
+		flags = terralib.newlist { string.format("/IMPLIB:%s.lib",libraryname),terralib.terrahome.."\\terra.lib",terralib.terrahome.."\\lua51.lib","Shlwapi.lib" }
         
 		for i,k in ipairs(names) do
             flags:insert("/EXPORT:"..k)
