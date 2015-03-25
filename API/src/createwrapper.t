@@ -1,17 +1,53 @@
 local ffi = require("ffi")
 
+local setupsigsegv
+
 local libraryformat = "lib%s.so"
-if ffi.os == "Windows" then
-    libraryformat = "%s.dll"
-end
 
 local headerformat = "%s.h"
 terralib.includepath = terralib.terrahome.."/include"
-local C = terralib.includecstring[[ 
+
+local C,CN = terralib.includecstring[[ 
     #include <stdio.h>
     #include <stdlib.h>
+    #ifndef _WIN32
+    #include <signal.h>
+    #endif
     #include "terra.h"
+    sig_t SIG_DFL_fn() { return SIG_DFL; }
 ]]
+
+
+
+local LUA_GLOBALSINDEX = -10002
+
+if ffi.os == "Windows" then
+    libraryformat = "%s.dll"
+    terra setupsigsegv(L : C.lua_State) end    
+else
+    
+    local terratraceback = global(&opaque -> {})
+    
+    local terra sigsegv(sig : int, info : &C.siginfo_t, uap : &opaque)
+        C.signal(sig,C.SIG_DFL_fn())  --reset signal to default, just in case traceback itself crashes
+        terratraceback(uap)
+        C.raise(sig)
+    end
+    terra setupsigsegv(L : &C.lua_State)
+        C.lua_getfield(L, LUA_GLOBALSINDEX,"terralib");
+        C.lua_getfield(L, -1, "traceback");
+        var tb = C.lua_topointer(L,-1);
+        if tb == nil then return end
+        terratraceback = @[&(&opaque -> {})](tb)
+        var sa : CN.sigaction
+        sa.sa_flags = C.SA_RESETHAND or C.SA_SIGINFO
+        C.sigemptyset(&sa.sa_mask)
+        sa.__sigaction_u.__sa_sigaction = sigsegv
+        C.sigaction(C.SIGSEGV, &sa, nil)
+        C.sigaction(C.SIGILL, &sa, nil)
+        C.lua_settop(L,-3)
+    end
+end
 
 local function saveaslibrary(libraryname, terrasourcefile)
     local success, tbl = xpcall(function() return assert(terralib.loadfile(terrasourcefile))() end,
@@ -42,14 +78,18 @@ local function saveaslibrary(libraryname, terrasourcefile)
     
     local source = io.open(terrasourcefile):read("*all")
     local source_sz = source:len()
+    
     local terra NewState() : &LibraryState
         var S = [&LibraryState](C.malloc(sizeof(LibraryState)))
         var L = C.luaL_newstate();
         S.L = L
         if L == nil then return doerror(L) end
         C.luaL_openlibs(L)
-        C.terra_init(L)
-    
+        var o  = C.terra_Options { verbose = 0, debug = 1, usemcjit = 0 }
+        C.terra_initwithoptions(L,&o)
+        
+        setupsigsegv(L)
+        
         if C.terra_loadbuffer(L,source,source_sz,terrasourcefile) ~= 0 or C.lua_pcall(L, 0, -1, 0) ~= 0 then return doerror(L) end
         
         escape

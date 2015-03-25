@@ -7,12 +7,12 @@ CXX = clang++
 FLAGS = -Ibuild  -I$(TERRAHOME)/include
 TERRAHOME = $(HOME)/terra/release
 TERRA = $(TERRAHOME)/terra
-LFLAGS = -Lbuild -lOpt -Wl,-rpath,$(PWD)/build -L$(TERRAHOME) -lterra -Wl,-rpath,$(TERRAHOME) -pagezero_size 10000 -image_base 100000000
+LFLAGS = -Lbuild -lOpt -Wl,-rpath,$(shell pwd)/build -L$(TERRAHOME) -lterra -Wl,-rpath,$(TERRAHOME) -pagezero_size 10000 -image_base 100000000
 
 OBJS = example.o
 LINK = clang++
 
-EXECUTABLE = example
+EXECUTABLE = example/example
 
 all:	$(EXECUTABLE)
 
@@ -21,7 +21,7 @@ TERRA = $(HOME)/terra/terra
 build/Opt.h build/libOpt.so:	src/createwrapper.t src/o.t
 	(cd build; $(TERRA) ../src/createwrapper.t Opt ../src/o.t)
 
-build/%.o:	src/%.cpp build/Opt.h
+build/%.o:	example/%.cpp build/Opt.h
 	$(CXX) $(FLAGS) $< -c -o $@
 
 $(EXECUTABLE):	$(addprefix build/, $(OBJS))

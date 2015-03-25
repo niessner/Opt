@@ -182,22 +182,15 @@ function opt.ProblemDefineFromTable(tbl,kind,params)
 end
 
 local function problemdefine(filename,kind,params,pt)
-	C.printf("problemdefine start\n")
+    pt.planctor = nil
     local success,p = xpcall(function() 
         filename,kind = ffi.string(filename), ffi.string(kind)
         local tbl = assert(terralib.loadfile(filename))() 
         assert(type(tbl) == "table")
         local p = opt.ProblemDefineFromTable(tbl,kind,params)
-		p.planctor:getpointer()
+		pt.id,pt.planctor = p.id,p.planctor:getpointer()
 		return p
     end,function(err) print(debug.traceback(err,2)) end)
-    if not success then 
-		pt.planctor = nil
-		return
-	end
-	C.printf("problemdefine A\n")
-    pt.id,pt.planctor = p.id,p.planctor:getpointer()
-	C.printf("problemdefine end\n")
 end
 
 struct opt.GradientDescentPlanParams {
