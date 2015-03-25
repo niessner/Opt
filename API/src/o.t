@@ -134,6 +134,23 @@ local function compileproblem(tbl,kind)
 			return results
 		end
     
+		local terra totalCost(data_ : &opaque, imageBindings : &&opt.ImageBinding)
+			var pd = [&PlanData](data_)
+			var result = 0.0
+			for h = 0,pd.gradH do
+				for w = 0,pd.gradW do
+					result = result + tbl.cost(w,h,[getimages(imageBindings,dims)])
+				end
+			end
+			return result
+		end
+
+		local inc = macro(function(lhs, rhs)
+			return quote
+				lhs = lhs + rhs
+			end
+		end)
+
 		local terra impl(data_ : &opaque, imageBindings : &&opt.ImageBinding, params_ : &opaque)
 			var pd = [&PlanData](data_)
 			var params = [&double](params_)
@@ -144,6 +161,8 @@ local function compileproblem(tbl,kind)
 			
 			for iter = 0,maxIters do
 
+				var cost = totalCost(data_, imageBindings)
+				C.printf("iteration &d, cost %f: ", iter, cost)
 				--
 				-- compute the gradient
 				--
@@ -159,8 +178,7 @@ local function compileproblem(tbl,kind)
 				--
 				for h = 0,pd.gradH do
 					for w = 0,pd.gradW do
-						pd.gradStore(w,h) = tbl.gradient(w,h,[getimages(imageBindings,dims)])
-						--pd.imageBindings()
+						inc((@imageBindings[0])(w,h), learningRate * pd.gradStore(w,h))
 					end
 				end
 			end
