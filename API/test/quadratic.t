@@ -15,7 +15,7 @@ X = opt.Image(double,W,1)
 -- note that this depends on whether g_i should be the gradient of r_i or r_i^2?
 --
 
-terra cost(i : uint64, j : uint64, xImage : X, aImage : A, bImage : B, cImage : C)
+local terra cost(i : uint64, j : uint64, xImage : X, aImage : A, bImage : B, cImage : C)
     --IO.printf("the cost function")
 	var x = xImage(i, j)
 	var a = aImage(i, j)
@@ -24,7 +24,7 @@ terra cost(i : uint64, j : uint64, xImage : X, aImage : A, bImage : B, cImage : 
 	return a * x * x + b * x + c
 end
 
-terra gradient(i : uint64, j : uint64, xImage : X, aImage : A, bImage : B, cImage : C)
+local terra gradient(i : uint64, j : uint64, xImage : X, aImage : A, bImage : B, cImage : C)
 	--IO.printf("the gradient function")
     var x = xImage(i, j)
 	var a = aImage(i, j)

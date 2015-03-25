@@ -128,7 +128,6 @@ local function compileproblem(tbl,kind)
 			local results = terralib.newlist()
 			for i,argumenttyp in ipairs(argumenttyps) do
 			    local Windex,Hindex = dimindex[argumenttyp.metamethods.W],dimindex[argumenttyp.metamethods.H]
-				print(Windex,Hindex)
 				assert(Windex and Hindex)
 				results:insert(`argumenttyp 
 				 { W = actualdims[Windex], 
@@ -153,6 +152,13 @@ local function compileproblem(tbl,kind)
 			return result
 		end
 
+		local terra max(x : double, y : double)
+			if x > y then
+				return x
+			else
+				return y
+			end
+		end
 
 		local terra impl(data_ : &opaque, imageBindings : &&opt.ImageBinding, params_ : &opaque)
 			var pd = [&PlanData](data_)
@@ -161,19 +167,28 @@ local function compileproblem(tbl,kind)
 
 			var [images] = [getimages(imageBindings,dims)]
 
-			var learningRate = 0.01
+			-- TODO: parameterize these
+			var initialLearningRate = 0.01
 			var maxIters = 1000
-			
+			var tolerance = 1e-10
+
+			-- Fixed constants (these do not need to be parameterized)
+			var learningLoss = 0.8
+			var learningGain = 1.1
+			var minLearningRate = 1e-25
+
+			var learningRate = initialLearningRate
+
 			for iter = 0,maxIters do
 
-				var cost = totalCost(data_, images)
-				C.printf("iteration %d, cost %f\n", iter, cost)
+				var startCost = totalCost(data_, images)
+				C.printf("iteration %d, cost=%f, learningRate=%f\n", iter, startCost, learningRate)
 				--
 				-- compute the gradient
 				--
 				for h = 0,pd.gradH do
 					for w = 0,pd.gradW do
-						pd.gradStore(w,h) = -tbl.gradient(w,h,images)
+						pd.gradStore(w,h) = tbl.gradient(w,h,images)
 						--C.printf("%d,%d = %f\n",w,h,pd.gradStore(w,h))
 					end
 				end
@@ -181,10 +196,31 @@ local function compileproblem(tbl,kind)
 				--
 				-- move along the gradient by learningRate
 				--
+				var maxDelta = 0.0
 				for h = 0,pd.gradH do
 					for w = 0,pd.gradW do
 						var addr = &[ images[1] ](w,h)
-						@addr = @addr + learningRate * pd.gradStore(w,h)
+						var delta = learningRate * pd.gradStore(w,h)
+						@addr = @addr - delta
+						maxDelta = max(delta, maxDelta)
+					end
+				end
+
+				--
+				-- update the learningRate
+				--
+				var endCost = totalCost(data_, images)
+				if endCost < startCost then
+					learningRate = learningRate * learningGain
+
+					if maxDelta < tolerance then
+						break
+					end
+				else
+					learningRate = learningRate * learningLoss
+
+					if learningRate < minLearningRate then
+						break
 					end
 				end
 			end

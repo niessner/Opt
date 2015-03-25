@@ -88,4 +88,6 @@ void TestFramework::runTest(const TestMethod &method, const TestExample &example
         imageBindings.push_back(image.terraBinding);
 
     Opt_ProblemSolve(optimizerState, plan, imageBindings.data(), NULL);
+
+    cout << "expected cost: " << example.minimumCost << endl;
 }
