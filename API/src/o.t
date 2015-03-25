@@ -146,7 +146,8 @@ local function compileproblem(tbl,kind)
 			var result = 0.0
 			for h = 0,pd.gradH do
 				for w = 0,pd.gradW do
-					result = result + tbl.cost.fn(w,h,images)
+					var v = tbl.cost.fn(w,h,images)
+					result = result + v * v
 				end
 			end
 			return result
