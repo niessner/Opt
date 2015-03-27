@@ -56,9 +56,15 @@ TestExample TestFramework::makeRandomQuadratic(int count)
 void TestFramework::runAllTests()
 {
     optimizerState = Opt_NewState();
+    if (optimizerState == nullptr)
+    {
+        cerr << "Opt_NewState failed" << endl;
+        return;
+    }
 
     TestExample example = makeRandomQuadratic(5);
-    TestMethod method = TestMethod("gradientdescent","no-params");
+    //TestMethod method = TestMethod("gradientdescentCPU","no-params");
+    TestMethod method = TestMethod("gradientdescentGPU", "no-params");
 
     for (auto &image : example.images)
         image.bind(optimizerState);
@@ -83,11 +89,21 @@ void TestFramework::runTest(const TestMethod &method, const TestExample &example
 
     Plan * plan = Opt_ProblemPlan(optimizerState, prob, dims);
 
-    vector<ImageBinding *> imageBindings;
+    vector<ImageBinding *> imageBindingsCPU;
+    vector<ImageBinding *> imageBindingsGPU;
     for (const auto &image : example.images)
-        imageBindings.push_back(image.terraBinding);
+    {
+        image.syncCPUToGPU();
+        imageBindingsCPU.push_back(image.terraBindingCPU);
+        imageBindingsGPU.push_back(image.terraBindingGPU);
+    }
 
-    Opt_ProblemSolve(optimizerState, plan, imageBindings.data(), NULL);
+    const bool isGPU = false;
+
+    if (isGPU)
+        Opt_ProblemSolve(optimizerState, plan, imageBindingsGPU.data(), NULL);
+    else
+        Opt_ProblemSolve(optimizerState, plan, imageBindingsCPU.data(), NULL);
 
     cout << "expected cost: " << example.minimumCost << endl;
 }

@@ -1,3 +1,6 @@
+
+--terralib.settypeerrordebugcallback( function(fn) fn:printpretty() end )
+
 opt = {} --anchor it in global namespace, otherwise it can be collected
 
 local S = require("std")
@@ -5,6 +8,7 @@ local S = require("std")
 local C = terralib.includecstring [[
 #include <stdio.h>
 #include <stdlib.h>
+#include <cuda_runtime.h>
 ]]
 
 local function newclass(name)
@@ -24,6 +28,47 @@ local function newclass(name)
     return mt
 end
 
+local vprintf = terralib.externfunction("cudart:vprintf", {&int8,&int8} -> int)
+local function createbuffer(args)
+    local Buf = terralib.types.newstruct()
+    return quote
+        var buf : Buf
+        escape
+            for i,e in ipairs(args) do
+                local typ = e:gettype()
+                local field = "_"..tonumber(i)
+                typ = typ == float and double or typ
+                table.insert(Buf.entries,{field,typ})
+                emit quote
+                   buf.[field] = e
+                end
+            end
+        end
+    in
+        [&int8](&buf)
+    end
+end
+printf = macro(function(fmt,...)
+    local buf = createbuffer({...})
+    return `vprintf(fmt,buf) 
+end)
+
+local dims = {{"blockIdx","ctaid"},
+              {"gridDim","nctaid"},
+              {"threadIdx","tid"},
+              {"blockDim","ntid"}}
+for i,d in ipairs(dims) do
+    local a,b = unpack(d)
+    local tbl = {}
+    for i,v in ipairs {"x","y","z" } do
+        local fn = cudalib["nvvm_read_ptx_sreg_"..b.."_"..v] 
+        tbl[v] = `fn()
+    end
+    _G[a] = tbl
+end
+
+__syncthreads = cudalib.nvvm_barrier0
+    
 struct opt.ImageBinding(S.Object) {
     data : &uint8
     stride : uint64
@@ -114,8 +159,8 @@ local function compileproblem(tbl,kind)
 		end
 		return Problem:new { planctor = planctor }
 
-	elseif kind == "gradientdescent" then
-
+	elseif kind == "gradientdescentCPU" then
+		
         local struct PlanData(S.Object) {
             plan : opt.Plan
 			gradW : int
@@ -244,7 +289,172 @@ local function compileproblem(tbl,kind)
 			pd.gradW = pd.dims[gradWIndex]
 			pd.gradH = pd.dims[gradHIndex]
 
-			pd.gradStore:init(pd.gradW, pd.gradH)
+			pd.gradStore:initCPU(pd.gradW, pd.gradH)
+
+			return &pd.plan
+		end
+		return Problem:new { planctor = planctor }
+	
+	elseif kind == "gradientdescentGPU" then
+		
+        local struct PlanData(S.Object) {
+            plan : opt.Plan
+			gradW : int
+			gradH : int
+			gradStore : unknowntyp
+            dims : int64[#dims + 1]
+        }
+
+		local function getimages(imagebindings,actualdims)
+			local results = terralib.newlist()
+			for i,argumenttyp in ipairs(argumenttyps) do
+			    local Windex,Hindex = dimindex[argumenttyp.metamethods.W],dimindex[argumenttyp.metamethods.H]
+				assert(Windex and Hindex)
+				results:insert(`argumenttyp 
+				 { W = actualdims[Windex], 
+				   H = actualdims[Hindex], 
+				   impl = 
+				   @imagebindings[i - 1]}) 
+			end
+			return results
+		end
+
+		local images = argumenttyps:map(symbol)
+
+		local terra max(x : double, y : double)
+			return terralib.select(x > y, x, y)
+		end
+
+		local cuda = {}
+
+		terra cuda.computeGradient(pd : PlanData, [images])
+			var w = blockDim.x * blockIdx.x + threadIdx.x;
+			var h = blockDim.y * blockIdx.y + threadIdx.y;
+
+			--printf("%d, %d\n", w, h)
+
+			if w < pd.gradW and h < pd.gradH then
+				pd.gradStore(w,h) = tbl.gradient(w,h,images)
+			end
+		end
+
+		terra cuda.updatePosition(pd : PlanData, learningRate : double, maxDelta : &double, [images])
+			var w = blockDim.x * blockIdx.x + threadIdx.x;
+			var h = blockDim.y * blockIdx.y + threadIdx.y;
+
+			--printf("%d, %d\n", w, h)
+			
+			if w < pd.gradW and h < pd.gradH then
+				var addr = &[ images[1] ](w,h)
+				var delta = learningRate * pd.gradStore(w,h)
+				@addr = @addr - delta
+				--@maxDelta = max(delta, @maxDelta)
+			end
+		end
+		    
+		local terra totalCost(data_ : &opaque, [images])
+			var pd = [&PlanData](data_)
+			var result = 0.0
+			for h = 0,pd.gradH do
+				for w = 0,pd.gradW do
+					var v = tbl.cost.fn(w,h,images)
+					--C.printf("v = %f\n", v)
+					result = result + v * v
+				end
+			end
+			return result
+		end
+
+		cuda = terralib.cudacompile(cuda)
+
+		local terra impl(data_ : &opaque, imageBindings : &&opt.ImageBinding, params_ : &opaque)
+			var pd = [&PlanData](data_)
+			var params = [&double](params_)
+			var dims = pd.dims
+
+			var [images] = [getimages(imageBindings,dims)]
+
+			-- TODO: parameterize these
+			var initialLearningRate = 0.01
+			var maxIters = 10
+			var tolerance = 1e-10
+
+			-- Fixed constants (these do not need to be parameterized)
+			var learningLoss = 0.8
+			var learningGain = 1.1
+			var minLearningRate = 1e-25
+
+
+			var learningRate = initialLearningRate
+
+			for iter = 0,maxIters do
+
+				--var startCost = totalCost(data_, images)
+				var startCost = 0.0
+				C.printf("iteration %d, cost=%f, learningRate=%f\n", iter, startCost, learningRate)
+				
+				--
+				-- compute the gradient
+				--
+				var launch = terralib.CUDAParams { (pd.gradW - 1) / 32 + 1, (pd.gradH - 1) / 32 + 1,1, 32,32,1, 0, nil }
+
+				--[[
+				{ "gridDimX", uint },
+                                { "gridDimY", uint },
+                                { "gridDimZ", uint },
+                                { "blockDimX", uint },
+                                { "blockDimY", uint },
+                                { "blockDimZ", uint },
+                                { "sharedMemBytes", uint },
+                                {"hStream" , terra.types.pointer(opaque) } }
+								--]]
+				--C.printf("gridDimX: %d, gridDimY %d, blickDimX %d, blockdimY %d\n", launch.gridDimX, launch.gridDimY, launch.blockDimX, launch.blockDimY)
+				cuda.computeGradient(&launch, @pd, [images])
+				C.cudaDeviceSynchronize()
+				
+				--
+				-- move along the gradient by learningRate
+				--
+				var maxDelta = 0.0
+				cuda.updatePosition(&launch, @pd, learningRate, &maxDelta, [images])
+				C.cudaDeviceSynchronize()
+
+				--
+				-- update the learningRate
+				--
+				var endCost = totalCost(data_, images)
+				if endCost < startCost then
+					learningRate = learningRate * learningGain
+
+					if maxDelta < tolerance then
+						break
+					end
+				else
+					learningRate = learningRate * learningLoss
+
+					if learningRate < minLearningRate then
+						break
+					end
+				end
+			end
+		end
+
+		local gradWIndex = dimindex[ graddim[1] ]
+		local gradHIndex = dimindex[ graddim[2] ]
+
+		local terra planctor(actualdims : &uint64) : &opt.Plan
+			var pd = PlanData.alloc()
+            pd.plan.data = pd
+			pd.plan.impl = impl
+			pd.dims[0] = 1
+			for i = 0,[#dims] do
+				pd.dims[i+1] = actualdims[i]
+			end
+
+			pd.gradW = pd.dims[gradWIndex]
+			pd.gradH = pd.dims[gradHIndex]
+
+			pd.gradStore:initGPU(pd.gradW, pd.gradH)
 
 			return &pd.plan
 		end
@@ -318,10 +528,17 @@ local newimage = terralib.memoize(function(typ,W,H)
    Image.metamethods.__apply = macro(function(self,x,y)
      return `@[&typ](self.impl:get(x,y))
    end)
-   terra Image:init(actualW : int,actualH : int)
+   terra Image:initCPU(actualW : int,actualH : int)
 		self.W = actualH
 		self.H = actualW
 		self.impl.data = [&uint8](C.malloc(actualW * actualH * sizeof(typ)))
+		self.impl.elemsize = sizeof(typ)
+		self.impl.stride = actualW * sizeof(typ)
+   end
+   terra Image:initGPU(actualW : int,actualH : int)
+		self.W = actualH
+		self.H = actualW
+		var cudaError = C.cudaMalloc([&&opaque](&(self.impl.data)), actualW * actualH * sizeof(typ))
 		self.impl.elemsize = sizeof(typ)
 		self.impl.stride = actualW * sizeof(typ)
    end

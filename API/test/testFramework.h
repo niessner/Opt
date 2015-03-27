@@ -15,7 +15,9 @@ struct TestImage
 {
     TestImage()
     {
-        terraBinding = NULL;
+        terraBindingCPU = nullptr;
+        terraBindingGPU = nullptr;
+        dataGPU = nullptr;
     }
     TestImage(int _dimX, int _dimY)
     {
@@ -26,23 +28,31 @@ struct TestImage
     {
         dimX = _dimX;
         dimY = _dimY;
-        data.resize(dimX * dimY);
+        dataCPU.resize(dimX * dimY);
+        cudaMalloc(&dataGPU, sizeof(double) * dimX * dimY);
+    }
+    void syncCPUToGPU() const
+    {
+        cudaMemcpy(dataGPU, (void *)dataCPU.data(), sizeof(double) * dimX * dimY, cudaMemcpyHostToDevice);
     }
     void bind(OptState *optimizerState)
     {
-        terraBinding = Opt_ImageBind(optimizerState, data.data(), sizeof(double), dimX * sizeof(double));
+        terraBindingCPU = Opt_ImageBind(optimizerState, dataCPU.data(), sizeof(double), dimX * sizeof(double));
+        terraBindingGPU = Opt_ImageBind(optimizerState, dataGPU, sizeof(double), dimX * sizeof(double));
     }
     double& operator()(int x, int y)
     {
-        return data[y * dimX + x];
+        return dataCPU[y * dimX + x];
     }
     double operator()(int x, int y) const
     {
-        return data[y * dimX + x];
+        return dataCPU[y * dimX + x];
     }
 
-    ImageBinding *terraBinding;
-    vector<double> data;
+    ImageBinding *terraBindingCPU;
+    ImageBinding *terraBindingGPU;
+    vector<double> dataCPU;
+    void *dataGPU;
     int dimX, dimY;
 };
 

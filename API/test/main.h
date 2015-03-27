@@ -3,6 +3,8 @@ extern "C" {
 #include "Opt.h"
 }
 
+#include "cuda_runtime.h"
+
 #include <iostream>
 #include <string>
 #include <vector>
