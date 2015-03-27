@@ -302,7 +302,8 @@ local function compileproblem(tbl,kind)
 			gradW : int
 			gradH : int
 			gradStore : unknowntyp
-			scratch : &float
+			scratchF : &float
+			scratchD : &double
             dims : int64[#dims + 1]
         }
 
@@ -349,7 +350,12 @@ local function compileproblem(tbl,kind)
 				var addr = &[ images[1] ](w,h)
 				var delta = learningRate * pd.gradStore(w,h)
 				@addr = @addr - delta
-				--@maxDelta = max(delta, @maxDelta)
+
+				delta = delta * delta
+				var deltaD : double = delta
+				var deltaI64 = @[&int64](&deltaD)
+				--printf("delta=%f, deltaI=%d\n", delta, deltaI)
+				terralib.asm(terralib.types.unit,"red.global.max.u64 [$0],$1;", "l,l", true, maxDelta, deltaI64)
 			end
 		end
 
@@ -369,11 +375,11 @@ local function compileproblem(tbl,kind)
 		local terra totalCost(pd : &PlanData, [images])
 			var launch = terralib.CUDAParams { (pd.gradW - 1) / 32 + 1, (pd.gradH - 1) / 32 + 1,1, 32,32,1, 0, nil }
 
-			@pd.scratch = 0.0f
-			cuda.costSum(&launch, @pd, pd.scratch, [images])
+			@pd.scratchF = 0.0f
+			cuda.costSum(&launch, @pd, pd.scratchF, [images])
 			C.cudaDeviceSynchronize()
 
-			return @pd.scratch
+			return @pd.scratchF
 		end
 
 		local terra impl(data_ : &opaque, imageBindings : &&opt.ImageBinding, params_ : &opaque)
@@ -392,7 +398,6 @@ local function compileproblem(tbl,kind)
 			var learningLoss = 0.8
 			var learningGain = 1.1
 			var minLearningRate = 1e-25
-
 
 			var learningRate = initialLearningRate
 
@@ -423,9 +428,11 @@ local function compileproblem(tbl,kind)
 				--
 				-- move along the gradient by learningRate
 				--
-				var maxDelta = 0.1
-				cuda.updatePosition(&launch, @pd, learningRate, &maxDelta, [images])
+				@pd.scratchD = 0.0
+				cuda.updatePosition(&launch, @pd, learningRate, pd.scratchD, [images])
 				C.cudaDeviceSynchronize()
+				C.printf("maxDelta %f\n", @pd.scratchD)
+				var maxDelta = @pd.scratchD
 
 				--
 				-- update the learningRate
@@ -463,7 +470,8 @@ local function compileproblem(tbl,kind)
 			pd.gradH = pd.dims[gradHIndex]
 
 			pd.gradStore:initGPU(pd.gradW, pd.gradH)
-			C.cudaMallocManaged([&&opaque](&(pd.scratch)), sizeof(float), C.cudaMemAttachGlobal)
+			C.cudaMallocManaged([&&opaque](&(pd.scratchF)), sizeof(float), C.cudaMemAttachGlobal)
+			C.cudaMallocManaged([&&opaque](&(pd.scratchD)), sizeof(double), C.cudaMemAttachGlobal)
 
 			return &pd.plan
 		end
