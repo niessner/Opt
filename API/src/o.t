@@ -302,6 +302,7 @@ local function compileproblem(tbl,kind)
 			gradW : int
 			gradH : int
 			gradStore : unknowntyp
+			scratch : &float
             dims : int64[#dims + 1]
         }
 
@@ -351,21 +352,29 @@ local function compileproblem(tbl,kind)
 				--@maxDelta = max(delta, @maxDelta)
 			end
 		end
-		    
-		local terra totalCost(data_ : &opaque, [images])
-			var pd = [&PlanData](data_)
-			var result = 0.0
-			for h = 0,pd.gradH do
-				for w = 0,pd.gradW do
-					var v = tbl.cost.fn(w,h,images)
-					--C.printf("v = %f\n", v)
-					result = result + v * v
-				end
-			end
-			return result
-		end
 
-		cuda = terralib.cudacompile(cuda)
+		terra cuda.costSum(pd : PlanData, sum : &float, [images])
+			var w = blockDim.x * blockIdx.x + threadIdx.x;
+			var h = blockDim.y * blockIdx.y + threadIdx.y;
+
+			if w < pd.gradW and h < pd.gradH then
+				var v = tbl.cost.fn(w,h,images)
+				var v2 = [float](v * v)
+				terralib.asm(terralib.types.unit,"red.global.add.f32 [$0],$1;","l,f",true,sum,v2)
+			end
+		end
+		
+		cuda = terralib.cudacompile(cuda, false)
+		 
+		local terra totalCost(pd : &PlanData, [images])
+			var launch = terralib.CUDAParams { (pd.gradW - 1) / 32 + 1, (pd.gradH - 1) / 32 + 1,1, 32,32,1, 0, nil }
+
+			@pd.scratch = 0.0f
+			cuda.costSum(&launch, @pd, pd.scratch, [images])
+			C.cudaDeviceSynchronize()
+
+			return @pd.scratch
+		end
 
 		local terra impl(data_ : &opaque, imageBindings : &&opt.ImageBinding, params_ : &opaque)
 			var pd = [&PlanData](data_)
@@ -376,7 +385,7 @@ local function compileproblem(tbl,kind)
 
 			-- TODO: parameterize these
 			var initialLearningRate = 0.01
-			var maxIters = 10
+			var maxIters = 1000
 			var tolerance = 1e-10
 
 			-- Fixed constants (these do not need to be parameterized)
@@ -389,8 +398,7 @@ local function compileproblem(tbl,kind)
 
 			for iter = 0,maxIters do
 
-				--var startCost = totalCost(data_, images)
-				var startCost = 0.0
+				var startCost = totalCost(pd, images)
 				C.printf("iteration %d, cost=%f, learningRate=%f\n", iter, startCost, learningRate)
 				
 				--
@@ -415,14 +423,14 @@ local function compileproblem(tbl,kind)
 				--
 				-- move along the gradient by learningRate
 				--
-				var maxDelta = 0.0
+				var maxDelta = 0.1
 				cuda.updatePosition(&launch, @pd, learningRate, &maxDelta, [images])
 				C.cudaDeviceSynchronize()
 
 				--
 				-- update the learningRate
 				--
-				var endCost = totalCost(data_, images)
+				var endCost = totalCost(pd, images)
 				if endCost < startCost then
 					learningRate = learningRate * learningGain
 
@@ -455,6 +463,7 @@ local function compileproblem(tbl,kind)
 			pd.gradH = pd.dims[gradHIndex]
 
 			pd.gradStore:initGPU(pd.gradW, pd.gradH)
+			C.cudaMallocManaged([&&opaque](&(pd.scratch)), sizeof(float), C.cudaMemAttachGlobal)
 
 			return &pd.plan
 		end
