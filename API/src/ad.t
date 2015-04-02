@@ -46,6 +46,10 @@ function Var:N() return self.p end
 function Const:N() return 0 end
 function Apply:N() return self.nvars end
 
+local empty = terralib.newlist {}
+function Exp:children() return empty end
+function Apply:children() return self.args end 
+
 
 function Var:cost() return 1 end
 function Const:cost() return 1 end
@@ -59,14 +63,15 @@ end
 
 function Const:__tostring() return tostring(self.v) end
 
-
+local applyid = 0
 local function newapply(op,args)
     local nvars = 0
     assert(not op.nparams or #args == op.nparams)
     for i,a in ipairs(args) do
         nvars = math.max(nvars,a:N())
     end
-    return Apply:new { op = op, args = args, nvars = nvars }
+    applyid = applyid + 1
+    return Apply:new { op = op, args = args, nvars = nvars, id = applyid - 1 }
 end
 
 local getconst = terralib.memoize(function(n) return Const:new { v = n } end)
@@ -74,46 +79,75 @@ local function toexp(n)
     return Exp:is(n) and n or tonumber(n) and getconst(n)
 end
 
-local zero,one = toexp(0),toexp(1)
+local zero,one,negone = toexp(0),toexp(1),toexp(-1)
 local function allconst(args)
     for i,a in ipairs(args) do
         if not Const:is(a) then return false end
     end
     return true
 end
-local function factor(e)
-    if e.kind == "Apply" and e.op.name == "mul" and Const:is(e.args[1]) then
-        return e.args[1].v, e.args[2]
+
+-- define a complete ordering of all nodes
+-- any commutative op should reorder its nodes in this order
+function Const:order()
+    return 2,self.v
+end
+
+function Apply:order()
+    return 1,self.id
+end
+
+function Var:order()
+    return 0,self.p
+end
+
+local function lessthan(a,b) 
+    local ah,al = a:order()
+    local bh,bl = b:order()
+    if ah < bh then return true
+    elseif bh < ah then return false
+    else return al < bl end
+end
+
+local commutes = { add = true, mul = true }
+local assoc = { add = true, mul = true }
+local function factors(e)
+    if Apply:is(e) and e.op.name == "mul" then
+        return e.args[1],e.args[2]
     end
-    return 1,e
+    return e,one
 end
 local function simplify(op,args)
     local x,y = unpack(args)
+    
     if allconst(args) and op:getimpl() then
         return toexp(op:getimpl()(unpack(args:map("v"))))
-    elseif op.name == "add" then
-        if Const:is(x) and not Const:is(y) then
-            return y + x
-        elseif y == zero then return x end
-        local c,a = factor(x)
-        local k,b = factor(y)
-        if a == b then return (c + k) * a end
+    elseif commutes[op.name] and lessthan(y,x) then return op(y,x)
+    elseif assoc[op.name] and Apply:is(x) and x.op.name == op.name then
+        return op(x.args[1],op(x.args[2],y))
     elseif op.name == "mul" then
-        if Const:is(y) and not Const:is(x) then
-            return y*x
-        elseif x == one then return y
-        elseif x == zero then return zero
-        elseif Const:is(x) then
-            local c,a = factor(y)
-            if c ~= 1 then
-                return (c*x.v)*y
-            end
+        if y == one then return x
+        elseif y == zero then return zero
+        elseif y == negone then return -x
+        end
+    elseif op.name == "add" then
+        if y == zero then return x 
+        end
+        local x0,x1 = factors(x)
+        local y0,y1 = factors(y)
+        if x0 == y0 then return x0*(x1 + y1)
+        elseif x1 == y1 then return (x0 + y0)*x1
+        end
+    elseif op.name == "sub" then
+        if x == y then return zero
+        elseif y == zero then return x
+        elseif x == zero then return -y 
         end
     elseif op.name == "div" then
-        if y == one then return x end
-    elseif op.name == "sub" then
-        if y == zero then return x end
-        elseif x == zero then return -y
+        if y == one then return x
+        elseif y == negone then return -x
+        elseif x == y then return one 
+        end
     end
     return newapply(op,args)
 end
@@ -232,7 +266,7 @@ local function expstostring(es)
             return ("-%s"):format(emitprec(e.args[1],3))
         elseif infix[e.op.name] then
             local o,p = unpack(infix[e.op.name])
-            return ("%s %s %s"):format(emitprec(e.args[1],p),o,emitprec(e.args[2],p))
+            return ("%s %s %s"):format(emitprec(e.args[1],p),o,emitprec(e.args[2],p+1))
         else
             return ("%s(%s)"):format(tostring(e.op),e.args:map(emit):concat(","))
         end
@@ -276,24 +310,13 @@ function Exp:d(v)
     self.derivs[v] = r
     return r
 end
-        
+    
 function Var:calcd(v)
    return self == v and toexp(1) or toexp(0)
 end
 function Const:calcd(v)
     return toexp(0)
 end
-function Apply:calcd(v)
-    local dargsdv = self.args:map("d",v)
-    local dfdargs = self.op.derivs:map("rename",self.args)
-    local r
-    for i = 1,#self.args do
-        local e = dargsdv[i]*dfdargs[i]
-        r = (not r and e) or (r + e)
-    end
-    return r
-end
-
 
 ad.add:define(function(x,y) return `x + y end,1,1)
 ad.sub:define(function(x,y) return `x - y end,1,-1)
@@ -319,6 +342,181 @@ ad.tan:define(function(x) return `C.tan(x) end, 1.0 + ad.tan(x)*ad.tan(x))
 ad.tanh:define(function(x) return `C.tanh(a) end, 1.0/(ad.cosh(x)*ad.cosh(x)))
 
 
+local function dominators(startnode,succ)
+    -- calculate post order traversal order
+    local visited = {}
+    local nodes = terralib.newlist()
+    local nodeindex = {}
+    local function visit(n)
+        if visited[n] then return end
+        visited[n] = true
+        for i,c in ipairs(succ(n)) do
+            visit(c)
+        end
+        nodes:insert(n)
+        nodeindex[n] = #nodes
+    end
+    visit(startnode)
+    
+    -- calculate predecessors (postorderid -> list(postorderid))
+    local pred = {}
+    
+    for i,n in ipairs(nodes) do
+        for j,c in ipairs(succ(n)) do
+            local ci = nodeindex[c]
+            pred[ci] = pred[ci] or terralib.newlist()
+            pred[ci]:insert(i)
+        end
+    end
+    
+    assert(nodeindex[startnode] == #nodes)
+    -- calculate immediate dominators
+    local doms = terralib.newlist{}
+    
+    doms[#nodes] = #nodes
+    
+    local function intersect(finger1,finger2)
+        while finger1 ~= finger2 do
+            while finger1 < finger2 do
+                finger1 = assert(doms[finger1])
+            end
+            while finger2 < finger1 do
+                finger2 = assert(doms[finger2])
+            end
+        end
+        return finger1
+    end
+    
+    local changed = true
+    while changed do
+        changed = false
+        --[[
+        for i = #nodes,1,-1 do
+            print(i,doms[i])
+        end
+        print()]]
+        for b = #nodes-1,1,-1 do
+            local bpred = pred[b]
+            local newidom
+            for i,p in ipairs(bpred) do
+                if doms[p] then
+                    newidom = newidom and intersect(p,newidom) or p
+                end
+            end
+            if doms[b] ~= newidom then
+                doms[b] = newidom
+                changed = true
+            end
+        end
+    end
+    
+    local r = {}
+    for i,n in ipairs(nodes) do
+        r[n] = nodes[doms[i]]
+    end
+    return r
+end
+
+function Exp:partials()
+    return empty
+end
+function Apply:partials()
+    self.partiallist = self.partiallist or self.op.derivs:map("rename",self.args)
+    return self.partiallist
+end
+
+if false then
+    function Apply:calcd(X)
+        -- extract derivative graph
+        assert(Var:is(X))
+        local succ = {}
+        local pred = {}
+        local function insertv(g,k,v)
+            g[k] = g[k] or terralib.newlist()
+            g[k]:insert(v)
+        end
+        local function deletev(g,k,v)
+            local es = g[k]
+            for i,e in ipairs(es) do
+                if e == v then
+                    es:remove(i)
+                    return
+                end
+            end
+            error("not found")
+        end
+        local function insert(e)
+            insertv(succ,e.from,e)
+            insertv(pred,e.to,e)
+        end
+        local function remove(e)
+            removev(succ,e.from,e)
+            removev(pred,e.to,e)
+        end
+       
+        local ingraph = {}
+        local function visit(n)
+            if ingraph[n] ~= nil then return ingraph[n] end
+            local partials = n:partials()
+            local include = n == X
+            for i,c in ipairs(n:children()) do
+                if visit(c) then    
+                    include = true
+                    insert { from = c, to = n, d = partials[i] }
+                end
+            end
+            ingraph[n] = include
+            return include
+        end
+        visit(self)
+    
+        local function simple(x)
+            if not pred[x] then return terralib.newlist{ toexp(1) } end
+            local r = terralib.newlist()
+            for i,p in ipairs(pred[x]) do
+                local s = simple(p.from)
+                r:insertall(s:map(function(v) return v*p.d end))
+            end
+            return r
+        end
+        local r
+        local factors = simple(self)
+        for i,f in ipairs(factors) do
+            r = (r and r + f) or f
+        end
+        return r or toexp(0)
+    end
+else
+    function Apply:calcd(v)
+    local dargsdv = self.args:map("d",v)
+    local dfdargs = self:partials()
+    local r
+    for i = 1,#self.args do
+        local e = dargsdv[i]*dfdargs[i]
+        r = (not r and e) or (r + e)
+    end
+    return r
+end
+
+end
+if false then
+    local n1,n2,n3 = {name = "n1"},{name = "n2"},{name = "n3"}
+    n1[1] = n2
+    n2[1] = n1
+    n2[2] = n3
+    n3[1] = n2
+
+    local n4 = { n3, n2 , name = "n4" }
+    local n5 = { n1, name = "n5"}
+    local n6 = {n4,n5, name = "n6"}
+
+    local d = dominators(n6,function(x) return x end)
+
+    for k,v in pairs(d) do
+        print(k.name," <- ",v.name)
+    end
+end
+
 
 --[[
 print(expstostring(ad.atan2.derivs))
@@ -336,5 +534,8 @@ print(x*-(-y+1)/4)
 print(r:rename({x+y,x+y}))]]
 
 
-local e = 2*x*x*x - y*x
-print(e:d(x))
+local e = 2*x*x*x*3 -- - y*x
+
+print((ad.sin(x)*ad.sin(x)):d(x))
+
+print(e:d(x)*3+(4*x)*x)
