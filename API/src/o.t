@@ -190,9 +190,9 @@ local function compileproblem(tbl,kind)
 			var result = 0.0
 			for h = 0,pd.gradH do
 				for w = 0,pd.gradW do
-					var v = tbl.cost.fn(w,h,images)
+				    var v = tbl.cost.fn(w,h,images)
 					--C.printf("v = %f\n", v)
-					result = result + v * v
+					result = result + v
 				end
 			end
 			return result
@@ -207,6 +207,7 @@ local function compileproblem(tbl,kind)
 		end
 
 		local terra impl(data_ : &opaque, imageBindings : &&opt.ImageBinding, params_ : &opaque)
+
 			var pd = [&PlanData](data_)
 			var params = [&double](params_)
 			var dims = pd.dims

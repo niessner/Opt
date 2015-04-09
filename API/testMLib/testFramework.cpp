@@ -211,7 +211,7 @@ void TestFramework::runTest(const TestMethod &method, const TestExample &example
         imageBindingsGPU.push_back(image.terraBindingGPU);
     }
 
-    const bool isGPU = true;
+    bool isGPU = ml::util::endsWith(method.optimizerName, "GPU");
 
     if (isGPU)
         Opt_ProblemSolve(optimizerState, plan, imageBindingsGPU.data(), NULL);
