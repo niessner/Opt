@@ -12,10 +12,10 @@ local w = 0.1
 
 local terra laplacian(i : uint64, j : uint64, xImage : X)
 	var x = xImage(i, j)
-	var n0 = X(i - 1, j)
-    var n1 = X(i + 1, j)
-    var n2 = X(i, j - 1)
-    var n3 = X(i, j + 1)
+	var n0 = xImage(i - 1, j)
+    var n1 = xImage(i + 1, j)
+    var n2 = xImage(i, j - 1)
+    var n3 = xImage(i, j + 1)
 
 	return 4 * x - (n0 + n1 + n2 + n3)
 end
@@ -44,33 +44,32 @@ local terra gradient(i : uint64, j : uint64, xImage : X, aImage : A)
 	var laplacianGradient = 0.0
 
 	if i > 0 and i < aImage.W - 1 and j > 0 and j < aImage.H - 1 then
-		var n0 = X(i - 1, j)
-        var n1 = X(i + 1, j)
-        var n2 = X(i, j - 1)
-        var n3 = X(i, j + 1)
-
-		var v = 4 * x - (n0 + n1 + n2 + n3)
+		var v = laplacian(i - 1, j, xImage)
 		laplacianGradient = laplacianGradient + 8 * v * x
 	end
 
-	if i > 0 then
-		var v = laplacian(i - 1, j)
-		laplacianGradient = laplacianGradient + -2 * v
+	if j > 0 and j < aImage.H - 1 then
+		if i > 0 then
+			var v = laplacian(i - 1, j, xImage)
+			laplacianGradient = laplacianGradient + -2 * v
+		end
+
+		if i < aImage.width - 1 then
+			var v = laplacian(i + 1, j, xImage)
+			laplacianGradient = laplacianGradient + -2 * v
+		end
 	end
 
-	if j > 0 then
-		var v = laplacian(i, j - 1)
-		laplacianGradient = laplacianGradient + -2 * v
-	end
+	if i > 0 and i < aImage.W - 1 then
+		if j > 0 then
+			var v = laplacian(i, j - 1, xImage)
+			laplacianGradient = laplacianGradient + -2 * v
+		end
 
-	if i < aImage.width - 1 then
-		var v = laplacian(i + 1, j)
-		laplacianGradient = laplacianGradient + -2 * v
-	end
-
-	if j < aImage.height - 1 then
-		var v = laplacian(i, j + 1)
-		laplacianGradient = laplacianGradient + -2 * v
+		if j < aImage.height - 1 then
+			var v = laplacian(i, j + 1, xImage)
+			laplacianGradient = laplacianGradient + -2 * v
+		end
 	end
 
 	var v2 = x - a

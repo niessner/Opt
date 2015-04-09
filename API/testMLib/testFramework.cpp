@@ -173,8 +173,8 @@ void TestFramework::runAllTests()
         return;
     }
 
-    TestExample example = makeRandomQuadratic(5);
-    //TestExample example = makeImageSmoothing("smoothingExampleA.png", 0.1);
+    //TestExample example = makeRandomQuadratic(5);
+    TestExample example = makeImageSmoothing("smoothingExampleA.png", 0.1);
 
     TestMethod method = TestMethod("gradientdescentCPU","no-params");
     //TestMethod method = TestMethod("gradientdescentGPU", "no-params");
