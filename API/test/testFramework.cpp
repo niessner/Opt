@@ -1,6 +1,21 @@
 
 #include "main.h"
 
+TestExample TestFramework::makeImageSmoothing(const string &imageFilename)
+{
+    //TestExample result(;
+
+    //
+    // terms:
+    // smoothness: 4 * x_i - (neighbors) = 0
+    // reconstruction: x_i = c_i
+    // 
+    // final energy function:
+    // E(x) = sum_i( (4 * x_i - (neighbors) ) ^2 ) + sum_i( w * (x_i - c_i)^2 )
+    //
+    // minimized when L^T L + 
+}
+
 TestExample TestFramework::makeRandomQuadratic(int count)
 {
     TestExample result("quadratic1D", "quadratic.t", count);

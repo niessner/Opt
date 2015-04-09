@@ -1,0 +1,30 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup>
+    <ClInclude Include="main.h" />
+    <ClInclude Include="testFramework.h" />
+    <ClInclude Include="mLibInclude.h" />
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="..\src\o.t" />
+    <None Include="quadratic.t">
+      <Filter>tests</Filter>
+    </None>
+    <None Include="example.t">
+      <Filter>tests</Filter>
+    </None>
+    <None Include="imageSmoothing.t">
+      <Filter>tests</Filter>
+    </None>
+  </ItemGroup>
+  <ItemGroup>
+    <Filter Include="tests">
+      <UniqueIdentifier>{21b87981-d4ac-44ec-b2e2-04d1f5d1747f}</UniqueIdentifier>
+    </Filter>
+  </ItemGroup>
+  <ItemGroup>
+    <ClCompile Include="testFramework.cpp" />
+    <ClCompile Include="main.cpp" />
+    <ClCompile Include="mLibSource.cpp" />
+  </ItemGroup>
+</Project>

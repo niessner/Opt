@@ -86,7 +86,7 @@ private:
     void runTest(const TestMethod &method, const TestExample &example);
 
     TestExample makeRandomQuadratic(int count);
-    TestExample makeImageSmoothing(const string &imageFilename);
+    TestExample makeImageSmoothing(const string &imageFilename, double w);
 
     vector<TestMethod> methods;
     vector<TestExample> examples;
