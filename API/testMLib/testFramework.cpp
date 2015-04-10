@@ -61,7 +61,7 @@ TestExample TestFramework::makeImageSmoothing(const string &imageFilename, doubl
 
     Bitmap testImage = bmp;
     for (const auto &p : bmp)
-        testImage(p.x, p.y) = util::boundToByte(x[getVariable(p.x, p.y)]);
+        testImage(p.x, p.y) = vec4uc(util::boundToByte(x[getVariable(p.x, p.y)]));
 
     LodePNG::save(testImage, "c:\\code\\test.png");
 
