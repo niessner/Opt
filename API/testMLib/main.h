@@ -1,6 +1,9 @@
 
 #include "mLibInclude.h"
 
+using namespace ml;
+using Bitmap = ml::ColorImageR8G8B8A8;
+
 extern "C" {
 #include "Opt.h"
 }
@@ -13,7 +16,5 @@ extern "C" {
 #include <functional>
 
 using namespace std;
-using namespace ml;
-using Bitmap = ml::ColorImageR8G8B8A8;
 
 #include "testFramework.h"

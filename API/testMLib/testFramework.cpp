@@ -13,19 +13,24 @@ TestExample TestFramework::makeImageSmoothing(const string &imageFilename, doubl
     //
     // minimized with A = L^T L + I * w, b = I * w * target
 
-    // image 
+    //
+    // if we are not using mlib, create a "debug" bitmap
+    //
 
     const Bitmap bmp = LodePNG::load(imageFilename);
-    const size_t pixelCount = bmp.size();
+    const int dimX = bmp.getWidth();
+    const int dimY = bmp.getHeight();
 
-    auto isBorder = [&](size_t x, size_t y)
-    {
-        return (x == 0 || y == 0 || x == bmp.getWidth() - 1 || y == bmp.getHeight() - 1);
-    };
+    const size_t pixelCount = bmp.size();
 
     auto getVariable = [&](size_t x, size_t y)
     {
         return (size_t)(y * bmp.getWidth() + x);
+    };
+
+    auto isBorder = [&](size_t x, size_t y)
+    {
+        return (x == 0 || y == 0 || x == dimX - 1 || y == dimY - 1);
     };
 
     SparseMatrixd L(pixelCount, pixelCount);
