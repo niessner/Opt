@@ -60,7 +60,7 @@ TestExample TestFramework::makeImageSmoothing(const string &imageFilename, doubl
 
     LodePNG::save(testImage, "c:\\code\\test.png");
 
-    TestExample result("imageSmoothing", "imageSmoothing.t", pixelCount);
+    TestExample result("imageSmoothing", "imageSmoothing.t", bmp.getWidth(), bmp.getHeight());
 
     result.costFunction = [=](const double *variables)
     {
@@ -101,11 +101,15 @@ TestExample TestFramework::makeImageSmoothing(const string &imageFilename, doubl
         return sum;
     };
 
-    result.images.resize(1);
+    result.images.resize(2);
     result.images[0].allocate(bmp.getWidth(), bmp.getHeight());
+    result.images[1].allocate(bmp.getWidth(), bmp.getHeight());
 
     for (const auto &p : bmp)
-        result.images[0](p.x, p.y) = p.value.r;
+    {
+        result.images[0]((int)p.x, (int)p.y) = 0.0;
+        result.images[1]((int)p.x, (int)p.y) = p.value.r;
+    }
 
     result.minimumCost = result.costFunction(x.data());
 
@@ -114,7 +118,7 @@ TestExample TestFramework::makeImageSmoothing(const string &imageFilename, doubl
 
 TestExample TestFramework::makeRandomQuadratic(int count)
 {
-    TestExample result("quadratic1D", "quadratic.t", count);
+    TestExample result("quadratic1D", "quadratic.t", count, 1);
     
     //
     // image order: x, a, b, c

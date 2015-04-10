@@ -58,12 +58,12 @@ struct TestImage
 
 struct TestExample
 {
-    TestExample(const string &_exampleName, const string &_terraCodeFilename, size_t _variableCount)
+    TestExample(const string &_exampleName, const string &_terraCodeFilename, size_t _variableDimX, size_t _variableDimY)
     {
         exampleName = _exampleName;
         terraCodeFilename = _terraCodeFilename;
-        variableDimX = _variableCount;
-        variableDimY = _variableCount;
+        variableDimX = _variableDimX;
+        variableDimY = _variableDimY;
     }
 
     size_t variableDimX, variableDimY;

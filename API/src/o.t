@@ -8,6 +8,7 @@ local S = require("std")
 local C = terralib.includecstring [[
 #include <stdio.h>
 #include <stdlib.h>
+#include <math.h>
 #include <cuda_runtime.h>
 ]]
 
@@ -190,8 +191,10 @@ local function compileproblem(tbl,kind)
 			var result = 0.0
 			for h = 0,pd.gradH do
 				for w = 0,pd.gradW do
+					--C.printf("totalCost %d,%d\n", w, h)
 				    var v = tbl.cost.fn(w,h,images)
 					--C.printf("v = %f\n", v)
+					--C.getchar()
 					result = result + v
 				end
 			end
@@ -208,15 +211,21 @@ local function compileproblem(tbl,kind)
 
 		local terra impl(data_ : &opaque, imageBindings : &&opt.ImageBinding, params_ : &opaque)
 
+			--C.printf("impl start\n")
+
 			var pd = [&PlanData](data_)
 			var params = [&double](params_)
 			var dims = pd.dims
 
+			--C.printf("impl A\n")
+
 			var [images] = [getimages(imageBindings,dims)]
+
+			--C.printf("impl B\n")
 
 			-- TODO: parameterize these
 			var initialLearningRate = 0.01
-			var maxIters = 1000
+			var maxIters = 10000
 			var tolerance = 1e-10
 
 			-- Fixed constants (these do not need to be parameterized)
@@ -227,11 +236,16 @@ local function compileproblem(tbl,kind)
 
 			var learningRate = initialLearningRate
 
+			--C.printf("impl D\n")
+
 			for iter = 0,maxIters do
+
+				--C.printf("impl iter start\n")
 
 				var startCost = totalCost(data_, images)
 				C.printf("iteration %d, cost=%f, learningRate=%f\n", iter, startCost, learningRate)
-				
+				--C.getchar()
+
 				--
 				-- compute the gradient
 				--
@@ -239,6 +253,7 @@ local function compileproblem(tbl,kind)
 					for w = 0,pd.gradW do
 						pd.gradStore(w,h) = tbl.gradient(w,h,images)
 						--C.printf("%d,%d = %f\n",w,h,pd.gradStore(w,h))
+						--C.getchar()
 					end
 				end
 
@@ -250,8 +265,9 @@ local function compileproblem(tbl,kind)
 					for w = 0,pd.gradW do
 						var addr = &[ images[1] ](w,h)
 						var delta = learningRate * pd.gradStore(w,h)
+						--C.printf("delta (%d,%d)=%f\n", w, h, delta)
 						@addr = @addr - delta
-						maxDelta = max(delta, maxDelta)
+						maxDelta = max(C.fabsf(delta), maxDelta)
 					end
 				end
 
@@ -263,15 +279,19 @@ local function compileproblem(tbl,kind)
 					learningRate = learningRate * learningGain
 
 					if maxDelta < tolerance then
+						C.printf("terminating, maxDelta=%f\n", maxDelta)
 						break
 					end
 				else
 					learningRate = learningRate * learningLoss
 
 					if learningRate < minLearningRate then
+						C.printf("terminating, learningRate=%f\n", learningRate)
 						break
 					end
 				end
+
+				--C.printf("impl iter end\n")
 			end
 		end
 
