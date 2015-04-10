@@ -185,8 +185,8 @@ void TestFramework::runAllTests()
     //TestExample example = makeRandomQuadratic(5);
     TestExample example = makeImageSmoothing("smoothingExampleB.png", 0.1);
 
-    TestMethod method = TestMethod("gradientdescentCPU","no-params");
-    //TestMethod method = TestMethod("gradientdescentGPU", "no-params");
+    //TestMethod method = TestMethod("gradientdescentCPU","no-params");
+    TestMethod method = TestMethod("gradientdescentGPU", "no-params");
 
     for (auto &image : example.images)
         image.bind(optimizerState);

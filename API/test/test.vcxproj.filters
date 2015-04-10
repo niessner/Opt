@@ -12,6 +12,9 @@
     <None Include="example.t">
       <Filter>tests</Filter>
     </None>
+    <None Include="laplacian.t">
+      <Filter>tests</Filter>
+    </None>
   </ItemGroup>
   <ItemGroup>
     <Filter Include="tests">

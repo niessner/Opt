@@ -96,6 +96,7 @@
   <ItemGroup>
     <None Include="..\src\o.t" />
     <None Include="example.t" />
+    <None Include="laplacian.t" />
     <None Include="quadratic.t" />
   </ItemGroup>
   <ItemGroup>

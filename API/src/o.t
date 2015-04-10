@@ -385,9 +385,8 @@ local function compileproblem(tbl,kind)
 			var h = blockDim.y * blockIdx.y + threadIdx.y;
 
 			if w < pd.gradW and h < pd.gradH then
-				var v = tbl.cost.fn(w,h,images)
-				var v2 = [float](v * v)
-				terralib.asm(terralib.types.unit,"red.global.add.f32 [$0],$1;","l,f",true,sum,v2)
+				var v = [float](tbl.cost.fn(w,h,images))
+				terralib.asm(terralib.types.unit,"red.global.add.f32 [$0],$1;","l,f",true,sum,v)
 			end
 		end
 		

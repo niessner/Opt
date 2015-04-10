@@ -7,6 +7,10 @@ local X = opt.Image(double,W,H)
 
 local A = opt.Image(double,W,H)
 
+local C = terralib.includecstring [[
+#include <math.h>
+]]
+
 -- TODO: this should be factored into a parameter
 local w = 0.1
 
