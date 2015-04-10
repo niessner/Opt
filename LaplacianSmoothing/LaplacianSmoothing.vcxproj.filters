@@ -1,0 +1,37 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup>
+    <ClInclude Include="src\main.h" />
+    <ClInclude Include="src\LaplacianSolverEquations.h">
+      <Filter>CUDA</Filter>
+    </ClInclude>
+    <ClInclude Include="src\LaplacianSolverParameters.h">
+      <Filter>CUDA</Filter>
+    </ClInclude>
+    <ClInclude Include="src\LaplacianSolverState.h">
+      <Filter>CUDA</Filter>
+    </ClInclude>
+    <ClInclude Include="src\LaplacianSolverUtil.h">
+      <Filter>CUDA</Filter>
+    </ClInclude>
+    <ClInclude Include="src\SolverUtil.h">
+      <Filter>CUDA</Filter>
+    </ClInclude>
+  </ItemGroup>
+  <ItemGroup>
+    <ClCompile Include="src\main.cpp" />
+  </ItemGroup>
+  <ItemGroup>
+    <Filter Include="CUDA">
+      <UniqueIdentifier>{45086a3f-329c-4de9-8358-8be4ca51355a}</UniqueIdentifier>
+    </Filter>
+  </ItemGroup>
+  <ItemGroup>
+    <CudaCompile Include="src\LaplacianSolver.cu">
+      <Filter>CUDA</Filter>
+    </CudaCompile>
+    <CudaCompile Include="src\CameraUtil.cu">
+      <Filter>CUDA</Filter>
+    </CudaCompile>
+  </ItemGroup>
+</Project>
