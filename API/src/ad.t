@@ -135,8 +135,10 @@ local function simplify(op,args)
         end
         local x0,x1 = factors(x)
         local y0,y1 = factors(y)
-        if x0 == y0 then return x0*(x1 + y1)
-        elseif x1 == y1 then return (x0 + y0)*x1
+        if x1 ~= one or y1 ~= one then 
+            if x0 == y0 then return x0*(x1 + y1)
+            elseif x1 == y1 then return (x0 + y0)*x1
+            end
         end
     elseif op.name == "sub" then
         if x == y then return zero
@@ -299,6 +301,47 @@ end
 
 function Exp:__tostring()
     return expstostring(terralib.newlist{self})
+end
+
+function ad.toterra(es)
+    es = terralib.islist(es) or terralib.newlist(es)
+    local manyuses = countuses(es)
+    local nvars = 0
+    local results = terralib.newlist {}
+    for i,e in ipairs(es) do 
+        results[i] = symbol(&float,"r"..tostring(i))
+        nvars = math.max(nvars,e:N())
+    end
+    local variables = {}
+    for i = 1,nvars do
+        variables[i] = symbol(float,"v"..i)
+    end
+    local statements = terralib.newlist()
+    local emitted = {}
+    local function emit(e)
+        if "Var" == e.kind then
+            return variables[e.p]
+        elseif "Const" == e.kind then
+            return `float(e.v)
+        elseif "Apply" == e.kind then
+            if emitted[e] then return emitted[e] end
+            assert(e.op.generator)
+            local exp = e.op.generator(unpack(e.args:map(emit)))
+            if manyuses[e] then
+                local v = symbol(float,"e")
+                emitted[e] = v
+                statements:insert(quote var [v] = exp end)
+                return v
+            else
+                return exp
+            end
+        end
+    end
+    local tes = es:map(emit)
+    return terra([results],[variables])
+        [statements]
+        [results:map(function(x) return `@x end)] = [tes]
+    end
 end
 
 function Exp:d(v)
@@ -539,3 +582,5 @@ local e = 2*x*x*x*3 -- - y*x
 print((ad.sin(x)*ad.sin(x)):d(x))
 
 print(e:d(x)*3+(4*x)*x)
+
+print(s)

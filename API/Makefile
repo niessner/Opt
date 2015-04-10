@@ -4,50 +4,40 @@ UNAME := $(shell uname)
 
 CXX = clang++
 
-FLAGS = -Ibuild  -I$(TERRAHOME)/include
+CUDAHOME = /usr/local/cuda
+FLAGS = -MD -Ibuild  -I$(TERRAHOME)/include -I$(CUDAHOME)/include -std=c++11
 TERRAHOME = $(HOME)/terra/release
 TERRA = $(TERRAHOME)/terra
-LFLAGS = -Lbuild -lOpt -Wl,-rpath,$(shell pwd)/build -L$(TERRAHOME) -lterra -Wl,-rpath,$(TERRAHOME) -pagezero_size 10000 -image_base 100000000
+LFLAGS = -Lbuild -L$(CUDAHOME)/lib -Wl,-rpath,$(CUDAHOME)/lib -lcudart -lOpt -Wl,-rpath,$(shell pwd)/build -L$(TERRAHOME) -lterra -Wl,-rpath,$(TERRAHOME) -pagezero_size 10000 -image_base 100000000
 
-EXAMPLE_OBJS = example.o
-TEST_OBJS = testFramework.o main.o
 LINK = clang++
 
 EXAMPLE = example/example
 TEST = test/test
+TESTMLIB = testMLib/testMLib
 
-
-all:	$(EXAMPLE) $(TEST) 
+EXECUTABLES = $(EXAMPLE) $(TEST)
+all:	$(EXECUTABLES)
 
 TERRA = $(HOME)/terra/terra
 
 build/Opt.h build/libOpt.so:	src/createwrapper.t src/o.t
 	(cd build; $(TERRA) ../src/createwrapper.t Opt ../src/o.t)
 
-build/%.o:	example/%.cpp build/Opt.h
+%.o:	%.cpp build/Opt.h
 	$(CXX) $(FLAGS) $< -c -o $@
 
-build/%.o:	test/%.cpp build/Opt.h
-	$(CXX) $(FLAGS) $< -std=c++11 -c -o $@
-
-
-$(EXAMPLE):	$(addprefix build/, $(EXAMPLE_OBJS))
+$(EXAMPLE):	example/example.o
 	$(LINK) $^ -o $@ $(LFLAGS)
 
-$(TEST):	$(addprefix build/, $(TEST_OBJS))
+$(TEST):	test/testFramework.o test/main.o
 	$(LINK) $^ -o $@ $(LFLAGS)
-
+	
+$(TESTMLIB):	testMLib/main.o testMLib/mLibSource.o testFramework.o
+	$(LINK) $^ -o $@ $(LFLAGS)
+	
 clean:
-	rm -rf build/*.o build/*.d
-	rm -rf $(EXECUTABLE)
+	rm -rf */*.o */*.d build/Opt.h build/libOpt.so
+	rm -rf $(EXECUTABLES)
 
-# dependency rules
-DEPENDENCIES = $(patsubst %.o,build/%.d,$(OBJS))
-build/%.d:	src/%.cpp build/Opt.h
-	@$(CXX) $(FLAGS) -w -M $< -o $@
-	@sed -i "" "1s/^/build\/$(notdir $(@)) /" $@ 
-
-#if we are cleaning, then don't include dependencies (which would require the header files are built)	
-ifeq ($(findstring $(MAKECMDGOALS),purge clean),)
--include $(DEPENDENCIES)
-endif
+-include $(wildcard */*.d)
