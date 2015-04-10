@@ -3,9 +3,9 @@ local IO = terralib.includec("stdio.h")
 R = opt.Dim("R")
 C = opt.Dim("C")
 
-A = opt.Image(double,R,C)
-X = opt.Image(double,C,1)
-B = opt.Image(double,R,1)
+A = opt.Image(float,R,C)
+X = opt.Image(float,C,1)
+B = opt.Image(float,R,1)
 
 terra cost(i : uint64, j : uint64, x : X, a : A, b : B)
     IO.printf("the cost function, %d x %d\n",int(i),int(j))

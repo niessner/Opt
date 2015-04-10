@@ -3,10 +3,10 @@ local IO = terralib.includec("stdio.h")
 W = opt.Dim("W")
 H = opt.Dim("H")
 
-A = opt.Image(double,W,1)
-B = opt.Image(double,W,1)
-C = opt.Image(double,W,1)
-X = opt.Image(double,W,1)
+A = opt.Image(float,W,1)
+B = opt.Image(float,W,1)
+C = opt.Image(float,W,1)
+X = opt.Image(float,W,1)
 
 --
 -- cost = sum_i (r_i^2)

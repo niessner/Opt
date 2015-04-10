@@ -29,29 +29,29 @@ struct TestImage
         dimX = _dimX;
         dimY = _dimY;
         dataCPU.resize(dimX * dimY);
-        cudaMalloc(&dataGPU, sizeof(double) * dimX * dimY);
+		cudaMalloc(&dataGPU, sizeof(float) * dimX * dimY);
     }
     void syncCPUToGPU() const
     {
-        cudaMemcpy(dataGPU, (void *)dataCPU.data(), sizeof(double) * dimX * dimY, cudaMemcpyHostToDevice);
+		cudaMemcpy(dataGPU, (void *)dataCPU.data(), sizeof(float) * dimX * dimY, cudaMemcpyHostToDevice);
     }
     void bind(OptState *optimizerState)
     {
-        terraBindingCPU = Opt_ImageBind(optimizerState, dataCPU.data(), sizeof(double), dimX * sizeof(double));
-        terraBindingGPU = Opt_ImageBind(optimizerState, dataGPU, sizeof(double), dimX * sizeof(double));
+        terraBindingCPU = Opt_ImageBind(optimizerState, dataCPU.data(), sizeof(float), dimX * sizeof(float));
+		terraBindingGPU = Opt_ImageBind(optimizerState, dataGPU, sizeof(float), dimX * sizeof(float));
     }
-    double& operator()(int x, int y)
+    float& operator()(int x, int y)
     {
         return dataCPU[y * dimX + x];
     }
-    double operator()(int x, int y) const
+	float operator()(int x, int y) const
     {
         return dataCPU[y * dimX + x];
     }
 
     ImageBinding *terraBindingCPU;
     ImageBinding *terraBindingGPU;
-    vector<double> dataCPU;
+    vector<float> dataCPU;
     void *dataGPU;
     int dimX, dimY;
 };
@@ -72,9 +72,9 @@ struct TestExample
 
     vector<TestImage> images;
 
-    double minimumCost;
+    float minimumCost;
 
-    function<double(const double *variables)> costFunction;
+    function<float(const float *variables)> costFunction;
 };
 
 class TestFramework
@@ -86,7 +86,7 @@ private:
     void runTest(const TestMethod &method, const TestExample &example);
 
     TestExample makeRandomQuadratic(int count);
-    TestExample makeImageSmoothing(const string &imageFilename, double w);
+    TestExample makeImageSmoothing(const string &imageFilename, float w);
 
     vector<TestMethod> methods;
     vector<TestExample> examples;

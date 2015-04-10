@@ -3,13 +3,17 @@ local IO = terralib.includec("stdio.h")
 local W = opt.Dim("W")
 local H = opt.Dim("H")
 
-local X = opt.Image(double,W,H)
-
-local A = opt.Image(double,W,H)
+local X = opt.Image(float,W,H)
+local A = opt.Image(float,W,H)
 
 local C = terralib.includecstring [[
 #include <math.h>
 ]]
+
+-- e = sum_{i,j} [ e_reg_{i,j}^2 + e_fit_{i,j}^2 ]
+-- e_reg_{i,j} = I(i,j) - 0.25 * [ I(i+1,j)+I(i-1,j)+I(i,j+1)+I(i,j-1) ]
+-- e_fit_{i,j} = || I(i,j) - \hat{I}(i,j) ||_2
+
 
 -- TODO: this should be factored into a parameter
 local w = 0.1

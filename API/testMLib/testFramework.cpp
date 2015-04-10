@@ -1,7 +1,7 @@
 
 #include "main.h"
 
-TestExample TestFramework::makeImageSmoothing(const string &imageFilename, double w)
+TestExample TestFramework::makeImageSmoothing(const string &imageFilename, float w)
 {
     //
     // terms:
@@ -33,7 +33,7 @@ TestExample TestFramework::makeImageSmoothing(const string &imageFilename, doubl
         return (x == 0 || y == 0 || x == dimX - 1 || y == dimY - 1);
     };
 
-    SparseMatrixd L(pixelCount, pixelCount);
+    SparseMatrixf L(pixelCount, pixelCount);
     for (const auto &p : bmp)
     {
         if (isBorder(p.x, p.y))
@@ -47,17 +47,17 @@ TestExample TestFramework::makeImageSmoothing(const string &imageFilename, doubl
         L(row, getVariable(p.x + 0, p.y + 1)) = -1.0;
     }
 
-    MathVector<double> targetValues(pixelCount);
+    MathVector<float> targetValues(pixelCount);
     for (const auto &p : bmp)
         targetValues[getVariable(p.x, p.y)] = p.value.r;
 
-    SparseMatrixd W = SparseMatrixd::identity(pixelCount) * w;
+    SparseMatrixf W = SparseMatrixf::identity(pixelCount) * w;
 
-    SparseMatrixd A = L.transpose() * L + W;
-    MathVector<double> b = W * targetValues;
+    SparseMatrixf A = L.transpose() * L + W;
+    MathVector<float> b = W * targetValues;
 
-    LinearSolverConjugateGradient<double> solver;
-    MathVector<double> x = solver.solve(A, b);
+    LinearSolverConjugateGradient<float> solver;
+    MathVector<float> x = solver.solve(A, b);
 
     Bitmap testImage = bmp;
     for (const auto &p : bmp)
@@ -67,10 +67,10 @@ TestExample TestFramework::makeImageSmoothing(const string &imageFilename, doubl
 
     TestExample result("imageSmoothing", "imageSmoothing.t", bmp.getWidth(), bmp.getHeight());
 
-    result.costFunction = [=](const double *variables)
+    result.costFunction = [=](const float *variables)
     {
         //(4 * x_i - (neighbors) ) ^2 ) + sum_i( w * (x_i - target_i)^2
-        double sum = 0.0;
+        float sum = 0.0;
 
         //
         // Laplacian cost
@@ -80,14 +80,14 @@ TestExample TestFramework::makeImageSmoothing(const string &imageFilename, doubl
             if (isBorder(p.x, p.y))
                 continue;
 
-            const double x = variables[getVariable(p.x, p.y)];
+            const float x = variables[getVariable(p.x, p.y)];
 
-            const double n0 = variables[getVariable(p.x - 1, p.y)];
-            const double n1 = variables[getVariable(p.x + 1, p.y)];
-            const double n2 = variables[getVariable(p.x, p.y - 1)];
-            const double n3 = variables[getVariable(p.x, p.y + 1)];
+            const float n0 = variables[getVariable(p.x - 1, p.y)];
+            const float n1 = variables[getVariable(p.x + 1, p.y)];
+            const float n2 = variables[getVariable(p.x, p.y - 1)];
+            const float n3 = variables[getVariable(p.x, p.y + 1)];
 
-            const double laplacianCost = 4 * x - (n0 + n1 + n2 + n3);
+            const float laplacianCost = 4 * x - (n0 + n1 + n2 + n3);
 
             sum += laplacianCost * laplacianCost;
         }
@@ -97,8 +97,8 @@ TestExample TestFramework::makeImageSmoothing(const string &imageFilename, doubl
         //
         for (const auto &p : bmp)
         {
-            const double x = variables[getVariable(p.x, p.y)];
-            const double reconstructionCost = x - p.value.r;
+            const float x = variables[getVariable(p.x, p.y)];
+            const float reconstructionCost = x - p.value.r;
 
             sum += w * (reconstructionCost * reconstructionCost);
         }
@@ -134,38 +134,38 @@ TestExample TestFramework::makeRandomQuadratic(int count)
 
     for (int i = 0; i < count; i++)
     {
-        result.images[1](i, 0) = i * 0.1 + 1.0;
-        result.images[2](i, 0) = i * 0.1 + 2.0;
-        result.images[3](i, 0) = i * 0.1 + 3.0;
+        result.images[1](i, 0) = i * 0.1f + 1.0f;
+        result.images[2](i, 0) = i * 0.1f + 2.0f;
+        result.images[3](i, 0) = i * 0.1f + 3.0f;
     }
 
     //
     // residual_i = ( (ax^2 + bx + c)^2 = 0)
     //
 
-    result.costFunction = [=](const double *variables)
+    result.costFunction = [=](const float *variables)
     {
-        double sum = 0.0;
+        float sum = 0.0;
         for (int i = 0; i < count; i++)
         {
-            const double x = variables[i];
-            const double a = result.images[1](i, 0);
-            const double b = result.images[2](i, 0);
-            const double c = result.images[3](i, 0);
-            const double v = a * x * x + b * x + c;
+            const float x = variables[i];
+            const float a = result.images[1](i, 0);
+            const float b = result.images[2](i, 0);
+            const float c = result.images[3](i, 0);
+            const float v = a * x * x + b * x + c;
             sum += v * v;
         }
         return sum;
     };
 
-    double minimumSum = 0.0;
+    float minimumSum = 0.0f;
     for (int i = 0; i < count; i++)
     {
-        const double a = result.images[1](i, 0);
-        const double b = result.images[2](i, 0);
-        const double c = result.images[3](i, 0);
-        const double x = -b / (2.0 * a);
-        const double v = a * x * x + b * x + c;
+        const float a = result.images[1](i, 0);
+        const float b = result.images[2](i, 0);
+        const float c = result.images[3](i, 0);
+        const float x = -b / (2.0f * a);
+        const float v = a * x * x + b * x + c;
         minimumSum += v * v;
     }
     result.minimumCost = minimumSum;
@@ -183,10 +183,10 @@ void TestFramework::runAllTests()
     }
 
     //TestExample example = makeRandomQuadratic(5);
-    TestExample example = makeImageSmoothing("smoothingExampleB.png", 0.1);
+    TestExample example = makeImageSmoothing("smoothingExampleB.png", 0.1f);
 
-    //TestMethod method = TestMethod("gradientdescentCPU","no-params");
-    TestMethod method = TestMethod("gradientdescentGPU", "no-params");
+    TestMethod method = TestMethod("gradientdescentCPU","no-params");
+    //TestMethod method = TestMethod("gradientdescentGPU", "no-params");
 
     for (auto &image : example.images)
         image.bind(optimizerState);
