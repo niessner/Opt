@@ -63,7 +63,7 @@ TestExample TestFramework::makeImageSmoothing(const string &imageFilename, doubl
     for (const auto &p : bmp)
         testImage(p.x, p.y) = vec4uc(util::boundToByte(x[getVariable(p.x, p.y)]));
 
-    LodePNG::save(testImage, "c:\\code\\test.png");
+    LodePNG::save(testImage, "smoothingOutputLinearSolve.png");
 
     TestExample result("imageSmoothing", "imageSmoothing.t", bmp.getWidth(), bmp.getHeight());
 
@@ -183,7 +183,7 @@ void TestFramework::runAllTests()
     }
 
     //TestExample example = makeRandomQuadratic(5);
-    TestExample example = makeImageSmoothing("smoothingExampleA.png", 0.1);
+    TestExample example = makeImageSmoothing("smoothingExampleB.png", 0.1);
 
     TestMethod method = TestMethod("gradientdescentCPU","no-params");
     //TestMethod method = TestMethod("gradientdescentGPU", "no-params");
