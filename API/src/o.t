@@ -794,7 +794,7 @@ local function linearizedConjugateGradientCPU(tbl, vars)
 	return Problem:new { makePlan = makePlan }
 end
 
---[[local function linearizedConjugateGradientGPU(tbl, vars)
+local function linearizedConjugateGradientGPU(tbl, vars)
 	local struct PlanData(S.Object) {
 		plan : opt.Plan
 		gradW : int
@@ -805,41 +805,54 @@ end
 		r : vars.unknownType
 		p : vars.unknownType
 		Ap : vars.unknownType
+		zeroes : vars.unknownType
 		
 		scratchF : &float
-		scratchD : &double
 	}
 	
 	local images = vars.argumentTypes:map(symbol)
 
 	local cuda = {}
 	
-	terra cuda.computeGradient(pd : PlanData, out : vars.unknownType, [images])
+	terra cuda.initialize(pd : PlanData, [images])
 		var w = blockDim.x * blockIdx.x + threadIdx.x;
 		var h = blockDim.y * blockIdx.y + threadIdx.y;
 
 		if w < pd.gradW and h < pd.gradH then
-			out(w,h) = tbl.gradient(w, h, images)
+			pd.r(w, h) = -tbl.gradientHack(w, h, [ images[1] ], images)
+			pd.b(w, h) = tbl.gradientHack(w, h, pd.zeroes, images)
+			pd.p(w, h) = pd.r(w, h)
 		end
 	end
-
-	terra cuda.updatePosition(pd : PlanData, learningRate : double, maxDelta : &double, [images])
+	
+	terra cuda.computeAp(pd : PlanData, [images])
 		var w = blockDim.x * blockIdx.x + threadIdx.x;
 		var h = blockDim.y * blockIdx.y + threadIdx.y;
 
 		if w < pd.gradW and h < pd.gradH then
-			var addr = &[ images[1] ](w,h)
-			var delta = learningRate * pd.gradStore(w,h)
-			@addr = @addr - delta
-
-			delta = delta * delta
-			var deltaD : double = delta
-			var deltaI64 = @[&int64](&deltaD)
-			--printf("delta=%f, deltaI=%d\n", delta, deltaI)
-			terralib.asm(terralib.types.unit,"red.global.max.u64 [$0],$1;", "l,l", true, maxDelta, deltaI64)
+			pd.Ap(w, h) = tbl.gradientHack(w, h, pd.p, images) - pd.b(w, h)
 		end
 	end
 
+	terra cuda.updateResidualAndPosition(pd : PlanData, alpha : float, [images])
+		var w = blockDim.x * blockIdx.x + threadIdx.x;
+		var h = blockDim.y * blockIdx.y + threadIdx.y;
+
+		if w < pd.gradW and h < pd.gradH then
+			[ images[1] ](w, h) = [ images[1] ](w, h) + alpha * pd.p(w, h)
+			pd.r(w, h) = pd.r(w, h) - alpha * pd.Ap(w, h)
+		end
+	end
+	
+	terra cuda.updateP(pd : PlanData, beta : float)
+		var w = blockDim.x * blockIdx.x + threadIdx.x;
+		var h = blockDim.y * blockIdx.y + threadIdx.y;
+
+		if w < pd.gradW and h < pd.gradH then
+			pd.p(w, h) = pd.r(w, h) + beta * pd.p(w, h)
+		end
+	end
+	
 	terra cuda.costSum(pd : PlanData, sum : &float, [images])
 		var w = blockDim.x * blockIdx.x + threadIdx.x;
 		var h = blockDim.y * blockIdx.y + threadIdx.y;
@@ -850,7 +863,7 @@ end
 		end
 	end
 	
-	terra cuda.imageInnerProduct(pd : PlanData, a : vars.unknownType, b : vars.unknownType, sum : &float, [images])
+	terra cuda.imageInnerProduct(pd : PlanData, a : vars.unknownType, b : vars.unknownType, sum : &float)
 		var w = blockDim.x * blockIdx.x + threadIdx.x;
 		var h = blockDim.y * blockIdx.y + threadIdx.y;
 
@@ -862,7 +875,7 @@ end
 	
 	cuda = terralib.cudacompile(cuda, false)
 	
-	local terra totalCost(data_ : &opaque, [images])
+	local terra totalCost(pd : &PlanData, [images])
 		var launch = terralib.CUDAParams { (pd.gradW - 1) / 32 + 1, (pd.gradH - 1) / 32 + 1,1, 32,32,1, 0, nil }
 
 		@pd.scratchF = 0.0f
@@ -873,14 +886,12 @@ end
 	end
 	
 	-- TODO: ask zach how to do templates so this can live at a higher scope
-	local terra imageInnerProduct(width : int, height : int, a : vars.unknownType, b : vars.unknownType)
-		var sum = 0.0
-		for h = 0, height do
-			for w = 0, width do
-				sum = sum + a(w, h) * b(w, h)
-			end
-		end
-		return sum
+	local terra imageInnerProduct(pd : &PlanData, a : vars.unknownType, b : vars.unknownType)
+		var launch = terralib.CUDAParams { (pd.gradW - 1) / 32 + 1, (pd.gradH - 1) / 32 + 1,1, 32,32,1, 0, nil }
+		@pd.scratchF = 0.0
+		cuda.imageInnerProduct(&launch, @pd, a, b, pd.scratchF)
+		C.cudaDeviceSynchronize()
+		return @pd.scratchF
 	end
 
 	local terra impl(data_ : &opaque, imageBindings : &&opt.ImageBinding, params_ : &opaque)
@@ -890,65 +901,40 @@ end
 
 		var [images] = [getImages(vars, imageBindings, dims)]
 
+		var launch = terralib.CUDAParams { (pd.gradW - 1) / 32 + 1, (pd.gradH - 1) / 32 + 1,1, 32,32,1, 0, nil }
+		
 		-- TODO: parameterize these
 		var maxIters = 1000
 		var tolerance = 1e-5
 
-		-- here, Ap is being used as storage for zeroes
-		for h = 0, pd.gradH do
-			for w = 0, pd.gradW do
-				pd.Ap(w, h) = 0.0
-			end
-		end
-		
-		for h = 0, pd.gradH do
-			for w = 0, pd.gradW do
-				pd.r(w, h) = -tbl.gradientHack(w, h, [ images[1] ], images)
-				pd.b(w, h) = tbl.gradientHack(w, h, pd.Ap, images)
-				pd.p(w, h) = pd.r(w, h)
-			end
-		end
-		
-		var rTr = imageInnerProduct(pd.gradW, pd.gradH, pd.r, pd.r)
+		cuda.initialize(&launch, @pd, [images])
 
-		for iter = 0,maxIters do
+		var rTr = imageInnerProduct(pd, pd.r, pd.r)
 
-			var iterStartCost = totalCost(data_, images)
+		for iter = 0, maxIters do
+
+			var iterStartCost = totalCost(pd, images)
 			
-			for h = 0, pd.gradH do
-				for w = 0, pd.gradW do
-					--TODO: more elegant gradientHack
-					pd.Ap(w, h) = tbl.gradientHack(w, h, pd.p, images) - pd.b(w, h)
-				end
-			end
+			cuda.computeAp(&launch, @pd, [images])
 			
-			var den = imageInnerProduct(pd.gradW, pd.gradH, pd.p, pd.Ap)
+			var den = imageInnerProduct(pd, pd.p, pd.Ap)
 			var alpha = rTr / den
 			
-			for h = 0, pd.gradH do
-				for w = 0, pd.gradW do
-					[ images[1] ](w, h) = [ images[1] ](w, h) + alpha * pd.p(w, h)
-					pd.r(w, h) = pd.r(w, h) - alpha * pd.Ap(w, h)
-				end
-			end
+			cuda.updateResidualAndPosition(&launch, @pd, alpha, [images])
 			
-			var rTrNew = imageInnerProduct(pd.gradW, pd.gradH, pd.r, pd.r)
+			var rTrNew = imageInnerProduct(pd, pd.r, pd.r)
 			
 			C.printf("iteration %d, cost=%f, rTr=%f\n", iter, iterStartCost, rTrNew)
 			
 			if(rTrNew < tolerance) then break end
 			
 			var beta = rTrNew / rTr
-			for h = 0, pd.gradH do
-				for w = 0, pd.gradW do
-					pd.p(w, h) = pd.r(w, h) + beta * pd.p(w, h)
-				end
-			end
+			cuda.updateP(&launch, @pd, beta)
 			
 			rTr = rTrNew
 		end
 		
-		var finalCost = totalCost(data_, images)
+		var finalCost = totalCost(pd, images)
 		C.printf("final cost=%f\n", finalCost)
 	end
 
@@ -967,15 +953,18 @@ end
 		pd.gradW = pd.dims[gradWIndex]
 		pd.gradH = pd.dims[gradHIndex]
 
-		pd.b:initCPU(pd.gradW, pd.gradH)
-		pd.r:initCPU(pd.gradW, pd.gradH)
-		pd.p:initCPU(pd.gradW, pd.gradH)
-		pd.Ap:initCPU(pd.gradW, pd.gradH)
+		pd.b:initGPU(pd.gradW, pd.gradH)
+		pd.r:initGPU(pd.gradW, pd.gradH)
+		pd.p:initGPU(pd.gradW, pd.gradH)
+		pd.Ap:initGPU(pd.gradW, pd.gradH)
+		pd.zeroes:initGPU(pd.gradW, pd.gradH)
+		
+		C.cudaMallocManaged([&&opaque](&(pd.scratchF)), sizeof(float), C.cudaMemAttachGlobal)
 		
 		return &pd.plan
 	end
 	return Problem:new { makePlan = makePlan }
-end]]
+end
 
 local function linearizedPreconditionedConjugateGradientCPU(tbl, vars)
 	local struct PlanData(S.Object) {
@@ -1190,6 +1179,8 @@ local function compileProblem(tbl, kind)
 		return conjugateGradientCPU(tbl, vars)
 	elseif kind == "linearizedConjugateGradientCPU" then
 		return linearizedConjugateGradientCPU(tbl, vars)
+	elseif kind == "linearizedConjugateGradientGPU" then
+		return linearizedConjugateGradientGPU(tbl, vars)
 	elseif kind == "linearizedPreconditionedConjugateGradientCPU" then
 		return linearizedPreconditionedConjugateGradientCPU(tbl, vars)
 	end
@@ -1275,8 +1266,8 @@ local newImage = terralib.memoize(function(typ, W, H)
 		end
    end
    terra Image:initGPU(actualW : int, actualH : int)
-		self.W = actualH
-		self.H = actualW
+		self.W = actualW
+		self.H = actualH
 		var cudaError = C.cudaMalloc([&&opaque](&(self.impl.data)), actualW * actualH * sizeof(typ))
 		cudaError = C.cudaMemset([&&opaque](&(self.impl.data)), 0, actualW * actualH * sizeof(typ))
 		self.impl.elemsize = sizeof(typ)

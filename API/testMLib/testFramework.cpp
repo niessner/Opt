@@ -182,10 +182,11 @@ void TestFramework::runAllTests()
     TestExample example = makeImageSmoothing("smoothingExampleB.png", 0.1f);
 
     //TestMethod method = TestMethod("gradientdescentCPU","no-params");
-    //TestMethod method = TestMethod("gradientdescentGPU", "no-params");
+    TestMethod method = TestMethod("gradientdescentGPU", "no-params");
     //TestMethod method = TestMethod("conjugateGradientCPU", "no-params");
     //TestMethod method = TestMethod("linearizedConjugateGradientCPU", "no-params");
-    TestMethod method = TestMethod("linearizedPreconditionedConjugateGradientCPU", "no-params");
+    //TestMethod method = TestMethod("linearizedConjugateGradientGPU", "no-params");
+    //TestMethod method = TestMethod("linearizedPreconditionedConjugateGradientCPU", "no-params");
 
     for (auto &image : example.images)
         image.bind(optimizerState);
