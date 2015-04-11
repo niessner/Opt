@@ -858,7 +858,7 @@ local function linearizedConjugateGradientGPU(tbl, vars)
 		var h = blockDim.y * blockIdx.y + threadIdx.y;
 
 		if w < pd.gradW and h < pd.gradH then
-			var v = [float](tbl.cost.fn(w,h,images))
+			var v = [float](tbl.cost.fn(w, h, images))
 			terralib.asm(terralib.types.unit,"red.global.add.f32 [$0],$1;","l,f", true, sum, v)
 		end
 	end
@@ -878,7 +878,9 @@ local function linearizedConjugateGradientGPU(tbl, vars)
 	local terra totalCost(pd : &PlanData, [images])
 		var launch = terralib.CUDAParams { (pd.gradW - 1) / 32 + 1, (pd.gradH - 1) / 32 + 1,1, 32,32,1, 0, nil }
 
-		@pd.scratchF = 0.0f
+		C.cudaDeviceSynchronize()
+		@pd.scratchF = 0.0
+		C.cudaDeviceSynchronize()
 		cuda.costSum(&launch, @pd, pd.scratchF, [images])
 		C.cudaDeviceSynchronize()
 
@@ -888,9 +890,13 @@ local function linearizedConjugateGradientGPU(tbl, vars)
 	-- TODO: ask zach how to do templates so this can live at a higher scope
 	local terra imageInnerProduct(pd : &PlanData, a : vars.unknownType, b : vars.unknownType)
 		var launch = terralib.CUDAParams { (pd.gradW - 1) / 32 + 1, (pd.gradH - 1) / 32 + 1,1, 32,32,1, 0, nil }
+		
+		C.cudaDeviceSynchronize()
 		@pd.scratchF = 0.0
+		C.cudaDeviceSynchronize()
 		cuda.imageInnerProduct(&launch, @pd, a, b, pd.scratchF)
 		C.cudaDeviceSynchronize()
+		
 		return @pd.scratchF
 	end
 
@@ -904,21 +910,27 @@ local function linearizedConjugateGradientGPU(tbl, vars)
 		var launch = terralib.CUDAParams { (pd.gradW - 1) / 32 + 1, (pd.gradH - 1) / 32 + 1,1, 32,32,1, 0, nil }
 		
 		-- TODO: parameterize these
-		var maxIters = 1000
+		var maxIters = 10
 		var tolerance = 1e-5
 
+		C.cudaDeviceSynchronize()
 		cuda.initialize(&launch, @pd, [images])
-
+		C.cudaDeviceSynchronize()
+		
 		var rTr = imageInnerProduct(pd, pd.r, pd.r)
+		C.printf("rTr %f\n", rTr)
 
 		for iter = 0, maxIters do
-
+	
 			var iterStartCost = totalCost(pd, images)
 			
+			C.cudaDeviceSynchronize()
 			cuda.computeAp(&launch, @pd, [images])
 			
 			var den = imageInnerProduct(pd, pd.p, pd.Ap)
 			var alpha = rTr / den
+			
+			C.printf("den=%f, alpha=%f\n", den, alpha)
 			
 			cuda.updateResidualAndPosition(&launch, @pd, alpha, [images])
 			
@@ -979,6 +991,7 @@ local function linearizedPreconditionedConjugateGradientCPU(tbl, vars)
 		p : vars.unknownType
 		MInv : vars.unknownType
 		Ap : vars.unknownType
+		zeroes : vars.unknownType
 	}
 	
 	local images = vars.argumentTypes:map(symbol)
@@ -1019,10 +1032,8 @@ local function linearizedPreconditionedConjugateGradientCPU(tbl, vars)
 		var maxIters = 1000
 		var tolerance = 1e-5
 
-		-- here, Ap is being used as storage for zeroes
 		for h = 0, pd.gradH do
 			for w = 0, pd.gradW do
-				pd.Ap(w, h) = 0.0
 				pd.MInv(w, h) = 1.0 / tbl.gradientPreconditioner(w, h)
 			end
 		end
@@ -1030,7 +1041,7 @@ local function linearizedPreconditionedConjugateGradientCPU(tbl, vars)
 		for h = 0, pd.gradH do
 			for w = 0, pd.gradW do
 				pd.r(w, h) = -tbl.gradientHack(w, h, [ images[1] ], images)
-				pd.b(w, h) = tbl.gradientHack(w, h, pd.Ap, images)
+				pd.b(w, h) = tbl.gradientHack(w, h, pd.zeroes, images)
 				pd.z(w, h) = pd.MInv(w, h) * pd.r(w, h)
 				pd.p(w, h) = pd.z(w, h)
 			end
@@ -1104,6 +1115,7 @@ local function linearizedPreconditionedConjugateGradientCPU(tbl, vars)
 		pd.p:initCPU(pd.gradW, pd.gradH)
 		pd.MInv:initCPU(pd.gradW, pd.gradH)
 		pd.Ap:initCPU(pd.gradW, pd.gradH)
+		pd.zeroes:initCPU(pd.gradW, pd.gradH)
 		
 		return &pd.plan
 	end
@@ -1268,10 +1280,12 @@ local newImage = terralib.memoize(function(typ, W, H)
    terra Image:initGPU(actualW : int, actualH : int)
 		self.W = actualW
 		self.H = actualH
-		var cudaError = C.cudaMalloc([&&opaque](&(self.impl.data)), actualW * actualH * sizeof(typ))
-		cudaError = C.cudaMemset([&&opaque](&(self.impl.data)), 0, actualW * actualH * sizeof(typ))
-		self.impl.elemsize = sizeof(typ)
-		self.impl.stride = actualW * sizeof(typ)
+		var typeSize = sizeof(typ)
+		--C.printf("typesize=%d\n", typeSize)
+		var cudaError = C.cudaMalloc([&&opaque](&(self.impl.data)), actualW * actualH * typeSize)
+		cudaError = C.cudaMemset([&&opaque](&(self.impl.data)), 0, actualW * actualH * typeSize)
+		self.impl.elemsize = typeSize
+		self.impl.stride = actualW * typeSize
    end
    Image.metamethods.typ,Image.metamethods.W,Image.metamethods.H = typ, W, H
    return Image
