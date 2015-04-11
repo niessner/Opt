@@ -715,8 +715,8 @@ local function linearizedConjugateGradientCPU(tbl, vars)
 		var [images] = [getImages(vars, imageBindings, dims)]
 
 		-- TODO: parameterize these
-		var maxIters = 20
-		var tolerance = 1e-10
+		var maxIters = 1000
+		var tolerance = 1e-5
 
 		-- here, Ap is being used as storage for zeroes
 		for h = 0, pd.gradH do
@@ -940,11 +940,17 @@ local newImage = terralib.memoize(function(typ, W, H)
      return `@[&typ](self.impl:get(x,y))
    end)
    terra Image:initCPU(actualW : int, actualH : int)
-		self.W = actualH
-		self.H = actualW
+		self.W = actualW
+		self.H = actualH
 		self.impl.data = [&uint8](C.malloc(actualW * actualH * sizeof(typ)))
 		self.impl.elemsize = sizeof(typ)
 		self.impl.stride = actualW * sizeof(typ)
+		
+		for h = 0, self.H do
+			for w = 0, self.W do
+				self(w, h) = 0.0
+			end
+		end
    end
    terra Image:initGPU(actualW : int, actualH : int)
 		self.W = actualH
