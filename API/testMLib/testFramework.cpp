@@ -149,7 +149,7 @@ TestExample TestFramework::makeRandomQuadratic(int count)
             const float b = result.images[2](i, 0);
             const float c = result.images[3](i, 0);
             const float v = a * x * x + b * x + c;
-            sum += v * v;
+            sum += v;
         }
         return sum;
     };
@@ -162,7 +162,7 @@ TestExample TestFramework::makeRandomQuadratic(int count)
         const float c = result.images[3](i, 0);
         const float x = -b / (2.0f * a);
         const float v = a * x * x + b * x + c;
-        minimumSum += v * v;
+        minimumSum += v;
     }
     result.minimumCost = minimumSum;
 
@@ -184,7 +184,8 @@ void TestFramework::runAllTests()
     //TestMethod method = TestMethod("gradientdescentCPU","no-params");
     //TestMethod method = TestMethod("gradientdescentGPU", "no-params");
     //TestMethod method = TestMethod("conjugateGradientCPU", "no-params");
-    TestMethod method = TestMethod("linearizedConjugateGradientCPU", "no-params");
+    //TestMethod method = TestMethod("linearizedConjugateGradientCPU", "no-params");
+    TestMethod method = TestMethod("linearizedPreconditionedConjugateGradientCPU", "no-params");
 
     for (auto &image : example.images)
         image.bind(optimizerState);

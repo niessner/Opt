@@ -683,6 +683,7 @@ local function linearizedConjugateGradientCPU(tbl, vars)
 	
 	local images = vars.argumentTypes:map(symbol)
 
+	-- TODO: ask zach how to factor out totalCost
 	local terra totalCost(data_ : &opaque, [images])
 		var pd = [&PlanData](data_)
 		var result = 0.0
@@ -722,7 +723,6 @@ local function linearizedConjugateGradientCPU(tbl, vars)
 		for h = 0, pd.gradH do
 			for w = 0, pd.gradW do
 				pd.Ap(w, h) = 0.0
-				[ images [1] ](w,h) = 0.0
 			end
 		end
 		
@@ -742,6 +742,7 @@ local function linearizedConjugateGradientCPU(tbl, vars)
 			
 			for h = 0, pd.gradH do
 				for w = 0, pd.gradW do
+					--TODO: more elegant gradientHack
 					pd.Ap(w, h) = tbl.gradientHack(w, h, pd.p, images) - pd.b(w, h)
 				end
 			end
@@ -762,10 +763,10 @@ local function linearizedConjugateGradientCPU(tbl, vars)
 			
 			if(rTrNew < tolerance) then break end
 			
-			var rScale = rTrNew / rTr
+			var beta = rTrNew / rTr
 			for h = 0, pd.gradH do
 				for w = 0, pd.gradW do
-					pd.p(w, h) = pd.r(w, h) + rScale * pd.p(w, h)
+					pd.p(w, h) = pd.r(w, h) + beta * pd.p(w, h)
 				end
 			end
 			
@@ -794,6 +795,150 @@ local function linearizedConjugateGradientCPU(tbl, vars)
 		pd.b:initCPU(pd.gradW, pd.gradH)
 		pd.r:initCPU(pd.gradW, pd.gradH)
 		pd.p:initCPU(pd.gradW, pd.gradH)
+		pd.Ap:initCPU(pd.gradW, pd.gradH)
+		
+		return &pd.plan
+	end
+	return Problem:new { makePlan = makePlan }
+end
+
+local function linearizedPreconditionedConjugateGradientCPU(tbl, vars)
+	local struct PlanData(S.Object) {
+		plan : opt.Plan
+		gradW : int
+		gradH : int
+		dims : int64[#vars.dims + 1]
+		
+		b : vars.unknownType
+		r : vars.unknownType
+		z : vars.unknownType
+		p : vars.unknownType
+		MInv : vars.unknownType
+		Ap : vars.unknownType
+	}
+	
+	local images = vars.argumentTypes:map(symbol)
+
+	-- TODO: ask zach how to factor out totalCost
+	local terra totalCost(data_ : &opaque, [images])
+		var pd = [&PlanData](data_)
+		var result = 0.0
+		for h = 0,pd.gradH do
+			for w = 0,pd.gradW do
+				var v = tbl.cost.fn(w, h, images)
+				result = result + v
+			end
+		end
+		return result
+	end
+	
+	-- TODO: ask zach how to pass something like pd in, instead of having to extract gradH and gradW. Probably a macro or some such.
+	-- TODO: ask zach how to do templates so this can live at a higher scope
+	local terra imageInnerProduct(width : int, height : int, a : vars.unknownType, b : vars.unknownType)
+		var sum = 0.0
+		for h = 0, height do
+			for w = 0, width do
+				sum = sum + a(w, h) * b(w, h)
+			end
+		end
+		return sum
+	end
+
+	local terra impl(data_ : &opaque, imageBindings : &&opt.ImageBinding, params_ : &opaque)
+		var pd = [&PlanData](data_)
+		var params = [&double](params_)
+		var dims = pd.dims
+
+		var [images] = [getImages(vars, imageBindings, dims)]
+
+		-- TODO: parameterize these
+		var maxIters = 1000
+		var tolerance = 1e-5
+
+		-- here, Ap is being used as storage for zeroes
+		for h = 0, pd.gradH do
+			for w = 0, pd.gradW do
+				pd.Ap(w, h) = 0.0
+				pd.MInv(w, h) = 1.0 / tbl.gradientPreconditioner(w, h)
+			end
+		end
+		
+		for h = 0, pd.gradH do
+			for w = 0, pd.gradW do
+				pd.r(w, h) = -tbl.gradientHack(w, h, [ images[1] ], images)
+				pd.b(w, h) = tbl.gradientHack(w, h, pd.Ap, images)
+				pd.z(w, h) = pd.MInv(w, h) * pd.r(w, h)
+				pd.p(w, h) = pd.z(w, h)
+			end
+		end
+		
+		for iter = 0,maxIters do
+
+			var iterStartCost = totalCost(data_, images)
+			
+			for h = 0, pd.gradH do
+				for w = 0, pd.gradW do
+					--TODO: more elegant gradientHack
+					pd.Ap(w, h) = tbl.gradientHack(w, h, pd.p, images) - pd.b(w, h)
+				end
+			end
+			
+			var rTzStart = imageInnerProduct(pd.gradW, pd.gradH, pd.r, pd.z)
+			var den = imageInnerProduct(pd.gradW, pd.gradH, pd.p, pd.Ap)
+			var alpha = rTzStart / den
+			
+			for h = 0, pd.gradH do
+				for w = 0, pd.gradW do
+					[ images[1] ](w, h) = [ images[1] ](w, h) + alpha * pd.p(w, h)
+					pd.r(w, h) = pd.r(w, h) - alpha * pd.Ap(w, h)
+				end
+			end
+			
+			var rTr = imageInnerProduct(pd.gradW, pd.gradH, pd.r, pd.r)
+			
+			C.printf("iteration %d, cost=%f, rTr=%f\n", iter, iterStartCost, rTr)
+			
+			if(rTr < tolerance) then break end
+			
+			for h = 0, pd.gradH do
+				for w = 0, pd.gradW do
+					pd.z(w, h) = pd.MInv(w, h) * pd.r(w, h)
+				end
+			end
+			
+			var beta = imageInnerProduct(pd.gradW, pd.gradH, pd.z, pd.r) / rTzStart
+			
+			for h = 0, pd.gradH do
+				for w = 0, pd.gradW do
+					pd.p(w, h) = pd.z(w, h) + beta * pd.p(w, h)
+				end
+			end
+		end
+		
+		var finalCost = totalCost(data_, images)
+		C.printf("final cost=%f\n", finalCost)
+	end
+
+	local gradWIndex = vars.dimIndex[ vars.gradientDim[1] ]
+	local gradHIndex = vars.dimIndex[ vars.gradientDim[2] ]
+
+	local terra makePlan(actualDims : &uint64) : &opt.Plan
+		var pd = PlanData.alloc()
+		pd.plan.data = pd
+		pd.plan.impl = impl
+		pd.dims[0] = 1
+		for i = 0,[#vars.dims] do
+			pd.dims[i+1] = actualDims[i]
+		end
+
+		pd.gradW = pd.dims[gradWIndex]
+		pd.gradH = pd.dims[gradHIndex]
+
+		pd.b:initCPU(pd.gradW, pd.gradH)
+		pd.r:initCPU(pd.gradW, pd.gradH)
+		pd.z:initCPU(pd.gradW, pd.gradH)
+		pd.p:initCPU(pd.gradW, pd.gradH)
+		pd.MInv:initCPU(pd.gradW, pd.gradH)
 		pd.Ap:initCPU(pd.gradW, pd.gradH)
 		
 		return &pd.plan
@@ -870,6 +1015,8 @@ local function compileProblem(tbl, kind)
 		return conjugateGradientCPU(tbl, vars)
 	elseif kind == "linearizedConjugateGradientCPU" then
 		return linearizedConjugateGradientCPU(tbl, vars)
+	elseif kind == "linearizedPreconditionedConjugateGradientCPU" then
+		return linearizedPreconditionedConjugateGradientCPU(tbl, vars)
 	end
     
 end
