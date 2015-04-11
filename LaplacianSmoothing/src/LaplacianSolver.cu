@@ -278,9 +278,10 @@ float EvalResidual(SolverInput& input, SolverState& state, SolverParameters& par
 		cutilSafeCall(cudaDeviceSynchronize());
 
 		residual = state.getSumResidual();
-	} else {
+	}
+	else {
 		const unsigned int N = input.N; // Number of block variables
-		EvalAllResidualsDevice <<<(N + THREADS_PER_BLOCK - 1) / THREADS_PER_BLOCK, THREADS_PER_BLOCK >>>(input, state, parameters);
+		EvalAllResidualsDevice << <(N + THREADS_PER_BLOCK - 1) / THREADS_PER_BLOCK, THREADS_PER_BLOCK >> >(input, state, parameters);
 		cutilSafeCall(cudaDeviceSynchronize());
 
 		float* h_residuals = new float[input.width*input.height];
@@ -320,7 +321,7 @@ __global__ void GradientDecentUpdateDevice(SolverInput input, SolverState state,
 	const unsigned int x = blockIdx.x * blockDim.x + threadIdx.x;
 
 	if (x < N) {
-		state.d_x[x] = state.d_x[x] + stepSize * state.d_delta[x];
+		state.d_x[x] = state.d_x[x] + stepSize * state.d_delta[x]; //delta is negative
 	}
 }
 
@@ -371,7 +372,7 @@ extern "C" void LaplacianSolveGNStub(SolverInput& input, SolverState& state, Sol
 // Main GD Solver Loop
 ////////////////////////////////////////////////////////////////////
 
-extern "C" void LaplacianSolveGDStub(SolverInput& input, SolverState& state, SolverParameters& parameters) 
+extern "C" void LaplacianSolveGDStub(SolverInput& input, SolverState& state, SolverParameters& parameters)
 {
 	float initialLearningRate = 0.01f;
 	float tolerance = 1e-10f;
@@ -401,12 +402,12 @@ extern "C" void LaplacianSolveGDStub(SolverInput& input, SolverState& state, Sol
 			if (maxDelta < tolerance) {
 				//break;
 			}
-			else {
-				learningRate = learningRate * learningLoss;
+		}
+		else {
+			learningRate = learningRate * learningLoss;
 
-				if (learningRate < minLearningRate) {
-					break;
-				}
+			if (learningRate < minLearningRate) {
+				break;
 			}
 		}
 
