@@ -472,10 +472,13 @@ local function conjugateGradientCPU(tbl, vars)
 		--C.printf("impl B\n")
 
 		-- TODO: parameterize these
-		var lineSearchMax = 1000
-		var lineSearchStart = 1e-5
-		var lineSearchMultiplier = 1.2
-		var maxIters = 100
+		var lineSearchMaxIters = 10000
+		var lineSearchBruteForceStart = 1e-6
+		var lineSearchBruteForceMultiplier = 1.1
+		var lineSearchBinaryMinMultiplier = 0.25
+		var lineSearchBinaryMaxMultiplier = 1.5
+		
+		var maxIters = 1000
 
 		--C.printf("impl D\n")
 
@@ -539,8 +542,35 @@ local function conjugateGradientCPU(tbl, vars)
 			
 			C.memcpy(pd.currentValues.impl.data, [ images[1] ].impl.data, sizeof(float) * pd.gradW * pd.gradH)
 			
+			--
+			-- line search
+			--
+			var bestAlpha = 0.0
 			
-			var alpha = lineSearchStart
+			var useBruteForce = true
+			if useBruteForce then
+				var alpha = lineSearchBruteForceStart
+				var bestCost = iterStartCost
+				
+				for lineSearchIndex = 0, lineSearchMaxIters do
+					alpha = alpha * lineSearchBruteForceMultiplier
+					
+					for h = 0,pd.gradH do
+						for w = 0,pd.gradW do
+							[ images[1] ](w, h) = pd.currentValues(w, h) + alpha * pd.searchDirection(w, h)
+						end
+					end
+					
+					var searchCost = totalCost(data_, images)
+					if searchCost <= bestCost then
+						bestAlpha = alpha
+						bestCost = searchCost
+					else
+						break
+					end
+				end
+			end
+			--[[var alpha = lineSearchStart
 			var bestAlpha = 0.0
 			var bestCost = iterStartCost
 			
@@ -560,14 +590,18 @@ local function conjugateGradientCPU(tbl, vars)
 				else
 					break
 				end
-			end
+			end]]
 			
-			C.printf("alpha=%f, beta=%f\n\n", alpha, beta)
+			C.printf("alpha=%f, beta=%f\n\n", bestAlpha, beta)
 			
 			for h = 0,pd.gradH do
 				for w = 0,pd.gradW do
 					[ images[1] ](w, h) = pd.currentValues(w, h) + bestAlpha * pd.searchDirection(w, h)
 				end
+			end
+			
+			if bestAlpha == 0.0 and beta == 0.0 then
+				break
 			end
 			--C.printf("impl iter end\n")
 		end
