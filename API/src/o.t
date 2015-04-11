@@ -98,11 +98,7 @@ local ffi = require('ffi')
 local problems = {}
 
 local terra max(x : double, y : double)
-	if x > y then
-		return x
-	else
-		return y
-	end
+	return terralib.select(x > y, x, y)
 end
 
 -- this function should do anything it needs to compile an optimizer defined
@@ -272,10 +268,6 @@ local function gradientDescentGPU(tbl,vars)
 
 	local images = vars.argumentTypes:map(symbol)
 
-	local terra max(x : double, y : double)
-		return terralib.select(x > y, x, y)
-	end
-
 	local cuda = {}
 
 	terra cuda.computeGradient(pd : PlanData, [images])
@@ -410,7 +402,7 @@ local function gradientDescentGPU(tbl,vars)
 		pd.plan.data = pd
 		pd.plan.impl = impl
 		pd.dims[0] = 1
-		for i = 0,[#dims] do
+		for i = 0,[#vars.dims] do
 			pd.dims[i+1] = actualDims[i]
 		end
 
@@ -802,6 +794,189 @@ local function linearizedConjugateGradientCPU(tbl, vars)
 	return Problem:new { makePlan = makePlan }
 end
 
+--[[local function linearizedConjugateGradientGPU(tbl, vars)
+	local struct PlanData(S.Object) {
+		plan : opt.Plan
+		gradW : int
+		gradH : int
+		dims : int64[#vars.dims + 1]
+		
+		b : vars.unknownType
+		r : vars.unknownType
+		p : vars.unknownType
+		Ap : vars.unknownType
+		
+		scratchF : &float
+		scratchD : &double
+	}
+	
+	local images = vars.argumentTypes:map(symbol)
+
+	local cuda = {}
+	
+	terra cuda.computeGradient(pd : PlanData, out : vars.unknownType, [images])
+		var w = blockDim.x * blockIdx.x + threadIdx.x;
+		var h = blockDim.y * blockIdx.y + threadIdx.y;
+
+		if w < pd.gradW and h < pd.gradH then
+			out(w,h) = tbl.gradient(w, h, images)
+		end
+	end
+
+	terra cuda.updatePosition(pd : PlanData, learningRate : double, maxDelta : &double, [images])
+		var w = blockDim.x * blockIdx.x + threadIdx.x;
+		var h = blockDim.y * blockIdx.y + threadIdx.y;
+
+		if w < pd.gradW and h < pd.gradH then
+			var addr = &[ images[1] ](w,h)
+			var delta = learningRate * pd.gradStore(w,h)
+			@addr = @addr - delta
+
+			delta = delta * delta
+			var deltaD : double = delta
+			var deltaI64 = @[&int64](&deltaD)
+			--printf("delta=%f, deltaI=%d\n", delta, deltaI)
+			terralib.asm(terralib.types.unit,"red.global.max.u64 [$0],$1;", "l,l", true, maxDelta, deltaI64)
+		end
+	end
+
+	terra cuda.costSum(pd : PlanData, sum : &float, [images])
+		var w = blockDim.x * blockIdx.x + threadIdx.x;
+		var h = blockDim.y * blockIdx.y + threadIdx.y;
+
+		if w < pd.gradW and h < pd.gradH then
+			var v = [float](tbl.cost.fn(w,h,images))
+			terralib.asm(terralib.types.unit,"red.global.add.f32 [$0],$1;","l,f", true, sum, v)
+		end
+	end
+	
+	terra cuda.imageInnerProduct(pd : PlanData, a : vars.unknownType, b : vars.unknownType, sum : &float, [images])
+		var w = blockDim.x * blockIdx.x + threadIdx.x;
+		var h = blockDim.y * blockIdx.y + threadIdx.y;
+
+		if w < pd.gradW and h < pd.gradH then
+			var v = [float](a(w, h) * b(w, h))
+			terralib.asm(terralib.types.unit,"red.global.add.f32 [$0],$1;","l,f", true, sum, v)
+		end
+	end
+	
+	cuda = terralib.cudacompile(cuda, false)
+	
+	local terra totalCost(data_ : &opaque, [images])
+		var launch = terralib.CUDAParams { (pd.gradW - 1) / 32 + 1, (pd.gradH - 1) / 32 + 1,1, 32,32,1, 0, nil }
+
+		@pd.scratchF = 0.0f
+		cuda.costSum(&launch, @pd, pd.scratchF, [images])
+		C.cudaDeviceSynchronize()
+
+		return @pd.scratchF
+	end
+	
+	-- TODO: ask zach how to do templates so this can live at a higher scope
+	local terra imageInnerProduct(width : int, height : int, a : vars.unknownType, b : vars.unknownType)
+		var sum = 0.0
+		for h = 0, height do
+			for w = 0, width do
+				sum = sum + a(w, h) * b(w, h)
+			end
+		end
+		return sum
+	end
+
+	local terra impl(data_ : &opaque, imageBindings : &&opt.ImageBinding, params_ : &opaque)
+		var pd = [&PlanData](data_)
+		var params = [&double](params_)
+		var dims = pd.dims
+
+		var [images] = [getImages(vars, imageBindings, dims)]
+
+		-- TODO: parameterize these
+		var maxIters = 1000
+		var tolerance = 1e-5
+
+		-- here, Ap is being used as storage for zeroes
+		for h = 0, pd.gradH do
+			for w = 0, pd.gradW do
+				pd.Ap(w, h) = 0.0
+			end
+		end
+		
+		for h = 0, pd.gradH do
+			for w = 0, pd.gradW do
+				pd.r(w, h) = -tbl.gradientHack(w, h, [ images[1] ], images)
+				pd.b(w, h) = tbl.gradientHack(w, h, pd.Ap, images)
+				pd.p(w, h) = pd.r(w, h)
+			end
+		end
+		
+		var rTr = imageInnerProduct(pd.gradW, pd.gradH, pd.r, pd.r)
+
+		for iter = 0,maxIters do
+
+			var iterStartCost = totalCost(data_, images)
+			
+			for h = 0, pd.gradH do
+				for w = 0, pd.gradW do
+					--TODO: more elegant gradientHack
+					pd.Ap(w, h) = tbl.gradientHack(w, h, pd.p, images) - pd.b(w, h)
+				end
+			end
+			
+			var den = imageInnerProduct(pd.gradW, pd.gradH, pd.p, pd.Ap)
+			var alpha = rTr / den
+			
+			for h = 0, pd.gradH do
+				for w = 0, pd.gradW do
+					[ images[1] ](w, h) = [ images[1] ](w, h) + alpha * pd.p(w, h)
+					pd.r(w, h) = pd.r(w, h) - alpha * pd.Ap(w, h)
+				end
+			end
+			
+			var rTrNew = imageInnerProduct(pd.gradW, pd.gradH, pd.r, pd.r)
+			
+			C.printf("iteration %d, cost=%f, rTr=%f\n", iter, iterStartCost, rTrNew)
+			
+			if(rTrNew < tolerance) then break end
+			
+			var beta = rTrNew / rTr
+			for h = 0, pd.gradH do
+				for w = 0, pd.gradW do
+					pd.p(w, h) = pd.r(w, h) + beta * pd.p(w, h)
+				end
+			end
+			
+			rTr = rTrNew
+		end
+		
+		var finalCost = totalCost(data_, images)
+		C.printf("final cost=%f\n", finalCost)
+	end
+
+	local gradWIndex = vars.dimIndex[ vars.gradientDim[1] ]
+	local gradHIndex = vars.dimIndex[ vars.gradientDim[2] ]
+
+	local terra makePlan(actualDims : &uint64) : &opt.Plan
+		var pd = PlanData.alloc()
+		pd.plan.data = pd
+		pd.plan.impl = impl
+		pd.dims[0] = 1
+		for i = 0,[#vars.dims] do
+			pd.dims[i+1] = actualDims[i]
+		end
+
+		pd.gradW = pd.dims[gradWIndex]
+		pd.gradH = pd.dims[gradHIndex]
+
+		pd.b:initCPU(pd.gradW, pd.gradH)
+		pd.r:initCPU(pd.gradW, pd.gradH)
+		pd.p:initCPU(pd.gradW, pd.gradH)
+		pd.Ap:initCPU(pd.gradW, pd.gradH)
+		
+		return &pd.plan
+	end
+	return Problem:new { makePlan = makePlan }
+end]]
+
 local function linearizedPreconditionedConjugateGradientCPU(tbl, vars)
 	local struct PlanData(S.Object) {
 		plan : opt.Plan
@@ -1103,6 +1278,7 @@ local newImage = terralib.memoize(function(typ, W, H)
 		self.W = actualH
 		self.H = actualW
 		var cudaError = C.cudaMalloc([&&opaque](&(self.impl.data)), actualW * actualH * sizeof(typ))
+		cudaError = C.cudaMemset([&&opaque](&(self.impl.data)), 0, actualW * actualH * sizeof(typ))
 		self.impl.elemsize = sizeof(typ)
 		self.impl.stride = actualW * sizeof(typ)
    end
