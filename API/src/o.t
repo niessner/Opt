@@ -7,6 +7,7 @@ local S = require("std")
 
 local C = terralib.includecstring [[
 #include <stdio.h>
+#include <string.h>
 #include <stdlib.h>
 #include <math.h>
 #include <cuda_runtime.h>
@@ -96,6 +97,14 @@ local ffi = require('ffi')
 
 local problems = {}
 
+local terra max(x : double, y : double)
+	if x > y then
+		return x
+	else
+		return y
+	end
+end
+
 -- this function should do anything it needs to compile an optimizer defined
 -- using the functions in tbl, using the optimizer 'kind' (e.g. kind = gradientdecesnt)
 -- it should generat the field makePlan which is the terra function that 
@@ -141,14 +150,6 @@ local function gradientDescentCPU(tbl,vars)
 		return result
 	end
 
-	local terra max(x : double, y : double)
-		if x > y then
-			return x
-		else
-			return y
-		end
-	end
-
 	local terra impl(data_ : &opaque, imageBindings : &&opt.ImageBinding, params_ : &opaque)
 
 		--C.printf("impl start\n")
@@ -178,7 +179,7 @@ local function gradientDescentCPU(tbl,vars)
 
 		--C.printf("impl D\n")
 
-		for iter = 0,maxIters do
+		for iter = 0, maxIters do
 
 			--C.printf("impl iter start\n")
 
@@ -425,6 +426,181 @@ local function gradientDescentGPU(tbl,vars)
 	return Problem:new { makePlan = makePlan }
 end
 
+local function conjugateGradientCPU(tbl, vars)
+	local struct PlanData(S.Object) {
+		plan : opt.Plan
+		gradW : int
+		gradH : int
+		
+		currentValues : vars.unknownType
+		bestValues : vars.unknownType
+		
+		gradient : vars.unknownType
+		prevGradient : vars.unknownType
+		
+		searchDirection : vars.unknownType
+		
+		dims : int64[#vars.dims + 1]
+	}
+	
+	local images = vars.argumentTypes:map(symbol)
+
+	local terra totalCost(data_ : &opaque, [images])
+		var pd = [&PlanData](data_)
+		var result = 0.0
+		for h = 0,pd.gradH do
+			for w = 0,pd.gradW do
+				var v = tbl.cost.fn(w, h, images)
+				result = result + v
+			end
+		end
+		return result
+	end
+
+	local terra impl(data_ : &opaque, imageBindings : &&opt.ImageBinding, params_ : &opaque)
+
+		--C.printf("impl start\n")
+
+		var pd = [&PlanData](data_)
+		var params = [&double](params_)
+		var dims = pd.dims
+
+		--C.printf("impl A\n")
+
+		var [images] = [getImages(vars, imageBindings, dims)]
+
+		--C.printf("impl B\n")
+
+		-- TODO: parameterize these
+		var lineSearchMax = 1000
+		var lineSearchStart = 1e-5
+		var lineSearchMultiplier = 1.2
+		var maxIters = 100
+
+		--C.printf("impl D\n")
+
+		for iter = 0,maxIters do
+
+			--C.printf("impl iter start\n")
+
+			var iterStartCost = totalCost(data_, images)
+			C.printf("iteration %d, cost=%f\n", iter, iterStartCost)
+			--C.getchar()
+
+			--
+			-- compute the gradient
+			--
+			for h = 0, pd.gradH do
+				for w = 0, pd.gradW do
+					pd.gradient(w, h) = tbl.gradient(w, h, images)
+				end
+			end
+
+			--
+			-- compute the search direction
+			--
+			var beta = 0.0
+			if iter == 0 then
+				for h = 0, pd.gradH do
+					for w = 0, pd.gradW do
+						pd.searchDirection(w, h) = -pd.gradient(w, h)
+					end
+				end
+			else
+				var num = 0.0
+				var den = 0.0
+				
+				--
+				-- Polak-Ribiere conjugacy
+				-- 
+				for h = 0, pd.gradH do
+					for w = 0, pd.gradW do
+						var g = pd.gradient(w, h)
+						var p = pd.prevGradient(w, h)
+						num = num + (-g * (-g + p))
+						den = den + p * p
+					end
+				end
+				beta = max(num / den, 0.0)
+				
+				var epsilon = 1e-5
+				if den > epsilon and den < epsilon then
+					beta = 0.0
+				end
+				
+				for h = 0, pd.gradH do
+					for w = 0, pd.gradW do
+						pd.searchDirection(w, h) = -pd.gradient(w, h) + beta * pd.searchDirection(w, h)
+					end
+				end
+			end
+			
+			C.memcpy(pd.prevGradient.impl.data, pd.gradient.impl.data, sizeof(float) * pd.gradW * pd.gradH)
+			
+			C.memcpy(pd.currentValues.impl.data, [ images[1] ].impl.data, sizeof(float) * pd.gradW * pd.gradH)
+			
+			
+			var alpha = lineSearchStart
+			var bestAlpha = 0.0
+			var bestCost = iterStartCost
+			
+			for lineSearchIndex = 0, lineSearchMax do
+				alpha = alpha * lineSearchMultiplier
+				
+				for h = 0,pd.gradH do
+					for w = 0,pd.gradW do
+						[ images[1] ](w, h) = pd.currentValues(w, h) + alpha * pd.searchDirection(w, h)
+					end
+				end
+				
+				var searchCost = totalCost(data_, images)
+				if searchCost <= bestCost then
+					bestAlpha = alpha
+					bestCost = searchCost
+				else
+					break
+				end
+			end
+			
+			C.printf("alpha=%f, beta=%f\n\n", alpha, beta)
+			
+			for h = 0,pd.gradH do
+				for w = 0,pd.gradW do
+					[ images[1] ](w, h) = pd.currentValues(w, h) + bestAlpha * pd.searchDirection(w, h)
+				end
+			end
+			--C.printf("impl iter end\n")
+		end
+	end
+
+	local gradWIndex = vars.dimIndex[ vars.gradientDim[1] ]
+	local gradHIndex = vars.dimIndex[ vars.gradientDim[2] ]
+
+	local terra makePlan(actualDims : &uint64) : &opt.Plan
+		var pd = PlanData.alloc()
+		pd.plan.data = pd
+		pd.plan.impl = impl
+		pd.dims[0] = 1
+		for i = 0,[#vars.dims] do
+			pd.dims[i+1] = actualDims[i]
+		end
+
+		pd.gradW = pd.dims[gradWIndex]
+		pd.gradH = pd.dims[gradHIndex]
+
+		pd.currentValues:initCPU(pd.gradW, pd.gradH)
+		pd.bestValues:initCPU(pd.gradW, pd.gradH)
+		
+		pd.gradient:initCPU(pd.gradW, pd.gradH)
+		pd.prevGradient:initCPU(pd.gradW, pd.gradH)
+		
+		pd.searchDirection:initCPU(pd.gradW, pd.gradH)
+
+		return &pd.plan
+	end
+	return Problem:new { makePlan = makePlan }
+end
+
 local function compileProblem(tbl, kind)
 	local vars = {
 		dims = tbl.dims,
@@ -487,13 +663,11 @@ local function compileProblem(tbl, kind)
 		return Problem:new { makePlan = makePlan }
 
 	elseif kind == "gradientdescentCPU" then
-		
         return gradientDescentCPU(tbl, vars)
-	
 	elseif kind == "gradientdescentGPU" then
-		
 		return gradientDescentGPU(tbl, vars)
-
+	elseif kind == "conjugateGradientCPU" then
+		return conjugateGradientCPU(tbl, vars)
 	end
     
 end
