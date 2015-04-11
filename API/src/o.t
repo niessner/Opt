@@ -481,6 +481,10 @@ local function conjugateGradientCPU(tbl, vars)
 		var maxIters = 1000
 
 		--C.printf("impl D\n")
+		
+		var file = C.fopen("C:/code/debug.txt", "wb")
+		
+		var prevBestAlpha = 0.0
 
 		for iter = 0,maxIters do
 
@@ -547,7 +551,53 @@ local function conjugateGradientCPU(tbl, vars)
 			--
 			var bestAlpha = 0.0
 			
-			var useBruteForce = true
+			var useBruteForce = (iter <= 1) or prevBestAlpha == 0.0
+			if not useBruteForce then
+				
+				-- TODO: figure out how terra constant arrays work
+				var a1 = prevBestAlpha * 0.25
+				var c1 = 0.0
+				var a2 = prevBestAlpha * 0.5
+				var c2 = 0.0
+				var a3 = prevBestAlpha * 0.75
+				var c3 = 0.0
+				var bestCost = iterStartCost
+				
+				for alphaIndex = 0, 4 do
+					var alpha = 0.0
+					if 	   alphaIndex == 0 then alpha = a1
+					elseif alphaIndex == 1 then alpha = a2
+					elseif alphaIndex == 2 then alpha = a3
+					else
+						var a = ((c2-c1)*(a1-a3) + (c3-c1)*(a2-a1))/((a1-a3)*(a2*a2-a1*a1) + (a2-a1)*(a3*a3-a1*a1))
+						var b = ((c2 - c1) - a * (a2*a2 - a1*a1)) / (a2 - a1)
+						var c = c1 - a * a1 * a1 - b * a1
+						-- 2ax + b = 0, x = -b / 2a
+						alpha = -b / (2.0 * a)
+					end
+					 
+					for h = 0,pd.gradH do
+						for w = 0,pd.gradW do
+							[ images[1] ](w, h) = pd.currentValues(w, h) + alpha * pd.searchDirection(w, h)
+						end
+					end
+					
+					var searchCost = totalCost(data_, images)
+					
+					if searchCost <= bestCost then
+						bestAlpha = alpha
+						bestCost = searchCost
+					elseif alphaIndex == 3 then
+						C.printf("quadratic minimization failed\n")
+					end
+					
+					if 	   alphaIndex == 0 then c1 = searchCost
+					elseif alphaIndex == 1 then c2 = searchCost
+					elseif alphaIndex == 2 then c3 = searchCost end
+				end
+				if bestAlpha == 0.0 then useBruteForce = true end
+			end
+			--C.fprintf(file, "iter %d\n", iter)
 			if useBruteForce then
 				var alpha = lineSearchBruteForceStart
 				var bestCost = iterStartCost
@@ -562,7 +612,10 @@ local function conjugateGradientCPU(tbl, vars)
 					end
 					
 					var searchCost = totalCost(data_, images)
-					if searchCost <= bestCost then
+					
+					--C.fprintf(file, "%f\t%f\n", alpha * 1000.0, searchCost / 1000000.0)
+					
+					if searchCost < bestCost then
 						bestAlpha = alpha
 						bestCost = searchCost
 					else
@@ -592,19 +645,21 @@ local function conjugateGradientCPU(tbl, vars)
 				end
 			end]]
 			
-			C.printf("alpha=%f, beta=%f\n\n", bestAlpha, beta)
-			
 			for h = 0,pd.gradH do
 				for w = 0,pd.gradW do
 					[ images[1] ](w, h) = pd.currentValues(w, h) + bestAlpha * pd.searchDirection(w, h)
 				end
 			end
 			
-			if bestAlpha == 0.0 and beta == 0.0 then
+			prevBestAlpha = bestAlpha
+			
+			C.printf("alpha=%f, beta=%f\n\n", bestAlpha, beta)
+			if bestAlpha <= 1e-8 and beta == 0.0 then
 				break
 			end
 			--C.printf("impl iter end\n")
 		end
+		C.fclose(file)
 	end
 
 	local gradWIndex = vars.dimIndex[ vars.gradientDim[1] ]
