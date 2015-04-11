@@ -101,6 +101,20 @@ local problems = {}
 -- it should generat the field planctor which is the terra function that 
 -- allocates the plan
 
+local function getImages(vars,imageBindings,actualDims)
+	local results = terralib.newlist()
+	for i,argumentType in ipairs(vars.argumentTypes) do
+		local Windex,Hindex = vars.dimIndex[argumentType.metamethods.W],vars.dimIndex[argumentType.metamethods.H]
+		assert(Windex and Hindex)
+		results:insert(`argumentType 
+		 { W = actualDims[Windex], 
+		   H = actualDims[Hindex], 
+		   impl = 
+		   @imageBindings[i - 1]}) 
+	end
+	return results
+end
+
 local function gradientDescentCPU(tbl,vars)
 	local struct PlanData(S.Object) {
 		plan : opt.Plan
@@ -109,20 +123,6 @@ local function gradientDescentCPU(tbl,vars)
 		gradStore : vars.unknownType
 		dims : int64[#dims + 1]
 	}
-
-	local function getimages(imagebindings,actualdims)
-		local results = terralib.newlist()
-		for i,argumentType in ipairs(vars.argumentTypes) do
-			local Windex,Hindex = vars.dimIndex[argumentType.metamethods.W],vars.dimIndex[argumentType.metamethods.H]
-			assert(Windex and Hindex)
-			results:insert(`argumentType 
-			 { W = actualdims[Windex], 
-			   H = actualdims[Hindex], 
-			   impl = 
-			   @imagebindings[i - 1]}) 
-		end
-		return results
-	end
 
 	local images = vars.argumentTypes:map(symbol)
 		
@@ -159,7 +159,7 @@ local function gradientDescentCPU(tbl,vars)
 
 		--C.printf("impl A\n")
 
-		var [images] = [getimages(imageBindings,dims)]
+		var [images] = [getImages(vars, imageBindings, dims)]
 
 		--C.printf("impl B\n")
 
@@ -238,13 +238,13 @@ local function gradientDescentCPU(tbl,vars)
 	local gradWIndex = vars.dimIndex[ vars.gradientDim[1] ]
 	local gradHIndex = vars.dimIndex[ vars.gradientDim[2] ]
 
-	local terra planctor(actualdims : &uint64) : &opt.Plan
+	local terra planctor(actualDims : &uint64) : &opt.Plan
 		var pd = PlanData.alloc()
 		pd.plan.data = pd
 		pd.plan.impl = impl
 		pd.dims[0] = 1
 		for i = 0,[#dims] do
-			pd.dims[i+1] = actualdims[i]
+			pd.dims[i+1] = actualDims[i]
 		end
 
 		pd.gradW = pd.dims[gradWIndex]
@@ -268,20 +268,6 @@ local function gradientDescentGPU(tbl,vars)
 		scratchD : &double
 		dims : int64[#dims + 1]
 	}
-
-	local function getimages(imagebindings,actualdims)
-		local results = terralib.newlist()
-		for i,argumenttyp in ipairs(vars.argumentTypes) do
-			local Windex,Hindex = vars.dimIndex[argumenttyp.metamethods.W],vars.dimIndex[argumenttyp.metamethods.H]
-			assert(Windex and Hindex)
-			results:insert(`argumenttyp 
-			 { W = actualdims[Windex], 
-			   H = actualdims[Hindex], 
-			   impl = 
-			   @imagebindings[i - 1]}) 
-		end
-		return results
-	end
 
 	local images = vars.argumentTypes:map(symbol)
 
@@ -348,7 +334,7 @@ local function gradientDescentGPU(tbl,vars)
 		var params = [&double](params_)
 		var dims = pd.dims
 
-		var [images] = [getimages(imageBindings,dims)]
+		var [images] = [getImages(vars,imageBindings,dims)]
 
 		-- TODO: parameterize these
 		var initialLearningRate = 0.01
@@ -418,13 +404,13 @@ local function gradientDescentGPU(tbl,vars)
 	local gradWIndex = vars.dimIndex[ vars.gradientDim[1] ]
 	local gradHIndex = vars.dimIndex[ vars.gradientDim[2] ]
 
-	local terra planctor(actualdims : &uint64) : &opt.Plan
+	local terra planctor(actualDims : &uint64) : &opt.Plan
 		var pd = PlanData.alloc()
 		pd.plan.data = pd
 		pd.plan.impl = impl
 		pd.dims[0] = 1
 		for i = 0,[#dims] do
-			pd.dims[i+1] = actualdims[i]
+			pd.dims[i+1] = actualDims[i]
 		end
 
 		pd.gradW = pd.dims[gradWIndex]
@@ -467,7 +453,7 @@ local function compileproblem(tbl,kind)
 			dims : int64[#dims+1]
 		}
 
-		local function emitcalltouserfunction(mapdims,actualdims,images,userfn)
+		local function emitcalltouserfunction(mapdims,actualDims,images,userfn)
 			local typ = userfn:gettype()
 			local di,dj = vars.dimIndex[mapdims[1]],vars.dimIndex[mapdims[2]]
 			assert(di and dj)
@@ -477,9 +463,9 @@ local function compileproblem(tbl,kind)
 				local W,H = imgtyp.metamethods.W,imgtyp.metamethods.H
 				W,H = vars.dimIndex[W],vars.dimIndex[H]
 				assert(W and H)
-				imagewrappers:insert(`imgtyp { W = actualdims[W], H = actualdims[H], impl = @images[i - 3] })
+				imagewrappers:insert(`imgtyp { W = actualDims[W], H = actualDims[H], impl = @images[i - 3] })
 			end
-			return `userfn(actualdims[di],actualdims[dj],imagewrappers)
+			return `userfn(actualDims[di],actualDims[dj],imagewrappers)
 		end
     
 		local terra impl(data_ : &opaque, images : &&opt.ImageBinding, params : &opaque)
@@ -488,13 +474,13 @@ local function compileproblem(tbl,kind)
 			[ emitcalltouserfunction(costdim,dims,images,tbl.cost.fn) ]
 			[ emitcalltouserfunction(vars.gradientDim,dims,images,tbl.gradient) ]
 		end
-		local terra planctor(actualdims : &uint64) : &opt.Plan
+		local terra planctor(actualDims : &uint64) : &opt.Plan
 			var pd = PlanData.alloc()
 			pd.plan.data = pd
 			pd.plan.impl = impl
 			pd.dims[0] = 1
 			for i = 0,[#dims] do
-				pd.dims[i+1] = actualdims[i]
+				pd.dims[i+1] = actualDims[i]
 			end
 			return &pd.plan
 		end
