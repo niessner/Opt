@@ -10,18 +10,9 @@
 #include "LaplacianSolverState.h"
 #include "LaplacianSolverParameters.h"
 
-__inline__ __device__ float evalFDevice(unsigned int variableIdx, SolverInput& input, SolverState& state, SolverParameters& parameters)
+
+__inline__ __device__ float evalLaplacian(unsigned int variableIdx, SolverInput& input, SolverState& state, SolverParameters& parameters, float& p)
 {
-	float e = 0.0f;
-
-	// E_fit
-	float targetDepth = input.d_targetDepth[variableIdx]; bool validTarget = (targetDepth != MINF);
-	if (validTarget) {
-		float e_fit = (state.d_x[variableIdx] - input.d_targetDepth[variableIdx]);	e_fit = e_fit * e_fit;
-		e += (parameters.weightFitting) * e_fit;
-	}
-
-
 	// E_reg
 	int i; int j; get2DIdx(variableIdx, input.width, input.height, i, j);
 
@@ -37,8 +28,24 @@ __inline__ __device__ float evalFDevice(unsigned int variableIdx, SolverInput& i
 	if (validN2) e_reg += state.d_x[variableIdx] - state.d_x[get1DIdx(n2_i, n2_j, input.width, input.height)];
 	if (validN3) e_reg += state.d_x[variableIdx] - state.d_x[get1DIdx(n3_i, n3_j, input.width, input.height)];
 
-	e_reg = e_reg*e_reg;
-	e += (parameters.weightRegularizer) * e_reg;
+	return e_reg;
+}
+
+__inline__ __device__ float evalFDevice(unsigned int variableIdx, SolverInput& input, SolverState& state, SolverParameters& parameters)
+{
+	float e = 0.0f;
+
+	// E_fit
+	float targetDepth = input.d_targetDepth[variableIdx]; bool validTarget = (targetDepth != MINF);
+	if (validTarget) {
+		float e_fit = (state.d_x[variableIdx] - input.d_targetDepth[variableIdx]);	e_fit = e_fit * e_fit;
+		e += (parameters.weightFitting) * e_fit;
+	}
+
+	// E_reg
+	float p = 0.0f;
+	float e_reg = evalLaplacian(variableIdx, input, state, parameters, p);
+	e += (parameters.weightRegularizer) * e_reg * e_reg;
 
 	return e;
 }
@@ -73,10 +80,13 @@ __inline__ __device__ float evalMinusJTFDevice(unsigned int variableIdx, SolverI
 	const int n2_i = i - 1; const int n2_j = j;		const bool isInsideN2 = isInsideImage(n2_i, n2_j, input.width, input.height); bool validN2 = false; if (isInsideN2) { float neighbourDepth2 = input.d_targetDepth[get1DIdx(n2_i, n2_j, input.width, input.height)]; validN2 = (neighbourDepth2 != MINF); }
 	const int n3_i = i + 1; const int n3_j = j;		const bool isInsideN3 = isInsideImage(n3_i, n3_j, input.width, input.height); bool validN3 = false; if (isInsideN3) { float neighbourDepth3 = input.d_targetDepth[get1DIdx(n3_i, n3_j, input.width, input.height)]; validN3 = (neighbourDepth3 != MINF); }
 
-	if (validN0) b += -parameters.weightRegularizer*2.0f*(state.d_x[variableIdx] - state.d_x[get1DIdx(n0_i, n0_j, input.width, input.height)]);
-	if (validN1) b += -parameters.weightRegularizer*2.0f*(state.d_x[variableIdx] - state.d_x[get1DIdx(n1_i, n1_j, input.width, input.height)]);
-	if (validN2) b += -parameters.weightRegularizer*2.0f*(state.d_x[variableIdx] - state.d_x[get1DIdx(n2_i, n2_j, input.width, input.height)]);
-	if (validN3) b += -parameters.weightRegularizer*2.0f*(state.d_x[variableIdx] - state.d_x[get1DIdx(n3_i, n3_j, input.width, input.height)]);
+	//if (validN0) b += -parameters.weightRegularizer*2.0f*(state.d_x[variableIdx] - state.d_x[get1DIdx(n0_i, n0_j, input.width, input.height)]);
+	//if (validN1) b += -parameters.weightRegularizer*2.0f*(state.d_x[variableIdx] - state.d_x[get1DIdx(n1_i, n1_j, input.width, input.height)]);
+	//if (validN2) b += -parameters.weightRegularizer*2.0f*(state.d_x[variableIdx] - state.d_x[get1DIdx(n2_i, n2_j, input.width, input.height)]);
+	//if (validN3) b += -parameters.weightRegularizer*2.0f*(state.d_x[variableIdx] - state.d_x[get1DIdx(n3_i, n3_j, input.width, input.height)]);
+	
+	float p0;
+	b += -parameters.weightRegularizer*2.0f*evalLaplacian(variableIdx, input, state, parameters, p0);
 
 	// Preconditioner depends on last solution P(input.d_x)
 	float p = 0.0f;
