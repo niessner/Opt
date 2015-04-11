@@ -12,7 +12,7 @@
 
 
 
-__inline__ __device__ float evalLaplacian(unsigned int i, unsigned int j, SolverInput& input, SolverState& state, SolverParameters& parameters, float& p)
+__inline__ __device__ float evalLaplacian(unsigned int i, unsigned int j, SolverInput& input, SolverState& state, SolverParameters& parameters)
 {
 	if (!isInsideImage(i, j, input.width, input.height)) return 0.0f;
 
@@ -28,19 +28,14 @@ __inline__ __device__ float evalLaplacian(unsigned int i, unsigned int j, Solver
 	if (validN2) e_reg += state.d_x[get1DIdx(i, j, input.width, input.height)] - state.d_x[get1DIdx(n2_i, n2_j, input.width, input.height)];
 	if (validN3) e_reg += state.d_x[get1DIdx(i, j, input.width, input.height)] - state.d_x[get1DIdx(n3_i, n3_j, input.width, input.height)];
 
-	if (validN0) p += 2.0f;
-	if (validN1) p += 2.0f;
-	if (validN2) p += 2.0f;
-	if (validN3) p += 2.0f;
-
 	return e_reg;
 }
 
-__inline__ __device__ float evalLaplacian(unsigned int variableIdx, SolverInput& input, SolverState& state, SolverParameters& parameters, float& p)
+__inline__ __device__ float evalLaplacian(unsigned int variableIdx, SolverInput& input, SolverState& state, SolverParameters& parameters)
 {
 	// E_reg
 	int i; int j; get2DIdx(variableIdx, input.width, input.height, i, j);
-	return evalLaplacian((unsigned int)i, (unsigned int)j, input, state, parameters, p);
+	return evalLaplacian((unsigned int)i, (unsigned int)j, input, state, parameters);
 }
 
 
@@ -56,16 +51,17 @@ __inline__ __device__ float evalFDevice(unsigned int variableIdx, SolverInput& i
 	}
 
 	// E_reg
-	float p = 0.0f;
-	float e_reg = evalLaplacian(variableIdx, input, state, parameters, p);
+	float e_reg = evalLaplacian(variableIdx, input, state, parameters);
 	e += (parameters.weightRegularizer) * e_reg * e_reg;
 
 	return e;
 }
 
+
 ////////////////////////////////////////
 // applyJT : this function is called per variable and evaluates each residual influencing that variable (i.e., each energy term per variable)
 ////////////////////////////////////////
+
 
 __inline__ __device__ float evalMinusJTFDevice(unsigned int variableIdx, SolverInput& input, SolverState& state, SolverParameters& parameters)
 {
@@ -86,26 +82,26 @@ __inline__ __device__ float evalMinusJTFDevice(unsigned int variableIdx, SolverI
 	// J depends on last solution J(input.d_x) and multiplies it with d_Jp returns result
 
 	int i; int j; get2DIdx(variableIdx, input.width, input.height, i, j);
-	
-	float p_reg_m = 0.0f;
-	float p_reg_n0 = 0.0f;	float p_reg_n1 = 0.0f;	float p_reg_n2 = 0.0f;	float p_reg_n3 = 0.0f;
 
-	b += -parameters.weightRegularizer*2.0f*(
-		4.0f*evalLaplacian(variableIdx, input, state, parameters, p_reg_m)
-		- evalLaplacian(i + 1, j + 0, input, state, parameters, p_reg_n0)
-		- evalLaplacian(i - 1, j + 0, input, state, parameters, p_reg_n1)
-		- evalLaplacian(i + 0, j + 1, input, state, parameters, p_reg_n2)
-		- evalLaplacian(i + 0, j - 1, input, state, parameters, p_reg_n3)
-		);
+	float l_m = evalLaplacian(variableIdx, input, state, parameters);
+	float l_n0 = evalLaplacian(i + 1, j + 0, input, state, parameters);
+	float l_n1 = evalLaplacian(i - 1, j + 0, input, state, parameters);
+	float l_n2 = evalLaplacian(i + 0, j + 1, input, state, parameters);
+	float l_n3 = evalLaplacian(i + 0, j - 1, input, state, parameters);
 
-	return b;
+	float wl_m = 0.0f;	
+	if (l_n0 != 0.0f) wl_m += 1.0f;
+	if (l_n1 != 0.0f) wl_m += 1.0f;
+	if (l_n2 != 0.0f) wl_m += 1.0f;
+	if (l_n3 != 0.0f) wl_m += 1.0f;
+
+	b += -parameters.weightRegularizer*2.0f*(l_m*wl_m - l_n0 - l_n1 - l_n2 - l_n3);
 
 	// Preconditioner depends on last solution P(input.d_x)
 	float p = 0.0f;
 
 	if (validTarget) p += 2.0f*parameters.weightFitting;	//e_reg
-	//p += (4.0f*p_reg_m - p_reg_n0 - p_reg_n1 - p_reg_n2 - p_reg_n3)*parameters.weightFitting;	//todo check regularizer
-	p += 4.0f*p_reg_m*parameters.weightFitting;
+	p += 2.0f*parameters.weightRegularizer*(wl_m*wl_m + wl_m);
 
 	if (p > FLOAT_EPSILON)	state.d_precondioner[variableIdx] = 1.0f / p;
 	else					state.d_precondioner[variableIdx] = 1.0f;
@@ -144,6 +140,8 @@ __inline__ __device__ float applyJTJDevice(unsigned int variableIdx, SolverInput
 	if (validN1) b += 2.0f*parameters.weightRegularizer*(state.d_p[variableIdx] - state.d_p[get1DIdx(n1_i, n1_j, input.width, input.height)]);
 	if (validN2) b += 2.0f*parameters.weightRegularizer*(state.d_p[variableIdx] - state.d_p[get1DIdx(n2_i, n2_j, input.width, input.height)]);
 	if (validN3) b += 2.0f*parameters.weightRegularizer*(state.d_p[variableIdx] - state.d_p[get1DIdx(n3_i, n3_j, input.width, input.height)]);
+
+
 
 	return b;
 }
