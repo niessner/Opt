@@ -879,11 +879,11 @@ local function linearizedConjugateGradientGPU(tbl, vars)
 		var launch = terralib.CUDAParams { (pd.gradW - 1) / 32 + 1, (pd.gradH - 1) / 32 + 1,1, 32,32,1, 0, nil }
 
 		C.cudaDeviceSynchronize()
-		@pd.scratchF = 0.0
+		@pd.scratchF = 0.0f
 		C.cudaDeviceSynchronize()
 		cuda.costSum(&launch, @pd, pd.scratchF, [images])
 		C.cudaDeviceSynchronize()
-
+		
 		return @pd.scratchF
 	end
 	
@@ -892,7 +892,7 @@ local function linearizedConjugateGradientGPU(tbl, vars)
 		var launch = terralib.CUDAParams { (pd.gradW - 1) / 32 + 1, (pd.gradH - 1) / 32 + 1,1, 32,32,1, 0, nil }
 		
 		C.cudaDeviceSynchronize()
-		@pd.scratchF = 0.0
+		@pd.scratchF = 0.0f
 		C.cudaDeviceSynchronize()
 		cuda.imageInnerProduct(&launch, @pd, a, b, pd.scratchF)
 		C.cudaDeviceSynchronize()
@@ -910,7 +910,7 @@ local function linearizedConjugateGradientGPU(tbl, vars)
 		var launch = terralib.CUDAParams { (pd.gradW - 1) / 32 + 1, (pd.gradH - 1) / 32 + 1,1, 32,32,1, 0, nil }
 		
 		-- TODO: parameterize these
-		var maxIters = 10
+		var maxIters = 1000
 		var tolerance = 1e-5
 
 		C.cudaDeviceSynchronize()
@@ -918,7 +918,6 @@ local function linearizedConjugateGradientGPU(tbl, vars)
 		C.cudaDeviceSynchronize()
 		
 		var rTr = imageInnerProduct(pd, pd.r, pd.r)
-		C.printf("rTr %f\n", rTr)
 
 		for iter = 0, maxIters do
 	
@@ -930,7 +929,7 @@ local function linearizedConjugateGradientGPU(tbl, vars)
 			var den = imageInnerProduct(pd, pd.p, pd.Ap)
 			var alpha = rTr / den
 			
-			C.printf("den=%f, alpha=%f\n", den, alpha)
+			--C.printf("den=%f, alpha=%f\n", den, alpha)
 			
 			cuda.updateResidualAndPosition(&launch, @pd, alpha, [images])
 			
@@ -1253,18 +1252,18 @@ function opt.Dim(name)
 end
 
 local newImage = terralib.memoize(function(typ, W, H)
-   local struct Image {
-        impl : opt.ImageBinding
-        W : uint64
-        H : uint64
-   }
-   function Image.metamethods.__tostring()
-      return string.format("Image(%s,%s,%s)",tostring(typ),W.name, H.name)
-   end
-   Image.metamethods.__apply = macro(function(self, x, y)
-     return `@[&typ](self.impl:get(x,y))
-   end)
-   terra Image:initCPU(actualW : int, actualH : int)
+	local struct Image {
+		impl : opt.ImageBinding
+		W : uint64
+		H : uint64
+	}
+	function Image.metamethods.__tostring()
+	  return string.format("Image(%s,%s,%s)",tostring(typ),W.name, H.name)
+	end
+	Image.metamethods.__apply = macro(function(self, x, y)
+	 return `@[&typ](self.impl:get(x,y))
+	end)
+	terra Image:initCPU(actualW : int, actualH : int)
 		self.W = actualW
 		self.H = actualH
 		self.impl.data = [&uint8](C.malloc(actualW * actualH * sizeof(typ)))
@@ -1276,19 +1275,26 @@ local newImage = terralib.memoize(function(typ, W, H)
 				self(w, h) = 0.0
 			end
 		end
-   end
-   terra Image:initGPU(actualW : int, actualH : int)
+	end
+	terra Image:initGPU(actualW : int, actualH : int)
 		self.W = actualW
 		self.H = actualH
 		var typeSize = sizeof(typ)
 		--C.printf("typesize=%d\n", typeSize)
 		var cudaError = C.cudaMalloc([&&opaque](&(self.impl.data)), actualW * actualH * typeSize)
-		cudaError = C.cudaMemset([&&opaque](&(self.impl.data)), 0, actualW * actualH * typeSize)
+		cudaError = C.cudaMemset([&opaque](self.impl.data), 0, actualW * actualH * typeSize)
 		self.impl.elemsize = typeSize
 		self.impl.stride = actualW * typeSize
-   end
-   Image.metamethods.typ,Image.metamethods.W,Image.metamethods.H = typ, W, H
-   return Image
+	end
+	terra Image:debugGPUPrint()
+		
+		--var cpuImage : type(self)
+		--cpuImage:initCPU(self.W, self.H)
+		
+		--C.cudaMemcpy(dataGPU, cpuImage, sizeof(float) * dimX * dimY, cudaMemcpyHostToDevice)
+	end
+	Image.metamethods.typ,Image.metamethods.W,Image.metamethods.H = typ, W, H
+	return Image
 end)
 
 function opt.Image(typ, W, H)
