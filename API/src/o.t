@@ -102,23 +102,25 @@ local problems = {}
 -- allocates the plan
 
 local function compileproblem(tbl,kind)
-    local dims = tbl.dims
-    local dimindex = { [1] = 0 }
-    for i, d in ipairs(dims) do
+	local vars = {
+		dims = tbl.dims,
+		dimIndex = { [1] = 0 },
+		costDim = tbl.cost.dim,
+		costType = tbl.cost.fn:gettype()
+	}
+	
+	vars.unknownType = vars.costType.parameters[3] -- 3rd argument is the image that is the unknown we are mapping over
+	vars.argumentTypes = terralib.newlist()
+	vars.gradientDim = { vars.unknownType.metamethods.W, vars.unknownType.metamethods.H }
+		
+    for i, d in ipairs(vars.dims) do
         assert(Dim:is(d))
-        dimindex[d] = i -- index into DimList, 0th entry is always 1
+        vars.dimIndex[d] = i -- index into DimList, 0th entry is always 1
     end
 
-    local costdim = tbl.cost.dim
-	local costtyp = tbl.cost.fn:gettype()
-    local unknowntyp = costtyp.parameters[3] -- 3rd argument is the image that is the unknown we are mapping over
-
-	local argumenttyps = terralib.newlist()
-	for i = 3,#costtyp.parameters do
-		argumenttyps:insert(costtyp.parameters[i])
+	for i = 3,#vars.costType.parameters do
+		vars.argumentTypes:insert(vars.costType.parameters[i])
 	end
-
-	local graddim = { unknowntyp.metamethods.W, unknowntyp.metamethods.H }
 
     if kind == "simpleexample" then
 
@@ -129,13 +131,13 @@ local function compileproblem(tbl,kind)
 
 		local function emitcalltouserfunction(mapdims,actualdims,images,userfn)
 			local typ = userfn:gettype()
-			local di,dj = dimindex[mapdims[1]],dimindex[mapdims[2]]
+			local di,dj = vars.dimIndex[mapdims[1]],vars.dimIndex[mapdims[2]]
 			assert(di and dj)
 			local imagewrappers = terralib.newlist()
 			for i = 3,#typ.parameters do
 				local imgtyp = typ.parameters[i]
 				local W,H = imgtyp.metamethods.W,imgtyp.metamethods.H
-				W,H = dimindex[W],dimindex[H]
+				W,H = vars.dimIndex[W],vars.dimIndex[H]
 				assert(W and H)
 				imagewrappers:insert(`imgtyp { W = actualdims[W], H = actualdims[H], impl = @images[i - 3] })
 			end
@@ -146,7 +148,7 @@ local function compileproblem(tbl,kind)
 			var data = [&PlanData](data_)
 			var dims = data.dims
 			[ emitcalltouserfunction(costdim,dims,images,tbl.cost.fn) ]
-			[ emitcalltouserfunction(graddim,dims,images,tbl.gradient) ]
+			[ emitcalltouserfunction(vars.gradientDim,dims,images,tbl.gradient) ]
 		end
 		local terra planctor(actualdims : &uint64) : &opt.Plan
 			var pd = PlanData.alloc()
@@ -166,16 +168,16 @@ local function compileproblem(tbl,kind)
             plan : opt.Plan
 			gradW : int
 			gradH : int
-			gradStore : unknowntyp
+			gradStore : vars.unknownType
             dims : int64[#dims + 1]
         }
 
 		local function getimages(imagebindings,actualdims)
 			local results = terralib.newlist()
-			for i,argumenttyp in ipairs(argumenttyps) do
-			    local Windex,Hindex = dimindex[argumenttyp.metamethods.W],dimindex[argumenttyp.metamethods.H]
+			for i,argumentType in ipairs(vars.argumentTypes) do
+			    local Windex,Hindex = vars.dimIndex[argumentType.metamethods.W],vars.dimIndex[argumentType.metamethods.H]
 				assert(Windex and Hindex)
-				results:insert(`argumenttyp 
+				results:insert(`argumentType 
 				 { W = actualdims[Windex], 
 				   H = actualdims[Hindex], 
 				   impl = 
@@ -184,7 +186,7 @@ local function compileproblem(tbl,kind)
 			return results
 		end
 
-		local images = argumenttyps:map(symbol)
+		local images = vars.argumentTypes:map(symbol)
 		    
 		local terra totalCost(data_ : &opaque, [images])
 			var pd = [&PlanData](data_)
@@ -295,8 +297,8 @@ local function compileproblem(tbl,kind)
 			end
 		end
 
-		local gradWIndex = dimindex[ graddim[1] ]
-		local gradHIndex = dimindex[ graddim[2] ]
+		local gradWIndex = vars.dimIndex[ vars.gradientDim[1] ]
+		local gradHIndex = vars.dimIndex[ vars.gradientDim[2] ]
 
 		local terra planctor(actualdims : &uint64) : &opt.Plan
 			var pd = PlanData.alloc()
@@ -322,7 +324,7 @@ local function compileproblem(tbl,kind)
             plan : opt.Plan
 			gradW : int
 			gradH : int
-			gradStore : unknowntyp
+			gradStore : vars.unknownType
 			scratchF : &float
 			scratchD : &double
             dims : int64[#dims + 1]
@@ -330,8 +332,8 @@ local function compileproblem(tbl,kind)
 
 		local function getimages(imagebindings,actualdims)
 			local results = terralib.newlist()
-			for i,argumenttyp in ipairs(argumenttyps) do
-			    local Windex,Hindex = dimindex[argumenttyp.metamethods.W],dimindex[argumenttyp.metamethods.H]
+			for i,argumenttyp in ipairs(vars.argumentTypes) do
+			    local Windex,Hindex = vars.dimIndex[argumenttyp.metamethods.W],vars.dimIndex[argumenttyp.metamethods.H]
 				assert(Windex and Hindex)
 				results:insert(`argumenttyp 
 				 { W = actualdims[Windex], 
@@ -342,7 +344,7 @@ local function compileproblem(tbl,kind)
 			return results
 		end
 
-		local images = argumenttyps:map(symbol)
+		local images = vars.argumentTypes:map(symbol)
 
 		local terra max(x : double, y : double)
 			return terralib.select(x > y, x, y)
@@ -474,8 +476,8 @@ local function compileproblem(tbl,kind)
 			end
 		end
 
-		local gradWIndex = dimindex[ graddim[1] ]
-		local gradHIndex = dimindex[ graddim[2] ]
+		local gradWIndex = vars.dimIndex[ vars.gradientDim[1] ]
+		local gradHIndex = vars.dimIndex[ vars.gradientDim[2] ]
 
 		local terra planctor(actualdims : &uint64) : &opt.Plan
 			var pd = PlanData.alloc()

@@ -13,10 +13,6 @@ TestExample TestFramework::makeImageSmoothing(const string &imageFilename, float
     //
     // minimized with A = L^T L + I * w, b = I * w * target
 
-    //
-    // if we are not using mlib, create a "debug" bitmap
-    //
-
     const Bitmap bmp = LodePNG::load(imageFilename);
     const int dimX = bmp.getWidth();
     const int dimY = bmp.getHeight();
