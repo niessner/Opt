@@ -13,8 +13,11 @@ class CUDALaplacianSolver
 		CUDALaplacianSolver(unsigned int imageWidth, unsigned int imageHeight);
 		~CUDALaplacianSolver();
 
-		void solve(float* d_targetDepth, float* d_result, unsigned int nNonLinearIterations, unsigned int nLinearIterations, float weightFitting, float weightRegularizer);
-	
+		//! gauss newton
+		void solveGN(float* d_targetDepth, float* d_result, unsigned int nNonLinearIterations, unsigned int nLinearIterations, float weightFitting, float weightRegularizer);
+		
+		//! gradient decent
+		void solveGD(float* d_targetDepth, float* d_result, unsigned int nIterations, float weightFitting, float weightRegularizer);
 	private:
 
 		SolverState	m_solverState;
@@ -22,3 +25,4 @@ class CUDALaplacianSolver
 		unsigned int m_imageWidth;
 		unsigned int m_imageHeight;
 };
+

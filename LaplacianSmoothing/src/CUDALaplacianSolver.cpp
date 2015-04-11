@@ -1,8 +1,8 @@
 #include "CUDALaplacianSolver.h"
 
 extern "C" void copyFloatMapFill(float* d_output, float* d_input, unsigned int width, unsigned int height);
-extern "C" void solveStereoStub(SolverInput& input, SolverState& state, SolverParameters& parameters);
-extern "C" void estimateLightingSH(SolverInput& input, SolverState& state);
+extern "C" void LaplacianSolveGNStub(SolverInput& input, SolverState& state, SolverParameters& parameters);	// gauss newton
+extern "C" void LaplacianSolveGDStub(SolverInput& input, SolverState& state, SolverParameters& parameters);	// gradient decent
 
 CUDALaplacianSolver::CUDALaplacianSolver(unsigned int imageWidth, unsigned int imageHeight) : m_imageWidth(imageWidth), m_imageHeight(imageHeight)
 {
@@ -46,7 +46,7 @@ CUDALaplacianSolver::~CUDALaplacianSolver()
 }
 
 
-void CUDALaplacianSolver::solve(float* d_targetDepth, float* d_result, unsigned int nNonLinearIterations, unsigned int nLinearIterations, float weightFitting, float weightRegularizer)
+void CUDALaplacianSolver::solveGN(float* d_targetDepth, float* d_result, unsigned int nNonLinearIterations, unsigned int nLinearIterations, float weightFitting, float weightRegularizer)
 {
 	//copyFloatMapFill(d_result, d_targetDepth, m_imageWidth, m_imageHeight);
 
@@ -65,5 +65,24 @@ void CUDALaplacianSolver::solve(float* d_targetDepth, float* d_result, unsigned 
 	solverInput.d_targetDepth = d_targetDepth;
 
 
-	solveStereoStub(solverInput, m_solverState, parameters);
+	LaplacianSolveGNStub(solverInput, m_solverState, parameters);
+}
+
+void CUDALaplacianSolver::solveGD(float* d_targetDepth, float* d_result, unsigned int nIterations, float weightFitting, float weightRegularizer)
+{
+	m_solverState.d_x = d_result;
+
+	SolverParameters parameters;
+	parameters.weightFitting = weightFitting;
+	parameters.weightRegularizer = weightRegularizer;
+	parameters.nNonLinearIterations = nIterations;
+	parameters.nLinIterations = 0;
+
+	SolverInput solverInput;
+	solverInput.N = m_imageWidth*m_imageHeight;
+	solverInput.width = m_imageWidth;
+	solverInput.height = m_imageHeight;
+	solverInput.d_targetDepth = d_targetDepth;
+
+	LaplacianSolveGDStub(solverInput, m_solverState, parameters);
 }

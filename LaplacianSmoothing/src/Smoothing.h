@@ -36,8 +36,8 @@ public:
 
 		unsigned int nonLinearIter = 10;
 		unsigned int linearIter = 10;
-		m_laplacianSolver->solve(d_image, d_result, nonLinearIter, linearIter, weightFit, weightReg);
-
+		//m_laplacianSolver->solveGN(d_image, d_result, nonLinearIter, linearIter, weightFit, weightReg);
+		m_laplacianSolver->solveGD(d_image, d_result, nonLinearIter, weightFit, weightReg);
 		return copyResultToCPU();
 	}
 

@@ -248,19 +248,91 @@ __global__ void EvalResidualDevice(SolverInput input, SolverState state, SolverP
 	const unsigned int x = blockIdx.x * blockDim.x + threadIdx.x;
 
 	if (x < N) {
-		float residual = evalResidual(x, input, state, parameters);
+		float residual = evalFDevice(x, input, state, parameters);
 		atomicAdd(&state.d_sumResidual[0], residual);
+	}
+}
+
+__global__ void EvalAllResidualsDevice(SolverInput input, SolverState state, SolverParameters parameters)
+{
+	const unsigned int N = input.N; // Number of block variables
+	const unsigned int x = blockIdx.x * blockDim.x + threadIdx.x;
+
+	if (x < N) {
+		float residual = evalFDevice(x, input, state, parameters);
+		state.d_r[x] = residual;
 	}
 }
 
 float EvalResidual(SolverInput& input, SolverState& state, SolverParameters& parameters)
 {
+	float residual = 0.0f;
+
+	bool useGPU = true;
+	if (useGPU) {
+		const unsigned int N = input.N; // Number of block variables
+		ResetResidualDevice << < 1, 1, 1 >> >(input, state, parameters);
+		cutilSafeCall(cudaDeviceSynchronize());
+
+		EvalResidualDevice << <(N + THREADS_PER_BLOCK - 1) / THREADS_PER_BLOCK, THREADS_PER_BLOCK >> >(input, state, parameters);
+		cutilSafeCall(cudaDeviceSynchronize());
+
+		residual = state.getSumResidual();
+	} else {
+		const unsigned int N = input.N; // Number of block variables
+		EvalAllResidualsDevice <<<(N + THREADS_PER_BLOCK - 1) / THREADS_PER_BLOCK, THREADS_PER_BLOCK >>>(input, state, parameters);
+		cutilSafeCall(cudaDeviceSynchronize());
+
+		float* h_residuals = new float[input.width*input.height];
+		cutilSafeCall(cudaMemcpy(h_residuals, state.d_r, sizeof(float)*input.width*input.height, cudaMemcpyDeviceToHost));
+
+		float res = 0.0f;
+		for (unsigned int i = 0; i < input.width*input.height; i++) {
+			res += h_residuals[i];
+		}
+		delete[] h_residuals;
+		residual = res;
+	}
+
+
+#ifdef _DEBUG
+	cutilSafeCall(cudaDeviceSynchronize());
+	cutilCheckMsg(__FUNCTION__);
+#endif
+
+	return residual;
+}
+
+
+__global__ void GradientDecentGradientDevice(SolverInput input, SolverState state, SolverParameters parameters)
+{
 	const unsigned int N = input.N; // Number of block variables
-		
-	ResetResidualDevice <<< 1, 1, 1 >>>(input, state, parameters);
+	const unsigned int x = blockIdx.x * blockDim.x + threadIdx.x;
+
+	if (x < N) {
+		state.d_delta[x] = evalMinusJTFDevice(x, input, state, parameters);
+	}
+}
+
+__global__ void GradientDecentUpdateDevice(SolverInput input, SolverState state, SolverParameters parameters, float stepSize)
+{
+	const unsigned int N = input.N; // Number of block variables
+	const unsigned int x = blockIdx.x * blockDim.x + threadIdx.x;
+
+	if (x < N) {
+		state.d_x[x] = state.d_x[x] + stepSize * state.d_delta[x];
+	}
+}
+
+
+void GradientDecentStep(SolverInput& input, SolverState& state, SolverParameters& parameters, float stepSize)
+{
+	const unsigned int N = input.N; // Number of block variables
+
+	GradientDecentGradientDevice << <(N + THREADS_PER_BLOCK - 1) / THREADS_PER_BLOCK, THREADS_PER_BLOCK >> >(input, state, parameters);
 	cutilSafeCall(cudaDeviceSynchronize());
 
-	EvalResidualDevice << <(N + THREADS_PER_BLOCK - 1) / THREADS_PER_BLOCK, THREADS_PER_BLOCK >> >(input, state, parameters);
+	GradientDecentUpdateDevice << <(N + THREADS_PER_BLOCK - 1) / THREADS_PER_BLOCK, THREADS_PER_BLOCK >> >(input, state, parameters, stepSize);
 	cutilSafeCall(cudaDeviceSynchronize());
 
 #ifdef _DEBUG
@@ -268,15 +340,16 @@ float EvalResidual(SolverInput& input, SolverState& state, SolverParameters& par
 	cutilCheckMsg(__FUNCTION__);
 #endif
 
-	return state.getSumResidual();
 }
+
+
 
 
 ////////////////////////////////////////////////////////////////////
 // Main GN Solver Loop
 ////////////////////////////////////////////////////////////////////
 
-extern "C" void solveStereoStub(SolverInput& input, SolverState& state, SolverParameters& parameters)
+extern "C" void LaplacianSolveGNStub(SolverInput& input, SolverState& state, SolverParameters& parameters)
 {
 	printf("residual=%f\n", EvalResidual(input, state, parameters));
 
@@ -292,4 +365,52 @@ extern "C" void solveStereoStub(SolverInput& input, SolverState& state, SolverPa
 
 		printf("residual=%f\n", EvalResidual(input, state, parameters));
 	}
+}
+
+////////////////////////////////////////////////////////////////////
+// Main GD Solver Loop
+////////////////////////////////////////////////////////////////////
+
+extern "C" void LaplacianSolveGDStub(SolverInput& input, SolverState& state, SolverParameters& parameters) 
+{
+	float initialLearningRate = 0.01f;
+	float tolerance = 1e-10f;
+
+	float learningLoss = 0.8f;
+	float learningGain = 1.1f;
+	float minLearningRate = 1e-25f;
+
+	float learningRate = initialLearningRate;
+
+	float residual = EvalResidual(input, state, parameters);
+	printf("iter=%d, residual=%f, learningRate=%f\n", 0, residual, learningRate);
+
+	for (unsigned int i = 0; i < parameters.nNonLinearIterations; i++) {
+		float startCost = EvalResidual(input, state, parameters);
+
+		float stepSize = learningRate;
+		GradientDecentStep(input, state, parameters, stepSize);
+
+		float residual = EvalResidual(input, state, parameters);
+
+		//update the learningRate
+		float endCost = residual;
+		float maxDelta = 1.0f;
+		if (endCost < startCost) {
+			learningRate = learningRate * learningGain;
+			if (maxDelta < tolerance) {
+				//break;
+			}
+			else {
+				learningRate = learningRate * learningLoss;
+
+				if (learningRate < minLearningRate) {
+					break;
+				}
+			}
+		}
+
+		printf("iter=%d, residual=%f, learningRate=%f\n", i + 1, residual, learningRate);
+	}
+
 }

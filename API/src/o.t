@@ -225,7 +225,7 @@ local function compileproblem(tbl,kind)
 
 			-- TODO: parameterize these
 			var initialLearningRate = 0.01
-			var maxIters = 10
+			var maxIters = 5000
 			var tolerance = 1e-10
 
 			-- Fixed constants (these do not need to be parameterized)
@@ -411,7 +411,7 @@ local function compileproblem(tbl,kind)
 
 			-- TODO: parameterize these
 			var initialLearningRate = 0.01
-			var maxIters = 10
+			var maxIters = 5000
 			var tolerance = 1e-10
 
 			-- Fixed constants (these do not need to be parameterized)
