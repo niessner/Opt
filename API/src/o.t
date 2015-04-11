@@ -98,7 +98,7 @@ local problems = {}
 
 -- this function should do anything it needs to compile an optimizer defined
 -- using the functions in tbl, using the optimizer 'kind' (e.g. kind = gradientdecesnt)
--- it should generat the field planctor which is the terra function that 
+-- it should generat the field makePlan which is the terra function that 
 -- allocates the plan
 
 local function getImages(vars,imageBindings,actualDims)
@@ -238,7 +238,7 @@ local function gradientDescentCPU(tbl,vars)
 	local gradWIndex = vars.dimIndex[ vars.gradientDim[1] ]
 	local gradHIndex = vars.dimIndex[ vars.gradientDim[2] ]
 
-	local terra planctor(actualDims : &uint64) : &opt.Plan
+	local terra makePlan(actualDims : &uint64) : &opt.Plan
 		var pd = PlanData.alloc()
 		pd.plan.data = pd
 		pd.plan.impl = impl
@@ -254,7 +254,7 @@ local function gradientDescentCPU(tbl,vars)
 
 		return &pd.plan
 	end
-	return Problem:new { planctor = planctor }
+	return Problem:new { makePlan = makePlan }
 end
 
 local function gradientDescentGPU(tbl,vars)
@@ -404,7 +404,7 @@ local function gradientDescentGPU(tbl,vars)
 	local gradWIndex = vars.dimIndex[ vars.gradientDim[1] ]
 	local gradHIndex = vars.dimIndex[ vars.gradientDim[2] ]
 
-	local terra planctor(actualDims : &uint64) : &opt.Plan
+	local terra makePlan(actualDims : &uint64) : &opt.Plan
 		var pd = PlanData.alloc()
 		pd.plan.data = pd
 		pd.plan.impl = impl
@@ -422,10 +422,10 @@ local function gradientDescentGPU(tbl,vars)
 
 		return &pd.plan
 	end
-	return Problem:new { planctor = planctor }
+	return Problem:new { makePlan = makePlan }
 end
 
-local function compileproblem(tbl,kind)
+local function compileProblem(tbl, kind)
 	local vars = {
 		dims = tbl.dims,
 		dimIndex = { [1] = 0 },
@@ -474,7 +474,7 @@ local function compileproblem(tbl,kind)
 			[ emitcalltouserfunction(costdim,dims,images,tbl.cost.fn) ]
 			[ emitcalltouserfunction(vars.gradientDim,dims,images,tbl.gradient) ]
 		end
-		local terra planctor(actualDims : &uint64) : &opt.Plan
+		local terra makePlan(actualDims : &uint64) : &opt.Plan
 			var pd = PlanData.alloc()
 			pd.plan.data = pd
 			pd.plan.impl = impl
@@ -484,36 +484,36 @@ local function compileproblem(tbl,kind)
 			end
 			return &pd.plan
 		end
-		return Problem:new { planctor = planctor }
+		return Problem:new { makePlan = makePlan }
 
 	elseif kind == "gradientdescentCPU" then
 		
-        return gradientDescentCPU(tbl,vars)
+        return gradientDescentCPU(tbl, vars)
 	
 	elseif kind == "gradientdescentGPU" then
 		
-		return gradientDescentGPU(tbl,vars)
+		return gradientDescentGPU(tbl, vars)
 
 	end
     
 end
 
-function opt.ProblemDefineFromTable(tbl,kind,params)
-    local p = compileproblem(tbl,kind,params)
+function opt.ProblemDefineFromTable(tbl, kind, params)
+    local p = compileProblem(tbl,kind,params)
     -- store each problem in a table, and assign it an id
-    problems[#problems+1] = p
+    problems[#problems + 1] = p
     p.id = #problems
     return p
 end
 
-local function problemdefine(filename,kind,params,pt)
-    pt.planctor = nil
+local function problemDefine(filename, kind, params, pt)
+    pt.makePlan = nil
     local success,p = xpcall(function() 
         filename,kind = ffi.string(filename), ffi.string(kind)
         local tbl = assert(terralib.loadfile(filename))() 
         assert(type(tbl) == "table")
         local p = opt.ProblemDefineFromTable(tbl,kind,params)
-		pt.id,pt.planctor = p.id,p.planctor:getpointer()
+		pt.id, pt.makePlan = p.id,p.makePlan:getpointer()
 		return p
     end,function(err) print(debug.traceback(err,2)) end)
 end
@@ -529,13 +529,13 @@ struct opt.Plan(S.Object) {
 
 struct opt.Problem(S.Object) {
     id : int
-    planctor : &uint64 -> &opt.Plan
+    makePlan : &uint64 -> &opt.Plan
 }
 
 terra opt.ProblemDefine(filename : rawstring, kind : rawstring, params : &opaque)
     var pt = opt.Problem.alloc()
-    problemdefine(filename,kind,params,pt)
-	if pt.planctor == nil then
+    problemDefine(filename,kind,params,pt)
+	if pt.makePlan == nil then
 		pt:delete()
 		return nil
 	end
@@ -551,7 +551,7 @@ function opt.Dim(name)
     return Dim:new { name = name }
 end
 
-local newimage = terralib.memoize(function(typ,W,H)
+local newImage = terralib.memoize(function(typ, W, H)
    local struct Image {
         impl : opt.ImageBinding
         W : uint64
@@ -560,36 +560,36 @@ local newimage = terralib.memoize(function(typ,W,H)
    function Image.metamethods.__tostring()
       return string.format("Image(%s,%s,%s)",tostring(typ),W.name, H.name)
    end
-   Image.metamethods.__apply = macro(function(self,x,y)
+   Image.metamethods.__apply = macro(function(self, x, y)
      return `@[&typ](self.impl:get(x,y))
    end)
-   terra Image:initCPU(actualW : int,actualH : int)
+   terra Image:initCPU(actualW : int, actualH : int)
 		self.W = actualH
 		self.H = actualW
 		self.impl.data = [&uint8](C.malloc(actualW * actualH * sizeof(typ)))
 		self.impl.elemsize = sizeof(typ)
 		self.impl.stride = actualW * sizeof(typ)
    end
-   terra Image:initGPU(actualW : int,actualH : int)
+   terra Image:initGPU(actualW : int, actualH : int)
 		self.W = actualH
 		self.H = actualW
 		var cudaError = C.cudaMalloc([&&opaque](&(self.impl.data)), actualW * actualH * sizeof(typ))
 		self.impl.elemsize = sizeof(typ)
 		self.impl.stride = actualW * sizeof(typ)
    end
-   Image.metamethods.typ,Image.metamethods.W,Image.metamethods.H = typ,W,H
+   Image.metamethods.typ,Image.metamethods.W,Image.metamethods.H = typ, W, H
    return Image
 end)
 
-function opt.Image(typ,W,H)
+function opt.Image(typ, W, H)
     assert(W == 1 or Dim:is(W))
     assert(H == 1 or Dim:is(H))
     assert(terralib.types.istype(typ))
-    return newimage(typ,W,H)
+    return newImage(typ, W, H)
 end
 
 terra opt.ProblemPlan(problem : &opt.Problem, dims : &uint64) : &opt.Plan
-	return problem.planctor(dims) -- this is just a wrapper around calling the plan constructor
+	return problem.makePlan(dims) -- this is just a wrapper around calling the plan constructor
 end 
 
 terra opt.PlanFree(plan : &opt.Plan)
@@ -598,7 +598,7 @@ terra opt.PlanFree(plan : &opt.Plan)
 end
 
 terra opt.ProblemSolve(plan : &opt.Plan, images : &&opt.ImageBinding, params : &opaque)
-	return plan.impl(plan.data,images,params)
+	return plan.impl(plan.data, images, params)
 end
 
 return opt
