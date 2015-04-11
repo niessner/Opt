@@ -89,6 +89,38 @@ local terra gradient(i : uint64, j : uint64, xImage : X, aImage : A)
 	return laplacianGradient + reconstructionGradient
 end
 
+local terra gradientHack(i : uint64, j : uint64, xImage : X, hackImage : X, aImage : A)
+	var x = xImage(i, j)
+	var a = aImage(i, j)
+
+	--IO.printf("widths (%d,%d)\n", xImage.W, aImage.W)
+	--IO.printf("heights (%d,%d)\n", xImage.H, aImage.H)
+
+	--IO.printf("image (%f,%f)\n", x, a)
+	if i == 6 and j == 1 then
+		--IO.getchar()
+	end
+
+	var laplacianGradient = 0.0
+
+	laplacianGradient = laplacianGradient + 8 * laplacian(i, j, xImage)
+
+	laplacianGradient = laplacianGradient + -2 * laplacian(i + 1, j, xImage)
+	laplacianGradient = laplacianGradient + -2 * laplacian(i - 1, j, xImage)
+	laplacianGradient = laplacianGradient + -2 * laplacian(i, j + 1, xImage)
+	laplacianGradient = laplacianGradient + -2 * laplacian(i, j - 1, xImage)
+
+	var reconstructionGradient = w * 2 * (x - a)
+
+	--IO.printf("gradients (%f,%f)\n", laplacianGradient, reconstructionGradient)
+	if i == 6 and j == 1 then
+		--IO.getchar()
+	end
+
+	return laplacianGradient + reconstructionGradient
+end
+
 return { dims = { W, H },
          cost = { dim = {W,H}, fn = cost },
-         gradient = gradient }
+         gradient = gradient,
+		 gradientHack = gradientHack }

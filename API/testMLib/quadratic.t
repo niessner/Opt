@@ -36,6 +36,15 @@ local terra gradient(i : uint64, j : uint64, xImage : X, aImage : A, bImage : B,
 	return 2.0 * (a * x * x + b * x + c) * (2.0 * a * x + b);
 end
 
+local terra gradientHack(i : uint64, j : uint64, xImage : X, hackImage : X, aImage : A, bImage : B, cImage : C)
+	var x = xImage(i, j)
+	var a = aImage(i, j)
+	var b = bImage(i, j)
+	var c = cImage(i, j)
+	return 2.0 * (a * x * x + b * x + c) * (2.0 * a * x + b);
+end
+
 return { dims = { W, H },
          cost = { dim = {W,1}, fn = cost },
-         gradient = gradient }
+         gradient = gradient,
+		 gradientHack = gradientHack }

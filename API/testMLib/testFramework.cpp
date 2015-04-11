@@ -178,12 +178,13 @@ void TestFramework::runAllTests()
         return;
     }
 
-    //TestExample example = makeRandomQuadratic(5);
-    TestExample example = makeImageSmoothing("smoothingExampleB.png", 0.1f);
+    TestExample example = makeRandomQuadratic(1);
+    //TestExample example = makeImageSmoothing("smoothingExampleB.png", 0.1f);
 
     //TestMethod method = TestMethod("gradientdescentCPU","no-params");
     //TestMethod method = TestMethod("gradientdescentGPU", "no-params");
-    TestMethod method = TestMethod("conjugateGradientCPU", "no-params");
+    //TestMethod method = TestMethod("conjugateGradientCPU", "no-params");
+    TestMethod method = TestMethod("linearizedConjugateGradientCPU", "no-params");
 
     for (auto &image : example.images)
         image.bind(optimizerState);
