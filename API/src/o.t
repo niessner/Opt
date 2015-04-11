@@ -768,6 +768,8 @@ local function linearizedConjugateGradientCPU(tbl, vars)
 					pd.p(w, h) = pd.r(w, h) + rScale * pd.p(w, h)
 				end
 			end
+			
+			rTr = rTrNew
 		end
 		
 		var finalCost = totalCost(data_, images)

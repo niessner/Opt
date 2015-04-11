@@ -25,7 +25,7 @@ local terra cost(i : uint64, j : uint64, xImage : X, aImage : A, bImage : B, cIm
 	--IO.printf("cost (%d,%d): x=%f, a=%f, b=%f, c=%f\n", i, j, x, a, b, c)
 
 	var v = a * x * x + b * x + c 
-	return v
+	return v * v
 end
 
 local terra gradient(i : uint64, j : uint64, xImage : X, aImage : A, bImage : B, cImage : C)
@@ -33,7 +33,7 @@ local terra gradient(i : uint64, j : uint64, xImage : X, aImage : A, bImage : B,
 	var a = aImage(i, j)
 	var b = bImage(i, j)
 	var c = cImage(i, j)
-	return 2.0 * a * x + b
+	return 2.0 * (a * x * x + b * x + c) * (2.0 * a * x + b)
 end
 
 local terra gradientHack(i : uint64, j : uint64, xImage : X, hackImage : X, aImage : A, bImage : B, cImage : C)

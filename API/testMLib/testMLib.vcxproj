@@ -103,6 +103,7 @@
     <None Include="example.t" />
     <None Include="imageSmoothing.t" />
     <None Include="quadratic.t" />
+    <None Include="quadraticSquared.t" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="main.cpp" />
