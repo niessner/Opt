@@ -54,11 +54,11 @@ printf = macro(function(fmt,...)
     return `vprintf(fmt,buf) 
 end)
 
-local dims = {{"blockIdx","ctaid"},
+local GPUBlockDims = {{"blockIdx","ctaid"},
               {"gridDim","nctaid"},
               {"threadIdx","tid"},
               {"blockDim","ntid"}}
-for i,d in ipairs(dims) do
+for i,d in ipairs(GPUBlockDims) do
     local a,b = unpack(d)
     local tbl = {}
     for i,v in ipairs {"x","y","z" } do
@@ -121,7 +121,7 @@ local function gradientDescentCPU(tbl,vars)
 		gradW : int
 		gradH : int
 		gradStore : vars.unknownType
-		dims : int64[#dims + 1]
+		dims : int64[#vars.dims + 1]
 	}
 
 	local images = vars.argumentTypes:map(symbol)
@@ -243,7 +243,7 @@ local function gradientDescentCPU(tbl,vars)
 		pd.plan.data = pd
 		pd.plan.impl = impl
 		pd.dims[0] = 1
-		for i = 0,[#dims] do
+		for i = 0,[#vars.dims] do
 			pd.dims[i+1] = actualDims[i]
 		end
 
@@ -266,7 +266,7 @@ local function gradientDescentGPU(tbl,vars)
 		gradStore : vars.unknownType
 		scratchF : &float
 		scratchD : &double
-		dims : int64[#dims + 1]
+		dims : int64[#vars.dims + 1]
 	}
 
 	local images = vars.argumentTypes:map(symbol)
