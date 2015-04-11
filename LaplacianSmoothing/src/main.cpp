@@ -21,7 +21,7 @@ int main(int argc, const char * argv[]) {
 	ColorImageR8G8B8A8 out(res.getWidth(), res.getHeight());
 	for (unsigned int y = 0; y < res.getHeight(); y++) {
 		for (unsigned int x = 0; x < res.getWidth(); x++) {
-			unsigned char p = math::round(res(x, y));
+			unsigned char p = math::round(math::clamp(res(x, y), 0.0f, 255.0f));
 			out(x, y) = vec4uc(p, p, p, 255);
 		}
 	}

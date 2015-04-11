@@ -87,20 +87,25 @@ __inline__ __device__ float evalMinusJTFDevice(unsigned int variableIdx, SolverI
 
 	int i; int j; get2DIdx(variableIdx, input.width, input.height, i, j);
 	
-	float p_reg = 0.0f;
+	float p_reg_m = 0.0f;
+	float p_reg_n0 = 0.0f;	float p_reg_n1 = 0.0f;	float p_reg_n2 = 0.0f;	float p_reg_n3 = 0.0f;
+
 	b += -parameters.weightRegularizer*2.0f*(
-		4.0f*evalLaplacian(variableIdx, input, state, parameters, p_reg)
-		- evalLaplacian(i + 1, j + 0, input, state, parameters, p_reg)
-		- evalLaplacian(i - 1, j + 0, input, state, parameters, p_reg)
-		- evalLaplacian(i + 0, j + 1, input, state, parameters, p_reg)
-		- evalLaplacian(i + 0, j - 1, input, state, parameters, p_reg)
+		4.0f*evalLaplacian(variableIdx, input, state, parameters, p_reg_m)
+		- evalLaplacian(i + 1, j + 0, input, state, parameters, p_reg_n0)
+		- evalLaplacian(i - 1, j + 0, input, state, parameters, p_reg_n1)
+		- evalLaplacian(i + 0, j + 1, input, state, parameters, p_reg_n2)
+		- evalLaplacian(i + 0, j - 1, input, state, parameters, p_reg_n3)
 		);
+
+	return b;
 
 	// Preconditioner depends on last solution P(input.d_x)
 	float p = 0.0f;
 
 	if (validTarget) p += 2.0f*parameters.weightFitting;	//e_reg
-	p += p_reg*parameters.weightFitting;
+	//p += (4.0f*p_reg_m - p_reg_n0 - p_reg_n1 - p_reg_n2 - p_reg_n3)*parameters.weightFitting;	//todo check regularizer
+	p += 4.0f*p_reg_m*parameters.weightFitting;
 
 	if (p > FLOAT_EPSILON)	state.d_precondioner[variableIdx] = 1.0f / p;
 	else					state.d_precondioner[variableIdx] = 1.0f;
