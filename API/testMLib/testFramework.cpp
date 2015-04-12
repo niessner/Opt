@@ -19,12 +19,12 @@ TestExample TestFramework::makeImageSmoothing(const string &imageFilename, float
 
     const size_t pixelCount = bmp.size();
 
-    auto getVariable = [&](size_t x, size_t y)
+    auto getVariable = [=](size_t x, size_t y)
     {
         return (size_t)(y * dimX + x);
     };
 
-    auto isBorder = [&](size_t x, size_t y)
+    auto isBorder = [=](size_t x, size_t y)
     {
         return (x == 0 || y == 0 || x == dimX - 1 || y == dimY - 1);
     };
