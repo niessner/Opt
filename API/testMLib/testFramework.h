@@ -35,6 +35,10 @@ struct TestImage
     {
 		cudaMemcpy(dataGPU, (void *)dataCPU.data(), sizeof(float) * dimX * dimY, cudaMemcpyHostToDevice);
     }
+    void syncGPUToCPU() const
+    {
+        cudaMemcpy((void *)dataCPU.data(), dataGPU, sizeof(float) * dimX * dimY, cudaMemcpyDeviceToHost);
+    }
     void bind(OptState *optimizerState)
     {
         terraBindingCPU = Opt_ImageBind(optimizerState, dataCPU.data(), sizeof(float), dimX * sizeof(float));
@@ -73,6 +77,7 @@ struct TestExample
     vector<TestImage> images;
 
     float minimumCost;
+    TestImage minimumValues;
 
     function<float(const float *variables)> costFunction;
 };

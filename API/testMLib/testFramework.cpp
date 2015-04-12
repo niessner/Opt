@@ -113,6 +113,7 @@ TestExample TestFramework::makeImageSmoothing(const string &imageFilename, float
     }
 
     result.minimumCost = result.costFunction(x.data());
+    result.minimumValues = result.images[0];
 
     return result;
 }
@@ -178,11 +179,11 @@ void TestFramework::runAllTests()
         return;
     }
 
-    //TestExample example = makeRandomQuadratic(1);
+    //TestExample example = makeRandomQuadratic(5);
     TestExample example = makeImageSmoothing("smoothingExampleB.png", 0.1f);
 
-    //TestMethod method = TestMethod("gradientdescentCPU","no-params");
-    TestMethod method = TestMethod("gradientdescentGPU", "no-params");
+    TestMethod method = TestMethod("gradientdescentCPU","no-params");
+    //TestMethod method = TestMethod("gradientdescentGPU", "no-params");
     //TestMethod method = TestMethod("conjugateGradientCPU", "no-params");
     //TestMethod method = TestMethod("linearizedConjugateGradientCPU", "no-params");
     //TestMethod method = TestMethod("linearizedConjugateGradientGPU", "no-params");
@@ -197,6 +198,8 @@ void TestFramework::runAllTests()
 void TestFramework::runTest(const TestMethod &method, const TestExample &example)
 {
     cout << "Running test: " << example.exampleName << " using " << method.optimizerName << endl;
+
+    cout << "start cost: " << example.costFunction(example.images[0].dataCPU.data()) << endl;
 
     uint64_t dims[] = { example.variableDimX, example.variableDimY };
 
@@ -223,9 +226,20 @@ void TestFramework::runTest(const TestMethod &method, const TestExample &example
     bool isGPU = ml::util::endsWith(method.optimizerName, "GPU");
 
     if (isGPU)
+    {
         Opt_ProblemSolve(optimizerState, plan, imageBindingsGPU.data(), NULL);
+        for (const auto &image : example.images)
+            image.syncGPUToCPU();
+    }
     else
         Opt_ProblemSolve(optimizerState, plan, imageBindingsCPU.data(), NULL);
+
+    //cout << "x(0, 0) = " << example.images[0](0, 0) << endl;
+    //cout << "x(1, 0) = " << example.images[0](5, 0) << endl;
+    //cout << "x(0, 1) = " << example.images[0](0, 5) << endl;
+
+    // TODO: this is not always accurate, in cases where costFunction does not exactly match the cost function in the terra file.  This should just call terra's cost function.
+    cout << "optimized cost: " << example.costFunction(example.images[0].dataCPU.data()) << endl;
 
     cout << "expected cost: " << example.minimumCost << endl;
 }
