@@ -52,6 +52,14 @@ struct TestImage
     {
         return dataCPU[y * dimX + x];
     }
+    float& operator()(size_t x, size_t y)
+    {
+        return dataCPU[y * dimX + x];
+    }
+    float operator()(size_t x, size_t y) const
+    {
+        return dataCPU[y * dimX + x];
+    }
 
     ImageBinding *terraBindingCPU;
     ImageBinding *terraBindingGPU;
@@ -79,7 +87,7 @@ struct TestExample
     float minimumCost;
     TestImage minimumValues;
 
-    function<float(const float *variables)> costFunction;
+    function<float(const TestImage &x)> costFunction;
 };
 
 class TestFramework

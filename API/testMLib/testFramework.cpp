@@ -21,7 +21,7 @@ TestExample TestFramework::makeImageSmoothing(const string &imageFilename, float
 
     auto getVariable = [&](size_t x, size_t y)
     {
-        return (size_t)(y * bmp.getWidth() + x);
+        return (size_t)(y * dimX + x);
     };
 
     auto isBorder = [&](size_t x, size_t y)
@@ -63,7 +63,7 @@ TestExample TestFramework::makeImageSmoothing(const string &imageFilename, float
 
     TestExample result("imageSmoothing", "imageSmoothing.t", bmp.getWidth(), bmp.getHeight());
 
-    result.costFunction = [=](const float *variables)
+    result.costFunction = [=](const TestImage &variables)
     {
         //(4 * x_i - (neighbors) ) ^2 ) + sum_i( w * (x_i - target_i)^2
         float sum = 0.0;
@@ -76,12 +76,12 @@ TestExample TestFramework::makeImageSmoothing(const string &imageFilename, float
             if (isBorder(p.x, p.y))
                 continue;
 
-            const float x = variables[getVariable(p.x, p.y)];
+            const float x = variables(p.x, p.y);
 
-            const float n0 = variables[getVariable(p.x - 1, p.y)];
-            const float n1 = variables[getVariable(p.x + 1, p.y)];
-            const float n2 = variables[getVariable(p.x, p.y - 1)];
-            const float n3 = variables[getVariable(p.x, p.y + 1)];
+            const float n0 = variables(p.x - 1, p.y);
+            const float n1 = variables(p.x + 1, p.y);
+            const float n2 = variables(p.x, p.y - 1);
+            const float n3 = variables(p.x, p.y + 1);
 
             const float laplacianCost = 4 * x - (n0 + n1 + n2 + n3);
 
@@ -93,7 +93,7 @@ TestExample TestFramework::makeImageSmoothing(const string &imageFilename, float
         //
         for (const auto &p : bmp)
         {
-            const float x = variables[getVariable(p.x, p.y)];
+            const float x = variables(p.x, p.y);
             const float reconstructionCost = x - p.value.r;
 
             sum += w * (reconstructionCost * reconstructionCost);
@@ -105,15 +105,17 @@ TestExample TestFramework::makeImageSmoothing(const string &imageFilename, float
     result.images.resize(2);
     result.images[0].allocate(bmp.getWidth(), bmp.getHeight());
     result.images[1].allocate(bmp.getWidth(), bmp.getHeight());
+    result.minimumValues = result.images[0];
 
     for (const auto &p : bmp)
     {
-        result.images[0]((int)p.x, (int)p.y) = 0.0;
-        result.images[1]((int)p.x, (int)p.y) = p.value.r;
+        result.images[0](p.x, p.y) = 0.0;
+        result.images[1](p.x, p.y) = p.value.r;
+        result.minimumValues(p.x, p.y) = x[getVariable((int)p.x, (int)p.y)];
     }
 
-    result.minimumCost = result.costFunction(x.data());
-    result.minimumValues = result.images[0];
+    result.minimumCost = result.costFunction(result.minimumValues);
+    
 
     return result;
 }
@@ -140,12 +142,12 @@ TestExample TestFramework::makeRandomQuadratic(int count)
     // residual_i = ( (ax^2 + bx + c)^2 = 0)
     //
 
-    result.costFunction = [=](const float *variables)
+    result.costFunction = [=](const TestImage &variables)
     {
         float sum = 0.0;
         for (int i = 0; i < count; i++)
         {
-            const float x = variables[i];
+            const float x = variables(i, 0);
             const float a = result.images[1](i, 0);
             const float b = result.images[2](i, 0);
             const float c = result.images[3](i, 0);
@@ -182,10 +184,10 @@ void TestFramework::runAllTests()
     //TestExample example = makeRandomQuadratic(5);
     TestExample example = makeImageSmoothing("smoothingExampleB.png", 0.1f);
 
-    TestMethod method = TestMethod("gradientdescentCPU","no-params");
+    //TestMethod method = TestMethod("gradientdescentCPU","no-params");
     //TestMethod method = TestMethod("gradientdescentGPU", "no-params");
     //TestMethod method = TestMethod("conjugateGradientCPU", "no-params");
-    //TestMethod method = TestMethod("linearizedConjugateGradientCPU", "no-params");
+    TestMethod method = TestMethod("linearizedConjugateGradientCPU", "no-params");
     //TestMethod method = TestMethod("linearizedConjugateGradientGPU", "no-params");
     //TestMethod method = TestMethod("linearizedPreconditionedConjugateGradientCPU", "no-params");
 
@@ -199,7 +201,7 @@ void TestFramework::runTest(const TestMethod &method, const TestExample &example
 {
     cout << "Running test: " << example.exampleName << " using " << method.optimizerName << endl;
 
-    cout << "start cost: " << example.costFunction(example.images[0].dataCPU.data()) << endl;
+    cout << "start cost: " << example.costFunction(example.images[0]) << endl;
 
     uint64_t dims[] = { example.variableDimX, example.variableDimY };
 
@@ -239,7 +241,7 @@ void TestFramework::runTest(const TestMethod &method, const TestExample &example
     //cout << "x(0, 1) = " << example.images[0](0, 5) << endl;
 
     // TODO: this is not always accurate, in cases where costFunction does not exactly match the cost function in the terra file.  This should just call terra's cost function.
-    cout << "optimized cost: " << example.costFunction(example.images[0].dataCPU.data()) << endl;
+    cout << "optimized cost: " << example.costFunction(example.images[0]) << endl;
 
     cout << "expected cost: " << example.minimumCost << endl;
 }

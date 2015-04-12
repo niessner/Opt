@@ -230,6 +230,14 @@ local function gradientDescentCPU(tbl,vars)
 
 			--C.printf("impl iter end\n")
 		end
+		
+		--[[var x00 = [ images[1] ](0, 0)
+		var x10 = [ images[1] ](5, 0)
+		var x01 = [ images[1] ](0, 5)
+		
+		C.printf("x(0,0) = %f\n", x00)
+		C.printf("x(1,0) = %f\n", x10)
+		C.printf("x(0,1) = %f\n", x01)]]
 	end
 
 	local gradWIndex = vars.dimIndex[ vars.gradientDim[1] ]
