@@ -1008,12 +1008,11 @@ local function linearizedPreconditionedConjugateGradientCPU(tbl, vars)
 		return result
 	end
 	
-	-- TODO: ask zach how to pass something like pd in, instead of having to extract gradH and gradW. Probably a macro or some such.
 	-- TODO: ask zach how to do templates so this can live at a higher scope
-	local terra imageInnerProduct(width : int, height : int, a : vars.unknownType, b : vars.unknownType)
+	local terra imageInnerProduct(pd : &PlanData, a : vars.unknownType, b : vars.unknownType)
 		var sum = 0.0
-		for h = 0, height do
-			for w = 0, width do
+		for h = 0, pd.gradH do
+			for w = 0, pd.gradW do
 				sum = sum + a(w, h) * b(w, h)
 			end
 		end
@@ -1057,8 +1056,8 @@ local function linearizedPreconditionedConjugateGradientCPU(tbl, vars)
 				end
 			end
 			
-			var rTzStart = imageInnerProduct(pd.gradW, pd.gradH, pd.r, pd.z)
-			var den = imageInnerProduct(pd.gradW, pd.gradH, pd.p, pd.Ap)
+			var rTzStart = imageInnerProduct(pd, pd.r, pd.z)
+			var den = imageInnerProduct(pd, pd.p, pd.Ap)
 			var alpha = rTzStart / den
 			
 			for h = 0, pd.gradH do
@@ -1068,7 +1067,7 @@ local function linearizedPreconditionedConjugateGradientCPU(tbl, vars)
 				end
 			end
 			
-			var rTr = imageInnerProduct(pd.gradW, pd.gradH, pd.r, pd.r)
+			var rTr = imageInnerProduct(pd, pd.r, pd.r)
 			
 			C.printf("iteration %d, cost=%f, rTr=%f\n", iter, iterStartCost, rTr)
 			
@@ -1080,7 +1079,7 @@ local function linearizedPreconditionedConjugateGradientCPU(tbl, vars)
 				end
 			end
 			
-			var beta = imageInnerProduct(pd.gradW, pd.gradH, pd.z, pd.r) / rTzStart
+			var beta = imageInnerProduct(pd, pd.z, pd.r) / rTzStart
 			
 			for h = 0, pd.gradH do
 				for w = 0, pd.gradW do
