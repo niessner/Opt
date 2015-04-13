@@ -240,8 +240,12 @@ void TestFramework::runTest(const TestMethod &method, const TestExample &example
     //cout << "x(1, 0) = " << example.images[0](5, 0) << endl;
     //cout << "x(0, 1) = " << example.images[0](0, 5) << endl;
 
+
+
     // TODO: this is not always accurate, in cases where costFunction does not exactly match the cost function in the terra file.  This should just call terra's cost function.
     cout << "optimized cost: " << example.costFunction(example.images[0]) << endl;
 
     cout << "expected cost: " << example.minimumCost << endl;
+
+    cout << "max delta: " << TestImage::maxDelta(example.images[0], example.minimumValues) << endl;
 }

@@ -60,6 +60,14 @@ struct TestImage
     {
         return dataCPU[y * dimX + x];
     }
+    static double maxDelta(const TestImage &a, const TestImage &b)
+    {
+        double delta = 0.0;
+        for (int x = 0; x < a.dimX; x++)
+            for (int y = 0; y < a.dimY; y++)
+                delta = std::max(delta, fabs((double)a(x, y) - (double)b(x, y)));
+        return delta;
+    }
 
     ImageBinding *terraBindingCPU;
     ImageBinding *terraBindingGPU;
