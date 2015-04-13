@@ -70,24 +70,6 @@ for i,d in ipairs(GPUBlockDims) do
 end
 
 __syncthreads = cudalib.nvvm_barrier0
-    
-struct opt.ImageBinding(S.Object) {
-    data : &uint8
-    stride : uint64
-    elemsize : uint64
-}
-terra opt.ImageBinding:get(x : uint64, y : uint64) : &uint8
-   return self.data + y * self.stride + x * self.elemsize
-end
-
-terra opt.ImageBind(data : &opaque, elemsize : uint64, stride : uint64) : &opt.ImageBinding
-    var img = opt.ImageBinding.alloc()
-    img.data,img.stride,img.elemsize = [&uint8](data),stride,elemsize
-    return img
-end
-terra opt.ImageFree(img : &opt.ImageBinding)
-    img:delete()
-end
 
 local Problem = newclass("Problem")
 local Dim = newclass("dimension")
@@ -1228,6 +1210,24 @@ end
 struct opt.GradientDescentPlanParams {
     nIterations : uint64
 }
+
+struct opt.ImageBinding(S.Object) {
+    data : &uint8
+    stride : uint64
+    elemsize : uint64
+}
+terra opt.ImageBinding:get(x : uint64, y : uint64) : &uint8
+   return self.data + y * self.stride + x * self.elemsize
+end
+
+terra opt.ImageBind(data : &opaque, elemsize : uint64, stride : uint64) : &opt.ImageBinding
+    var img = opt.ImageBinding.alloc()
+    img.data,img.stride,img.elemsize = [&uint8](data),stride,elemsize
+    return img
+end
+terra opt.ImageFree(img : &opt.ImageBinding)
+    img:delete()
+end
 
 struct opt.Plan(S.Object) {
     impl : {&opaque,&&opt.ImageBinding,&opaque} -> {}

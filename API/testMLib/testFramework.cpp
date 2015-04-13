@@ -187,8 +187,8 @@ void TestFramework::runAllTests()
     //TestMethod method = TestMethod("gradientdescentCPU","no-params");
     //TestMethod method = TestMethod("gradientdescentGPU", "no-params");
     //TestMethod method = TestMethod("conjugateGradientCPU", "no-params");
-    TestMethod method = TestMethod("linearizedConjugateGradientCPU", "no-params");
-    //TestMethod method = TestMethod("linearizedConjugateGradientGPU", "no-params");
+    //TestMethod method = TestMethod("linearizedConjugateGradientCPU", "no-params");
+    TestMethod method = TestMethod("linearizedConjugateGradientGPU", "no-params");
     //TestMethod method = TestMethod("linearizedPreconditionedConjugateGradientCPU", "no-params");
 
     for (auto &image : example.images)
