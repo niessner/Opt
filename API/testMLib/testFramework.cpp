@@ -63,7 +63,7 @@ TestExample TestFramework::makeImageSmoothing(const string &imageFilename, float
 
     TestExample result("imageSmoothing", "imageSmoothing.t", bmp.getWidth(), bmp.getHeight());
 
-    result.costFunction = [=](const TestImage &variables)
+    result.costFunction = [=](const OptImage &variables)
     {
         //(4 * x_i - (neighbors) ) ^2 ) + sum_i( w * (x_i - target_i)^2
         float sum = 0.0;
@@ -142,7 +142,7 @@ TestExample TestFramework::makeRandomQuadratic(int count)
     // residual_i = ( (ax^2 + bx + c)^2 = 0)
     //
 
-    result.costFunction = [=](const TestImage &variables)
+    result.costFunction = [=](const OptImage &variables)
     {
         float sum = 0.0;
         for (int i = 0; i < count; i++)
@@ -187,8 +187,8 @@ void TestFramework::runAllTests()
     //TestMethod method = TestMethod("gradientdescentCPU","no-params");
     //TestMethod method = TestMethod("gradientdescentGPU", "no-params");
     //TestMethod method = TestMethod("conjugateGradientCPU", "no-params");
-    //TestMethod method = TestMethod("linearizedConjugateGradientCPU", "no-params");
-    TestMethod method = TestMethod("linearizedConjugateGradientGPU", "no-params");
+    TestMethod method = TestMethod("linearizedConjugateGradientCPU", "no-params");
+    //TestMethod method = TestMethod("linearizedConjugateGradientGPU", "no-params");
     //TestMethod method = TestMethod("linearizedPreconditionedConjugateGradientCPU", "no-params");
 
     for (auto &image : example.images)
@@ -247,5 +247,5 @@ void TestFramework::runTest(const TestMethod &method, const TestExample &example
 
     cout << "expected cost: " << example.minimumCost << endl;
 
-    cout << "max delta: " << TestImage::maxDelta(example.images[0], example.minimumValues) << endl;
+    cout << "max delta: " << OptImage::maxDelta(example.images[0], example.minimumValues) << endl;
 }

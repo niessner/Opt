@@ -11,15 +11,15 @@ struct TestMethod
     string optimizerParameters;
 };
 
-struct TestImage
+struct OptImage
 {
-    TestImage()
+    OptImage()
     {
         terraBindingCPU = nullptr;
         terraBindingGPU = nullptr;
         dataGPU = nullptr;
     }
-    TestImage(int _dimX, int _dimY)
+    OptImage(int _dimX, int _dimY)
     {
         allocate(_dimX, _dimY);
     }
@@ -60,7 +60,7 @@ struct TestImage
     {
         return dataCPU[y * dimX + x];
     }
-    static double maxDelta(const TestImage &a, const TestImage &b)
+    static double maxDelta(const OptImage &a, const OptImage &b)
     {
         double delta = 0.0;
         for (int x = 0; x < a.dimX; x++)
@@ -90,12 +90,12 @@ struct TestExample
     string exampleName;
     string terraCodeFilename;
 
-    vector<TestImage> images;
+    vector<OptImage> images;
 
     float minimumCost;
-    TestImage minimumValues;
+    OptImage minimumValues;
 
-    function<float(const TestImage &x)> costFunction;
+    function<float(const OptImage &x)> costFunction;
 };
 
 class TestFramework

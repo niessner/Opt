@@ -102,6 +102,20 @@ local function getImages(vars,imageBindings,actualDims)
 	return results
 end
 
+local function makeTotalCost(tbl, PlanData, images)
+	local terra totalCost(pd : &PlanData, [images])
+		var result = 0.0
+		for h = 0,pd.gradH do
+			for w = 0,pd.gradW do
+				var v = tbl.cost.fn(w,h,images)
+				result = result + v
+			end
+		end
+		return result
+	end
+	return totalCost
+end
+
 local function gradientDescentCPU(tbl,vars)
 	local struct PlanData(S.Object) {
 		plan : opt.Plan
@@ -112,21 +126,7 @@ local function gradientDescentCPU(tbl,vars)
 	}
 
 	local images = vars.argumentTypes:map(symbol)
-		
-	local terra totalCost(data_ : &opaque, [images])
-		var pd = [&PlanData](data_)
-		var result = 0.0
-		for h = 0,pd.gradH do
-			for w = 0,pd.gradW do
-				--C.printf("totalCost %d,%d\n", w, h)
-				var v = tbl.cost.fn(w,h,images)
-				--C.printf("v = %f\n", v)
-				--C.getchar()
-				result = result + v
-			end
-		end
-		return result
-	end
+	local totalCost = makeTotalCost(tbl, PlanData, images)
 
 	local terra impl(data_ : &opaque, imageBindings : &&opt.ImageBinding, params_ : &opaque)
 
@@ -161,7 +161,7 @@ local function gradientDescentCPU(tbl,vars)
 
 			--C.printf("impl iter start\n")
 
-			var startCost = totalCost(data_, images)
+			var startCost = totalCost(pd, images)
 			C.printf("iteration %d, cost=%f, learningRate=%f\n", iter, startCost, learningRate)
 			--C.getchar()
 
@@ -193,7 +193,7 @@ local function gradientDescentCPU(tbl,vars)
 			--
 			-- update the learningRate
 			--
-			var endCost = totalCost(data_, images)
+			var endCost = totalCost(pd, images)
 			if endCost < startCost then
 				learningRate = learningRate * learningGain
 
@@ -425,18 +425,7 @@ local function conjugateGradientCPU(tbl, vars)
 	}
 	
 	local images = vars.argumentTypes:map(symbol)
-
-	local terra totalCost(data_ : &opaque, [images])
-		var pd = [&PlanData](data_)
-		var result = 0.0
-		for h = 0,pd.gradH do
-			for w = 0,pd.gradW do
-				var v = tbl.cost.fn(w, h, images)
-				result = result + v
-			end
-		end
-		return result
-	end
+	local totalCost = makeTotalCost(tbl, PlanData, images)
 
 	local terra impl(data_ : &opaque, imageBindings : &&opt.ImageBinding, params_ : &opaque)
 
@@ -471,7 +460,7 @@ local function conjugateGradientCPU(tbl, vars)
 
 			--C.printf("impl iter start\n")
 
-			var iterStartCost = totalCost(data_, images)
+			var iterStartCost = totalCost(pd, images)
 			C.printf("iteration %d, cost=%f\n", iter, iterStartCost)
 			--C.getchar()
 
@@ -563,7 +552,7 @@ local function conjugateGradientCPU(tbl, vars)
 						end
 					end
 					
-					var searchCost = totalCost(data_, images)
+					var searchCost = totalCost(pd, images)
 					
 					if searchCost <= bestCost then
 						bestAlpha = alpha
@@ -592,7 +581,7 @@ local function conjugateGradientCPU(tbl, vars)
 						end
 					end
 					
-					var searchCost = totalCost(data_, images)
+					var searchCost = totalCost(pd, images)
 					
 					--C.fprintf(file, "%f\t%f\n", alpha * 1000.0, searchCost / 1000000.0)
 					
@@ -663,22 +652,15 @@ local function linearizedConjugateGradientCPU(tbl, vars)
 		Ap : vars.unknownType
 	}
 	
-	local images = vars.argumentTypes:map(symbol)
-
-	-- TODO: ask zach how to factor out totalCost
-	local terra totalCost(data_ : &opaque, [images])
-		var pd = [&PlanData](data_)
-		var result = 0.0
-		for h = 0,pd.gradH do
-			for w = 0,pd.gradW do
-				var v = tbl.cost.fn(w, h, images)
-				result = result + v
-			end
-		end
-		return result
+	local imagesAll = vars.argumentTypes:map(symbol)
+	local unknownImage = imagesAll[1]
+	local dataImages = terralib.newlist()
+	for i = 2,#imagesAll do
+		dataImages:insert(imagesAll[i])
 	end
 	
-	-- TODO: ask zach how to pass something like pd in, instead of having to extract gradH and gradW. Probably a macro or some such.
+	local totalCost = makeTotalCost(tbl, PlanData, imagesAll)
+
 	-- TODO: ask zach how to do templates so this can live at a higher scope
 	local terra imageInnerProduct(width : int, height : int, a : vars.unknownType, b : vars.unknownType)
 		var sum = 0.0
@@ -695,8 +677,8 @@ local function linearizedConjugateGradientCPU(tbl, vars)
 		var params = [&double](params_)
 		var dims = pd.dims
 
-		var [images] = [getImages(vars, imageBindings, dims)]
-
+		var [imagesAll] = [getImages(vars, imageBindings, dims)]
+		
 		-- TODO: parameterize these
 		var maxIters = 1000
 		var tolerance = 1e-5
@@ -710,8 +692,8 @@ local function linearizedConjugateGradientCPU(tbl, vars)
 		
 		for h = 0, pd.gradH do
 			for w = 0, pd.gradW do
-				pd.r(w, h) = -tbl.gradientHack(w, h, [ images[1] ], images)
-				pd.b(w, h) = tbl.gradientHack(w, h, pd.Ap, images)
+				pd.r(w, h) = -tbl.gradientHack(w, h, [ imagesAll[1] ], imagesAll)
+				pd.b(w, h) = tbl.gradientHack(w, h, pd.Ap, imagesAll)
 				pd.p(w, h) = pd.r(w, h)
 			end
 		end
@@ -720,12 +702,12 @@ local function linearizedConjugateGradientCPU(tbl, vars)
 
 		for iter = 0,maxIters do
 
-			var iterStartCost = totalCost(data_, images)
+			var iterStartCost = totalCost(pd, imagesAll)
 			
 			for h = 0, pd.gradH do
 				for w = 0, pd.gradW do
 					--TODO: more elegant gradientHack
-					pd.Ap(w, h) = tbl.gradientHack(w, h, pd.p, images) - pd.b(w, h)
+					pd.Ap(w, h) = tbl.gradientHack(w, h, pd.p, imagesAll) - pd.b(w, h)
 				end
 			end
 			
@@ -734,7 +716,7 @@ local function linearizedConjugateGradientCPU(tbl, vars)
 			
 			for h = 0, pd.gradH do
 				for w = 0, pd.gradW do
-					[ images[1] ](w, h) = [ images[1] ](w, h) + alpha * pd.p(w, h)
+					[ imagesAll[1] ](w, h) = [ imagesAll[1] ](w, h) + alpha * pd.p(w, h)
 					pd.r(w, h) = pd.r(w, h) - alpha * pd.Ap(w, h)
 				end
 			end
@@ -755,7 +737,7 @@ local function linearizedConjugateGradientCPU(tbl, vars)
 			rTr = rTrNew
 		end
 		
-		var finalCost = totalCost(data_, images)
+		var finalCost = totalCost(pd, imagesAll)
 		C.printf("final cost=%f\n", finalCost)
 	end
 
