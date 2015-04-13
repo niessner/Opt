@@ -17,7 +17,7 @@ public:
 		cutilSafeCall(cudaMemcpy(d_image, m_image.getPointer(), sizeof(float)*m_image.getWidth()*m_image.getHeight(), cudaMemcpyHostToDevice));
 		
 		float* h_result = new float[m_image.getWidth()*m_image.getHeight()];
-		ZeroMemory(h_result, sizeof(float)*m_image.getWidth()*m_image.getHeight());
+		memset(h_result, 0, sizeof(float)*m_image.getWidth()*m_image.getHeight());
 		cutilSafeCall(cudaMemcpy(d_result, h_result, sizeof(float)*m_image.getWidth()*m_image.getHeight(), cudaMemcpyHostToDevice));
 		SAFE_DELETE_ARRAY(h_result);
 
@@ -34,10 +34,10 @@ public:
 		float weightFit = 0.1f;
 		float weightReg = 1.0f;
 
-		unsigned int nonLinearIter = 3000;
+		unsigned int nonLinearIter = 50;
 		unsigned int linearIter = 10;
-		//m_laplacianSolver->solveGN(d_image, d_result, nonLinearIter, linearIter, weightFit, weightReg);
-		m_laplacianSolver->solveGD(d_image, d_result, nonLinearIter, weightFit, weightReg);
+		m_laplacianSolver->solveGN(d_image, d_result, nonLinearIter, linearIter, weightFit, weightReg);
+		//m_laplacianSolver->solveGD(d_image, d_result, nonLinearIter, weightFit, weightReg);
 		return copyResultToCPU();
 	}
 

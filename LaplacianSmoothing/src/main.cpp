@@ -6,6 +6,7 @@
 
 int main(int argc, const char * argv[]) {
 
+
 	const std::string inputImage = "smoothingExampleB.png";
 	const ColorImageR8G8B8A8 image = LodePNG::load(inputImage);
 	ColorImageR32 imageR32(image.getWidth(), image.getHeight());

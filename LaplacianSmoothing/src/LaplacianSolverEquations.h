@@ -38,6 +38,21 @@ __inline__ __device__ float evalLaplacian(unsigned int variableIdx, SolverInput&
 	return evalLaplacian((unsigned int)i, (unsigned int)j, input, state, parameters);
 }
 
+__inline__ __device__ float getNumNeighbors(int i, int j, SolverInput& input) {
+
+	// in the case of a graph/mesh these 'neighbor' indices need to be obtained by the domain data structure (e.g., CRS/CCS)
+	const int n0_i = i;		const int n0_j = j - 1; const bool isInsideN0 = isInsideImage(n0_i, n0_j, input.width, input.height); bool validN0 = false; if (isInsideN0) { float neighbourDepth0 = input.d_targetDepth[get1DIdx(n0_i, n0_j, input.width, input.height)]; validN0 = (neighbourDepth0 != MINF); }
+	const int n1_i = i;		const int n1_j = j + 1; const bool isInsideN1 = isInsideImage(n1_i, n1_j, input.width, input.height); bool validN1 = false; if (isInsideN1) { float neighbourDepth1 = input.d_targetDepth[get1DIdx(n1_i, n1_j, input.width, input.height)]; validN1 = (neighbourDepth1 != MINF); }
+	const int n2_i = i - 1; const int n2_j = j;		const bool isInsideN2 = isInsideImage(n2_i, n2_j, input.width, input.height); bool validN2 = false; if (isInsideN2) { float neighbourDepth2 = input.d_targetDepth[get1DIdx(n2_i, n2_j, input.width, input.height)]; validN2 = (neighbourDepth2 != MINF); }
+	const int n3_i = i + 1; const int n3_j = j;		const bool isInsideN3 = isInsideImage(n3_i, n3_j, input.width, input.height); bool validN3 = false; if (isInsideN3) { float neighbourDepth3 = input.d_targetDepth[get1DIdx(n3_i, n3_j, input.width, input.height)]; validN3 = (neighbourDepth3 != MINF); }
+
+	float res = 0.0f;
+	if (validN0) res += 1.0f;
+	if (validN1) res += 1.0f;
+	if (validN2) res += 1.0f;
+	if (validN3) res += 1.0f;
+	return res;
+}
 
 __inline__ __device__ float evalFDevice(unsigned int variableIdx, SolverInput& input, SolverState& state, SolverParameters& parameters)
 {
@@ -89,22 +104,20 @@ __inline__ __device__ float evalMinusJTFDevice(unsigned int variableIdx, SolverI
 	float l_n2 = evalLaplacian(i + 0, j + 1, input, state, parameters);
 	float l_n3 = evalLaplacian(i + 0, j - 1, input, state, parameters);
 
-	float wl_m = 0.0f;	
-	if (l_n0 != 0.0f) wl_m += 1.0f;
-	if (l_n1 != 0.0f) wl_m += 1.0f;
-	if (l_n2 != 0.0f) wl_m += 1.0f;
-	if (l_n3 != 0.0f) wl_m += 1.0f;
+	float n = getNumNeighbors(i, j, input);
 
-	b += -parameters.weightRegularizer*2.0f*(l_m*wl_m - l_n0 - l_n1 - l_n2 - l_n3);
+	b += -parameters.weightRegularizer*2.0f*(l_m*n - l_n0 - l_n1 - l_n2 - l_n3);
 
 	// Preconditioner depends on last solution P(input.d_x)
 	float p = 0.0f;
 
 	if (validTarget) p += 2.0f*parameters.weightFitting;	//e_reg
-	p += 2.0f*parameters.weightRegularizer*(wl_m*wl_m + wl_m);
+	p += 2.0f*parameters.weightRegularizer*(n*n + n);
 
 	if (p > FLOAT_EPSILON)	state.d_precondioner[variableIdx] = 1.0f / p;
 	else					state.d_precondioner[variableIdx] = 1.0f;
+
+
 
 	return b;
 }
@@ -112,6 +125,7 @@ __inline__ __device__ float evalMinusJTFDevice(unsigned int variableIdx, SolverI
 ////////////////////////////////////////
 // applyJTJ : this function is called per variable and evaluates each residual influencing that variable (i.e., each energy term per variable)
 ////////////////////////////////////////
+
 
 __inline__ __device__ float applyJTJDevice(unsigned int variableIdx, SolverInput& input, SolverState& state, SolverParameters& parameters)
 {
@@ -130,20 +144,53 @@ __inline__ __device__ float applyJTJDevice(unsigned int variableIdx, SolverInput
 
 	int i; int j; get2DIdx(variableIdx, input.width, input.height, i, j);
 
-	// in the case of a graph/mesh these 'neighbor' indices need to be obtained by the domain data structure (e.g., CRS/CCS)
-	const int n0_i = i;		const int n0_j = j - 1; const bool isInsideN0 = isInsideImage(n0_i, n0_j, input.width, input.height); bool validN0 = false; if (isInsideN0) { float neighbourDepth0 = input.d_targetDepth[get1DIdx(n0_i, n0_j, input.width, input.height)]; validN0 = (neighbourDepth0 != MINF); }
-	const int n1_i = i;		const int n1_j = j + 1; const bool isInsideN1 = isInsideImage(n1_i, n1_j, input.width, input.height); bool validN1 = false; if (isInsideN1) { float neighbourDepth1 = input.d_targetDepth[get1DIdx(n1_i, n1_j, input.width, input.height)]; validN1 = (neighbourDepth1 != MINF); }
-	const int n2_i = i - 1; const int n2_j = j;		const bool isInsideN2 = isInsideImage(n2_i, n2_j, input.width, input.height); bool validN2 = false; if (isInsideN2) { float neighbourDepth2 = input.d_targetDepth[get1DIdx(n2_i, n2_j, input.width, input.height)]; validN2 = (neighbourDepth2 != MINF); }
-	const int n3_i = i + 1; const int n3_j = j;		const bool isInsideN3 = isInsideImage(n3_i, n3_j, input.width, input.height); bool validN3 = false; if (isInsideN3) { float neighbourDepth3 = input.d_targetDepth[get1DIdx(n3_i, n3_j, input.width, input.height)]; validN3 = (neighbourDepth3 != MINF); }
+	float e_reg = 0.0f;
+	float n = getNumNeighbors(i, j, input);
 
-	if (validN0) b += 2.0f*parameters.weightRegularizer*(state.d_p[variableIdx] - state.d_p[get1DIdx(n0_i, n0_j, input.width, input.height)]);
-	if (validN1) b += 2.0f*parameters.weightRegularizer*(state.d_p[variableIdx] - state.d_p[get1DIdx(n1_i, n1_j, input.width, input.height)]);
-	if (validN2) b += 2.0f*parameters.weightRegularizer*(state.d_p[variableIdx] - state.d_p[get1DIdx(n2_i, n2_j, input.width, input.height)]);
-	if (validN3) b += 2.0f*parameters.weightRegularizer*(state.d_p[variableIdx] - state.d_p[get1DIdx(n3_i, n3_j, input.width, input.height)]);
+	e_reg += (n*n + n) * state.d_p[variableIdx];	//diagonal of A
 
+	{
+		// direct neighbors
+		const int n0_i = i;		const int n0_j = j - 1; const bool isInsideN0 = isInsideImage(n0_i, n0_j, input.width, input.height); bool validN0 = false; if (isInsideN0) { float neighbourDepth0 = input.d_targetDepth[get1DIdx(n0_i, n0_j, input.width, input.height)]; validN0 = (neighbourDepth0 != MINF); }
+		const int n1_i = i;		const int n1_j = j + 1; const bool isInsideN1 = isInsideImage(n1_i, n1_j, input.width, input.height); bool validN1 = false; if (isInsideN1) { float neighbourDepth1 = input.d_targetDepth[get1DIdx(n1_i, n1_j, input.width, input.height)]; validN1 = (neighbourDepth1 != MINF); }
+		const int n2_i = i - 1; const int n2_j = j;		const bool isInsideN2 = isInsideImage(n2_i, n2_j, input.width, input.height); bool validN2 = false; if (isInsideN2) { float neighbourDepth2 = input.d_targetDepth[get1DIdx(n2_i, n2_j, input.width, input.height)]; validN2 = (neighbourDepth2 != MINF); }
+		const int n3_i = i + 1; const int n3_j = j;		const bool isInsideN3 = isInsideImage(n3_i, n3_j, input.width, input.height); bool validN3 = false; if (isInsideN3) { float neighbourDepth3 = input.d_targetDepth[get1DIdx(n3_i, n3_j, input.width, input.height)]; validN3 = (neighbourDepth3 != MINF); }
 
+		if (validN0) e_reg += -(n + getNumNeighbors(n0_i, n0_j, input))*(state.d_p[get1DIdx(n0_i, n0_j, input.width, input.height)]);
+		if (validN1) e_reg += -(n + getNumNeighbors(n1_i, n1_j, input))*(state.d_p[get1DIdx(n1_i, n1_j, input.width, input.height)]);
+		if (validN2) e_reg += -(n + getNumNeighbors(n2_i, n2_j, input))*(state.d_p[get1DIdx(n2_i, n2_j, input.width, input.height)]);
+		if (validN3) e_reg += -(n + getNumNeighbors(n3_i, n3_j, input))*(state.d_p[get1DIdx(n3_i, n3_j, input.width, input.height)]);
+	}
+	{
+		// neighbors of neighbors
+		const int n0_i = i;		const int n0_j = j - 2; const bool isInsideN0 = isInsideImage(n0_i, n0_j, input.width, input.height); bool validN0 = false; if (isInsideN0) { float neighbourDepth0 = input.d_targetDepth[get1DIdx(n0_i, n0_j, input.width, input.height)]; validN0 = (neighbourDepth0 != MINF); }
+		const int n1_i = i;		const int n1_j = j + 2; const bool isInsideN1 = isInsideImage(n1_i, n1_j, input.width, input.height); bool validN1 = false; if (isInsideN1) { float neighbourDepth1 = input.d_targetDepth[get1DIdx(n1_i, n1_j, input.width, input.height)]; validN1 = (neighbourDepth1 != MINF); }
+		const int n2_i = i - 2; const int n2_j = j;		const bool isInsideN2 = isInsideImage(n2_i, n2_j, input.width, input.height); bool validN2 = false; if (isInsideN2) { float neighbourDepth2 = input.d_targetDepth[get1DIdx(n2_i, n2_j, input.width, input.height)]; validN2 = (neighbourDepth2 != MINF); }
+		const int n3_i = i + 2; const int n3_j = j;		const bool isInsideN3 = isInsideImage(n3_i, n3_j, input.width, input.height); bool validN3 = false; if (isInsideN3) { float neighbourDepth3 = input.d_targetDepth[get1DIdx(n3_i, n3_j, input.width, input.height)]; validN3 = (neighbourDepth3 != MINF); }
 
+		if (validN0) e_reg += 1.0f*(state.d_p[get1DIdx(n0_i, n0_j, input.width, input.height)]);
+		if (validN1) e_reg += 1.0f*(state.d_p[get1DIdx(n1_i, n1_j, input.width, input.height)]);
+		if (validN2) e_reg += 1.0f*(state.d_p[get1DIdx(n2_i, n2_j, input.width, input.height)]);
+		if (validN3) e_reg += 1.0f*(state.d_p[get1DIdx(n3_i, n3_j, input.width, input.height)]);
+	}
+	{
+		// diagonal neighbors
+		const int n0_i = i + 1;	const int n0_j = j + 1; const bool isInsideN0 = isInsideImage(n0_i, n0_j, input.width, input.height); bool validN0 = false; if (isInsideN0) { float neighbourDepth0 = input.d_targetDepth[get1DIdx(n0_i, n0_j, input.width, input.height)]; validN0 = (neighbourDepth0 != MINF); }
+		const int n1_i = i + 1;	const int n1_j = j - 1; const bool isInsideN1 = isInsideImage(n1_i, n1_j, input.width, input.height); bool validN1 = false; if (isInsideN1) { float neighbourDepth1 = input.d_targetDepth[get1DIdx(n1_i, n1_j, input.width, input.height)]; validN1 = (neighbourDepth1 != MINF); }
+		const int n2_i = i - 1; const int n2_j = j + 1;	const bool isInsideN2 = isInsideImage(n2_i, n2_j, input.width, input.height); bool validN2 = false; if (isInsideN2) { float neighbourDepth2 = input.d_targetDepth[get1DIdx(n2_i, n2_j, input.width, input.height)]; validN2 = (neighbourDepth2 != MINF); }
+		const int n3_i = i - 1; const int n3_j = j - 1;	const bool isInsideN3 = isInsideImage(n3_i, n3_j, input.width, input.height); bool validN3 = false; if (isInsideN3) { float neighbourDepth3 = input.d_targetDepth[get1DIdx(n3_i, n3_j, input.width, input.height)]; validN3 = (neighbourDepth3 != MINF); }
+
+		if (validN0) e_reg += 2.0f*(state.d_p[get1DIdx(n0_i, n0_j, input.width, input.height)]);
+		if (validN1) e_reg += 2.0f*(state.d_p[get1DIdx(n1_i, n1_j, input.width, input.height)]);
+		if (validN2) e_reg += 2.0f*(state.d_p[get1DIdx(n2_i, n2_j, input.width, input.height)]);
+		if (validN3) e_reg += 2.0f*(state.d_p[get1DIdx(n3_i, n3_j, input.width, input.height)]);
+	}
+	
+	b += 2.0f*parameters.weightFitting*e_reg;
+
+	//printf("e=%.2f (%d,%d)\t",e_reg,i,j);
 	return b;
 }
+
 
 #endif

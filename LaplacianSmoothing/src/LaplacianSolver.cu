@@ -365,6 +365,9 @@ extern "C" void LaplacianSolveGNStub(SolverInput& input, SolverState& state, Sol
 		ApplyLinearUpdate(input, state, parameters);	//this should be also done in the last PCGIteration
 
 		printf("residual=%f\n", EvalResidual(input, state, parameters));
+
+		//std::cout << "enter for next loop...\n\n" << std::endl; 
+		//getchar();
 	}
 }
 
