@@ -186,7 +186,7 @@ __inline__ __device__ float applyJTJDevice(unsigned int variableIdx, SolverInput
 		if (validN3) e_reg += 2.0f*(state.d_p[get1DIdx(n3_i, n3_j, input.width, input.height)]);
 	}
 	
-	b += 2.0f*parameters.weightFitting*e_reg;
+	b += 2.0f*parameters.weightRegularizer*e_reg;
 
 	//printf("e=%.2f (%d,%d)\t",e_reg,i,j);
 	return b;
