@@ -691,8 +691,8 @@ local function linearizedConjugateGradientCPU(tbl, vars)
 		
 		for h = 0, pd.gradH do
 			for w = 0, pd.gradW do
-				pd.r(w, h) = -tbl.gradientHack(w, h, [ imagesAll[1] ], imagesAll)
-				pd.b(w, h) = tbl.gradientHack(w, h, pd.Ap, imagesAll)
+				pd.r(w, h) = -tbl.gradient(w, h, unknownImage, dataImages)
+				pd.b(w, h) = tbl.gradient(w, h, pd.Ap, dataImages)
 				pd.p(w, h) = pd.r(w, h)
 			end
 		end

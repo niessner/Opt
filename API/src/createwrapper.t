@@ -72,7 +72,7 @@ else
 end
 
 local function saveaslibrary(libraryname, terrasourcefile)
-    local filename = terrasourcefile:match("[^/]*.t$")
+    local filename = terrasourcefile:match("[^/\\]*.t$")
     local terrapath, packagename = "/"..terrasourcefile:sub(1,-#filename-1).."?.t;",filename:sub(1,-3)
     package.terrapath = package.terrapath..";."..terrapath
     local success, tbl = xpcall(function() return assert(require(packagename)) end,
