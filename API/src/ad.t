@@ -122,9 +122,13 @@ local function simplify(op,args)
     
     if allconst(args) and op:getimpl() then
         return toexp(op:getimpl()(unpack(args:map("v"))))
-    elseif commutes[op.name] and lessthan(y,x) then return op(y,x)
-    elseif assoc[op.name] and Apply:is(x) and x.op.name == op.name then
-        return op(x.args[1],op(x.args[2],y))
+    elseif commutes[op.name] and lessthan(y,x) then return op(y,x) -- constants will be on rhs
+    elseif assoc[op.name] and Apply:is(x) and x.op.name == op.name
+           and Const:is(x.args[2]) then -- (e + c) + ? -> e + (? + c)
+        return op(x.args[1],op(x.args[2],y)) -- e0 + (e1 + c) ->  (e0 + e1) + c
+    elseif assoc[op.name] and Apply:is(y) and y.op.name == op.name
+           and Const:is(y.args[2]) then
+        return op(op(x,y.args[1]),y.args[2])
     elseif op.name == "mul" then
         if y == one then return x
         elseif y == zero then return zero
@@ -135,7 +139,7 @@ local function simplify(op,args)
         end
         local x0,x1 = factors(x)
         local y0,y1 = factors(y)
-        if x1 ~= one or y1 ~= one then 
+        if x1 ~= one or y1 ~= one or x0 == y0 then 
             if x0 == y0 then return x0*(x1 + y1)
             elseif x1 == y1 then return (x0 + y0)*x1
             end
@@ -151,6 +155,7 @@ local function simplify(op,args)
         elseif x == y then return one 
         end
     end
+    
     return newapply(op,args)
 end
 
@@ -162,9 +167,9 @@ end)
 
 
 local function toexps(...)
-    local es = terralib.newlist {...}
-    for i,e in ipairs(es) do
-        es[i] = assert(toexp(e))
+    local es = terralib.newlist {}
+    for i = 1, select('#',...) do
+        es[i] = assert(toexp(select(i,...)),"attempting use a value that is not an expression")
     end
     return es
 end
@@ -380,6 +385,30 @@ function Apply:calcd(v)
     return r
 end
 
+--calc d(thisexpress)/d(exps[1]) ... d(thisexpress)/d(exps[#exps]) (i.e. the gradient of this expression with relation to the inputs) 
+function Exp:gradient(exps)
+    exps = terralib.islist(exps) or terralib.newlist(exps)
+    -- reverse mode ad, work backward from this expression, accumulate stuff.
+    local tape = {} -- mapping from exp -> current accumulated derivative
+    local postorder = terralib.newlist()
+    local function visit(e)
+        if tape[e] then return end
+        tape[e] = zero
+        for i,c in ipairs(e:children()) do visit(c) end
+        postorder:insert(e)
+    end
+    visit(self)
+    tape[self] = one -- the reverse ad 'seed'
+    for i = #postorder,1,-1 do --reverse post order traversal from self to equation roots, all uses come before defs
+        local e = postorder[i]
+        local p = e:partials()
+        for j,c in ipairs(e:children()) do
+            tape[c] = tape[c] + tape[e]*p[j]
+        end
+    end
+    return exps:map(function(e) return tape[e] or zero end)
+end
+
 
 ad.add:define(function(x,y) return `x + y end,1,1)
 ad.sub:define(function(x,y) return `x - y end,1,-1)
@@ -419,6 +448,20 @@ print(r:rename({x+y,x+y}))
 local e = 2*x*x*x*3 -- - y*x
 print((ad.sin(x)*ad.sin(x)):d(x))
 print(e:d(x)*3+(4*x)*x)
+
+
+local w = x*x
+
+local exp = (3*w + 4*w + 3*w*z)
+
+--6x+8x+6xz
+
+-- 7x + (7x + (z*7x
+
+-- 7x + (r1 
+print(unpack((3*x*x + x):gradient{x}))
+print(expstostring(exp:gradient({x,y,z})))
 ]]
+
 
 return ad
