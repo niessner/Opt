@@ -8,6 +8,10 @@
 using namespace ml;
 using Bitmap = ml::ColorImageR8G8B8A8;
 
+extern "C" {
+#include "Opt.h"
+}
+
 using namespace std;
 
 #include "interactiveDLL.h"

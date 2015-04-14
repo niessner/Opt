@@ -2,7 +2,8 @@
 
 void App::init()
 {
-	
+    printf("test\n");
+    cout << "hello\n" << endl;
 }
 
 UINT32 App::processCommand(const string &command)
