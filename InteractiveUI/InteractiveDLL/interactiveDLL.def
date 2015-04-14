@@ -1,0 +1,8 @@
+LIBRARY Interactive.dll
+
+EXPORTS
+    IVInit
+	IVProcessCommand
+	IVGetStringByName
+	IVGetIntegerByName
+	IVGetBitmapByName
