@@ -256,7 +256,7 @@ end
 local infix = { add = {"+",1}, sub = {"-",1}, mul = {"*",2}, div = {"/",2} }
 
 
-local function expstostring(es)
+local function expstostring(es,names)
     local n = 0
     local tbl = terralib.newlist()
     local manyuses = countuses(es)
@@ -281,7 +281,7 @@ local function expstostring(es)
     end
     function emit(e)
         if "Var" == e.kind then
-            return ("v%d"):format(e.p)
+            return (names and names[e.p]) or ("v%d"):format(e.p)
         elseif "Const" == e.kind then
             return tostring(e.v)
         elseif "Apply" == e.kind then
@@ -304,23 +304,23 @@ local function expstostring(es)
     if #tbl == 0 then return r end
     return ("let\n%sin\n  %s\nend\n"):format(tbl:concat(),r)
 end
-
+ad.tostrings = expstostring
 function Exp:__tostring()
     return expstostring(terralib.newlist{self})
 end
 
-function ad.toterra(es)
-    es = terralib.islist(es) or terralib.newlist(es)
+function ad.toterra(es,resultnames,varnames)
+    es = terralib.islist(es) and es or terralib.newlist(es)
     local manyuses = countuses(es)
     local nvars = 0
     local results = terralib.newlist {}
     for i,e in ipairs(es) do 
-        results[i] = symbol(&float,"r"..tostring(i))
+        results[i] = symbol(&float,(resultnames and resultnames[i]) or "r"..tostring(i))
         nvars = math.max(nvars,e:N())
     end
     local variables = {}
     for i = 1,nvars do
-        variables[i] = symbol(float,"v"..i)
+        variables[i] = symbol(float,(varnames and varnames[i]) or "v"..i)
     end
     local statements = terralib.newlist()
     local emitted = {}
@@ -387,7 +387,7 @@ end
 
 --calc d(thisexpress)/d(exps[1]) ... d(thisexpress)/d(exps[#exps]) (i.e. the gradient of this expression with relation to the inputs) 
 function Exp:gradient(exps)
-    exps = terralib.islist(exps) or terralib.newlist(exps)
+    exps = terralib.islist(exps) and exps or terralib.newlist(exps)
     -- reverse mode ad, work backward from this expression, accumulate stuff.
     local tape = {} -- mapping from exp -> current accumulated derivative
     local postorder = terralib.newlist()
@@ -435,7 +435,6 @@ ad.tanh:define(function(x) return `C.tanh(a) end, 1.0/(ad.cosh(x)*ad.cosh(x)))
 
 setmetatable(ad,nil) -- remove special metatable that generates new blank ops
 
-
 --[[
 print(expstostring(ad.atan2.derivs))
 assert(y == y)
@@ -460,8 +459,10 @@ local exp = (3*w + 4*w + 3*w*z)
 
 -- 7x + (r1 
 print(unpack((3*x*x + x):gradient{x}))
-print(expstostring(exp:gradient({x,y,z})))
+local g = exp:gradient({x,y,z})
+print(expstostring(g,{"x","y","z"}))
+
+local t = ad.toterra(g, {"dedx","dedy","dedz"},{"x","y","z"})
+t:printpretty()
 ]]
-
-
 return ad
