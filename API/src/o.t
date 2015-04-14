@@ -115,6 +115,19 @@ local function makeTotalCost(tbl, PlanData, images)
 	return totalCost
 end
 
+local function makeImageInnerProduct(imageType)
+	local terra imageInnerProduct(a : imageType, b : imageType)
+		var sum = 0.0
+		for h = 0, a.H do
+			for w = 0, a.W do
+				sum = sum + a(w, h) * b(w, h)
+			end
+		end
+		return sum
+	end
+	return imageInnerProduct
+end
+
 local function gradientDescentCPU(tbl,vars)
 	local struct PlanData(S.Object) {
 		plan : opt.Plan
@@ -129,17 +142,11 @@ local function gradientDescentCPU(tbl,vars)
 
 	local terra impl(data_ : &opaque, imageBindings : &&opt.ImageBinding, params_ : &opaque)
 
-		--C.printf("impl start\n")
-
 		var pd = [&PlanData](data_)
 		var params = [&double](params_)
 		var dims = pd.dims
 
-		--C.printf("impl A\n")
-
 		var [images] = [getImages(vars, imageBindings, dims)]
-
-		--C.printf("impl B\n")
 
 		-- TODO: parameterize these
 		var initialLearningRate = 0.01
@@ -151,15 +158,9 @@ local function gradientDescentCPU(tbl,vars)
 		var learningGain = 1.1
 		var minLearningRate = 1e-25
 
-
 		var learningRate = initialLearningRate
 
-		--C.printf("impl D\n")
-
 		for iter = 0, maxIters do
-
-			--C.printf("impl iter start\n")
-
 			var startCost = totalCost(pd, images)
 			C.printf("iteration %d, cost=%f, learningRate=%f\n", iter, startCost, learningRate)
 			--C.getchar()
@@ -208,17 +209,7 @@ local function gradientDescentCPU(tbl,vars)
 					break
 				end
 			end
-
-			--C.printf("impl iter end\n")
 		end
-		
-		--[[var x00 = [ images[1] ](0, 0)
-		var x10 = [ images[1] ](5, 0)
-		var x01 = [ images[1] ](0, 5)
-		
-		C.printf("x(0,0) = %f\n", x00)
-		C.printf("x(1,0) = %f\n", x10)
-		C.printf("x(0,1) = %f\n", x01)]]
 	end
 
 	local gradWIndex = vars.dimIndex[ vars.gradientDim[1] ]
@@ -648,21 +639,13 @@ local function linearizedConjugateGradientCPU(tbl, vars)
 		b : vars.unknownType
 		r : vars.unknownType
 		p : vars.unknownType
+		zeroes : vars.unknownType
 		Ap : vars.unknownType
 	}
 	
 	local totalCost = makeTotalCost(tbl, PlanData, vars.imagesAll)
 
-	-- TODO: ask zach how to do templates so this can live at a higher scope
-	local terra imageInnerProduct(width : int, height : int, a : vars.unknownType, b : vars.unknownType)
-		var sum = 0.0
-		for h = 0, height do
-			for w = 0, width do
-				sum = sum + a(w, h) * b(w, h)
-			end
-		end
-		return sum
-	end
+	local imageInnerProduct = makeImageInnerProduct(vars.unknownType)
 
 	local terra impl(data_ : &opaque, imageBindings : &&opt.ImageBinding, params_ : &opaque)
 		var pd = [&PlanData](data_)
@@ -675,22 +658,15 @@ local function linearizedConjugateGradientCPU(tbl, vars)
 		var maxIters = 1000
 		var tolerance = 1e-5
 
-		-- here, Ap is being used as storage for zeroes
-		for h = 0, pd.gradH do
-			for w = 0, pd.gradW do
-				pd.Ap(w, h) = 0.0
-			end
-		end
-		
 		for h = 0, pd.gradH do
 			for w = 0, pd.gradW do
 				pd.r(w, h) = -tbl.gradient(w, h, vars.unknownImage, vars.dataImages)
-				pd.b(w, h) = tbl.gradient(w, h, pd.Ap, vars.dataImages)
+				pd.b(w, h) = tbl.gradient(w, h, pd.zeroes, vars.dataImages)
 				pd.p(w, h) = pd.r(w, h)
 			end
 		end
 		
-		var rTr = imageInnerProduct(pd.gradW, pd.gradH, pd.r, pd.r)
+		var rTr = imageInnerProduct(pd.r, pd.r)
 
 		for iter = 0,maxIters do
 
@@ -702,7 +678,7 @@ local function linearizedConjugateGradientCPU(tbl, vars)
 				end
 			end
 			
-			var den = imageInnerProduct(pd.gradW, pd.gradH, pd.p, pd.Ap)
+			var den = imageInnerProduct(pd.p, pd.Ap)
 			var alpha = rTr / den
 			
 			for h = 0, pd.gradH do
@@ -712,7 +688,7 @@ local function linearizedConjugateGradientCPU(tbl, vars)
 				end
 			end
 			
-			var rTrNew = imageInnerProduct(pd.gradW, pd.gradH, pd.r, pd.r)
+			var rTrNew = imageInnerProduct(pd.r, pd.r)
 			
 			C.printf("iteration %d, cost=%f, rTr=%f\n", iter, iterStartCost, rTrNew)
 			
@@ -751,6 +727,7 @@ local function linearizedConjugateGradientCPU(tbl, vars)
 		pd.r:initCPU(pd.gradW, pd.gradH)
 		pd.p:initCPU(pd.gradW, pd.gradH)
 		pd.Ap:initCPU(pd.gradW, pd.gradH)
+		pd.zeroes:initCPU(pd.gradW, pd.gradH)
 		
 		return &pd.plan
 	end
