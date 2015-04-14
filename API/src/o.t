@@ -12,6 +12,9 @@ local C = terralib.includecstring [[
 #include <cuda_runtime.h>
 ]]
 
+-- constants
+local verboseSolver = false
+
 local function newclass(name)
     local mt = { __name = name }
     mt.__index = mt
@@ -30,6 +33,7 @@ local function newclass(name)
 end
 
 local vprintf = terralib.externfunction("cudart:vprintf", {&int8,&int8} -> int)
+
 local function createbuffer(args)
     local Buf = terralib.types.newstruct()
     return quote
@@ -49,10 +53,22 @@ local function createbuffer(args)
         [&int8](&buf)
     end
 end
+
 printf = macro(function(fmt,...)
     local buf = createbuffer({...})
     return `vprintf(fmt,buf) 
 end)
+
+if verboseSolver then
+	log = macro(function(fmt,...)
+		local buf = createbuffer({...})
+		return `vprintf(fmt, buf)
+	end)
+else
+	log = function(fmt,...)
+	
+	end
+end
 
 local GPUBlockDims = {{"blockIdx","ctaid"},
               {"gridDim","nctaid"},
@@ -156,7 +172,7 @@ local function gradientDescentCPU(tbl,vars)
 
 		for iter = 0, maxIters do
 			var startCost = totalCost(pd, vars.imagesAll)
-			C.printf("iteration %d, cost=%f, learningRate=%f\n", iter, startCost, learningRate)
+			log("iteration %d, cost=%f, learningRate=%f\n", iter, startCost, learningRate)
 			--C.getchar()
 
 			--
@@ -165,8 +181,6 @@ local function gradientDescentCPU(tbl,vars)
 			for h = 0,pd.gradH do
 				for w = 0,pd.gradW do
 					pd.gradient(w, h) = tbl.gradient(w, h, vars.imagesAll)
-					--C.printf("%d,%d = %f\n",w,h,pd.gradStore(w,h))
-					--C.getchar()
 				end
 			end
 
@@ -178,7 +192,6 @@ local function gradientDescentCPU(tbl,vars)
 				for w = 0,pd.gradW do
 					var addr = &vars.unknownImage(w, h)
 					var delta = learningRate * pd.gradient(w, h)
-					--C.printf("delta (%d,%d)=%f\n", w, h, delta)
 					@addr = @addr - delta
 					maxDelta = max(C.fabsf(delta), maxDelta)
 				end
@@ -192,14 +205,14 @@ local function gradientDescentCPU(tbl,vars)
 				learningRate = learningRate * learningGain
 
 				if maxDelta < tolerance then
-					C.printf("terminating, maxDelta=%f\n", maxDelta)
+					log("terminating, maxDelta=%f\n", maxDelta)
 					break
 				end
 			else
 				learningRate = learningRate * learningLoss
 
 				if learningRate < minLearningRate then
-					C.printf("terminating, learningRate=%f\n", learningRate)
+					log("terminating, learningRate=%f\n", learningRate)
 					break
 				end
 			end
@@ -313,7 +326,7 @@ local function gradientDescentGPU(tbl,vars)
 		for iter = 0,maxIters do
 
 			var startCost = totalCost(pd, vars.imagesAll)
-			C.printf("iteration %d, cost=%f, learningRate=%f\n", iter, startCost, learningRate)
+			log("iteration %d, cost=%f, learningRate=%f\n", iter, startCost, learningRate)
 			
 			--
 			-- compute the gradient
@@ -340,7 +353,7 @@ local function gradientDescentGPU(tbl,vars)
 			@pd.scratchD = 0.0
 			cuda.updatePosition(&launch, @pd, learningRate, pd.scratchD, [vars.imagesAll])
 			C.cudaDeviceSynchronize()
-			C.printf("maxDelta %f\n", @pd.scratchD)
+			log("maxDelta %f\n", @pd.scratchD)
 			var maxDelta = @pd.scratchD
 
 			--
@@ -404,17 +417,11 @@ local function conjugateGradientCPU(tbl, vars)
 
 	local terra impl(data_ : &opaque, imageBindings : &&opt.ImageBinding, params_ : &opaque)
 
-		--C.printf("impl start\n")
-
 		var pd = [&PlanData](data_)
 		var params = [&double](params_)
 		var dims = pd.dims
 
-		--C.printf("impl A\n")
-
 		var [vars.imagesAll] = [getImages(vars, imageBindings, dims)]
-
-		--C.printf("impl B\n")
 
 		-- TODO: parameterize these
 		var lineSearchMaxIters = 10000
@@ -424,8 +431,6 @@ local function conjugateGradientCPU(tbl, vars)
 		var lineSearchBinaryMaxMultiplier = 1.5
 		
 		var maxIters = 1000
-
-		--C.printf("impl D\n")
 		
 		var file = C.fopen("C:/code/debug.txt", "wb")
 		
@@ -433,11 +438,8 @@ local function conjugateGradientCPU(tbl, vars)
 
 		for iter = 0,maxIters do
 
-			--C.printf("impl iter start\n")
-
 			var iterStartCost = totalCost(pd, vars.imagesAll)
-			C.printf("iteration %d, cost=%f\n", iter, iterStartCost)
-			--C.getchar()
+			log("iteration %d, cost=%f\n", iter, iterStartCost)
 
 			--
 			-- compute the gradient
@@ -533,7 +535,7 @@ local function conjugateGradientCPU(tbl, vars)
 						bestAlpha = alpha
 						bestCost = searchCost
 					elseif alphaIndex == 3 then
-						C.printf("quadratic minimization failed\n")
+						log("quadratic minimization failed\n")
 					end
 					
 					if 	   alphaIndex == 0 then c1 = searchCost
@@ -577,11 +579,10 @@ local function conjugateGradientCPU(tbl, vars)
 			
 			prevBestAlpha = bestAlpha
 			
-			C.printf("alpha=%f, beta=%f\n\n", bestAlpha, beta)
+			log("alpha=%f, beta=%f\n\n", bestAlpha, beta)
 			if bestAlpha <= 1e-8 and beta == 0.0 then
 				break
 			end
-			--C.printf("impl iter end\n")
 		end
 		C.fclose(file)
 	end
@@ -671,7 +672,7 @@ local function linearizedConjugateGradientCPU(tbl, vars)
 			
 			var rTrNew = imageInnerProduct(pd.r, pd.r)
 			
-			C.printf("iteration %d, cost=%f, rTr=%f\n", iter, iterStartCost, rTrNew)
+			log("iteration %d, cost=%f, rTr=%f\n", iter, iterStartCost, rTrNew)
 			
 			if(rTrNew < tolerance) then break end
 			
@@ -686,7 +687,7 @@ local function linearizedConjugateGradientCPU(tbl, vars)
 		end
 		
 		var finalCost = totalCost(pd, vars.imagesAll)
-		C.printf("final cost=%f\n", finalCost)
+		log("final cost=%f\n", finalCost)
 	end
 
 	local terra makePlan(actualDims : &uint64) : &opt.Plan
@@ -845,13 +846,13 @@ local function linearizedConjugateGradientGPU(tbl, vars)
 			var den = imageInnerProduct(pd, pd.p, pd.Ap)
 			var alpha = rTr / den
 			
-			--C.printf("den=%f, alpha=%f\n", den, alpha)
+			--log("den=%f, alpha=%f\n", den, alpha)
 			
 			cuda.updateResidualAndPosition(&launch, @pd, alpha, [vars.imagesAll])
 			
 			var rTrNew = imageInnerProduct(pd, pd.r, pd.r)
 			
-			C.printf("iteration %d, cost=%f, rTr=%f\n", iter, iterStartCost, rTrNew)
+			log("iteration %d, cost=%f, rTr=%f\n", iter, iterStartCost, rTrNew)
 			
 			if(rTrNew < tolerance) then break end
 			
@@ -862,7 +863,7 @@ local function linearizedConjugateGradientGPU(tbl, vars)
 		end
 		
 		var finalCost = totalCost(pd, vars.imagesAll)
-		C.printf("final cost=%f\n", finalCost)
+		log("final cost=%f\n", finalCost)
 	end
 
 	local terra makePlan(actualDims : &uint64) : &opt.Plan
@@ -958,7 +959,7 @@ local function linearizedPreconditionedConjugateGradientCPU(tbl, vars)
 			
 			var rTr = imageInnerProduct(pd.r, pd.r)
 			
-			C.printf("iteration %d, cost=%f, rTr=%f\n", iter, iterStartCost, rTr)
+			log("iteration %d, cost=%f, rTr=%f\n", iter, iterStartCost, rTr)
 			
 			if(rTr < tolerance) then break end
 			
@@ -978,7 +979,7 @@ local function linearizedPreconditionedConjugateGradientCPU(tbl, vars)
 		end
 		
 		var finalCost = totalCost(pd, vars.imagesAll)
-		C.printf("final cost=%f\n", finalCost)
+		log("final cost=%f\n", finalCost)
 	end
 
 	local terra makePlan(actualDims : &uint64) : &opt.Plan
@@ -1158,7 +1159,6 @@ local newImage = terralib.memoize(function(typ, W, H)
 		self.W = actualW
 		self.H = actualH
 		var typeSize = sizeof(typ)
-		--C.printf("typesize=%d\n", typeSize)
 		var cudaError = C.cudaMalloc([&&opaque](&(self.impl.data)), actualW * actualH * typeSize)
 		cudaError = C.cudaMemset([&opaque](self.impl.data), 0, actualW * actualH * typeSize)
 		self.impl.elemsize = typeSize
