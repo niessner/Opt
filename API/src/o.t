@@ -651,14 +651,7 @@ local function linearizedConjugateGradientCPU(tbl, vars)
 		Ap : vars.unknownType
 	}
 	
-	local imagesAll = vars.argumentTypes:map(symbol)
-	local unknownImage = imagesAll[1]
-	local dataImages = terralib.newlist()
-	for i = 2,#imagesAll do
-		dataImages:insert(imagesAll[i])
-	end
-	
-	local totalCost = makeTotalCost(tbl, PlanData, imagesAll)
+	local totalCost = makeTotalCost(tbl, PlanData, vars.imagesAll)
 
 	-- TODO: ask zach how to do templates so this can live at a higher scope
 	local terra imageInnerProduct(width : int, height : int, a : vars.unknownType, b : vars.unknownType)
@@ -676,7 +669,7 @@ local function linearizedConjugateGradientCPU(tbl, vars)
 		var params = [&double](params_)
 		var dims = pd.dims
 
-		var [imagesAll] = [getImages(vars, imageBindings, dims)]
+		var [vars.imagesAll] = [getImages(vars, imageBindings, dims)]
 		
 		-- TODO: parameterize these
 		var maxIters = 1000
@@ -691,8 +684,8 @@ local function linearizedConjugateGradientCPU(tbl, vars)
 		
 		for h = 0, pd.gradH do
 			for w = 0, pd.gradW do
-				pd.r(w, h) = -tbl.gradient(w, h, unknownImage, dataImages)
-				pd.b(w, h) = tbl.gradient(w, h, pd.Ap, dataImages)
+				pd.r(w, h) = -tbl.gradient(w, h, vars.unknownImage, vars.dataImages)
+				pd.b(w, h) = tbl.gradient(w, h, pd.Ap, vars.dataImages)
 				pd.p(w, h) = pd.r(w, h)
 			end
 		end
@@ -701,12 +694,11 @@ local function linearizedConjugateGradientCPU(tbl, vars)
 
 		for iter = 0,maxIters do
 
-			var iterStartCost = totalCost(pd, imagesAll)
+			var iterStartCost = totalCost(pd, vars.imagesAll)
 			
 			for h = 0, pd.gradH do
 				for w = 0, pd.gradW do
-					--TODO: more elegant gradientHack
-					pd.Ap(w, h) = tbl.gradientHack(w, h, pd.p, imagesAll) - pd.b(w, h)
+					pd.Ap(w, h) = tbl.gradient(w, h, pd.p, vars.dataImages) - pd.b(w, h)
 				end
 			end
 			
@@ -715,7 +707,7 @@ local function linearizedConjugateGradientCPU(tbl, vars)
 			
 			for h = 0, pd.gradH do
 				for w = 0, pd.gradW do
-					[ imagesAll[1] ](w, h) = [ imagesAll[1] ](w, h) + alpha * pd.p(w, h)
+					vars.unknownImage(w, h) = vars.unknownImage(w, h) + alpha * pd.p(w, h)
 					pd.r(w, h) = pd.r(w, h) - alpha * pd.Ap(w, h)
 				end
 			end
@@ -736,7 +728,7 @@ local function linearizedConjugateGradientCPU(tbl, vars)
 			rTr = rTrNew
 		end
 		
-		var finalCost = totalCost(pd, imagesAll)
+		var finalCost = totalCost(pd, vars.imagesAll)
 		C.printf("final cost=%f\n", finalCost)
 	end
 
@@ -1111,48 +1103,15 @@ local function compileProblem(tbl, kind)
 	for i = 3,#vars.costType.parameters do
 		vars.argumentTypes:insert(vars.costType.parameters[i])
 	end
+	
+	vars.imagesAll = vars.argumentTypes:map(symbol)
+	vars.unknownImage = vars.imagesAll[1]
+	vars.dataImages = terralib.newlist()
+	for i = 2,#vars.imagesAll do
+		vars.dataImages:insert(vars.imagesAll[i])
+	end
 
-    if kind == "simpleexample" then
-
-		local struct PlanData(S.Object) {
-			plan : opt.Plan
-			dims : int64[#dims+1]
-		}
-
-		local function emitcalltouserfunction(mapdims,actualDims,images,userfn)
-			local typ = userfn:gettype()
-			local di,dj = vars.dimIndex[mapdims[1]],vars.dimIndex[mapdims[2]]
-			assert(di and dj)
-			local imagewrappers = terralib.newlist()
-			for i = 3,#typ.parameters do
-				local imgtyp = typ.parameters[i]
-				local W,H = imgtyp.metamethods.W,imgtyp.metamethods.H
-				W,H = vars.dimIndex[W],vars.dimIndex[H]
-				assert(W and H)
-				imagewrappers:insert(`imgtyp { W = actualDims[W], H = actualDims[H], impl = @images[i - 3] })
-			end
-			return `userfn(actualDims[di],actualDims[dj],imagewrappers)
-		end
-    
-		local terra impl(data_ : &opaque, images : &&opt.ImageBinding, params : &opaque)
-			var data = [&PlanData](data_)
-			var dims = data.dims
-			[ emitcalltouserfunction(costdim,dims,images,tbl.cost.fn) ]
-			[ emitcalltouserfunction(vars.gradientDim,dims,images,tbl.gradient) ]
-		end
-		local terra makePlan(actualDims : &uint64) : &opt.Plan
-			var pd = PlanData.alloc()
-			pd.plan.data = pd
-			pd.plan.impl = impl
-			pd.dims[0] = 1
-			for i = 0,[#dims] do
-				pd.dims[i+1] = actualDims[i]
-			end
-			return &pd.plan
-		end
-		return Problem:new { makePlan = makePlan }
-
-	elseif kind == "gradientdescentCPU" then
+    if kind == "gradientdescentCPU" then
         return gradientDescentCPU(tbl, vars)
 	elseif kind == "gradientdescentGPU" then
 		return gradientDescentGPU(tbl, vars)
