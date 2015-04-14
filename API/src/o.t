@@ -82,11 +82,6 @@ local terra max(x : double, y : double)
 	return terralib.select(x > y, x, y)
 end
 
--- this function should do anything it needs to compile an optimizer defined
--- using the functions in tbl, using the optimizer 'kind' (e.g. kind = gradientdecesnt)
--- it should generat the field makePlan which is the terra function that 
--- allocates the plan
-
 local function getImages(vars,imageBindings,actualDims)
 	local results = terralib.newlist()
 	for i,argumentType in ipairs(vars.argumentTypes) do
@@ -133,12 +128,11 @@ local function gradientDescentCPU(tbl,vars)
 		plan : opt.Plan
 		gradW : int
 		gradH : int
-		gradStore : vars.unknownType
+		gradient : vars.unknownType
 		dims : int64[#vars.dims + 1]
 	}
 
-	local images = vars.argumentTypes:map(symbol)
-	local totalCost = makeTotalCost(tbl, PlanData, images)
+	local totalCost = makeTotalCost(tbl, PlanData, vars.imagesAll)
 
 	local terra impl(data_ : &opaque, imageBindings : &&opt.ImageBinding, params_ : &opaque)
 
@@ -146,11 +140,11 @@ local function gradientDescentCPU(tbl,vars)
 		var params = [&double](params_)
 		var dims = pd.dims
 
-		var [images] = [getImages(vars, imageBindings, dims)]
+		var [vars.imagesAll] = [getImages(vars, imageBindings, dims)]
 
 		-- TODO: parameterize these
 		var initialLearningRate = 0.01
-		var maxIters = 5000
+		var maxIters = 500
 		var tolerance = 1e-10
 
 		-- Fixed constants (these do not need to be parameterized)
@@ -161,7 +155,7 @@ local function gradientDescentCPU(tbl,vars)
 		var learningRate = initialLearningRate
 
 		for iter = 0, maxIters do
-			var startCost = totalCost(pd, images)
+			var startCost = totalCost(pd, vars.imagesAll)
 			C.printf("iteration %d, cost=%f, learningRate=%f\n", iter, startCost, learningRate)
 			--C.getchar()
 
@@ -170,7 +164,7 @@ local function gradientDescentCPU(tbl,vars)
 			--
 			for h = 0,pd.gradH do
 				for w = 0,pd.gradW do
-					pd.gradStore(w,h) = tbl.gradient(w,h,images)
+					pd.gradient(w, h) = tbl.gradient(w, h, vars.imagesAll)
 					--C.printf("%d,%d = %f\n",w,h,pd.gradStore(w,h))
 					--C.getchar()
 				end
@@ -182,8 +176,8 @@ local function gradientDescentCPU(tbl,vars)
 			var maxDelta = 0.0
 			for h = 0,pd.gradH do
 				for w = 0,pd.gradW do
-					var addr = &[ images[1] ](w,h)
-					var delta = learningRate * pd.gradStore(w,h)
+					var addr = &vars.unknownImage(w, h)
+					var delta = learningRate * pd.gradient(w, h)
 					--C.printf("delta (%d,%d)=%f\n", w, h, delta)
 					@addr = @addr - delta
 					maxDelta = max(C.fabsf(delta), maxDelta)
@@ -193,7 +187,7 @@ local function gradientDescentCPU(tbl,vars)
 			--
 			-- update the learningRate
 			--
-			var endCost = totalCost(pd, images)
+			var endCost = totalCost(pd, vars.imagesAll)
 			if endCost < startCost then
 				learningRate = learningRate * learningGain
 
@@ -212,9 +206,6 @@ local function gradientDescentCPU(tbl,vars)
 		end
 	end
 
-	local gradWIndex = vars.dimIndex[ vars.gradientDim[1] ]
-	local gradHIndex = vars.dimIndex[ vars.gradientDim[2] ]
-
 	local terra makePlan(actualDims : &uint64) : &opt.Plan
 		var pd = PlanData.alloc()
 		pd.plan.data = pd
@@ -224,10 +215,10 @@ local function gradientDescentCPU(tbl,vars)
 			pd.dims[i+1] = actualDims[i]
 		end
 
-		pd.gradW = pd.dims[gradWIndex]
-		pd.gradH = pd.dims[gradHIndex]
+		pd.gradW = pd.dims[vars.gradWIndex]
+		pd.gradH = pd.dims[vars.gradHIndex]
 
-		pd.gradStore:initCPU(pd.gradW, pd.gradH)
+		pd.gradient:initCPU(pd.gradW, pd.gradH)
 
 		return &pd.plan
 	end
@@ -245,30 +236,28 @@ local function gradientDescentGPU(tbl,vars)
 		scratchD : &double
 		dims : int64[#vars.dims + 1]
 	}
-
-	local images = vars.argumentTypes:map(symbol)
-
+	
 	local cuda = {}
 
-	terra cuda.computeGradient(pd : PlanData, [images])
+	terra cuda.computeGradient(pd : PlanData, [vars.imagesAll])
 		var w = blockDim.x * blockIdx.x + threadIdx.x;
 		var h = blockDim.y * blockIdx.y + threadIdx.y;
 
 		--printf("%d, %d\n", w, h)
 
 		if w < pd.gradW and h < pd.gradH then
-			pd.gradStore(w,h) = tbl.gradient(w,h,images)
+			pd.gradStore(w,h) = tbl.gradient(w, h, vars.imagesAll)
 		end
 	end
 
-	terra cuda.updatePosition(pd : PlanData, learningRate : double, maxDelta : &double, [images])
+	terra cuda.updatePosition(pd : PlanData, learningRate : double, maxDelta : &double, [vars.imagesAll])
 		var w = blockDim.x * blockIdx.x + threadIdx.x;
 		var h = blockDim.y * blockIdx.y + threadIdx.y;
 
 		--printf("%d, %d\n", w, h)
 		
 		if w < pd.gradW and h < pd.gradH then
-			var addr = &[ images[1] ](w,h)
+			var addr = &vars.unknownImage(w,h)
 			var delta = learningRate * pd.gradStore(w,h)
 			@addr = @addr - delta
 
@@ -280,23 +269,23 @@ local function gradientDescentGPU(tbl,vars)
 		end
 	end
 
-	terra cuda.costSum(pd : PlanData, sum : &float, [images])
+	terra cuda.costSum(pd : PlanData, sum : &float, [vars.imagesAll])
 		var w = blockDim.x * blockIdx.x + threadIdx.x;
 		var h = blockDim.y * blockIdx.y + threadIdx.y;
 
 		if w < pd.gradW and h < pd.gradH then
-			var v = [float](tbl.cost.fn(w,h,images))
+			var v = [float](tbl.cost.fn(w, h, vars.imagesAll))
 			terralib.asm(terralib.types.unit,"red.global.add.f32 [$0],$1;","l,f",true,sum,v)
 		end
 	end
 	
 	cuda = terralib.cudacompile(cuda, false)
 	 
-	local terra totalCost(pd : &PlanData, [images])
+	local terra totalCost(pd : &PlanData, [vars.imagesAll])
 		var launch = terralib.CUDAParams { (pd.gradW - 1) / 32 + 1, (pd.gradH - 1) / 32 + 1,1, 32,32,1, 0, nil }
 
 		@pd.scratchF = 0.0f
-		cuda.costSum(&launch, @pd, pd.scratchF, [images])
+		cuda.costSum(&launch, @pd, pd.scratchF, [vars.imagesAll])
 		C.cudaDeviceSynchronize()
 
 		return @pd.scratchF
@@ -307,7 +296,7 @@ local function gradientDescentGPU(tbl,vars)
 		var params = [&double](params_)
 		var dims = pd.dims
 
-		var [images] = [getImages(vars,imageBindings,dims)]
+		var [vars.imagesAll] = [getImages(vars,imageBindings,dims)]
 
 		-- TODO: parameterize these
 		var initialLearningRate = 0.01
@@ -323,7 +312,7 @@ local function gradientDescentGPU(tbl,vars)
 
 		for iter = 0,maxIters do
 
-			var startCost = totalCost(pd, images)
+			var startCost = totalCost(pd, vars.imagesAll)
 			C.printf("iteration %d, cost=%f, learningRate=%f\n", iter, startCost, learningRate)
 			
 			--
@@ -342,14 +331,14 @@ local function gradientDescentGPU(tbl,vars)
 							{"hStream" , terra.types.pointer(opaque) } }
 							--]]
 			--C.printf("gridDimX: %d, gridDimY %d, blickDimX %d, blockdimY %d\n", launch.gridDimX, launch.gridDimY, launch.blockDimX, launch.blockDimY)
-			cuda.computeGradient(&launch, @pd, [images])
+			cuda.computeGradient(&launch, @pd, [vars.imagesAll])
 			C.cudaDeviceSynchronize()
 			
 			--
 			-- move along the gradient by learningRate
 			--
 			@pd.scratchD = 0.0
-			cuda.updatePosition(&launch, @pd, learningRate, pd.scratchD, [images])
+			cuda.updatePosition(&launch, @pd, learningRate, pd.scratchD, [vars.imagesAll])
 			C.cudaDeviceSynchronize()
 			C.printf("maxDelta %f\n", @pd.scratchD)
 			var maxDelta = @pd.scratchD
@@ -357,7 +346,7 @@ local function gradientDescentGPU(tbl,vars)
 			--
 			-- update the learningRate
 			--
-			var endCost = totalCost(pd, images)
+			var endCost = totalCost(pd, vars.imagesAll)
 			if endCost < startCost then
 				learningRate = learningRate * learningGain
 
@@ -374,9 +363,6 @@ local function gradientDescentGPU(tbl,vars)
 		end
 	end
 
-	local gradWIndex = vars.dimIndex[ vars.gradientDim[1] ]
-	local gradHIndex = vars.dimIndex[ vars.gradientDim[2] ]
-
 	local terra makePlan(actualDims : &uint64) : &opt.Plan
 		var pd = PlanData.alloc()
 		pd.plan.data = pd
@@ -386,8 +372,8 @@ local function gradientDescentGPU(tbl,vars)
 			pd.dims[i+1] = actualDims[i]
 		end
 
-		pd.gradW = pd.dims[gradWIndex]
-		pd.gradH = pd.dims[gradHIndex]
+		pd.gradW = pd.dims[vars.gradWIndex]
+		pd.gradH = pd.dims[vars.gradHIndex]
 
 		pd.gradStore:initGPU(pd.gradW, pd.gradH)
 		C.cudaMallocManaged([&&opaque](&(pd.scratchF)), sizeof(float), C.cudaMemAttachGlobal)
@@ -414,8 +400,7 @@ local function conjugateGradientCPU(tbl, vars)
 		searchDirection : vars.unknownType
 	}
 	
-	local images = vars.argumentTypes:map(symbol)
-	local totalCost = makeTotalCost(tbl, PlanData, images)
+	local totalCost = makeTotalCost(tbl, PlanData, vars.imagesAll)
 
 	local terra impl(data_ : &opaque, imageBindings : &&opt.ImageBinding, params_ : &opaque)
 
@@ -427,7 +412,7 @@ local function conjugateGradientCPU(tbl, vars)
 
 		--C.printf("impl A\n")
 
-		var [images] = [getImages(vars, imageBindings, dims)]
+		var [vars.imagesAll] = [getImages(vars, imageBindings, dims)]
 
 		--C.printf("impl B\n")
 
@@ -450,7 +435,7 @@ local function conjugateGradientCPU(tbl, vars)
 
 			--C.printf("impl iter start\n")
 
-			var iterStartCost = totalCost(pd, images)
+			var iterStartCost = totalCost(pd, vars.imagesAll)
 			C.printf("iteration %d, cost=%f\n", iter, iterStartCost)
 			--C.getchar()
 
@@ -459,7 +444,7 @@ local function conjugateGradientCPU(tbl, vars)
 			--
 			for h = 0, pd.gradH do
 				for w = 0, pd.gradW do
-					pd.gradient(w, h) = tbl.gradient(w, h, images)
+					pd.gradient(w, h) = tbl.gradient(w, h, vars.imagesAll)
 				end
 			end
 
@@ -504,7 +489,7 @@ local function conjugateGradientCPU(tbl, vars)
 			
 			C.memcpy(pd.prevGradient.impl.data, pd.gradient.impl.data, sizeof(float) * pd.gradW * pd.gradH)
 			
-			C.memcpy(pd.currentValues.impl.data, [ images[1] ].impl.data, sizeof(float) * pd.gradW * pd.gradH)
+			C.memcpy(pd.currentValues.impl.data, vars.unknownImage.impl.data, sizeof(float) * pd.gradW * pd.gradH)
 			
 			--
 			-- line search
@@ -538,11 +523,11 @@ local function conjugateGradientCPU(tbl, vars)
 					 
 					for h = 0,pd.gradH do
 						for w = 0,pd.gradW do
-							[ images[1] ](w, h) = pd.currentValues(w, h) + alpha * pd.searchDirection(w, h)
+							vars.unknownImage(w, h) = pd.currentValues(w, h) + alpha * pd.searchDirection(w, h)
 						end
 					end
 					
-					var searchCost = totalCost(pd, images)
+					var searchCost = totalCost(pd, vars.imagesAll)
 					
 					if searchCost <= bestCost then
 						bestAlpha = alpha
@@ -567,11 +552,11 @@ local function conjugateGradientCPU(tbl, vars)
 					
 					for h = 0,pd.gradH do
 						for w = 0,pd.gradW do
-							[ images[1] ](w, h) = pd.currentValues(w, h) + alpha * pd.searchDirection(w, h)
+							vars.unknownImage(w, h) = pd.currentValues(w, h) + alpha * pd.searchDirection(w, h)
 						end
 					end
 					
-					var searchCost = totalCost(pd, images)
+					var searchCost = totalCost(pd, vars.imagesAll)
 					
 					--C.fprintf(file, "%f\t%f\n", alpha * 1000.0, searchCost / 1000000.0)
 					
@@ -586,7 +571,7 @@ local function conjugateGradientCPU(tbl, vars)
 			
 			for h = 0,pd.gradH do
 				for w = 0,pd.gradW do
-					[ images[1] ](w, h) = pd.currentValues(w, h) + bestAlpha * pd.searchDirection(w, h)
+					vars.unknownImage(w, h) = pd.currentValues(w, h) + bestAlpha * pd.searchDirection(w, h)
 				end
 			end
 			
@@ -601,9 +586,6 @@ local function conjugateGradientCPU(tbl, vars)
 		C.fclose(file)
 	end
 
-	local gradWIndex = vars.dimIndex[ vars.gradientDim[1] ]
-	local gradHIndex = vars.dimIndex[ vars.gradientDim[2] ]
-
 	local terra makePlan(actualDims : &uint64) : &opt.Plan
 		var pd = PlanData.alloc()
 		pd.plan.data = pd
@@ -613,8 +595,8 @@ local function conjugateGradientCPU(tbl, vars)
 			pd.dims[i+1] = actualDims[i]
 		end
 
-		pd.gradW = pd.dims[gradWIndex]
-		pd.gradH = pd.dims[gradHIndex]
+		pd.gradW = pd.dims[vars.gradWIndex]
+		pd.gradH = pd.dims[vars.gradHIndex]
 
 		pd.currentValues:initCPU(pd.gradW, pd.gradH)
 		pd.bestValues:initCPU(pd.gradW, pd.gradH)
@@ -746,36 +728,34 @@ local function linearizedConjugateGradientGPU(tbl, vars)
 		scratchF : &float
 	}
 	
-	local images = vars.argumentTypes:map(symbol)
-
 	local cuda = {}
 	
-	terra cuda.initialize(pd : PlanData, [images])
+	terra cuda.initialize(pd : PlanData, [vars.imagesAll])
 		var w = blockDim.x * blockIdx.x + threadIdx.x;
 		var h = blockDim.y * blockIdx.y + threadIdx.y;
 
 		if w < pd.gradW and h < pd.gradH then
-			pd.r(w, h) = -tbl.gradientHack(w, h, [ images[1] ], images)
-			pd.b(w, h) = tbl.gradientHack(w, h, pd.zeroes, images)
+			pd.r(w, h) = -tbl.gradient(w, h, vars.unknownImage, vars.dataImages)
+			pd.b(w, h) = tbl.gradient(w, h, pd.zeroes, vars.dataImages)
 			pd.p(w, h) = pd.r(w, h)
 		end
 	end
 	
-	terra cuda.computeAp(pd : PlanData, [images])
+	terra cuda.computeAp(pd : PlanData, [vars.imagesAll])
 		var w = blockDim.x * blockIdx.x + threadIdx.x;
 		var h = blockDim.y * blockIdx.y + threadIdx.y;
 
 		if w < pd.gradW and h < pd.gradH then
-			pd.Ap(w, h) = tbl.gradientHack(w, h, pd.p, images) - pd.b(w, h)
+			pd.Ap(w, h) = tbl.gradient(w, h, pd.p, vars.dataImages) - pd.b(w, h)
 		end
 	end
 
-	terra cuda.updateResidualAndPosition(pd : PlanData, alpha : float, [images])
+	terra cuda.updateResidualAndPosition(pd : PlanData, alpha : float, [vars.imagesAll])
 		var w = blockDim.x * blockIdx.x + threadIdx.x;
 		var h = blockDim.y * blockIdx.y + threadIdx.y;
 
 		if w < pd.gradW and h < pd.gradH then
-			[ images[1] ](w, h) = [ images[1] ](w, h) + alpha * pd.p(w, h)
+			vars.unknownImage(w, h) = vars.unknownImage(w, h) + alpha * pd.p(w, h)
 			pd.r(w, h) = pd.r(w, h) - alpha * pd.Ap(w, h)
 		end
 	end
@@ -789,12 +769,12 @@ local function linearizedConjugateGradientGPU(tbl, vars)
 		end
 	end
 	
-	terra cuda.costSum(pd : PlanData, sum : &float, [images])
+	terra cuda.costSum(pd : PlanData, sum : &float, [vars.imagesAll])
 		var w = blockDim.x * blockIdx.x + threadIdx.x;
 		var h = blockDim.y * blockIdx.y + threadIdx.y;
 
 		if w < pd.gradW and h < pd.gradH then
-			var v = [float](tbl.cost.fn(w, h, images))
+			var v = [float](tbl.cost.fn(w, h, vars.imagesAll))
 			terralib.asm(terralib.types.unit,"red.global.add.f32 [$0],$1;","l,f", true, sum, v)
 		end
 	end
@@ -811,13 +791,13 @@ local function linearizedConjugateGradientGPU(tbl, vars)
 	
 	cuda = terralib.cudacompile(cuda, false)
 	
-	local terra totalCost(pd : &PlanData, [images])
+	local terra totalCost(pd : &PlanData, [vars.imagesAll])
 		var launch = terralib.CUDAParams { (pd.gradW - 1) / 32 + 1, (pd.gradH - 1) / 32 + 1,1, 32,32,1, 0, nil }
 
 		C.cudaDeviceSynchronize()
 		@pd.scratchF = 0.0f
 		C.cudaDeviceSynchronize()
-		cuda.costSum(&launch, @pd, pd.scratchF, [images])
+		cuda.costSum(&launch, @pd, pd.scratchF, [vars.imagesAll])
 		C.cudaDeviceSynchronize()
 		
 		return @pd.scratchF
@@ -841,7 +821,7 @@ local function linearizedConjugateGradientGPU(tbl, vars)
 		var params = [&double](params_)
 		var dims = pd.dims
 
-		var [images] = [getImages(vars, imageBindings, dims)]
+		var [vars.imagesAll] = [getImages(vars, imageBindings, dims)]
 
 		var launch = terralib.CUDAParams { (pd.gradW - 1) / 32 + 1, (pd.gradH - 1) / 32 + 1,1, 32,32,1, 0, nil }
 		
@@ -850,24 +830,24 @@ local function linearizedConjugateGradientGPU(tbl, vars)
 		var tolerance = 1e-5
 
 		C.cudaDeviceSynchronize()
-		cuda.initialize(&launch, @pd, [images])
+		cuda.initialize(&launch, @pd, [vars.imagesAll])
 		C.cudaDeviceSynchronize()
 		
 		var rTr = imageInnerProduct(pd, pd.r, pd.r)
 
 		for iter = 0, maxIters do
 	
-			var iterStartCost = totalCost(pd, images)
+			var iterStartCost = totalCost(pd, vars.imagesAll)
 			
 			C.cudaDeviceSynchronize()
-			cuda.computeAp(&launch, @pd, [images])
+			cuda.computeAp(&launch, @pd, [vars.imagesAll])
 			
 			var den = imageInnerProduct(pd, pd.p, pd.Ap)
 			var alpha = rTr / den
 			
 			--C.printf("den=%f, alpha=%f\n", den, alpha)
 			
-			cuda.updateResidualAndPosition(&launch, @pd, alpha, [images])
+			cuda.updateResidualAndPosition(&launch, @pd, alpha, [vars.imagesAll])
 			
 			var rTrNew = imageInnerProduct(pd, pd.r, pd.r)
 			
@@ -881,7 +861,7 @@ local function linearizedConjugateGradientGPU(tbl, vars)
 			rTr = rTrNew
 		end
 		
-		var finalCost = totalCost(pd, images)
+		var finalCost = totalCost(pd, vars.imagesAll)
 		C.printf("final cost=%f\n", finalCost)
 	end
 
@@ -1025,6 +1005,11 @@ local function linearizedPreconditionedConjugateGradientCPU(tbl, vars)
 	end
 	return Problem:new { makePlan = makePlan }
 end
+
+-- this function should do anything it needs to compile an optimizer defined
+-- using the functions in tbl, using the optimizer 'kind' (e.g. kind = gradientdecesnt)
+-- it should generate the field makePlan which is the terra function that 
+-- allocates the plan
 
 local function compileProblem(tbl, kind)
 	local vars = {

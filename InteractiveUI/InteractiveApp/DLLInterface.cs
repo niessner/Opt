@@ -12,7 +12,7 @@ using System.Linq;
 using System.Diagnostics;
 using System.Windows.Input;
 
-namespace InteractiveApp
+namespace UIWindow
 {
     [StructLayout(LayoutKind.Sequential), Serializable]
     public struct IVBitmapInfo

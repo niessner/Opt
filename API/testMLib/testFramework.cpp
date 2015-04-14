@@ -184,17 +184,19 @@ void TestFramework::runAllTests()
     //TestExample example = makeRandomQuadratic(5);
     TestExample example = makeImageSmoothing("smoothingExampleB.png", 0.1f);
 
-    //TestMethod method = TestMethod("gradientdescentCPU","no-params");
-    //TestMethod method = TestMethod("gradientdescentGPU", "no-params");
-    //TestMethod method = TestMethod("conjugateGradientCPU", "no-params");
-    TestMethod method = TestMethod("linearizedConjugateGradientCPU", "no-params");
-    //TestMethod method = TestMethod("linearizedConjugateGradientGPU", "no-params");
-    //TestMethod method = TestMethod("linearizedPreconditionedConjugateGradientCPU", "no-params");
+    vector<TestMethod> methods;
+    methods.push_back(TestMethod("gradientdescentCPU","no-params"));
+    methods.push_back(TestMethod("gradientdescentGPU", "no-params"));
+    methods.push_back(TestMethod("conjugateGradientCPU", "no-params"));
+    methods.push_back(TestMethod("linearizedConjugateGradientCPU", "no-params"));
+    methods.push_back(TestMethod("linearizedConjugateGradientGPU", "no-params"));
+    methods.push_back(TestMethod("linearizedPreconditionedConjugateGradientCPU", "no-params"));
 
     for (auto &image : example.images)
         image.bind(optimizerState);
 
-    runTest(method, example);
+    for (auto &method : methods)
+        runTest(method, example);
 }
 
 void TestFramework::runTest(const TestMethod &method, const TestExample &example)
