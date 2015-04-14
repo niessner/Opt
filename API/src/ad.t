@@ -153,6 +153,7 @@ local function simplify(op,args)
         if y == one then return x
         elseif y == negone then return -x
         elseif x == y then return one 
+        elseif Const:is(y) then return x*(one/y)
         end
     end
     
@@ -186,6 +187,8 @@ local x,y,z = v[1],v[2],v[3]
 
 local ad = {}
 ad.v = v
+ad.toexp = toexp
+
 setmetatable(ad, { __index = function(self,idx) -- for just this file, auto-generate an op 
     local name = assert(type(idx) == "string" and idx)
     local op = Op:new { name = name }
@@ -257,6 +260,7 @@ local infix = { add = {"+",1}, sub = {"-",1}, mul = {"*",2}, div = {"/",2} }
 
 
 local function expstostring(es,names)
+    es = (terralib.islist(es) and es) or terralib.newlist(es)
     local n = 0
     local tbl = terralib.newlist()
     local manyuses = countuses(es)
@@ -431,8 +435,8 @@ ad.sin:define(function(x) return `C.sin(x) end, ad.cos(x))
 ad.sinh:define(function(x) return `C.sinh(a) end, ad.cosh(x))
 ad.sqrt:define(function(x) return `C.sqrt(x) end, 1.0/(2.0*ad.sqrt(x)))
 ad.tan:define(function(x) return `C.tan(x) end, 1.0 + ad.tan(x)*ad.tan(x))
-ad.tanh:define(function(x) return `C.tanh(a) end, 1.0/(ad.cosh(x)*ad.cosh(x)))
-
+ad.tanh:define(function(x) return `C.tanh(x) end, 1.0/(ad.cosh(x)*ad.cosh(x)))
+ad.select:define(function(x,y,z) return `terralib.select(x ~= 0.f,y,z) end,ad.select(x,1,0),ad.select(x,0,1))
 setmetatable(ad,nil) -- remove special metatable that generates new blank ops
 
 --[[

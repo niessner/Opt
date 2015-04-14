@@ -72,7 +72,10 @@ else
 end
 
 local function saveaslibrary(libraryname, terrasourcefile)
-    local success, tbl = xpcall(function() return assert(terralib.loadfile(terrasourcefile))() end,
+    local filename = terrasourcefile:match("[^/]*.t$")
+    local terrapath, packagename = "/"..terrasourcefile:sub(1,-#filename-1).."?.t;",filename:sub(1,-3)
+    package.terrapath = package.terrapath..";."..terrapath
+    local success, tbl = xpcall(function() return assert(require(packagename)) end,
                          function(err) return debug.traceback(err,2) end)
     if not success then error(tbl,0) end
     local apifunctions = terralib.newlist()
@@ -98,9 +101,6 @@ local function saveaslibrary(libraryname, terrasourcefile)
         return nil
     end
     
-    local filename = terrasourcefile:match("[^/]*.t$")
-    local terrapath, packagename = "/"..terrasourcefile:sub(1,-#filename-1).."?.t;",filename:sub(1,-3)
-    print(terrapath,packagename)
     local terra NewState() : &LibraryState
         var S = [&LibraryState](C.malloc(sizeof(LibraryState)))
         var L = C.luaL_newstate();

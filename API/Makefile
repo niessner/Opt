@@ -4,8 +4,10 @@ UNAME := $(shell uname)
 
 CXX = clang++
 
+MLIB = ../mLib
+
 CUDAHOME = /usr/local/cuda
-FLAGS = -MD -Ibuild  -I$(TERRAHOME)/include -I$(CUDAHOME)/include -std=c++11
+FLAGS = -O3 -g -MD -Ibuild  -I$(TERRAHOME)/include -I$(CUDAHOME)/include -I$(MLIB)/include -std=c++11 -ferror-limit=0
 TERRAHOME = $(HOME)/terra/release
 TERRA = $(TERRAHOME)/terra
 LFLAGS = -Lbuild -L$(CUDAHOME)/lib -Wl,-rpath,$(CUDAHOME)/lib -lcudart -lOpt -Wl,-rpath,$(shell pwd)/build -L$(TERRAHOME) -lterra -Wl,-rpath,$(TERRAHOME) -pagezero_size 10000 -image_base 100000000
@@ -16,7 +18,7 @@ EXAMPLE = example/example
 TEST = test/test
 TESTMLIB = testMLib/testMLib
 
-EXECUTABLES = $(EXAMPLE) $(TEST)
+EXECUTABLES = $(EXAMPLE) $(TEST) $(TESTMLIB)
 all:	$(EXECUTABLES)
 
 TERRA = $(HOME)/terra/terra
@@ -33,7 +35,7 @@ $(EXAMPLE):	example/example.o
 $(TEST):	test/testFramework.o test/main.o
 	$(LINK) $^ -o $@ $(LFLAGS)
 	
-$(TESTMLIB):	testMLib/main.o testMLib/mLibSource.o testFramework.o
+$(TESTMLIB):	testMLib/main.o testMLib/mLibSource.o testMLib/testFramework.o
 	$(LINK) $^ -o $@ $(LFLAGS)
 	
 clean:

@@ -1305,4 +1305,65 @@ terra opt.ProblemSolve(plan : &opt.Plan, images : &&opt.ImageBinding, params : &
 	return plan.impl(plan.data, images, params)
 end
 
+ad = require("ad")
+
+
+local accesstovar = {} -- map from image(x,y) to ad variable object that represents that value
+local accesstobounds = {} -- map from image(x,y) to ad variable representing the boundary info
+local varnames = {}
+
+local nextvar = 1
+local function getnextvar(n,x,y)
+    local xn,yn = tostring(x):gsub("-","m"),tostring(y):gsub("-","m")
+    nextvar = nextvar + 1
+    varnames[nextvar] = ("%s_%s_%s"):format(n,xn,yn)
+    return ad.v[nextvar]
+end
+local ImageAccess = terralib.memoize(function(im,x,y)
+    local a = { image = im, x = x, y = y}
+    accesstovar[a],accesstobounds[a] = getnextvar(im.name,x,y),getnextvar(im.name.."_bounds",x,y)
+    return a
+end)
+
+local Image = newclass("Image")
+-- Z: this will eventually be opt.Image, but that is currently used by our direct methods
+-- so this is going in the ad table for now
+function ad.Image(name,W,H)
+    assert(W == 1 or Dim:is(W))
+    assert(H == 1 or Dim:is(H))
+    return Image:new { name = tostring(name), W = W, H = H }
+end
+
+function Image:inbounds(x,y)
+    x,y = assert(tonumber(x)),assert(tonumber(y))
+    return assert(accesstobounds[ImageAccess(self,x,y)])
+end
+function Image:__call(x,y)
+    x,y = assert(tonumber(x)),assert(tonumber(y))
+    return assert(accesstovar[ImageAccess(self,x,y)])
+end
+
+function ad.Cost(dims,images,costexp)
+    assert(#images > 0)
+    --TODO: check that Dims used in images are in dims list
+    --TODO: check images are all images 
+    costexp = assert(ad.toexp(costexp))
+    --TODO: check all image uses in costexp are bound to images in list
+    local unknown = images[1] -- assume for now that the first image is the unknown
+    --TODO: code gen cost and gradient
+    print(ad.tostrings({assert(costexp)}, varnames))
+    
+    local realvars = terralib.newlist()
+    local rvnames = terralib.newlist()
+    for k,v in pairs(accesstovar) do
+        local n = varnames[v:N()]
+        if n:match("X") then
+            realvars:insert(v)
+            rvnames:insert(n)
+        end
+    end
+    print(ad.tostrings(costexp:gradient(realvars), varnames))
+    print(unpack(rvnames))
+    error("TODO: NYI!")
+end
 return opt
