@@ -89,10 +89,6 @@ local terra gradient(i : uint64, j : uint64, xImage : X, aImage : A)
 	return laplacianGradient + reconstructionGradient
 end
 
-local terra gradientHack(i : uint64, j : uint64, xImage : X, hackImage : X, aImage : A)
-	return gradient(i, j, xImage, aImage)
-end
-
 local terra gradientPreconditioner(i : uint64, j : uint64)
 	return 24 + w * 2
 end
@@ -100,5 +96,4 @@ end
 return { dims = { W, H },
          cost = { dim = {W,H}, fn = cost },
          gradient = gradient,
-		 gradientHack = gradientHack,
 		 gradientPreconditioner = gradientPreconditioner }

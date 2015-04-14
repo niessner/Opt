@@ -36,11 +36,6 @@ local terra gradient(i : uint64, j : uint64, xImage : X, aImage : A, bImage : B,
 	return 2.0 * a * x + b
 end
 
-local terra gradientHack(i : uint64, j : uint64, xImage : X, hackImage : X, aImage : A, bImage : B, cImage : C)
-	return gradient(i, j, xImage, aImage, bImage, cImage)
-end
-
 return { dims = { W, H },
          cost = { dim = {W,1}, fn = cost },
-         gradient = gradient,
-		 gradientHack = gradientHack }
+         gradient = gradient}

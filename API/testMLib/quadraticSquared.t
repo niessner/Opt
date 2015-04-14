@@ -42,5 +42,4 @@ end
 
 return { dims = { W, H },
          cost = { dim = {W,1}, fn = cost },
-         gradient = gradient,
-		 gradientHack = gradientHack }
+         gradient = gradient}
