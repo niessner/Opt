@@ -98,8 +98,9 @@ local function saveaslibrary(libraryname, terrasourcefile)
         return nil
     end
     
-    
-    local append = "/"..terrasourcefile
+    local filename = terrasourcefile:match("[^/]*.t$")
+    local terrapath, packagename = "/"..terrasourcefile:sub(1,-#filename-1).."?.t;",filename:sub(1,-3)
+    print(terrapath,packagename)
     local terra NewState() : &LibraryState
         var S = [&LibraryState](C.malloc(sizeof(LibraryState)))
         var L = C.luaL_newstate();
@@ -112,9 +113,15 @@ local function saveaslibrary(libraryname, terrasourcefile)
         setupsigsegv(L)
         var path : int8[4096]
         directoryforsymbol(NewState,path,4096)
-        C.strncat(path,append,4096)
-        C.printf("Loading %s\n",path)
-        if C.terra_loadfile(L,path) ~= 0 or C.lua_pcall(L, 0, -1, 0) ~= 0 then return doerror(L) end
+        C.strncat(path,terrapath,4096)
+        C.lua_getfield(L,LUA_GLOBALSINDEX,"package")
+        C.lua_getfield(L,-1,"terrapath")
+        C.lua_pushstring(L,path)
+        C.lua_concat(L,2)
+        C.lua_setfield(L,-2,"terrapath")
+        C.lua_getfield(L,LUA_GLOBALSINDEX,"require")
+        C.lua_pushstring(L,packagename)
+        if C.lua_pcall(L,1,1,0) ~= 0 then return doerror(L) end
         
         escape
             for k,v in pairs(apifunctions) do

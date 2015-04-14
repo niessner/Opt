@@ -2,7 +2,6 @@
 --terralib.settypeerrordebugcallback( function(fn) fn:printpretty() end )
 
 opt = {} --anchor it in global namespace, otherwise it can be collected
-
 local S = require("std")
 
 local C = terralib.includecstring [[
