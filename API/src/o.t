@@ -13,7 +13,7 @@ local C = terralib.includecstring [[
 ]]
 
 -- constants
-local verboseSolver = false
+local verboseSolver = true
 
 local function newclass(name)
     local mt = { __name = name }
@@ -62,7 +62,7 @@ end)
 if verboseSolver then
 	log = macro(function(fmt,...)
 		local buf = createbuffer({...})
-		return `vprintf(fmt, buf)
+		return `C.vprintf(fmt, buf)
 	end)
 else
 	log = function(fmt,...)
@@ -432,7 +432,7 @@ local function conjugateGradientCPU(tbl, vars)
 		
 		var maxIters = 1000
 		
-		var file = C.fopen("C:/code/debug.txt", "wb")
+		--var file = C.fopen("C:/code/debug.txt", "wb")
 		
 		var prevBestAlpha = 0.0
 
@@ -584,7 +584,6 @@ local function conjugateGradientCPU(tbl, vars)
 				break
 			end
 		end
-		C.fclose(file)
 	end
 
 	local terra makePlan(actualDims : &uint64) : &opt.Plan
@@ -1043,9 +1042,9 @@ local function compileProblem(tbl, kind)
 	vars.gradWIndex = vars.dimIndex[ vars.gradientDim[1] ]
 	vars.gradHIndex = vars.dimIndex[ vars.gradientDim[2] ]
 
-    if kind == "gradientdescentCPU" then
+    if kind == "gradientDescentCPU" then
         return gradientDescentCPU(tbl, vars)
-	elseif kind == "gradientdescentGPU" then
+	elseif kind == "gradientDescentGPU" then
 		return gradientDescentGPU(tbl, vars)
 	elseif kind == "conjugateGradientCPU" then
 		return conjugateGradientCPU(tbl, vars)
