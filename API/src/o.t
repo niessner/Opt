@@ -1308,22 +1308,41 @@ end
 ad = require("ad")
 
 
-local accesstovar = {} -- map from image(x,y) to ad variable object that represents that value
-local accesstobounds = {} -- map from image(x,y) to ad variable representing the boundary info
-local varnames = {}
+local ImageTable = newclass("ImageTable") -- a context that keeps a mapping from image accesses im(0,-1) to the ad variable object that represents the access
 
-local nextvar = 1
-local function getnextvar(n,x,y)
-    local xn,yn = tostring(x):gsub("-","m"),tostring(y):gsub("-","m")
-    nextvar = nextvar + 1
-    varnames[nextvar] = ("%s_%s_%s"):format(n,xn,yn)
-    return ad.v[nextvar]
-end
 local ImageAccess = terralib.memoize(function(im,x,y)
-    local a = { image = im, x = x, y = y}
-    accesstovar[a],accesstobounds[a] = getnextvar(im.name,x,y),getnextvar(im.name.."_bounds",x,y)
-    return a
+    return { image = im, x = x, y = y}
 end)
+
+function ImageTable:create(perimagevariables)
+    return self:new { accesstovarid = {}, 
+                      nextvar = 1, perimagevariables = perimagevariables, 
+                      varnames = terralib.newlist {}, 
+                      imagetoaccesses = {} }
+end
+
+function ImageTable:access(a) -- a is an ImageAccess object
+    if not self.accesstovarid[a] then
+        self.accesstovarid[a] = #self.varnames + 1
+        for i,imagevar in ipairs(self.perimagevariables) do
+            local xn,yn = tostring(a.x):gsub("-","m"),tostring(a.y):gsub("-","m")
+            self.varnames:insert(("%s_%s_%s%s"):format(a.image.name,xn,yn,imagevar))
+        end
+        assert(self.imagetoaccesses[a.image],"using an image not declared as part of the energy function "..a.image.name)
+        self.imagetoaccesses[a.image]:insert(a)
+    end
+    return self.accesstovarid[a]
+end
+function ImageTable:accesses(im) return assert(self.imagetoaccesses[im]) end
+
+function ImageTable:addimage(im)
+    assert(not self.imagetoaccesses[im])
+    self.imagetoaccesses[im] = terralib.newlist()
+end
+
+local globalimagetable = ImageTable:create({"","_boundary"}) -- this is used when expressions are create
+                                              -- when we scatter-to-gather we make a smaller table with the accesses needed
+                                              -- for the specific problem 
 
 local Image = newclass("Image")
 -- Z: this will eventually be opt.Image, but that is currently used by our direct methods
@@ -1331,16 +1350,18 @@ local Image = newclass("Image")
 function ad.Image(name,W,H)
     assert(W == 1 or Dim:is(W))
     assert(H == 1 or Dim:is(H))
-    return Image:new { name = tostring(name), W = W, H = H }
+    local im = Image:new { name = tostring(name), W = W, H = H }
+    globalimagetable:addimage(im)
+    return im
 end
 
 function Image:inbounds(x,y)
     x,y = assert(tonumber(x)),assert(tonumber(y))
-    return assert(accesstobounds[ImageAccess(self,x,y)])
+    return ad.v[globalimagetable:access(ImageAccess(self,x,y)) + 1]
 end
 function Image:__call(x,y)
     x,y = assert(tonumber(x)),assert(tonumber(y))
-    return assert(accesstovar[ImageAccess(self,x,y)])
+    return ad.v[globalimagetable:access(ImageAccess(self,x,y))]
 end
 
 function ad.Cost(dims,images,costexp)
@@ -1351,18 +1372,16 @@ function ad.Cost(dims,images,costexp)
     --TODO: check all image uses in costexp are bound to images in list
     local unknown = images[1] -- assume for now that the first image is the unknown
     --TODO: code gen cost and gradient
-    print(ad.tostrings({assert(costexp)}, varnames))
+    print(ad.tostrings({assert(costexp)}, globalimagetable.varnames))
     
     local realvars = terralib.newlist()
     local rvnames = terralib.newlist()
-    for k,v in pairs(accesstovar) do
-        local n = varnames[v:N()]
-        if n:match("X") then
-            realvars:insert(v)
-            rvnames:insert(n)
-        end
+    for i,a in ipairs(globalimagetable:accesses(unknown)) do
+        local n = ad.v[globalimagetable:access(a)]
+        realvars:insert(n)
+        rvnames:insert(globalimagetable.varnames[n])
     end
-    print(ad.tostrings(costexp:gradient(realvars), varnames))
+    print(ad.tostrings(costexp:gradient(realvars), globalimagetable.varnames))
     print(unpack(rvnames))
     error("TODO: NYI!")
 end
