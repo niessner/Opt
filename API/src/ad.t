@@ -50,17 +50,6 @@ local empty = terralib.newlist {}
 function Exp:children() return empty end
 function Apply:children() return self.args end 
 
-
-function Var:cost() return 1 end
-function Const:cost() return 1 end
-function Apply:cost() 
-    local c = 1
-    for i,a in ipairs(self.args) do
-        c = c + a:cost()
-    end
-    return c
-end
-
 function Const:__tostring() return tostring(self.v) end
 
 local applyid = 0
@@ -101,12 +90,16 @@ function Var:order()
     return 0,self.p
 end
 
-local function lessthan(a,b) 
-    local ah,al = a:order()
-    local bh,bl = b:order()
-    if ah < bh then return true
-    elseif bh < ah then return false
-    else return al < bl end
+local function shouldcommute(a,b)
+    if Const:is(a) then return true end
+    if Var:is(a) and Var:is(b) then return a.p < b.p end
+    if b:prec() < a:prec() then return true end
+    --local ah,al = a:order()
+    --local bh,bl = b:order()
+    --if ah < bh then return true
+    --elseif bh < ah then return false
+    --else return al < bl end
+    return false
 end
 
 local commutes = { add = true, mul = true }
@@ -119,10 +112,9 @@ local function factors(e)
 end
 local function simplify(op,args)
     local x,y = unpack(args)
-    
     if allconst(args) and op:getimpl() then
         return toexp(op:getimpl()(unpack(args:map("v"))))
-    elseif commutes[op.name] and lessthan(y,x) then return op(y,x) -- constants will be on rhs
+    elseif commutes[op.name] and shouldcommute(x,y) then return op(y,x) -- constants will be on rhs
     elseif assoc[op.name] and Apply:is(x) and x.op.name == op.name
            and Const:is(x.args[2]) then -- (e + c) + ? -> e + (? + c)
         return op(x.args[1],op(x.args[2],y)) -- e0 + (e1 + c) ->  (e0 + e1) + c
@@ -231,12 +223,10 @@ end
 Exp.__unm = function(a) return ad.unm(a) end
 
 function Var:rename(vars)
-    assert(self.p <= #vars)
-    return vars[self.p]
+    return assert(vars[self.p])
 end
 function Const:rename(vars) return self end
 function Apply:rename(vars)
-    assert(self:N() <= #vars) 
     return self.op(unpack(self.args:map("rename",vars)))
 end
 
@@ -256,19 +246,25 @@ local function countuses(es)
 end    
 
 
+
 local infix = { add = {"+",1}, sub = {"-",1}, mul = {"*",2}, div = {"/",2} }
 
+function Op:prec()
+    if not infix[self.name] then return 3
+    else return infix[self.name][2] end
+end
 
+function Exp:prec()
+    if self.kind ~= "Apply" then return 3
+    else return self.op:prec() end
+end
 local function expstostring(es,names)
     es = (terralib.islist(es) and es) or terralib.newlist(es)
     local n = 0
     local tbl = terralib.newlist()
     local manyuses = countuses(es)
     local emitted = {}
-    local function prec(e)
-        if e.kind ~= "Apply" or e.op.name == "unm" or not infix[e.op.name] or manyuses[e] then return 3
-        else return infix[e.op.name][2] end
-    end
+    local function prec(e) return (manyuses[e] and 3) or e:prec() end
     local emit
     local function emitprec(e,p)
         return (prec(e) < p and "(%s)" or "%s"):format(emit(e))
@@ -438,7 +434,7 @@ ad.tan:define(function(x) return `C.tan(x) end, 1.0 + ad.tan(x)*ad.tan(x))
 ad.tanh:define(function(x) return `C.tanh(x) end, 1.0/(ad.cosh(x)*ad.cosh(x)))
 ad.select:define(function(x,y,z) return `terralib.select(x ~= 0.f,y,z) end,ad.select(x,1,0),ad.select(x,0,1))
 setmetatable(ad,nil) -- remove special metatable that generates new blank ops
-
+ad.Var,ad.Apply,ad.Const,ad.Exp = Var, Apply, Const, Exp
 --[[
 print(expstostring(ad.atan2.derivs))
 assert(y == y)

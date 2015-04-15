@@ -1252,31 +1252,38 @@ ad = require("ad")
 
 local ImageTable = newclass("ImageTable") -- a context that keeps a mapping from image accesses im(0,-1) to the ad variable object that represents the access
 
-local ImageAccess = terralib.memoize(function(im,x,y)
-    return { image = im, x = x, y = y}
+local ImageAccess = newclass("ImageAccess")
+
+ImageAccess.get = terralib.memoize(function(self,im,field,x,y)
+    return ImageAccess:new { image = im, field = field, x = x, y = y}
 end)
 
-function ImageTable:create(perimagevariables)
-    return self:new { accesstovarid = {}, 
-                      nextvar = 1, perimagevariables = perimagevariables, 
-                      varnames = terralib.newlist {}, 
+function ImageAccess:__tostring()
+    local xn,yn = tostring(self.x):gsub("-","m"),tostring(self.y):gsub("-","m")
+    return ("%s_%s_%s_%s"):format(self.image.name,self.field,xn,yn)
+end
+
+function ImageTable:create()
+    return self:new { accesstovarid_ = {}, 
+                      varidtoaccess_ = terralib.newlist {},
                       imagetoaccesses = {} }
 end
 
-function ImageTable:access(a) -- a is an ImageAccess object
-    if not self.accesstovarid[a] then
-        self.accesstovarid[a] = #self.varnames + 1
-        for i,imagevar in ipairs(self.perimagevariables) do
-            local xn,yn = tostring(a.x):gsub("-","m"),tostring(a.y):gsub("-","m")
-            self.varnames:insert(("%s_%s_%s%s"):format(a.image.name,xn,yn,imagevar))
-        end
+function ImageTable:accesstovarid(a) -- a is an ImageAccess object
+    assert(ImageAccess:is(a))
+    if not self.accesstovarid_[a] then
+        self.varidtoaccess_:insert(a)
+        self.accesstovarid_[a] = #self.varidtoaccess_
         assert(self.imagetoaccesses[a.image],"using an image not declared as part of the energy function "..a.image.name)
         self.imagetoaccesses[a.image]:insert(a)
     end
-    return self.accesstovarid[a]
+    return self.accesstovarid_[a]
 end
-function ImageTable:accesses(im) return assert(self.imagetoaccesses[im]) end
+function ImageTable:varidtoaccess(id)
+    return assert(self.varidtoaccess_[assert(tonumber(id),"not a number?")])
+end
 
+function ImageTable:accesses(im) return assert(self.imagetoaccesses[im]) end
 function ImageTable:addimage(im)
     assert(not self.imagetoaccesses[im])
     self.imagetoaccesses[im] = terralib.newlist()
@@ -1299,13 +1306,40 @@ end
 
 function Image:inbounds(x,y)
     x,y = assert(tonumber(x)),assert(tonumber(y))
-    return ad.v[globalimagetable:access(ImageAccess(self,x,y)) + 1]
+    return ad.v[globalimagetable:accesstovarid(ImageAccess:get(self,"bounds",x,y))]
 end
 function Image:__call(x,y)
     x,y = assert(tonumber(x)),assert(tonumber(y))
-    return ad.v[globalimagetable:access(ImageAccess(self,x,y))]
+    return ad.v[globalimagetable:accesstovarid(ImageAccess:get(self,"v",x,y))]
 end
 
+local function usedvariables(exp)
+    local uses = terralib.newlist()
+    local seen = {}
+    local function visit(e)
+        if seen[e] then return end
+        seen[e] = true
+        if ad.Var:is(e) then uses:insert(e) end
+        for i,c in ipairs(e:children()) do visit(c) end
+    end
+    visit(exp)
+    return uses
+end
+
+local function centerexp(fromtable,totable,names,access,exp)
+    local x,y = -access.x,access.y
+    local function shift(a)
+        return ImageAccess:get(a.image,a.field,a.x + x, a.y + y)
+    end
+    local renames = {}
+    for i,v in ipairs(usedvariables(exp)) do
+        local sa = shift(fromtable:varidtoaccess(v:N()))
+        local nv = totable:accesstovarid(sa)
+        names[nv] = names[nv] or tostring(sa)
+        renames[v:N()] = ad.v[nv]
+    end
+    return exp:rename(renames)
+end 
 function ad.Cost(dims,images,costexp)
     assert(#images > 0)
     --TODO: check that Dims used in images are in dims list
@@ -1313,18 +1347,55 @@ function ad.Cost(dims,images,costexp)
     costexp = assert(ad.toexp(costexp))
     --TODO: check all image uses in costexp are bound to images in list
     local unknown = images[1] -- assume for now that the first image is the unknown
-    --TODO: code gen cost and gradient
-    print(ad.tostrings({assert(costexp)}, globalimagetable.varnames))
     
-    local realvars = terralib.newlist()
-    local rvnames = terralib.newlist()
-    for i,a in ipairs(globalimagetable:accesses(unknown)) do
-        local n = ad.v[globalimagetable:access(a)]
-        realvars:insert(n)
-        rvnames:insert(globalimagetable.varnames[n])
+    
+    -- register the input images with the mappings from image -> uses
+    local costtable = ImageTable:create()
+    local gradtable = ImageTable:create()
+    for i,im in ipairs(images) do
+        costtable:addimage(im)
+        gradtable:addimage(im)
     end
-    print(ad.tostrings(costexp:gradient(realvars), globalimagetable.varnames))
-    print(unpack(rvnames))
+    
+    
+    -- collect the actually used variables and remap them to only local uses
+    local unknownvars = terralib.newlist()
+    local unknownvarnames = terralib.newlist()
+    
+    local costvarnames = terralib.newlist()
+    
+    local globaltocost = {}
+    for i,c in ipairs(usedvariables(costexp)) do
+        local a = globalimagetable:varidtoaccess(c:N())
+        local cv = ad.v[costtable:accesstovarid(a)]
+        globaltocost[c:N()] = cv 
+        costvarnames:insert(a)
+        if a.image == unknown and a.field == "v" then
+            unknownvars:insert(cv)
+            unknownvarnames:insert(tostring(a))
+        end
+    end
+    
+    costexp = costexp:rename(globaltocost)
+    local gradient = costexp:gradient(unknownvars)
+    
+    print("cost expression")
+    print(ad.tostrings({assert(costexp)}, costvarnames))
+    print("grad expression")
+    print(table.concat(unknownvarnames,", ").." = ",
+          ad.tostrings(gradient, costvarnames))
+    
+    local gradientgathered = 0
+    local gradnames = terralib.newlist()
+    for i,u in ipairs(unknownvars) do
+        local g = gradient[i]
+        local a = costtable:varidtoaccess(u:N())
+        gradientgathered = gradientgathered + centerexp(costtable,gradtable,gradnames,a,g)
+    end
+    
+    print("grad gather")
+    print(ad.tostrings({gradientgathered},gradnames))
+    
     error("TODO: NYI!")
 end
 return opt
