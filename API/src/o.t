@@ -90,11 +90,11 @@ local ffi = require('ffi')
 
 local problems = {}
 
-local terra max(x : double, y : double)
+--[[local terra max(x : double, y : double)
 	return terralib.select(x > y, x, y)
 end
 
-local function getImages(vars,imageBindings,actualDims)
+local function util.getImages(vars,imageBindings,actualDims)
 	local results = terralib.newlist()
 	for i,argumentType in ipairs(vars.argumentTypes) do
 		local Windex,Hindex = vars.dimIndex[argumentType.metamethods.W],vars.dimIndex[argumentType.metamethods.H]
@@ -183,7 +183,7 @@ local function makeImageInnerProduct(imageType)
 		return sum
 	end
 	return imageInnerProduct
-end
+end]]
 
 local function gradientDescentCPU(tbl,vars)
 	local struct PlanData(S.Object) {
@@ -195,7 +195,7 @@ local function gradientDescentCPU(tbl,vars)
 	}
 
 	local computeCost = util.makeComputeCost(tbl, vars.imagesAll)
-	local computeGradient = makeComputeGradient(tbl, vars.unknownType, vars.imagesAll)
+	local computeGradient = util.makeComputeGradient(tbl, vars.unknownType, vars.imagesAll)
 
 	local terra impl(data_ : &opaque, imageBindings : &&opt.ImageBinding, params_ : &opaque)
 
@@ -203,11 +203,11 @@ local function gradientDescentCPU(tbl,vars)
 		var params = [&double](params_)
 		var dims = pd.dims
 
-		var [vars.imagesAll] = [getImages(vars, imageBindings, dims)]
+		var [vars.imagesAll] = [util.getImages(vars, imageBindings, dims)]
 
 		-- TODO: parameterize these
 		var initialLearningRate = 0.01
-		var maxIters = 10000
+		var maxIters = 200
 		var tolerance = 1e-10
 
 		-- Fixed constants (these do not need to be parameterized)
@@ -233,7 +233,7 @@ local function gradientDescentCPU(tbl,vars)
 					var addr = &vars.unknownImage(w, h)
 					var delta = learningRate * pd.gradient(w, h)
 					@addr = @addr - delta
-					maxDelta = max(C.fabsf(delta), maxDelta)
+					maxDelta = util.max(C.fabsf(delta), maxDelta)
 				end
 			end
 
@@ -349,7 +349,7 @@ local function gradientDescentGPU(tbl,vars)
 		var params = [&double](params_)
 		var dims = pd.dims
 
-		var [vars.imagesAll] = [getImages(vars,imageBindings,dims)]
+		var [vars.imagesAll] = [util.getImages(vars,imageBindings,dims)]
 
 		-- TODO: parameterize these
 		var initialLearningRate = 0.01
@@ -456,9 +456,9 @@ local function conjugateGradientCPU(tbl, vars)
 		searchDirection : vars.unknownType
 	}
 	
-	local computeTotalCost = makeTotalCost(tbl, vars.imagesAll)
-	local computeSearchCost = makeSearchCost(tbl, vars.unknownType, vars.dataImages)
-	local computeResiduals = makeComputeResiduals(tbl, vars.unknownType, vars.dataImages)
+	local computeCost = util.makeComputeCost(tbl, vars.imagesAll)
+	local computeSearchCost = util.makeSearchCost(tbl, vars.unknownType, vars.dataImages)
+	local computeResiduals = util.makeComputeResiduals(tbl, vars.unknownType, vars.dataImages)
 	
 	local terra impl(data_ : &opaque, imageBindings : &&opt.ImageBinding, params_ : &opaque)
 
@@ -466,7 +466,7 @@ local function conjugateGradientCPU(tbl, vars)
 		var params = [&double](params_)
 		var dims = pd.dims
 
-		var [vars.imagesAll] = [getImages(vars, imageBindings, dims)]
+		var [vars.imagesAll] = [util.getImages(vars, imageBindings, dims)]
 
 		-- TODO: parameterize these
 		var lineSearchMaxIters = 10000
@@ -479,7 +479,7 @@ local function conjugateGradientCPU(tbl, vars)
 
 		for iter = 0, maxIters do
 
-			var iterStartCost = computeTotalCost(vars.imagesAll)
+			var iterStartCost = computeCost(vars.imagesAll)
 			log("iteration %d, cost=%f\n", iter, iterStartCost)
 
 			--
@@ -516,7 +516,7 @@ local function conjugateGradientCPU(tbl, vars)
 						den = den + p * p
 					end
 				end
-				beta = max(num / den, 0.0)
+				beta = util.max(num / den, 0.0)
 				
 				var epsilon = 1e-5
 				if den > -epsilon and den < epsilon then
@@ -555,7 +555,7 @@ local function conjugateGradientCPU(tbl, vars)
 				
 				for alphaIndex = 0, 4 do
 					var alpha = 0.0
-					if 	   alphaIndex <= 2 then alpha = alphas[alphaIndex]
+					if alphaIndex <= 2 then alpha = alphas[alphaIndex]
 					else
 						var a1 = alphas[0] var a2 = alphas[1] var a3 = alphas[2]
 						var c1 = costs[0] var c2 = costs[1] var c3 = costs[2]
@@ -692,15 +692,15 @@ local function linearizedConjugateGradientCPU(tbl, vars)
 		Ap : vars.unknownType
 	}
 	
-	local totalCost = makeTotalCost(tbl, vars.imagesAll)
-	local imageInnerProduct = makeImageInnerProduct(vars.unknownType)
+	local computeCost = util.makeComputeCost(tbl, vars.imagesAll)
+	local imageInnerProduct = util.makeImageInnerProduct(vars.unknownType)
 
 	local terra impl(data_ : &opaque, imageBindings : &&opt.ImageBinding, params_ : &opaque)
 		var pd = [&PlanData](data_)
 		var params = [&double](params_)
 		var dims = pd.dims
 
-		var [vars.imagesAll] = [getImages(vars, imageBindings, dims)]
+		var [vars.imagesAll] = [util.getImages(vars, imageBindings, dims)]
 		
 		-- TODO: parameterize these
 		var maxIters = 1000
@@ -718,7 +718,7 @@ local function linearizedConjugateGradientCPU(tbl, vars)
 
 		for iter = 0,maxIters do
 
-			var iterStartCost = totalCost(vars.imagesAll)
+			var iterStartCost = computeCost(vars.imagesAll)
 			
 			for h = 0, pd.gradH do
 				for w = 0, pd.gradW do
@@ -752,7 +752,7 @@ local function linearizedConjugateGradientCPU(tbl, vars)
 			rTr = rTrNew
 		end
 		
-		var finalCost = totalCost(vars.imagesAll)
+		var finalCost = computeCost(vars.imagesAll)
 		log("final cost=%f\n", finalCost)
 	end
 
@@ -888,7 +888,7 @@ local function linearizedConjugateGradientGPU(tbl, vars)
 		var params = [&double](params_)
 		var dims = pd.dims
 
-		var [vars.imagesAll] = [getImages(vars, imageBindings, dims)]
+		var [vars.imagesAll] = [util.getImages(vars, imageBindings, dims)]
 
 		var launch = terralib.CUDAParams { (pd.gradW - 1) / 32 + 1, (pd.gradH - 1) / 32 + 1,1, 32,32,1, 0, nil }
 		
@@ -973,15 +973,15 @@ local function linearizedPreconditionedConjugateGradientCPU(tbl, vars)
 		zeroes : vars.unknownType
 	}
 	
-	local totalCost = makeTotalCost(tbl, vars.imagesAll)
-	local imageInnerProduct = makeImageInnerProduct(vars.unknownType)
+	local computeCost = util.makeComputeCost(tbl, vars.imagesAll)
+	local imageInnerProduct = util.makeImageInnerProduct(vars.unknownType)
 
 	local terra impl(data_ : &opaque, imageBindings : &&opt.ImageBinding, params_ : &opaque)
 		var pd = [&PlanData](data_)
 		var params = [&double](params_)
 		var dims = pd.dims
 
-		var [vars.imagesAll] = [getImages(vars, imageBindings, dims)]
+		var [vars.imagesAll] = [util.getImages(vars, imageBindings, dims)]
 
 		-- TODO: parameterize these
 		var maxIters = 1000
@@ -1004,7 +1004,7 @@ local function linearizedPreconditionedConjugateGradientCPU(tbl, vars)
 		
 		for iter = 0,maxIters do
 
-			var iterStartCost = totalCost(vars.imagesAll)
+			var iterStartCost = computeCost(vars.imagesAll)
 			
 			for h = 0, pd.gradH do
 				for w = 0, pd.gradW do
@@ -1044,7 +1044,7 @@ local function linearizedPreconditionedConjugateGradientCPU(tbl, vars)
 			end
 		end
 		
-		var finalCost = totalCost(vars.imagesAll)
+		var finalCost = computeCost(vars.imagesAll)
 		log("final cost=%f\n", finalCost)
 	end
 
@@ -1214,7 +1214,7 @@ local newImage = terralib.memoize(function(typ, W, H)
 	terra Image:inbounds(x : int64, y : int64)
 	    return x >= 0 and y >= 0 and x < self.W and y < self.H
 	end
-	Image.methods.inbounds:disas()
+	--Image.methods.inbounds:disas()
 	terra Image:get(x : int64, y : int64)
 	    var v : typ = 0.f --TODO:only works for single precision things
 	    var b = self:inbounds(x,y)

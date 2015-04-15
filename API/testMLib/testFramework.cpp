@@ -192,7 +192,7 @@ void TestFramework::runAllTests()
     methods.push_back(TestMethod("linearizedConjugateGradientCPU", "no-params"));
     methods.push_back(TestMethod("linearizedConjugateGradientGPU", "no-params"));
     methods.push_back(TestMethod("linearizedPreconditionedConjugateGradientCPU", "no-params"));
-    */
+    
     for (auto &image : example.images)
         image.bind(optimizerState);
 
