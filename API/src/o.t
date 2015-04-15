@@ -549,21 +549,16 @@ local function conjugateGradientCPU(tbl, vars)
 			var useBruteForce = (iter <= 1) or prevBestAlpha == 0.0
 			if not useBruteForce then
 				
-				-- TODO: figure out how terra constant arrays work
-				var a1 = prevBestAlpha * 0.25
-				var c1 = 0.0
-				var a2 = prevBestAlpha * 0.5
-				var c2 = 0.0
-				var a3 = prevBestAlpha * 0.75
-				var c3 = 0.0
+				var alphas = array(prevBestAlpha * 0.25, prevBestAlpha * 0.5, prevBestAlpha * 0.75, 0.0)
+				var costs : float[4]
 				var bestCost = 0.0
 				
 				for alphaIndex = 0, 4 do
 					var alpha = 0.0
-					if 	   alphaIndex == 0 then alpha = a1
-					elseif alphaIndex == 1 then alpha = a2
-					elseif alphaIndex == 2 then alpha = a3
+					if 	   alphaIndex <= 2 then alpha = alphas[alphaIndex]
 					else
+						var a1 = alphas[0] var a2 = alphas[1] var a3 = alphas[2]
+						var c1 = costs[0] var c2 = costs[1] var c3 = costs[2]
 						var a = ((c2-c1)*(a1-a3) + (c3-c1)*(a2-a1))/((a1-a3)*(a2*a2-a1*a1) + (a2-a1)*(a3*a3-a1*a1))
 						var b = ((c2 - c1) - a * (a2*a2 - a1*a1)) / (a2 - a1)
 						var c = c1 - a * a1 * a1 - b * a1
@@ -595,9 +590,7 @@ local function conjugateGradientCPU(tbl, vars)
 						C.getchar()]]
 					end
 					
-					if 	   alphaIndex == 0 then c1 = searchCost
-					elseif alphaIndex == 1 then c2 = searchCost
-					elseif alphaIndex == 2 then c3 = searchCost end
+					costs[alphaIndex] = searchCost
 				end
 				if bestAlpha == 0.0 then useBruteForce = true end
 			end
