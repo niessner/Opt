@@ -1194,6 +1194,13 @@ local newImage = terralib.memoize(function(typ, W, H)
 	Image.metamethods.__apply = macro(function(self, x, y)
 	 return `@[&typ](self.impl:get(x,y))
 	end)
+	terra Image:get(x : int64, y : int64)
+	    var v : typ,b : float = 0.f, 0.f --TODO:only works for single precision things
+	    if x >= 0 and y >= 0 and x < self.W and y < self.H then
+	        v,b = self(x,y),1.f
+	    end
+	    return v,b
+	end
 	terra Image:initCPU(actualW : int, actualH : int)
 		self.W = actualW
 		self.H = actualH
@@ -1340,7 +1347,47 @@ local function centerexp(fromtable,totable,names,access,exp)
     end
     return exp:rename(renames)
 end 
+
+local function createfunction(images,imagetable,exp,varnames)
+    local syms = images:map(function(im) return symbol(opt.Image(float,im.W,im.H),im.name) end)
+    local i,j = symbol(int64,"i"), symbol(int64,"j")
+    local stmts = terralib.newlist()
+    local accesssyms = {}
+    local vartosym = {}
+    for imageidx,im in ipairs(images) do
+        local accesses = imagetable:accesses(im)
+        for _,a in ipairs(accesses) do
+            local both = ImageAccess:get(a.image,"",a.x,a.y)
+            if not accesssyms[both] then
+                local va,ga = ImageAccess:get(a.image,"v",a.x,a.y),ImageAccess:get(a.image,"bounds",a.x,a.y)
+                local r = { v = symbol(float,tostring(va)), bounds = symbol(float,tostring(ga)) }
+                stmts:insert quote    
+                    var [r.v],[r.bounds] = [syms[imageidx]]:get(i+[a.x],j+[a.y])
+                end
+                accesssyms[both] = r
+            end
+            vartosym[imagetable:accesstovarid(a)] = assert(accesssyms[both][a.field])
+        end
+    end
+    for i = 1,#vartosym do
+        print(vartosym[i])
+    end
+    print(unpack(varnames))
+    local terrafn = ad.toterra({exp},nil,varnames)
+    terrafn:printpretty(true,false)
+    local terra generatedfn([i] : int64, [j] : int64, [syms])
+        [stmts]
+        var r : float
+        terrafn(&r,[vartosym])
+        return r
+    end
+    generatedfn:printpretty(false)
+    generatedfn:printpretty(true,false)
+    generatedfn:disas()
+    return generatedfn
+end
 function ad.Cost(dims,images,costexp)
+    images = terralib.islist(images) and images or terralib.newlist(images)
     assert(#images > 0)
     --TODO: check that Dims used in images are in dims list
     --TODO: check images are all images 
@@ -1369,7 +1416,7 @@ function ad.Cost(dims,images,costexp)
         local a = globalimagetable:varidtoaccess(c:N())
         local cv = ad.v[costtable:accesstovarid(a)]
         globaltocost[c:N()] = cv 
-        costvarnames:insert(a)
+        costvarnames:insert(tostring(a))
         if a.image == unknown and a.field == "v" then
             unknownvars:insert(cv)
             unknownvarnames:insert(tostring(a))
@@ -1396,6 +1443,8 @@ function ad.Cost(dims,images,costexp)
     print("grad gather")
     print(ad.tostrings({gradientgathered},gradnames))
     
-    error("TODO: NYI!")
+    local costfn = createfunction(images,costtable,costexp,costvarnames)
+    local gradfn = createfunction(images,gradtable,gradientgathered,gradnames)
+    return { dims = dims, cost = { dim = dims, fn = costfn}, gradient = gradfn }
 end
 return opt
