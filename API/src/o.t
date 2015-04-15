@@ -9,7 +9,7 @@ local util = require("util")
 local C = util.C
 
 -- constants
-local verboseSolver = false
+local verboseSolver = true
 
 local function newclass(name)
     local mt = { __name = name }
@@ -57,13 +57,13 @@ end)
 
 if verboseSolver then
 	log = macro(function(fmt,...)
-		local buf = createbuffer({...})
-		return `C.vprintf(fmt, buf)
+		local args = {...}
+		return `C.printf(fmt, args)
 	end)
 else
-	log = function(fmt,...)
+	log = macro(function(fmt,...)
 	
-	end
+	end)
 end
 
 local GPUBlockDims = {{"blockIdx","ctaid"},
@@ -1211,12 +1211,17 @@ local newImage = terralib.memoize(function(typ, W, H)
 	Image.metamethods.__apply = macro(function(self, x, y)
 	 return `@[&typ](self.impl:get(x,y))
 	end)
+	terra Image:inbounds(x : int64, y : int64)
+	    return x >= 0 and y >= 0 and x < self.W and y < self.H
+	end
+	Image.methods.inbounds:disas()
 	terra Image:get(x : int64, y : int64)
-	    var v : typ,b : float = 0.f, 0.f --TODO:only works for single precision things
-	    if x >= 0 and y >= 0 and x < self.W and y < self.H then
-	        v,b = self(x,y),1.f
+	    var v : typ = 0.f --TODO:only works for single precision things
+	    var b = self:inbounds(x,y)
+	    if b then
+	        v = self(x,y)
 	    end
-	    return v,b
+	    return v,float(b)
 	end
 	terra Image:initCPU(actualW : int, actualH : int)
 		self.W = actualW
@@ -1365,7 +1370,7 @@ local function centerexp(fromtable,totable,names,access,exp)
     return exp:rename(renames)
 end 
 
-local function createfunction(images,imagetable,exp,varnames)
+local function createfunction(images,imagetable,exp,varnames,debug)
     local syms = images:map(function(im) return symbol(opt.Image(float,im.W,im.H),im.name) end)
     local i,j = symbol(int64,"i"), symbol(int64,"j")
     local stmts = terralib.newlist()
@@ -1380,27 +1385,26 @@ local function createfunction(images,imagetable,exp,varnames)
                 local r = { v = symbol(float,tostring(va)), bounds = symbol(float,tostring(ga)) }
                 stmts:insert quote    
                     var [r.v],[r.bounds] = [syms[imageidx]]:get(i+[a.x],j+[a.y])
+                    if i < 4 and j < 4 then
+                        --C.printf("%s(%d + %d,%d + %d) = %f,%f\n",[a.image.name],i,[a.x],j,[a.y],[r.v],[r.bounds])
+                    end
                 end
                 accesssyms[both] = r
             end
             vartosym[imagetable:accesstovarid(a)] = assert(accesssyms[both][a.field])
         end
     end
-    for i = 1,#vartosym do
-        print(vartosym[i])
-    end
-    print(unpack(varnames))
     local terrafn = ad.toterra({exp},nil,varnames)
-    terrafn:printpretty(true,false)
+    --terrafn:printpretty(true,false)
     local terra generatedfn([i] : int64, [j] : int64, [syms])
         [stmts]
         var r : float
         terrafn(&r,[vartosym])
         return r
     end
-    generatedfn:printpretty(false)
-    generatedfn:printpretty(true,false)
-    generatedfn:disas()
+    --generatedfn:printpretty(false)
+    --generatedfn:printpretty(true,false)
+    --generatedfn:disas()
     return generatedfn
 end
 function ad.Cost(dims,images,costexp)
@@ -1460,8 +1464,8 @@ function ad.Cost(dims,images,costexp)
     print("grad gather")
     print(ad.tostrings({gradientgathered},gradnames))
     
-    local costfn = createfunction(images,costtable,costexp,costvarnames)
-    local gradfn = createfunction(images,gradtable,gradientgathered,gradnames)
+    local costfn = createfunction(images,costtable,costexp,costvarnames,false)
+    local gradfn = createfunction(images,gradtable,gradientgathered,gradnames,true)
     return { dims = dims, cost = { dim = dims, fn = costfn}, gradient = gradfn }
 end
 return opt

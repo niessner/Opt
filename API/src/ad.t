@@ -93,7 +93,7 @@ end
 local function shouldcommute(a,b)
     if Const:is(a) then return true end
     if Var:is(a) and Var:is(b) then return a.p < b.p end
-    if b:prec() < a:prec() then return true end
+    --if b:prec() < a:prec() then return true end
     --local ah,al = a:order()
     --local bh,bl = b:order()
     --if ah < bh then return true
@@ -114,12 +114,20 @@ local function simplify(op,args)
     local x,y = unpack(args)
     if allconst(args) and op:getimpl() then
         return toexp(op:getimpl()(unpack(args:map("v"))))
-    elseif commutes[op.name] and shouldcommute(x,y) then return op(y,x) -- constants will be on rhs
+    end
+    if #args == 2 and Apply:is(x) and Apply:is(y) and x.op.name == "select" and y.op.name == "select" and x.args[1] == y.args[1] then
+        return ad.select(x.args[1],op(x.args[2],y.args[2]),op(x.args[3],y.args[3]))
+    end
+    if commutes[op.name] and shouldcommute(x,y) then 
+        --print("commute")
+        return op(y,x) -- constants will be on rhs
     elseif assoc[op.name] and Apply:is(x) and x.op.name == op.name
            and Const:is(x.args[2]) then -- (e + c) + ? -> e + (? + c)
+        --print("assoc1")
         return op(x.args[1],op(x.args[2],y)) -- e0 + (e1 + c) ->  (e0 + e1) + c
     elseif assoc[op.name] and Apply:is(y) and y.op.name == op.name
            and Const:is(y.args[2]) then
+        --print("assoc2")
         return op(op(x,y.args[1]),y.args[2])
     elseif op.name == "mul" then
         if y == one then return x
@@ -148,6 +156,7 @@ local function simplify(op,args)
         elseif Const:is(y) then return x*(one/y)
         end
     end
+    
     
     return newapply(op,args)
 end
@@ -432,7 +441,8 @@ ad.sinh:define(function(x) return `C.sinh(a) end, ad.cosh(x))
 ad.sqrt:define(function(x) return `C.sqrt(x) end, 1.0/(2.0*ad.sqrt(x)))
 ad.tan:define(function(x) return `C.tan(x) end, 1.0 + ad.tan(x)*ad.tan(x))
 ad.tanh:define(function(x) return `C.tanh(x) end, 1.0/(ad.cosh(x)*ad.cosh(x)))
-ad.select:define(function(x,y,z) return `terralib.select(x ~= 0.f,y,z) end,ad.select(x,1,0),ad.select(x,0,1))
+ad.select:define(function(x,y,z) return `terralib.select(x ~= 0.f,y,z) end,0,ad.select(x,1,0),ad.select(x,0,1))
+ad.eq:define(function(x,y) return `terralib.select(x == y,1.f,0.f) end, 0,0)
 setmetatable(ad,nil) -- remove special metatable that generates new blank ops
 ad.Var,ad.Apply,ad.Const,ad.Exp = Var, Apply, Const, Exp
 --[[

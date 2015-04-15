@@ -6,7 +6,9 @@ int main()
   //printf("Hello\n");
     TestFramework test;
     test.runAllTests();
+    #ifdef _WIN32
     cin.get();
+    #endif
     return 0;
     /*OptState * S =  Opt_NewState();
     uint64_t dims[] = {1024,512};
