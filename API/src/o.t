@@ -112,18 +112,57 @@ local function getImages(vars,imageBindings,actualDims)
 	return results
 end
 
-local function makeTotalCost(tbl, PlanData, images)
-	local terra totalCost(pd : &PlanData, [images])
+local function makeTotalCost(tbl, images)
+	local terra totalCost([images])
 		var result = 0.0
-		for h = 0,pd.gradH do
-			for w = 0,pd.gradW do
-				var v = tbl.cost.fn(w,h,images)
+		for h = 0, [ images[1] ].H do
+			for w = 0, [ images[1] ].W do
+				var v = tbl.cost.fn(w, h, images)
 				result = result + v
 			end
 		end
 		return result
 	end
 	return totalCost
+end
+
+local function makeDeltaCost(tbl, imageType, dataImages)
+	local terra deltaCost(baseResiduals : imageType, currentValues : imageType, [dataImages])
+		var result = 0.0
+		for h = 0, currentValues.H do
+			for w = 0, currentValues.W do
+				var residual = tbl.cost.fn(w, h, currentValues, dataImages)
+				var delta = residual - baseResiduals(w, h)
+				result = result + delta
+			end
+		end
+		return result
+	end
+	return deltaCost
+end
+
+local function makeSearchCost(tbl, imageType, dataImages)
+	local deltaCost = makeDeltaCost(tbl, imageType, dataImages)
+	local terra searchCost(baseValues : imageType, baseResiduals : imageType, searchDirection : imageType, alpha : float, valueStore : imageType, [dataImages])
+		for h = 0, baseValues.H do
+			for w = 0, baseValues.W do
+				valueStore(w, h) = baseValues(w, h) + alpha * searchDirection(w, h)
+			end
+		end
+		return deltaCost(baseResiduals, valueStore, dataImages)
+	end
+	return searchCost
+end
+
+local function makeComputeResiduals(tbl, imageType, dataImages)
+	local terra computeResiduals(values : imageType, residuals : imageType, [dataImages])
+		for h = 0, values.H do
+			for w = 0, values.W do
+				residuals(w, h) = tbl.cost.fn(w, h, values, dataImages)
+			end
+		end
+	end
+	return computeResiduals
 end
 
 local function makeImageInnerProduct(imageType)
@@ -148,7 +187,7 @@ local function gradientDescentCPU(tbl,vars)
 		dims : int64[#vars.dims + 1]
 	}
 
-	local totalCost = makeTotalCost(tbl, PlanData, vars.imagesAll)
+	local totalCost = makeTotalCost(tbl, vars.imagesAll)
 
 	local terra impl(data_ : &opaque, imageBindings : &&opt.ImageBinding, params_ : &opaque)
 
@@ -171,7 +210,7 @@ local function gradientDescentCPU(tbl,vars)
 		var learningRate = initialLearningRate
 
 		for iter = 0, maxIters do
-			var startCost = totalCost(pd, vars.imagesAll)
+			var startCost = totalCost(vars.imagesAll)
 			log("iteration %d, cost=%f, learningRate=%f\n", iter, startCost, learningRate)
 			--C.getchar()
 
@@ -200,7 +239,7 @@ local function gradientDescentCPU(tbl,vars)
 			--
 			-- update the learningRate
 			--
-			var endCost = totalCost(pd, vars.imagesAll)
+			var endCost = totalCost(vars.imagesAll)
 			if endCost < startCost then
 				learningRate = learningRate * learningGain
 
@@ -271,7 +310,7 @@ local function gradientDescentGPU(tbl,vars)
 		
 		if w < pd.gradW and h < pd.gradH then
 			var addr = &vars.unknownImage(w,h)
-			var delta = learningRate * pd.gradStore(w,h)
+			var delta = learningRate * pd.gradStore(w, h)
 			@addr = @addr - delta
 
 			delta = delta * delta
@@ -402,9 +441,12 @@ local function conjugateGradientCPU(tbl, vars)
 		plan : opt.Plan
 		gradW : int
 		gradH : int
+		costW : int
+		costH : int
 		dims : int64[#vars.dims + 1]
 				
 		currentValues : vars.unknownType
+		currentResiduals : vars.unknownType
 		bestValues : vars.unknownType
 		
 		gradient : vars.unknownType
@@ -413,8 +455,10 @@ local function conjugateGradientCPU(tbl, vars)
 		searchDirection : vars.unknownType
 	}
 	
-	local totalCost = makeTotalCost(tbl, PlanData, vars.imagesAll)
-
+	local computeTotalCost = makeTotalCost(tbl, vars.imagesAll)
+	local computeSearchCost = makeSearchCost(tbl, vars.unknownType, vars.dataImages)
+	local computeResiduals = makeComputeResiduals(tbl, vars.unknownType, vars.dataImages)
+	
 	local terra impl(data_ : &opaque, imageBindings : &&opt.ImageBinding, params_ : &opaque)
 
 		var pd = [&PlanData](data_)
@@ -432,13 +476,11 @@ local function conjugateGradientCPU(tbl, vars)
 		
 		var maxIters = 1000
 		
-		--var file = C.fopen("C:/code/debug.txt", "wb")
-		
 		var prevBestAlpha = 0.0
 
 		for iter = 0,maxIters do
 
-			var iterStartCost = totalCost(pd, vars.imagesAll)
+			var iterStartCost = computeTotalCost(vars.imagesAll)
 			log("iteration %d, cost=%f\n", iter, iterStartCost)
 
 			--
@@ -496,6 +538,8 @@ local function conjugateGradientCPU(tbl, vars)
 			--
 			-- line search
 			--
+			computeResiduals(pd.currentValues, pd.currentResiduals, vars.dataImages)
+			
 			var bestAlpha = 0.0
 			
 			var useBruteForce = (iter <= 1) or prevBestAlpha == 0.0
@@ -529,13 +573,28 @@ local function conjugateGradientCPU(tbl, vars)
 						end
 					end
 					
-					var searchCost = totalCost(pd, vars.imagesAll)
+					var searchCost = computeTotalCost(vars.imagesAll)
 					
 					if searchCost <= bestCost then
 						bestAlpha = alpha
 						bestCost = searchCost
 					elseif alphaIndex == 3 then
 						log("quadratic minimization failed\n")
+						
+						--[[var file = C.fopen("C:/code/debug.txt", "wb")
+
+						var debugAlpha = lineSearchBruteForceStart
+						for lineSearchIndex = 0, 400 do
+							debugAlpha = debugAlpha * lineSearchBruteForceMultiplier
+							
+							var searchCost = computeSearchCost(pd.currentValues, pd.currentResiduals, pd.searchDirection, debugAlpha, vars.unknownImage, vars.dataImages)
+							
+							C.fprintf(file, "%15.15f\t%15.15f\n", debugAlpha * 1000.0, searchCost)
+						end
+						
+						C.fclose(file)
+						log("debug alpha outputted")
+						C.getchar()]]
 					end
 					
 					if 	   alphaIndex == 0 then c1 = searchCost
@@ -558,7 +617,7 @@ local function conjugateGradientCPU(tbl, vars)
 						end
 					end
 					
-					var searchCost = totalCost(pd, vars.imagesAll)
+					var searchCost = computeTotalCost(vars.imagesAll)
 					
 					--C.fprintf(file, "%f\t%f\n", alpha * 1000.0, searchCost / 1000000.0)
 					
@@ -597,9 +656,14 @@ local function conjugateGradientCPU(tbl, vars)
 
 		pd.gradW = pd.dims[vars.gradWIndex]
 		pd.gradH = pd.dims[vars.gradHIndex]
+		
+		pd.costW = pd.dims[vars.costWIndex]
+		pd.costH = pd.dims[vars.costHIndex]
 
 		pd.currentValues:initCPU(pd.gradW, pd.gradH)
 		pd.bestValues:initCPU(pd.gradW, pd.gradH)
+		
+		pd.currentResiduals:initCPU(pd.costW, pd.costH)
 		
 		pd.gradient:initCPU(pd.gradW, pd.gradH)
 		pd.prevGradient:initCPU(pd.gradW, pd.gradH)
@@ -625,7 +689,7 @@ local function linearizedConjugateGradientCPU(tbl, vars)
 		Ap : vars.unknownType
 	}
 	
-	local totalCost = makeTotalCost(tbl, PlanData, vars.imagesAll)
+	local totalCost = makeTotalCost(tbl, vars.imagesAll)
 	local imageInnerProduct = makeImageInnerProduct(vars.unknownType)
 
 	local terra impl(data_ : &opaque, imageBindings : &&opt.ImageBinding, params_ : &opaque)
@@ -651,7 +715,7 @@ local function linearizedConjugateGradientCPU(tbl, vars)
 
 		for iter = 0,maxIters do
 
-			var iterStartCost = totalCost(pd, vars.imagesAll)
+			var iterStartCost = totalCost(vars.imagesAll)
 			
 			for h = 0, pd.gradH do
 				for w = 0, pd.gradW do
@@ -685,7 +749,7 @@ local function linearizedConjugateGradientCPU(tbl, vars)
 			rTr = rTrNew
 		end
 		
-		var finalCost = totalCost(pd, vars.imagesAll)
+		var finalCost = totalCost(vars.imagesAll)
 		log("final cost=%f\n", finalCost)
 	end
 
@@ -906,7 +970,7 @@ local function linearizedPreconditionedConjugateGradientCPU(tbl, vars)
 		zeroes : vars.unknownType
 	}
 	
-	local totalCost = makeTotalCost(tbl, PlanData, vars.imagesAll)
+	local totalCost = makeTotalCost(tbl, vars.imagesAll)
 	local imageInnerProduct = makeImageInnerProduct(vars.unknownType)
 
 	local terra impl(data_ : &opaque, imageBindings : &&opt.ImageBinding, params_ : &opaque)
@@ -937,7 +1001,7 @@ local function linearizedPreconditionedConjugateGradientCPU(tbl, vars)
 		
 		for iter = 0,maxIters do
 
-			var iterStartCost = totalCost(pd, vars.imagesAll)
+			var iterStartCost = totalCost(vars.imagesAll)
 			
 			for h = 0, pd.gradH do
 				for w = 0, pd.gradW do
@@ -977,7 +1041,7 @@ local function linearizedPreconditionedConjugateGradientCPU(tbl, vars)
 			end
 		end
 		
-		var finalCost = totalCost(pd, vars.imagesAll)
+		var finalCost = totalCost(vars.imagesAll)
 		log("final cost=%f\n", finalCost)
 	end
 
@@ -1041,6 +1105,9 @@ local function compileProblem(tbl, kind)
 	
 	vars.gradWIndex = vars.dimIndex[ vars.gradientDim[1] ]
 	vars.gradHIndex = vars.dimIndex[ vars.gradientDim[2] ]
+	
+	vars.costWIndex = vars.dimIndex[ vars.costDim[1] ]
+	vars.costHIndex = vars.dimIndex[ vars.costDim[2] ]
 
     if kind == "gradientDescentCPU" then
         return gradientDescentCPU(tbl, vars)

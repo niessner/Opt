@@ -183,7 +183,7 @@ local function saveaslibrary(libraryname, terrasourcefile)
     end
     
     local cheader = io.open(string.format(headerformat,libraryname),"w")
-    cheader:write '#include "terra.h"\n#include <stdint.h>\n'
+    cheader:write '#include <stdint.h>\n'
     for i,l in ipairs(ctypes) do cheader:write(l) end
     for i,l in ipairs(cfunctions) do cheader:write(l) end
     cheader:close()

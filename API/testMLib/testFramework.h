@@ -60,6 +60,12 @@ struct OptImage
     {
         return dataCPU[y * dimX + x];
     }
+    void clear(float clearValue)
+    {
+        for (int x = 0; x < dimX; x++)
+            for (int y = 0; y < dimY; y++)
+                (*this)(x, y) = clearValue;
+    }
     static double maxDelta(const OptImage &a, const OptImage &b)
     {
         double delta = 0.0;
@@ -104,7 +110,7 @@ public:
     void runAllTests();
 
 private:
-    void runTest(const TestMethod &method, const TestExample &example);
+    void runTest(const TestMethod &method, TestExample &example);
 
     TestExample makeRandomQuadratic(int count);
     TestExample makeImageSmoothing(const string &imageFilename, float w);
