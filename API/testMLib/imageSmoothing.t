@@ -55,20 +55,12 @@ local terra cost(i : uint64, j : uint64, xImage : X, aImage : A)
 	var v2 = x - a
 	var reconstructionCost = w * v2 * v2
 
-	return laplacianCost + reconstructionCost
+	return (float)(laplacianCost + reconstructionCost)
 end
 
 local terra gradient(i : uint64, j : uint64, xImage : X, aImage : A)
 	var x = xImage(i, j)
 	var a = aImage(i, j)
-
-	--IO.printf("widths (%d,%d)\n", xImage.W, aImage.W)
-	--IO.printf("heights (%d,%d)\n", xImage.H, aImage.H)
-
-	--IO.printf("image (%f,%f)\n", x, a)
-	if i == 6 and j == 1 then
-		--IO.getchar()
-	end
 
 	var laplacianGradient = 0.0
 
@@ -81,12 +73,7 @@ local terra gradient(i : uint64, j : uint64, xImage : X, aImage : A)
 
 	var reconstructionGradient = w * 2 * (x - a)
 
-	--IO.printf("gradients (%f,%f)\n", laplacianGradient, reconstructionGradient)
-	if i == 6 and j == 1 then
-		--IO.getchar()
-	end
-
-	return laplacianGradient + reconstructionGradient
+	return (float)(laplacianGradient + reconstructionGradient)
 end
 
 local terra gradientPreconditioner(i : uint64, j : uint64)

@@ -4,13 +4,9 @@
 opt = {} --anchor it in global namespace, otherwise it can be collected
 local S = require("std")
 
-local C = terralib.includecstring [[
-#include <stdio.h>
-#include <string.h>
-#include <stdlib.h>
-#include <math.h>
-#include <cuda_runtime.h>
-]]
+local util = require("util")
+
+local C = util.C
 
 -- constants
 local verboseSolver = false
@@ -198,7 +194,7 @@ local function gradientDescentCPU(tbl,vars)
 		dims : int64[#vars.dims + 1]
 	}
 
-	local totalCost = makeTotalCost(tbl, vars.imagesAll)
+	local computeCost = util.makeComputeCost(tbl, vars.imagesAll)
 	local computeGradient = makeComputeGradient(tbl, vars.unknownType, vars.imagesAll)
 
 	local terra impl(data_ : &opaque, imageBindings : &&opt.ImageBinding, params_ : &opaque)
@@ -222,7 +218,7 @@ local function gradientDescentCPU(tbl,vars)
 		var learningRate = initialLearningRate
 
 		for iter = 0, maxIters do
-			var startCost = totalCost(vars.imagesAll)
+			var startCost = computeCost(vars.imagesAll)
 			log("iteration %d, cost=%f, learningRate=%f\n", iter, startCost, learningRate)
 			--C.getchar()
 
@@ -244,7 +240,7 @@ local function gradientDescentCPU(tbl,vars)
 			--
 			-- update the learningRate
 			--
-			var endCost = totalCost(vars.imagesAll)
+			var endCost = computeCost(vars.imagesAll)
 			if endCost < startCost then
 				learningRate = learningRate * learningGain
 

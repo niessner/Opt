@@ -74,6 +74,14 @@ struct OptImage
                 delta = std::max(delta, fabs((double)a(x, y) - (double)b(x, y)));
         return delta;
     }
+    static double avgDelta(const OptImage &a, const OptImage &b)
+    {
+        double delta = 0.0;
+        for (int x = 0; x < a.dimX; x++)
+            for (int y = 0; y < a.dimY; y++)
+                delta += fabs((double)a(x, y) - (double)b(x, y));
+        return delta / (double)(a.dimX * a.dimY);
+    }
 
     ImageBinding *terraBindingCPU;
     ImageBinding *terraBindingGPU;
