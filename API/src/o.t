@@ -13,7 +13,7 @@ local C = terralib.includecstring [[
 ]]
 
 -- constants
-local verboseSolver = true
+local verboseSolver = false
 
 local function newclass(name)
     local mt = { __name = name }
@@ -199,7 +199,7 @@ local function gradientDescentCPU(tbl,vars)
 
 		-- TODO: parameterize these
 		var initialLearningRate = 0.01
-		var maxIters = 500
+		var maxIters = 10000
 		var tolerance = 1e-10
 
 		-- Fixed constants (these do not need to be parameterized)
@@ -469,10 +469,8 @@ local function conjugateGradientCPU(tbl, vars)
 
 		-- TODO: parameterize these
 		var lineSearchMaxIters = 10000
-		var lineSearchBruteForceStart = 1e-6
+		var lineSearchBruteForceStart = 1e-7
 		var lineSearchBruteForceMultiplier = 1.1
-		var lineSearchBinaryMinMultiplier = 0.25
-		var lineSearchBinaryMaxMultiplier = 1.5
 		
 		var maxIters = 1000
 		
@@ -566,14 +564,8 @@ local function conjugateGradientCPU(tbl, vars)
 						-- 2ax + b = 0, x = -b / 2a
 						alpha = -b / (2.0 * a)
 					end
-					 
-					for h = 0,pd.gradH do
-						for w = 0,pd.gradW do
-							vars.unknownImage(w, h) = pd.currentValues(w, h) + alpha * pd.searchDirection(w, h)
-						end
-					end
 					
-					var searchCost = computeTotalCost(vars.imagesAll)
+					var searchCost = computeSearchCost(pd.currentValues, pd.currentResiduals, pd.searchDirection, alpha, vars.unknownImage, vars.dataImages)
 					
 					if searchCost <= bestCost then
 						bestAlpha = alpha
@@ -603,7 +595,7 @@ local function conjugateGradientCPU(tbl, vars)
 				end
 				if bestAlpha == 0.0 then useBruteForce = true end
 			end
-			--C.fprintf(file, "iter %d\n", iter)
+			
 			if useBruteForce then
 				var alpha = lineSearchBruteForceStart
 				var bestCost = iterStartCost
@@ -611,13 +603,7 @@ local function conjugateGradientCPU(tbl, vars)
 				for lineSearchIndex = 0, lineSearchMaxIters do
 					alpha = alpha * lineSearchBruteForceMultiplier
 					
-					for h = 0,pd.gradH do
-						for w = 0,pd.gradW do
-							vars.unknownImage(w, h) = pd.currentValues(w, h) + alpha * pd.searchDirection(w, h)
-						end
-					end
-					
-					var searchCost = computeTotalCost(vars.imagesAll)
+					var searchCost = computeSearchCost(pd.currentValues, pd.currentResiduals, pd.searchDirection, alpha, vars.unknownImage, vars.dataImages)
 					
 					--C.fprintf(file, "%f\t%f\n", alpha * 1000.0, searchCost / 1000000.0)
 					
