@@ -126,6 +126,17 @@ local function makeTotalCost(tbl, images)
 	return totalCost
 end
 
+local function makeComputeGradient(tbl, imageType, images)
+	local terra computeGradient(gradientOut : imageType, [images])
+		for h = 0, gradientOut.H do
+			for w = 0, gradientOut.W do
+				gradientOut(w, h) = tbl.gradient(w, h, images)
+			end
+		end
+	end
+	return computeGradient
+end
+
 local function makeDeltaCost(tbl, imageType, dataImages)
 	local terra deltaCost(baseResiduals : imageType, currentValues : imageType, [dataImages])
 		var result = 0.0
@@ -188,6 +199,7 @@ local function gradientDescentCPU(tbl,vars)
 	}
 
 	local totalCost = makeTotalCost(tbl, vars.imagesAll)
+	local computeGradient = makeComputeGradient(tbl, vars.unknownType, vars.imagesAll)
 
 	local terra impl(data_ : &opaque, imageBindings : &&opt.ImageBinding, params_ : &opaque)
 
@@ -214,15 +226,8 @@ local function gradientDescentCPU(tbl,vars)
 			log("iteration %d, cost=%f, learningRate=%f\n", iter, startCost, learningRate)
 			--C.getchar()
 
-			--
-			-- compute the gradient
-			--
-			for h = 0,pd.gradH do
-				for w = 0,pd.gradW do
-					pd.gradient(w, h) = tbl.gradient(w, h, vars.imagesAll)
-				end
-			end
-
+			computeGradient(pd.gradient, vars.imagesAll)
+			
 			--
 			-- move along the gradient by learningRate
 			--
@@ -469,14 +474,14 @@ local function conjugateGradientCPU(tbl, vars)
 
 		-- TODO: parameterize these
 		var lineSearchMaxIters = 10000
-		var lineSearchBruteForceStart = 1e-7
+		var lineSearchBruteForceStart = 1e-6
 		var lineSearchBruteForceMultiplier = 1.1
 		
 		var maxIters = 1000
 		
 		var prevBestAlpha = 0.0
 
-		for iter = 0,maxIters do
+		for iter = 0, maxIters do
 
 			var iterStartCost = computeTotalCost(vars.imagesAll)
 			log("iteration %d, cost=%f\n", iter, iterStartCost)
@@ -518,7 +523,7 @@ local function conjugateGradientCPU(tbl, vars)
 				beta = max(num / den, 0.0)
 				
 				var epsilon = 1e-5
-				if den > epsilon and den < epsilon then
+				if den > -epsilon and den < epsilon then
 					beta = 0.0
 				end
 				
@@ -538,6 +543,11 @@ local function conjugateGradientCPU(tbl, vars)
 			--
 			computeResiduals(pd.currentValues, pd.currentResiduals, vars.dataImages)
 			
+			-- NOTE: this approach to line search will have unexpected behavior if the cost function
+			-- returns double-precision, but residuals are stored at single precision!
+			--var nullSearchCost = computeSearchCost(pd.currentValues, pd.currentResiduals, pd.searchDirection, 0.0, vars.unknownImage, vars.dataImages)
+			--log("nullSearch=%12.12f\n", nullSearchCost)
+			
 			var bestAlpha = 0.0
 			
 			var useBruteForce = (iter <= 1) or prevBestAlpha == 0.0
@@ -550,7 +560,7 @@ local function conjugateGradientCPU(tbl, vars)
 				var c2 = 0.0
 				var a3 = prevBestAlpha * 0.75
 				var c3 = 0.0
-				var bestCost = iterStartCost
+				var bestCost = 0.0
 				
 				for alphaIndex = 0, 4 do
 					var alpha = 0.0
@@ -567,7 +577,7 @@ local function conjugateGradientCPU(tbl, vars)
 					
 					var searchCost = computeSearchCost(pd.currentValues, pd.currentResiduals, pd.searchDirection, alpha, vars.unknownImage, vars.dataImages)
 					
-					if searchCost <= bestCost then
+					if searchCost < bestCost then
 						bestAlpha = alpha
 						bestCost = searchCost
 					elseif alphaIndex == 3 then
@@ -597,8 +607,10 @@ local function conjugateGradientCPU(tbl, vars)
 			end
 			
 			if useBruteForce then
+				log("brute-force line search\n")
 				var alpha = lineSearchBruteForceStart
-				var bestCost = iterStartCost
+				
+				var bestCost = 0.0
 				
 				for lineSearchIndex = 0, lineSearchMaxIters do
 					alpha = alpha * lineSearchBruteForceMultiplier
@@ -616,16 +628,32 @@ local function conjugateGradientCPU(tbl, vars)
 				end
 			end
 			
-			for h = 0,pd.gradH do
-				for w = 0,pd.gradW do
+			for h = 0, pd.gradH do
+				for w = 0, pd.gradW do
 					vars.unknownImage(w, h) = pd.currentValues(w, h) + bestAlpha * pd.searchDirection(w, h)
 				end
 			end
 			
 			prevBestAlpha = bestAlpha
 			
-			log("alpha=%f, beta=%f\n\n", bestAlpha, beta)
-			if bestAlpha <= 1e-8 and beta == 0.0 then
+			log("alpha=%12.12f, beta=%12.12f\n\n", bestAlpha, beta)
+			if bestAlpha == 0.0 and beta == 0.0 then
+			
+				--[[var file = C.fopen("C:/code/debug.txt", "wb")
+
+				var debugAlpha = 0.0
+				for lineSearchIndex = 0, 400 do
+					var searchCost = computeSearchCost(pd.currentValues, pd.currentResiduals, pd.searchDirection, debugAlpha, vars.unknownImage, vars.dataImages)
+					
+					C.fprintf(file, "%15.15f\t%15.15f\n", debugAlpha * 1000.0, searchCost)
+					
+					debugAlpha = debugAlpha + 1e-8
+				end
+				
+				C.fclose(file)
+				log("debug alpha outputted")
+				C.getchar()]]
+				
 				break
 			end
 		end
