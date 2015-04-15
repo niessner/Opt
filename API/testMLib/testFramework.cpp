@@ -187,7 +187,6 @@ void TestFramework::runAllTests()
     vector<TestMethod> methods;
     methods.push_back(TestMethod("gradientDescentCPU","no-params"));
     methods.push_back(TestMethod("gradientDescentGPU", "no-params"));
-    methods.push_back(TestMethod("gradientDescentGPU", "no-params"));
     methods.push_back(TestMethod("conjugateGradientCPU", "no-params"));
     methods.push_back(TestMethod("linearizedConjugateGradientCPU", "no-params"));
     methods.push_back(TestMethod("linearizedConjugateGradientGPU", "no-params"));
