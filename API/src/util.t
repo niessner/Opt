@@ -207,7 +207,7 @@ util.makeDumpLineSearchValues = function(tbl, imageType, dataImages)
 		var file = C.fopen("C:/code/debug.txt", "wb")
 
 		for lineSearchIndex = 0, lineSearchMaxIters do
-			debugAlpha = debugAlpha * lineSearchBruteForceMultiplier
+			alpha = alpha * lineSearchBruteForceMultiplier
 			
 			var searchCost = computeSearchCost(baseValues, baseResiduals, searchDirection, alpha, valueStore, dataImages)
 			
@@ -219,10 +219,20 @@ util.makeDumpLineSearchValues = function(tbl, imageType, dataImages)
 		C.fclose(file)
 		log("debug alpha outputted")
 		C.getchar()
-		
-		return bestAlpha
 	end
-	return lineSearchBruteForce
+	return dumpLineSearchValues
+end
+
+util.makeCPUFunctions = function(tbl, imageType, dataImages, allImages)
+	local cpu = {}
+	cpu.computeCost = util.makeComputeCost(tbl, allImages)
+	cpu.computeGradient = util.makeComputeGradient(tbl, imageType, allImages)
+	cpu.computeSearchCost = util.makeSearchCost(tbl, imageType, dataImages)
+	cpu.computeResiduals = util.makeComputeResiduals(tbl, imageType, dataImages)
+	cpu.lineSearchBruteForce = util.makeLineSearchBruteForce(tbl, imageType, dataImages)
+	cpu.lineSearchQuadraticMinimum = util.makeLineSearchQuadraticMinimum(tbl, imageType, dataImages)
+	cpu.dumpLineSearchValues = util.makeDumpLineSearchValues(tbl, imageType, dataImages)
+	return cpu
 end
 
 return util

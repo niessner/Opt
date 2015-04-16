@@ -116,11 +116,7 @@ solversCPU.conjugateGradientCPU = function(Problem, tbl, vars)
 		searchDirection : vars.unknownType
 	}
 	
-	local computeCost = util.makeComputeCost(tbl, vars.imagesAll)
-	local computeSearchCost = util.makeSearchCost(tbl, vars.unknownType, vars.dataImages)
-	local computeResiduals = util.makeComputeResiduals(tbl, vars.unknownType, vars.dataImages)
-	local lineSearchBruteForce = util.makeLineSearchBruteForce(tbl, vars.unknownType, vars.dataImages)
-	local lineSearchQuadraticMinimum = util.makeLineSearchQuadraticMinimum(tbl, vars.unknownType, vars.dataImages)
+	local cpu = util.makeCPUFunctions(tbl, vars.unknownType, vars.dataImages, vars.imagesAll)
 	
 	local terra impl(data_ : &opaque, imageBindings : &&opt.ImageBinding, params_ : &opaque)
 
@@ -136,18 +132,11 @@ solversCPU.conjugateGradientCPU = function(Problem, tbl, vars)
 
 		for iter = 0, maxIters do
 
-			var iterStartCost = computeCost(vars.imagesAll)
+			var iterStartCost = cpu.computeCost(vars.imagesAll)
 			log("iteration %d, cost=%f\n", iter, iterStartCost)
 
-			--
-			-- compute the gradient
-			--
-			for h = 0, pd.gradH do
-				for w = 0, pd.gradW do
-					pd.gradient(w, h) = tbl.gradient(w, h, vars.imagesAll)
-				end
-			end
-
+			cpu.computeGradient(pd.gradient, vars.imagesAll)
+			
 			--
 			-- compute the search direction
 			--
@@ -193,7 +182,7 @@ solversCPU.conjugateGradientCPU = function(Problem, tbl, vars)
 			--
 			-- line search
 			--
-			computeResiduals(pd.currentValues, pd.currentResiduals, vars.dataImages)
+			cpu.computeResiduals(pd.currentValues, pd.currentResiduals, vars.dataImages)
 			
 			-- NOTE: this approach to line search will have unexpected behavior if the cost function
 			-- returns double-precision, but residuals are stored at single precision!
@@ -203,14 +192,14 @@ solversCPU.conjugateGradientCPU = function(Problem, tbl, vars)
 			var useBruteForce = (iter <= 1) or prevBestAlpha == 0.0
 			if not useBruteForce then
 				
-				bestAlpha = lineSearchQuadraticMinimum(pd.currentValues, pd.currentResiduals, pd.searchDirection, vars.unknownImage, prevBestAlpha, vars.dataImages)
+				bestAlpha = cpu.lineSearchQuadraticMinimum(pd.currentValues, pd.currentResiduals, pd.searchDirection, vars.unknownImage, prevBestAlpha, vars.dataImages)
 				
 				if bestAlpha == 0.0 then useBruteForce = true end
 			end
 			
 			if useBruteForce then
 				log("brute-force line search\n")
-				bestAlpha = lineSearchBruteForce(pd.currentValues, pd.currentResiduals, pd.searchDirection, vars.unknownImage, vars.dataImages)
+				bestAlpha = cpu.lineSearchBruteForce(pd.currentValues, pd.currentResiduals, pd.searchDirection, vars.unknownImage, vars.dataImages)
 			end
 			
 			for h = 0, pd.gradH do
@@ -225,22 +214,6 @@ solversCPU.conjugateGradientCPU = function(Problem, tbl, vars)
 			
 			log("alpha=%12.12f, beta=%12.12f\n\n", bestAlpha, beta)
 			if bestAlpha == 0.0 and beta == 0.0 then
-			
-				--[[var file = C.fopen("C:/code/debug.txt", "wb")
-
-				var debugAlpha = 0.0
-				for lineSearchIndex = 0, 400 do
-					var searchCost = computeSearchCost(pd.currentValues, pd.currentResiduals, pd.searchDirection, debugAlpha, vars.unknownImage, vars.dataImages)
-					
-					C.fprintf(file, "%15.15f\t%15.15f\n", debugAlpha * 1000.0, searchCost)
-					
-					debugAlpha = debugAlpha + 1e-8
-				end
-				
-				C.fclose(file)
-				log("debug alpha outputted")
-				C.getchar()]]
-				
 				break
 			end
 		end
