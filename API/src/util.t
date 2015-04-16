@@ -71,17 +71,30 @@ util.makeDeltaCost = function(tbl, imageType, dataImages)
 	return deltaCost
 end
 
-util.makeSearchCost = function(tbl, imageType, dataImages)
-	local deltaCost = util.makeDeltaCost(tbl, imageType, dataImages)
+util.makeSearchCost = function(tbl, imageType, cpu, dataImages)
 	local terra searchCost(baseValues : imageType, baseResiduals : imageType, searchDirection : imageType, alpha : float, valueStore : imageType, [dataImages])
 		for h = 0, baseValues.H do
 			for w = 0, baseValues.W do
 				valueStore(w, h) = baseValues(w, h) + alpha * searchDirection(w, h)
 			end
 		end
-		return deltaCost(baseResiduals, valueStore, dataImages)
+		return cpu.deltaCost(baseResiduals, valueStore, dataImages)
 	end
 	return searchCost
+end
+
+util.makeSearchCostParallel = function(tbl, imageType, cpu, dataImages)
+	local terra searchCostParallel(baseValues : imageType, baseResiduals : imageType, searchDirection : imageType, count : int, alphas : &float, costs : &float, valueStore : imageType, [dataImages])
+		for i = 0, count do
+			for h = 0, baseValues.H do
+				for w = 0, baseValues.W do
+					valueStore(w, h) = baseValues(w, h) + alphas[i] * searchDirection(w, h)
+				end
+			end
+			costs[i] = cpu.deltaCost(baseResiduals, valueStore, dataImages)
+		end
+	end
+	return searchCostParallel
 end
 
 util.makeComputeResiduals = function(tbl, imageType, dataImages)
@@ -144,35 +157,28 @@ end
 util.makeLineSearchQuadraticMinimum = function(tbl, imageType, cpu, dataImages)
 	local terra lineSearchQuadraticMinimum(baseValues : imageType, baseResiduals : imageType, searchDirection : imageType, valueStore : imageType, alphaGuess : float, [dataImages])
 
-		var alphas : double[4] = array(alphaGuess * 0.5, alphaGuess * 1.0, alphaGuess * 1.5, 0.0)
-		var costs : double[4]
+		var alphas : float[4] = array(alphaGuess * 0.5f, alphaGuess * 1.0f, alphaGuess * 1.5f, 0.0f)
+		var costs : float[4]
+		
+		cpu.computeSearchCostParallel(baseValues, baseResiduals, searchDirection, 3, alphas, costs, valueStore, dataImages)
+		
+		var a1 = alphas[0] var a2 = alphas[1] var a3 = alphas[2]
+		var c1 = costs[0] var c2 = costs[1] var c3 = costs[2]
+		var a = ((c2-c1)*(a1-a3) + (c3-c1)*(a2-a1))/((a1-a3)*(a2*a2-a1*a1) + (a2-a1)*(a3*a3-a1*a1))
+		var b = ((c2 - c1) - a * (a2*a2 - a1*a1)) / (a2 - a1)
+		alphas[3] = -b / (2.0 * a)
+		costs[3] = cpu.computeSearchCost(baseValues, baseResiduals, searchDirection, alphas[3], valueStore, dataImages)
+		
 		var bestCost = 0.0
 		var bestAlpha = 0.0
-		
-		for alphaIndex = 0, 4 do
-			var alpha = 0.0
-			if alphaIndex <= 2 then alpha = alphas[alphaIndex]
-			else
-				var a1 = alphas[0] var a2 = alphas[1] var a3 = alphas[2]
-				var c1 = costs[0] var c2 = costs[1] var c3 = costs[2]
-				var a = ((c2-c1)*(a1-a3) + (c3-c1)*(a2-a1))/((a1-a3)*(a2*a2-a1*a1) + (a2-a1)*(a3*a3-a1*a1))
-				var b = ((c2 - c1) - a * (a2*a2 - a1*a1)) / (a2 - a1)
-				var c = c1 - a * a1 * a1 - b * a1
-				-- 2ax + b = 0, x = -b / 2a
-				alpha = -b / (2.0 * a)
-			end
-			
-			var searchCost = cpu.computeSearchCost(baseValues, baseResiduals, searchDirection, alpha, valueStore, dataImages)
-			
-			if searchCost < bestCost then
-				bestAlpha = alpha
-				bestCost = searchCost
-			elseif alphaIndex == 3 then
+		for i = 0, 4 do
+			if costs[i] < bestCost then
+				bestAlpha = alphas[i]
+				bestCost = costs[i]
+			elseif i == 3 then
 				C.printf("quadratic minimization failed, bestAlpha=%f\n", bestAlpha)
 				--cpu.dumpLineSearch(baseValues, baseResiduals, searchDirection, valueStore, dataImages)
 			end
-			
-			costs[alphaIndex] = searchCost
 		end
 		
 		return bestAlpha
@@ -214,7 +220,9 @@ util.makeCPUFunctions = function(tbl, imageType, dataImages, allImages)
 	local cpu = {}
 	cpu.computeCost = util.makeComputeCost(tbl, allImages)
 	cpu.computeGradient = util.makeComputeGradient(tbl, imageType, allImages)
-	cpu.computeSearchCost = util.makeSearchCost(tbl, imageType, dataImages)
+	cpu.deltaCost = util.makeDeltaCost(tbl, imageType, dataImages)
+	cpu.computeSearchCost = util.makeSearchCost(tbl, imageType, cpu, dataImages)
+	cpu.computeSearchCostParallel = util.makeSearchCostParallel(tbl, imageType, cpu, dataImages)
 	cpu.computeResiduals = util.makeComputeResiduals(tbl, imageType, dataImages)
 	cpu.imageInnerProduct = util.makeImageInnerProduct(imageType)
 	cpu.dumpLineSearch = util.makeDumpLineSearch(tbl, imageType, cpu, dataImages)
