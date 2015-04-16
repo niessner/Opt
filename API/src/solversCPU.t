@@ -525,11 +525,7 @@ solversCPU.lbfgsCPU = function(Problem, tbl, vars)
 			--
 			-- compute the search direction p
 			--
-			for h = 0, pd.gradH do
-				for w = 0, pd.gradW do
-					pd.p(w, h) = -pd.gradient(w, h)
-				end
-			end
+			cpu.setImage(pd.p, pd.gradient, -1.0f)
 			
 			if k >= 1 then
 				for i = k - 1, k - m - 1, -1 do

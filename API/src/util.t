@@ -31,6 +31,41 @@ util.getImages = function(vars,imageBindings,actualDims)
 	return results
 end
 
+util.makeImageInnerProduct = function(imageType)
+	local terra imageInnerProduct(a : imageType, b : imageType)
+		var sum = 0.0
+		for h = 0, a.H do
+			for w = 0, a.W do
+				sum = sum + a(w, h) * b(w, h)
+			end
+		end
+		return sum
+	end
+	return imageInnerProduct
+end
+
+util.makeSetImage = function(imageType)
+	local terra setImage(targetImage : imageType, sourceImage : imageType, scale : float)
+		for h = 0, targetImage.H do
+			for w = 0, targetImage.W do
+				targetImage(w, h) = sourceImage(w, h) * scale
+			end
+		end
+	end
+	return setImage
+end
+
+util.makeAddImage = function(imageType)
+	local terra addImage(targetImage : imageType, addedImage : imageType, scale : float)
+		for h = 0, targetImage.H do
+			for w = 0, targetImage.W do
+				targetImage(w, h) = targetImage(w, h) + addedImage(w, h) * scale
+			end
+		end
+	end
+	return addImage
+end
+
 util.makeComputeCost = function(tbl, images)
 	local terra computeCost([images])
 		var result = 0.0
@@ -106,19 +141,6 @@ util.makeComputeResiduals = function(tbl, imageType, dataImages)
 		end
 	end
 	return computeResiduals
-end
-
-util.makeImageInnerProduct = function(imageType)
-	local terra imageInnerProduct(a : imageType, b : imageType)
-		var sum = 0.0
-		for h = 0, a.H do
-			for w = 0, a.W do
-				sum = sum + a(w, h) * b(w, h)
-			end
-		end
-		return sum
-	end
-	return imageInnerProduct
 end
 
 util.makeLineSearchBruteForce = function(tbl, imageType, cpu, dataImages)
@@ -220,6 +242,8 @@ util.makeCPUFunctions = function(tbl, imageType, dataImages, allImages)
 	local cpu = {}
 	cpu.computeCost = util.makeComputeCost(tbl, allImages)
 	cpu.computeGradient = util.makeComputeGradient(tbl, imageType, allImages)
+	cpu.setImage = util.makeSetImage(imageType)
+	cpu.addImage = util.makeSetImage(imageType)
 	cpu.deltaCost = util.makeDeltaCost(tbl, imageType, dataImages)
 	cpu.computeSearchCost = util.makeSearchCost(tbl, imageType, cpu, dataImages)
 	cpu.computeSearchCostParallel = util.makeSearchCostParallel(tbl, imageType, cpu, dataImages)
