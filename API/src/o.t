@@ -56,16 +56,18 @@ printf = macro(function(fmt,...)
     local buf = createbuffer({...})
     return `vprintf(fmt,buf) 
 end)
-
+local dprint
 if verboseSolver then
 	log = macro(function(fmt,...)
 		local args = {...}
 		return `C.printf(fmt, args)
 	end)
+	dprint = print
 else
 	log = function(fmt,...)
 	
 	end
+	dprint = function() end
 end
 
 local GPUBlockDims = {{"blockIdx","ctaid"},
@@ -355,7 +357,17 @@ local function centerexp(access,exp)
     return exp:rename(rename)
 end 
 
-local function createfunction(images,exp)
+local function removeboundaries(exp)
+    local function nobounds(a)
+        if BoundsAccess:is(a) then return ad.toexp(1)
+        else return ad.v[a] end
+    end
+    return exp:rename(nobounds)
+end
+local function createfunction(images,exp,usebounds)
+    if not usebounds then
+        exp = removeboundaries(exp)
+    end
     local imageindex = {}
     local imagesyms = terralib.newlist()
     for i,im in ipairs(images) do
@@ -363,6 +375,8 @@ local function createfunction(images,exp)
         imageindex[im] = s
         imagesyms:insert(s)
     end
+    local stencil = {0,0}
+    
     local unknownimage = imagesyms[1]
     local i,j = symbol(int64,"i"), symbol(int64,"j")
     local stmts = terralib.newlist()
@@ -375,16 +389,21 @@ local function createfunction(images,exp)
                 local im = assert(imageindex[a.image],("cost function uses image %s not listed in parameters."):format(a.image))
                 r = symbol(float,tostring(a))
                 stmts:insert quote
-                    var [r] = im:get(i+[a.x],j+[a.y])
+                    var [r] = [ usebounds and (`im:get(i+[a.x],j+[a.y])) or (`im(i+[a.x],j+[a.y])) ]
                     --if i < 4 and j < 4 then
                     --    C.printf("%s(%d + %d,%d + %d) = %f,%f\n",[a.image.name],i,[a.x],j,[a.y],[r.v],[r.bounds])
                     --end
                 end
+                stencil[1] = math.max(stencil[1],math.abs(a.x))
+                stencil[2] = math.max(stencil[2],math.abs(a.y))
             else --bounds calculation
+                assert(usebounds) -- if we removed them, we shouldn't see any boundary accesses
                 r = symbol(int,tostring(a))
                 stmts:insert quote
                     var [r] = opt.InBoundsCalc(i+a.x,j+a.y,unknownimage.W,unknownimage.H,a.sx,a.sy)
                 end
+                stencil[1] = math.max(stencil[1],math.abs(a.x)+a.sx)
+                stencil[2] = math.max(stencil[2],math.abs(a.y)+a.sy)
             end
             accesssyms[a] = r
         end
@@ -398,8 +417,17 @@ local function createfunction(images,exp)
     --generatedfn:printpretty(false,false)
     generatedfn:compile()
     --generatedfn:printpretty(true,false)
-    --generatedfn:disas()
-    return generatedfn
+    if verboseSolver then
+        generatedfn:disas()
+    end
+    return generatedfn,stencil
+end
+local function createfunctionset(images,exp)
+    dprint("bound")
+    local boundary,stencil = createfunction(images,exp,true)
+    dprint("interior")
+    local interior = createfunction(images,exp,false)
+    return { boundary = boundary, stencil = stencil, interior = interior }
 end
 
 function ad.Cost(dims,images,costexp)
@@ -427,23 +455,29 @@ function ad.Cost(dims,images,costexp)
     
     local gradient = costexp:gradient(unknownvars)
     
-    print("cost expression")
-    print(ad.tostrings({assert(costexp)}))
-    print("grad expression")
+    dprint("cost expression")
+    dprint(ad.tostrings({assert(costexp)}))
+    dprint("grad expression")
     local names = table.concat(unknownvars:map(function(v) return tostring(v:key()) end),", ")
-    print(names.." = "..ad.tostrings(gradient))
+    dprint(names.." = "..ad.tostrings(gradient))
     
     local gradientgathered = 0
     for i,u in ipairs(unknownvars) do
         gradientgathered = gradientgathered + centerexp(u:key(),gradient[i])
     end
     
-    print("grad gather")
-    print(ad.tostrings({gradientgathered}))
+    dprint("grad gather")
+    dprint(ad.tostrings({gradientgathered}))
     
-    local costfn = createfunction(images,costexp)
-    local gradfn = createfunction(images,gradientgathered)
-    print("Warning: functions do not guard reads!")
-    return { dims = dims, cost = { dim = dims, fn = costfn}, gradient = gradfn }
+    dprint("cost")
+    local cost = createfunctionset(images,costexp)
+    cost.dims = dims
+    dprint("grad")
+    local gradient = createfunctionset(images,gradientgathered)
+    local r = { dims = dims, cost = cost, gradient = gradient }
+    if verboseSolver then
+        terralib.tree.printraw(r)
+    end
+    return r
 end
 return opt

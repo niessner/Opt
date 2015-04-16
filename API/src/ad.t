@@ -86,7 +86,7 @@ local function factors(e)
     return e,one
 end
 local function simplify(op,args)
-    local x,y = unpack(args)
+    local x,y,z = unpack(args)
     if allconst(args) and op:getimpl() then
         return toexp(op:getimpl()(unpack(args:map("v"))))
     end
@@ -138,6 +138,8 @@ local function simplify(op,args)
         elseif x == y then return one 
         elseif Const:is(y) then return x*(one/y)
         end
+    elseif op.name == "select" and Const:is(x) then
+        return  x.v ~= 0 and y or z
     end
     
     
