@@ -558,7 +558,7 @@ end]]
 
 solversCPU.lbfgsCPU = function(Problem, tbl, vars)
 
-	local maxIters = 100
+	local maxIters = 10
 	
 	local struct PlanData(S.Object) {
 		plan : opt.Plan
@@ -568,8 +568,6 @@ solversCPU.lbfgsCPU = function(Problem, tbl, vars)
 		costH : int
 		dims : int64[#vars.dims + 1]
 		
-		k : int
-		
 		gradient : vars.unknownType
 		prevGradient : vars.unknownType
 				
@@ -578,7 +576,7 @@ solversCPU.lbfgsCPU = function(Problem, tbl, vars)
 		yList : vars.unknownType[maxIters]
 		syProduct : float[maxIters]
 		yyProduct : float[maxIters]
-		alpha : float[maxIters]
+		alphaList : float[maxIters]
 		
 		-- variables used for line search
 		currentValues : vars.unknownType
@@ -586,7 +584,7 @@ solversCPU.lbfgsCPU = function(Problem, tbl, vars)
 	}
 	
 	local computeCost = util.makeComputeCost(tbl, vars.imagesAll)
-	local computeGradient = util.makeComputeGradient(tbl, vars.imagesAll)
+	local computeGradient = util.makeComputeGradient(tbl, vars.unknownType, vars.imagesAll)
 	local computeSearchCost = util.makeSearchCost(tbl, vars.unknownType, vars.dataImages)
 	local computeResiduals = util.makeComputeResiduals(tbl, vars.unknownType, vars.dataImages)
 	local imageInnerProduct = util.makeImageInnerProduct(vars.unknownType)
@@ -602,19 +600,18 @@ solversCPU.lbfgsCPU = function(Problem, tbl, vars)
 		var [vars.imagesAll] = [util.getImages(vars, imageBindings, dims)]
 
 		-- TODO: parameterize these
-		var lineSearchMaxIters = 10000
-		var lineSearchBruteForceStart = 1e-6
+		var lineSearchMaxIters = 1000
+		var lineSearchBruteForceStart = 1e-3
 		var lineSearchBruteForceMultiplier = 1.1
 		
 		var m = 10
+		var k = 0
 		
 		var prevBestAlpha = 0.0
 		
-		pd.k = 0
-		
 		computeGradient(pd.gradient, vars.imagesAll)
 
-		for iter = 0, maxIters do
+		for iter = 0, maxIters - 1 do
 
 			var iterStartCost = computeCost(vars.imagesAll)
 			log("iteration %d, cost=%f\n", iter, iterStartCost)
@@ -631,24 +628,26 @@ solversCPU.lbfgsCPU = function(Problem, tbl, vars)
 			if k >= 1 then
 				for i = k - 1, k - m, -1 do
 					if i < 0 then break end
-					alphas[i] = imageInnerProduct(pd.sList[i], pd.p) / syProduct[i]
+					pd.alphaList[i] = imageInnerProduct(pd.sList[i], pd.p) / pd.syProduct[i]
 					for h = 0, pd.gradH do
 						for w = 0, pd.gradW do
-							pd.p(w, h) = pd.p(w, h) - alphas[i] * yList[i](w, h)
+							pd.p(w, h) = pd.p(w, h) - pd.alphaList[i] * pd.yList[i](w, h)
 						end
 					end
 				end
-				var scale = syProduct[k - 1] / yyProduct[k - 1]
+				var scale = pd.syProduct[k - 1] / pd.yyProduct[k - 1]
 				for h = 0, pd.gradH do
 					for w = 0, pd.gradW do
 						pd.p(w, h) = pd.p(w, h) * scale
 					end
 				end
-				for i = util.max(k - m, 0), k - 1 do
-					var beta = imageInnerProduct(pd.yList[i], pd.p) / syProduct[i]
-					for h = 0, pd.gradH do
-						for w = 0, pd.gradW do
-							pd.p(w, h) = pd.p(w, h) + (alphas[i] - beta) * sList[i](w, h)
+				for i = k - m, k - 1 do
+					if i >= 0 then
+						var beta = imageInnerProduct(pd.yList[i], pd.p) / pd.syProduct[i]
+						for h = 0, pd.gradH do
+							for w = 0, pd.gradW do
+								pd.p(w, h) = pd.p(w, h) + (pd.alphaList[i] - beta) * pd.sList[i](w, h)
+							end
 						end
 					end
 				end
@@ -666,7 +665,8 @@ solversCPU.lbfgsCPU = function(Problem, tbl, vars)
 			
 			var bestAlpha = 0.0
 			
-			var useBruteForce = (iter <= 1) or prevBestAlpha == 0.0
+			var useBruteForce = true
+			--var useBruteForce = (iter <= 1) or prevBestAlpha == 0.0
 			if not useBruteForce then
 				var alphas = array(prevBestAlpha * 0.25, prevBestAlpha * 0.5, prevBestAlpha * 0.75, 0.0)
 				var costs : float[4]
@@ -731,7 +731,7 @@ solversCPU.lbfgsCPU = function(Problem, tbl, vars)
 						bestAlpha = alpha
 						bestCost = searchCost
 					else
-						break
+						--break
 					end
 				end
 			end
@@ -741,23 +741,23 @@ solversCPU.lbfgsCPU = function(Problem, tbl, vars)
 				for w = 0, pd.gradW do
 					var delta = bestAlpha * pd.p(w, h)
 					vars.unknownImage(w, h) = pd.currentValues(w, h) + delta
-					vars.sList[k](w, h) = delta
+					pd.sList[k](w, h) = delta
 				end
 			end
 			
-			C.memcpy(pd.prevGradient.impl.data, vars.gradient.impl.data, sizeof(float) * pd.gradW * pd.gradH)
+			C.memcpy(pd.prevGradient.impl.data, pd.gradient.impl.data, sizeof(float) * pd.gradW * pd.gradH)
 			
 			computeGradient(pd.gradient, vars.imagesAll)
 			
 			-- compute new y
 			for h = 0, pd.gradH do
 				for w = 0, pd.gradW do
-					vars.yList[k](w, h) = pd.gradient(w, h) - pd.prevGradient(w, h)
+					pd.yList[k](w, h) = pd.gradient(w, h) - pd.prevGradient(w, h)
 				end
 			end
 			
-			syProduct[k] = imageInnerProduct(pd.sList[i], pd.yList[i])
-			yyProduct[k] = imageInnerProduct(pd.yList[i], pd.yList[i])
+			pd.syProduct[k] = imageInnerProduct(pd.sList[k], pd.yList[k])
+			pd.yyProduct[k] = imageInnerProduct(pd.yList[k], pd.yList[k])
 			
 			prevBestAlpha = bestAlpha
 			
