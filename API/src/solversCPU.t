@@ -120,6 +120,7 @@ solversCPU.conjugateGradientCPU = function(Problem, tbl, vars)
 	local computeSearchCost = util.makeSearchCost(tbl, vars.unknownType, vars.dataImages)
 	local computeResiduals = util.makeComputeResiduals(tbl, vars.unknownType, vars.dataImages)
 	local lineSearchBruteForce = util.makeLineSearchBruteForce(tbl, vars.unknownType, vars.dataImages)
+	local lineSearchQuadraticMinimum = util.makeLineSearchQuadraticMinimum(tbl, vars.unknownType, vars.dataImages)
 	
 	local terra impl(data_ : &opaque, imageBindings : &&opt.ImageBinding, params_ : &opaque)
 
@@ -199,76 +200,16 @@ solversCPU.conjugateGradientCPU = function(Problem, tbl, vars)
 			
 			var bestAlpha = 0.0
 			
-			var useBruteForce = true
-			--[[var useBruteForce = (iter <= 1) or prevBestAlpha == 0.0
+			var useBruteForce = (iter <= 1) or prevBestAlpha == 0.0
 			if not useBruteForce then
 				
-				var alphas = array(prevBestAlpha * 0.25, prevBestAlpha * 0.5, prevBestAlpha * 0.75, 0.0)
-				var costs : float[4]
-				var bestCost = 0.0
+				bestAlpha = lineSearchQuadraticMinimum(pd.currentValues, pd.currentResiduals, pd.searchDirection, vars.unknownImage, prevBestAlpha, vars.dataImages)
 				
-				for alphaIndex = 0, 4 do
-					var alpha = 0.0
-					if alphaIndex <= 2 then alpha = alphas[alphaIndex]
-					else
-						var a1 = alphas[0] var a2 = alphas[1] var a3 = alphas[2]
-						var c1 = costs[0] var c2 = costs[1] var c3 = costs[2]
-						var a = ((c2-c1)*(a1-a3) + (c3-c1)*(a2-a1))/((a1-a3)*(a2*a2-a1*a1) + (a2-a1)*(a3*a3-a1*a1))
-						var b = ((c2 - c1) - a * (a2*a2 - a1*a1)) / (a2 - a1)
-						var c = c1 - a * a1 * a1 - b * a1
-						-- 2ax + b = 0, x = -b / 2a
-						alpha = -b / (2.0 * a)
-					end
-					
-					var searchCost = computeSearchCost(pd.currentValues, pd.currentResiduals, pd.searchDirection, alpha, vars.unknownImage, vars.dataImages)
-					
-					if searchCost < bestCost then
-						bestAlpha = alpha
-						bestCost = searchCost
-					elseif alphaIndex == 3 then
-						log("quadratic minimization failed\n")
-						
-						var file = C.fopen("C:/code/debug.txt", "wb")
-
-						var debugAlpha = lineSearchBruteForceStart
-						for lineSearchIndex = 0, 400 do
-							debugAlpha = debugAlpha * lineSearchBruteForceMultiplier
-							
-							var searchCost = computeSearchCost(pd.currentValues, pd.currentResiduals, pd.searchDirection, debugAlpha, vars.unknownImage, vars.dataImages)
-							
-							C.fprintf(file, "%15.15f\t%15.15f\n", debugAlpha * 1000.0, searchCost)
-						end
-						
-						C.fclose(file)
-						log("debug alpha outputted")
-						C.getchar()
-					end
-					
-					costs[alphaIndex] = searchCost
-				end
 				if bestAlpha == 0.0 then useBruteForce = true end
-			end]]
+			end
 			
 			if useBruteForce then
 				log("brute-force line search\n")
-				--[[var alpha = lineSearchBruteForceStart
-				
-				var bestCost = 0.0
-				
-				for lineSearchIndex = 0, lineSearchMaxIters do
-					alpha = alpha * lineSearchBruteForceMultiplier
-					
-					var searchCost = computeSearchCost(pd.currentValues, pd.currentResiduals, pd.searchDirection, alpha, vars.unknownImage, vars.dataImages)
-					
-					--C.fprintf(file, "%f\t%f\n", alpha * 1000.0, searchCost / 1000000.0)
-					
-					if searchCost < bestCost then
-						bestAlpha = alpha
-						bestCost = searchCost
-					else
-						break
-					end
-				end]]
 				bestAlpha = lineSearchBruteForce(pd.currentValues, pd.currentResiduals, pd.searchDirection, vars.unknownImage, vars.dataImages)
 			end
 			
@@ -279,6 +220,8 @@ solversCPU.conjugateGradientCPU = function(Problem, tbl, vars)
 			end
 			
 			prevBestAlpha = bestAlpha
+			
+			--if iter % 20 == 0 then C.getchar() end
 			
 			log("alpha=%12.12f, beta=%12.12f\n\n", bestAlpha, beta)
 			if bestAlpha == 0.0 and beta == 0.0 then
@@ -624,7 +567,7 @@ solversCPU.lbfgsCPU = function(Problem, tbl, vars)
 			end
 			
 			if k >= 1 then
-				for i = k - 1, k - m, -1 do
+				for i = k - 1, k - m - 1, -1 do
 					if i < 0 then break end
 					pd.alphaList[i] = imageInnerProduct(pd.sList[i], pd.p) / pd.syProduct[i]
 					for h = 0, pd.gradH do
@@ -639,7 +582,7 @@ solversCPU.lbfgsCPU = function(Problem, tbl, vars)
 						pd.p(w, h) = pd.p(w, h) * scale
 					end
 				end
-				for i = k - m, k - 1 do
+				for i = k - m, k do
 					if i >= 0 then
 						var beta = imageInnerProduct(pd.yList[i], pd.p) / pd.syProduct[i]
 						for h = 0, pd.gradH do

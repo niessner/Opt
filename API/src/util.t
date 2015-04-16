@@ -116,12 +116,14 @@ util.makeLineSearchBruteForce = function(tbl, imageType, dataImages)
 	local terra lineSearchBruteForce(baseValues : imageType, baseResiduals : imageType, searchDirection : imageType, valueStore : imageType, [dataImages])
 
 		-- Constants
-		var lineSearchMaxIters = 100
-		var lineSearchBruteForceStart = 1e-2
-		var lineSearchBruteForceMultiplier = 1.2
+		var lineSearchMaxIters = 1000
+		var lineSearchBruteForceStart = 1e-5
+		var lineSearchBruteForceMultiplier = 1.1
 				
 		var alpha = lineSearchBruteForceStart
 		var bestAlpha = 0.0
+		
+		var terminalCost = 10.0
 
 		var bestCost = 0.0
 		
@@ -133,10 +135,90 @@ util.makeLineSearchBruteForce = function(tbl, imageType, dataImages)
 			if searchCost < bestCost then
 				bestAlpha = alpha
 				bestCost = searchCost
-			else
-				--break
+			elseif searchCost > terminalCost then
+				break
 			end
 		end
+		
+		return bestAlpha
+	end
+	return lineSearchBruteForce
+end
+
+util.makeLineSearchQuadraticMinimum = function(tbl, imageType, dataImages)
+
+	local computeSearchCost = util.makeSearchCost(tbl, imageType, dataImages)
+	local computeResiduals = util.makeComputeResiduals(tbl, imageType, dataImages)
+
+	local terra lineSearchQuadraticMinimum(baseValues : imageType, baseResiduals : imageType, searchDirection : imageType, valueStore : imageType, alphaGuess : float, [dataImages])
+
+		var alphas = array(alphaGuess * 0.25, alphaGuess * 0.5, alphaGuess * 0.75, 0.0)
+		var costs : float[4]
+		var bestCost = 0.0
+		var bestAlpha = 0.0
+		
+		for alphaIndex = 0, 4 do
+			var alpha = 0.0
+			if alphaIndex <= 2 then alpha = alphas[alphaIndex]
+			else
+				var a1 = alphas[0] var a2 = alphas[1] var a3 = alphas[2]
+				var c1 = costs[0] var c2 = costs[1] var c3 = costs[2]
+				var a = ((c2-c1)*(a1-a3) + (c3-c1)*(a2-a1))/((a1-a3)*(a2*a2-a1*a1) + (a2-a1)*(a3*a3-a1*a1))
+				var b = ((c2 - c1) - a * (a2*a2 - a1*a1)) / (a2 - a1)
+				var c = c1 - a * a1 * a1 - b * a1
+				-- 2ax + b = 0, x = -b / 2a
+				alpha = -b / (2.0 * a)
+			end
+			
+			var searchCost = computeSearchCost(baseValues, baseResiduals, searchDirection, alpha, valueStore, dataImages)
+			
+			if searchCost < bestCost then
+				bestAlpha = alpha
+				bestCost = searchCost
+			elseif alphaIndex == 3 then
+				C.printf("quadratic minimization failed\n")
+			end
+			
+			costs[alphaIndex] = searchCost
+		end
+		
+		return bestAlpha
+	end
+	return lineSearchQuadraticMinimum
+end
+
+
+				
+				
+util.makeDumpLineSearchValues = function(tbl, imageType, dataImages)
+
+	local computeSearchCost = util.makeSearchCost(tbl, imageType, dataImages)
+	local computeResiduals = util.makeComputeResiduals(tbl, imageType, dataImages)
+
+	local terra dumpLineSearchValues(baseValues : imageType, baseResiduals : imageType, searchDirection : imageType, valueStore : imageType, [dataImages])
+
+		-- Constants
+		var lineSearchMaxIters = 1000
+		var lineSearchBruteForceStart = 1e-5
+		var lineSearchBruteForceMultiplier = 1.1
+				
+		var alpha = lineSearchBruteForceStart
+		
+		var file = C.fopen("C:/code/debug.txt", "wb")
+
+		for lineSearchIndex = 0, lineSearchMaxIters do
+			debugAlpha = debugAlpha * lineSearchBruteForceMultiplier
+			
+			var searchCost = computeSearchCost(baseValues, baseResiduals, searchDirection, alpha, valueStore, dataImages)
+			
+			C.fprintf(file, "%15.15f\t%15.15f\n", alpha * 1000.0, searchCost)
+			
+			if searchCost >= 100.0 then break end
+		end
+		
+		C.fclose(file)
+		log("debug alpha outputted")
+		C.getchar()
 		
 		return bestAlpha
 	end
