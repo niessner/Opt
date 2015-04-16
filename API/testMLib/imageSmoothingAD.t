@@ -2,12 +2,12 @@ local C = terralib.includecstring[[
 #include <stdio.h>
 #include <math.h>
 ]]
-local orig = require("imageSmoothing")
-local W,H = orig.dims[1],orig.dims[2]
+--local orig = require("imageSmoothing")
+--local W,H = orig.dims[1],orig.dims[2]
 
 local w = .1 -- keep us rational for now
---local W = opt.Dim("W")
---local H = opt.Dim("H")
+local W = opt.Dim("W")
+local H = opt.Dim("H")
 
 local X = ad.Image("X",W,H)
 local A = ad.Image("A",W,H)
@@ -19,7 +19,7 @@ local reconstructionCost = X(0,0) - A(0,0)
 
 local cost = laplacianCostF*laplacianCostF + w*reconstructionCost*reconstructionCost
 
-
+--return require("imageSmoothing")
 return ad.Cost({W,H},{X,A},cost)
 
 --[=[

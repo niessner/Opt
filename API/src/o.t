@@ -234,13 +234,14 @@ local newImage = terralib.memoize(function(typ, W, H)
 	    return x >= 0 and y >= 0 and x < self.W and y < self.H
 	end
 	--Image.methods.inbounds:disas()
-	terra Image:get(x : int64, y : int64)
+	terra Image:get(x : int64, y : int64, pb : &float)
 	    var v : typ = 0.f --TODO:only works for single precision things
 	    var b = self:inbounds(x,y)
+	     @pb = float(b)
 	    if b then
 	        v = self(x,y)
 	    end
-	    return v,float(b)
+	    return v
 	end
 	terra Image:initCPU(actualW : int, actualH : int)
 		self.W = actualW
@@ -311,119 +312,72 @@ function ImageAccess:__tostring()
     return ("%s_%s_%s_%s"):format(self.image.name,self.field,xn,yn)
 end
 
-function ImageTable:create()
-    return self:new { accesstovarid_ = {}, 
-                      varidtoaccess_ = terralib.newlist {},
-                      imagetoaccesses = {} }
-end
-
-function ImageTable:accesstovarid(a) -- a is an ImageAccess object
-    assert(ImageAccess:is(a))
-    if not self.accesstovarid_[a] then
-        self.varidtoaccess_:insert(a)
-        self.accesstovarid_[a] = #self.varidtoaccess_
-        assert(self.imagetoaccesses[a.image],"using an image not declared as part of the energy function "..a.image.name)
-        self.imagetoaccesses[a.image]:insert(a)
-    end
-    return self.accesstovarid_[a]
-end
-function ImageTable:varidtoaccess(id)
-    return assert(self.varidtoaccess_[assert(tonumber(id),"not a number?")])
-end
-
-function ImageTable:accesses(im) return assert(self.imagetoaccesses[im]) end
-function ImageTable:addimage(im)
-    assert(not self.imagetoaccesses[im])
-    self.imagetoaccesses[im] = terralib.newlist()
-end
-
-local globalimagetable = ImageTable:create({"","_boundary"}) -- this is used when expressions are create
-                                              -- when we scatter-to-gather we make a smaller table with the accesses needed
-                                              -- for the specific problem 
-
 local Image = newclass("Image")
 -- Z: this will eventually be opt.Image, but that is currently used by our direct methods
 -- so this is going in the ad table for now
 function ad.Image(name,W,H)
     assert(W == 1 or Dim:is(W))
     assert(H == 1 or Dim:is(H))
-    local im = Image:new { name = tostring(name), W = W, H = H }
-    globalimagetable:addimage(im)
-    return im
+    return Image:new { name = tostring(name), W = W, H = H }
 end
 
 function Image:inbounds(x,y)
     x,y = assert(tonumber(x)),assert(tonumber(y))
-    return ad.v[globalimagetable:accesstovarid(ImageAccess:get(self,"bounds",x,y))]
+    return ad.v[ImageAccess:get(self,"bounds",x,y)]
 end
 function Image:__call(x,y)
     x,y = assert(tonumber(x)),assert(tonumber(y))
-    return ad.v[globalimagetable:accesstovarid(ImageAccess:get(self,"v",x,y))]
+    return ad.v[ImageAccess:get(self,"v",x,y)]
 end
 
-local function usedvariables(exp)
-    local uses = terralib.newlist()
-    local seen = {}
-    local function visit(e)
-        if seen[e] then return end
-        seen[e] = true
-        if ad.Var:is(e) then uses:insert(e) end
-        for i,c in ipairs(e:children()) do visit(c) end
+local function centerexp(access,exp)
+    local x,y = -access.x,-access.y
+    local function rename(a)
+        return ad.v[ImageAccess:get(a.image,a.field,a.x + x, a.y + y)]
     end
-    visit(exp)
-    return uses
-end
-
-local function centerexp(fromtable,totable,names,access,exp)
-    local x,y = -access.x,access.y
-    local function shift(a)
-        return ImageAccess:get(a.image,a.field,a.x + x, a.y + y)
-    end
-    local renames = {}
-    for i,v in ipairs(usedvariables(exp)) do
-        local sa = shift(fromtable:varidtoaccess(v:N()))
-        local nv = totable:accesstovarid(sa)
-        names[nv] = names[nv] or tostring(sa)
-        renames[v:N()] = ad.v[nv]
-    end
-    return exp:rename(renames)
+    return exp:rename(rename)
 end 
 
-local function createfunction(images,imagetable,exp,varnames,debug)
-    local syms = images:map(function(im) return symbol(opt.Image(float,im.W,im.H),im.name) end)
+local function createfunction(images,exp)
+    local imageindex = {}
+    local imagesyms = terralib.newlist()
+    print("IMAGERS")
+    for i,im in ipairs(images) do
+        print(im)
+        local s = symbol(opt.Image(float,im.W,im.H),im.name)
+        imageindex[im] = s
+        imagesyms:insert(s)
+    end
     local i,j = symbol(int64,"i"), symbol(int64,"j")
     local stmts = terralib.newlist()
     local accesssyms = {}
     local vartosym = {}
-    for imageidx,im in ipairs(images) do
-        local accesses = imagetable:accesses(im)
-        for _,a in ipairs(accesses) do
-            local both = ImageAccess:get(a.image,"",a.x,a.y)
-            if not accesssyms[both] then
-                local va,ga = ImageAccess:get(a.image,"v",a.x,a.y),ImageAccess:get(a.image,"bounds",a.x,a.y)
-                local r = { v = symbol(float,tostring(va)), bounds = symbol(float,tostring(ga)) }
-                stmts:insert quote    
-                    var [r.v],[r.bounds] = [syms[imageidx]]:get(i+[a.x],j+[a.y])
-                    if i < 4 and j < 4 then
-                        --C.printf("%s(%d + %d,%d + %d) = %f,%f\n",[a.image.name],i,[a.x],j,[a.y],[r.v],[r.bounds])
-                    end
-                end
-                accesssyms[both] = r
+    local function emitvar(a)
+        local both = ImageAccess:get(a.image,"",a.x,a.y)
+        if not accesssyms[both] then
+            local va,ga = ImageAccess:get(a.image,"v",a.x,a.y),ImageAccess:get(a.image,"bounds",a.x,a.y)
+            local r = { v = symbol(float,tostring(va)), bounds = symbol(float,tostring(ga)) }
+            local im = assert(imageindex[a.image],("cost function uses image %s not listed in parameters."):format(a.image))
+            stmts:insert quote
+                var [r.bounds]
+                var [r.v] = im:get(i+[a.x],j+[a.y],&[r.bounds])
+                --if i < 4 and j < 4 then
+                --    C.printf("%s(%d + %d,%d + %d) = %f,%f\n",[a.image.name],i,[a.x],j,[a.y],[r.v],[r.bounds])
+                --end
             end
-            vartosym[imagetable:accesstovarid(a)] = assert(accesssyms[both][a.field])
+            accesssyms[both] = r
         end
+        return accesssyms[both][a.field]
     end
-    local terrafn = ad.toterra({exp},nil,varnames)
-    --terrafn:printpretty(true,false)
-    local terra generatedfn([i] : int64, [j] : int64, [syms])
+    local result = ad.toterra({exp},emitvar)
+    local terra generatedfn([i] : int64, [j] : int64, [imagesyms])
         [stmts]
-        var r : float
-        terrafn(&r,[vartosym])
-        return r
+        return result
     end
-    --generatedfn:printpretty(false)
+    generatedfn:printpretty(false,false)
+    generatedfn:compile()
     --generatedfn:printpretty(true,false)
-    --generatedfn:disas()
+    generatedfn:disas()
     return generatedfn
 end
 function ad.Cost(dims,images,costexp)
@@ -435,56 +389,38 @@ function ad.Cost(dims,images,costexp)
     --TODO: check all image uses in costexp are bound to images in list
     local unknown = images[1] -- assume for now that the first image is the unknown
     
-    
-    -- register the input images with the mappings from image -> uses
-    local costtable = ImageTable:create()
-    local gradtable = ImageTable:create()
-    for i,im in ipairs(images) do
-        costtable:addimage(im)
-        gradtable:addimage(im)
-    end
-    
-    
     -- collect the actually used variables and remap them to only local uses
+    local seenunknown = {}
     local unknownvars = terralib.newlist()
-    local unknownvarnames = terralib.newlist()
     
-    local costvarnames = terralib.newlist()
-    
-    local globaltocost = {}
-    for i,c in ipairs(usedvariables(costexp)) do
-        local a = globalimagetable:varidtoaccess(c:N())
-        local cv = ad.v[costtable:accesstovarid(a)]
-        globaltocost[c:N()] = cv 
-        costvarnames:insert(tostring(a))
-        if a.image == unknown and a.field == "v" then
-            unknownvars:insert(cv)
-            unknownvarnames:insert(tostring(a))
+    costexp:rename(function(a)
+        local v = ad.v[a]
+        --assert(<image is in images list>)
+        if a.image == unknown and a.field == "v" and not seenunknown[a] then
+            unknownvars:insert(v)
+            seenunknown[a] = true
         end
-    end
+        return v
+    end)
     
-    costexp = costexp:rename(globaltocost)
     local gradient = costexp:gradient(unknownvars)
     
     print("cost expression")
-    print(ad.tostrings({assert(costexp)}, costvarnames))
+    print(ad.tostrings({assert(costexp)}))
     print("grad expression")
-    print(table.concat(unknownvarnames,", ").." = ",
-          ad.tostrings(gradient, costvarnames))
+    local names = table.concat(unknownvars:map(function(v) return tostring(v:key()) end),", ")
+    print(names.." = "..ad.tostrings(gradient))
     
     local gradientgathered = 0
-    local gradnames = terralib.newlist()
     for i,u in ipairs(unknownvars) do
-        local g = gradient[i]
-        local a = costtable:varidtoaccess(u:N())
-        gradientgathered = gradientgathered + centerexp(costtable,gradtable,gradnames,a,g)
+        gradientgathered = gradientgathered + centerexp(u:key(),gradient[i])
     end
     
     print("grad gather")
-    print(ad.tostrings({gradientgathered},gradnames))
+    print(ad.tostrings({gradientgathered}))
     
-    local costfn = createfunction(images,costtable,costexp,costvarnames,false)
-    local gradfn = createfunction(images,gradtable,gradientgathered,gradnames,true)
+    local costfn = createfunction(images,costexp)
+    local gradfn = createfunction(images,gradientgathered)
     return { dims = dims, cost = { dim = dims, fn = costfn}, gradient = gradfn }
 end
 return opt

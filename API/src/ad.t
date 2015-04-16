@@ -42,10 +42,6 @@ local Var = Exp:Variant("Var") -- a variable
 local Apply = Exp:Variant("Apply") -- an application
 local Const = Exp:Variant("Const") -- a constant, C
 
-function Var:N() return self.p end
-function Const:N() return 0 end
-function Apply:N() return self.nvars end
-
 local empty = terralib.newlist {}
 function Exp:children() return empty end
 function Apply:children() return self.args end 
@@ -56,9 +52,6 @@ local applyid = 0
 local function newapply(op,args)
     local nvars = 0
     assert(not op.nparams or #args == op.nparams)
-    for i,a in ipairs(args) do
-        nvars = math.max(nvars,a:N())
-    end
     applyid = applyid + 1
     return Apply:new { op = op, args = args, nvars = nvars, id = applyid - 1 }
 end
@@ -76,29 +69,11 @@ local function allconst(args)
     return true
 end
 
--- define a complete ordering of all nodes
--- any commutative op should reorder its nodes in this order
-function Const:order()
-    return 2,self.v
-end
-
-function Apply:order()
-    return 1,self.id
-end
-
-function Var:order()
-    return 0,self.p
-end
+function Var:key() return self.key_ end
 
 local function shouldcommute(a,b)
     if Const:is(a) then return true end
-    if Var:is(a) and Var:is(b) then return a.p < b.p end
-    --if b:prec() < a:prec() then return true end
-    --local ah,al = a:order()
-    --local bh,bl = b:order()
-    --if ah < bh then return true
-    --elseif bh < ah then return false
-    --else return al < bl end
+    if b:prec() < a:prec() then return true end
     return false
 end
 
@@ -133,6 +108,14 @@ local function simplify(op,args)
         if y == one then return x
         elseif y == zero then return zero
         elseif y == negone then return -x
+        elseif Apply:is(x) and x.op.name == "select" then
+            if x.args[2] == one or x.args[2] == zero or x.args[3] == one or x.args[3] == zero then
+                return ad.select(x.args[1],y*x.args[2],y*x.args[3])
+            end
+        elseif Apply:is(y) and y.op.name == "select" then
+            if y.args[2] == one or y.args[2] == zero or y.args[3] == one or y.args[3] == zero then
+                return ad.select(y.args[1],x*y.args[2],x*y.args[3])
+            end
         end
     elseif op.name == "add" then
         if y == zero then return x 
@@ -179,7 +162,7 @@ end
 
 -- generates variable names
 local v = setmetatable({},{__index = function(self,idx)
-    local r = Var:new { p = assert(tonumber(idx)) }
+    local r = Var:new { key_ = assert(idx) }
     self[idx] = r
     return r
 end})
@@ -205,9 +188,6 @@ function Op:define(fn,...)
     self.nparams = debug.getinfo(fn,"u").nparams
     self.generator = fn
     self.derivs = toexps(...)
-    for i,d in ipairs(self.derivs) do
-        assert(d:N() <= self.nparams)
-    end
     return self
 end
 function Op:getimpl()
@@ -232,7 +212,9 @@ end
 Exp.__unm = function(a) return ad.unm(a) end
 
 function Var:rename(vars)
-    return assert(vars[self.p])
+    local nv = type(vars) == "function" and vars(self:key()) or vars[self:key()] 
+    return assert(toexp(nv),
+                  ("rename: unknown invalid mapping for variable %s which maps to %s"):format(tostring(self:key()),tostring(nv)))
 end
 function Const:rename(vars) return self end
 function Apply:rename(vars)
@@ -267,7 +249,7 @@ function Exp:prec()
     if self.kind ~= "Apply" then return 3
     else return self.op:prec() end
 end
-local function expstostring(es,names)
+local function expstostring(es)
     es = (terralib.islist(es) and es) or terralib.newlist(es)
     local n = 0
     local tbl = terralib.newlist()
@@ -290,7 +272,8 @@ local function expstostring(es,names)
     end
     function emit(e)
         if "Var" == e.kind then
-            return (names and names[e.p]) or ("v%d"):format(e.p)
+            local k = e:key()
+            return type(k) == "number" and ("v%d"):format(k) or tostring(e:key()) 
         elseif "Const" == e.kind then
             return tostring(e.v)
         elseif "Apply" == e.kind then
@@ -318,24 +301,20 @@ function Exp:__tostring()
     return expstostring(terralib.newlist{self})
 end
 
-function ad.toterra(es,resultnames,varnames)
+function ad.toterra(es,varmap_) 
     es = terralib.islist(es) and es or terralib.newlist(es)
+     --varmap is a function or table mapping keys to what terra code should go there
+    local varmap = type(varmap_) == "table" and function(v) return varmap_[v] end or varmap_
+    assert(varmap)
     local manyuses = countuses(es)
     local nvars = 0
     local results = terralib.newlist {}
-    for i,e in ipairs(es) do 
-        results[i] = symbol(&float,(resultnames and resultnames[i]) or "r"..tostring(i))
-        nvars = math.max(nvars,e:N())
-    end
-    local variables = {}
-    for i = 1,nvars do
-        variables[i] = symbol(float,(varnames and varnames[i]) or "v"..i)
-    end
+    
     local statements = terralib.newlist()
     local emitted = {}
     local function emit(e)
         if "Var" == e.kind then
-            return variables[e.p]
+            return assert(varmap(e:key()),"no mapping for variable key "..tostring(e:key()))
         elseif "Const" == e.kind then
             return `float(e.v)
         elseif "Apply" == e.kind then
@@ -353,10 +332,7 @@ function ad.toterra(es,resultnames,varnames)
         end
     end
     local tes = es:map(emit)
-    return terra([results],[variables])
-        [statements]
-        [results:map(function(x) return `@x end)] = [tes]
-    end
+    return #statements == 0 and (`tes) or quote [statements] in [tes] end
 end
 
 function Exp:d(v)
@@ -445,7 +421,9 @@ ad.select:define(function(x,y,z) return `terralib.select(x ~= 0.f,y,z) end,0,ad.
 ad.eq:define(function(x,y) return `terralib.select(x == y,1.f,0.f) end, 0,0)
 setmetatable(ad,nil) -- remove special metatable that generates new blank ops
 ad.Var,ad.Apply,ad.Const,ad.Exp = Var, Apply, Const, Exp
+
 --[[
+local x,y,z = ad.v.x,ad.v.y,ad.v.z
 print(expstostring(ad.atan2.derivs))
 assert(y == y)
 assert(ad.cos == ad.cos)
@@ -453,7 +431,7 @@ local r = ad.sin(x) + ad.cos(y) + ad.cos(y)
 print(r)
 print(expstostring( terralib.newlist { r, r + 1} ))
 print(x*-(-y+1)/4)
-print(r:rename({x+y,x+y}))
+print(r:rename({x = x+y,y = x+y}))
 local e = 2*x*x*x*3 -- - y*x
 print((ad.sin(x)*ad.sin(x)):d(x))
 print(e:d(x)*3+(4*x)*x)
@@ -470,9 +448,8 @@ local exp = (3*w + 4*w + 3*w*z)
 -- 7x + (r1 
 print(unpack((3*x*x + x):gradient{x}))
 local g = exp:gradient({x,y,z})
-print(expstostring(g,{"x","y","z"}))
-
-local t = ad.toterra(g, {"dedx","dedy","dedz"},{"x","y","z"})
+print(expstostring(g))
+local t = ad.toterra(g,{x = symbol("x"), y = symbol("y"), z = symbol("z")})
 t:printpretty()
 ]]
 return ad
