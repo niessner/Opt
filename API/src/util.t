@@ -107,4 +107,40 @@ util.makeImageInnerProduct = function(imageType)
 	end
 	return imageInnerProduct
 end
+
+util.makeLineSearchBruteForce = function(tbl, imageType, dataImages)
+
+	local computeSearchCost = util.makeSearchCost(tbl, imageType, dataImages)
+	local computeResiduals = util.makeComputeResiduals(tbl, imageType, dataImages)
+
+	local terra lineSearchBruteForce(baseValues : imageType, baseResiduals : imageType, searchDirection : imageType, valueStore : imageType, [dataImages])
+
+		-- Constants
+		var lineSearchMaxIters = 100
+		var lineSearchBruteForceStart = 1e-2
+		var lineSearchBruteForceMultiplier = 1.2
+				
+		var alpha = lineSearchBruteForceStart
+		var bestAlpha = 0.0
+
+		var bestCost = 0.0
+		
+		for lineSearchIndex = 0, lineSearchMaxIters do
+			alpha = alpha * lineSearchBruteForceMultiplier
+			
+			var searchCost = computeSearchCost(baseValues, baseResiduals, searchDirection, alpha, valueStore, dataImages)
+			
+			if searchCost < bestCost then
+				bestAlpha = alpha
+				bestCost = searchCost
+			else
+				--break
+			end
+		end
+		
+		return bestAlpha
+	end
+	return lineSearchBruteForce
+end
+
 return util

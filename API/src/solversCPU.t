@@ -119,6 +119,7 @@ solversCPU.conjugateGradientCPU = function(Problem, tbl, vars)
 	local computeCost = util.makeComputeCost(tbl, vars.imagesAll)
 	local computeSearchCost = util.makeSearchCost(tbl, vars.unknownType, vars.dataImages)
 	local computeResiduals = util.makeComputeResiduals(tbl, vars.unknownType, vars.dataImages)
+	local lineSearchBruteForce = util.makeLineSearchBruteForce(tbl, vars.unknownType, vars.dataImages)
 	
 	local terra impl(data_ : &opaque, imageBindings : &&opt.ImageBinding, params_ : &opaque)
 
@@ -127,11 +128,6 @@ solversCPU.conjugateGradientCPU = function(Problem, tbl, vars)
 		var dims = pd.dims
 
 		var [vars.imagesAll] = [util.getImages(vars, imageBindings, dims)]
-
-		-- TODO: parameterize these
-		var lineSearchMaxIters = 10000
-		var lineSearchBruteForceStart = 1e-6
-		var lineSearchBruteForceMultiplier = 1.1
 		
 		var maxIters = 1000
 		
@@ -203,7 +199,8 @@ solversCPU.conjugateGradientCPU = function(Problem, tbl, vars)
 			
 			var bestAlpha = 0.0
 			
-			var useBruteForce = (iter <= 1) or prevBestAlpha == 0.0
+			var useBruteForce = true
+			--[[var useBruteForce = (iter <= 1) or prevBestAlpha == 0.0
 			if not useBruteForce then
 				
 				var alphas = array(prevBestAlpha * 0.25, prevBestAlpha * 0.5, prevBestAlpha * 0.75, 0.0)
@@ -231,7 +228,7 @@ solversCPU.conjugateGradientCPU = function(Problem, tbl, vars)
 					elseif alphaIndex == 3 then
 						log("quadratic minimization failed\n")
 						
-						--[[var file = C.fopen("C:/code/debug.txt", "wb")
+						var file = C.fopen("C:/code/debug.txt", "wb")
 
 						var debugAlpha = lineSearchBruteForceStart
 						for lineSearchIndex = 0, 400 do
@@ -244,17 +241,17 @@ solversCPU.conjugateGradientCPU = function(Problem, tbl, vars)
 						
 						C.fclose(file)
 						log("debug alpha outputted")
-						C.getchar()]]
+						C.getchar()
 					end
 					
 					costs[alphaIndex] = searchCost
 				end
 				if bestAlpha == 0.0 then useBruteForce = true end
-			end
+			end]]
 			
 			if useBruteForce then
 				log("brute-force line search\n")
-				var alpha = lineSearchBruteForceStart
+				--[[var alpha = lineSearchBruteForceStart
 				
 				var bestCost = 0.0
 				
@@ -271,7 +268,8 @@ solversCPU.conjugateGradientCPU = function(Problem, tbl, vars)
 					else
 						break
 					end
-				end
+				end]]
+				bestAlpha = lineSearchBruteForce(pd.currentValues, pd.currentResiduals, pd.searchDirection, vars.unknownImage, vars.dataImages)
 			end
 			
 			for h = 0, pd.gradH do
