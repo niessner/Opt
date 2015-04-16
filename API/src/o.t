@@ -143,7 +143,10 @@ local function compileProblem(tbl, kind)
 		return solversGPU.linearizedConjugateGradientGPU(Problem, tbl, vars)
 	elseif kind == "linearizedPreconditionedConjugateGradientCPU" then
 		return solversCPU.linearizedPreconditionedConjugateGradientCPU(Problem, tbl, vars)
+	elseif kind == "lbfgsCPU" then
+		return solversCPU.lbfgsCPU(Problem, tbl, vars)
 	end
+	
     
 end
 

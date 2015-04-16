@@ -109,7 +109,6 @@ solversCPU.conjugateGradientCPU = function(Problem, tbl, vars)
 				
 		currentValues : vars.unknownType
 		currentResiduals : vars.unknownType
-		bestValues : vars.unknownType
 		
 		gradient : vars.unknownType
 		prevGradient : vars.unknownType
@@ -192,7 +191,6 @@ solversCPU.conjugateGradientCPU = function(Problem, tbl, vars)
 			end
 			
 			C.memcpy(pd.prevGradient.impl.data, pd.gradient.impl.data, sizeof(float) * pd.gradW * pd.gradH)
-			
 			C.memcpy(pd.currentValues.impl.data, vars.unknownImage.impl.data, sizeof(float) * pd.gradW * pd.gradH)
 			
 			--
@@ -202,8 +200,6 @@ solversCPU.conjugateGradientCPU = function(Problem, tbl, vars)
 			
 			-- NOTE: this approach to line search will have unexpected behavior if the cost function
 			-- returns double-precision, but residuals are stored at single precision!
-			--var nullSearchCost = computeSearchCost(pd.currentValues, pd.currentResiduals, pd.searchDirection, 0.0, vars.unknownImage, vars.dataImages)
-			--log("nullSearch=%12.12f\n", nullSearchCost)
 			
 			var bestAlpha = 0.0
 			
@@ -325,7 +321,6 @@ solversCPU.conjugateGradientCPU = function(Problem, tbl, vars)
 		pd.costH = pd.dims[vars.costHIndex]
 
 		pd.currentValues:initCPU(pd.gradW, pd.gradH)
-		pd.bestValues:initCPU(pd.gradW, pd.gradH)
 		
 		pd.currentResiduals:initCPU(pd.costW, pd.costH)
 		
@@ -551,6 +546,258 @@ solversCPU.linearizedPreconditionedConjugateGradientCPU = function(Problem, tbl,
 		pd.Ap:initCPU(pd.gradW, pd.gradH)
 		pd.zeroes:initCPU(pd.gradW, pd.gradH)
 		
+		return &pd.plan
+	end
+	return Problem:new { makePlan = makePlan }
+end
+
+--[[vars.dataImages = terralib.newlist()
+for i = 2,#vars.imagesAll do
+	vars.dataImages:insert(vars.imagesAll[i])
+end]]
+
+solversCPU.lbfgsCPU = function(Problem, tbl, vars)
+
+	local maxIters = 100
+	
+	local struct PlanData(S.Object) {
+		plan : opt.Plan
+		gradW : int
+		gradH : int
+		costW : int
+		costH : int
+		dims : int64[#vars.dims + 1]
+		
+		k : int
+		
+		gradient : vars.unknownType
+		prevGradient : vars.unknownType
+				
+		p : vars.unknownType
+		sList : vars.unknownType[maxIters]
+		yList : vars.unknownType[maxIters]
+		syProduct : float[maxIters]
+		yyProduct : float[maxIters]
+		alpha : float[maxIters]
+		
+		-- variables used for line search
+		currentValues : vars.unknownType
+		currentResiduals : vars.unknownType
+	}
+	
+	local computeCost = util.makeComputeCost(tbl, vars.imagesAll)
+	local computeGradient = util.makeComputeGradient(tbl, vars.imagesAll)
+	local computeSearchCost = util.makeSearchCost(tbl, vars.unknownType, vars.dataImages)
+	local computeResiduals = util.makeComputeResiduals(tbl, vars.unknownType, vars.dataImages)
+	local imageInnerProduct = util.makeImageInnerProduct(vars.unknownType)
+	
+	local terra impl(data_ : &opaque, imageBindings : &&opt.ImageBinding, params_ : &opaque)
+
+		-- two-loop recursion: http://papers.nips.cc/paper/5333-large-scale-l-bfgs-using-mapreduce.pdf
+		
+		var pd = [&PlanData](data_)
+		var params = [&double](params_)
+		var dims = pd.dims
+
+		var [vars.imagesAll] = [util.getImages(vars, imageBindings, dims)]
+
+		-- TODO: parameterize these
+		var lineSearchMaxIters = 10000
+		var lineSearchBruteForceStart = 1e-6
+		var lineSearchBruteForceMultiplier = 1.1
+		
+		var m = 10
+		
+		var prevBestAlpha = 0.0
+		
+		pd.k = 0
+		
+		computeGradient(pd.gradient, vars.imagesAll)
+
+		for iter = 0, maxIters do
+
+			var iterStartCost = computeCost(vars.imagesAll)
+			log("iteration %d, cost=%f\n", iter, iterStartCost)
+			
+			--
+			-- compute the search direction p
+			--
+			for h = 0, pd.gradH do
+				for w = 0, pd.gradW do
+					pd.p(w, h) = -pd.gradient(w, h)
+				end
+			end
+			
+			if k >= 1 then
+				for i = k - 1, k - m, -1 do
+					if i < 0 then break end
+					alphas[i] = imageInnerProduct(pd.sList[i], pd.p) / syProduct[i]
+					for h = 0, pd.gradH do
+						for w = 0, pd.gradW do
+							pd.p(w, h) = pd.p(w, h) - alphas[i] * yList[i](w, h)
+						end
+					end
+				end
+				var scale = syProduct[k - 1] / yyProduct[k - 1]
+				for h = 0, pd.gradH do
+					for w = 0, pd.gradW do
+						pd.p(w, h) = pd.p(w, h) * scale
+					end
+				end
+				for i = util.max(k - m, 0), k - 1 do
+					var beta = imageInnerProduct(pd.yList[i], pd.p) / syProduct[i]
+					for h = 0, pd.gradH do
+						for w = 0, pd.gradW do
+							pd.p(w, h) = pd.p(w, h) + (alphas[i] - beta) * sList[i](w, h)
+						end
+					end
+				end
+			end
+			
+			C.memcpy(pd.currentValues.impl.data, vars.unknownImage.impl.data, sizeof(float) * pd.gradW * pd.gradH)
+			
+			--
+			-- line search
+			--
+			computeResiduals(pd.currentValues, pd.currentResiduals, vars.dataImages)
+			
+			-- NOTE: this approach to line search will have unexpected behavior if the cost function
+			-- returns double-precision, but residuals are stored at single precision!
+			
+			var bestAlpha = 0.0
+			
+			var useBruteForce = (iter <= 1) or prevBestAlpha == 0.0
+			if not useBruteForce then
+				var alphas = array(prevBestAlpha * 0.25, prevBestAlpha * 0.5, prevBestAlpha * 0.75, 0.0)
+				var costs : float[4]
+				var bestCost = 0.0
+				
+				for alphaIndex = 0, 3 do
+					var alpha = 0.0
+					if alphaIndex <= 2 then alpha = alphas[alphaIndex]
+					else
+						var a1 = alphas[0] var a2 = alphas[1] var a3 = alphas[2]
+						var c1 = costs[0] var c2 = costs[1] var c3 = costs[2]
+						var a = ((c2-c1)*(a1-a3) + (c3-c1)*(a2-a1))/((a1-a3)*(a2*a2-a1*a1) + (a2-a1)*(a3*a3-a1*a1))
+						var b = ((c2 - c1) - a * (a2*a2 - a1*a1)) / (a2 - a1)
+						var c = c1 - a * a1 * a1 - b * a1
+						-- 2ax + b = 0, x = -b / 2a
+						alpha = -b / (2.0 * a)
+					end
+					
+					var searchCost = computeSearchCost(pd.currentValues, pd.currentResiduals, pd.p, alpha, vars.unknownImage, vars.dataImages)
+					
+					if searchCost < bestCost then
+						bestAlpha = alpha
+						bestCost = searchCost
+					elseif alphaIndex == 3 then
+						log("quadratic minimization failed\n")
+						
+						--[[var file = C.fopen("C:/code/debug.txt", "wb")
+
+						var debugAlpha = lineSearchBruteForceStart
+						for lineSearchIndex = 0, 400 do
+							debugAlpha = debugAlpha * lineSearchBruteForceMultiplier
+							
+							var searchCost = computeSearchCost(pd.currentValues, pd.currentResiduals, pd.p, debugAlpha, vars.unknownImage, vars.dataImages)
+							
+							C.fprintf(file, "%15.15f\t%15.15f\n", debugAlpha * 1000.0, searchCost)
+						end
+						
+						C.fclose(file)
+						log("debug alpha outputted")
+						C.getchar()]]
+					end
+					
+					costs[alphaIndex] = searchCost
+				end
+				if bestAlpha == 0.0 then useBruteForce = true end
+			end
+			
+			if useBruteForce then
+				log("brute-force line search\n")
+				var alpha = lineSearchBruteForceStart
+				
+				var bestCost = 0.0
+				
+				for lineSearchIndex = 0, lineSearchMaxIters do
+					alpha = alpha * lineSearchBruteForceMultiplier
+					
+					var searchCost = computeSearchCost(pd.currentValues, pd.currentResiduals, pd.p, alpha, vars.unknownImage, vars.dataImages)
+					
+					--C.fprintf(file, "%f\t%f\n", alpha * 1000.0, searchCost / 1000000.0)
+					
+					if searchCost < bestCost then
+						bestAlpha = alpha
+						bestCost = searchCost
+					else
+						break
+					end
+				end
+			end
+			
+			-- compute new x and s
+			for h = 0, pd.gradH do
+				for w = 0, pd.gradW do
+					var delta = bestAlpha * pd.p(w, h)
+					vars.unknownImage(w, h) = pd.currentValues(w, h) + delta
+					vars.sList[k](w, h) = delta
+				end
+			end
+			
+			C.memcpy(pd.prevGradient.impl.data, vars.gradient.impl.data, sizeof(float) * pd.gradW * pd.gradH)
+			
+			computeGradient(pd.gradient, vars.imagesAll)
+			
+			-- compute new y
+			for h = 0, pd.gradH do
+				for w = 0, pd.gradW do
+					vars.yList[k](w, h) = pd.gradient(w, h) - pd.prevGradient(w, h)
+				end
+			end
+			
+			syProduct[k] = imageInnerProduct(pd.sList[i], pd.yList[i])
+			yyProduct[k] = imageInnerProduct(pd.yList[i], pd.yList[i])
+			
+			prevBestAlpha = bestAlpha
+			
+			k = k + 1
+			
+			log("alpha=%12.12f\n\n", bestAlpha)
+			if bestAlpha == 0.0 then
+				break
+			end
+		end
+	end
+	
+	local terra makePlan(actualDims : &uint64) : &opt.Plan
+		var pd = PlanData.alloc()
+		pd.plan.data = pd
+		pd.plan.impl = impl
+		pd.dims[0] = 1
+		for i = 0,[#vars.dims] do
+			pd.dims[i+1] = actualDims[i]
+		end
+
+		pd.gradW = pd.dims[vars.gradWIndex]
+		pd.gradH = pd.dims[vars.gradHIndex]
+		
+		pd.costW = pd.dims[vars.costWIndex]
+		pd.costH = pd.dims[vars.costHIndex]
+
+		pd.gradient:initCPU(pd.gradW, pd.gradH)
+		pd.prevGradient:initCPU(pd.gradW, pd.gradH)
+		
+		pd.currentValues:initCPU(pd.gradW, pd.gradH)
+		pd.currentResiduals:initCPU(pd.costW, pd.costH)
+		
+		pd.p:initCPU(pd.gradW, pd.gradH)
+		
+		for i = 0, maxIters - 1 do
+			pd.sList[i]:initCPU(pd.gradW, pd.gradH)
+			pd.yList[i]:initCPU(pd.gradW, pd.gradH)
+		end
+
 		return &pd.plan
 	end
 	return Problem:new { makePlan = makePlan }

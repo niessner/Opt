@@ -6,6 +6,7 @@ int main()
   //printf("Hello\n");
     TestFramework test;
     test.runAllTests();
+    cout << "done" << endl;
     #ifdef _WIN32
     cin.get();
     #endif
