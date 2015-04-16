@@ -221,6 +221,12 @@ function opt.Dim(name)
     return Dim:new { name = name }
 end
 
+terra opt.InBoundsCalc(x : int64, y : int64, W : int64, H : int64, sx : int64, sy : int64) : int
+    var minx,maxx,miny,maxy = x - sx,x + sx,y - sy,y + sy
+    return int(minx >= 0) and int(maxx < W) and int(miny >= 0) and int(maxy < H)
+end 
+
+
 local newImage = terralib.memoize(function(typ, W, H)
 	local struct Image {
 		impl : opt.ImageBinding
@@ -237,14 +243,13 @@ local newImage = terralib.memoize(function(typ, W, H)
 	    return x >= 0 and y >= 0 and x < self.W and y < self.H
 	end
 	--Image.methods.inbounds:disas()
-	terra Image:get(x : int64, y : int64, pb : &float)
+	terra Image:get(x : int64, y : int64)
 	    var v : typ = 0.f --TODO:only works for single precision things
-	    var b = self:inbounds(x,y)
-	     @pb = float(b)
-	    if b then
+	    --[[if opt.InBoundsCalc(x,y,self.W,self.H,0,0) ~= 0 then
 	        v = self(x,y)
 	    end
-	    return v
+	    return v]]
+	    return self(x,y)
 	end
 	terra Image:initCPU(actualW : int, actualH : int)
 		self.W = actualW
@@ -305,6 +310,7 @@ ad = require("ad")
 local ImageTable = newclass("ImageTable") -- a context that keeps a mapping from image accesses im(0,-1) to the ad variable object that represents the access
 
 local ImageAccess = newclass("ImageAccess")
+local BoundsAccess = newclass("BoundsAccess")
 
 ImageAccess.get = terralib.memoize(function(self,im,field,x,y)
     return ImageAccess:new { image = im, field = field, x = x, y = y}
@@ -314,6 +320,10 @@ function ImageAccess:__tostring()
     local xn,yn = tostring(self.x):gsub("-","m"),tostring(self.y):gsub("-","m")
     return ("%s_%s_%s_%s"):format(self.image.name,self.field,xn,yn)
 end
+function BoundsAccess:__tostring() return ("bounds_%d_%d_%d_%d"):format(self.x,self.y,self.sx,self.sy) end
+BoundsAccess.get = terralib.memoize(function(self,x,y,sx,sy)
+    return BoundsAccess:new { x = x, y = y, sx = sx, sy = sy }
+end)
 
 local Image = newclass("Image")
 -- Z: this will eventually be opt.Image, but that is currently used by our direct methods
@@ -324,19 +334,23 @@ function ad.Image(name,W,H)
     return Image:new { name = tostring(name), W = W, H = H }
 end
 
-function Image:inbounds(x,y)
-    x,y = assert(tonumber(x)),assert(tonumber(y))
-    return ad.v[ImageAccess:get(self,"bounds",x,y)]
-end
 function Image:__call(x,y)
     x,y = assert(tonumber(x)),assert(tonumber(y))
     return ad.v[ImageAccess:get(self,"v",x,y)]
 end
-
+function opt.InBounds(sx,sy)
+    return ad.v[BoundsAccess:get(0,0,sx,sy)]
+end
+function BoundsAccess:shift(x,y)
+    return BoundsAccess:get(self.x+x,self.y+y,self.sx,self.sy)
+end
+function ImageAccess:shift(x,y)
+    return ImageAccess:get(self.image,self.field,self.x + x, self.y + y)
+end
 local function centerexp(access,exp)
     local x,y = -access.x,-access.y
     local function rename(a)
-        return ad.v[ImageAccess:get(a.image,a.field,a.x + x, a.y + y)]
+        return ad.v[a:shift(x,y)]
     end
     return exp:rename(rename)
 end 
@@ -344,45 +358,50 @@ end
 local function createfunction(images,exp)
     local imageindex = {}
     local imagesyms = terralib.newlist()
-    print("IMAGERS")
     for i,im in ipairs(images) do
-        print(im)
         local s = symbol(opt.Image(float,im.W,im.H),im.name)
         imageindex[im] = s
         imagesyms:insert(s)
     end
+    local unknownimage = imagesyms[1]
     local i,j = symbol(int64,"i"), symbol(int64,"j")
     local stmts = terralib.newlist()
     local accesssyms = {}
     local vartosym = {}
     local function emitvar(a)
-        local both = ImageAccess:get(a.image,"",a.x,a.y)
-        if not accesssyms[both] then
-            local va,ga = ImageAccess:get(a.image,"v",a.x,a.y),ImageAccess:get(a.image,"bounds",a.x,a.y)
-            local r = { v = symbol(float,tostring(va)), bounds = symbol(float,tostring(ga)) }
-            local im = assert(imageindex[a.image],("cost function uses image %s not listed in parameters."):format(a.image))
-            stmts:insert quote
-                var [r.bounds]
-                var [r.v] = im:get(i+[a.x],j+[a.y],&[r.bounds])
-                --if i < 4 and j < 4 then
-                --    C.printf("%s(%d + %d,%d + %d) = %f,%f\n",[a.image.name],i,[a.x],j,[a.y],[r.v],[r.bounds])
-                --end
+        if not accesssyms[a] then
+            local r 
+            if ImageAccess:is(a) then
+                local im = assert(imageindex[a.image],("cost function uses image %s not listed in parameters."):format(a.image))
+                r = symbol(float,tostring(a))
+                stmts:insert quote
+                    var [r] = im:get(i+[a.x],j+[a.y])
+                    --if i < 4 and j < 4 then
+                    --    C.printf("%s(%d + %d,%d + %d) = %f,%f\n",[a.image.name],i,[a.x],j,[a.y],[r.v],[r.bounds])
+                    --end
+                end
+            else --bounds calculation
+                r = symbol(int,tostring(a))
+                stmts:insert quote
+                    var [r] = opt.InBoundsCalc(i+a.x,j+a.y,unknownimage.W,unknownimage.H,a.sx,a.sy)
+                end
             end
-            accesssyms[both] = r
+            accesssyms[a] = r
         end
-        return accesssyms[both][a.field]
+        return accesssyms[a]
     end
     local result = ad.toterra({exp},emitvar)
     local terra generatedfn([i] : int64, [j] : int64, [imagesyms])
         [stmts]
         return result
     end
-    generatedfn:printpretty(false,false)
+    --generatedfn:printpretty(false,false)
     generatedfn:compile()
     --generatedfn:printpretty(true,false)
-    generatedfn:disas()
+    --generatedfn:disas()
     return generatedfn
 end
+
 function ad.Cost(dims,images,costexp)
     images = terralib.islist(images) and images or terralib.newlist(images)
     assert(#images > 0)
@@ -399,7 +418,7 @@ function ad.Cost(dims,images,costexp)
     costexp:rename(function(a)
         local v = ad.v[a]
         --assert(<image is in images list>)
-        if a.image == unknown and a.field == "v" and not seenunknown[a] then
+        if ImageAccess:is(a) and a.image == unknown and a.field == "v" and not seenunknown[a] then
             unknownvars:insert(v)
             seenunknown[a] = true
         end
@@ -424,6 +443,7 @@ function ad.Cost(dims,images,costexp)
     
     local costfn = createfunction(images,costexp)
     local gradfn = createfunction(images,gradientgathered)
+    print("Warning: functions do not guard reads!")
     return { dims = dims, cost = { dim = dims, fn = costfn}, gradient = gradfn }
 end
 return opt

@@ -417,7 +417,7 @@ ad.sinh:define(function(x) return `C.sinh(a) end, ad.cosh(x))
 ad.sqrt:define(function(x) return `C.sqrt(x) end, 1.0/(2.0*ad.sqrt(x)))
 ad.tan:define(function(x) return `C.tan(x) end, 1.0 + ad.tan(x)*ad.tan(x))
 ad.tanh:define(function(x) return `C.tanh(x) end, 1.0/(ad.cosh(x)*ad.cosh(x)))
-ad.select:define(function(x,y,z) return `terralib.select(x ~= 0.f,y,z) end,0,ad.select(x,1,0),ad.select(x,0,1))
+ad.select:define(function(x,y,z) return `terralib.select(bool(x),y,z) end,0,ad.select(x,1,0),ad.select(x,0,1))
 ad.eq:define(function(x,y) return `terralib.select(x == y,1.f,0.f) end, 0,0)
 setmetatable(ad,nil) -- remove special metatable that generates new blank ops
 ad.Var,ad.Apply,ad.Const,ad.Exp = Var, Apply, Const, Exp
