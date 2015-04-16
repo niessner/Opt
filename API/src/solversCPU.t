@@ -381,7 +381,8 @@ solversCPU.linearizedPreconditionedConjugateGradientCPU = function(Problem, tbl,
 
 		for h = 0, pd.gradH do
 			for w = 0, pd.gradW do
-				pd.MInv(w, h) = 1.0 / tbl.gradientPreconditioner(w, h)
+				--pd.MInv(w, h) = 1.0 / tbl.gradientPreconditioner(w, h)
+				pd.MInv(w, h) = 1.0
 			end
 		end
 		

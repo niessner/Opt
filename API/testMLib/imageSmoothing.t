@@ -82,5 +82,5 @@ end
 
 return { dims = { W, H },
          cost = { dim = {W,H}, boundary = cost, interior = cost, stencil = {1,1} },
-         gradient = { boundary = gradient, interior = gradient, stencil = {2,2} }},
+         gradient = { boundary = gradient, interior = gradient, stencil = {2,2} },
 		 gradientPreconditioner = gradientPreconditioner }
