@@ -58,12 +58,12 @@ end
 
 util.makeDeltaCost = function(tbl, imageType, dataImages)
 	local terra deltaCost(baseResiduals : imageType, currentValues : imageType, [dataImages])
-		var result = 0.0
+		var result : double = 0.0
 		for h = 0, currentValues.H do
 			for w = 0, currentValues.W do
 				var residual = tbl.cost.fn(w, h, currentValues, dataImages)
 				var delta = residual - baseResiduals(w, h)
-				result = result + delta
+				result = result + [double](delta)
 			end
 		end
 		return result
@@ -108,11 +108,7 @@ util.makeImageInnerProduct = function(imageType)
 	return imageInnerProduct
 end
 
-util.makeLineSearchBruteForce = function(tbl, imageType, dataImages)
-
-	local computeSearchCost = util.makeSearchCost(tbl, imageType, dataImages)
-	local computeResiduals = util.makeComputeResiduals(tbl, imageType, dataImages)
-
+util.makeLineSearchBruteForce = function(tbl, imageType, cpu, dataImages)
 	local terra lineSearchBruteForce(baseValues : imageType, baseResiduals : imageType, searchDirection : imageType, valueStore : imageType, [dataImages])
 
 		-- Constants
@@ -130,7 +126,7 @@ util.makeLineSearchBruteForce = function(tbl, imageType, dataImages)
 		for lineSearchIndex = 0, lineSearchMaxIters do
 			alpha = alpha * lineSearchBruteForceMultiplier
 			
-			var searchCost = computeSearchCost(baseValues, baseResiduals, searchDirection, alpha, valueStore, dataImages)
+			var searchCost = cpu.computeSearchCost(baseValues, baseResiduals, searchDirection, alpha, valueStore, dataImages)
 			
 			if searchCost < bestCost then
 				bestAlpha = alpha
@@ -145,15 +141,11 @@ util.makeLineSearchBruteForce = function(tbl, imageType, dataImages)
 	return lineSearchBruteForce
 end
 
-util.makeLineSearchQuadraticMinimum = function(tbl, imageType, dataImages)
-
-	local computeSearchCost = util.makeSearchCost(tbl, imageType, dataImages)
-	local computeResiduals = util.makeComputeResiduals(tbl, imageType, dataImages)
-
+util.makeLineSearchQuadraticMinimum = function(tbl, imageType, cpu, dataImages)
 	local terra lineSearchQuadraticMinimum(baseValues : imageType, baseResiduals : imageType, searchDirection : imageType, valueStore : imageType, alphaGuess : float, [dataImages])
 
-		var alphas = array(alphaGuess * 0.25, alphaGuess * 0.5, alphaGuess * 0.75, 0.0)
-		var costs : float[4]
+		var alphas : double[4] = array(alphaGuess * 0.5, alphaGuess * 1.0, alphaGuess * 1.5, 0.0)
+		var costs : double[4]
 		var bestCost = 0.0
 		var bestAlpha = 0.0
 		
@@ -170,13 +162,14 @@ util.makeLineSearchQuadraticMinimum = function(tbl, imageType, dataImages)
 				alpha = -b / (2.0 * a)
 			end
 			
-			var searchCost = computeSearchCost(baseValues, baseResiduals, searchDirection, alpha, valueStore, dataImages)
+			var searchCost = cpu.computeSearchCost(baseValues, baseResiduals, searchDirection, alpha, valueStore, dataImages)
 			
 			if searchCost < bestCost then
 				bestAlpha = alpha
 				bestCost = searchCost
 			elseif alphaIndex == 3 then
-				C.printf("quadratic minimization failed\n")
+				C.printf("quadratic minimization failed, bestAlpha=%f\n", bestAlpha)
+				--cpu.dumpLineSearch(baseValues, baseResiduals, searchDirection, valueStore, dataImages)
 			end
 			
 			costs[alphaIndex] = searchCost
@@ -187,15 +180,9 @@ util.makeLineSearchQuadraticMinimum = function(tbl, imageType, dataImages)
 	return lineSearchQuadraticMinimum
 end
 
+util.makeDumpLineSearch = function(tbl, imageType, cpu, dataImages)
 
-				
-				
-util.makeDumpLineSearchValues = function(tbl, imageType, dataImages)
-
-	local computeSearchCost = util.makeSearchCost(tbl, imageType, dataImages)
-	local computeResiduals = util.makeComputeResiduals(tbl, imageType, dataImages)
-
-	local terra dumpLineSearchValues(baseValues : imageType, baseResiduals : imageType, searchDirection : imageType, valueStore : imageType, [dataImages])
+	local terra dumpLineSearch(baseValues : imageType, baseResiduals : imageType, searchDirection : imageType, valueStore : imageType, [dataImages])
 
 		-- Constants
 		var lineSearchMaxIters = 1000
@@ -209,18 +196,18 @@ util.makeDumpLineSearchValues = function(tbl, imageType, dataImages)
 		for lineSearchIndex = 0, lineSearchMaxIters do
 			alpha = alpha * lineSearchBruteForceMultiplier
 			
-			var searchCost = computeSearchCost(baseValues, baseResiduals, searchDirection, alpha, valueStore, dataImages)
+			var searchCost = cpu.computeSearchCost(baseValues, baseResiduals, searchDirection, alpha, valueStore, dataImages)
 			
-			C.fprintf(file, "%15.15f\t%15.15f\n", alpha * 1000.0, searchCost)
+			C.fprintf(file, "%15.15f\t%15.15f\n", alpha, searchCost)
 			
-			if searchCost >= 100.0 then break end
+			if searchCost >= 10.0 then break end
 		end
 		
 		C.fclose(file)
 		log("debug alpha outputted")
 		C.getchar()
 	end
-	return dumpLineSearchValues
+	return dumpLineSearch
 end
 
 util.makeCPUFunctions = function(tbl, imageType, dataImages, allImages)
@@ -229,10 +216,10 @@ util.makeCPUFunctions = function(tbl, imageType, dataImages, allImages)
 	cpu.computeGradient = util.makeComputeGradient(tbl, imageType, allImages)
 	cpu.computeSearchCost = util.makeSearchCost(tbl, imageType, dataImages)
 	cpu.computeResiduals = util.makeComputeResiduals(tbl, imageType, dataImages)
-	cpu.lineSearchBruteForce = util.makeLineSearchBruteForce(tbl, imageType, dataImages)
-	cpu.lineSearchQuadraticMinimum = util.makeLineSearchQuadraticMinimum(tbl, imageType, dataImages)
-	cpu.dumpLineSearchValues = util.makeDumpLineSearchValues(tbl, imageType, dataImages)
 	cpu.imageInnerProduct = util.makeImageInnerProduct(imageType)
+	cpu.dumpLineSearch = util.makeDumpLineSearch(tbl, imageType, cpu, dataImages)
+	cpu.lineSearchBruteForce = util.makeLineSearchBruteForce(tbl, imageType, cpu, dataImages)
+	cpu.lineSearchQuadraticMinimum = util.makeLineSearchQuadraticMinimum(tbl, imageType, cpu, dataImages)
 	return cpu
 end
 

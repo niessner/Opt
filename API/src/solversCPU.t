@@ -572,7 +572,20 @@ solversCPU.lbfgsCPU = function(Problem, tbl, vars)
 				
 				bestAlpha = cpu.lineSearchQuadraticMinimum(pd.currentValues, pd.currentResiduals, pd.p, vars.unknownImage, prevBestAlpha, vars.dataImages)
 				
-				if bestAlpha == 0.0 then useBruteForce = true end
+				if bestAlpha == 0.0 then
+					log("quadratic guess=%f failed, trying again...\n", prevBestAlpha)
+					bestAlpha = cpu.lineSearchQuadraticMinimum(pd.currentValues, pd.currentResiduals, pd.p, vars.unknownImage, prevBestAlpha * 4.0, vars.dataImages)
+					
+					if bestAlpha == 0.0 then
+					
+						if iter >= 10 then
+							log("quadratic minimization exhausted\n")
+						else
+							useBruteForce = true
+						end
+						--cpu.dumpLineSearch(pd.currentValues, pd.currentResiduals, pd.p, vars.unknownImage, vars.dataImages)
+					end
+				end
 			end
 			
 			if useBruteForce then
