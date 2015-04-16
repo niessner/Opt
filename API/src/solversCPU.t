@@ -472,7 +472,7 @@ end]]
 
 solversCPU.lbfgsCPU = function(Problem, tbl, vars)
 
-	local maxIters = 10
+	local maxIters = 1000
 	
 	local struct PlanData(S.Object) {
 		plan : opt.Plan
@@ -497,11 +497,7 @@ solversCPU.lbfgsCPU = function(Problem, tbl, vars)
 		currentResiduals : vars.unknownType
 	}
 	
-	local computeCost = util.makeComputeCost(tbl, vars.imagesAll)
-	local computeGradient = util.makeComputeGradient(tbl, vars.unknownType, vars.imagesAll)
-	local computeSearchCost = util.makeSearchCost(tbl, vars.unknownType, vars.dataImages)
-	local computeResiduals = util.makeComputeResiduals(tbl, vars.unknownType, vars.dataImages)
-	local imageInnerProduct = util.makeImageInnerProduct(vars.unknownType)
+	local cpu = util.makeCPUFunctions(tbl, vars.unknownType, vars.dataImages, vars.imagesAll)
 	
 	local terra impl(data_ : &opaque, imageBindings : &&opt.ImageBinding, params_ : &opaque)
 
@@ -513,21 +509,16 @@ solversCPU.lbfgsCPU = function(Problem, tbl, vars)
 
 		var [vars.imagesAll] = [util.getImages(vars, imageBindings, dims)]
 
-		-- TODO: parameterize these
-		var lineSearchMaxIters = 1000
-		var lineSearchBruteForceStart = 1e-3
-		var lineSearchBruteForceMultiplier = 1.1
-		
 		var m = 10
 		var k = 0
 		
 		var prevBestAlpha = 0.0
 		
-		computeGradient(pd.gradient, vars.imagesAll)
+		cpu.computeGradient(pd.gradient, vars.imagesAll)
 
 		for iter = 0, maxIters - 1 do
 
-			var iterStartCost = computeCost(vars.imagesAll)
+			var iterStartCost = cpu.computeCost(vars.imagesAll)
 			log("iteration %d, cost=%f\n", iter, iterStartCost)
 			
 			--
@@ -542,7 +533,7 @@ solversCPU.lbfgsCPU = function(Problem, tbl, vars)
 			if k >= 1 then
 				for i = k - 1, k - m - 1, -1 do
 					if i < 0 then break end
-					pd.alphaList[i] = imageInnerProduct(pd.sList[i], pd.p) / pd.syProduct[i]
+					pd.alphaList[i] = cpu.imageInnerProduct(pd.sList[i], pd.p) / pd.syProduct[i]
 					for h = 0, pd.gradH do
 						for w = 0, pd.gradW do
 							pd.p(w, h) = pd.p(w, h) - pd.alphaList[i] * pd.yList[i](w, h)
@@ -557,7 +548,7 @@ solversCPU.lbfgsCPU = function(Problem, tbl, vars)
 				end
 				for i = k - m, k do
 					if i >= 0 then
-						var beta = imageInnerProduct(pd.yList[i], pd.p) / pd.syProduct[i]
+						var beta = cpu.imageInnerProduct(pd.yList[i], pd.p) / pd.syProduct[i]
 						for h = 0, pd.gradH do
 							for w = 0, pd.gradW do
 								pd.p(w, h) = pd.p(w, h) + (pd.alphaList[i] - beta) * pd.sList[i](w, h)
@@ -572,82 +563,21 @@ solversCPU.lbfgsCPU = function(Problem, tbl, vars)
 			--
 			-- line search
 			--
-			computeResiduals(pd.currentValues, pd.currentResiduals, vars.dataImages)
-			
-			-- NOTE: this approach to line search will have unexpected behavior if the cost function
-			-- returns double-precision, but residuals are stored at single precision!
+			cpu.computeResiduals(pd.currentValues, pd.currentResiduals, vars.dataImages)
 			
 			var bestAlpha = 0.0
 			
-			var useBruteForce = true
-			--var useBruteForce = (iter <= 1) or prevBestAlpha == 0.0
+			var useBruteForce = (iter <= 1) or prevBestAlpha == 0.0
 			if not useBruteForce then
-				var alphas = array(prevBestAlpha * 0.25, prevBestAlpha * 0.5, prevBestAlpha * 0.75, 0.0)
-				var costs : float[4]
-				var bestCost = 0.0
 				
-				for alphaIndex = 0, 3 do
-					var alpha = 0.0
-					if alphaIndex <= 2 then alpha = alphas[alphaIndex]
-					else
-						var a1 = alphas[0] var a2 = alphas[1] var a3 = alphas[2]
-						var c1 = costs[0] var c2 = costs[1] var c3 = costs[2]
-						var a = ((c2-c1)*(a1-a3) + (c3-c1)*(a2-a1))/((a1-a3)*(a2*a2-a1*a1) + (a2-a1)*(a3*a3-a1*a1))
-						var b = ((c2 - c1) - a * (a2*a2 - a1*a1)) / (a2 - a1)
-						var c = c1 - a * a1 * a1 - b * a1
-						-- 2ax + b = 0, x = -b / 2a
-						alpha = -b / (2.0 * a)
-					end
-					
-					var searchCost = computeSearchCost(pd.currentValues, pd.currentResiduals, pd.p, alpha, vars.unknownImage, vars.dataImages)
-					
-					if searchCost < bestCost then
-						bestAlpha = alpha
-						bestCost = searchCost
-					elseif alphaIndex == 3 then
-						log("quadratic minimization failed\n")
-						
-						--[[var file = C.fopen("C:/code/debug.txt", "wb")
-
-						var debugAlpha = lineSearchBruteForceStart
-						for lineSearchIndex = 0, 400 do
-							debugAlpha = debugAlpha * lineSearchBruteForceMultiplier
-							
-							var searchCost = computeSearchCost(pd.currentValues, pd.currentResiduals, pd.p, debugAlpha, vars.unknownImage, vars.dataImages)
-							
-							C.fprintf(file, "%15.15f\t%15.15f\n", debugAlpha * 1000.0, searchCost)
-						end
-						
-						C.fclose(file)
-						log("debug alpha outputted")
-						C.getchar()]]
-					end
-					
-					costs[alphaIndex] = searchCost
-				end
+				bestAlpha = cpu.lineSearchQuadraticMinimum(pd.currentValues, pd.currentResiduals, pd.p, vars.unknownImage, prevBestAlpha, vars.dataImages)
+				
 				if bestAlpha == 0.0 then useBruteForce = true end
 			end
 			
 			if useBruteForce then
 				log("brute-force line search\n")
-				var alpha = lineSearchBruteForceStart
-				
-				var bestCost = 0.0
-				
-				for lineSearchIndex = 0, lineSearchMaxIters do
-					alpha = alpha * lineSearchBruteForceMultiplier
-					
-					var searchCost = computeSearchCost(pd.currentValues, pd.currentResiduals, pd.p, alpha, vars.unknownImage, vars.dataImages)
-					
-					--C.fprintf(file, "%f\t%f\n", alpha * 1000.0, searchCost / 1000000.0)
-					
-					if searchCost < bestCost then
-						bestAlpha = alpha
-						bestCost = searchCost
-					else
-						--break
-					end
-				end
+				bestAlpha = cpu.lineSearchBruteForce(pd.currentValues, pd.currentResiduals, pd.p, vars.unknownImage, vars.dataImages)
 			end
 			
 			-- compute new x and s
@@ -661,7 +591,7 @@ solversCPU.lbfgsCPU = function(Problem, tbl, vars)
 			
 			C.memcpy(pd.prevGradient.impl.data, pd.gradient.impl.data, sizeof(float) * pd.gradW * pd.gradH)
 			
-			computeGradient(pd.gradient, vars.imagesAll)
+			cpu.computeGradient(pd.gradient, vars.imagesAll)
 			
 			-- compute new y
 			for h = 0, pd.gradH do
@@ -670,8 +600,8 @@ solversCPU.lbfgsCPU = function(Problem, tbl, vars)
 				end
 			end
 			
-			pd.syProduct[k] = imageInnerProduct(pd.sList[k], pd.yList[k])
-			pd.yyProduct[k] = imageInnerProduct(pd.yList[k], pd.yList[k])
+			pd.syProduct[k] = cpu.imageInnerProduct(pd.sList[k], pd.yList[k])
+			pd.yyProduct[k] = cpu.imageInnerProduct(pd.yList[k], pd.yList[k])
 			
 			prevBestAlpha = bestAlpha
 			

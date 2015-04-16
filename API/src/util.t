@@ -232,6 +232,7 @@ util.makeCPUFunctions = function(tbl, imageType, dataImages, allImages)
 	cpu.lineSearchBruteForce = util.makeLineSearchBruteForce(tbl, imageType, dataImages)
 	cpu.lineSearchQuadraticMinimum = util.makeLineSearchQuadraticMinimum(tbl, imageType, dataImages)
 	cpu.dumpLineSearchValues = util.makeDumpLineSearchValues(tbl, imageType, dataImages)
+	cpu.imageInnerProduct = util.makeImageInnerProduct(imageType)
 	return cpu
 end
 
