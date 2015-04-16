@@ -531,35 +531,22 @@ solversCPU.lbfgsCPU = function(Problem, tbl, vars)
 				for i = k - 1, k - m - 1, -1 do
 					if i < 0 then break end
 					pd.alphaList[i] = cpu.imageInnerProduct(pd.sList[i], pd.p) / pd.syProduct[i]
-					for h = 0, pd.gradH do
-						for w = 0, pd.gradW do
-							pd.p(w, h) = pd.p(w, h) - pd.alphaList[i] * pd.yList[i](w, h)
-						end
-					end
+					cpu.addImage(pd.p, pd.yList[i], -pd.alphaList[i])
 				end
 				var scale = pd.syProduct[k - 1] / pd.yyProduct[k - 1]
-				for h = 0, pd.gradH do
-					for w = 0, pd.gradW do
-						pd.p(w, h) = pd.p(w, h) * scale
-					end
-				end
+				cpu.scaleImage(pd.p, scale)
 				for i = k - m, k do
 					if i >= 0 then
 						var beta = cpu.imageInnerProduct(pd.yList[i], pd.p) / pd.syProduct[i]
-						for h = 0, pd.gradH do
-							for w = 0, pd.gradW do
-								pd.p(w, h) = pd.p(w, h) + (pd.alphaList[i] - beta) * pd.sList[i](w, h)
-							end
-						end
+						cpu.addImage(pd.p, pd.sList[i], pd.alphaList[i] - beta)
 					end
 				end
 			end
 			
-			C.memcpy(pd.currentValues.impl.data, vars.unknownImage.impl.data, sizeof(float) * pd.gradW * pd.gradH)
-			
 			--
 			-- line search
 			--
+			cpu.copyImage(pd.currentValues, vars.unknownImage)
 			cpu.computeResiduals(pd.currentValues, pd.currentResiduals, vars.dataImages)
 			
 			var bestAlpha = 0.0
@@ -599,7 +586,7 @@ solversCPU.lbfgsCPU = function(Problem, tbl, vars)
 				end
 			end
 			
-			C.memcpy(pd.prevGradient.impl.data, pd.gradient.impl.data, sizeof(float) * pd.gradW * pd.gradH)
+			cpu.copyImage(pd.prevGradient, pd.gradient)
 			
 			cpu.computeGradient(pd.gradient, vars.imagesAll)
 			

@@ -55,6 +55,28 @@ util.makeSetImage = function(imageType)
 	return setImage
 end
 
+util.makeCopyImage = function(imageType)
+	local terra copyImage(targetImage : imageType, sourceImage : imageType)
+		for h = 0, targetImage.H do
+			for w = 0, targetImage.W do
+				targetImage(w, h) = sourceImage(w, h)
+			end
+		end
+	end
+	return copyImage
+end
+
+util.makeScaleImage = function(imageType)
+	local terra scaleImage(targetImage : imageType, scale : float)
+		for h = 0, targetImage.H do
+			for w = 0, targetImage.W do
+				targetImage(w, h) = targetImage(w, h) * scale
+			end
+		end
+	end
+	return scaleImage
+end
+
 util.makeAddImage = function(imageType)
 	local terra addImage(targetImage : imageType, addedImage : imageType, scale : float)
 		for h = 0, targetImage.H do
@@ -209,7 +231,6 @@ util.makeLineSearchQuadraticMinimum = function(tbl, imageType, cpu, dataImages)
 end
 
 util.makeDumpLineSearch = function(tbl, imageType, cpu, dataImages)
-
 	local terra dumpLineSearch(baseValues : imageType, baseResiduals : imageType, searchDirection : imageType, valueStore : imageType, [dataImages])
 
 		-- Constants
@@ -242,8 +263,10 @@ util.makeCPUFunctions = function(tbl, imageType, dataImages, allImages)
 	local cpu = {}
 	cpu.computeCost = util.makeComputeCost(tbl, allImages)
 	cpu.computeGradient = util.makeComputeGradient(tbl, imageType, allImages)
+	cpu.copyImage = util.makeCopyImage(imageType)
 	cpu.setImage = util.makeSetImage(imageType)
-	cpu.addImage = util.makeSetImage(imageType)
+	cpu.addImage = util.makeAddImage(imageType)
+	cpu.scaleImage = util.makeScaleImage(imageType)
 	cpu.deltaCost = util.makeDeltaCost(tbl, imageType, dataImages)
 	cpu.computeSearchCost = util.makeSearchCost(tbl, imageType, cpu, dataImages)
 	cpu.computeSearchCostParallel = util.makeSearchCostParallel(tbl, imageType, cpu, dataImages)
