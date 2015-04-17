@@ -11,7 +11,9 @@ local solversGPU = require("solversGPU")
 local C = util.C
 
 -- constants
+local verboseFixThis = true
 local verboseSolver = false
+local verboseAD = false
 
 local function newclass(name)
     local mt = { __name = name }
@@ -57,7 +59,18 @@ printf = macro(function(fmt,...)
     return `vprintf(fmt,buf) 
 end)
 local dprint
-if verboseSolver then
+if verboseFixThis then
+	solverLog = macro(function(fmt,...)
+		local args = {...}
+		return `C.printf(fmt, args)
+	end)
+else
+	solverLog = function(fmt,...)
+	
+	end
+end
+
+if verboseAD then
 	log = macro(function(fmt,...)
 		local args = {...}
 		return `C.printf(fmt, args)
@@ -69,6 +82,7 @@ else
 	end
 	dprint = function() end
 end
+
 
 local GPUBlockDims = {{"blockIdx","ctaid"},
               {"gridDim","nctaid"},
@@ -147,6 +161,8 @@ local function compileProblem(tbl, kind)
 		return solversCPU.linearizedPreconditionedConjugateGradientCPU(Problem, tbl, vars)
 	elseif kind == "lbfgsCPU" then
 		return solversCPU.lbfgsCPU(Problem, tbl, vars)
+	elseif kind == "vlbfgsCPU" then
+		return solversCPU.vlbfgsCPU(Problem, tbl, vars)
 	end
 	
     

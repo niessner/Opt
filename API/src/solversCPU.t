@@ -39,7 +39,7 @@ solversCPU.gradientDescentCPU = function(Problem, tbl, vars)
 
 		for iter = 0, maxIters do
 			var startCost = computeCost(vars.imagesAll)
-			log("iteration %d, cost=%f, learningRate=%f\n", iter, startCost, learningRate)
+			solverLog("iteration %d, cost=%f, learningRate=%f\n", iter, startCost, learningRate)
 			--C.getchar()
 
 			computeGradient(pd.gradient, vars.imagesAll)
@@ -65,14 +65,14 @@ solversCPU.gradientDescentCPU = function(Problem, tbl, vars)
 				learningRate = learningRate * learningGain
 
 				if maxDelta < tolerance then
-					log("terminating, maxDelta=%f\n", maxDelta)
+					solverLog("terminating, maxDelta=%f\n", maxDelta)
 					break
 				end
 			else
 				learningRate = learningRate * learningLoss
 
 				if learningRate < minLearningRate then
-					log("terminating, learningRate=%f\n", learningRate)
+					solverLog("terminating, learningRate=%f\n", learningRate)
 					break
 				end
 			end
@@ -133,7 +133,7 @@ solversCPU.conjugateGradientCPU = function(Problem, tbl, vars)
 		for iter = 0, maxIters do
 
 			var iterStartCost = cpu.computeCost(vars.imagesAll)
-			log("iteration %d, cost=%f\n", iter, iterStartCost)
+			solverLog("iteration %d, cost=%f\n", iter, iterStartCost)
 
 			cpu.computeGradient(pd.gradient, vars.imagesAll)
 			
@@ -198,7 +198,7 @@ solversCPU.conjugateGradientCPU = function(Problem, tbl, vars)
 			end
 			
 			if useBruteForce then
-				log("brute-force line search\n")
+				solverLog("brute-force line search\n")
 				bestAlpha = cpu.lineSearchBruteForce(pd.currentValues, pd.currentResiduals, pd.searchDirection, vars.unknownImage, vars.dataImages)
 			end
 			
@@ -212,7 +212,7 @@ solversCPU.conjugateGradientCPU = function(Problem, tbl, vars)
 			
 			--if iter % 20 == 0 then C.getchar() end
 			
-			log("alpha=%12.12f, beta=%12.12f\n\n", bestAlpha, beta)
+			solverLog("alpha=%12.12f, beta=%12.12f\n\n", bestAlpha, beta)
 			if bestAlpha == 0.0 and beta == 0.0 then
 				break
 			end
@@ -308,7 +308,7 @@ solversCPU.linearizedConjugateGradientCPU = function(Problem, tbl, vars)
 			
 			var rTrNew = imageInnerProduct(pd.r, pd.r)
 			
-			log("iteration %d, cost=%f, rTr=%f\n", iter, iterStartCost, rTrNew)
+			solverLog("iteration %d, cost=%f, rTr=%f\n", iter, iterStartCost, rTrNew)
 			
 			if(rTrNew < tolerance) then break end
 			
@@ -323,7 +323,7 @@ solversCPU.linearizedConjugateGradientCPU = function(Problem, tbl, vars)
 		end
 		
 		var finalCost = computeCost(vars.imagesAll)
-		log("final cost=%f\n", finalCost)
+		solverLog("final cost=%f\n", finalCost)
 	end
 
 	local terra makePlan(actualDims : &uint64) : &opt.Plan
@@ -418,7 +418,7 @@ solversCPU.linearizedPreconditionedConjugateGradientCPU = function(Problem, tbl,
 			
 			var rTr = imageInnerProduct(pd.r, pd.r)
 			
-			log("iteration %d, cost=%f, rTr=%f\n", iter, iterStartCost, rTr)
+			solverLog("iteration %d, cost=%f, rTr=%f\n", iter, iterStartCost, rTr)
 			
 			if(rTr < tolerance) then break end
 			
@@ -438,7 +438,7 @@ solversCPU.linearizedPreconditionedConjugateGradientCPU = function(Problem, tbl,
 		end
 		
 		var finalCost = computeCost(vars.imagesAll)
-		log("final cost=%f\n", finalCost)
+		solverLog("final cost=%f\n", finalCost)
 	end
 
 	local terra makePlan(actualDims : &uint64) : &opt.Plan
@@ -465,11 +465,6 @@ solversCPU.linearizedPreconditionedConjugateGradientCPU = function(Problem, tbl,
 	end
 	return Problem:new { makePlan = makePlan }
 end
-
---[[vars.dataImages = terralib.newlist()
-for i = 2,#vars.imagesAll do
-	vars.dataImages:insert(vars.imagesAll[i])
-end]]
 
 solversCPU.lbfgsCPU = function(Problem, tbl, vars)
 
@@ -520,7 +515,7 @@ solversCPU.lbfgsCPU = function(Problem, tbl, vars)
 		for iter = 0, maxIters - 1 do
 
 			var iterStartCost = cpu.computeCost(vars.imagesAll)
-			log("iteration %d, cost=%f\n", iter, iterStartCost)
+			solverLog("iteration %d, cost=%f\n", iter, iterStartCost)
 			
 			--
 			-- compute the search direction p
@@ -557,13 +552,13 @@ solversCPU.lbfgsCPU = function(Problem, tbl, vars)
 				bestAlpha = cpu.lineSearchQuadraticMinimum(pd.currentValues, pd.currentResiduals, pd.p, vars.unknownImage, prevBestAlpha, vars.dataImages)
 				
 				if bestAlpha == 0.0 then
-					log("quadratic guess=%f failed, trying again...\n", prevBestAlpha)
+					solverLog("quadratic guess=%f failed, trying again...\n", prevBestAlpha)
 					bestAlpha = cpu.lineSearchQuadraticMinimum(pd.currentValues, pd.currentResiduals, pd.p, vars.unknownImage, prevBestAlpha * 4.0, vars.dataImages)
 					
 					if bestAlpha == 0.0 then
 					
 						if iter >= 10 then
-							log("quadratic minimization exhausted\n")
+							solverLog("quadratic minimization exhausted\n")
 						else
 							useBruteForce = true
 						end
@@ -573,7 +568,7 @@ solversCPU.lbfgsCPU = function(Problem, tbl, vars)
 			end
 			
 			if useBruteForce then
-				log("brute-force line search\n")
+				solverLog("brute-force line search\n")
 				bestAlpha = cpu.lineSearchBruteForce(pd.currentValues, pd.currentResiduals, pd.p, vars.unknownImage, vars.dataImages)
 			end
 			
@@ -604,7 +599,7 @@ solversCPU.lbfgsCPU = function(Problem, tbl, vars)
 			
 			k = k + 1
 			
-			log("alpha=%12.12f\n\n", bestAlpha)
+			solverLog("alpha=%12.12f\n\n", bestAlpha)
 			if bestAlpha == 0.0 then
 				break
 			end
@@ -638,6 +633,245 @@ solversCPU.lbfgsCPU = function(Problem, tbl, vars)
 			pd.sList[i]:initCPU(pd.gradW, pd.gradH)
 			pd.yList[i]:initCPU(pd.gradW, pd.gradH)
 		end
+
+		return &pd.plan
+	end
+	return Problem:new { makePlan = makePlan }
+end
+
+solversCPU.vlbfgsCPU = function(Problem, tbl, vars)
+
+	local maxIters = 1000
+	local m = 10
+	local b = 2 * m + 1
+	
+	local struct PlanData(S.Object) {
+		plan : opt.Plan
+		gradW : int
+		gradH : int
+		costW : int
+		costH : int
+		dimensions : int64[#vars.dimensions + 1]
+		
+		gradient : vars.unknownType
+		prevGradient : vars.unknownType
+				
+		p : vars.unknownType
+		sList : vars.unknownType[m]
+		yList : vars.unknownType[m]
+		alphaList : float[maxIters]
+		
+		dotProductMatrix : vars.unknownType
+		coefficients : double[b]
+		
+		-- variables used for line search
+		currentValues : vars.unknownType
+		currentResiduals : vars.unknownType
+	}
+	
+	local terra imageFromIndex(pd : &PlanData, index : int)
+		if index < m then
+			return pd.yList[index]
+		elseif index < 2 * m then
+			return pd.sList[index - m]
+		else
+			return pd.gradient
+		end
+	end
+	
+	local cpu = util.makeCPUFunctions(tbl, vars.unknownType, vars.dataImages, vars.imagesAll)
+	
+	local terra impl(data_ : &opaque, imageBindings : &&opt.ImageBinding, params_ : &opaque)
+
+		-- two-loop recursion: http://papers.nips.cc/paper/5333-large-scale-l-bfgs-using-mapreduce.pdf
+		
+		var pd = [&PlanData](data_)
+		var params = [&double](params_)
+		var dimensions = pd.dimensions
+
+		var [vars.imagesAll] = [util.getImages(vars, imageBindings, dimensions)]
+
+		var m = 10
+		var k = 0
+		
+		var prevBestAlpha = 0.0
+		
+		cpu.computeGradient(pd.gradient, vars.imagesAll)
+
+		for iter = 0, maxIters - 1 do
+
+			var iterStartCost = cpu.computeCost(vars.imagesAll)
+			solverLog("iteration %d, cost=%f\n", iter, iterStartCost)
+			
+			C.printf("label A\n")
+			
+			-- compute the dot product matrix
+			for i = 0, b do
+				for j = 0, b do
+					pd.dotProductMatrix(i, j) = cpu.imageInnerProduct(imageFromIndex(pd, i), imageFromIndex(pd, j))
+				end
+			end
+			
+			C.printf("label B\n")
+			
+			--
+			-- compute the search direction p
+			--
+			if k == 0 then
+				cpu.setImage(pd.p, pd.gradient, -1.0f)
+			else
+				for i = 0, b - 1 do pd.coefficients[i] = 0.0 end
+				pd.coefficients[2 * m] = -1.0
+				
+				for i = k - 1, k - m - 1, -1 do
+					if i < 0 then break end
+					var j = i - (k - m) + 1
+					
+					var num = 0.0
+					for q = 0, b do
+						num = num + pd.coefficients[q] * pd.dotProductMatrix(q, j)
+					end
+					var den = pd.dotProductMatrix(j, j + m)
+					pd.alphaList[i] = num / den
+					pd.coefficients[j + m] = pd.coefficients[j + m] - pd.alphaList[i]
+					--pd.alphaList[i] = cpu.imageInnerProduct(pd.sList[i], pd.p) / pd.syProduct[i]
+					--cpu.addImage(pd.p, pd.yList[i], -pd.alphaList[i])
+				end
+				
+				--var scale = pd.syProduct[k - 1] / pd.yyProduct[k - 1]
+				--cpu.scaleImage(pd.p, scale)
+				var scale = pd.dotProductMatrix(m, 2 * m) / pd.dotProductMatrix(2 * m, 2 * m)
+				for i = 0, b do
+					pd.coefficients[i] = pd.coefficients[i] * scale
+				end
+				
+				for i = k - m, k do
+					if i >= 0 then
+						var j = i - (k - m) + 1
+						var num = 0.0
+						for q = 0, b do
+							num = num + pd.coefficients[q] * pd.dotProductMatrix(q, m + j)
+						end
+						var den = pd.dotProductMatrix(j, j + m)
+						var beta = num / den
+						pd.coefficients[j] = pd.coefficients[j] + (pd.alphaList[i] - beta)
+						
+						--var beta = cpu.imageInnerProduct(pd.yList[i], pd.p) / pd.syProduct[i]
+						--cpu.addImage(pd.p, pd.sList[i], pd.alphaList[i] - beta)
+					end
+				end
+				
+				--
+				-- reconstruct p from basis vectors
+				--
+				cpu.scaleImage(pd.p, 0.0f)
+				for i = 0, b do
+					var image = imageFromIndex(pd, i)
+					var coefficient = pd.coefficients[i]
+					cpu.addImage(pd.p, image, coefficient)
+				end
+			end
+			
+			--
+			-- line search
+			--
+			cpu.copyImage(pd.currentValues, vars.unknownImage)
+			cpu.computeResiduals(pd.currentValues, pd.currentResiduals, vars.dataImages)
+			
+			var bestAlpha = 0.0
+			
+			var useBruteForce = (iter <= 1) or prevBestAlpha == 0.0
+			if not useBruteForce then
+				
+				bestAlpha = cpu.lineSearchQuadraticMinimum(pd.currentValues, pd.currentResiduals, pd.p, vars.unknownImage, prevBestAlpha, vars.dataImages)
+				
+				if bestAlpha == 0.0 then
+					solverLog("quadratic guess=%f failed, trying again...\n", prevBestAlpha)
+					bestAlpha = cpu.lineSearchQuadraticMinimum(pd.currentValues, pd.currentResiduals, pd.p, vars.unknownImage, prevBestAlpha * 4.0, vars.dataImages)
+					
+					if bestAlpha == 0.0 then
+					
+						if iter >= 10 then
+							solverLog("quadratic minimization exhausted\n")
+						else
+							useBruteForce = true
+						end
+						--cpu.dumpLineSearch(pd.currentValues, pd.currentResiduals, pd.p, vars.unknownImage, vars.dataImages)
+					end
+				end
+			end
+			
+			if useBruteForce then
+				solverLog("brute-force line search\n")
+				bestAlpha = cpu.lineSearchBruteForce(pd.currentValues, pd.currentResiduals, pd.p, vars.unknownImage, vars.dataImages)
+			end
+			
+			-- remove the oldest s and y
+			for i = 0, m - 1 do
+				pd.yList[i] = pd.yList[i + 1]
+				pd.sList[i] = pd.sList[i + 1]
+			end
+			
+			-- compute new x and s
+			for h = 0, pd.gradH do
+				for w = 0, pd.gradW do
+					var delta = bestAlpha * pd.p(w, h)
+					vars.unknownImage(w, h) = pd.currentValues(w, h) + delta
+					pd.sList[m - 1](w, h) = delta
+				end
+			end
+			
+			cpu.copyImage(pd.prevGradient, pd.gradient)
+			
+			cpu.computeGradient(pd.gradient, vars.imagesAll)
+			
+			-- compute new y
+			for h = 0, pd.gradH do
+				for w = 0, pd.gradW do
+					pd.yList[m - 1](w, h) = pd.gradient(w, h) - pd.prevGradient(w, h)
+				end
+			end
+			
+			prevBestAlpha = bestAlpha
+			
+			k = k + 1
+			
+			solverLog("alpha=%12.12f\n\n", bestAlpha)
+			if bestAlpha == 0.0 then
+				break
+			end
+		end
+	end
+	
+	local terra makePlan(actualDims : &uint64) : &opt.Plan
+		var pd = PlanData.alloc()
+		pd.plan.data = pd
+		pd.plan.impl = impl
+		pd.dimensions[0] = 1
+		for i = 0,[#vars.dimensions] do
+			pd.dimensions[i + 1] = actualDims[i]
+		end
+
+		pd.gradW = pd.dimensions[vars.gradWIndex]
+		pd.gradH = pd.dimensions[vars.gradHIndex]
+		
+		pd.costW = pd.dimensions[vars.costWIndex]
+		pd.costH = pd.dimensions[vars.costHIndex]
+
+		pd.gradient:initCPU(pd.gradW, pd.gradH)
+		pd.prevGradient:initCPU(pd.gradW, pd.gradH)
+		
+		pd.currentValues:initCPU(pd.gradW, pd.gradH)
+		pd.currentResiduals:initCPU(pd.costW, pd.costH)
+		
+		pd.p:initCPU(pd.gradW, pd.gradH)
+		
+		for i = 0, m do
+			pd.sList[i]:initCPU(pd.gradW, pd.gradH)
+			pd.yList[i]:initCPU(pd.gradW, pd.gradH)
+		end
+		
+		pd.dotProductMatrix:initCPU(b, b)
 
 		return &pd.plan
 	end

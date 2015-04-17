@@ -253,7 +253,7 @@ util.makeDumpLineSearch = function(tbl, imageType, cpu, dataImages)
 		end
 		
 		C.fclose(file)
-		log("debug alpha outputted")
+		solverLog("debug alpha outputted")
 		C.getchar()
 	end
 	return dumpLineSearch
