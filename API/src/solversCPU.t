@@ -11,7 +11,7 @@ solversCPU.gradientDescentCPU = function(Problem, tbl, vars)
 		gradW : int
 		gradH : int
 		gradient : vars.unknownType
-		dims : int64[#vars.dims + 1]
+		dimensions : int64[#vars.dimensions + 1]
 	}
 
 	local computeCost = util.makeComputeCost(tbl, vars.imagesAll)
@@ -21,9 +21,9 @@ solversCPU.gradientDescentCPU = function(Problem, tbl, vars)
 
 		var pd = [&PlanData](data_)
 		var params = [&double](params_)
-		var dims = pd.dims
+		var dimensions = pd.dimensions
 
-		var [vars.imagesAll] = [util.getImages(vars, imageBindings, dims)]
+		var [vars.imagesAll] = [util.getImages(vars, imageBindings, dimensions)]
 
 		-- TODO: parameterize these
 		var initialLearningRate = 0.01
@@ -83,13 +83,13 @@ solversCPU.gradientDescentCPU = function(Problem, tbl, vars)
 		var pd = PlanData.alloc()
 		pd.plan.data = pd
 		pd.plan.impl = impl
-		pd.dims[0] = 1
-		for i = 0,[#vars.dims] do
-			pd.dims[i+1] = actualDims[i]
+		pd.dimensions[0] = 1
+		for i = 0,[#vars.dimensions] do
+			pd.dimensions[i+1] = actualDims[i]
 		end
 
-		pd.gradW = pd.dims[vars.gradWIndex]
-		pd.gradH = pd.dims[vars.gradHIndex]
+		pd.gradW = pd.dimensions[vars.gradWIndex]
+		pd.gradH = pd.dimensions[vars.gradHIndex]
 
 		pd.gradient:initCPU(pd.gradW, pd.gradH)
 
@@ -105,7 +105,7 @@ solversCPU.conjugateGradientCPU = function(Problem, tbl, vars)
 		gradH : int
 		costW : int
 		costH : int
-		dims : int64[#vars.dims + 1]
+		dimensions : int64[#vars.dimensions + 1]
 				
 		currentValues : vars.unknownType
 		currentResiduals : vars.unknownType
@@ -122,9 +122,9 @@ solversCPU.conjugateGradientCPU = function(Problem, tbl, vars)
 
 		var pd = [&PlanData](data_)
 		var params = [&double](params_)
-		var dims = pd.dims
+		var dimensions = pd.dimensions
 
-		var [vars.imagesAll] = [util.getImages(vars, imageBindings, dims)]
+		var [vars.imagesAll] = [util.getImages(vars, imageBindings, dimensions)]
 		
 		var maxIters = 1000
 		
@@ -223,16 +223,16 @@ solversCPU.conjugateGradientCPU = function(Problem, tbl, vars)
 		var pd = PlanData.alloc()
 		pd.plan.data = pd
 		pd.plan.impl = impl
-		pd.dims[0] = 1
-		for i = 0,[#vars.dims] do
-			pd.dims[i+1] = actualDims[i]
+		pd.dimensions[0] = 1
+		for i = 0,[#vars.dimensions] do
+			pd.dimensions[i+1] = actualDims[i]
 		end
 
-		pd.gradW = pd.dims[vars.gradWIndex]
-		pd.gradH = pd.dims[vars.gradHIndex]
+		pd.gradW = pd.dimensions[vars.gradWIndex]
+		pd.gradH = pd.dimensions[vars.gradHIndex]
 		
-		pd.costW = pd.dims[vars.costWIndex]
-		pd.costH = pd.dims[vars.costHIndex]
+		pd.costW = pd.dimensions[vars.costWIndex]
+		pd.costH = pd.dimensions[vars.costHIndex]
 
 		pd.currentValues:initCPU(pd.gradW, pd.gradH)
 		
@@ -253,7 +253,7 @@ solversCPU.linearizedConjugateGradientCPU = function(Problem, tbl, vars)
 		plan : opt.Plan
 		gradW : int
 		gradH : int
-		dims : int64[#vars.dims + 1]
+		dimensions : int64[#vars.dimensions + 1]
 		
 		b : vars.unknownType
 		r : vars.unknownType
@@ -268,9 +268,9 @@ solversCPU.linearizedConjugateGradientCPU = function(Problem, tbl, vars)
 	local terra impl(data_ : &opaque, imageBindings : &&opt.ImageBinding, params_ : &opaque)
 		var pd = [&PlanData](data_)
 		var params = [&double](params_)
-		var dims = pd.dims
+		var dimensions = pd.dimensions
 
-		var [vars.imagesAll] = [util.getImages(vars, imageBindings, dims)]
+		var [vars.imagesAll] = [util.getImages(vars, imageBindings, dimensions)]
 		
 		-- TODO: parameterize these
 		var maxIters = 1000
@@ -330,13 +330,13 @@ solversCPU.linearizedConjugateGradientCPU = function(Problem, tbl, vars)
 		var pd = PlanData.alloc()
 		pd.plan.data = pd
 		pd.plan.impl = impl
-		pd.dims[0] = 1
-		for i = 0,[#vars.dims] do
-			pd.dims[i+1] = actualDims[i]
+		pd.dimensions[0] = 1
+		for i = 0,[#vars.dimensions] do
+			pd.dimensions[i+1] = actualDims[i]
 		end
 
-		pd.gradW = pd.dims[vars.gradWIndex]
-		pd.gradH = pd.dims[vars.gradHIndex]
+		pd.gradW = pd.dimensions[vars.gradWIndex]
+		pd.gradH = pd.dimensions[vars.gradHIndex]
 
 		pd.b:initCPU(pd.gradW, pd.gradH)
 		pd.r:initCPU(pd.gradW, pd.gradH)
@@ -354,7 +354,7 @@ solversCPU.linearizedPreconditionedConjugateGradientCPU = function(Problem, tbl,
 		plan : opt.Plan
 		gradW : int
 		gradH : int
-		dims : int64[#vars.dims + 1]
+		dimensions : int64[#vars.dimensions + 1]
 		
 		b : vars.unknownType
 		r : vars.unknownType
@@ -371,9 +371,9 @@ solversCPU.linearizedPreconditionedConjugateGradientCPU = function(Problem, tbl,
 	local terra impl(data_ : &opaque, imageBindings : &&opt.ImageBinding, params_ : &opaque)
 		var pd = [&PlanData](data_)
 		var params = [&double](params_)
-		var dims = pd.dims
+		var dimensions = pd.dimensions
 
-		var [vars.imagesAll] = [util.getImages(vars, imageBindings, dims)]
+		var [vars.imagesAll] = [util.getImages(vars, imageBindings, dimensions)]
 
 		-- TODO: parameterize these
 		var maxIters = 1000
@@ -445,13 +445,13 @@ solversCPU.linearizedPreconditionedConjugateGradientCPU = function(Problem, tbl,
 		var pd = PlanData.alloc()
 		pd.plan.data = pd
 		pd.plan.impl = impl
-		pd.dims[0] = 1
-		for i = 0,[#vars.dims] do
-			pd.dims[i+1] = actualDims[i]
+		pd.dimensions[0] = 1
+		for i = 0,[#vars.dimensions] do
+			pd.dimensions[i+1] = actualDims[i]
 		end
 
-		pd.gradW = pd.dims[vars.gradWIndex]
-		pd.gradH = pd.dims[vars.gradHIndex]
+		pd.gradW = pd.dimensions[vars.gradWIndex]
+		pd.gradH = pd.dimensions[vars.gradHIndex]
 
 		pd.b:initCPU(pd.gradW, pd.gradH)
 		pd.r:initCPU(pd.gradW, pd.gradH)
@@ -481,7 +481,7 @@ solversCPU.lbfgsCPU = function(Problem, tbl, vars)
 		gradH : int
 		costW : int
 		costH : int
-		dims : int64[#vars.dims + 1]
+		dimensions : int64[#vars.dimensions + 1]
 		
 		gradient : vars.unknownType
 		prevGradient : vars.unknownType
@@ -506,9 +506,9 @@ solversCPU.lbfgsCPU = function(Problem, tbl, vars)
 		
 		var pd = [&PlanData](data_)
 		var params = [&double](params_)
-		var dims = pd.dims
+		var dimensions = pd.dimensions
 
-		var [vars.imagesAll] = [util.getImages(vars, imageBindings, dims)]
+		var [vars.imagesAll] = [util.getImages(vars, imageBindings, dimensions)]
 
 		var m = 10
 		var k = 0
@@ -615,16 +615,16 @@ solversCPU.lbfgsCPU = function(Problem, tbl, vars)
 		var pd = PlanData.alloc()
 		pd.plan.data = pd
 		pd.plan.impl = impl
-		pd.dims[0] = 1
-		for i = 0,[#vars.dims] do
-			pd.dims[i+1] = actualDims[i]
+		pd.dimensions[0] = 1
+		for i = 0,[#vars.dimensions] do
+			pd.dimensions[i+1] = actualDims[i]
 		end
 
-		pd.gradW = pd.dims[vars.gradWIndex]
-		pd.gradH = pd.dims[vars.gradHIndex]
+		pd.gradW = pd.dimensions[vars.gradWIndex]
+		pd.gradH = pd.dimensions[vars.gradHIndex]
 		
-		pd.costW = pd.dims[vars.costWIndex]
-		pd.costH = pd.dims[vars.costHIndex]
+		pd.costW = pd.dimensions[vars.costWIndex]
+		pd.costH = pd.dimensions[vars.costHIndex]
 
 		pd.gradient:initCPU(pd.gradW, pd.gradH)
 		pd.prevGradient:initCPU(pd.gradW, pd.gradH)

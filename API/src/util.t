@@ -93,7 +93,7 @@ util.makeComputeCost = function(tbl, images)
 		var result = 0.0
 		for h = 0, [ images[1] ].H do
 			for w = 0, [ images[1] ].W do
-				var v = tbl.cost.fn(w, h, images)
+				var v = tbl.cost.boundary(w, h, images)
 				result = result + v
 			end
 		end
@@ -106,7 +106,7 @@ util.makeComputeGradient = function(tbl, imageType, images)
 	local terra computeGradient(gradientOut : imageType, [images])
 		for h = 0, gradientOut.H do
 			for w = 0, gradientOut.W do
-				gradientOut(w, h) = tbl.gradient(w, h, images)
+				gradientOut(w, h) = tbl.gradient.boundary(w, h, images)
 			end
 		end
 	end
@@ -118,7 +118,7 @@ util.makeDeltaCost = function(tbl, imageType, dataImages)
 		var result : double = 0.0
 		for h = 0, currentValues.H do
 			for w = 0, currentValues.W do
-				var residual = tbl.cost.fn(w, h, currentValues, dataImages)
+				var residual = tbl.cost.boundary(w, h, currentValues, dataImages)
 				var delta = residual - baseResiduals(w, h)
 				result = result + [double](delta)
 			end
@@ -158,7 +158,7 @@ util.makeComputeResiduals = function(tbl, imageType, dataImages)
 	local terra computeResiduals(values : imageType, residuals : imageType, [dataImages])
 		for h = 0, values.H do
 			for w = 0, values.W do
-				residuals(w, h) = tbl.cost.fn(w, h, values, dataImages)
+				residuals(w, h) = tbl.cost.boundary(w, h, values, dataImages)
 			end
 		end
 	end

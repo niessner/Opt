@@ -14,7 +14,7 @@ solversGPU.gradientDescentGPU = function(Problem, tbl, vars)
 		gradStore : vars.unknownType
 		scratchF : &float
 		scratchD : &double
-		dims : int64[#vars.dims + 1]
+		dimensions : int64[#vars.dimensions + 1]
 	}
 	
 	local cuda = {}
@@ -74,9 +74,9 @@ solversGPU.gradientDescentGPU = function(Problem, tbl, vars)
 	local terra impl(data_ : &opaque, imageBindings : &&opt.ImageBinding, params_ : &opaque)
 		var pd = [&PlanData](data_)
 		var params = [&double](params_)
-		var dims = pd.dims
+		var dimensions = pd.dimensions
 
-		var [vars.imagesAll] = [util.getImages(vars,imageBindings,dims)]
+		var [vars.imagesAll] = [util.getImages(vars,imageBindings,dimensions)]
 
 		-- TODO: parameterize these
 		var initialLearningRate = 0.01
@@ -147,13 +147,13 @@ solversGPU.gradientDescentGPU = function(Problem, tbl, vars)
 		var pd = PlanData.alloc()
 		pd.plan.data = pd
 		pd.plan.impl = impl
-		pd.dims[0] = 1
-		for i = 0,[#vars.dims] do
-			pd.dims[i+1] = actualDims[i]
+		pd.dimensions[0] = 1
+		for i = 0,[#vars.dimensions] do
+			pd.dimensions[i+1] = actualDims[i]
 		end
 
-		pd.gradW = pd.dims[vars.gradWIndex]
-		pd.gradH = pd.dims[vars.gradHIndex]
+		pd.gradW = pd.dimensions[vars.gradWIndex]
+		pd.gradH = pd.dimensions[vars.gradHIndex]
 
 		pd.gradStore:initGPU(pd.gradW, pd.gradH)
 		C.cudaMallocManaged([&&opaque](&(pd.scratchF)), sizeof(float), C.cudaMemAttachGlobal)
@@ -169,7 +169,7 @@ solversGPU.linearizedConjugateGradientGPU = function(Problem, tbl, vars)
 		plan : opt.Plan
 		gradW : int
 		gradH : int
-		dims : int64[#vars.dims + 1]
+		dimensions : int64[#vars.dimensions + 1]
 		
 		b : vars.unknownType
 		r : vars.unknownType
@@ -271,9 +271,9 @@ solversGPU.linearizedConjugateGradientGPU = function(Problem, tbl, vars)
 	local terra impl(data_ : &opaque, imageBindings : &&opt.ImageBinding, params_ : &opaque)
 		var pd = [&PlanData](data_)
 		var params = [&double](params_)
-		var dims = pd.dims
+		var dimensions = pd.dimensions
 
-		var [vars.imagesAll] = [util.getImages(vars, imageBindings, dims)]
+		var [vars.imagesAll] = [util.getImages(vars, imageBindings, dimensions)]
 
 		var launch = terralib.CUDAParams { (pd.gradW - 1) / 32 + 1, (pd.gradH - 1) / 32 + 1,1, 32,32,1, 0, nil }
 		
@@ -321,13 +321,13 @@ solversGPU.linearizedConjugateGradientGPU = function(Problem, tbl, vars)
 		var pd = PlanData.alloc()
 		pd.plan.data = pd
 		pd.plan.impl = impl
-		pd.dims[0] = 1
-		for i = 0,[#vars.dims] do
-			pd.dims[i+1] = actualDims[i]
+		pd.dimensions[0] = 1
+		for i = 0,[#vars.dimensions] do
+			pd.dimensions[i+1] = actualDims[i]
 		end
 
-		pd.gradW = pd.dims[vars.gradWIndex]
-		pd.gradH = pd.dims[vars.gradHIndex]
+		pd.gradW = pd.dimensions[vars.gradWIndex]
+		pd.gradH = pd.dimensions[vars.gradHIndex]
 
 		pd.b:initGPU(pd.gradW, pd.gradH)
 		pd.r:initGPU(pd.gradW, pd.gradH)

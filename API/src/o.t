@@ -101,17 +101,17 @@ local problems = {}
 
 local function compileProblem(tbl, kind)
 	local vars = {
-		dims = tbl.dims,
+		dimensions = tbl.dimensions,
 		dimIndex = { [1] = 0 },
-		costDim = tbl.cost.dim,
-		costType = tbl.cost.fn:gettype()
+		costDim = tbl.cost.dimensions,
+		costType = tbl.cost.boundary:gettype()
 	}
 	
 	vars.unknownType = vars.costType.parameters[3] -- 3rd argument is the image that is the unknown we are mapping over
 	vars.argumentTypes = terralib.newlist()
 	vars.gradientDim = { vars.unknownType.metamethods.W, vars.unknownType.metamethods.H }
 		
-    for i, d in ipairs(vars.dims) do
+    for i, d in ipairs(vars.dimensions) do
         assert(Dim:is(d))
         vars.dimIndex[d] = i -- index into DimList, 0th entry is always 1
     end
@@ -262,7 +262,7 @@ local newImage = terralib.memoize(function(typ, W, H)
 		
 		for h = 0, self.H do
 			for w = 0, self.W do
-				self(w, h) = 0.0
+				self(w, h) = 0.0f
 			end
 		end
 	end
@@ -293,8 +293,8 @@ function opt.Image(typ, W, H)
     return newImage(typ, W, H)
 end
 
-terra opt.ProblemPlan(problem : &opt.Problem, dims : &uint64) : &opt.Plan
-	return problem.makePlan(dims) -- this is just a wrapper around calling the plan constructor
+terra opt.ProblemPlan(problem : &opt.Problem, dimensions : &uint64) : &opt.Plan
+	return problem.makePlan(dimensions) -- this is just a wrapper around calling the plan constructor
 end 
 
 terra opt.PlanFree(plan : &opt.Plan)
@@ -430,10 +430,10 @@ local function createfunctionset(images,exp)
     return { boundary = boundary, stencil = stencil, interior = interior }
 end
 
-function ad.Cost(dims,images,costexp)
+function ad.Cost(dimensions,images,costexp)
     images = terralib.islist(images) and images or terralib.newlist(images)
     assert(#images > 0)
-    --TODO: check that Dims used in images are in dims list
+    --TODO: check that Dims used in images are in dimensions list
     --TODO: check images are all images 
     costexp = assert(ad.toexp(costexp))
     --TODO: check all image uses in costexp are bound to images in list
@@ -471,10 +471,10 @@ function ad.Cost(dims,images,costexp)
     
     dprint("cost")
     local cost = createfunctionset(images,costexp)
-    cost.dimensions = dims
+    cost.dimensions = dimensions
     dprint("grad")
     local gradient = createfunctionset(images,gradientgathered)
-    local r = { dimensions = dims, cost = cost, gradient = gradient }
+    local r = { dimensions = dimensions, cost = cost, gradient = gradient }
     if verboseSolver then
         terralib.tree.printraw(r)
     end
