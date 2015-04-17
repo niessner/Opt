@@ -26,7 +26,7 @@ solversGPU.gradientDescentGPU = function(Problem, tbl, vars)
 		--printf("%d, %d\n", w, h)
 
 		if w < pd.gradW and h < pd.gradH then
-			pd.gradStore(w,h) = tbl.gradient(w, h, vars.imagesAll)
+			pd.gradStore(w,h) = tbl.gradient.boundary(w, h, vars.imagesAll)
 		end
 	end
 
@@ -54,7 +54,7 @@ solversGPU.gradientDescentGPU = function(Problem, tbl, vars)
 		var h = blockDim.y * blockIdx.y + threadIdx.y;
 
 		if w < pd.gradW and h < pd.gradH then
-			var v = [float](tbl.cost.fn(w, h, vars.imagesAll))
+			var v = [float](tbl.cost.boundary(w, h, vars.imagesAll))
 			terralib.asm(terralib.types.unit,"red.global.add.f32 [$0],$1;","l,f",true,sum,v)
 		end
 	end
@@ -80,7 +80,7 @@ solversGPU.gradientDescentGPU = function(Problem, tbl, vars)
 
 		-- TODO: parameterize these
 		var initialLearningRate = 0.01
-		var maxIters = 5000
+		var maxIters = 10000
 		var tolerance = 1e-10
 
 		-- Fixed constants (these do not need to be parameterized)
@@ -187,8 +187,8 @@ solversGPU.linearizedConjugateGradientGPU = function(Problem, tbl, vars)
 		var h = blockDim.y * blockIdx.y + threadIdx.y;
 
 		if w < pd.gradW and h < pd.gradH then
-			pd.r(w, h) = -tbl.gradient(w, h, vars.unknownImage, vars.dataImages)
-			pd.b(w, h) = tbl.gradient(w, h, pd.zeroes, vars.dataImages)
+			pd.r(w, h) = -tbl.gradient.boundary(w, h, vars.unknownImage, vars.dataImages)
+			pd.b(w, h) = tbl.gradient.boundary(w, h, pd.zeroes, vars.dataImages)
 			pd.p(w, h) = pd.r(w, h)
 		end
 	end
@@ -198,7 +198,7 @@ solversGPU.linearizedConjugateGradientGPU = function(Problem, tbl, vars)
 		var h = blockDim.y * blockIdx.y + threadIdx.y;
 
 		if w < pd.gradW and h < pd.gradH then
-			pd.Ap(w, h) = tbl.gradient(w, h, pd.p, vars.dataImages) - pd.b(w, h)
+			pd.Ap(w, h) = tbl.gradient.boundary(w, h, pd.p, vars.dataImages) - pd.b(w, h)
 		end
 	end
 
@@ -226,7 +226,7 @@ solversGPU.linearizedConjugateGradientGPU = function(Problem, tbl, vars)
 		var h = blockDim.y * blockIdx.y + threadIdx.y;
 
 		if w < pd.gradW and h < pd.gradH then
-			var v = [float](tbl.cost.fn(w, h, vars.imagesAll))
+			var v = [float](tbl.cost.boundary(w, h, vars.imagesAll))
 			terralib.asm(terralib.types.unit,"red.global.add.f32 [$0],$1;","l,f", true, sum, v)
 		end
 	end
