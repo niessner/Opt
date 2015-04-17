@@ -471,10 +471,10 @@ function ad.Cost(dims,images,costexp)
     
     dprint("cost")
     local cost = createfunctionset(images,costexp)
-    cost.dims = dims
+    cost.dimensions = dims
     dprint("grad")
     local gradient = createfunctionset(images,gradientgathered)
-    local r = { dims = dims, cost = cost, gradient = gradient }
+    local r = { dimensions = dims, cost = cost, gradient = gradient }
     if verboseSolver then
         terralib.tree.printraw(r)
     end
