@@ -102,6 +102,25 @@ util.makeComputeCost = function(tbl, images)
 	return computeCost
 end
 
+util.makeComputeCostGPU = function(tbl, allImages)
+	local terra kernel(sum : &float, [allImages])
+		var w = blockDim.x * blockIdx.x + threadIdx.x;
+		var h = blockDim.y * blockIdx.y + threadIdx.y;
+
+		if w < [ images[1] ].W and h < [ images[1] ].H then
+			var v = [float](tbl.cost.fn(w, h, vars.imagesAll))
+			terralib.asm(terralib.types.unit,"red.global.add.f32 [$0],$1;","l,f",true,sum,v)
+		end
+	end
+	local terra computeCostGPU(pd : &PlanData, gradientOut : imageType, [allImages])
+		var launch = terralib.CUDAParams { (pd.gradW - 1) / 32 + 1, (pd.gradH - 1) / 32 + 1,1, 32,32,1, 0, nil }
+		@pd.scratchF = 0.0f
+		kernel(&launch, pd.scratchF, [vars.imagesAll])
+		C.cudaDeviceSynchronize()
+	end
+	return computeCostGPU
+end
+
 util.makeComputeGradient = function(tbl, imageType, images)
 	local terra computeGradient(gradientOut : imageType, [images])
 		for h = 0, gradientOut.H do
@@ -111,6 +130,23 @@ util.makeComputeGradient = function(tbl, imageType, images)
 		end
 	end
 	return computeGradient
+end
+
+util.makeComputeGradientGPU = function(tbl, imageType, images)
+	local terra kernel(gradientOut : imageType, [images])
+		var w = blockDim.x * blockIdx.x + threadIdx.x
+		var h = blockDim.y * blockIdx.y + threadIdx.y
+
+		if w < gradientOut.W and h < gradientOut.H then
+			pd.gradStore(w, h) = tbl.gradient.boundary(w, h, images)
+		end
+	end
+	local terra computeGradientGPU(gradientOut : imageType, [images])
+		var launch = terralib.CUDAParams { (pd.gradW - 1) / 32 + 1, (pd.gradH - 1) / 32 + 1,1, 32,32,1, 0, nil }
+		kernel(&launch, @pd, [vars.imagesAll])
+		C.cudaDeviceSynchronize()
+	end
+	return computeGradientGPU
 end
 
 util.makeDeltaCost = function(tbl, imageType, dataImages)
@@ -220,7 +256,7 @@ util.makeLineSearchQuadraticMinimum = function(tbl, imageType, cpu, dataImages)
 				bestAlpha = alphas[i]
 				bestCost = costs[i]
 			elseif i == 3 then
-				C.printf("quadratic minimization failed, bestAlpha=%f\n", bestAlpha)
+				solverLog("quadratic minimization failed, bestAlpha=%f\n", bestAlpha)
 				--cpu.dumpLineSearch(baseValues, baseResiduals, searchDirection, valueStore, dataImages)
 			end
 		end
@@ -310,8 +346,27 @@ util.makeCPUFunctions = function(tbl, imageType, dataImages, allImages)
 	cpu.lineSearchBruteForce = util.makeLineSearchBruteForce(tbl, imageType, cpu, dataImages)
 	cpu.lineSearchQuadraticMinimum = util.makeLineSearchQuadraticMinimum(tbl, imageType, cpu, dataImages)
 	cpu.lineSearchQuadraticFallback = util.makeLineSearchQuadraticFallback(tbl, imageType, cpu, dataImages)
-	
 	return cpu
+end
+
+util.makeGPUFunctions = function(tbl, imageType, dataImages, allImages)
+	local gpu = {}
+	gpu.computeCost = util.makeComputeCostGPU(tbl, allImages)
+	gpu.computeGradient = util.makeComputeGradientGPU(tbl, imageType, allImages)
+	--[[gpu.copyImage = util.makeCopyImage(imageType)
+	gpu.setImage = util.makeSetImage(imageType)
+	gpu.addImage = util.makeAddImage(imageType)
+	gpu.scaleImage = util.makeScaleImage(imageType)
+	gpu.deltaCost = util.makeDeltaCost(tbl, imageType, dataImages)
+	gpu.computeSearchCost = util.makeSearchCost(tbl, imageType, gpu, dataImages)
+	gpu.computeSearchCostParallel = util.makeSearchCostParallel(tbl, imageType, gpu, dataImages)
+	gpu.computeResiduals = util.makeComputeResiduals(tbl, imageType, dataImages)
+	gpu.imageInnerProduct = util.makeImageInnerProduct(imageType)
+	gpu.dumpLineSearch = util.makeDumpLineSearch(tbl, imageType, gpu, dataImages)
+	gpu.lineSearchBruteForce = util.makeLineSearchBruteForce(tbl, imageType, gpu, dataImages)
+	gpu.lineSearchQuadraticMinimum = util.makeLineSearchQuadraticMinimum(tbl, imageType, gpu, dataImages)
+	gpu.lineSearchQuadraticFallback = util.makeLineSearchQuadraticFallback(tbl, imageType, gpu, dataImages)]]
+	return gpu
 end
 
 return util

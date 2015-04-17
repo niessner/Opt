@@ -11,7 +11,7 @@ local solversGPU = require("solversGPU")
 local C = util.C
 
 -- constants
-local verboseFixThis = true
+local verboseFixThis = false
 local verboseSolver = false
 local verboseAD = false
 
@@ -163,6 +163,8 @@ local function compileProblem(tbl, kind)
 		return solversCPU.lbfgsCPU(Problem, tbl, vars)
 	elseif kind == "vlbfgsCPU" then
 		return solversCPU.vlbfgsCPU(Problem, tbl, vars)
+	elseif kind == "vlbfgsGPU" then
+		return solversGPU.vlbfgsGPU(Problem, tbl, vars)
 	end
 	
     

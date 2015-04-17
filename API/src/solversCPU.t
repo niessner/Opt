@@ -278,8 +278,8 @@ solversCPU.linearizedConjugateGradientCPU = function(Problem, tbl, vars)
 
 		for h = 0, pd.gradH do
 			for w = 0, pd.gradW do
-				pd.r(w, h) = -tbl.gradient(w, h, vars.unknownImage, vars.dataImages)
-				pd.b(w, h) = tbl.gradient(w, h, pd.zeroes, vars.dataImages)
+				pd.r(w, h) = -tbl.gradient.boundary(w, h, vars.unknownImage, vars.dataImages)
+				pd.b(w, h) = tbl.gradient.boundary(w, h, pd.zeroes, vars.dataImages)
 				pd.p(w, h) = pd.r(w, h)
 			end
 		end
@@ -292,7 +292,7 @@ solversCPU.linearizedConjugateGradientCPU = function(Problem, tbl, vars)
 			
 			for h = 0, pd.gradH do
 				for w = 0, pd.gradW do
-					pd.Ap(w, h) = tbl.gradient(w, h, pd.p, vars.dataImages) - pd.b(w, h)
+					pd.Ap(w, h) = tbl.gradient.boundary(w, h, pd.p, vars.dataImages) - pd.b(w, h)
 				end
 			end
 			
@@ -388,8 +388,8 @@ solversCPU.linearizedPreconditionedConjugateGradientCPU = function(Problem, tbl,
 		
 		for h = 0, pd.gradH do
 			for w = 0, pd.gradW do
-				pd.r(w, h) = -tbl.gradient(w, h, vars.unknownImage, vars.dataImages)
-				pd.b(w, h) = tbl.gradient(w, h, pd.zeroes, vars.dataImages)
+				pd.r(w, h) = -tbl.gradient.boundary(w, h, vars.unknownImage, vars.dataImages)
+				pd.b(w, h) = tbl.gradient.boundary(w, h, pd.zeroes, vars.dataImages)
 				pd.z(w, h) = pd.MInv(w, h) * pd.r(w, h)
 				pd.p(w, h) = pd.z(w, h)
 			end
@@ -401,7 +401,7 @@ solversCPU.linearizedPreconditionedConjugateGradientCPU = function(Problem, tbl,
 			
 			for h = 0, pd.gradH do
 				for w = 0, pd.gradW do
-					pd.Ap(w, h) = tbl.gradient(w, h, pd.p, vars.dataImages) - pd.b(w, h)
+					pd.Ap(w, h) = tbl.gradient.boundary(w, h, pd.p, vars.dataImages) - pd.b(w, h)
 				end
 			end
 			
