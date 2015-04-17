@@ -663,6 +663,7 @@ solversCPU.vlbfgsCPU = function(Problem, tbl, vars)
 		alphaList : float[maxIters]
 		
 		dotProductMatrix : vars.unknownType
+		dotProductMatrixStorage : vars.unknownType
 		coefficients : double[b]
 		
 		-- variables used for line search
@@ -678,6 +679,13 @@ solversCPU.vlbfgsCPU = function(Problem, tbl, vars)
 		else
 			return pd.gradient
 		end
+	end
+	
+	local terra nextCoefficientIndex(index : int)
+		if index == m - 1 or index == 2 * m - 1 or index == 2 * m then
+			return -1
+		end
+		return index + 1
 	end
 	
 	local cpu = util.makeCPUFunctions(tbl, vars.unknownType, vars.dataImages, vars.imagesAll)
@@ -709,10 +717,24 @@ solversCPU.vlbfgsCPU = function(Problem, tbl, vars)
 			if k == 0 then
 				cpu.setImage(pd.p, pd.gradient, -1.0f)
 			else
-				-- compute the dot product matrix
+				-- compute the top half of the dot product matrix
+				cpu.copyImage(pd.dotProductMatrixStorage, pd.dotProductMatrix)
 				for i = 0, b do
-					for j = 0, b do
-						pd.dotProductMatrix(i, j) = cpu.imageInnerProduct(imageFromIndex(pd, i), imageFromIndex(pd, j))
+					for j = i, b do
+						var prevI = nextCoefficientIndex(i)
+						var prevJ = nextCoefficientIndex(j)
+						if prevI == -1 or prevJ == -1 then
+							pd.dotProductMatrix(i, j) = cpu.imageInnerProduct(imageFromIndex(pd, i), imageFromIndex(pd, j))
+						else
+							pd.dotProductMatrix(i, j) = pd.dotProductMatrixStorage(prevI, prevJ)
+						end
+					end
+				end
+				
+				-- compute the bottom half of the dot product matrix
+				for i = 0, b do
+					for j = 0, i do
+						pd.dotProductMatrix(i, j) = pd.dotProductMatrix(j, i)
 					end
 				end
 			
@@ -835,6 +857,7 @@ solversCPU.vlbfgsCPU = function(Problem, tbl, vars)
 		end
 		
 		pd.dotProductMatrix:initCPU(b, b)
+		pd.dotProductMatrixStorage:initCPU(b, b)
 
 		return &pd.plan
 	end
