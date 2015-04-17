@@ -45,12 +45,12 @@
   <PropertyGroup Label="UserMacros" />
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
     <LinkIncremental>true</LinkIncremental>
-    <IncludePath>C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA\v6.5\include;..\..\..\terra\release;..\..\..\terra\release\include;..\build\;./;$(IncludePath)</IncludePath>
+    <IncludePath>../../Framework;C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA\v6.5\include;..\..\..\terra\release;..\..\..\terra\release\include;..\build\;./;$(IncludePath)</IncludePath>
     <LibraryPath>C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA\v6.5\lib\x64;$(LibraryPath)</LibraryPath>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
     <LinkIncremental>false</LinkIncremental>
-    <IncludePath>C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA\v6.5\include;..\..\..\terra\release;..\..\..\terra\release\include;..\build\;./;$(IncludePath)</IncludePath>
+    <IncludePath>../../Framework;C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA\v6.5\include;..\..\..\terra\release;..\..\..\terra\release\include;..\build\;./;$(IncludePath)</IncludePath>
     <LibraryPath>C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA\v6.5\lib\x64;$(LibraryPath)</LibraryPath>
   </PropertyGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">

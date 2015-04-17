@@ -15,6 +15,8 @@ extern "C" {
 #include <vector>
 #include <functional>
 
+#include "OptImage.h"
+
 using namespace std;
 
 #include "testFramework.h"
