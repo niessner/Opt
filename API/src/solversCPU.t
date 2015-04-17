@@ -639,6 +639,7 @@ solversCPU.lbfgsCPU = function(Problem, tbl, vars)
 	return Problem:new { makePlan = makePlan }
 end
 
+-- vector-free L-BFGS using two-loop recursion: http://papers.nips.cc/paper/5333-large-scale-l-bfgs-using-mapreduce.pdf
 solversCPU.vlbfgsCPU = function(Problem, tbl, vars)
 
 	local maxIters = 1000
@@ -655,7 +656,7 @@ solversCPU.vlbfgsCPU = function(Problem, tbl, vars)
 		
 		gradient : vars.unknownType
 		prevGradient : vars.unknownType
-				
+
 		p : vars.unknownType
 		sList : vars.unknownType[m]
 		yList : vars.unknownType[m]
@@ -682,8 +683,6 @@ solversCPU.vlbfgsCPU = function(Problem, tbl, vars)
 	local cpu = util.makeCPUFunctions(tbl, vars.unknownType, vars.dataImages, vars.imagesAll)
 	
 	local terra impl(data_ : &opaque, imageBindings : &&opt.ImageBinding, params_ : &opaque)
-
-		-- two-loop recursion: http://papers.nips.cc/paper/5333-large-scale-l-bfgs-using-mapreduce.pdf
 		
 		var pd = [&PlanData](data_)
 		var params = [&double](params_)
@@ -702,8 +701,6 @@ solversCPU.vlbfgsCPU = function(Problem, tbl, vars)
 
 			var iterStartCost = cpu.computeCost(vars.imagesAll)
 			solverLog("iteration %d, cost=%f\n", iter, iterStartCost)
-			
-			--C.printf("label A\n")
 			
 			-- compute the dot product matrix
 			for i = 0, b do
@@ -732,12 +729,8 @@ solversCPU.vlbfgsCPU = function(Problem, tbl, vars)
 					var den = pd.dotProductMatrix(j, j + m)
 					pd.alphaList[i] = num / den
 					pd.coefficients[j + m] = pd.coefficients[j + m] - pd.alphaList[i]
-					--pd.alphaList[i] = cpu.imageInnerProduct(pd.sList[i], pd.p) / pd.syProduct[i]
-					--cpu.addImage(pd.p, pd.yList[i], -pd.alphaList[i])
 				end
 				
-				--var scale = pd.syProduct[k - 1] / pd.yyProduct[k - 1]
-				--cpu.scaleImage(pd.p, scale)
 				var scale = pd.dotProductMatrix(m - 1, 2 * m - 1) / pd.dotProductMatrix(2 * m - 1, 2 * m - 1)
 				for i = 0, b do
 					pd.coefficients[i] = pd.coefficients[i] * scale
@@ -753,9 +746,6 @@ solversCPU.vlbfgsCPU = function(Problem, tbl, vars)
 						var den = pd.dotProductMatrix(j, j + m)
 						var beta = num / den
 						pd.coefficients[j] = pd.coefficients[j] + (pd.alphaList[i] - beta)
-						
-						--var beta = cpu.imageInnerProduct(pd.yList[i], pd.p) / pd.syProduct[i]
-						--cpu.addImage(pd.p, pd.sList[i], pd.alphaList[i] - beta)
 					end
 				end
 				
@@ -776,33 +766,7 @@ solversCPU.vlbfgsCPU = function(Problem, tbl, vars)
 			cpu.copyImage(pd.currentValues, vars.unknownImage)
 			cpu.computeResiduals(pd.currentValues, pd.currentResiduals, vars.dataImages)
 			
-			var bestAlpha = 0.0
-			
-			var useBruteForce = (iter <= 1) or prevBestAlpha == 0.0
-			if not useBruteForce then
-				
-				bestAlpha = cpu.lineSearchQuadraticMinimum(pd.currentValues, pd.currentResiduals, pd.p, vars.unknownImage, prevBestAlpha, vars.dataImages)
-				
-				if bestAlpha == 0.0 then
-					solverLog("quadratic guess=%f failed, trying again...\n", prevBestAlpha)
-					bestAlpha = cpu.lineSearchQuadraticMinimum(pd.currentValues, pd.currentResiduals, pd.p, vars.unknownImage, prevBestAlpha * 4.0, vars.dataImages)
-					
-					if bestAlpha == 0.0 then
-					
-						if iter >= 10 then
-							solverLog("quadratic minimization exhausted\n")
-						else
-							useBruteForce = true
-						end
-						--cpu.dumpLineSearch(pd.currentValues, pd.currentResiduals, pd.p, vars.unknownImage, vars.dataImages)
-					end
-				end
-			end
-			
-			if useBruteForce then
-				solverLog("brute-force line search\n")
-				bestAlpha = cpu.lineSearchBruteForce(pd.currentValues, pd.currentResiduals, pd.p, vars.unknownImage, vars.dataImages)
-			end
+			var bestAlpha = cpu.lineSearchQuadraticFallback(pd.currentValues, pd.currentResiduals, pd.p, vars.unknownImage, prevBestAlpha, vars.dataImages)
 			
 			-- remove the oldest s and y
 			for i = 0, m - 1 do

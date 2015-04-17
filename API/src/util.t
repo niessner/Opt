@@ -230,6 +230,40 @@ util.makeLineSearchQuadraticMinimum = function(tbl, imageType, cpu, dataImages)
 	return lineSearchQuadraticMinimum
 end
 
+util.makeLineSearchQuadraticFallback = function(tbl, imageType, cpu, dataImages)
+	local terra lineSearchQuadraticFallback(baseValues : imageType, baseResiduals : imageType, searchDirection : imageType, valueStore : imageType, alphaGuess : float, [dataImages])
+		var bestAlpha = 0.0
+		var useBruteForce = (alphaGuess == 0.0)
+		if not useBruteForce then
+			
+			bestAlpha = cpu.lineSearchQuadraticMinimum(baseValues, baseResiduals, searchDirection, valueStore, alphaGuess, dataImages)
+			
+			if bestAlpha == 0.0 then
+				solverLog("quadratic guess=%f failed, trying again...\n", alphaGuess)
+				bestAlpha = cpu.lineSearchQuadraticMinimum(baseValues, baseResiduals, searchDirection, valueStore, alphaGuess * 4.0, dataImages)
+				
+				if bestAlpha == 0.0 then
+					solverLog("quadratic minimization exhausted\n")
+					
+					--if iter >= 10 then
+					--else
+						--useBruteForce = true
+					--end
+					--cpu.dumpLineSearch(baseValues, baseResiduals, searchDirection, valueStore, dataImages)
+				end
+			end
+		end
+
+		if useBruteForce then
+			solverLog("brute-force line search\n")
+			bestAlpha = cpu.lineSearchBruteForce(baseValues, baseResiduals, searchDirection, valueStore, dataImages)
+		end
+		
+		return bestAlpha
+	end
+	return lineSearchQuadraticFallback
+end
+
 util.makeDumpLineSearch = function(tbl, imageType, cpu, dataImages)
 	local terra dumpLineSearch(baseValues : imageType, baseResiduals : imageType, searchDirection : imageType, valueStore : imageType, [dataImages])
 
@@ -275,6 +309,8 @@ util.makeCPUFunctions = function(tbl, imageType, dataImages, allImages)
 	cpu.dumpLineSearch = util.makeDumpLineSearch(tbl, imageType, cpu, dataImages)
 	cpu.lineSearchBruteForce = util.makeLineSearchBruteForce(tbl, imageType, cpu, dataImages)
 	cpu.lineSearchQuadraticMinimum = util.makeLineSearchQuadraticMinimum(tbl, imageType, cpu, dataImages)
+	cpu.lineSearchQuadraticFallback = util.makeLineSearchQuadraticFallback(tbl, imageType, cpu, dataImages)
+	
 	return cpu
 end
 
