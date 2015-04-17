@@ -643,7 +643,7 @@ end
 solversCPU.vlbfgsCPU = function(Problem, tbl, vars)
 
 	local maxIters = 1000
-	local m = 10
+	local m = 4
 	local b = 2 * m + 1
 	
 	local struct PlanData(S.Object) {
@@ -690,10 +690,11 @@ solversCPU.vlbfgsCPU = function(Problem, tbl, vars)
 
 		var [vars.imagesAll] = [util.getImages(vars, imageBindings, dimensions)]
 
-		var m = 10
 		var k = 0
 		
-		var prevBestAlpha = 0.0
+		-- using an initial guess of alpha means that it will invoke quadratic optimization on the first iteration,
+		-- which is only sometimes a good idea.
+		var prevBestAlpha = 1.0
 		
 		cpu.computeGradient(pd.gradient, vars.imagesAll)
 
@@ -702,19 +703,19 @@ solversCPU.vlbfgsCPU = function(Problem, tbl, vars)
 			var iterStartCost = cpu.computeCost(vars.imagesAll)
 			solverLog("iteration %d, cost=%f\n", iter, iterStartCost)
 			
-			-- compute the dot product matrix
-			for i = 0, b do
-				for j = 0, b do
-					pd.dotProductMatrix(i, j) = cpu.imageInnerProduct(imageFromIndex(pd, i), imageFromIndex(pd, j))
-				end
-			end
-			
 			--
 			-- compute the search direction p
 			--
 			if k == 0 then
 				cpu.setImage(pd.p, pd.gradient, -1.0f)
 			else
+				-- compute the dot product matrix
+				for i = 0, b do
+					for j = 0, b do
+						pd.dotProductMatrix(i, j) = cpu.imageInnerProduct(imageFromIndex(pd, i), imageFromIndex(pd, j))
+					end
+				end
+			
 				for i = 0, 2 * m do pd.coefficients[i] = 0.0 end
 				pd.coefficients[2 * m] = -1.0
 				
