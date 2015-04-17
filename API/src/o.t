@@ -263,11 +263,10 @@ local newImage = terralib.memoize(function(typ, W, H)
 	--Image.methods.inbounds:disas()
 	terra Image:get(x : int64, y : int64)
 	    var v : typ = 0.f --TODO:only works for single precision things
-	    --[[if opt.InBoundsCalc(x,y,self.W,self.H,0,0) ~= 0 then
+	    if opt.InBoundsCalc(x,y,self.W,self.H,0,0) ~= 0 then
 	        v = self(x,y)
 	    end
-	    return v]]
-	    return self(x,y)
+	    return v
 	end
 	terra Image:initCPU(actualW : int, actualH : int)
 		self.W = actualW
