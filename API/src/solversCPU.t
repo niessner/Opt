@@ -671,9 +671,9 @@ solversCPU.vlbfgsCPU = function(Problem, tbl, vars)
 	
 	local terra imageFromIndex(pd : &PlanData, index : int)
 		if index < m then
-			return pd.yList[index]
+			return pd.sList[index]
 		elseif index < 2 * m then
-			return pd.sList[index - m]
+			return pd.yList[index - m]
 		else
 			return pd.gradient
 		end
@@ -703,7 +703,7 @@ solversCPU.vlbfgsCPU = function(Problem, tbl, vars)
 			var iterStartCost = cpu.computeCost(vars.imagesAll)
 			solverLog("iteration %d, cost=%f\n", iter, iterStartCost)
 			
-			C.printf("label A\n")
+			--C.printf("label A\n")
 			
 			-- compute the dot product matrix
 			for i = 0, b do
@@ -712,20 +712,18 @@ solversCPU.vlbfgsCPU = function(Problem, tbl, vars)
 				end
 			end
 			
-			C.printf("label B\n")
-			
 			--
 			-- compute the search direction p
 			--
 			if k == 0 then
 				cpu.setImage(pd.p, pd.gradient, -1.0f)
 			else
-				for i = 0, b - 1 do pd.coefficients[i] = 0.0 end
+				for i = 0, 2 * m do pd.coefficients[i] = 0.0 end
 				pd.coefficients[2 * m] = -1.0
 				
 				for i = k - 1, k - m - 1, -1 do
 					if i < 0 then break end
-					var j = i - (k - m) + 1
+					var j = i - (k - m)
 					
 					var num = 0.0
 					for q = 0, b do
@@ -740,14 +738,14 @@ solversCPU.vlbfgsCPU = function(Problem, tbl, vars)
 				
 				--var scale = pd.syProduct[k - 1] / pd.yyProduct[k - 1]
 				--cpu.scaleImage(pd.p, scale)
-				var scale = pd.dotProductMatrix(m, 2 * m) / pd.dotProductMatrix(2 * m, 2 * m)
+				var scale = pd.dotProductMatrix(m - 1, 2 * m - 1) / pd.dotProductMatrix(2 * m - 1, 2 * m - 1)
 				for i = 0, b do
 					pd.coefficients[i] = pd.coefficients[i] * scale
 				end
 				
 				for i = k - m, k do
 					if i >= 0 then
-						var j = i - (k - m) + 1
+						var j = i - (k - m)
 						var num = 0.0
 						for q = 0, b do
 							num = num + pd.coefficients[q] * pd.dotProductMatrix(q, m + j)
