@@ -12,10 +12,10 @@ solversCPU.gradientDescentCPU = function(Problem, tbl, vars)
 		gradH : int
 		gradient : vars.unknownType
 		dimensions : int64[#vars.dimensions + 1]
+		images : vars.planImagesType
 	}
 
-	local computeCost = util.makeComputeCost(tbl, vars.imagesAll)
-	local computeGradient = util.makeComputeGradient(tbl, vars.unknownType, vars.imagesAll)
+	local cpu = util.makeCPUFunctions(tbl, vars, PlanData)
 
 	local terra impl(data_ : &opaque, imageBindings : &&opt.ImageBinding, params_ : &opaque)
 
@@ -23,11 +23,11 @@ solversCPU.gradientDescentCPU = function(Problem, tbl, vars)
 		var params = [&double](params_)
 		var dimensions = pd.dimensions
 
-		var [vars.imagesAll] = [util.getImages(vars, imageBindings, dimensions)]
+		unpackstruct(pd.images) = [util.getImages(vars, PlanData, imageBindings, dimensions)]
 
 		-- TODO: parameterize these
 		var initialLearningRate = 0.01
-		var maxIters = 200
+		var maxIters = 10
 		var tolerance = 1e-10
 
 		-- Fixed constants (these do not need to be parameterized)
@@ -38,11 +38,11 @@ solversCPU.gradientDescentCPU = function(Problem, tbl, vars)
 		var learningRate = initialLearningRate
 
 		for iter = 0, maxIters do
-			var startCost = computeCost(vars.imagesAll)
-			solverLog("iteration %d, cost=%f, learningRate=%f\n", iter, startCost, learningRate)
+			var startCost = cpu.computeCost(pd)
+			logSolver("iteration %d, cost=%f, learningRate=%f\n", iter, startCost, learningRate)
 			--C.getchar()
 
-			computeGradient(pd.gradient, vars.imagesAll)
+			cpu.computeGradient(pd, pd.gradient, pd.images.unknown)
 			
 			--
 			-- move along the gradient by learningRate
@@ -50,9 +50,8 @@ solversCPU.gradientDescentCPU = function(Problem, tbl, vars)
 			var maxDelta = 0.0
 			for h = 0,pd.gradH do
 				for w = 0,pd.gradW do
-					var addr = &vars.unknownImage(w, h)
-					var delta = learningRate * pd.gradient(w, h)
-					@addr = @addr - delta
+					var delta = -learningRate * pd.gradient(w, h)
+					pd.images.unknown(w, h) = pd.images.unknown(w, h) + delta
 					maxDelta = util.max(C.fabsf(delta), maxDelta)
 				end
 			end
@@ -60,19 +59,19 @@ solversCPU.gradientDescentCPU = function(Problem, tbl, vars)
 			--
 			-- update the learningRate
 			--
-			var endCost = computeCost(vars.imagesAll)
+			var endCost = cpu.computeCost(pd)
 			if endCost < startCost then
 				learningRate = learningRate * learningGain
 
 				if maxDelta < tolerance then
-					solverLog("terminating, maxDelta=%f\n", maxDelta)
+					logSolver("terminating, maxDelta=%f\n", maxDelta)
 					break
 				end
 			else
 				learningRate = learningRate * learningLoss
 
 				if learningRate < minLearningRate then
-					solverLog("terminating, learningRate=%f\n", learningRate)
+					logSolver("terminating, learningRate=%f\n", learningRate)
 					break
 				end
 			end
@@ -106,6 +105,7 @@ solversCPU.conjugateGradientCPU = function(Problem, tbl, vars)
 		costW : int
 		costH : int
 		dimensions : int64[#vars.dimensions + 1]
+		images : vars.planImagesType
 				
 		currentValues : vars.unknownType
 		currentResiduals : vars.unknownType
@@ -116,7 +116,7 @@ solversCPU.conjugateGradientCPU = function(Problem, tbl, vars)
 		searchDirection : vars.unknownType
 	}
 	
-	local cpu = util.makeCPUFunctions(tbl, vars.unknownType, vars.dataImages, vars.imagesAll)
+	local cpu = util.makeCPUFunctions(tbl, vars, PlanData)
 	
 	local terra impl(data_ : &opaque, imageBindings : &&opt.ImageBinding, params_ : &opaque)
 
@@ -124,7 +124,7 @@ solversCPU.conjugateGradientCPU = function(Problem, tbl, vars)
 		var params = [&double](params_)
 		var dimensions = pd.dimensions
 
-		var [vars.imagesAll] = [util.getImages(vars, imageBindings, dimensions)]
+		unpackstruct(pd.images) = [util.getImages(vars, PlanData, imageBindings, dimensions)]
 		
 		var maxIters = 1000
 		
@@ -132,10 +132,10 @@ solversCPU.conjugateGradientCPU = function(Problem, tbl, vars)
 
 		for iter = 0, maxIters do
 
-			var iterStartCost = cpu.computeCost(vars.imagesAll)
-			solverLog("iteration %d, cost=%f\n", iter, iterStartCost)
+			var iterStartCost = cpu.computeCost(pd)
+			logSolver("iteration %d, cost=%f\n", iter, iterStartCost)
 
-			cpu.computeGradient(pd.gradient, vars.imagesAll)
+			cpu.computeGradient(pd, pd.gradient, pd.images.unknown)
 			
 			--
 			-- compute the search direction
@@ -176,43 +176,25 @@ solversCPU.conjugateGradientCPU = function(Problem, tbl, vars)
 				end
 			end
 			
-			C.memcpy(pd.prevGradient.impl.data, pd.gradient.impl.data, sizeof(float) * pd.gradW * pd.gradH)
-			C.memcpy(pd.currentValues.impl.data, vars.unknownImage.impl.data, sizeof(float) * pd.gradW * pd.gradH)
+			cpu.copyImage(pd.prevGradient, pd.gradient)
 			
 			--
 			-- line search
 			--
-			cpu.computeResiduals(pd.currentValues, pd.currentResiduals, vars.dataImages)
+			cpu.copyImage(pd.currentValues, pd.images.unknown)
+			cpu.computeResiduals(pd, pd.currentValues, pd.currentResiduals)
 			
-			-- NOTE: this approach to line search will have unexpected behavior if the cost function
-			-- returns double-precision, but residuals are stored at single precision!
-			
-			var bestAlpha = 0.0
-			
-			var useBruteForce = (iter <= 1) or prevBestAlpha == 0.0
-			if not useBruteForce then
-				
-				bestAlpha = cpu.lineSearchQuadraticMinimum(pd.currentValues, pd.currentResiduals, pd.searchDirection, vars.unknownImage, prevBestAlpha, vars.dataImages)
-				
-				if bestAlpha == 0.0 then useBruteForce = true end
-			end
-			
-			if useBruteForce then
-				solverLog("brute-force line search\n")
-				bestAlpha = cpu.lineSearchBruteForce(pd.currentValues, pd.currentResiduals, pd.searchDirection, vars.unknownImage, vars.dataImages)
-			end
+			var bestAlpha = cpu.lineSearchQuadraticFallback(pd, pd.currentValues, pd.currentResiduals, pd.searchDirection, pd.images.unknown, prevBestAlpha)
 			
 			for h = 0, pd.gradH do
 				for w = 0, pd.gradW do
-					vars.unknownImage(w, h) = pd.currentValues(w, h) + bestAlpha * pd.searchDirection(w, h)
+					pd.images.unknown(w, h) = pd.currentValues(w, h) + bestAlpha * pd.searchDirection(w, h)
 				end
 			end
 			
 			prevBestAlpha = bestAlpha
 			
-			--if iter % 20 == 0 then C.getchar() end
-			
-			solverLog("alpha=%12.12f, beta=%12.12f\n\n", bestAlpha, beta)
+			logSolver("alpha=%12.12f, beta=%12.12f\n\n", bestAlpha, beta)
 			if bestAlpha == 0.0 and beta == 0.0 then
 				break
 			end
@@ -254,6 +236,7 @@ solversCPU.linearizedConjugateGradientCPU = function(Problem, tbl, vars)
 		gradW : int
 		gradH : int
 		dimensions : int64[#vars.dimensions + 1]
+		images : vars.planImagesType
 		
 		b : vars.unknownType
 		r : vars.unknownType
@@ -262,57 +245,71 @@ solversCPU.linearizedConjugateGradientCPU = function(Problem, tbl, vars)
 		Ap : vars.unknownType
 	}
 	
-	local computeCost = util.makeComputeCost(tbl, vars.imagesAll)
-	local imageInnerProduct = util.makeImageInnerProduct(vars.unknownType)
+	local cpu = util.makeCPUFunctions(tbl, vars, PlanData)
 
 	local terra impl(data_ : &opaque, imageBindings : &&opt.ImageBinding, params_ : &opaque)
 		var pd = [&PlanData](data_)
 		var params = [&double](params_)
 		var dimensions = pd.dimensions
 
-		var [vars.imagesAll] = [util.getImages(vars, imageBindings, dimensions)]
+		unpackstruct(pd.images) = [util.getImages(vars, PlanData, imageBindings, dimensions)]
 		
 		-- TODO: parameterize these
 		var maxIters = 1000
 		var tolerance = 1e-5
 
-		for h = 0, pd.gradH do
-			for w = 0, pd.gradW do
-				pd.r(w, h) = -tbl.gradient.boundary(w, h, vars.unknownImage, vars.dataImages)
-				pd.b(w, h) = tbl.gradient.boundary(w, h, pd.zeroes, vars.dataImages)
-				pd.p(w, h) = pd.r(w, h)
-			end
-		end
+		cpu.computeGradient(pd, pd.r, pd.images.unknown)
+		cpu.scaleImage(pd.r, -1.0f)
 		
-		var rTr = imageInnerProduct(pd.r, pd.r)
+		cpu.copyImage(pd.images.unknown, pd.zeroes)
+		cpu.computeGradient(pd, pd.b, pd.images.unknown)
+		
+		cpu.copyImage(pd.p, pd.r)
+		
+		--for h = 0, pd.gradH do
+		--	for w = 0, pd.gradW do
+		--		pd.r(w, h) = -tbl.gradient.boundary(w, h, pd.images.unknown, vars.dataImages)
+		--		pd.b(w, h) = tbl.gradient.boundary(w, h, pd.zeroes, vars.dataImages)
+		--		pd.p(w, h) = pd.r(w, h)
+		--	end
+		--end
+		
+		var rTr = cpu.imageInnerProduct(pd.r, pd.r)
 
 		for iter = 0,maxIters do
 
-			var iterStartCost = computeCost(vars.imagesAll)
+			var iterStartCost = cpu.computeCost(pd)
 			
-			for h = 0, pd.gradH do
+			cpu.computeGradient(pd, pd.Ap, pd.p)
+			cpu.addImage(pd.Ap, pd.b, -1.0f)
+			
+			--[[for h = 0, pd.gradH do
 				for w = 0, pd.gradW do
 					pd.Ap(w, h) = tbl.gradient.boundary(w, h, pd.p, vars.dataImages) - pd.b(w, h)
 				end
-			end
+			end]]
 			
-			var den = imageInnerProduct(pd.p, pd.Ap)
+			var den = cpu.imageInnerProduct(pd.p, pd.Ap)
 			var alpha = rTr / den
 			
-			for h = 0, pd.gradH do
-				for w = 0, pd.gradW do
-					vars.unknownImage(w, h) = vars.unknownImage(w, h) + alpha * pd.p(w, h)
-					pd.r(w, h) = pd.r(w, h) - alpha * pd.Ap(w, h)
-				end
-			end
+			cpu.addImage(pd.images.unknown, pd.p, alpha)
+			cpu.addImage(pd.r, pd.Ap, -alpha)
 			
-			var rTrNew = imageInnerProduct(pd.r, pd.r)
+			--for h = 0, pd.gradH do
+			--	for w = 0, pd.gradW do
+			--		pd.images.unknown(w, h) = pd.images.unknown(w, h) + alpha * pd.p(w, h)
+			--		pd.r(w, h) = pd.r(w, h) - alpha * pd.Ap(w, h)
+			--	end
+			--end
 			
-			solverLog("iteration %d, cost=%f, rTr=%f\n", iter, iterStartCost, rTrNew)
+			var rTrNew = cpu.imageInnerProduct(pd.r, pd.r)
+			
+			logSolver("iteration %d, cost=%f, rTr=%f\n", iter, iterStartCost, rTrNew)
 			
 			if(rTrNew < tolerance) then break end
 			
 			var beta = rTrNew / rTr
+			
 			for h = 0, pd.gradH do
 				for w = 0, pd.gradW do
 					pd.p(w, h) = pd.r(w, h) + beta * pd.p(w, h)
@@ -322,8 +319,8 @@ solversCPU.linearizedConjugateGradientCPU = function(Problem, tbl, vars)
 			rTr = rTrNew
 		end
 		
-		var finalCost = computeCost(vars.imagesAll)
-		solverLog("final cost=%f\n", finalCost)
+		var finalCost = cpu.computeCost(pd)
+		logSolver("final cost=%f\n", finalCost)
 	end
 
 	local terra makePlan(actualDims : &uint64) : &opt.Plan
@@ -341,123 +338,6 @@ solversCPU.linearizedConjugateGradientCPU = function(Problem, tbl, vars)
 		pd.b:initCPU(pd.gradW, pd.gradH)
 		pd.r:initCPU(pd.gradW, pd.gradH)
 		pd.p:initCPU(pd.gradW, pd.gradH)
-		pd.Ap:initCPU(pd.gradW, pd.gradH)
-		pd.zeroes:initCPU(pd.gradW, pd.gradH)
-		
-		return &pd.plan
-	end
-	return Problem:new { makePlan = makePlan }
-end
-
-solversCPU.linearizedPreconditionedConjugateGradientCPU = function(Problem, tbl, vars)
-	local struct PlanData(S.Object) {
-		plan : opt.Plan
-		gradW : int
-		gradH : int
-		dimensions : int64[#vars.dimensions + 1]
-		
-		b : vars.unknownType
-		r : vars.unknownType
-		z : vars.unknownType
-		p : vars.unknownType
-		MInv : vars.unknownType
-		Ap : vars.unknownType
-		zeroes : vars.unknownType
-	}
-	
-	local computeCost = util.makeComputeCost(tbl, vars.imagesAll)
-	local imageInnerProduct = util.makeImageInnerProduct(vars.unknownType)
-
-	local terra impl(data_ : &opaque, imageBindings : &&opt.ImageBinding, params_ : &opaque)
-		var pd = [&PlanData](data_)
-		var params = [&double](params_)
-		var dimensions = pd.dimensions
-
-		var [vars.imagesAll] = [util.getImages(vars, imageBindings, dimensions)]
-
-		-- TODO: parameterize these
-		var maxIters = 1000
-		var tolerance = 1e-5
-
-		for h = 0, pd.gradH do
-			for w = 0, pd.gradW do
-				--pd.MInv(w, h) = 1.0 / tbl.gradientPreconditioner(w, h)
-				pd.MInv(w, h) = 1.0
-			end
-		end
-		
-		for h = 0, pd.gradH do
-			for w = 0, pd.gradW do
-				pd.r(w, h) = -tbl.gradient.boundary(w, h, vars.unknownImage, vars.dataImages)
-				pd.b(w, h) = tbl.gradient.boundary(w, h, pd.zeroes, vars.dataImages)
-				pd.z(w, h) = pd.MInv(w, h) * pd.r(w, h)
-				pd.p(w, h) = pd.z(w, h)
-			end
-		end
-		
-		for iter = 0,maxIters do
-
-			var iterStartCost = computeCost(vars.imagesAll)
-			
-			for h = 0, pd.gradH do
-				for w = 0, pd.gradW do
-					pd.Ap(w, h) = tbl.gradient.boundary(w, h, pd.p, vars.dataImages) - pd.b(w, h)
-				end
-			end
-			
-			var rTzStart = imageInnerProduct(pd.r, pd.z)
-			var den = imageInnerProduct(pd.p, pd.Ap)
-			var alpha = rTzStart / den
-			
-			for h = 0, pd.gradH do
-				for w = 0, pd.gradW do
-					vars.unknownImage(w, h) = vars.unknownImage(w, h) + alpha * pd.p(w, h)
-					pd.r(w, h) = pd.r(w, h) - alpha * pd.Ap(w, h)
-				end
-			end
-			
-			var rTr = imageInnerProduct(pd.r, pd.r)
-			
-			solverLog("iteration %d, cost=%f, rTr=%f\n", iter, iterStartCost, rTr)
-			
-			if(rTr < tolerance) then break end
-			
-			for h = 0, pd.gradH do
-				for w = 0, pd.gradW do
-					pd.z(w, h) = pd.MInv(w, h) * pd.r(w, h)
-				end
-			end
-			
-			var beta = imageInnerProduct(pd.z, pd.r) / rTzStart
-			
-			for h = 0, pd.gradH do
-				for w = 0, pd.gradW do
-					pd.p(w, h) = pd.z(w, h) + beta * pd.p(w, h)
-				end
-			end
-		end
-		
-		var finalCost = computeCost(vars.imagesAll)
-		solverLog("final cost=%f\n", finalCost)
-	end
-
-	local terra makePlan(actualDims : &uint64) : &opt.Plan
-		var pd = PlanData.alloc()
-		pd.plan.data = pd
-		pd.plan.impl = impl
-		pd.dimensions[0] = 1
-		for i = 0,[#vars.dimensions] do
-			pd.dimensions[i+1] = actualDims[i]
-		end
-
-		pd.gradW = pd.dimensions[vars.gradWIndex]
-		pd.gradH = pd.dimensions[vars.gradHIndex]
-
-		pd.b:initCPU(pd.gradW, pd.gradH)
-		pd.r:initCPU(pd.gradW, pd.gradH)
-		pd.z:initCPU(pd.gradW, pd.gradH)
-		pd.p:initCPU(pd.gradW, pd.gradH)
-		pd.MInv:initCPU(pd.gradW, pd.gradH)
 		pd.Ap:initCPU(pd.gradW, pd.gradH)
 		pd.zeroes:initCPU(pd.gradW, pd.gradH)
 		
@@ -477,6 +357,7 @@ solversCPU.lbfgsCPU = function(Problem, tbl, vars)
 		costW : int
 		costH : int
 		dimensions : int64[#vars.dimensions + 1]
+		images : vars.planImagesType
 		
 		gradient : vars.unknownType
 		prevGradient : vars.unknownType
@@ -493,7 +374,7 @@ solversCPU.lbfgsCPU = function(Problem, tbl, vars)
 		currentResiduals : vars.unknownType
 	}
 	
-	local cpu = util.makeCPUFunctions(tbl, vars.unknownType, vars.dataImages, vars.imagesAll)
+	local cpu = util.makeCPUFunctions(tbl, vars, PlanData)
 	
 	local terra impl(data_ : &opaque, imageBindings : &&opt.ImageBinding, params_ : &opaque)
 
@@ -503,19 +384,19 @@ solversCPU.lbfgsCPU = function(Problem, tbl, vars)
 		var params = [&double](params_)
 		var dimensions = pd.dimensions
 
-		var [vars.imagesAll] = [util.getImages(vars, imageBindings, dimensions)]
+		unpackstruct(pd.images) = [util.getImages(vars, PlanData, imageBindings, dimensions)]
 
-		var m = 10
+		var m = 2
 		var k = 0
 		
 		var prevBestAlpha = 0.0
 		
-		cpu.computeGradient(pd.gradient, vars.imagesAll)
+		cpu.computeGradient(pd, pd.gradient, pd.images.unknown)
 
 		for iter = 0, maxIters - 1 do
 
-			var iterStartCost = cpu.computeCost(vars.imagesAll)
-			solverLog("iteration %d, cost=%f\n", iter, iterStartCost)
+			var iterStartCost = cpu.computeCost(pd)
+			logSolver("iteration %d, cost=%f\n", iter, iterStartCost)
 			
 			--
 			-- compute the search direction p
@@ -541,49 +422,23 @@ solversCPU.lbfgsCPU = function(Problem, tbl, vars)
 			--
 			-- line search
 			--
-			cpu.copyImage(pd.currentValues, vars.unknownImage)
-			cpu.computeResiduals(pd.currentValues, pd.currentResiduals, vars.dataImages)
+			cpu.copyImage(pd.currentValues, pd.images.unknown)
+			cpu.computeResiduals(pd, pd.currentValues, pd.currentResiduals)
 			
-			var bestAlpha = 0.0
-			
-			var useBruteForce = (iter <= 1) or prevBestAlpha == 0.0
-			if not useBruteForce then
-				
-				bestAlpha = cpu.lineSearchQuadraticMinimum(pd.currentValues, pd.currentResiduals, pd.p, vars.unknownImage, prevBestAlpha, vars.dataImages)
-				
-				if bestAlpha == 0.0 then
-					solverLog("quadratic guess=%f failed, trying again...\n", prevBestAlpha)
-					bestAlpha = cpu.lineSearchQuadraticMinimum(pd.currentValues, pd.currentResiduals, pd.p, vars.unknownImage, prevBestAlpha * 4.0, vars.dataImages)
-					
-					if bestAlpha == 0.0 then
-					
-						if iter >= 10 then
-							solverLog("quadratic minimization exhausted\n")
-						else
-							useBruteForce = true
-						end
-						--cpu.dumpLineSearch(pd.currentValues, pd.currentResiduals, pd.p, vars.unknownImage, vars.dataImages)
-					end
-				end
-			end
-			
-			if useBruteForce then
-				solverLog("brute-force line search\n")
-				bestAlpha = cpu.lineSearchBruteForce(pd.currentValues, pd.currentResiduals, pd.p, vars.unknownImage, vars.dataImages)
-			end
+			var bestAlpha = cpu.lineSearchQuadraticFallback(pd, pd.currentValues, pd.currentResiduals, pd.p, pd.images.unknown, prevBestAlpha)
 			
 			-- compute new x and s
 			for h = 0, pd.gradH do
 				for w = 0, pd.gradW do
 					var delta = bestAlpha * pd.p(w, h)
-					vars.unknownImage(w, h) = pd.currentValues(w, h) + delta
+					pd.images.unknown(w, h) = pd.currentValues(w, h) + delta
 					pd.sList[k](w, h) = delta
 				end
 			end
 			
 			cpu.copyImage(pd.prevGradient, pd.gradient)
 			
-			cpu.computeGradient(pd.gradient, vars.imagesAll)
+			cpu.computeGradient(pd, pd.gradient, pd.images.unknown)
 			
 			-- compute new y
 			for h = 0, pd.gradH do
@@ -599,7 +454,7 @@ solversCPU.lbfgsCPU = function(Problem, tbl, vars)
 			
 			k = k + 1
 			
-			solverLog("alpha=%12.12f\n\n", bestAlpha)
+			logSolver("alpha=%12.12f\n\n", bestAlpha)
 			if bestAlpha == 0.0 then
 				break
 			end
@@ -643,7 +498,7 @@ end
 solversCPU.vlbfgsCPU = function(Problem, tbl, vars)
 
 	local maxIters = 1000
-	local m = 4
+	local m = 2
 	local b = 2 * m + 1
 	
 	local struct PlanData(S.Object) {
@@ -653,6 +508,7 @@ solversCPU.vlbfgsCPU = function(Problem, tbl, vars)
 		costW : int
 		costH : int
 		dimensions : int64[#vars.dimensions + 1]
+		images : vars.planImagesType
 		
 		gradient : vars.unknownType
 		prevGradient : vars.unknownType
@@ -688,7 +544,7 @@ solversCPU.vlbfgsCPU = function(Problem, tbl, vars)
 		return index + 1
 	end
 	
-	local cpu = util.makeCPUFunctions(tbl, vars.unknownType, vars.dataImages, vars.imagesAll)
+	local cpu = util.makeCPUFunctions(tbl, vars, PlanData)
 	
 	local terra impl(data_ : &opaque, imageBindings : &&opt.ImageBinding, params_ : &opaque)
 		
@@ -696,7 +552,7 @@ solversCPU.vlbfgsCPU = function(Problem, tbl, vars)
 		var params = [&double](params_)
 		var dimensions = pd.dimensions
 
-		var [vars.imagesAll] = [util.getImages(vars, imageBindings, dimensions)]
+		unpackstruct(pd.images) = [util.getImages(vars, PlanData, imageBindings, dimensions)]
 
 		var k = 0
 		
@@ -704,12 +560,12 @@ solversCPU.vlbfgsCPU = function(Problem, tbl, vars)
 		-- which is only sometimes a good idea.
 		var prevBestAlpha = 1.0
 		
-		cpu.computeGradient(pd.gradient, vars.imagesAll)
+		cpu.computeGradient(pd, pd.gradient, pd.images.unknown)
 
 		for iter = 0, maxIters - 1 do
 
-			var iterStartCost = cpu.computeCost(vars.imagesAll)
-			solverLog("iteration %d, cost=%f\n", iter, iterStartCost)
+			var iterStartCost = cpu.computeCost(pd)
+			logSolver("iteration %d, cost=%f\n", iter, iterStartCost)
 			
 			--
 			-- compute the search direction p
@@ -786,29 +642,33 @@ solversCPU.vlbfgsCPU = function(Problem, tbl, vars)
 			--
 			-- line search
 			--
-			cpu.copyImage(pd.currentValues, vars.unknownImage)
-			cpu.computeResiduals(pd.currentValues, pd.currentResiduals, vars.dataImages)
+			cpu.copyImage(pd.currentValues, pd.images.unknown)
+			cpu.computeResiduals(pd, pd.currentValues, pd.currentResiduals)
 			
-			var bestAlpha = cpu.lineSearchQuadraticFallback(pd.currentValues, pd.currentResiduals, pd.p, vars.unknownImage, prevBestAlpha, vars.dataImages)
+			var bestAlpha = cpu.lineSearchQuadraticFallback(pd, pd.currentValues, pd.currentResiduals, pd.p, pd.images.unknown, prevBestAlpha)
 			
-			-- remove the oldest s and y
+			-- cycle the oldest s and y
+			var yListStore = pd.yList[0]
+			var sListStore = pd.sList[0]
 			for i = 0, m - 1 do
 				pd.yList[i] = pd.yList[i + 1]
 				pd.sList[i] = pd.sList[i + 1]
 			end
+			pd.yList[m - 1] = yListStore
+			pd.sList[m - 1] = sListStore
 			
 			-- compute new x and s
 			for h = 0, pd.gradH do
 				for w = 0, pd.gradW do
 					var delta = bestAlpha * pd.p(w, h)
-					vars.unknownImage(w, h) = pd.currentValues(w, h) + delta
+					pd.images.unknown(w, h) = pd.currentValues(w, h) + delta
 					pd.sList[m - 1](w, h) = delta
 				end
 			end
 			
 			cpu.copyImage(pd.prevGradient, pd.gradient)
 			
-			cpu.computeGradient(pd.gradient, vars.imagesAll)
+			cpu.computeGradient(pd, pd.gradient, pd.images.unknown)
 			
 			-- compute new y
 			for h = 0, pd.gradH do
@@ -821,7 +681,7 @@ solversCPU.vlbfgsCPU = function(Problem, tbl, vars)
 			
 			k = k + 1
 			
-			solverLog("alpha=%12.12f\n\n", bestAlpha)
+			logSolver("alpha=%12.12f\n\n", bestAlpha)
 			if bestAlpha == 0.0 then
 				break
 			end

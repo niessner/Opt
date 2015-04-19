@@ -11,76 +11,25 @@ solversGPU.gradientDescentGPU = function(Problem, tbl, vars)
 		plan : opt.Plan
 		gradW : int
 		gradH : int
-		gradStore : vars.unknownType
-		scratchF : &float
-		scratchD : &double
 		dimensions : int64[#vars.dimensions + 1]
+		images : vars.planImagesType
+		scratchF : &float
+		
+		gradStore : vars.unknownType
 	}
 	
-	local cuda = {}
-
-	terra cuda.computeGradient(pd : PlanData, [vars.imagesAll])
-		var w = blockDim.x * blockIdx.x + threadIdx.x;
-		var h = blockDim.y * blockIdx.y + threadIdx.y;
-
-		--printf("%d, %d\n", w, h)
-
-		if w < pd.gradW and h < pd.gradH then
-			pd.gradStore(w,h) = tbl.gradient.boundary(w, h, vars.imagesAll)
-		end
-	end
-
-	terra cuda.updatePosition(pd : PlanData, learningRate : double, maxDelta : &double, [vars.imagesAll])
-		var w = blockDim.x * blockIdx.x + threadIdx.x;
-		var h = blockDim.y * blockIdx.y + threadIdx.y;
-
-		--printf("%d, %d\n", w, h)
-		
-		if w < pd.gradW and h < pd.gradH then
-			var addr = &vars.unknownImage(w,h)
-			var delta = learningRate * pd.gradStore(w, h)
-			@addr = @addr - delta
-
-			delta = delta * delta
-			var deltaD : double = delta
-			var deltaI64 = @[&int64](&deltaD)
-			--printf("delta=%f, deltaI=%d\n", delta, deltaI)
-			terralib.asm(terralib.types.unit,"red.global.max.u64 [$0],$1;", "l,l", true, maxDelta, deltaI64)
-		end
-	end
-
-	terra cuda.costSum(pd : PlanData, sum : &float, [vars.imagesAll])
-		var w = blockDim.x * blockIdx.x + threadIdx.x;
-		var h = blockDim.y * blockIdx.y + threadIdx.y;
-
-		if w < pd.gradW and h < pd.gradH then
-			var v = [float](tbl.cost.boundary(w, h, vars.imagesAll))
-			terralib.asm(terralib.types.unit,"red.global.add.f32 [$0],$1;","l,f",true,sum,v)
-		end
-	end
+	local gpu = util.makeGPUFunctions(tbl, vars, PlanData)
 	
-	cuda = terralib.cudacompile(cuda, false)
-	 
-	local terra totalCost(pd : &PlanData, [vars.imagesAll])
-		var launch = terralib.CUDAParams { (pd.gradW - 1) / 32 + 1, (pd.gradH - 1) / 32 + 1,1, 32,32,1, 0, nil }
-
-		@pd.scratchF = 0.0f
-		cuda.costSum(&launch, @pd, pd.scratchF, [vars.imagesAll])
-		C.cudaDeviceSynchronize()
-
-		return @pd.scratchF
-	end
-
 	local terra impl(data_ : &opaque, imageBindings : &&opt.ImageBinding, params_ : &opaque)
 		var pd = [&PlanData](data_)
 		var params = [&double](params_)
 		var dimensions = pd.dimensions
 
-		var [vars.imagesAll] = [util.getImages(vars,imageBindings,dimensions)]
+		unpackstruct(pd.images) = [util.getImages(vars, PlanData, imageBindings, dimensions)]
 
 		-- TODO: parameterize these
 		var initialLearningRate = 0.01
-		var maxIters = 10000
+		var maxIters = 5000
 		var tolerance = 1e-10
 
 		-- Fixed constants (these do not need to be parameterized)
@@ -90,49 +39,24 @@ solversGPU.gradientDescentGPU = function(Problem, tbl, vars)
 
 		var learningRate = initialLearningRate
 
-		for iter = 0,maxIters do
+		for iter = 0, maxIters do
 
-			var startCost = totalCost(pd, vars.imagesAll)
-			log("iteration %d, cost=%f, learningRate=%f\n", iter, startCost, learningRate)
+			var startCost = gpu.computeCost(pd)
+			logSolver("iteration %d, cost=%f, learningRate=%f\n", iter, startCost, learningRate)
 			
-			--
-			-- compute the gradient
-			--
-			var launch = terralib.CUDAParams { (pd.gradW - 1) / 32 + 1, (pd.gradH - 1) / 32 + 1,1, 32,32,1, 0, nil }
-
-			--[[
-			{ "gridDimX", uint },
-							{ "gridDimY", uint },
-							{ "gridDimZ", uint },
-							{ "blockDimX", uint },
-							{ "blockDimY", uint },
-							{ "blockDimZ", uint },
-							{ "sharedMemBytes", uint },
-							{"hStream" , terra.types.pointer(opaque) } }
-							--]]
-			--C.printf("gridDimX: %d, gridDimY %d, blickDimX %d, blockdimY %d\n", launch.gridDimX, launch.gridDimY, launch.blockDimX, launch.blockDimY)
-			cuda.computeGradient(&launch, @pd, [vars.imagesAll])
-			C.cudaDeviceSynchronize()
+			gpu.computeGradient(pd, pd.gradStore)
 			
 			--
 			-- move along the gradient by learningRate
 			--
-			@pd.scratchD = 0.0
-			cuda.updatePosition(&launch, @pd, learningRate, pd.scratchD, [vars.imagesAll])
-			C.cudaDeviceSynchronize()
-			log("maxDelta %f\n", @pd.scratchD)
-			var maxDelta = @pd.scratchD
-
+			gpu.updatePosition(pd, learningRate)
+			
 			--
 			-- update the learningRate
 			--
-			var endCost = totalCost(pd, vars.imagesAll)
+			var endCost = gpu.computeCost(pd)
 			if endCost < startCost then
 				learningRate = learningRate * learningGain
-
-				if maxDelta < tolerance then
-					break
-				end
 			else
 				learningRate = learningRate * learningLoss
 
@@ -157,19 +81,19 @@ solversGPU.gradientDescentGPU = function(Problem, tbl, vars)
 
 		pd.gradStore:initGPU(pd.gradW, pd.gradH)
 		C.cudaMallocManaged([&&opaque](&(pd.scratchF)), sizeof(float), C.cudaMemAttachGlobal)
-		C.cudaMallocManaged([&&opaque](&(pd.scratchD)), sizeof(double), C.cudaMemAttachGlobal)
 
 		return &pd.plan
 	end
 	return Problem:new { makePlan = makePlan }
 end
 
-solversGPU.linearizedConjugateGradientGPU = function(Problem, tbl, vars)
+--[[solversGPU.linearizedConjugateGradientGPU = function(Problem, tbl, vars)
 	local struct PlanData(S.Object) {
 		plan : opt.Plan
 		gradW : int
 		gradH : int
 		dimensions : int64[#vars.dimensions + 1]
+		images : vars.planImagesType
 		
 		b : vars.unknownType
 		r : vars.unknownType
@@ -273,7 +197,7 @@ solversGPU.linearizedConjugateGradientGPU = function(Problem, tbl, vars)
 		var params = [&double](params_)
 		var dimensions = pd.dimensions
 
-		var [vars.imagesAll] = [util.getImages(vars, imageBindings, dimensions)]
+		unpackstruct(pd.images) = [util.getImages(vars, PlanData, imageBindings, dimensions)]
 
 		var launch = terralib.CUDAParams { (pd.gradW - 1) / 32 + 1, (pd.gradH - 1) / 32 + 1,1, 32,32,1, 0, nil }
 		
@@ -340,7 +264,7 @@ solversGPU.linearizedConjugateGradientGPU = function(Problem, tbl, vars)
 		return &pd.plan
 	end
 	return Problem:new { makePlan = makePlan }
-end
+end]]
 
 -- vector-free L-BFGS using two-loop recursion: http://papers.nips.cc/paper/5333-large-scale-l-bfgs-using-mapreduce.pdf
 solversGPU.vlbfgsGPU = function(Problem, tbl, vars)
@@ -356,6 +280,8 @@ solversGPU.vlbfgsGPU = function(Problem, tbl, vars)
 		costW : int
 		costH : int
 		dimensions : int64[#vars.dimensions + 1]
+		images : vars.planImagesType
+		scratchF : &float
 		
 		gradient : vars.unknownType
 		prevGradient : vars.unknownType
@@ -391,7 +317,8 @@ solversGPU.vlbfgsGPU = function(Problem, tbl, vars)
 		return index + 1
 	end
 	
-	local gpu = util.makeGPUFunctions(tbl, vars.unknownType, vars.dataImages, vars.imagesAll)
+	local gpu = util.makeGPUFunctions(tbl, vars, PlanData)
+	local cpu = util.makeCPUFunctions(tbl, vars, PlanData)
 	
 	local terra impl(data_ : &opaque, imageBindings : &&opt.ImageBinding, params_ : &opaque)
 		
@@ -399,7 +326,7 @@ solversGPU.vlbfgsGPU = function(Problem, tbl, vars)
 		var params = [&double](params_)
 		var dimensions = pd.dimensions
 
-		var [vars.imagesAll] = [util.getImages(vars, imageBindings, dimensions)]
+		unpackstruct(pd.images) = [util.getImages(vars, PlanData, imageBindings, dimensions)]
 
 		var k = 0
 		
@@ -407,21 +334,23 @@ solversGPU.vlbfgsGPU = function(Problem, tbl, vars)
 		-- which is only sometimes a good idea.
 		var prevBestAlpha = 1.0
 		
-		gpu.computeGradient(pd.gradient, vars.imagesAll)
+		gpu.computeGradient(pd, pd.gradient)
 
 		for iter = 0, maxIters - 1 do
 
-			var iterStartCost = gpu.computeCost(pd, vars.imagesAll)
-			solverLog("iteration %d, cost=%f\n", iter, iterStartCost)
+			var iterStartCost = gpu.computeCost(pd)
+			logSolver("iteration %d, cost=%f\n", iter, iterStartCost)
 			
 			--
 			-- compute the search direction p
 			--
 			if k == 0 then
-				gpu.setImage(pd.p, pd.gradient, -1.0f)
+				gpu.copyImageScale(pd.p, pd.gradient, -1.0f)
 			else
+				-- note that much of this happens on the CPU!
+				
 				-- compute the top half of the dot product matrix
-				gpu.copyImage(pd.dotProductMatrixStorage, pd.dotProductMatrix)
+				cpu.copyImage(pd.dotProductMatrixStorage, pd.dotProductMatrix)
 				for i = 0, b do
 					for j = i, b do
 						var prevI = nextCoefficientIndex(i)
@@ -475,10 +404,8 @@ solversGPU.vlbfgsGPU = function(Problem, tbl, vars)
 					end
 				end
 				
-				--
 				-- reconstruct p from basis vectors
-				--
-				gpu.scaleImage(pd.p, 0.0f)
+				gpu.copyImageScale(pd.p, pd.p, 0.0f)
 				for i = 0, b do
 					var image = imageFromIndex(pd, i)
 					var coefficient = pd.coefficients[i]
@@ -490,41 +417,53 @@ solversGPU.vlbfgsGPU = function(Problem, tbl, vars)
 			-- line search
 			--
 			gpu.copyImage(pd.currentValues, vars.unknownImage)
-			gpu.computeResiduals(pd.currentValues, pd.currentResiduals, vars.dataImages)
+			gpu.computeResiduals(pd, pd.currentResiduals, pd.currentValues)
 			
 			var bestAlpha = gpu.lineSearchQuadraticFallback(pd.currentValues, pd.currentResiduals, pd.p, vars.unknownImage, prevBestAlpha, vars.dataImages)
 			
-			-- remove the oldest s and y
+			-- cycle the oldest s and y
+			var yListStore = pd.yList[0]
+			var sListStore = pd.sList[0]
 			for i = 0, m - 1 do
 				pd.yList[i] = pd.yList[i + 1]
 				pd.sList[i] = pd.sList[i + 1]
 			end
+			pd.yList[m - 1] = yListStore
+			pd.sList[m - 1] = sListStore
 			
 			-- compute new x and s
-			for h = 0, pd.gradH do
+			gpu.copyImageScale(pd.sList[m - 1], pd.p, bestAlpha)
+			gpu.copyImage(pd.unknownImage, pd.currentValues)
+			gpu.addImage(pd.unknownImage, pd.pd.sList[m - 1], 1.0f)
+			
+			--[[for h = 0, pd.gradH do
 				for w = 0, pd.gradW do
 					var delta = bestAlpha * pd.p(w, h)
 					vars.unknownImage(w, h) = pd.currentValues(w, h) + delta
 					pd.sList[m - 1](w, h) = delta
 				end
-			end
+			end]]
 			
 			gpu.copyImage(pd.prevGradient, pd.gradient)
 			
-			gpu.computeGradient(pd.gradient, vars.imagesAll)
+			gpu.computeGradient(pd, pd.gradient)
+			
+			
 			
 			-- compute new y
-			for h = 0, pd.gradH do
+			gpu.copyImage(pd.yList[m - 1], pd.gradient)
+			gpu.addImage(pd.yList[m - 1], pd.prevGradient, -1.0f)
+			--[[for h = 0, pd.gradH do
 				for w = 0, pd.gradW do
 					pd.yList[m - 1](w, h) = pd.gradient(w, h) - pd.prevGradient(w, h)
 				end
-			end
+			end]]
 			
 			prevBestAlpha = bestAlpha
 			
 			k = k + 1
 			
-			solverLog("alpha=%12.12f\n\n", bestAlpha)
+			logSolver("alpha=%12.12f\n\n", bestAlpha)
 			if bestAlpha == 0.0 then
 				break
 			end

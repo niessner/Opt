@@ -11,8 +11,7 @@ local solversGPU = require("solversGPU")
 local C = util.C
 
 -- constants
-local verboseFixThis = false
-local verboseSolver = false
+local verboseSolver = true
 local verboseAD = false
 
 local function newclass(name)
@@ -59,27 +58,28 @@ printf = macro(function(fmt,...)
     return `vprintf(fmt,buf) 
 end)
 local dprint
-if verboseFixThis then
-	solverLog = macro(function(fmt,...)
+
+if verboseSolver then
+	logSolver = macro(function(fmt,...)
 		local args = {...}
 		return `C.printf(fmt, args)
 	end)
 else
-	solverLog = function(fmt,...)
-	
-	end
+	logSolver = macro(function(fmt,...)
+		return 0
+	end)
 end
 
 if verboseAD then
-	log = macro(function(fmt,...)
+	logAD = macro(function(fmt,...)
 		local args = {...}
 		return `C.printf(fmt, args)
 	end)
 	dprint = print
 else
-	log = function(fmt,...)
-	
-	end
+	logAD = macro(function(fmt,...)
+		return 0
+	end)
 	dprint = function() end
 end
 
@@ -117,37 +117,32 @@ local function compileProblem(tbl, kind)
 	local vars = {
 		dimensions = tbl.dimensions,
 		dimIndex = { [1] = 0 },
-		costDim = tbl.cost.dimensions,
 		costType = tbl.cost.boundary:gettype()
 	}
 	
 	vars.unknownType = vars.costType.parameters[3] -- 3rd argument is the image that is the unknown we are mapping over
-	vars.argumentTypes = terralib.newlist()
-	vars.gradientDim = { vars.unknownType.metamethods.W, vars.unknownType.metamethods.H }
 		
     for i, d in ipairs(vars.dimensions) do
         assert(Dim:is(d))
         vars.dimIndex[d] = i -- index into DimList, 0th entry is always 1
     end
 
-	for i = 3,#vars.costType.parameters do
-		vars.argumentTypes:insert(vars.costType.parameters[i])
+	local PlanImages = terralib.types.newstruct ("PlanImages")
+	PlanImages.entries:insert( { "unknown", vars.unknownType } )
+	
+	for i = 4, #vars.costType.parameters do
+		PlanImages.entries:insert( { "image"..tostring(i - 4), vars.costType.parameters[i] } )
 	end
 	
-	vars.imagesAll = vars.argumentTypes:map(symbol)
-	vars.unknownImage = vars.imagesAll[1]
-	vars.dataImages = terralib.newlist()
-	for i = 2,#vars.imagesAll do
-		vars.dataImages:insert(vars.imagesAll[i])
-	end
+	vars.planImagesType = PlanImages
 	
-	vars.gradWIndex = vars.dimIndex[ vars.gradientDim[1] ]
-	vars.gradHIndex = vars.dimIndex[ vars.gradientDim[2] ]
+	vars.gradWIndex = vars.dimIndex[ tbl.gradient.dimensions[1] ]
+	vars.gradHIndex = vars.dimIndex[ tbl.gradient.dimensions[2] ]
 	
-	vars.costWIndex = vars.dimIndex[ vars.costDim[1] ]
-	vars.costHIndex = vars.dimIndex[ vars.costDim[2] ]
+	vars.costWIndex = vars.dimIndex[ tbl.cost.dimensions[1] ]
+	vars.costHIndex = vars.dimIndex[ tbl.cost.dimensions[2] ]
 
-    if kind == "gradientDescentCPU" then
+	if kind == "gradientDescentCPU" then
         return solversCPU.gradientDescentCPU(Problem, tbl, vars)
 	elseif kind == "gradientDescentGPU" then
 		return solversGPU.gradientDescentGPU(Problem, tbl, vars)
@@ -157,8 +152,6 @@ local function compileProblem(tbl, kind)
 		return solversCPU.linearizedConjugateGradientCPU(Problem, tbl, vars)
 	elseif kind == "linearizedConjugateGradientGPU" then
 		return solversGPU.linearizedConjugateGradientGPU(Problem, tbl, vars)
-	elseif kind == "linearizedPreconditionedConjugateGradientCPU" then
-		return solversCPU.linearizedPreconditionedConjugateGradientCPU(Problem, tbl, vars)
 	elseif kind == "lbfgsCPU" then
 		return solversCPU.lbfgsCPU(Problem, tbl, vars)
 	elseif kind == "vlbfgsCPU" then
@@ -167,6 +160,7 @@ local function compileProblem(tbl, kind)
 		return solversGPU.vlbfgsGPU(Problem, tbl, vars)
 	end
 	
+	error("unknown kind: "..kind)
     
 end
 
@@ -434,17 +428,17 @@ local function createfunction(images,exp,usebounds)
     --generatedfn:printpretty(false,false)
     generatedfn:compile()
     --generatedfn:printpretty(true,false)
-    if verboseSolver then
+    if verboseAD then
         generatedfn:disas()
     end
     return generatedfn,stencil
 end
-local function createfunctionset(images,exp)
+local function createfunctionset(images,dimensions,exp)
     dprint("bound")
     local boundary,stencil = createfunction(images,exp,true)
     dprint("interior")
     local interior = createfunction(images,exp,false)
-    return { boundary = boundary, stencil = stencil, interior = interior }
+    return { boundary = boundary, stencil = stencil, interior = interior, dimensions = dimensions }
 end
 
 function ad.Cost(dimensions,images,costexp)
@@ -487,12 +481,12 @@ function ad.Cost(dimensions,images,costexp)
     dprint(ad.tostrings({gradientgathered}))
     
     dprint("cost")
-    local cost = createfunctionset(images,costexp)
+    local cost = createfunctionset(images,dimensions,costexp)
     cost.dimensions = dimensions
     dprint("grad")
-    local gradient = createfunctionset(images,gradientgathered)
+    local gradient = createfunctionset(images,dimensions,gradientgathered)
     local r = { dimensions = dimensions, cost = cost, gradient = gradient }
-    if verboseSolver then
+    if verboseAD then
         terralib.tree.printraw(r)
     end
     return r
