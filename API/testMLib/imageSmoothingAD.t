@@ -6,7 +6,7 @@ local C = terralib.includecstring[[
 local orig = require("imageSmoothing")
 
 local w = .1 -- keep us rational for now
-local W,H = orig and orig.dims[1] or opt.Dim("W"),orig and orig.dims[2] or opt.Dim("H")
+local W,H = orig and orig.dimensions[1] or opt.Dim("W"),orig and orig.dimensions[2] or opt.Dim("H")
 
 local X = ad.Image("X",W,H)
 local A = ad.Image("A",W,H)

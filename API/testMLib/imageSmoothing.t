@@ -80,7 +80,7 @@ local terra gradientPreconditioner(i : uint64, j : uint64)
 	return 24 + w * 2
 end
 
-return { dims = { W, H },
-         cost = { dim = {W,H}, boundary = cost, interior = cost, stencil = {1,1} },
-         gradient = { boundary = gradient, interior = gradient, stencil = {2,2} },
+return { dimensions = { W, H },
+         cost = { dimensions = {W,H}, boundary = cost, interior = cost, stencil = {1,1} },
+         gradient = { dimensions = {W,H}, boundary = gradient, interior = gradient, stencil = {2,2} },
 		 gradientPreconditioner = gradientPreconditioner }
