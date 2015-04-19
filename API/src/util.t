@@ -352,13 +352,32 @@ util.makeComputeCostGPU = function(data)
 		var cost = [float](data.tbl.cost.boundary(w, h, unpackstruct(pd.images)))
 		atomicAdd(pd.scratchF, cost)
 	end
-	local function computeCostHeader(pd)
+	local function header(pd)
 		return quote @pd.scratchF = 0.0f end
 	end
-	local function computeCostFooter(pd)
+	local function footer(pd)
 		return quote return @pd.scratchF end
 	end
-	return { kernel = computeCost, header = computeCostHeader, footer = computeCostFooter, params = {}, mapMemberName = "unknown" }
+	return { kernel = computeCost, header = header, footer = footer, params = {}, mapMemberName = "unknown" }
+end
+
+util.makeComputeDeltaCostGPU = function(data)
+	-- haha ha
+	local terra costHack(pd : &data.PlanData, w : int, h : int, values : data.imageType)
+		return data.tbl.cost.boundary(w, h, values, pd.images.image0)
+	end
+	local terra computeDeltaCost(pd : &data.PlanData, w : int, h : int, baseResiduals : data.imageType, currentValues : data.imageType)
+		var residual = [float](costHack(w, h, currentValues, unpackstruct(pd.images)))
+		var delta = residual - baseResiduals(w, h)
+		atomicAdd(pd.scratchF, delta)
+	end
+	local function header(pd)
+		return quote @pd.scratchF = 0.0f end
+	end
+	local function footer(pd)
+		return quote return @pd.scratchF end
+	end
+	return { kernel = computeDeltaCost, header = header, footer = footer, params = {symbol(data.imageType)}, mapMemberName = "unknown" }
 end
 
 util.makeComputeGradientGPU = function(data)
@@ -387,6 +406,14 @@ util.makeAddImageGPU = function(data)
 		imageOut(w, h) = imageOut(w, h) + imageIn(w, h) * scale
 	end
 	return { kernel = copyImageScale, header = noHeader, footer = noFooter, params = {symbol(data.imageType), symbol(data.imageType), symbol(float)}, mapMemberName = "unknown" }
+end
+
+-- out = A + B * scale
+util.makeCombineImageGPU = function(data)
+	local terra combineImage(pd : &data.PlanData, w : int, h : int, imageOut : data.imageType, imageA : data.imageType, imageB : data.imageType, scale : float)
+		imageOut(w, h) = imageA(w, h) + imageB(w, h) * scale
+	end
+	return { kernel = copyImageScale, header = noHeader, footer = noFooter, params = {symbol(data.imageType), symbol(data.imageType), symbol(data.imageType), symbol(float)}, mapMemberName = "unknown" }
 end
 
 -- TODO: residuals should map over cost, not unknowns!!

@@ -498,8 +498,8 @@ solversGPU.vlbfgsGPU = function(Problem, tbl, vars)
 			pd.yList[i]:initGPU(pd.gradW, pd.gradH)
 		end
 		
-		pd.dotProductMatrix:initGPU(b, b)
-		pd.dotProductMatrixStorage:initGPU(b, b)
+		pd.dotProductMatrix:initCPU(b, b)
+		pd.dotProductMatrixStorage:initCPU(b, b)
 
 		return &pd.plan
 	end
