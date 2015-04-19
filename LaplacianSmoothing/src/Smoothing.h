@@ -35,7 +35,7 @@ public:
 		float weightReg = 1.0f;
 
 		unsigned int nonLinearIter = 50;
-		unsigned int linearIter = 10;
+		unsigned int linearIter = 50;
 		m_laplacianSolver->solveGN(d_image, d_result, nonLinearIter, linearIter, weightFit, weightReg);
 		//m_laplacianSolver->solveGD(d_image, d_result, nonLinearIter, weightFit, weightReg);
 		return copyResultToCPU();

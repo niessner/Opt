@@ -1,0 +1,298 @@
+% -*- compile-command: "texify --pdf --quiet dsl.tex" -*-
+
+
+
+\definecolor{Brown}{cmyk}{0,0.81,1,0.60}
+\definecolor{OliveGreen}{cmyk}{0.64,0,0.95,0.40}
+\definecolor{CadetBlue}{cmyk}{0.62,0.57,0.23,0}
+\definecolor{lightlightgray}{gray}{0.9}
+\definecolor{gray}{gray}{0.4}
+
+\lstset{
+language=C,
+basicstyle=\ttfamily,                   % Code font, Examples: \footnotesize, \ttfamily
+keywordstyle=\color{OliveGreen},        % Keywords font ('*' = uppercase)
+commentstyle=\color{gray},              % Comments font
+numbers=none,                           % Line nums position
+numberstyle=\tiny,                      % Line-numbers fonts
+stepnumber=1,                           % Step between two line-numbers
+numbersep=5pt,                          % How far are line-numbers from code
+backgroundcolor=\color{lightlightgray}, % Choose background color
+frame=none,                             % A frame around the code
+tabsize=4,                              % Default tab size
+captionpos=b,                           % Caption-position = bottom
+breaklines=true,                        % Automatic line breaking?
+breakatwhitespace=false,                % Automatic breaks only at whitespace?
+showspaces=false,                       % Dont make spaces visible
+showtabs=false,                         % Dont make tabls visible
+columns=flexible,                       % Column format
+keepspaces=true,						% Maintain spaces
+morekeywords={ushort, uchar, uchar3},
+}
+
+
+
+% comments
+\newcommand{\IGNORE}[1]{{}}
+\newcommand{\MZ}[1]{\textcolor{magenta}{{\textbf{[Michael: #1]}}}}
+\newcommand{\MATTHIAS}[1]{\textcolor{red}{{\textbf{[Matthias: #1]}}}}
+
+
+
+%\def \proof {\noindent {\it Proof: }~}
+%\def\etal{~{et al.}~}
+
+%Shorthand for consistent \fig references
+%\newcommand{\fig}{Fig.}
+%\newcommand{\figref}[1]{Fig.~\ref{#1}}
+%\newcommand{\secref}[1]{Sec.~\ref{#1}}
+
+\DeclareMathOperator*{\argmin}{argmin}
+
+% math-ops
+\def \spanof{\mathop{\rm span}\nolimits}
+\def \clip{\mathrel{\rm clip}}
+\def \det{\mathop{\rm det}\nolimits}
+\def \dim{\mathop{\rm dim}\nolimits}
+%\def \max{\mathop{\rm max}\nolimits}
+\def \op{\mathrel{\rm op}}
+\def \outcode{\mathop{\rm outcode}\nolimits}
+\def \pixel{\mathop{\rm pixel}\nolimits}
+\def \rank{\mathop{\rm rank}\nolimits}
+\def \round{\mathrel{\rm round}}
+\def \sgn{\mathop{\rm sgn}\nolimits}
+\def \sinc{\mathrel{\rm sinc}}
+\def \spur{\mathop{\rm spur}\nolimits}
+\def \stencil{\mathop{\rm stencil}\nolimits}
+\def \supp{\mathop{\rm supp}\nolimits}
+\def \weci{\mathop{\rm wec}\nolimits}
+\def \wec{\mathop{\rm WEC}\nolimits}
+\def \zbuff{\mathop{\rm zBuffer}\nolimits}
+\def \ease{\mathop{\rm ease}\nolimits}
+\def \path{\bp C}
+\def \profile{\bp S}
+
+
+\def\awflabelledpicOffset#1#2#3#4{
+\begin{tikzpicture}
+\node (pic) {#1};
+\path[fill=gray,draw=black,text=white,thick] (pic.south west) +(#3,#4) circle (1.3ex)
+   node {\small #2};
+\end{tikzpicture}
+}
+\def\awflabelledpic#1#2{\awflabelledpicOffset{#1}{#2}{1.6ex}{1.6ex}}
+
+\newcommand{\awfhang}[1]{
+\begin{minipage}[t]{\textwidth}% Top-hanging minipage, will align on
+			       % bottom of first line
+\begin{tabbing} % tabbing so that minipage shrinks to fit
+\\[-\baselineskip] % Make first line zero-height
+#1 % Include user's text
+\end{tabbing}
+\end{minipage}
+}
+
+% Bold small letters (for vectors)
+
+\newcommand{\bfa}{{\mathbf{a}}}
+\newcommand{\bfb}{{\mathbf{b}}}
+\newcommand{\bfc}{{\mathbf{c}}}
+\newcommand{\bfd}{{\mathbf{d}}}
+\newcommand{\bfe}{{\mathbf{e}}}
+\newcommand{\bff}{{\mathbf{f}}}
+\newcommand{\bfg}{{\mathbf{g}}}
+\newcommand{\bfh}{{\mathbf{h}}}
+\newcommand{\bfi}{{\mathbf{i}}}
+\newcommand{\bfj}{{\mathbf{j}}}
+\newcommand{\bfk}{{\mathbf{k}}}
+\newcommand{\bfl}{{\mathbf{l}}}
+\newcommand{\bfm}{{\mathbf{m}}}
+\newcommand{\bfn}{{\mathbf{n}}}
+\newcommand{\bfo}{{\mathbf{o}}}
+\newcommand{\bfp}{{\mathbf{p}}}
+\newcommand{\bfq}{{\mathbf{q}}}
+\newcommand{\bfr}{{\mathbf{r}}}
+\newcommand{\bfs}{{\mathbf{s}}}
+\newcommand{\bft}{{\mathbf{t}}}
+\newcommand{\bfu}{{\mathbf{u}}}
+\newcommand{\bfv}{{\mathbf{v}}}
+\newcommand{\bfw}{{\mathbf{w}}}
+\newcommand{\bfx}{{\mathbf{x}}}
+\newcommand{\bfy}{{\mathbf{y}}}
+\newcommand{\bfz}{{\mathbf{z}}}
+
+% Capital bold Characters
+
+\newcommand{\bfA}{{\mathbf{A}}}
+\newcommand{\bfB}{{\mathbf{B}}}
+\newcommand{\bfC}{{\mathbf{C}}}
+\newcommand{\bfD}{{\mathbf{D}}}
+\newcommand{\bfE}{{\mathbf{E}}}
+\newcommand{\bfF}{{\mathbf{F}}}
+\newcommand{\bfG}{{\mathbf{G}}}
+\newcommand{\bfH}{{\mathbf{H}}}
+\newcommand{\bfI}{{\mathbf{I}}}
+\newcommand{\bfJ}{{\mathbf{J}}}
+\newcommand{\bfK}{{\mathbf{K}}}
+\newcommand{\bfL}{{\mathbf{L}}}
+\newcommand{\bfM}{{\mathbf{M}}}
+\newcommand{\bfN}{{\mathbf{N}}}
+\newcommand{\bfO}{{\mathbf{O}}}
+\newcommand{\bfP}{{\mathbf{P}}}
+\newcommand{\bfQ}{{\mathbf{Q}}}
+\newcommand{\bfR}{{\mathbf{R}}}
+\newcommand{\bfS}{{\mathbf{S}}}
+\newcommand{\bfT}{{\mathbf{T}}}
+\newcommand{\bfU}{{\mathbf{U}}}
+\newcommand{\bfV}{{\mathbf{V}}}
+\newcommand{\bfW}{{\mathbf{W}}}
+\newcommand{\bfX}{{\mathbf{X}}}
+\newcommand{\bfY}{{\mathbf{Y}}}
+\newcommand{\bfZ}{{\mathbf{Z}}}
+
+% Capital bold characters in math mode
+
+\providecommand{\BA}{{\boldsymbol{A}}}
+\providecommand{\BB}{{\boldsymbol{B}}}
+\providecommand{\BC}{{\boldsymbol{C}}}
+\providecommand{\BD}{{\boldsymbol{D}}}
+\providecommand{\BE}{{\boldsymbol{E}}}
+\providecommand{\BF}{{\boldsymbol{F}}}
+\providecommand{\BG}{{\boldsymbol{G}}}
+\providecommand{\BH}{{\boldsymbol{H}}}
+\providecommand{\BI}{{\boldsymbol{I}}}
+\providecommand{\BJ}{{\boldsymbol{J}}}
+\providecommand{\BK}{{\boldsymbol{K}}}
+\providecommand{\BL}{{\boldsymbol{L}}}
+\providecommand{\BM}{{\boldsymbol{M}}}
+\providecommand{\BN}{{\boldsymbol{N}}}
+\providecommand{\BO}{{\boldsymbol{O}}}
+\providecommand{\BP}{{\boldsymbol{P}}}
+\providecommand{\BQ}{{\boldsymbol{Q}}}
+\providecommand{\BR}{{\boldsymbol{R}}}
+\providecommand{\BS}{{\boldsymbol{S}}}
+\providecommand{\BT}{{\boldsymbol{T}}}
+\providecommand{\BU}{{\boldsymbol{U}}}
+\providecommand{\BV}{{\boldsymbol{V}}}
+\providecommand{\BW}{{\boldsymbol{W}}}
+\providecommand{\BX}{{\boldsymbol{X}}}
+\providecommand{\BY}{{\boldsymbol{Y}}}
+\providecommand{\BZ}{{\boldsymbol{Z}}}
+
+% Bold capital greek characters
+
+\newcommand{\BGamma}{\mathbf{\Gamma}}
+\newcommand{\bdelta}{\mathbf{\Delta}}
+\newcommand{\btheta}{\mathbf{\Theta}}
+\newcommand{\BLambda}{\mathbf{\Lambda}}
+\newcommand{\BXi}{\mathbf{\Xi}}
+\newcommand{\BPi}{\mathbf{\Pi}}
+\newcommand{\BPsi}{\mathbf{\Psi}}
+\newcommand{\BSigma}{\mathbf{\Sigma}}
+\newcommand{\BUpsilon}{\mathbf{\Upsilon}}
+\newcommand{\bphi}{\mathbf{\Phi}}
+\newcommand{\BOmega}{\mathbf{\Omega}}
+
+% bold greek characters (math style)
+
+\newcommand{\nablabf}{\boldsymbol{\nabla}}
+\newcommand{\alphabf}{\boldsymbol{\alpha}}
+\newcommand{\betabf}{\boldsymbol{\beta}}
+\newcommand{\gammabf}{\boldsymbol{\gamma}}
+\newcommand{\deltabf}{\boldsymbol{\delta}}
+\newcommand{\epsilonbf}{\boldsymbol{\epsilon}}
+\newcommand{\varepsilonbf}{\boldsymbol{\varepsilon}}
+\newcommand{\zetabf}{\boldsymbol{\zeta}}
+\newcommand{\etabf}{\boldsymbol{\eta}}
+\newcommand{\thetabf}{\boldsymbol{\theta}}
+\newcommand{\varthetabf}{\boldsymbol{\vartheta}}
+\newcommand{\iotabf}{\boldsymbol{\iota}}
+\newcommand{\kappabf}{\boldsymbol{\kappa}}
+\newcommand{\lambdabf}{\boldsymbol{\lambda}}
+\newcommand{\mubf}{\boldsymbol{\mu}}
+\newcommand{\nubf}{\boldsymbol{\nu}}
+\newcommand{\xibf}{\boldsymbol{\xi}}
+\newcommand{\pibf}{\boldsymbol{\pi}}
+\newcommand{\varpibf}{\boldsymbol{\varpi}}
+\newcommand{\rhobf}{\boldsymbol{\rho}}
+\newcommand{\varrhobf}{\boldsymbol{\varrho}}
+\newcommand{\sigmabf}{\boldsymbol{\sigma}}
+\newcommand{\varsigmabf}{\boldsymbol{\varsigma}}
+\newcommand{\taubf}{\boldsymbol{\tau}}
+\newcommand{\upsilonbf}{\boldsymbol{\upsilon}}
+\newcommand{\phibf}{\boldsymbol{\phi}}
+\newcommand{\varphibf}{\boldsymbol{\varphi}}
+\newcommand{\chibf}{\boldsymbol{\chi}}
+\newcommand{\psibf}{\boldsymbol{\psi}}
+\newcommand{\omegabf}{\boldsymbol{\omega}}
+\newcommand{\Gammabf}{\boldsymbol{\Gamma}}
+\newcommand{\Deltabf}{\boldsymbol{\Delta}}
+\newcommand{\Thetabf}{\boldsymbol{\Theta}}
+\newcommand{\Lambdabf}{\boldsymbol{\Lambda}}
+\newcommand{\Xibf}{\boldsymbol{\Xi}}
+\newcommand{\Pibf}{\boldsymbol{\Pi}}
+\newcommand{\Psibf}{\boldsymbol{\Psi}}
+\newcommand{\Sigmabf}{\boldsymbol{\Sigma}}
+\newcommand{\Upsilonbf}{\boldsymbol{\Upsilon}}
+\newcommand{\Phibf}{\boldsymbol{\Phi}}
+\newcommand{\Omegabf}{\boldsymbol{\Omega}}
+
+% Sans serif characters
+
+\newcommand{\sfa}{{\mathsf{a}}}
+\newcommand{\sfb}{{\mathsf{b}}}
+\newcommand{\sfc}{{\mathsf{c}}}
+\newcommand{\sfd}{{\mathsf{d}}}
+\newcommand{\sfe}{{\mathsf{e}}}
+\newcommand{\sff}{{\mathsf{f}}}
+\newcommand{\sfg}{{\mathsf{g}}}
+\newcommand{\sfh}{{\mathsf{h}}}
+\newcommand{\sfi}{{\mathsf{i}}}
+\newcommand{\sfj}{{\mathsf{j}}}
+\newcommand{\sfk}{{\mathsf{k}}}
+\newcommand{\sfl}{{\mathsf{l}}}
+\newcommand{\sfm}{{\mathsf{m}}}
+\newcommand{\sfn}{{\mathsf{n}}}
+\newcommand{\sfo}{{\mathsf{o}}}
+\newcommand{\sfp}{{\mathsf{p}}}
+\newcommand{\sfq}{{\mathsf{q}}}
+\newcommand{\sfr}{{\mathsf{r}}}
+\newcommand{\sfs}{{\mathsf{s}}}
+\newcommand{\sft}{{\mathsf{t}}}
+\newcommand{\sfu}{{\mathsf{u}}}
+\newcommand{\sfv}{{\mathsf{v}}}
+\newcommand{\sfw}{{\mathsf{w}}}
+\newcommand{\sfx}{{\mathsf{x}}}
+\newcommand{\sfy}{{\mathsf{y}}}
+\newcommand{\sfz}{{\mathsf{z}}}
+
+\newcommand{\sfA}{{\mathsf{A}}}
+\newcommand{\sfB}{{\mathsf{B}}}
+\newcommand{\sfC}{{\mathsf{C}}}
+\newcommand{\sfD}{{\mathsf{D}}}
+\newcommand{\sfE}{{\mathsf{E}}}
+\newcommand{\sfF}{{\mathsf{F}}}
+\newcommand{\sfG}{{\mathsf{G}}}
+\newcommand{\sfH}{{\mathsf{H}}}
+\newcommand{\sfI}{{\mathsf{I}}}
+\newcommand{\sfJ}{{\mathsf{J}}}
+\newcommand{\sfK}{{\mathsf{K}}}
+\newcommand{\sfL}{{\mathsf{L}}}
+\newcommand{\sfM}{{\mathsf{M}}}
+\newcommand{\sfN}{{\mathsf{N}}}
+\newcommand{\sfO}{{\mathsf{O}}}
+\newcommand{\sfP}{{\mathsf{P}}}
+\newcommand{\sfQ}{{\mathsf{Q}}}
+\newcommand{\sfR}{{\mathsf{R}}}
+\newcommand{\sfS}{{\mathsf{S}}}
+\newcommand{\sfT}{{\mathsf{T}}}
+\newcommand{\sfU}{{\mathsf{U}}}
+\newcommand{\sfV}{{\mathsf{V}}}
+\newcommand{\sfW}{{\mathsf{W}}}
+\newcommand{\sfX}{{\mathsf{X}}}
+\newcommand{\sfY}{{\mathsf{Y}}}
+\newcommand{\sfZ}{{\mathsf{Z}}}
+
+%set symbols
+\newcommand{\setR}{{\mathbb{R}}}
+\newcommand{\mcE}{{\mathcal{E}}}

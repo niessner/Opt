@@ -1,0 +1,152 @@
+%%% template.tex
+%%%
+%%% This LaTeX source document can be used as the basis for your technical
+%%% paper or abstract.
+
+%%% The parameter to the ``documentclass'' command is very important.
+%%% - use ``review'' for content submitted for review.
+%%% - use ``preprint'' for accepted content you are making available.
+%%% - use ``tog'' for technical papers accepted to the TOG journal and
+%%%   for presentation at the SIGGRAPH or SIGGRAPH Asia conference.
+%%% - use ``conference'' for final content accepted to a sponsored event
+%%%   (hint: If you don't know, you should use ``conference.'')
+
+%\documentclass[tog]{acmsiggraph}
+\documentclass[review]{acmsiggraph}
+
+%%% Make the ``BibTeX'' word pretty...
+
+\def\BibTeX{{\rm B\kern-.05em{\sc i\kern-.025em b}\kern-.08em
+    T\kern-.1667em\lower.7ex\hbox{E}\kern-.125emX}}
+
+%%% Used by the ``review'' variation; the online ID will be printed on 
+%%% every page of the content.
+
+\TOGonlineid{0011}
+
+%%% Used by the ``preprint'' variation.
+
+\TOGvolume{0}
+\TOGnumber{0}
+
+\usepackage{comment}
+\usepackage{bm}
+\usepackage{multirow}
+\usepackage{subfigure}
+\usepackage{amssymb}
+\usepackage{amsmath}
+\usepackage{microtype}
+\usepackage{color}
+\usepackage{listings}
+\usepackage{algpseudocode}
+
+\input{macros}
+
+\title{OptiSL: Real-time Non-Linear Least Squares}
+
+\author{Stephen N. Spencer\thanks{e-mail:spencer@cs.washington.edu}\\Chair, ACM SIGGRAPH Publications Committee}
+\pdfauthor{Stephen N. Spencer}
+
+\keywords{radiosity, global illumination, constant time}
+
+
+
+\begin{document}
+
+%%% This is the ``teaser'' command, which puts an figure, centered, below 
+%%% the title and author information, and above the body of the content.
+
+ \teaser{
+   %\includegraphics[height=1.5in]{images/sampleteaser}
+   \caption{Caption}
+ }
+
+\maketitle
+
+\begin{abstract}
+
+
+\end{abstract}
+
+\begin{CRcatlist}
+  \CRcat{I.3.3}{Computer Graphics}{Three-Dimensional Graphics and Realism}{Display Algorithms}
+  \CRcat{I.3.7}{Computer Graphics}{Three-Dimensional Graphics and Realism}{Radiosity};
+\end{CRcatlist}
+
+\keywordlist
+
+%% Required for all content. 
+
+\copyrightspace
+
+\section{Gauss-Newton Optimization}
+$n$ variables\\
+$k$ residuals\\
+$\mathbf{x}$ unknown\\
+Traditional Gauss-Newton definition
+$$E (\mathbf{x}) = || \mathbf{F}(\mathbf{x}) ||_2^2,\qquad \mathbf{F}(\mathbf{x})  =[f_1(\mathbf{x}), \hdots, f_k(\mathbf{x})]^T$$
+
+
+
+The optimal parameters $\mathbf{x}^{*}$ are obtained by solving the minimization problem
+$$ \mathbf{x}^{*} = \displaystyle \argmin_\mathbf{x} \Vert \mathbf{F} (\mathbf{x}) \Vert_2^2.$$
+%
+We linearize the vector field $\mathbf{F}(\mathbf{x})$ using the first-order Taylor expansion,
+and obtain a linearized solution $\mathbf{x}_{k+1}$ for a given $\mathbf{x}_k$:
+%and obtain an iterative update $\mathbf{x}_k \rightarrow \mathbf{x}_{k+1}$:
+$$ \mathbf{F}(\mathbf{x}_{k+1}) \approx \mathbf{F}(\mathbf{x}_{k})+\mathbf{J}(\mathbf{x}_{k})\delta_k,\qquad \delta_k = \mathbf{x}_{k+1}-\mathbf{x}_{k},$$
+where $\mathbf{J}(\mathbf{x}_k)$ is the Jacobian matrix of $\mathbf{F}$ evaluated at $\mathbf{x}_k$.
+This approximation transforms the original non-linear optimization problem into a linear minimization problem:
+$$
+\mathbf{\delta}_{k}^{*}=\argmin_{\mathbf{\delta}_{k}}{||\mathbf{F}(\mathbf{x}_{k})+\mathbf{J}(\mathbf{x}_{k})\mathbf{\delta}_{k}||^2}.
+$$
+%where $\mathbf{\delta}_k^{*}$ is the optimal solution.
+This is a highly over-constrained linear system for which we obtain the optimal least-squares solution $\mathbf{\delta}_k^{*}$ by solving the corresponding normal equations:
+$$
+2 \mathbf{J}(\mathbf{x}_{k})^T\mathbf{J}(\mathbf{x}_{k})\mathbf{\delta}_{k}^{*} = - 2\mathbf{J}(\mathbf{x}_{k})^T\mathbf{F}(\mathbf{x}_{k}).
+$$
+To solve the original non-linear minimization problem, we thus need to solve a sequence of linearized problems;
+i.e., we initialize $\mathbf{x}_0$, and successively compute the update $\mathbf{\delta}_k^{*}$ from $\mathbf{x}_k$ to $\mathbf{x}_{k+1}$.
+
+\section{Applications}
+
+
+
+\subsection{Laplacian Smoothing} 
+$$E_{\mathit{fit}}(i,j) = [I(i,j) - \hat{I}(i,j) ]^2$$
+
+$$E_{\mathit{reg}}(i,j) = \sum_{(l,m) \in \mathcal{N}(i,j)} [I(i,j) - I(l,m) ]^2,$$
+$$\textnormal{where}\ \mathcal{N}(i,j) = \{(i+1,j), (i-1,j), (i,j+1), (i,j-1)\}$$
+
+$$E_{\Delta} = \sum_{(i,j) \in \mathcal{I}} w_{\mathit{fit}} E_{\mathit{fit}}(i,j) + w_{\mathit{reg}} E_{\mathit{reg}}(i,j)$$
+
+\subsection{Bi-Laplacian Smoothing}
+
+$$E_{\mathit{fit}}(i,j) = [I(i,j) - \hat{I}(i,j) ]^2$$
+
+$$E_{\mathit{reg}}(i,j) = [4 I(i,j) - I(i+1,j) - I(i-1,j) - I(i,j+1) - I(i,j-1)]^2$$
+
+$$E_{\Delta^2} = \sum_{(i,j) \in \mathcal{I}} w_{\mathit{fit}} E_{\mathit{fit}}(i,j) + w_{\mathit{reg}} E_{\mathit{reg}}(i,j)$$
+
+\subsection{Poisson Image Editing}
+
+\cite{perez2003poisson}
+
+\subsection{Shape from Shading (Image)}
+
+\cite{wu2014sfs}
+
+\subsection{Shape from Shading (Volume)}
+
+\subsection{Non-rigid Surface Tracking (Graph)}
+
+\cite{zollhoefer2014deformable}
+
+
+
+%\section*{Acknowledgements}
+
+\bibliographystyle{acmsiggraph}
+\nocite{*}
+\bibliography{dsl}
+\end{document}
