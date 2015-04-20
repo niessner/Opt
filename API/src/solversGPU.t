@@ -419,7 +419,7 @@ solversGPU.vlbfgsGPU = function(Problem, tbl, vars)
 			gpu.copyImage(pd.currentValues, vars.unknownImage)
 			gpu.computeResiduals(pd, pd.currentResiduals, pd.currentValues)
 			
-			var bestAlpha = gpu.lineSearchQuadraticFallback(pd.currentValues, pd.currentResiduals, pd.p, vars.unknownImage, prevBestAlpha, vars.dataImages)
+			var bestAlpha = gpu.lineSearchBruteForce(pd.currentValues, pd.currentResiduals, pd.p, vars.unknownImage, vars.dataImages)
 			
 			-- cycle the oldest s and y
 			var yListStore = pd.yList[0]
@@ -447,8 +447,6 @@ solversGPU.vlbfgsGPU = function(Problem, tbl, vars)
 			gpu.copyImage(pd.prevGradient, pd.gradient)
 			
 			gpu.computeGradient(pd, pd.gradient)
-			
-			
 			
 			-- compute new y
 			gpu.copyImage(pd.yList[m - 1], pd.gradient)

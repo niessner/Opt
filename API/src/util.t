@@ -380,6 +380,20 @@ util.makeComputeDeltaCostGPU = function(data)
 	return { kernel = computeDeltaCost, header = header, footer = footer, params = {symbol(data.imageType)}, mapMemberName = "unknown" }
 end
 
+util.makeInnerProductGPU = function(data)
+	local terra innerProduct(pd : &data.PlanData, w : int, h : int, imageA : data.imageType, imageB : data.imageType)
+		var v = imageA(w, h) * imageB(w, h)
+		atomicAdd(pd.scratchF, v)
+	end
+	local function header(pd)
+		return quote @pd.scratchF = 0.0f end
+	end
+	local function footer(pd)
+		return quote return @pd.scratchF end
+	end
+	return { kernel = innerProduct, header = header, footer = footer, params = {}, mapMemberName = "unknown" }
+end
+
 util.makeComputeGradientGPU = function(data)
 	local terra computeGradient(pd : &data.PlanData, w : int, h : int, gradientOut : data.imageType)
 		gradientOut(w, h) = data.tbl.gradient.boundary(w, h, unpackstruct(pd.images))
@@ -437,6 +451,8 @@ util.makeUpdatePositionGPU = function(data)
 	return { kernel = updatePositionGPU, header = noHeader, footer = noFooter, params = {symbol(float)}, mapMemberName = "unknown" }
 end
 
+
+
 util.makeCPUFunctions = function(tbl, vars, PlanData)
 	local cpu = {}
 	
@@ -479,10 +495,12 @@ util.makeGPUFunctions = function(tbl, vars, PlanData)
 	-- accumulate all naked kernels
 	kernelTemplate.computeCost = util.makeComputeCostGPU(data)
 	kernelTemplate.computeGradient = util.makeComputeGradientGPU(data)
+	kernelTemplate.computeDeltaCost = util.makeDeltaCostGPU(data)
 	kernelTemplate.copyImage = util.makeCopyImageGPU(data)
 	kernelTemplate.copyImageScale = util.makeCopyImageScaleGPU(data)
 	kernelTemplate.addImage = util.makeAddImageGPU(data)
 	kernelTemplate.computeResiduals = util.makeComputeResidualsGPU(data)
+	kernelTemplate.innerProduct = util.makeInnerProductGPU(data)
 	
 	kernelTemplate.updatePosition = util.makeUpdatePositionGPU(data)
 	
@@ -497,12 +515,10 @@ util.makeGPUFunctions = function(tbl, vars, PlanData)
 		gpu[k] = makeGPULauncher(compiledKernels[k], kernelTemplate[k].header, kernelTemplate[k].footer, tbl, PlanData, kernelTemplate[k].params)
 	end
 	
+	-- composite GPU functions
+	--gpu.
+	
 	--[[
-	gpu.copyImage = util.makeCopyImage(imageType)
-	gpu.copyImageScale = util.makeCopyImageScale(imageType)
-	gpu.setImage = util.makeSetImage(imageType)
-	gpu.addImage = util.makeAddImage(imageType)
-	gpu.scaleImage = util.makeScaleImage(imageType)
 	gpu.deltaCost = util.makeDeltaCost(tbl, imageType, dataImages)
 	gpu.computeSearchCost = util.makeSearchCost(tbl, imageType, gpu, dataImages)
 	gpu.computeSearchCostParallel = util.makeSearchCostParallel(tbl, imageType, gpu, dataImages)
