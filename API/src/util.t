@@ -495,12 +495,12 @@ util.makeGPUFunctions = function(tbl, vars, PlanData)
 	-- accumulate all naked kernels
 	kernelTemplate.computeCost = util.makeComputeCostGPU(data)
 	kernelTemplate.computeGradient = util.makeComputeGradientGPU(data)
-	kernelTemplate.computeDeltaCost = util.makeDeltaCostGPU(data)
+	--kernelTemplate.computeDeltaCost = util.makeDeltaCostGPU(data)
 	kernelTemplate.copyImage = util.makeCopyImageGPU(data)
 	kernelTemplate.copyImageScale = util.makeCopyImageScaleGPU(data)
 	kernelTemplate.addImage = util.makeAddImageGPU(data)
-	kernelTemplate.computeResiduals = util.makeComputeResidualsGPU(data)
-	kernelTemplate.innerProduct = util.makeInnerProductGPU(data)
+	--kernelTemplate.computeResiduals = util.makeComputeResidualsGPU(data)
+	--kernelTemplate.innerProduct = util.makeInnerProductGPU(data)
 	
 	kernelTemplate.updatePosition = util.makeUpdatePositionGPU(data)
 	
