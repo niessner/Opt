@@ -394,6 +394,20 @@ util.makeInnerProductGPU = function(data)
 	return { kernel = innerProduct, header = header, footer = footer, params = {symbol(data.imageType), symbol(data.imageType)}, mapMemberName = "unknown" }
 end
 
+util.makeInnerProductReductionGPU = function(data)
+	local terra innerProductReduction(pd : &data.PlanData, w : int, h : int, imageA : data.imageType, imageB : data.imageType)
+		var v = imageA(w, h) * imageB(w, h)
+		atomicAdd(pd.scratchF, v)
+	end
+	local function header(pd)
+		return quote @pd.scratchF = 0.0f end
+	end
+	local function footer(pd)
+		return quote return @pd.scratchF end
+	end
+	return { kernel = innerProductReduction, header = header, footer = footer, params = {symbol(data.imageType), symbol(data.imageType)}, mapMemberName = "unknown" }
+end
+
 util.makeComputeGradientGPU = function(data)
 	local terra computeGradient(pd : &data.PlanData, w : int, h : int, gradientOut : data.imageType)
 		gradientOut(w, h) = data.tbl.gradient.boundary(w, h, unpackstruct(pd.images))
@@ -608,6 +622,7 @@ util.makeGPUFunctions = function(tbl, vars, PlanData, specializedKernels)
 	kernelTemplate.computeDeltaCost = util.makeComputeDeltaCostGPU(data)
 	kernelTemplate.computeResiduals = util.makeComputeResidualsGPU(data)
 	kernelTemplate.innerProduct = util.makeInnerProductGPU(data)
+	kernelTemplate.innerProductReduction = util.makeInnerProductReductionGPU(data)
 		
 	for k, v in pairs(specializedKernels) do
 		kernelTemplate[k] = v(data)
@@ -634,4 +649,50 @@ util.makeGPUFunctions = function(tbl, vars, PlanData, specializedKernels)
 	return gpu
 end
 
+--[[
+
+inline __device__ void scanPart1(unsigned int threadIdx, unsigned int blockIdx, unsigned int threadsPerBlock, float* d_output)
+{
+	__syncthreads();
+	blockReduce(bucket, threadIdx, threadsPerBlock);
+	if(threadIdx == 0) d_output[blockIdx] = bucket[0];
+}
+
+inline __device__ void scanPart2(unsigned int threadIdx, unsigned int threadsPerBlock, unsigned int blocksPerGrid, float* d_tmp)
+{
+	if(threadIdx < blocksPerGrid) bucket[threadIdx] = d_tmp[threadIdx];
+	else						  bucket[threadIdx] = 0.0f;
+	
+	__syncthreads();
+	blockReduce(bucket, threadIdx, threadsPerBlock);
+	__syncthreads();
+}
+
+inline __device__ void warpReduce(volatile float* sdata, int threadIdx, unsigned int threadsPerBlock) // See Optimizing Parallel Reduction in CUDA by Mark Harris
+{
+	if(threadIdx < 32)
+	{
+		if(threadIdx + 32 < threadsPerBlock) sdata[threadIdx] = sdata[threadIdx] + sdata[threadIdx + 32];
+		if(threadIdx + 16 < threadsPerBlock) sdata[threadIdx] = sdata[threadIdx] + sdata[threadIdx + 16];
+		if(threadIdx +  8 < threadsPerBlock) sdata[threadIdx] = sdata[threadIdx] + sdata[threadIdx +  8];
+		if(threadIdx +  4 < threadsPerBlock) sdata[threadIdx] = sdata[threadIdx] + sdata[threadIdx +  4];
+		if(threadIdx +  2 < threadsPerBlock) sdata[threadIdx] = sdata[threadIdx] + sdata[threadIdx +  2];
+		if(threadIdx +  1 < threadsPerBlock) sdata[threadIdx] = sdata[threadIdx] + sdata[threadIdx +  1];
+	}
+}
+
+inline __device__ void blockReduce(volatile float* sdata, int threadIdx, unsigned int threadsPerBlock)
+{
+	#pragma unroll
+	for(unsigned int stride = threadsPerBlock/2 ; stride > 32; stride/=2)
+	{
+		if(threadIdx < stride) sdata[threadIdx] = sdata[threadIdx] + sdata[threadIdx+stride];
+
+		__syncthreads();
+	}
+
+	warpReduce(sdata, threadIdx, threadsPerBlock);
+}
+
+]]
 return util
