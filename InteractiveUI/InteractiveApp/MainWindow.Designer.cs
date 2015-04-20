@@ -28,6 +28,7 @@
         /// </summary>
         private void InitializeComponent()
         {
+            this.components = new System.ComponentModel.Container();
             this.textBoxEnergy = new System.Windows.Forms.RichTextBox();
             this.label1 = new System.Windows.Forms.Label();
             this.textBoxCompiler = new System.Windows.Forms.RichTextBox();
@@ -35,7 +36,14 @@
             this.label3 = new System.Windows.Forms.Label();
             this.pictureBoxMinimum = new System.Windows.Forms.PictureBox();
             this.buttonLoad = new System.Windows.Forms.Button();
+            this.Save = new System.Windows.Forms.Button();
+            this.LoadImage = new System.Windows.Forms.Button();
+            this.compileButton = new System.Windows.Forms.Button();
+            this.resultImageBox = new System.Windows.Forms.PictureBox();
+            this.timer = new System.Windows.Forms.Timer(this.components);
+            this.optimizationMethodComboBox = new System.Windows.Forms.ComboBox();
             ((System.ComponentModel.ISupportInitialize)(this.pictureBoxMinimum)).BeginInit();
+            ((System.ComponentModel.ISupportInitialize)(this.resultImageBox)).BeginInit();
             this.SuspendLayout();
             // 
             // textBoxEnergy
@@ -47,6 +55,7 @@
             this.textBoxEnergy.Size = new System.Drawing.Size(619, 536);
             this.textBoxEnergy.TabIndex = 0;
             this.textBoxEnergy.Text = "";
+            this.textBoxEnergy.TextChanged += new System.EventHandler(this.textBoxEnergy_TextChanged);
             // 
             // label1
             // 
@@ -61,18 +70,18 @@
             // textBoxCompiler
             // 
             this.textBoxCompiler.BorderStyle = System.Windows.Forms.BorderStyle.FixedSingle;
-            this.textBoxCompiler.Location = new System.Drawing.Point(13, 608);
+            this.textBoxCompiler.Location = new System.Drawing.Point(13, 639);
             this.textBoxCompiler.Margin = new System.Windows.Forms.Padding(4);
             this.textBoxCompiler.Name = "textBoxCompiler";
             this.textBoxCompiler.ReadOnly = true;
-            this.textBoxCompiler.Size = new System.Drawing.Size(619, 179);
+            this.textBoxCompiler.Size = new System.Drawing.Size(619, 148);
             this.textBoxCompiler.TabIndex = 0;
             this.textBoxCompiler.Text = "";
             // 
             // label2
             // 
             this.label2.AutoSize = true;
-            this.label2.Location = new System.Drawing.Point(9, 585);
+            this.label2.Location = new System.Drawing.Point(9, 616);
             this.label2.Margin = new System.Windows.Forms.Padding(4, 0, 4, 0);
             this.label2.Name = "label2";
             this.label2.Size = new System.Drawing.Size(126, 19);
@@ -93,7 +102,7 @@
             // 
             this.pictureBoxMinimum.Location = new System.Drawing.Point(641, 39);
             this.pictureBoxMinimum.Name = "pictureBoxMinimum";
-            this.pictureBoxMinimum.Size = new System.Drawing.Size(687, 536);
+            this.pictureBoxMinimum.Size = new System.Drawing.Size(687, 382);
             this.pictureBoxMinimum.TabIndex = 2;
             this.pictureBoxMinimum.TabStop = false;
             // 
@@ -107,11 +116,67 @@
             this.buttonLoad.UseVisualStyleBackColor = true;
             this.buttonLoad.Click += new System.EventHandler(this.buttonLoad_Click);
             // 
+            // Save
+            // 
+            this.Save.Location = new System.Drawing.Point(303, 4);
+            this.Save.Name = "Save";
+            this.Save.Size = new System.Drawing.Size(150, 28);
+            this.Save.TabIndex = 5;
+            this.Save.Text = "Save Source";
+            this.Save.UseVisualStyleBackColor = true;
+            this.Save.Click += new System.EventHandler(this.buttonSave_Click);
+            // 
+            // LoadImage
+            // 
+            this.LoadImage.Location = new System.Drawing.Point(819, 5);
+            this.LoadImage.Name = "LoadImage";
+            this.LoadImage.Size = new System.Drawing.Size(150, 28);
+            this.LoadImage.TabIndex = 6;
+            this.LoadImage.Text = "Load Image";
+            this.LoadImage.UseVisualStyleBackColor = true;
+            this.LoadImage.Click += new System.EventHandler(this.buttonLoadImage_Click);
+            // 
+            // compileButton
+            // 
+            this.compileButton.Location = new System.Drawing.Point(12, 582);
+            this.compileButton.Name = "compileButton";
+            this.compileButton.Size = new System.Drawing.Size(149, 26);
+            this.compileButton.TabIndex = 7;
+            this.compileButton.Text = "Compile and Run";
+            this.compileButton.UseVisualStyleBackColor = true;
+            this.compileButton.Click += new System.EventHandler(this.compileButton_Click);
+            // 
+            // resultImageBox
+            // 
+            this.resultImageBox.Location = new System.Drawing.Point(641, 427);
+            this.resultImageBox.Name = "resultImageBox";
+            this.resultImageBox.Size = new System.Drawing.Size(687, 360);
+            this.resultImageBox.TabIndex = 8;
+            this.resultImageBox.TabStop = false;
+            // 
+            // timer
+            // 
+            this.timer.Enabled = true;
+            this.timer.Tick += new System.EventHandler(this.timer_Tick);
+            // 
+            // optimizationMethodComboBox
+            // 
+            this.optimizationMethodComboBox.FormattingEnabled = true;
+            this.optimizationMethodComboBox.Location = new System.Drawing.Point(263, 581);
+            this.optimizationMethodComboBox.Name = "optimizationMethodComboBox";
+            this.optimizationMethodComboBox.Size = new System.Drawing.Size(369, 27);
+            this.optimizationMethodComboBox.TabIndex = 9;
+            // 
             // MainWindow
             // 
             this.AutoScaleDimensions = new System.Drawing.SizeF(8F, 19F);
             this.AutoScaleMode = System.Windows.Forms.AutoScaleMode.Font;
             this.ClientSize = new System.Drawing.Size(1340, 795);
+            this.Controls.Add(this.optimizationMethodComboBox);
+            this.Controls.Add(this.resultImageBox);
+            this.Controls.Add(this.compileButton);
+            this.Controls.Add(this.LoadImage);
+            this.Controls.Add(this.Save);
             this.Controls.Add(this.buttonLoad);
             this.Controls.Add(this.pictureBoxMinimum);
             this.Controls.Add(this.label3);
@@ -125,6 +190,7 @@
             this.Text = "Interactive Optimizer";
             this.Load += new System.EventHandler(this.MainWindow_Load);
             ((System.ComponentModel.ISupportInitialize)(this.pictureBoxMinimum)).EndInit();
+            ((System.ComponentModel.ISupportInitialize)(this.resultImageBox)).EndInit();
             this.ResumeLayout(false);
             this.PerformLayout();
 
@@ -139,6 +205,12 @@
         private System.Windows.Forms.Label label3;
         private System.Windows.Forms.PictureBox pictureBoxMinimum;
         private System.Windows.Forms.Button buttonLoad;
+        private System.Windows.Forms.Button Save;
+        private System.Windows.Forms.Button LoadImage;
+        private System.Windows.Forms.Button compileButton;
+        private System.Windows.Forms.PictureBox resultImageBox;
+        private System.Windows.Forms.Timer timer;
+        private System.Windows.Forms.ComboBox optimizationMethodComboBox;
 
     }
 }

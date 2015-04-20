@@ -1,5 +1,6 @@
 #ifndef OptImage_h
 #define OptImage_h
+#include "cuda_runtime.h"
 
 struct OptImage
 {

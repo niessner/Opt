@@ -38,6 +38,8 @@ namespace UIWindow
 
         public static void formatSourceLine(RichTextBox rtb, int start, int length)
         {
+            rtb.Select(start, length);
+            rtb.SelectionColor = Color.Black;
             makeRegexps();
 
             string s = rtb.Text.Substring(start, length);

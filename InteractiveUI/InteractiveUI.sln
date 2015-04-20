@@ -10,6 +10,8 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "InteractiveApp", "Interacti
 EndProject
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "InteractiveDLL", "InteractiveDLL\InteractiveDLL.vcxproj", "{7069D556-5164-4065-8F38-B1F107AD2BEA}"
 EndProject
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "testMLib", "..\API\testMLib\testMLib.vcxproj", "{897652C9-FA4C-4D1D-9799-83C209968BEB}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|x64 = Debug|x64
@@ -24,6 +26,10 @@ Global
 		{7069D556-5164-4065-8F38-B1F107AD2BEA}.Debug|x64.Build.0 = Debug|x64
 		{7069D556-5164-4065-8F38-B1F107AD2BEA}.Release|x64.ActiveCfg = Release|x64
 		{7069D556-5164-4065-8F38-B1F107AD2BEA}.Release|x64.Build.0 = Release|x64
+		{897652C9-FA4C-4D1D-9799-83C209968BEB}.Debug|x64.ActiveCfg = Debug|x64
+		{897652C9-FA4C-4D1D-9799-83C209968BEB}.Debug|x64.Build.0 = Debug|x64
+		{897652C9-FA4C-4D1D-9799-83C209968BEB}.Release|x64.ActiveCfg = Release|x64
+		{897652C9-FA4C-4D1D-9799-83C209968BEB}.Release|x64.Build.0 = Release|x64
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

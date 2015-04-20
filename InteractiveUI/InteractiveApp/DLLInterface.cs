@@ -30,14 +30,14 @@ namespace UIWindow
         const string InteractiveDLL = "Interactive.dll";
         [DllImport(InteractiveDLL, CharSet = CharSet.Unicode)]
         public static extern IntPtr IVInit();
-        /*[DllImport(InteractiveDLL)]
+        [DllImport(InteractiveDLL)]
         private static extern UInt32 IVProcessCommand(IntPtr context, [In, MarshalAs(UnmanagedType.LPStr)] String command);
         [DllImport(InteractiveDLL)]
         public static extern IntPtr IVGetBitmapByName(IntPtr context, [In, MarshalAs(UnmanagedType.LPStr)] String bitmapName);
         [DllImport(InteractiveDLL)]
         public static extern IntPtr IVGetStringByName(IntPtr context, [In, MarshalAs(UnmanagedType.LPStr)] String stringName);
         [DllImport(InteractiveDLL)]
-        public static extern Int32 IVGetIntegerByName(IntPtr context, [In, MarshalAs(UnmanagedType.LPStr)] String integerName);*/
+        public static extern Int32 IVGetIntegerByName(IntPtr context, [In, MarshalAs(UnmanagedType.LPStr)] String integerName);
         
         public IntPtr interactiveDLLContext = (IntPtr)0;
 
@@ -49,7 +49,7 @@ namespace UIWindow
             }
         }
 
-        /*public UInt32 ProcessCommand(String command)
+        public UInt32 ProcessCommand(String command)
         {
             return IVProcessCommand(interactiveDLLContext, command);
         }
@@ -76,6 +76,6 @@ namespace UIWindow
             {
                 return Marshal.PtrToStringAnsi(stringPtr);
             }
-        }*/
+        }
     }
 }
