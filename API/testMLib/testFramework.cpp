@@ -198,9 +198,9 @@ void TestFramework::runAllTests()
     //
     // GPU methods
     //
-    methods.push_back(TestMethod("gradientDescentGPU", "no-params"));
+    //methods.push_back(TestMethod("gradientDescentGPU", "no-params"));
     //methods.push_back(TestMethod("linearizedConjugateGradientGPU", "no-params"));
-    //methods.push_back(TestMethod("vlbfgsGPU", "no-params"));
+    methods.push_back(TestMethod("vlbfgsGPU", "no-params"));
     
     for (auto &image : example.images)
         image.bind(optimizerState);

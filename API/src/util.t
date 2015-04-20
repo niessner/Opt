@@ -142,7 +142,7 @@ util.makeComputeResiduals = function(data)
 	return computeResiduals
 end
 
-util.makeDeltaCost = function(data)
+util.makeComputeDeltaCost = function(data)
 	-- haha ha
 	local terra costHack(pd : &data.PlanData, w : int, h : int, values : data.imageType)
 		return data.tbl.cost.boundary(w, h, values, pd.images.image0)
@@ -162,7 +162,7 @@ util.makeDeltaCost = function(data)
 	return deltaCost
 end
 
-util.makeSearchCost = function(data, cpu)
+util.makeComputeSearchCost = function(data, cpu)
 	local terra searchCost(pd : &data.PlanData, baseValues : data.imageType, baseResiduals : data.imageType, searchDirection : data.imageType, alpha : float, valueStore : data.imageType)
 		for h = 0, baseValues.H do
 			for w = 0, baseValues.W do
@@ -174,7 +174,7 @@ util.makeSearchCost = function(data, cpu)
 	return searchCost
 end
 
-util.makeSearchCostParallel = function(data, cpu)
+util.makeComputeSearchCostParallel = function(data, cpu)
 	local terra searchCostParallel(pd : &data.PlanData, baseValues : data.imageType, baseResiduals : data.imageType, searchDirection : data.imageType, count : int, alphas : &float, costs : &float, valueStore : data.imageType)
 		for i = 0, count do
 			for h = 0, baseValues.H do
@@ -367,7 +367,7 @@ util.makeComputeDeltaCostGPU = function(data)
 		return data.tbl.cost.boundary(w, h, values, pd.images.image0)
 	end
 	local terra computeDeltaCost(pd : &data.PlanData, w : int, h : int, baseResiduals : data.imageType, currentValues : data.imageType)
-		var residual = [float](costHack(w, h, currentValues, unpackstruct(pd.images)))
+		var residual = [float](costHack(pd, w, h, currentValues))
 		var delta = residual - baseResiduals(w, h)
 		atomicAdd(pd.scratchF, delta)
 	end
@@ -377,7 +377,7 @@ util.makeComputeDeltaCostGPU = function(data)
 	local function footer(pd)
 		return quote return @pd.scratchF end
 	end
-	return { kernel = computeDeltaCost, header = header, footer = footer, params = {symbol(data.imageType)}, mapMemberName = "unknown" }
+	return { kernel = computeDeltaCost, header = header, footer = footer, params = {symbol(data.imageType), symbol(data.imageType)}, mapMemberName = "unknown" }
 end
 
 util.makeInnerProductGPU = function(data)
@@ -391,7 +391,7 @@ util.makeInnerProductGPU = function(data)
 	local function footer(pd)
 		return quote return @pd.scratchF end
 	end
-	return { kernel = innerProduct, header = header, footer = footer, params = {}, mapMemberName = "unknown" }
+	return { kernel = innerProduct, header = header, footer = footer, params = {symbol(data.imageType), symbol(data.imageType)}, mapMemberName = "unknown" }
 end
 
 util.makeComputeGradientGPU = function(data)
@@ -416,10 +416,10 @@ util.makeCopyImageScaleGPU = function(data)
 end
 
 util.makeAddImageGPU = function(data)
-	local terra copyImageScale(pd : &data.PlanData, w : int, h : int, imageOut : data.imageType, imageIn : data.imageType, scale : float)
+	local terra addImage(pd : &data.PlanData, w : int, h : int, imageOut : data.imageType, imageIn : data.imageType, scale : float)
 		imageOut(w, h) = imageOut(w, h) + imageIn(w, h) * scale
 	end
-	return { kernel = copyImageScale, header = noHeader, footer = noFooter, params = {symbol(data.imageType), symbol(data.imageType), symbol(float)}, mapMemberName = "unknown" }
+	return { kernel = addImage, header = noHeader, footer = noFooter, params = {symbol(data.imageType), symbol(data.imageType), symbol(float)}, mapMemberName = "unknown" }
 end
 
 -- out = A + B * scale
@@ -427,7 +427,7 @@ util.makeCombineImageGPU = function(data)
 	local terra combineImage(pd : &data.PlanData, w : int, h : int, imageOut : data.imageType, imageA : data.imageType, imageB : data.imageType, scale : float)
 		imageOut(w, h) = imageA(w, h) + imageB(w, h) * scale
 	end
-	return { kernel = copyImageScale, header = noHeader, footer = noFooter, params = {symbol(data.imageType), symbol(data.imageType), symbol(data.imageType), symbol(float)}, mapMemberName = "unknown" }
+	return { kernel = combineImage, header = noHeader, footer = noFooter, params = {symbol(data.imageType), symbol(data.imageType), symbol(data.imageType), symbol(float)}, mapMemberName = "unknown" }
 end
 
 -- TODO: residuals should map over cost, not unknowns!!
@@ -440,6 +440,48 @@ util.makeComputeResidualsGPU = function(data)
 		residuals(w, h) = costHack(pd, w, h, values)
 	end
 	return { kernel = computeResiduals, header = noHeader, footer = noFooter, params = {symbol(data.imageType), symbol(data.imageType)}, mapMemberName = "unknown" }
+end
+
+util.makeComputeSearchCostGPU = function(data, gpu)
+	local terra lineSearchBruteForce(pd : &data.PlanData, baseValues : data.imageType, baseResiduals : data.imageType, searchDirection : data.imageType, alpha : float, valueStore : data.imageType)
+
+		gpu.combineImage(pd, valueStore, baseValues, searchDirection, alpha)
+		return gpu.computeDeltaCost(pd, baseResiduals, valueStore)
+	end
+	return lineSearchBruteForce
+end
+
+util.makeLineSearchBruteForceGPU = function(data, gpu)
+	local terra lineSearchBruteForce(pd : &data.PlanData, baseValues : data.imageType, baseResiduals : data.imageType, searchDirection : data.imageType, valueStore : data.imageType)
+
+		-- Constants
+		var lineSearchMaxIters = 1000
+		var lineSearchBruteForceStart = 1e-5
+		var lineSearchBruteForceMultiplier = 1.1
+				
+		var alpha = lineSearchBruteForceStart
+		var bestAlpha = 0.0
+		
+		var terminalCost = 10.0
+
+		var bestCost = 0.0
+		
+		for lineSearchIndex = 0, lineSearchMaxIters do
+			alpha = alpha * lineSearchBruteForceMultiplier
+			
+			var searchCost = gpu.computeSearchCost(pd, baseValues, baseResiduals, searchDirection, alpha, valueStore)
+			
+			if searchCost < bestCost then
+				bestAlpha = alpha
+				bestCost = searchCost
+			elseif searchCost > terminalCost then
+				break
+			end
+		end
+		
+		return bestAlpha
+	end
+	return lineSearchBruteForce
 end
 
 util.makeCPUFunctions = function(tbl, vars, PlanData)
@@ -458,11 +500,11 @@ util.makeCPUFunctions = function(tbl, vars, PlanData)
 	
 	cpu.computeCost = util.makeComputeCost(data)
 	cpu.computeGradient = util.makeComputeGradient(data)
-	cpu.deltaCost = util.makeDeltaCost(data)
+	cpu.deltaCost = util.makeComputeDeltaCost(data)
 	cpu.computeResiduals = util.makeComputeResiduals(data)
 	
-	cpu.computeSearchCost = util.makeSearchCost(data, cpu)
-	cpu.computeSearchCostParallel = util.makeSearchCostParallel(data, cpu)
+	cpu.computeSearchCost = util.makeComputeSearchCost(data, cpu)
+	cpu.computeSearchCostParallel = util.makeComputeSearchCostParallel(data, cpu)
 	cpu.dumpLineSearch = util.makeDumpLineSearch(data, cpu)
 	cpu.lineSearchBruteForce = util.makeLineSearchBruteForce(data, cpu)
 	cpu.lineSearchQuadraticMinimum = util.makeLineSearchQuadraticMinimum(data, cpu)
@@ -484,12 +526,13 @@ util.makeGPUFunctions = function(tbl, vars, PlanData, specializedKernels)
 	-- accumulate all naked kernels
 	kernelTemplate.computeCost = util.makeComputeCostGPU(data)
 	kernelTemplate.computeGradient = util.makeComputeGradientGPU(data)
-	--kernelTemplate.computeDeltaCost = util.makeDeltaCostGPU(data)
 	kernelTemplate.copyImage = util.makeCopyImageGPU(data)
 	kernelTemplate.copyImageScale = util.makeCopyImageScaleGPU(data)
 	kernelTemplate.addImage = util.makeAddImageGPU(data)
-	--kernelTemplate.computeResiduals = util.makeComputeResidualsGPU(data)
-	--kernelTemplate.innerProduct = util.makeInnerProductGPU(data)
+	kernelTemplate.combineImage = util.makeCombineImageGPU(data)
+	kernelTemplate.computeDeltaCost = util.makeComputeDeltaCostGPU(data)
+	kernelTemplate.computeResiduals = util.makeComputeResidualsGPU(data)
+	kernelTemplate.innerProduct = util.makeInnerProductGPU(data)
 		
 	for k, v in pairs(specializedKernels) do
 		kernelTemplate[k] = v(data)
@@ -507,7 +550,8 @@ util.makeGPUFunctions = function(tbl, vars, PlanData, specializedKernels)
 	end
 	
 	-- composite GPU functions
-	--gpu.
+	gpu.computeSearchCost = util.makeComputeSearchCostGPU(data, gpu)
+	gpu.lineSearchBruteForce = util.makeLineSearchBruteForceGPU(data, gpu)
 	
 	--[[
 	gpu.deltaCost = util.makeDeltaCost(tbl, imageType, dataImages)

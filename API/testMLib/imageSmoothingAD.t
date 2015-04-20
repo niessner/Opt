@@ -1,7 +1,7 @@
 local W,H = opt.Dim("W"), opt.Dim("H")
 local X = ad.Image("X",W,H)
 local A = ad.Image("A",W,H)
-local P = opt.InBounds(5,5)
+local P = opt.InBounds(1,1)
 
 
 local w = 0.1 -- keep us rational for now

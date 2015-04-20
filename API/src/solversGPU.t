@@ -287,7 +287,7 @@ end]]
 solversGPU.vlbfgsGPU = function(Problem, tbl, vars)
 
 	local maxIters = 1000
-	local m = 4
+	local m = 2
 	local b = 2 * m + 1
 	
 	local struct PlanData(S.Object) {
@@ -304,17 +304,19 @@ solversGPU.vlbfgsGPU = function(Problem, tbl, vars)
 		prevGradient : vars.unknownType
 
 		p : vars.unknownType
+		
 		sList : vars.unknownType[m]
 		yList : vars.unknownType[m]
-		alphaList : float[maxIters]
-		
-		dotProductMatrix : vars.unknownType
-		dotProductMatrixStorage : vars.unknownType
-		coefficients : double[b]
 		
 		-- variables used for line search
 		currentValues : vars.unknownType
 		currentResiduals : vars.unknownType
+		
+		-- These all live on the CPU!
+		dotProductMatrix : vars.unknownType
+		dotProductMatrixStorage : vars.unknownType
+		alphaList : vars.unknownType
+		coefficients : float[b]
 	}
 	
 	local terra imageFromIndex(pd : &PlanData, index : int)
@@ -334,7 +336,9 @@ solversGPU.vlbfgsGPU = function(Problem, tbl, vars)
 		return index + 1
 	end
 	
-	local gpu = util.makeGPUFunctions(tbl, vars, PlanData)
+	local specializedKernels = {}
+	
+	local gpu = util.makeGPUFunctions(tbl, vars, PlanData, {})
 	local cpu = util.makeCPUFunctions(tbl, vars, PlanData)
 	
 	local terra impl(data_ : &opaque, imageBindings : &&opt.ImageBinding, params_ : &opaque)
@@ -354,15 +358,16 @@ solversGPU.vlbfgsGPU = function(Problem, tbl, vars)
 		gpu.computeGradient(pd, pd.gradient)
 
 		for iter = 0, maxIters - 1 do
-
+		
 			var iterStartCost = gpu.computeCost(pd)
+			
 			logSolver("iteration %d, cost=%f\n", iter, iterStartCost)
 			
 			--
 			-- compute the search direction p
 			--
 			if k == 0 then
-				gpu.copyImageScale(pd.p, pd.gradient, -1.0f)
+				gpu.copyImageScale(pd, pd.p, pd.gradient, -1.0f)
 			else
 				-- note that much of this happens on the CPU!
 				
@@ -373,7 +378,7 @@ solversGPU.vlbfgsGPU = function(Problem, tbl, vars)
 						var prevI = nextCoefficientIndex(i)
 						var prevJ = nextCoefficientIndex(j)
 						if prevI == -1 or prevJ == -1 then
-							pd.dotProductMatrix(i, j) = gpu.imageInnerProduct(imageFromIndex(pd, i), imageFromIndex(pd, j))
+							pd.dotProductMatrix(i, j) = gpu.innerProduct(pd, imageFromIndex(pd, i), imageFromIndex(pd, j))
 						else
 							pd.dotProductMatrix(i, j) = pd.dotProductMatrixStorage(prevI, prevJ)
 						end
@@ -399,8 +404,8 @@ solversGPU.vlbfgsGPU = function(Problem, tbl, vars)
 						num = num + pd.coefficients[q] * pd.dotProductMatrix(q, j)
 					end
 					var den = pd.dotProductMatrix(j, j + m)
-					pd.alphaList[i] = num / den
-					pd.coefficients[j + m] = pd.coefficients[j + m] - pd.alphaList[i]
+					pd.alphaList(i, 0) = num / den
+					pd.coefficients[j + m] = pd.coefficients[j + m] - pd.alphaList(i, 0)
 				end
 				
 				var scale = pd.dotProductMatrix(m - 1, 2 * m - 1) / pd.dotProductMatrix(2 * m - 1, 2 * m - 1)
@@ -417,26 +422,26 @@ solversGPU.vlbfgsGPU = function(Problem, tbl, vars)
 						end
 						var den = pd.dotProductMatrix(j, j + m)
 						var beta = num / den
-						pd.coefficients[j] = pd.coefficients[j] + (pd.alphaList[i] - beta)
+						pd.coefficients[j] = pd.coefficients[j] + (pd.alphaList(i, 0) - beta)
 					end
 				end
 				
 				-- reconstruct p from basis vectors
-				gpu.copyImageScale(pd.p, pd.p, 0.0f)
+				gpu.copyImageScale(pd, pd.p, pd.p, 0.0f)
 				for i = 0, b do
 					var image = imageFromIndex(pd, i)
 					var coefficient = pd.coefficients[i]
-					gpu.addImage(pd.p, image, coefficient)
+					gpu.addImage(pd, pd.p, image, coefficient)
 				end
 			end
 			
 			--
 			-- line search
 			--
-			gpu.copyImage(pd.currentValues, vars.unknownImage)
+			gpu.copyImage(pd, pd.currentValues, pd.images.unknown)
 			gpu.computeResiduals(pd, pd.currentResiduals, pd.currentValues)
 			
-			var bestAlpha = gpu.lineSearchBruteForce(pd.currentValues, pd.currentResiduals, pd.p, vars.unknownImage, vars.dataImages)
+			var bestAlpha = gpu.lineSearchBruteForce(pd, pd.currentValues, pd.currentResiduals, pd.p, pd.images.unknown)
 			
 			-- cycle the oldest s and y
 			var yListStore = pd.yList[0]
@@ -449,30 +454,15 @@ solversGPU.vlbfgsGPU = function(Problem, tbl, vars)
 			pd.sList[m - 1] = sListStore
 			
 			-- compute new x and s
-			gpu.copyImageScale(pd.sList[m - 1], pd.p, bestAlpha)
-			gpu.copyImage(pd.unknownImage, pd.currentValues)
-			gpu.addImage(pd.unknownImage, pd.pd.sList[m - 1], 1.0f)
+			gpu.copyImageScale(pd, pd.sList[m - 1], pd.p, bestAlpha)
+			gpu.combineImage(pd, pd.images.unknown, pd.currentValues, pd.sList[m - 1], 1.0f)
 			
-			--[[for h = 0, pd.gradH do
-				for w = 0, pd.gradW do
-					var delta = bestAlpha * pd.p(w, h)
-					vars.unknownImage(w, h) = pd.currentValues(w, h) + delta
-					pd.sList[m - 1](w, h) = delta
-				end
-			end]]
-			
-			gpu.copyImage(pd.prevGradient, pd.gradient)
+			gpu.copyImage(pd, pd.prevGradient, pd.gradient)
 			
 			gpu.computeGradient(pd, pd.gradient)
 			
 			-- compute new y
-			gpu.copyImage(pd.yList[m - 1], pd.gradient)
-			gpu.addImage(pd.yList[m - 1], pd.prevGradient, -1.0f)
-			--[[for h = 0, pd.gradH do
-				for w = 0, pd.gradW do
-					pd.yList[m - 1](w, h) = pd.gradient(w, h) - pd.prevGradient(w, h)
-				end
-			end]]
+			gpu.combineImage(pd, pd.yList[m - 1], pd.gradient, pd.prevGradient, -1.0f)
 			
 			prevBestAlpha = bestAlpha
 			
@@ -513,8 +503,13 @@ solversGPU.vlbfgsGPU = function(Problem, tbl, vars)
 			pd.yList[i]:initGPU(pd.gradW, pd.gradH)
 		end
 		
+		C.cudaMallocManaged([&&opaque](&(pd.scratchF)), sizeof(float), C.cudaMemAttachGlobal)
+		
+		-- CPU!
 		pd.dotProductMatrix:initCPU(b, b)
 		pd.dotProductMatrixStorage:initCPU(b, b)
+		pd.alphaList:initCPU(maxIters, 1)
+		
 
 		return &pd.plan
 	end
