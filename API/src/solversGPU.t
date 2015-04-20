@@ -5,6 +5,14 @@ local C = util.C
 
 solversGPU = {}
 
+local function noHeader(pd)
+	return quote end
+end
+
+local function noFooter(pd)
+	return quote end
+end
+
 solversGPU.gradientDescentGPU = function(Problem, tbl, vars)
 
 	local struct PlanData(S.Object) {
@@ -18,7 +26,16 @@ solversGPU.gradientDescentGPU = function(Problem, tbl, vars)
 		gradStore : vars.unknownType
 	}
 	
-	local gpu = util.makeGPUFunctions(tbl, vars, PlanData)
+	local specializedKernels = {}
+	specializedKernels.updatePosition = function(data)
+		local terra updatePositionGPU(pd : &data.PlanData, w : int, h : int, learningRate : float)
+			var delta = -learningRate * pd.gradStore(w, h)
+			pd.images.unknown(w, h) = pd.images.unknown(w, h) + delta
+		end
+		return { kernel = updatePositionGPU, header = noHeader, footer = noFooter, params = {symbol(float)}, mapMemberName = "unknown" }
+	end
+	
+	local gpu = util.makeGPUFunctions(tbl, vars, PlanData, specializedKernels)
 	
 	local terra impl(data_ : &opaque, imageBindings : &&opt.ImageBinding, params_ : &opaque)
 		var pd = [&PlanData](data_)

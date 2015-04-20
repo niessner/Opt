@@ -442,17 +442,6 @@ util.makeComputeResidualsGPU = function(data)
 	return { kernel = computeResiduals, header = noHeader, footer = noFooter, params = {symbol(data.imageType), symbol(data.imageType)}, mapMemberName = "unknown" }
 end
 
--- gradient descent kernel
-util.makeUpdatePositionGPU = function(data)
-	local terra updatePositionGPU(pd : &data.PlanData, w : int, h : int, learningRate : float)
-		var delta = -learningRate * pd.gradStore(w, h)
-		pd.images.unknown(w, h) = pd.images.unknown(w, h) + delta
-	end
-	return { kernel = updatePositionGPU, header = noHeader, footer = noFooter, params = {symbol(float)}, mapMemberName = "unknown" }
-end
-
-
-
 util.makeCPUFunctions = function(tbl, vars, PlanData)
 	local cpu = {}
 	
@@ -482,7 +471,7 @@ util.makeCPUFunctions = function(tbl, vars, PlanData)
 	return cpu
 end
 
-util.makeGPUFunctions = function(tbl, vars, PlanData)
+util.makeGPUFunctions = function(tbl, vars, PlanData, specializedKernels)
 	local gpu = {}
 	local kernelTemplate = {}
 	local wrappedKernels = {}
@@ -501,8 +490,10 @@ util.makeGPUFunctions = function(tbl, vars, PlanData)
 	kernelTemplate.addImage = util.makeAddImageGPU(data)
 	--kernelTemplate.computeResiduals = util.makeComputeResidualsGPU(data)
 	--kernelTemplate.innerProduct = util.makeInnerProductGPU(data)
-	
-	kernelTemplate.updatePosition = util.makeUpdatePositionGPU(data)
+		
+	for k, v in pairs(specializedKernels) do
+		kernelTemplate[k] = v(data)
+	end
 	
 	-- clothe naked kernels
 	for k, v in pairs(kernelTemplate) do
