@@ -353,7 +353,7 @@ solversGPU.vlbfgsGPU = function(Problem, tbl, vars)
 		
 		-- using an initial guess of alpha means that it will invoke quadratic optimization on the first iteration,
 		-- which is only sometimes a good idea.
-		var prevBestAlpha = 1.0
+		var prevBestAlpha = 0.0
 		
 		gpu.computeGradient(pd, pd.gradient)
 
@@ -441,7 +441,7 @@ solversGPU.vlbfgsGPU = function(Problem, tbl, vars)
 			gpu.copyImage(pd, pd.currentValues, pd.images.unknown)
 			gpu.computeResiduals(pd, pd.currentResiduals, pd.currentValues)
 			
-			var bestAlpha = gpu.lineSearchBruteForce(pd, pd.currentValues, pd.currentResiduals, pd.p, pd.images.unknown)
+			var bestAlpha = gpu.lineSearchQuadraticFallback(pd, pd.currentValues, pd.currentResiduals, pd.p, pd.images.unknown, prevBestAlpha)
 			
 			-- cycle the oldest s and y
 			var yListStore = pd.yList[0]

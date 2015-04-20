@@ -443,12 +443,21 @@ util.makeComputeResidualsGPU = function(data)
 end
 
 util.makeComputeSearchCostGPU = function(data, gpu)
-	local terra lineSearchBruteForce(pd : &data.PlanData, baseValues : data.imageType, baseResiduals : data.imageType, searchDirection : data.imageType, alpha : float, valueStore : data.imageType)
+	local terra computeSearchCost(pd : &data.PlanData, baseValues : data.imageType, baseResiduals : data.imageType, searchDirection : data.imageType, alpha : float, valueStore : data.imageType)
 
 		gpu.combineImage(pd, valueStore, baseValues, searchDirection, alpha)
 		return gpu.computeDeltaCost(pd, baseResiduals, valueStore)
 	end
-	return lineSearchBruteForce
+	return computeSearchCost
+end
+
+util.makeComputeSearchCostParallelGPU = function(data, gpu)
+	local terra computeSearchCostParallel(pd : &data.PlanData, baseValues : data.imageType, baseResiduals : data.imageType, searchDirection : data.imageType, count : int, alphas : &float, costs : &float, valueStore : data.imageType)
+		for i = 0, count do
+			costs[i] = gpu.computeSearchCost(pd, baseValues, baseResiduals, searchDirection, alphas[i], valueStore)
+		end
+	end
+	return computeSearchCostParallel
 end
 
 util.makeLineSearchBruteForceGPU = function(data, gpu)
@@ -482,6 +491,72 @@ util.makeLineSearchBruteForceGPU = function(data, gpu)
 		return bestAlpha
 	end
 	return lineSearchBruteForce
+end
+
+util.makeLineSearchQuadraticMinimumGPU = function(data, gpu)
+	local terra lineSearchQuadraticMinimum(pd : &data.PlanData, baseValues : data.imageType, baseResiduals : data.imageType, searchDirection : data.imageType, valueStore : data.imageType, alphaGuess : float)
+
+		var alphas : float[4] = array(alphaGuess * 0.5f, alphaGuess * 1.0f, alphaGuess * 1.5f, 0.0f)
+		var costs : float[4]
+		
+		gpu.computeSearchCostParallel(pd, baseValues, baseResiduals, searchDirection, 3, alphas, costs, valueStore)
+		
+		var a1 = alphas[0] var a2 = alphas[1] var a3 = alphas[2]
+		var c1 = costs[0] var c2 = costs[1] var c3 = costs[2]
+		var a = ((c2-c1)*(a1-a3) + (c3-c1)*(a2-a1))/((a1-a3)*(a2*a2-a1*a1) + (a2-a1)*(a3*a3-a1*a1))
+		var b = ((c2 - c1) - a * (a2*a2 - a1*a1)) / (a2 - a1)
+		alphas[3] = -b / (2.0 * a)
+		costs[3] = gpu.computeSearchCost(pd, baseValues, baseResiduals, searchDirection, alphas[3], valueStore)
+		
+		var bestCost = 0.0
+		var bestAlpha = 0.0
+		for i = 0, 4 do
+			if costs[i] < bestCost then
+				bestAlpha = alphas[i]
+				bestCost = costs[i]
+			elseif i == 3 then
+				logSolver("quadratic minimization failed, bestAlpha=%f\n", bestAlpha)
+				--gpu.dumpLineSearch(baseValues, baseResiduals, searchDirection, valueStore, dataImages)
+			end
+		end
+		
+		return bestAlpha
+	end
+	return lineSearchQuadraticMinimum
+end
+
+util.makeLineSearchQuadraticFallbackGPU = function(data, gpu)
+	local terra lineSearchQuadraticFallback(pd : &data.PlanData, baseValues : data.imageType, baseResiduals : data.imageType, searchDirection : data.imageType, valueStore : data.imageType, alphaGuess : float)
+		var bestAlpha = 0.0
+		var useBruteForce = (alphaGuess == 0.0)
+		if not useBruteForce then
+			
+			bestAlpha = gpu.lineSearchQuadraticMinimum(pd, baseValues, baseResiduals, searchDirection, valueStore, alphaGuess)
+			
+			if bestAlpha == 0.0 then
+				logSolver("quadratic guess=%f failed, trying again...\n", alphaGuess)
+				bestAlpha = gpu.lineSearchQuadraticMinimum(pd, baseValues, baseResiduals, searchDirection, valueStore, alphaGuess * 4.0)
+				
+				if bestAlpha == 0.0 then
+					logSolver("quadratic minimization exhausted\n")
+					
+					--if iter >= 10 then
+					--else
+						--useBruteForce = true
+					--end
+					--gpu.dumpLineSearch(baseValues, baseResiduals, searchDirection, valueStore, dataImages)
+				end
+			end
+		end
+
+		if useBruteForce then
+			logSolver("brute-force line search\n")
+			bestAlpha = gpu.lineSearchBruteForce(pd, baseValues, baseResiduals, searchDirection, valueStore)
+		end
+		
+		return bestAlpha
+	end
+	return lineSearchQuadraticFallback
 end
 
 util.makeCPUFunctions = function(tbl, vars, PlanData)
@@ -551,18 +626,11 @@ util.makeGPUFunctions = function(tbl, vars, PlanData, specializedKernels)
 	
 	-- composite GPU functions
 	gpu.computeSearchCost = util.makeComputeSearchCostGPU(data, gpu)
+	gpu.computeSearchCostParallel = util.makeComputeSearchCostParallelGPU(data, gpu)
 	gpu.lineSearchBruteForce = util.makeLineSearchBruteForceGPU(data, gpu)
+	gpu.lineSearchQuadraticMinimum = util.makeLineSearchQuadraticMinimumGPU(data, gpu)
+	gpu.lineSearchQuadraticFallback = util.makeLineSearchQuadraticFallbackGPU(data, gpu)
 	
-	--[[
-	gpu.deltaCost = util.makeDeltaCost(tbl, imageType, dataImages)
-	gpu.computeSearchCost = util.makeSearchCost(tbl, imageType, gpu, dataImages)
-	gpu.computeSearchCostParallel = util.makeSearchCostParallel(tbl, imageType, gpu, dataImages)
-	gpu.computeResiduals = util.makeComputeResiduals(tbl, imageType, dataImages)
-	gpu.imageInnerProduct = util.makeImageInnerProduct(imageType)
-	gpu.dumpLineSearch = util.makeDumpLineSearch(tbl, imageType, gpu, dataImages)
-	gpu.lineSearchBruteForce = util.makeLineSearchBruteForce(tbl, imageType, gpu, dataImages)
-	gpu.lineSearchQuadraticMinimum = util.makeLineSearchQuadraticMinimum(tbl, imageType, gpu, dataImages)
-	gpu.lineSearchQuadraticFallback = util.makeLineSearchQuadraticFallback(tbl, imageType, gpu, dataImages)]]
 	return gpu
 end
 
