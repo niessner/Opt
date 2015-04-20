@@ -73,7 +73,7 @@ function Var:key() return self.key_ end
 
 local function shouldcommute(a,b)
     if Const:is(a) then return true end
-    --if b:prec() < a:prec() then return true end
+    if b:prec() < a:prec() then return true end
     return false
 end
 
@@ -87,16 +87,14 @@ local function factors(e)
 end
 local function simplify(op,args)
     local x,y,z = unpack(args)
+    --print(x,y)
     if allconst(args) and op:getimpl() then
         return toexp(op:getimpl()(unpack(args:map("v"))))
     end
     if #args == 2 and Apply:is(x) and Apply:is(y) and x.op.name == "select" and y.op.name == "select" and x.args[1] == y.args[1] then
         return ad.select(x.args[1],op(x.args[2],y.args[2]),op(x.args[3],y.args[3]))
     end
-    if commutes[op.name] and shouldcommute(x,y) then 
-        --print("commute")
-        return op(y,x) -- constants will be on rhs
-    elseif assoc[op.name] and Apply:is(x) and x.op.name == op.name
+    if assoc[op.name] and Apply:is(x) and x.op.name == op.name
            and Const:is(x.args[2]) then -- (e + c) + ? -> e + (? + c)
         --print("assoc1")
         return op(x.args[1],op(x.args[2],y)) -- e0 + (e1 + c) ->  (e0 + e1) + c
@@ -104,6 +102,9 @@ local function simplify(op,args)
            and Const:is(y.args[2]) then
         --print("assoc2")
         return op(op(x,y.args[1]),y.args[2])
+    elseif commutes[op.name] and shouldcommute(x,y) then 
+        --print("commute")
+        return op(y,x) -- constants will be on rhs
     elseif op.name == "mul" then
         if y == one then return x
         elseif y == zero then return zero
@@ -478,5 +479,4 @@ print(expstostring(g))
 local t = ad.toterra(g,{x = symbol("x"), y = symbol("y"), z = symbol("z")})
 t:printpretty()
 ]]
-
 return ad
