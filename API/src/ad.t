@@ -73,7 +73,7 @@ function Var:key() return self.key_ end
 
 local function shouldcommute(a,b)
     if Const:is(a) then return true end
-    if b:prec() < a:prec() then return true end
+    --if b:prec() < a:prec() then return true end
     return false
 end
 
@@ -396,6 +396,30 @@ function Exp:gradient(exps)
     return exps:map(function(e) return tape[e] or zero end)
 end
 
+function Exp:assumofsquares()
+    local terms = terralib.newlist()
+    local function parsesquare(x,c)
+        assert(Apply:is(x) and x.op.name == "mul" and x.args[1] == x.args[2], "expected a sub of square terms but this term is not squared: "..tostring(x))
+        return x.args[1]*c
+    end
+    local function parsefactor(x)
+        if Apply:is(x) and x.op.name == "mul" and Const:is(x.args[2]) then
+            return parsesquare(x.args[1],math.sqrt(x.args[2].v))
+        else
+            return parsesquare(x,one)
+        end
+    end
+    local function parseterm(x)
+        if Apply:is(x) and x.op.name == "add" then 
+            parseterm(x.args[1])
+            parseterm(x.op.name == "sub" and -x.args[1] or x.args[2])
+        else
+            terms:insert(parsefactor(x))
+        end
+    end
+    parseterm(self)
+    return terms
+end
 
 ad.add:define(function(x,y) return `x + y end,1,1)
 ad.sub:define(function(x,y) return `x - y end,1,-1)
@@ -454,4 +478,5 @@ print(expstostring(g))
 local t = ad.toterra(g,{x = symbol("x"), y = symbol("y"), z = symbol("z")})
 t:printpretty()
 ]]
+
 return ad
