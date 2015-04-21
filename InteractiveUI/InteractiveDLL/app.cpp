@@ -16,6 +16,7 @@ UINT32 App::processCommand(const string &command)
         loadPNGIntoTest(words[1]);
     } else if (words[0] == "run") {
         string optimizationMethod = words[1];
+        printf("%s\n", words[1].c_str());
         if (_queryBitmapInfo.colorData == NULL) {
             _errorString = "No image available";
             return -1;
@@ -62,7 +63,7 @@ UINT32 App::processCommand(const string &command)
             imageBindingsGPU.push_back(image.terraBindingGPU);
         }
 
-        bool isGPU = false;//ml::util::endsWith(method.optimizerName, "GPU");
+        bool isGPU = ml::util::endsWith(optimizationMethod, "GPU");
 
         if (isGPU)
         {

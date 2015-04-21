@@ -3,7 +3,7 @@ class App
 {
 public:
     void init();
-
+    std::mutex _lock;
     
 
     UINT32 processCommand(const string &command);
