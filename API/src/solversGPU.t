@@ -199,7 +199,7 @@ solversGPU.vlbfgsGPU = function(Problem, tbl, vars)
 						var prevI = nextCoefficientIndex(i)
 						var prevJ = nextCoefficientIndex(j)
 						if prevI == -1 or prevJ == -1 then
-							pd.dotProductMatrix(i, j) = gpu.innerProductReduction(pd, imageFromIndex(pd, i), imageFromIndex(pd, j))
+							pd.dotProductMatrix(i, j) = gpu.innerProduct(pd, imageFromIndex(pd, i), imageFromIndex(pd, j))
 						else
 							pd.dotProductMatrix(i, j) = pd.dotProductMatrixStorage(prevI, prevJ)
 						end

@@ -13,6 +13,8 @@ util.C = terralib.includecstring [[
 
 local C = util.C
 
+local warpSize = 32;
+
 util.max = terra(x : double, y : double)
 	return terralib.select(x > y, x, y)
 end
@@ -335,6 +337,20 @@ local terra atomicAdd(sum : &float, value : float)
 	terralib.asm(terralib.types.unit,"red.global.add.f32 [$0],$1;","l,f", true, sum, value)
 end
 
+local terra __shfl_down(v : float, delta : uint, width : int)
+	var ret : float;
+    var c : int;
+	c = ((warpSize-width) << 8) or 0x1F;
+	ret = terralib.asm(float,"shfl.down.b32 %0, %1, %2, %3;","=f,f,r,r", v, delta, c)
+	return ret;
+end
+
+local terra laneid()
+    var laneid : int;
+	laneid = terralib.asm(float,"mov.u32 %0, %laneid","=r")
+	return laneid;
+end
+
 local makeGPULauncher = function(compiledKernel, header, footer, tbl, PlanData, params)
 	local terra GPULauncher(pd : &PlanData, [params])
 		var launch = terralib.CUDAParams { (pd.gradW - 1) / 32 + 1, (pd.gradH - 1) / 32 + 1,1, 32,32,1, 0, nil }
@@ -394,10 +410,26 @@ util.makeInnerProductGPU = function(data)
 	return { kernel = innerProduct, header = header, footer = footer, params = {symbol(data.imageType), symbol(data.imageType)}, mapMemberName = "unknown" }
 end
 
+
+local terra warpReduceSum(val : float) 
+  var offset = warpSize/2
+  while offset > 0 do 
+    val = val + __shfl_down(val, offset);
+    offset =  offset/2
+  end
+  return val;
+end
+
+
 util.makeInnerProductReductionGPU = function(data)
 	local terra innerProductReduction(pd : &data.PlanData, w : int, h : int, imageA : data.imageType, imageB : data.imageType)
 		var v = imageA(w, h) * imageB(w, h)
-		atomicAdd(pd.scratchF, v)
+		var lane = threadIdx.x % warpSize;
+		v = warpReduceSum(v);
+		--TODO: switch to block reduce
+		if (laneid == 0) then
+			atomicAdd(pd.scratchF, v)
+		end
 	end
 	local function header(pd)
 		return quote @pd.scratchF = 0.0f end
@@ -622,7 +654,7 @@ util.makeGPUFunctions = function(tbl, vars, PlanData, specializedKernels)
 	kernelTemplate.computeDeltaCost = util.makeComputeDeltaCostGPU(data)
 	kernelTemplate.computeResiduals = util.makeComputeResidualsGPU(data)
 	kernelTemplate.innerProduct = util.makeInnerProductGPU(data)
-	kernelTemplate.innerProductReduction = util.makeInnerProductReductionGPU(data)
+	--kernelTemplate.innerProductReduction = util.makeInnerProductReductionGPU(data)
 		
 	for k, v in pairs(specializedKernels) do
 		kernelTemplate[k] = v(data)

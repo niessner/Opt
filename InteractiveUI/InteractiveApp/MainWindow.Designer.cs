@@ -48,11 +48,11 @@
             // 
             // textBoxEnergy
             // 
-            this.textBoxEnergy.Font = new System.Drawing.Font("Consolas", 9.75F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, ((byte)(0)));
+            this.textBoxEnergy.Font = new System.Drawing.Font("Consolas", 12F);
             this.textBoxEnergy.Location = new System.Drawing.Point(13, 39);
             this.textBoxEnergy.Margin = new System.Windows.Forms.Padding(4);
             this.textBoxEnergy.Name = "textBoxEnergy";
-            this.textBoxEnergy.Size = new System.Drawing.Size(619, 536);
+            this.textBoxEnergy.Size = new System.Drawing.Size(680, 536);
             this.textBoxEnergy.TabIndex = 0;
             this.textBoxEnergy.Text = "";
             this.textBoxEnergy.TextChanged += new System.EventHandler(this.textBoxEnergy_TextChanged);
@@ -100,9 +100,9 @@
             // 
             // pictureBoxMinimum
             // 
-            this.pictureBoxMinimum.Location = new System.Drawing.Point(641, 39);
+            this.pictureBoxMinimum.Location = new System.Drawing.Point(700, 39);
             this.pictureBoxMinimum.Name = "pictureBoxMinimum";
-            this.pictureBoxMinimum.Size = new System.Drawing.Size(687, 382);
+            this.pictureBoxMinimum.Size = new System.Drawing.Size(628, 382);
             this.pictureBoxMinimum.TabIndex = 2;
             this.pictureBoxMinimum.TabStop = false;
             // 
@@ -148,15 +148,16 @@
             // 
             // resultImageBox
             // 
-            this.resultImageBox.Location = new System.Drawing.Point(641, 427);
+            this.resultImageBox.Location = new System.Drawing.Point(700, 427);
             this.resultImageBox.Name = "resultImageBox";
-            this.resultImageBox.Size = new System.Drawing.Size(687, 360);
+            this.resultImageBox.Size = new System.Drawing.Size(628, 360);
             this.resultImageBox.TabIndex = 8;
             this.resultImageBox.TabStop = false;
             // 
             // timer
             // 
             this.timer.Enabled = true;
+            this.timer.Interval = 200;
             this.timer.Tick += new System.EventHandler(this.timer_Tick);
             // 
             // optimizationMethodComboBox

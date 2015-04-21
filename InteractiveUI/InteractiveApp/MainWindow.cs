@@ -19,6 +19,7 @@ namespace UIWindow
         DLLInterface dll;
         public string imageFilename;
         bool textChangedSinceLastCompile = false;
+        bool textChangedSinceLastTick = false;
         bool compiling = false;
         List<string> optimizationMethods = new List<string> {
             "gradientDescentCPU",
@@ -26,15 +27,16 @@ namespace UIWindow
             "conjugateGradientCPU",
             "linearizedConjugateGradientCPU",
             "linearizedConjugateGradientGPU", 
-            "linearizedPreconditionedConjugateGradientCPU",
-            "lbfgsCPU"};
+            "lbfgsCPU",
+            "vlbfgsCPU",
+            "vlbfgsGPU"};
 
         public MainWindow()
         {
             InitializeComponent();
             foreach (string method in optimizationMethods)
                 optimizationMethodComboBox.Items.Add(method);
-            optimizationMethodComboBox.SelectedItem = "linearizedPreconditionedConjugateGradientCPU";
+            optimizationMethodComboBox.SelectedItem = "vlbfgsCPU";
         }
 
         private void MainWindow_Load(object sender, EventArgs e)
@@ -147,16 +149,18 @@ namespace UIWindow
 
         private void timer_Tick(object sender, EventArgs e)
         {
-            if (textChangedSinceLastCompile && !compiling)
+            if (textChangedSinceLastCompile && !textChangedSinceLastTick && !compiling)
             {
                 Compile();
                 textChangedSinceLastCompile = false;
             }
+            textChangedSinceLastTick = false;
         }
 
         private void textBoxEnergy_TextChanged(object sender, EventArgs e)
         {
             textChangedSinceLastCompile = true;
+            textChangedSinceLastTick = true;
         }
 
     
