@@ -58,7 +58,17 @@ end
 
 local getconst = terralib.memoize(function(n) return Const:new { v = n } end)
 local function toexp(n)
-    return Exp:is(n) and n or tonumber(n) and getconst(n)
+    if n then 
+        if Exp:is(n) then return n
+        elseif type(n) == "number" then return getconst(n)
+        elseif type(n) == "table" then
+            local mt = getmetatable(n)
+            if type(mt.__toadexp) == "function" then
+                return toexp(mt.__toadexp(n))
+            end
+        end
+    end
+    return nil
 end
 
 local zero,one,negone = toexp(0),toexp(1),toexp(-1)
@@ -117,6 +127,8 @@ local function simplify(op,args)
             if y.args[2] == one or y.args[2] == zero or y.args[3] == one or y.args[3] == zero then
                 return ad.select(y.args[1],x*y.args[2],x*y.args[3])
             end
+        elseif Const:is(y) and Apply:is(x) and x.op.name == "unm" then
+            return x.args[1]*-y
         end
     elseif op.name == "add" then
         if y == zero then return x 
@@ -395,31 +407,6 @@ function Exp:gradient(exps)
         end
     end
     return exps:map(function(e) return tape[e] or zero end)
-end
-
-function Exp:assumofsquares()
-    local terms = terralib.newlist()
-    local function parsesquare(x,c)
-        assert(Apply:is(x) and x.op.name == "mul" and x.args[1] == x.args[2], "expected a sub of square terms but this term is not squared: "..tostring(x))
-        return x.args[1]*c
-    end
-    local function parsefactor(x)
-        if Apply:is(x) and x.op.name == "mul" and Const:is(x.args[2]) then
-            return parsesquare(x.args[1],math.sqrt(x.args[2].v))
-        else
-            return parsesquare(x,one)
-        end
-    end
-    local function parseterm(x)
-        if Apply:is(x) and x.op.name == "add" then 
-            parseterm(x.args[1])
-            parseterm(x.op.name == "sub" and -x.args[1] or x.args[2])
-        else
-            terms:insert(parsefactor(x))
-        end
-    end
-    parseterm(self)
-    return terms
 end
 
 ad.add:define(function(x,y) return `x + y end,1,1)

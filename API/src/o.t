@@ -12,7 +12,7 @@ local C = util.C
 
 -- constants
 local verboseSolver = true
-local verboseAD = false
+local verboseAD = true
 
 local function newclass(name)
     local mt = { __name = name }
@@ -324,7 +324,19 @@ local ImageTable = newclass("ImageTable") -- a context that keeps a mapping from
 
 local ImageAccess = newclass("ImageAccess")
 local BoundsAccess = newclass("BoundsAccess")
-
+local SumOfSquares = newclass("SumOfSquares")
+function SumOfSquares:__toadexp()
+    local sum = 0
+    for i,t in ipairs(self.terms) do
+        sum = sum + t*t
+    end
+    return sum
+end
+function ad.sumsquared(...)
+    local exp = terralib.newlist {...}
+    exp = exp:map(function(x) return assert(ad.toexp(x), "expected an ad expression") end)
+    return SumOfSquares:new { terms = exp }
+end
 ImageAccess.get = terralib.memoize(function(self,im,field,x,y)
     return ImageAccess:new { image = im, field = field, x = x, y = y}
 end)
@@ -360,8 +372,7 @@ end
 function ImageAccess:shift(x,y)
     return ImageAccess:get(self.image,self.field,self.x + x, self.y + y)
 end
-local function centerexp(access,exp)
-    local x,y = -access.x,-access.y
+local function shiftexp(exp,x,y)
     local function rename(a)
         return ad.v[a:shift(x,y)]
     end
@@ -429,7 +440,7 @@ local function createfunction(images,exp,usebounds)
     generatedfn:compile()
     --generatedfn:printpretty(true,false)
     if verboseAD then
-        generatedfn:disas()
+        --generatedfn:disas()
     end
     return generatedfn,stencil
 end
@@ -440,8 +451,66 @@ local function createfunctionset(images,dimensions,exp)
     local interior = createfunction(images,exp,false)
     return { boundary = boundary, stencil = stencil, interior = interior, dimensions = dimensions }
 end
+local function unknowns(exp,unknown)
+    local seenunknown = {}
+    local unknownvars = terralib.newlist()
+    exp:rename(function(a)
+        local v = ad.v[a]
+        if ImageAccess:is(a) and a.image == unknown and a.field == "v" and not seenunknown[a] then
+            unknownvars:insert(v)
+            seenunknown[a] = true
+        end
+        return v
+    end)
+    return unknownvars
+end
 
-function ad.Cost(dimensions,images,costexp)
+local getshift = terralib.memoize(function(x,y) return {x = x, y = y} end)
+
+local function shiftswithoverlappingstencil(unknownvars)
+    local shifttooverlap = {}
+    local shifts = terralib.newlist()
+    for i,a_ in ipairs(unknownvars) do
+        local a = a_:key()
+        for j,b_ in ipairs(unknownvars) do
+            local b = b_:key()
+            local s = getshift(a.x - b.x, a.y - b.y) -- at what shift from a to b does a's (a.x,a.y) overlap with b's (b.x,b.y)
+            if not shifttooverlap[s] then
+                shifttooverlap[s] = terralib.newlist()
+                shifts:insert(s)
+            end
+            shifttooverlap[s]:insert({left = i, right = j})
+        end
+    end
+    return shifts,shifttooverlap
+end
+
+local function createjtj(Fs,unknown,P)
+    local P_hat = 0
+    for _,F in ipairs(Fs) do
+        local P_F = 0
+        local unknownvars = unknowns(F,unknown)
+        local dfdx = F:gradient(unknownvars)
+        local shifts,shifttooverlap = shiftswithoverlappingstencil(unknownvars)
+        for _,shift in pairs(shifts) do
+            local overlaps = shifttooverlap[shift]
+            --print("shift",shift.x,shift.y)
+            local sum = 0
+            for i,o in ipairs(overlaps) do
+                --print("considering  ", unknownvars[o.left],unknownvars[o.right])
+                local alpha = dfdx[o.left]
+                local beta = shiftexp(dfdx[o.right],shift.x,shift.y)
+                sum = sum + alpha*beta
+            end
+            P_F = P_F + P(shift.x,shift.y) * sum  
+        end
+        P_hat = P_hat + P_F
+    end
+    return P_hat
+end
+
+function ad.Cost(dimensions,images,costexp_)
+    local costexp = assert(ad.toexp(costexp_))
     images = terralib.islist(images) and images or terralib.newlist(images)
     assert(#images > 0)
     --TODO: check that Dims used in images are in dimensions list
@@ -451,18 +520,9 @@ function ad.Cost(dimensions,images,costexp)
     local unknown = images[1] -- assume for now that the first image is the unknown
     
     -- collect the actually used variables and remap them to only local uses
-    local seenunknown = {}
-    local unknownvars = terralib.newlist()
+
     
-    costexp:rename(function(a)
-        local v = ad.v[a]
-        --assert(<image is in images list>)
-        if ImageAccess:is(a) and a.image == unknown and a.field == "v" and not seenunknown[a] then
-            unknownvars:insert(v)
-            seenunknown[a] = true
-        end
-        return v
-    end)
+    local unknownvars = unknowns(costexp,unknown)
     
     local gradient = costexp:gradient(unknownvars)
     
@@ -474,7 +534,8 @@ function ad.Cost(dimensions,images,costexp)
     
     local gradientgathered = 0
     for i,u in ipairs(unknownvars) do
-        gradientgathered = gradientgathered + centerexp(u:key(),gradient[i])
+        local a = u:key()
+        gradientgathered = gradientgathered + shiftexp(gradient[i],-a.x,-a.y)
     end
     
     dprint("grad gather")
@@ -488,6 +549,15 @@ function ad.Cost(dimensions,images,costexp)
     local r = { dimensions = dimensions, cost = cost, gradient = gradient }
     if verboseAD then
         terralib.tree.printraw(r)
+    end
+    
+    if SumOfSquares:is(costexp_) then
+        local P = ad.Image("P",unknown.W,unknown.H)
+        local jtjexp = createjtj(costexp_.terms,unknown,P)
+        dprint("jtj with bounds:")
+        dprint(jtjexp)
+        dprint("jtj without bounds:")
+        dprint(removeboundaries(jtjexp))
     end
     return r
 end
