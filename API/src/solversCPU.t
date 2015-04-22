@@ -24,7 +24,7 @@ solversCPU.gradientDescentCPU = function(problemSpec, vars)
 
 		-- TODO: parameterize these
 		var initialLearningRate = 0.01
-		var maxIters = 10000
+		var maxIters = 10
 		var tolerance = 1e-10
 
 		-- Fixed constants (these do not need to be parameterized)
@@ -90,11 +90,6 @@ end
 solversCPU.conjugateGradientCPU = function(problemSpec, vars)
 	local struct PlanData(S.Object) {
 		plan : opt.Plan
-		gradW : int
-		gradH : int
-		costW : int
-		costH : int
-		dimensions : int64[#vars.dimensions + 1]
 		images : vars.PlanImages
 				
 		currentValues : vars.unknownType
@@ -108,13 +103,12 @@ solversCPU.conjugateGradientCPU = function(problemSpec, vars)
 	
 	local cpu = util.makeCPUFunctions(problemSpec, vars, PlanData)
 	
-	local terra impl(data_ : &opaque, imageBindings : &&opt.ImageBinding, params_ : &opaque)
+	local terra impl(data_ : &opaque, images : &&opaque, params_ : &opaque)
 
 		var pd = [&PlanData](data_)
 		var params = [&double](params_)
-		var dimensions = pd.dimensions
 
-		unpackstruct(pd.images) = [util.getImages(vars, PlanData, imageBindings, dimensions)]
+		unpackstruct(pd.images) = [util.getImages(PlanData, images)]
 		
 		var maxIters = 1000
 		
@@ -132,8 +126,8 @@ solversCPU.conjugateGradientCPU = function(problemSpec, vars)
 			--
 			var beta = 0.0
 			if iter == 0 then
-				for h = 0, pd.gradH do
-					for w = 0, pd.gradW do
+				for h = 0, pd.images.unknown:H() do
+					for w = 0, pd.images.unknown:W() do
 						pd.searchDirection(w, h) = -pd.gradient(w, h)
 					end
 				end
@@ -144,8 +138,8 @@ solversCPU.conjugateGradientCPU = function(problemSpec, vars)
 				--
 				-- Polak-Ribiere conjugacy
 				-- 
-				for h = 0, pd.gradH do
-					for w = 0, pd.gradW do
+				for h = 0, pd.images.unknown:H() do
+					for w = 0, pd.images.unknown:W() do
 						var g = pd.gradient(w, h)
 						var p = pd.prevGradient(w, h)
 						num = num + (-g * (-g + p))
@@ -159,8 +153,8 @@ solversCPU.conjugateGradientCPU = function(problemSpec, vars)
 					beta = 0.0
 				end
 				
-				for h = 0, pd.gradH do
-					for w = 0, pd.gradW do
+				for h = 0, pd.images.unknown:H() do
+					for w = 0, pd.images.unknown:W() do
 						pd.searchDirection(w, h) = -pd.gradient(w, h) + beta * pd.searchDirection(w, h)
 					end
 				end
@@ -176,8 +170,8 @@ solversCPU.conjugateGradientCPU = function(problemSpec, vars)
 			
 			var bestAlpha = cpu.lineSearchQuadraticFallback(pd, pd.currentValues, pd.currentResiduals, pd.searchDirection, pd.images.unknown, prevBestAlpha)
 			
-			for h = 0, pd.gradH do
-				for w = 0, pd.gradW do
+			for h = 0, pd.images.unknown:H() do
+				for w = 0, pd.images.unknown:W() do
 					pd.images.unknown(w, h) = pd.currentValues(w, h) + bestAlpha * pd.searchDirection(w, h)
 				end
 			end
@@ -191,41 +185,28 @@ solversCPU.conjugateGradientCPU = function(problemSpec, vars)
 		end
 	end
 
-	local terra makePlan(actualDims : &uint64) : &opt.Plan
+	local terra makePlan() : &opt.Plan
 		var pd = PlanData.alloc()
 		pd.plan.data = pd
 		pd.plan.impl = impl
-		pd.dimensions[0] = 1
-		for i = 0,[#vars.dimensions] do
-			pd.dimensions[i+1] = actualDims[i]
-		end
 
-		pd.gradW = pd.dimensions[vars.gradWIndex]
-		pd.gradH = pd.dimensions[vars.gradHIndex]
+		pd.currentValues:initCPU()
 		
-		pd.costW = pd.dimensions[vars.costWIndex]
-		pd.costH = pd.dimensions[vars.costHIndex]
-
-		pd.currentValues:initCPU(pd.gradW, pd.gradH)
+		pd.currentResiduals:initCPU()
 		
-		pd.currentResiduals:initCPU(pd.costW, pd.costH)
+		pd.gradient:initCPU()
+		pd.prevGradient:initCPU()
 		
-		pd.gradient:initCPU(pd.gradW, pd.gradH)
-		pd.prevGradient:initCPU(pd.gradW, pd.gradH)
-		
-		pd.searchDirection:initCPU(pd.gradW, pd.gradH)
+		pd.searchDirection:initCPU()
 
 		return &pd.plan
 	end
-	return Problem:new { makePlan = makePlan }
+	return makePlan
 end
 
 solversCPU.linearizedConjugateGradientCPU = function(problemSpec, vars)
 	local struct PlanData(S.Object) {
 		plan : opt.Plan
-		gradW : int
-		gradH : int
-		dimensions : int64[#vars.dimensions + 1]
 		images : vars.PlanImages
 		
 		b : vars.unknownType
@@ -237,12 +218,11 @@ solversCPU.linearizedConjugateGradientCPU = function(problemSpec, vars)
 	
 	local cpu = util.makeCPUFunctions(problemSpec, vars, PlanData)
 
-	local terra impl(data_ : &opaque, imageBindings : &&opt.ImageBinding, params_ : &opaque)
+	local terra impl(data_ : &opaque, images : &&opaque, params_ : &opaque)
 		var pd = [&PlanData](data_)
 		var params = [&double](params_)
-		var dimensions = pd.dimensions
 
-		unpackstruct(pd.images) = [util.getImages(vars, PlanData, imageBindings, dimensions)]
+		unpackstruct(pd.images) = [util.getImages(PlanData, images)]
 		
 		-- TODO: parameterize these
 		var maxIters = 1000
@@ -256,8 +236,8 @@ solversCPU.linearizedConjugateGradientCPU = function(problemSpec, vars)
 		
 		cpu.copyImage(pd.p, pd.r)
 		
-		--for h = 0, pd.gradH do
-		--	for w = 0, pd.gradW do
+		--for h = 0, pd.images.unknown:H() do
+		--	for w = 0, pd.images.unknown:W() do
 		--		pd.r(w, h) = -problemSpec.gradient.boundary(w, h, pd.images.unknown, vars.dataImages)
 		--		pd.b(w, h) = problemSpec.gradient.boundary(w, h, pd.zeroes, vars.dataImages)
 		--		pd.p(w, h) = pd.r(w, h)
@@ -273,8 +253,8 @@ solversCPU.linearizedConjugateGradientCPU = function(problemSpec, vars)
 			cpu.computeGradient(pd, pd.Ap, pd.p)
 			cpu.addImage(pd.Ap, pd.b, -1.0f)
 			
-			--[[for h = 0, pd.gradH do
-				for w = 0, pd.gradW do
+			--[[for h = 0, pd.images.unknown:H() do
+				for w = 0, pd.images.unknown:W() do
 					pd.Ap(w, h) = problemSpec.gradient.boundary(w, h, pd.p, vars.dataImages) - pd.b(w, h)
 				end
 			end]]
@@ -285,8 +265,8 @@ solversCPU.linearizedConjugateGradientCPU = function(problemSpec, vars)
 			cpu.addImage(pd.images.unknown, pd.p, alpha)
 			cpu.addImage(pd.r, pd.Ap, -alpha)
 			
-			--for h = 0, pd.gradH do
-			--	for w = 0, pd.gradW do
+			--for h = 0, pd.images.unknown:H() do
+			--	for w = 0, pd.images.unknown:W() do
 			--		pd.images.unknown(w, h) = pd.images.unknown(w, h) + alpha * pd.p(w, h)
 			--		pd.r(w, h) = pd.r(w, h) - alpha * pd.Ap(w, h)
 			--	end
@@ -300,8 +280,8 @@ solversCPU.linearizedConjugateGradientCPU = function(problemSpec, vars)
 			
 			var beta = rTrNew / rTr
 			
-			for h = 0, pd.gradH do
-				for w = 0, pd.gradW do
+			for h = 0, pd.images.unknown:H() do
+				for w = 0, pd.images.unknown:W() do
 					pd.p(w, h) = pd.r(w, h) + beta * pd.p(w, h)
 				end
 			end
@@ -313,27 +293,20 @@ solversCPU.linearizedConjugateGradientCPU = function(problemSpec, vars)
 		logSolver("final cost=%f\n", finalCost)
 	end
 
-	local terra makePlan(actualDims : &uint64) : &opt.Plan
+	local terra makePlan() : &opt.Plan
 		var pd = PlanData.alloc()
 		pd.plan.data = pd
 		pd.plan.impl = impl
-		pd.dimensions[0] = 1
-		for i = 0,[#vars.dimensions] do
-			pd.dimensions[i+1] = actualDims[i]
-		end
 
-		pd.gradW = pd.dimensions[vars.gradWIndex]
-		pd.gradH = pd.dimensions[vars.gradHIndex]
-
-		pd.b:initCPU(pd.gradW, pd.gradH)
-		pd.r:initCPU(pd.gradW, pd.gradH)
-		pd.p:initCPU(pd.gradW, pd.gradH)
-		pd.Ap:initCPU(pd.gradW, pd.gradH)
-		pd.zeroes:initCPU(pd.gradW, pd.gradH)
+		pd.b:initCPU()
+		pd.r:initCPU()
+		pd.p:initCPU()
+		pd.Ap:initCPU()
+		pd.zeroes:initCPU()
 		
 		return &pd.plan
 	end
-	return Problem:new { makePlan = makePlan }
+	return makePlan
 end
 
 solversCPU.lbfgsCPU = function(problemSpec, vars)
@@ -342,11 +315,6 @@ solversCPU.lbfgsCPU = function(problemSpec, vars)
 	
 	local struct PlanData(S.Object) {
 		plan : opt.Plan
-		gradW : int
-		gradH : int
-		costW : int
-		costH : int
-		dimensions : int64[#vars.dimensions + 1]
 		images : vars.PlanImages
 		
 		gradient : vars.unknownType
@@ -366,15 +334,14 @@ solversCPU.lbfgsCPU = function(problemSpec, vars)
 	
 	local cpu = util.makeCPUFunctions(problemSpec, vars, PlanData)
 	
-	local terra impl(data_ : &opaque, imageBindings : &&opt.ImageBinding, params_ : &opaque)
+	local terra impl(data_ : &opaque, images : &&opaque, params_ : &opaque)
 
 		-- two-loop recursion: http://papers.nips.cc/paper/5333-large-scale-l-bfgs-using-mapreduce.pdf
 		
 		var pd = [&PlanData](data_)
 		var params = [&double](params_)
-		var dimensions = pd.dimensions
 
-		unpackstruct(pd.images) = [util.getImages(vars, PlanData, imageBindings, dimensions)]
+		unpackstruct(pd.images) = [util.getImages(PlanData, images)]
 
 		var m = 2
 		var k = 0
@@ -418,8 +385,8 @@ solversCPU.lbfgsCPU = function(problemSpec, vars)
 			var bestAlpha = cpu.lineSearchQuadraticFallback(pd, pd.currentValues, pd.currentResiduals, pd.p, pd.images.unknown, prevBestAlpha)
 			
 			-- compute new x and s
-			for h = 0, pd.gradH do
-				for w = 0, pd.gradW do
+			for h = 0, pd.images.unknown:H() do
+				for w = 0, pd.images.unknown:W() do
 					var delta = bestAlpha * pd.p(w, h)
 					pd.images.unknown(w, h) = pd.currentValues(w, h) + delta
 					pd.sList[k](w, h) = delta
@@ -431,8 +398,8 @@ solversCPU.lbfgsCPU = function(problemSpec, vars)
 			cpu.computeGradient(pd, pd.gradient, pd.images.unknown)
 			
 			-- compute new y
-			for h = 0, pd.gradH do
-				for w = 0, pd.gradW do
+			for h = 0, pd.images.unknown:H() do
+				for w = 0, pd.images.unknown:W() do
 					pd.yList[k](w, h) = pd.gradient(w, h) - pd.prevGradient(w, h)
 				end
 			end
@@ -451,37 +418,23 @@ solversCPU.lbfgsCPU = function(problemSpec, vars)
 		end
 	end
 	
-	local terra makePlan(actualDims : &uint64) : &opt.Plan
-		var pd = PlanData.alloc()
-		pd.plan.data = pd
-		pd.plan.impl = impl
-		pd.dimensions[0] = 1
-		for i = 0,[#vars.dimensions] do
-			pd.dimensions[i+1] = actualDims[i]
-		end
-
-		pd.gradW = pd.dimensions[vars.gradWIndex]
-		pd.gradH = pd.dimensions[vars.gradHIndex]
+	local terra makePlan() : &opt.Plan
+		pd.gradient:initCPU()
+		pd.prevGradient:initCPU()
 		
-		pd.costW = pd.dimensions[vars.costWIndex]
-		pd.costH = pd.dimensions[vars.costHIndex]
-
-		pd.gradient:initCPU(pd.gradW, pd.gradH)
-		pd.prevGradient:initCPU(pd.gradW, pd.gradH)
-		
-		pd.currentValues:initCPU(pd.gradW, pd.gradH)
+		pd.currentValues:initCPU()
 		pd.currentResiduals:initCPU(pd.costW, pd.costH)
 		
-		pd.p:initCPU(pd.gradW, pd.gradH)
+		pd.p:initCPU()
 		
 		for i = 0, maxIters - 1 do
-			pd.sList[i]:initCPU(pd.gradW, pd.gradH)
-			pd.yList[i]:initCPU(pd.gradW, pd.gradH)
+			pd.sList[i]:initCPU()
+			pd.yList[i]:initCPU()
 		end
 
 		return &pd.plan
 	end
-	return Problem:new { makePlan = makePlan }
+	return makePlan
 end
 
 -- vector-free L-BFGS using two-loop recursion: http://papers.nips.cc/paper/5333-large-scale-l-bfgs-using-mapreduce.pdf
@@ -493,11 +446,6 @@ solversCPU.vlbfgsCPU = function(problemSpec, vars)
 	
 	local struct PlanData(S.Object) {
 		plan : opt.Plan
-		gradW : int
-		gradH : int
-		costW : int
-		costH : int
-		dimensions : int64[#vars.dimensions + 1]
 		images : vars.PlanImages
 		
 		gradient : vars.unknownType
@@ -536,13 +484,12 @@ solversCPU.vlbfgsCPU = function(problemSpec, vars)
 	
 	local cpu = util.makeCPUFunctions(problemSpec, vars, PlanData)
 	
-	local terra impl(data_ : &opaque, imageBindings : &&opt.ImageBinding, params_ : &opaque)
+	local terra impl(data_ : &opaque, images : &&opaque, params_ : &opaque)
 		
 		var pd = [&PlanData](data_)
 		var params = [&double](params_)
-		var dimensions = pd.dimensions
 
-		unpackstruct(pd.images) = [util.getImages(vars, PlanData, imageBindings, dimensions)]
+		unpackstruct(pd.images) = [util.getImages(PlanData, images)]
 
 		var k = 0
 		
@@ -648,8 +595,8 @@ solversCPU.vlbfgsCPU = function(problemSpec, vars)
 			pd.sList[m - 1] = sListStore
 			
 			-- compute new x and s
-			for h = 0, pd.gradH do
-				for w = 0, pd.gradW do
+			for h = 0, pd.images.unknown:H() do
+				for w = 0, pd.images.unknown:W() do
 					var delta = bestAlpha * pd.p(w, h)
 					pd.images.unknown(w, h) = pd.currentValues(w, h) + delta
 					pd.sList[m - 1](w, h) = delta
@@ -661,8 +608,8 @@ solversCPU.vlbfgsCPU = function(problemSpec, vars)
 			cpu.computeGradient(pd, pd.gradient, pd.images.unknown)
 			
 			-- compute new y
-			for h = 0, pd.gradH do
-				for w = 0, pd.gradW do
+			for h = 0, pd.images.unknown:H() do
+				for w = 0, pd.images.unknown:W() do
 					pd.yList[m - 1](w, h) = pd.gradient(w, h) - pd.prevGradient(w, h)
 				end
 			end
@@ -678,32 +625,22 @@ solversCPU.vlbfgsCPU = function(problemSpec, vars)
 		end
 	end
 	
-	local terra makePlan(actualDims : &uint64) : &opt.Plan
+	local terra makePlan() : &opt.Plan
 		var pd = PlanData.alloc()
 		pd.plan.data = pd
 		pd.plan.impl = impl
-		pd.dimensions[0] = 1
-		for i = 0,[#vars.dimensions] do
-			pd.dimensions[i + 1] = actualDims[i]
-		end
 
-		pd.gradW = pd.dimensions[vars.gradWIndex]
-		pd.gradH = pd.dimensions[vars.gradHIndex]
+		pd.gradient:initCPU()
+		pd.prevGradient:initCPU()
 		
-		pd.costW = pd.dimensions[vars.costWIndex]
-		pd.costH = pd.dimensions[vars.costHIndex]
-
-		pd.gradient:initCPU(pd.gradW, pd.gradH)
-		pd.prevGradient:initCPU(pd.gradW, pd.gradH)
+		pd.currentValues:initCPU()
+		pd.currentResiduals:initCPU(pd..unknown:W(), pd.images.unknown:H())
 		
-		pd.currentValues:initCPU(pd.gradW, pd.gradH)
-		pd.currentResiduals:initCPU(pd.costW, pd.costH)
-		
-		pd.p:initCPU(pd.gradW, pd.gradH)
+		pd.p:initCPU()
 		
 		for i = 0, m do
-			pd.sList[i]:initCPU(pd.gradW, pd.gradH)
-			pd.yList[i]:initCPU(pd.gradW, pd.gradH)
+			pd.sList[i]:initCPU()
+			pd.yList[i]:initCPU()
 		end
 		
 		pd.dotProductMatrix:initCPU(b, b)
@@ -711,7 +648,7 @@ solversCPU.vlbfgsCPU = function(problemSpec, vars)
 
 		return &pd.plan
 	end
-	return Problem:new { makePlan = makePlan }
+	return makePlan
 end
 
 -- vector-free L-BFGS using two-loop recursion: http://papers.nips.cc/paper/5333-large-scale-l-bfgs-using-mapreduce.pdf
@@ -723,11 +660,6 @@ solversCPU.bidirectionalVLBFGSCPU = function(problemSpec, vars)
 	
 	local struct PlanData(S.Object) {
 		plan : opt.Plan
-		gradW : int
-		gradH : int
-		costW : int
-		costH : int
-		dimensions : int64[#vars.dimensions + 1]
 		images : vars.PlanImages
 		
 		gradient : vars.unknownType
@@ -767,13 +699,12 @@ solversCPU.bidirectionalVLBFGSCPU = function(problemSpec, vars)
 	
 	local cpu = util.makeCPUFunctions(problemSpec, vars, PlanData)
 	
-	local terra impl(data_ : &opaque, imageBindings : &&opt.ImageBinding, params_ : &opaque)
+	local terra impl(data_ : &opaque, images : &&opaque, params_ : &opaque)
 		
 		var pd = [&PlanData](data_)
 		var params = [&double](params_)
-		var dimensions = pd.dimensions
 
-		unpackstruct(pd.images) = [util.getImages(vars, PlanData, imageBindings, dimensions)]
+		unpackstruct(pd.images) = [util.getImages(PlanData, images)]
 
 		var k = 0
 		
@@ -892,8 +823,8 @@ solversCPU.bidirectionalVLBFGSCPU = function(problemSpec, vars)
 			pd.sList[m - 1] = sListStore
 			
 			-- compute new x and s
-			for h = 0, pd.gradH do
-				for w = 0, pd.gradW do
+			for h = 0, pd.images.unknown:H() do
+				for w = 0, pd.images.unknown:W() do
 					var delta = bestAlpha * pd.p(w, h)
 					pd.images.unknown(w, h) = pd.currentValues(w, h) + delta
 					pd.sList[m - 1](w, h) = delta
@@ -905,8 +836,8 @@ solversCPU.bidirectionalVLBFGSCPU = function(problemSpec, vars)
 			cpu.computeGradient(pd, pd.gradient, pd.images.unknown)
 			
 			-- compute new y
-			for h = 0, pd.gradH do
-				for w = 0, pd.gradW do
+			for h = 0, pd.images.unknown:H() do
+				for w = 0, pd.images.unknown:W() do
 					pd.yList[m - 1](w, h) = pd.gradient(w, h) - pd.prevGradient(w, h)
 				end
 			end
@@ -922,42 +853,32 @@ solversCPU.bidirectionalVLBFGSCPU = function(problemSpec, vars)
 		end
 	end
 	
-	local terra makePlan(actualDims : &uint64) : &opt.Plan
+	local terra makePlan() : &opt.Plan
 		var pd = PlanData.alloc()
 		pd.plan.data = pd
 		pd.plan.impl = impl
-		pd.dimensions[0] = 1
-		for i = 0,[#vars.dimensions] do
-			pd.dimensions[i + 1] = actualDims[i]
-		end
 
-		pd.gradW = pd.dimensions[vars.gradWIndex]
-		pd.gradH = pd.dimensions[vars.gradHIndex]
+		pd.gradient:initCPU()
+		pd.prevGradient:initCPU()
 		
-		pd.costW = pd.dimensions[vars.costWIndex]
-		pd.costH = pd.dimensions[vars.costHIndex]
-
-		pd.gradient:initCPU(pd.gradW, pd.gradH)
-		pd.prevGradient:initCPU(pd.gradW, pd.gradH)
-		
-		pd.currentValues:initCPU(pd.gradW, pd.gradH)
+		pd.currentValues:initCPU()
 		pd.currentResiduals:initCPU(pd.costW, pd.costH)
 		
-		pd.p:initCPU(pd.gradW, pd.gradH)
+		pd.p:initCPU()
 		
 		for i = 0, m do
-			pd.sList[i]:initCPU(pd.gradW, pd.gradH)
-			pd.yList[i]:initCPU(pd.gradW, pd.gradH)
+			pd.sList[i]:initCPU()
+			pd.yList[i]:initCPU()
 		end
 		
 		pd.dotProductMatrix:initCPU(b, b)
 		pd.dotProductMatrixStorage:initCPU(b, b)
 		
-		pd.biSearchDirection:initCPU(pd.gradW, pd.gradH)
+		pd.biSearchDirection:initCPU()
 
 		return &pd.plan
 	end
-	return Problem:new { makePlan = makePlan }
+	return makePlan
 end
 
 return solversCPU

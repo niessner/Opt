@@ -17,10 +17,7 @@ solversGPU.gradientDescentGPU = function(Problem, tbl, vars)
 
 	local struct PlanData(S.Object) {
 		plan : opt.Plan
-		gradW : int
-		gradH : int
-		dimensions : int64[#vars.dimensions + 1]
-		images : vars.planImagesType
+		images : vars.PlanImages
 		scratchF : &float
 		
 		gradStore : vars.unknownType
@@ -37,12 +34,11 @@ solversGPU.gradientDescentGPU = function(Problem, tbl, vars)
 	
 	local gpu = util.makeGPUFunctions(tbl, vars, PlanData, specializedKernels)
 	
-	local terra impl(data_ : &opaque, imageBindings : &&opt.ImageBinding, params_ : &opaque)
+	local terra impl(data_ : &opaque, images : &&opaque, params_ : &opaque)
 		var pd = [&PlanData](data_)
 		var params = [&double](params_)
-		var dimensions = pd.dimensions
 
-		unpackstruct(pd.images) = [util.getImages(vars, PlanData, imageBindings, dimensions)]
+		unpackstruct(pd.images) = [util.getImages(PlanData, images)]
 
 		-- TODO: parameterize these
 		var initialLearningRate = 0.01
@@ -84,24 +80,17 @@ solversGPU.gradientDescentGPU = function(Problem, tbl, vars)
 		end
 	end
 
-	local terra makePlan(actualDims : &uint64) : &opt.Plan
+	local terra makePlan() : &opt.Plan
 		var pd = PlanData.alloc()
 		pd.plan.data = pd
 		pd.plan.impl = impl
-		pd.dimensions[0] = 1
-		for i = 0,[#vars.dimensions] do
-			pd.dimensions[i+1] = actualDims[i]
-		end
 
-		pd.gradW = pd.dimensions[vars.gradWIndex]
-		pd.gradH = pd.dimensions[vars.gradHIndex]
-
-		pd.gradStore:initGPU(pd.gradW, pd.gradH)
+		pd.gradStore:initGPU(images.unknown:W(), images.unknown:H())
 		C.cudaMallocManaged([&&opaque](&(pd.scratchF)), sizeof(float), C.cudaMemAttachGlobal)
 
 		return &pd.plan
 	end
-	return Problem:new { makePlan = makePlan }
+	return makePlan
 end
 
 -- vector-free L-BFGS using two-loop recursion: http://papers.nips.cc/paper/5333-large-scale-l-bfgs-using-mapreduce.pdf
@@ -113,12 +102,7 @@ solversGPU.vlbfgsGPU = function(Problem, tbl, vars)
 	
 	local struct PlanData(S.Object) {
 		plan : opt.Plan
-		gradW : int
-		gradH : int
-		costW : int
-		costH : int
-		dimensions : int64[#vars.dimensions + 1]
-		images : vars.planImagesType
+		images : vars.PlanImages
 		scratchF : &float
 		
 		gradient : vars.unknownType
@@ -162,13 +146,12 @@ solversGPU.vlbfgsGPU = function(Problem, tbl, vars)
 	local gpu = util.makeGPUFunctions(tbl, vars, PlanData, {})
 	local cpu = util.makeCPUFunctions(tbl, vars, PlanData)
 	
-	local terra impl(data_ : &opaque, imageBindings : &&opt.ImageBinding, params_ : &opaque)
+	local terra impl(data_ : &opaque, images : &&opaque, params_ : &opaque)
 		
 		var pd = [&PlanData](data_)
 		var params = [&double](params_)
-		var dimensions = pd.dimensions
 
-		unpackstruct(pd.images) = [util.getImages(vars, PlanData, imageBindings, dimensions)]
+		unpackstruct(pd.images) = [util.getImages(PlanData, images)]
 
 		var k = 0
 		
@@ -296,32 +279,22 @@ solversGPU.vlbfgsGPU = function(Problem, tbl, vars)
 		end
 	end
 	
-	local terra makePlan(actualDims : &uint64) : &opt.Plan
+	local terra makePlan() : &opt.Plan
 		var pd = PlanData.alloc()
 		pd.plan.data = pd
 		pd.plan.impl = impl
-		pd.dimensions[0] = 1
-		for i = 0,[#vars.dimensions] do
-			pd.dimensions[i + 1] = actualDims[i]
-		end
 
-		pd.gradW = pd.dimensions[vars.gradWIndex]
-		pd.gradH = pd.dimensions[vars.gradHIndex]
+		pd.gradient:initGPU(images.unknown:W(), images.unknown:H())
+		pd.prevGradient:initGPU(images.unknown:W(), images.unknown:H())
 		
-		pd.costW = pd.dimensions[vars.costWIndex]
-		pd.costH = pd.dimensions[vars.costHIndex]
-
-		pd.gradient:initGPU(pd.gradW, pd.gradH)
-		pd.prevGradient:initGPU(pd.gradW, pd.gradH)
-		
-		pd.currentValues:initGPU(pd.gradW, pd.gradH)
+		pd.currentValues:initGPU(images.unknown:W(), images.unknown:H())
 		pd.currentResiduals:initGPU(pd.costW, pd.costH)
 		
-		pd.p:initGPU(pd.gradW, pd.gradH)
+		pd.p:initGPU(images.unknown:W(), images.unknown:H())
 		
 		for i = 0, m do
-			pd.sList[i]:initGPU(pd.gradW, pd.gradH)
-			pd.yList[i]:initGPU(pd.gradW, pd.gradH)
+			pd.sList[i]:initGPU(images.unknown:W(), images.unknown:H())
+			pd.yList[i]:initGPU(images.unknown:W(), images.unknown:H())
 		end
 		
 		C.cudaMallocManaged([&&opaque](&(pd.scratchF)), sizeof(float), C.cudaMemAttachGlobal)
@@ -334,7 +307,7 @@ solversGPU.vlbfgsGPU = function(Problem, tbl, vars)
 
 		return &pd.plan
 	end
-	return Problem:new { makePlan = makePlan }
+	return makePlan
 end
 
 return solversGPU

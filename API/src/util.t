@@ -300,14 +300,15 @@ end
 util.makeLineSearchQuadraticFallback = function(data, cpu)
 	local terra lineSearchQuadraticFallback(pd : &data.PlanData, baseValues : data.imageType, baseResiduals : data.imageType, searchDirection : data.imageType, valueStore : data.imageType, alphaGuess : float)
 		var bestAlpha = 0.0
+		var bestCost = 0.0
 		var useBruteForce = (alphaGuess == 0.0)
 		if not useBruteForce then
 			
-			bestAlpha = cpu.lineSearchQuadraticMinimum(pd, baseValues, baseResiduals, searchDirection, valueStore, alphaGuess)
+			bestAlpha, bestCost = cpu.lineSearchQuadraticMinimum(pd, baseValues, baseResiduals, searchDirection, valueStore, alphaGuess)
 			
 			if bestAlpha == 0.0 then
 				logSolver("quadratic guess=%f failed, trying again...\n", alphaGuess)
-				bestAlpha = cpu.lineSearchQuadraticMinimum(pd, baseValues, baseResiduals, searchDirection, valueStore, alphaGuess * 4.0)
+				bestAlpha, bestCost = cpu.lineSearchQuadraticMinimum(pd, baseValues, baseResiduals, searchDirection, valueStore, alphaGuess * 4.0)
 				
 				if bestAlpha == 0.0 then
 					logSolver("quadratic minimization exhausted\n")
