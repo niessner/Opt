@@ -7,7 +7,7 @@ CXX = clang++
 MLIB = ../mLib
 
 CUDAHOME = /usr/local/cuda
-FLAGS = -O3 -g -MD -Ibuild  -I$(TERRAHOME)/include -I$(CUDAHOME)/include -I$(MLIB)/include -std=c++11 -ferror-limit=0
+FLAGS = -O3 -g -MD -Ibuild  -I$(TERRAHOME)/include -I$(CUDAHOME)/include -I$(MLIB)/include -I../Framework -std=c++11 -ferror-limit=0
 TERRAHOME = $(HOME)/terra/release
 TERRA = $(TERRAHOME)/terra
 LFLAGS = -Lbuild -L$(CUDAHOME)/lib -Wl,-rpath,$(CUDAHOME)/lib -lcudart -lOpt -Wl,-rpath,$(shell pwd)/build -L$(TERRAHOME) -lterra -Wl,-rpath,$(TERRAHOME) -pagezero_size 10000 -image_base 100000000

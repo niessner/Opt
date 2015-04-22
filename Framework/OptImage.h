@@ -6,8 +6,6 @@ struct OptImage
 {
     OptImage()
     {
-        terraBindingCPU = nullptr;
-        terraBindingGPU = nullptr;
         dataGPU = nullptr;
     }
     OptImage(int _dimX, int _dimY)
@@ -29,11 +27,6 @@ struct OptImage
     void syncGPUToCPU() const
     {
         cudaMemcpy((void *)dataCPU.data(), dataGPU, sizeof(float) * dimX * dimY, cudaMemcpyDeviceToHost);
-    }
-    void bind(OptState *optimizerState)
-    {
-        terraBindingCPU = Opt_ImageBind(optimizerState, dataCPU.data(), sizeof(float), dimX * sizeof(float));
-        terraBindingGPU = Opt_ImageBind(optimizerState, dataGPU, sizeof(float), dimX * sizeof(float));
     }
     float& operator()(int x, int y)
     {
@@ -73,9 +66,9 @@ struct OptImage
                 delta += fabs((double)a(x, y) - (double)b(x, y));
         return delta / (double)(a.dimX * a.dimY);
     }
+    const void * DataCPU() const { return dataCPU.data(); }
+    const void * DataGPU() const { return dataGPU; }
 
-    ImageBinding *terraBindingCPU;
-    ImageBinding *terraBindingGPU;
     vector<float> dataCPU;
     void *dataGPU;
     int dimX, dimY;

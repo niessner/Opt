@@ -113,7 +113,8 @@ local problems = {}
 -- it should generate the field makePlan which is the terra function that 
 -- allocates the plan
 
-local function compileProblem(tbl, kind)
+local function compilePlan(tbl, kind,params)
+	print("Compile Plan!")
 	local vars = {
 		dimensions = tbl.dimensions,
 		dimIndex = { [1] = 0 },
@@ -164,75 +165,35 @@ local function compileProblem(tbl, kind)
     
 end
 
-function opt.ProblemDefineFromTable(tbl, kind, params)
-    local p = compileProblem(tbl,kind,params)
-    -- store each problem in a table, and assign it an id
-    problems[#problems + 1] = p
-    p.id = #problems
-    return p
-end
-
-local function problemDefine(filename, kind, params, pt)
-    pt.makePlan = nil
-    local success,p = xpcall(function() 
-        filename,kind = ffi.string(filename), ffi.string(kind)
-        local tbl = assert(terralib.loadfile(filename))() 
-        assert(type(tbl) == "table")
-        local p = opt.ProblemDefineFromTable(tbl,kind,params)
-		pt.id, pt.makePlan = p.id,p.makePlan:getpointer()
-		return p
-    end,function(err) print(debug.traceback(err,2)) end)
-end
-
 struct opt.GradientDescentPlanParams {
     nIterations : uint64
 }
 
-struct opt.ImageBinding(S.Object) {
-    data : &uint8
-    stride : uint64
-    elemsize : uint64
-}
-terra opt.ImageBinding:get(x : uint64, y : uint64) : &uint8
-   return self.data + y * self.stride + x * self.elemsize
-end
-
-terra opt.ImageBind(data : &opaque, elemsize : uint64, stride : uint64) : &opt.ImageBinding
-    var img = opt.ImageBinding.alloc()
-    img.data,img.stride,img.elemsize = [&uint8](data),stride,elemsize
-    return img
-end
-terra opt.ImageFree(img : &opt.ImageBinding)
-    img:delete()
-end
-
 struct opt.Plan(S.Object) {
-    impl : {&opaque,&&opt.ImageBinding,&opaque} -> {}
+    impl : {&opaque,&opaque,&opaque} -> {}
     data : &opaque
 } 
 
-struct opt.Problem(S.Object) {
-    id : int
-    makePlan : &uint64 -> &opt.Plan
-}
-
+struct opt.Problem {} -- just used as an opaque type, pointers are actually just the ID
+local function problemDefine(filename, kind, params, pid)
+    local problemmetadata = { filename = ffi.string(filename), kind = ffi.string(kind), params = params, id = #problems + 1 }
+    problems[problemmetadata.id] = problemmetadata
+    pid[0] = problemmetadata.id
+end
+-- define just stores meta-data right now. ProblemPlan does all compilation for now
 terra opt.ProblemDefine(filename : rawstring, kind : rawstring, params : &opaque)
-    var pt = opt.Problem.alloc()
-    problemDefine(filename,kind,params,pt)
-	if pt.makePlan == nil then
-		pt:delete()
-		return nil
-	end
-    return pt
+    var id : int
+    problemDefine(filename, kind, params,&id)
+    return [&opt.Problem](id)
 end 
-
 terra opt.ProblemDelete(p : &opt.Problem)
-    -- TODO: deallocate any problem state here (remove from the Lua table,etc.)
-    p:delete() 
+    var id = int64(p)
+    --TODO: remove from problem table
 end
 
-function opt.Dim(name)
-    return Dim:new { name = name }
+function opt.Dim(name,idx)
+    idx = assert(tonumber(idx),"expected an index for this dimension")
+    return Dim:new { name = name, size = tonumber(opt.dimensions[idx]) }
 end
 
 terra opt.InBoundsCalc(x : int64, y : int64, W : int64, H : int64, sx : int64, sy : int64) : int
@@ -240,72 +201,77 @@ terra opt.InBoundsCalc(x : int64, y : int64, W : int64, H : int64, sx : int64, s
     return int(minx >= 0) and int(maxx < W) and int(miny >= 0) and int(maxy < H)
 end 
 
-
-local newImage = terralib.memoize(function(typ, W, H)
+local newImage = terralib.memoize(function(typ, W, H, elemsize, stride)
 	local struct Image {
-		impl : opt.ImageBinding
-		W : uint64
-		H : uint64
+		data : &uint8
 	}
 	function Image.metamethods.__tostring()
 	  return string.format("Image(%s,%s,%s)",tostring(typ),W.name, H.name)
 	end
 	Image.metamethods.__apply = macro(function(self, x, y)
-	 return `@[&typ](self.impl:get(x,y))
+	 return `@[&typ](self.data + y*stride + x*elemsize)
 	end)
 	terra Image:inbounds(x : int64, y : int64)
-	    return x >= 0 and y >= 0 and x < self.W and y < self.H
+	    return x >= 0 and y >= 0 and x < W.size and y < H.size
 	end
-	--Image.methods.inbounds:disas()
 	terra Image:get(x : int64, y : int64)
 	    var v : typ = 0.f --TODO:only works for single precision things
-	    if opt.InBoundsCalc(x,y,self.W,self.H,0,0) ~= 0 then
+	    if opt.InBoundsCalc(x,y,W.size,H.size,0,0) ~= 0 then
 	        v = self(x,y)
 	    end
 	    return v
 	end
-	terra Image:initCPU(actualW : int, actualH : int)
-		self.W = actualW
-		self.H = actualH
-		self.impl.data = [&uint8](C.malloc(actualW * actualH * sizeof(typ)))
-		self.impl.elemsize = sizeof(typ)
-		self.impl.stride = actualW * sizeof(typ)
-		
-		for h = 0, self.H do
-			for w = 0, self.W do
+	terra Image:H() return H.size end
+	terra Image:W() return W.size end
+	terra Image:initCPU()
+		self.data = [&uint8](C.malloc(stride*H.size))
+		for h = 0, H.size do
+			for w = 0, W.size do
 				self(w, h) = 0.0f
 			end
 		end
 	end
-	terra Image:initGPU(actualW : int, actualH : int)
-		self.W = actualW
-		self.H = actualH
-		var typeSize = sizeof(typ)
-		var cudaError = C.cudaMalloc([&&opaque](&(self.impl.data)), actualW * actualH * typeSize)
-		cudaError = C.cudaMemset([&opaque](self.impl.data), 0, actualW * actualH * typeSize)
-		self.impl.elemsize = typeSize
-		self.impl.stride = actualW * typeSize
+	terra Image:initGPU()
+		var cudaError = C.cudaMalloc([&&opaque](&(self.data)), stride*H.size)
+		cudaError = C.cudaMemset([&opaque](self.impl.data), 0, stride*H.size)
 	end
-	terra Image:debugGPUPrint()
-		
-		--var cpuImage : type(self)
-		--cpuImage:initCPU(self.W, self.H)
-		
-		--C.cudaMemcpy(dataGPU, cpuImage, sizeof(float) * dimX * dimY, cudaMemcpyHostToDevice)
-	end
-	Image.metamethods.typ,Image.metamethods.W,Image.metamethods.H = typ, W, H
+	local mm = Image.metamethods
+	mm.typ,mm.W,mm.H,mm.elemsize,mm.stride = typ,W,H,elemsize,stride
 	return Image
 end)
 
-function opt.Image(typ, W, H)
-    assert(W == 1 or Dim:is(W))
-    assert(H == 1 or Dim:is(H))
-    assert(terralib.types.istype(typ))
-    return newImage(typ, W, H)
+
+local unity = Dim:new { name = "1", size = 1 }
+local function todim(d)
+    return Dim:is(d) and d or d == 1 and unity
 end
 
-terra opt.ProblemPlan(problem : &opt.Problem, dimensions : &uint64) : &opt.Plan
-	return problem.makePlan(dimensions) -- this is just a wrapper around calling the plan constructor
+function opt.InternalImage(typ,W,H)
+    W,H = assert(todim(W)),assert(todim(H))
+    assert(terralib.type.istype(typ))
+    local elemsize = terralib.sizeof(typ)
+    return newImage(typ,W,H,elemsize,elemsize*W.size)
+end
+function opt.Image(typ, W, H, idx)
+    assert(terralib.types.istype(typ))
+    local elemsize = assert(tonumber(opt.elemsizes[idx]))
+    local stride = assert(tonumber(opt.strides[idx]))
+    return newImage(typ, assert(todim(W)), assert(todim(H)), elemsize, stride)
+end
+
+local function problemPlan(id, dimensions, elemsizes, strides, pplan)
+    local success,p = xpcall(function() 
+        local problemmetadata = assert(problems[id])
+        opt.dimensions,opt.elemsizes,opt.strides = dimensions,elemsizes,strides
+        local tbl = assert(terralib.loadfile(problemmetadata.filename))()
+        assert(type(tbl) == "table")
+		pplan[0] = compilePlan(tbl,problemmetadata.kind,problemmetadata.params)
+    end,function(err) print(debug.traceback(err,2)) end)
+end
+terra opt.ProblemPlan(problem : &opt.Problem, dimensions : &uint64, elemsizes : &uint64, strides : &uint64) : &opt.Plan
+	var p : &opt.Plan
+	problemPlan(int(int64(problem)),dimensions,elemsizes,strides,&p)
+	return p
 end 
 
 terra opt.PlanFree(plan : &opt.Plan)
@@ -313,7 +279,7 @@ terra opt.PlanFree(plan : &opt.Plan)
     plan:delete()
 end
 
-terra opt.ProblemSolve(plan : &opt.Plan, images : &&opt.ImageBinding, params : &opaque)
+terra opt.ProblemSolve(plan : &opt.Plan, images : &opaque, params : &opaque)
 	return plan.impl(plan.data, images, params)
 end
 
@@ -353,10 +319,10 @@ end)
 local Image = newclass("Image")
 -- Z: this will eventually be opt.Image, but that is currently used by our direct methods
 -- so this is going in the ad table for now
-function ad.Image(name,W,H)
+function ad.Image(name,W,H,idx)
     assert(W == 1 or Dim:is(W))
     assert(H == 1 or Dim:is(H))
-    return Image:new { name = tostring(name), W = W, H = H }
+    return Image:new { name = tostring(name), W = W, H = H, idx = assert(tonumber(idx)) }
 end
 
 function Image:__call(x,y)
@@ -393,7 +359,7 @@ local function createfunction(images,exp,usebounds)
     local imageindex = {}
     local imagesyms = terralib.newlist()
     for i,im in ipairs(images) do
-        local s = symbol(opt.Image(float,im.W,im.H),im.name)
+        local s = symbol(opt.Image(float,im.W,im.H,i-1),im.name)
         imageindex[im] = s
         imagesyms:insert(s)
     end
@@ -421,8 +387,10 @@ local function createfunction(images,exp,usebounds)
             else --bounds calculation
                 assert(usebounds) -- if we removed them, we shouldn't see any boundary accesses
                 r = symbol(int,tostring(a))
+                local W,H = unknownimage.type.metamethods.W.size,unknownimage.type.metamethods.H.size
+                print(W,H)
                 stmts:insert quote
-                    var [r] = opt.InBoundsCalc(i+a.x,j+a.y,unknownimage.W,unknownimage.H,a.sx,a.sy)
+                    var [r] = opt.InBoundsCalc(i+a.x,j+a.y,W,H,a.sx,a.sy)
                 end
                 stencil[1] = math.max(stencil[1],math.abs(a.x)+a.sx)
                 stencil[2] = math.max(stencil[2],math.abs(a.y)+a.sy)
@@ -436,33 +404,47 @@ local function createfunction(images,exp,usebounds)
         [stmts]
         return result
     end
-    --generatedfn:printpretty(false,false)
     generatedfn:compile()
-    --generatedfn:printpretty(true,false)
     if verboseAD then
         --generatedfn:disas()
     end
     return generatedfn,stencil
 end
-local function createfunctionset(images,dimensions,exp)
+local function createfunctionset(images,exp)
     dprint("bound")
     local boundary,stencil = createfunction(images,exp,true)
     dprint("interior")
     local interior = createfunction(images,exp,false)
-    return { boundary = boundary, stencil = stencil, interior = interior, dimensions = dimensions }
+    return { boundary = boundary, stencil = stencil, interior = interior, dimensions = {images[1].W,images[1].H} }
 end
-local function unknowns(exp,unknown)
+local function unknowns(exp)
     local seenunknown = {}
     local unknownvars = terralib.newlist()
     exp:rename(function(a)
         local v = ad.v[a]
-        if ImageAccess:is(a) and a.image == unknown and a.field == "v" and not seenunknown[a] then
+        if ImageAccess:is(a) and a.image.idx == 0 and a.field == "v" and not seenunknown[a] then -- assume image 0 is unknown
             unknownvars:insert(v)
             seenunknown[a] = true
         end
         return v
     end)
     return unknownvars
+end
+local function imagesusedinexpression(exp)
+    local N = 0
+    local idxtoimage = terralib.newlist{}
+    exp:rename(function(a)
+        if ImageAccess:is(a) then
+            N = math.max(N,a.image.idx+1)
+            assert(idxtoimage[a.image.idx+1] == nil or idxtoimage[a.image.idx+1] == a.image, "image for index " ..tostring(a.image.idx).. " defined twice?")
+            idxtoimage[a.image.idx+1] = a.image
+        end
+        return ad.v[a]
+    end)
+    for i = 1,N do
+        assert(idxtoimage[i],"undefined image at index "..tostring(i-1))
+    end
+    return idxtoimage
 end
 
 local getshift = terralib.memoize(function(x,y) return {x = x, y = y} end)
@@ -489,7 +471,7 @@ local function createjtj(Fs,unknown,P)
     local P_hat = 0
     for _,F in ipairs(Fs) do
         local P_F = 0
-        local unknownvars = unknowns(F,unknown)
+        local unknownvars = unknowns(F)
         local dfdx = F:gradient(unknownvars)
         local shifts,shifttooverlap = shiftswithoverlappingstencil(unknownvars)
         for _,shift in pairs(shifts) do
@@ -509,21 +491,12 @@ local function createjtj(Fs,unknown,P)
     return P_hat
 end
 
-function ad.Cost(dimensions,images,costexp_)
+function ad.Cost(costexp_)
     local costexp = assert(ad.toexp(costexp_))
-    images = terralib.islist(images) and images or terralib.newlist(images)
-    assert(#images > 0)
-    --TODO: check that Dims used in images are in dimensions list
-    --TODO: check images are all images 
-    costexp = assert(ad.toexp(costexp))
-    --TODO: check all image uses in costexp are bound to images in list
-    local unknown = images[1] -- assume for now that the first image is the unknown
+    local images = imagesusedinexpression(costexp)
+    local unknown = images[1]
     
-    -- collect the actually used variables and remap them to only local uses
-
-    
-    local unknownvars = unknowns(costexp,unknown)
-    
+    local unknownvars = unknowns(costexp)
     local gradient = costexp:gradient(unknownvars)
     
     dprint("cost expression")
@@ -542,17 +515,16 @@ function ad.Cost(dimensions,images,costexp_)
     dprint(ad.tostrings({gradientgathered}))
     
     dprint("cost")
-    local cost = createfunctionset(images,dimensions,costexp)
-    cost.dimensions = dimensions
+    local cost = createfunctionset(images,costexp)
     dprint("grad")
-    local gradient = createfunctionset(images,dimensions,gradientgathered)
-    local r = { dimensions = dimensions, cost = cost, gradient = gradient }
+    local gradient = createfunctionset(images,gradientgathered)
+    local r = { cost = cost, gradient = gradient }
     if verboseAD then
         terralib.tree.printraw(r)
     end
     
     if SumOfSquares:is(costexp_) then
-        local P = ad.Image("P",unknown.W,unknown.H)
+        local P = ad.Image("P",unknown.W,unknown.H,#images+1)
         local jtjexp = createjtj(costexp_.terms,unknown,P)
         dprint("jtj with bounds:")
         dprint(jtjexp)
