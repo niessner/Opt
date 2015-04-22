@@ -191,8 +191,9 @@ void TestFramework::runAllTests()
     //
     methods.push_back(TestMethod("gradientDescentCPU","no-params"));
     methods.push_back(TestMethod("conjugateGradientCPU", "no-params"));
-    //methods.push_back(TestMethod("linearizedConjugateGradientCPU", "no-params"));
-    //methods.push_back(TestMethod("lbfgsCPU", "no-params"));
+    methods.push_back(TestMethod("linearizedConjugateGradientCPU", "no-params"));
+    methods.push_back(TestMethod("lbfgsCPU", "no-params"));
+    methods.push_back(TestMethod("vlbfgsCPU", "no-params"));
     //methods.push_back(TestMethod("vlbfgsCPU", "no-params"));
 
     //

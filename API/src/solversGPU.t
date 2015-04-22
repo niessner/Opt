@@ -99,7 +99,7 @@ solversGPU.vlbfgsGPU = function(Problem, tbl, vars)
 	local maxIters = 1000
 	local m = 10
 	local b = 2 * m + 1
-	
+
 	local struct PlanData(S.Object) {
 		plan : opt.Plan
 		images : vars.PlanImages

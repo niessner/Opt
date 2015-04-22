@@ -419,11 +419,15 @@ solversCPU.lbfgsCPU = function(problemSpec, vars)
 	end
 	
 	local terra makePlan() : &opt.Plan
+		var pd = PlanData.alloc()
+		pd.plan.data = pd
+		pd.plan.impl = impl
+		
 		pd.gradient:initCPU()
 		pd.prevGradient:initCPU()
 		
 		pd.currentValues:initCPU()
-		pd.currentResiduals:initCPU(pd.costW, pd.costH)
+		pd.currentResiduals:initCPU()
 		
 		pd.p:initCPU()
 		
@@ -443,6 +447,10 @@ solversCPU.vlbfgsCPU = function(problemSpec, vars)
 	local maxIters = 1000
 	local m = 2
 	local b = 2 * m + 1
+	
+	--TODO: how do I do this correctly?
+	--local bDim = opt.Dim("b", b )
+	--opt.InternalImage(float, bDim, bDim)
 	
 	local struct PlanData(S.Object) {
 		plan : opt.Plan
@@ -634,7 +642,7 @@ solversCPU.vlbfgsCPU = function(problemSpec, vars)
 		pd.prevGradient:initCPU()
 		
 		pd.currentValues:initCPU()
-		pd.currentResiduals:initCPU(pd..unknown:W(), pd.images.unknown:H())
+		pd.currentResiduals:initCPU()
 		
 		pd.p:initCPU()
 		
@@ -643,8 +651,8 @@ solversCPU.vlbfgsCPU = function(problemSpec, vars)
 			pd.yList[i]:initCPU()
 		end
 		
-		pd.dotProductMatrix:initCPU(b, b)
-		pd.dotProductMatrixStorage:initCPU(b, b)
+		pd.dotProductMatrix:initCPU()
+		pd.dotProductMatrixStorage:initCPU()
 
 		return &pd.plan
 	end
@@ -862,7 +870,7 @@ solversCPU.bidirectionalVLBFGSCPU = function(problemSpec, vars)
 		pd.prevGradient:initCPU()
 		
 		pd.currentValues:initCPU()
-		pd.currentResiduals:initCPU(pd.costW, pd.costH)
+		pd.currentResiduals:initCPU()
 		
 		pd.p:initCPU()
 		
@@ -871,8 +879,8 @@ solversCPU.bidirectionalVLBFGSCPU = function(problemSpec, vars)
 			pd.yList[i]:initCPU()
 		end
 		
-		pd.dotProductMatrix:initCPU(b, b)
-		pd.dotProductMatrixStorage:initCPU(b, b)
+		pd.dotProductMatrix:initCPU()
+		pd.dotProductMatrixStorage:initCPU()
 		
 		pd.biSearchDirection:initCPU()
 
