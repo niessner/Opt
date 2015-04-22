@@ -24,7 +24,7 @@ solversCPU.gradientDescentCPU = function(problemSpec, vars)
 
 		-- TODO: parameterize these
 		var initialLearningRate = 0.01
-		var maxIters = 10
+		var maxIters = 10000
 		var tolerance = 1e-10
 
 		-- Fixed constants (these do not need to be parameterized)

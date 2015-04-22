@@ -182,7 +182,7 @@ void TestFramework::runAllTests()
     }
 
     //TestExample example = makeRandomQuadratic(5);
-    TestExample example = makeImageSmoothing("smoothingExampleA.png", 0.1f);
+    TestExample example = makeImageSmoothing("smoothingExampleB.png", 0.1f);
 
     vector<TestMethod> methods;
 
@@ -233,7 +233,7 @@ void TestFramework::runTest(const TestMethod &method, TestExample &example)
         image.syncCPUToGPU();
         imagesCPU.push_back((void*)image.DataCPU());
         imagesGPU.push_back((void*)image.DataGPU());
-        stride.push_back(image.dimX);
+        stride.push_back(image.dimX * sizeof(float));
         elemsize.push_back(sizeof(float));
     }
     

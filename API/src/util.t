@@ -107,6 +107,7 @@ end
 util.makeComputeCost = function(data)
 	local terra computeCost(pd : &data.PlanData)
 		var result = 0.0
+		--C.printf("W=%d,H=%d,size=%d,stride=%d\n", pd.images.unknown:H(), pd.images.unknown:W())
 		for h = 0, pd.images.unknown:H() do
 			for w = 0, pd.images.unknown:W() do
 				var v = data.problemSpec.cost.boundary(w, h, unpackstruct(pd.images))
