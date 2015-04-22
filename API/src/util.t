@@ -27,37 +27,32 @@ local function noFooter(pd)
 	return quote end
 end
 
-util.getImages = function(vars, PlanData, imageBindings, actualDims)
+util.getImages = function(PlanData, images)
 	local results = terralib.newlist()
 	for i, field in ipairs(PlanData:getfield("images").type:getfields()) do
-		local argumentType = field.type
-		local Windex, Hindex = vars.dimIndex[argumentType.metamethods.W],vars.dimIndex[argumentType.metamethods.H]
-		assert(Windex and Hindex)
-		results:insert(`argumentType 
-		 { W = actualDims[Windex], 
-		   H = actualDims[Hindex], 
-		   impl = @imageBindings[i - 1]})
+		results:insert(`field.type 
+		 { data = [&uint8](images[i - 1])})
 	end
 	return results
 end
 
-util.makeImageInnerProduct = function(imageType)
-	local terra imageInnerProduct(a : imageType, b : imageType)
+util.makeInnerProduct = function(imageType)
+	local terra innerProduct(a : imageType, b : imageType)
 		var sum = 0.0
-		for h = 0, a.H do
-			for w = 0, a.W do
+		for h = 0, a:H() do
+			for w = 0, a:W() do
 				sum = sum + a(w, h) * b(w, h)
 			end
 		end
 		return sum
 	end
-	return imageInnerProduct
+	return innerProduct
 end
 
 util.makeSetImage = function(imageType)
 	local terra setImage(targetImage : imageType, sourceImage : imageType, scale : float)
-		for h = 0, targetImage.H do
-			for w = 0, targetImage.W do
+		for h = 0, targetImage:H() do
+			for w = 0, targetImage:W() do
 				targetImage(w, h) = sourceImage(w, h) * scale
 			end
 		end
@@ -67,8 +62,8 @@ end
 
 util.makeCopyImage = function(imageType)
 	local terra copyImage(targetImage : imageType, sourceImage : imageType)
-		for h = 0, targetImage.H do
-			for w = 0, targetImage.W do
+		for h = 0, targetImage:H() do
+			for w = 0, targetImage:W() do
 				targetImage(w, h) = sourceImage(w, h)
 			end
 		end
@@ -76,10 +71,21 @@ util.makeCopyImage = function(imageType)
 	return copyImage
 end
 
+util.makeClearImage = function(imageType)
+	local terra clearImage(targetImage : imageType, value : float)
+		for h = 0, targetImage:H() do
+			for w = 0, targetImage:W() do
+				targetImage(w, h) = value
+			end
+		end
+	end
+	return clearImage
+end
+
 util.makeScaleImage = function(imageType)
 	local terra scaleImage(targetImage : imageType, scale : float)
-		for h = 0, targetImage.H do
-			for w = 0, targetImage.W do
+		for h = 0, targetImage:H() do
+			for w = 0, targetImage:W() do
 				targetImage(w, h) = targetImage(w, h) * scale
 			end
 		end
@@ -89,8 +95,8 @@ end
 
 util.makeAddImage = function(imageType)
 	local terra addImage(targetImage : imageType, addedImage : imageType, scale : float)
-		for h = 0, targetImage.H do
-			for w = 0, targetImage.W do
+		for h = 0, targetImage:H() do
+			for w = 0, targetImage:W() do
 				targetImage(w, h) = targetImage(w, h) + addedImage(w, h) * scale
 			end
 		end
@@ -101,9 +107,9 @@ end
 util.makeComputeCost = function(data)
 	local terra computeCost(pd : &data.PlanData)
 		var result = 0.0
-		for h = 0, pd.images.unknown.H do
-			for w = 0, pd.images.unknown.W do
-				var v = data.tbl.cost.boundary(w, h, unpackstruct(pd.images))
+		for h = 0, pd.images.unknown:H() do
+			for w = 0, pd.images.unknown:W() do
+				var v = data.problemSpec.cost.boundary(w, h, unpackstruct(pd.images))
 				result = result + v
 			end
 		end
@@ -115,12 +121,12 @@ end
 util.makeComputeGradient = function(data)
 	-- haha ha
 	local terra gradientHack(pd : &data.PlanData, w : int, h : int, values : data.imageType)
-		return data.tbl.gradient.boundary(w, h, values, pd.images.image0)
+		return data.problemSpec.gradient.boundary(w, h, values, pd.images.image0)
 	end
 	
 	local terra computeGradient(pd : &data.PlanData, gradientOut : data.imageType, values : data.imageType)
-		for h = 0, gradientOut.H do
-			for w = 0, gradientOut.W do
+		for h = 0, gradientOut:H() do
+			for w = 0, gradientOut:W() do
 				gradientOut(w, h) = gradientHack(pd, w, h, values)
 			end
 		end
@@ -131,12 +137,12 @@ end
 util.makeComputeResiduals = function(data)
 	-- haha ha
 	local terra costHack(pd : &data.PlanData, w : int, h : int, values : data.imageType)
-		return data.tbl.cost.boundary(w, h, values, pd.images.image0)
+		return data.problemSpec.cost.boundary(w, h, values, pd.images.image0)
 	end
 	
 	local terra computeResiduals(pd : &data.PlanData, values : data.imageType, residuals : data.imageType)
-		for h = 0, values.H do
-			for w = 0, values.W do
+		for h = 0, values:H() do
+			for w = 0, values:W() do
 				residuals(w, h) = costHack(pd, w, h, values)
 			end
 		end
@@ -147,13 +153,13 @@ end
 util.makeComputeDeltaCost = function(data)
 	-- haha ha
 	local terra costHack(pd : &data.PlanData, w : int, h : int, values : data.imageType)
-		return data.tbl.cost.boundary(w, h, values, pd.images.image0)
+		return data.problemSpec.cost.boundary(w, h, values, pd.images.image0)
 	end
 	
 	local terra deltaCost(pd : &data.PlanData, baseResiduals : data.imageType, currentValues : data.imageType)
 		var result : double = 0.0
-		for h = 0, currentValues.H do
-			for w = 0, currentValues.W do
+		for h = 0, currentValues:H() do
+			for w = 0, currentValues:W() do
 				var residual = costHack(pd, w, h, currentValues)
 				var delta = residual - baseResiduals(w, h)
 				result = result + delta
@@ -166,9 +172,21 @@ end
 
 util.makeComputeSearchCost = function(data, cpu)
 	local terra searchCost(pd : &data.PlanData, baseValues : data.imageType, baseResiduals : data.imageType, searchDirection : data.imageType, alpha : float, valueStore : data.imageType)
-		for h = 0, baseValues.H do
-			for w = 0, baseValues.W do
+		for h = 0, baseValues:H() do
+			for w = 0, baseValues:W() do
 				valueStore(w, h) = baseValues(w, h) + alpha * searchDirection(w, h)
+			end
+		end
+		return cpu.deltaCost(pd, baseResiduals, valueStore)
+	end
+	return searchCost
+end
+
+util.makeComputeBiSearchCost = function(data, cpu)
+	local terra searchCost(pd : &data.PlanData, baseValues : data.imageType, baseResiduals : data.imageType, searchDirectionA : data.imageType, searchDirectionB : data.imageType, alpha : float, beta : float, valueStore : data.imageType)
+		for h = 0, baseValues:H() do
+			for w = 0, baseValues:W() do
+				valueStore(w, h) = baseValues(w, h) + alpha * searchDirectionA(w, h) + beta * searchDirectionB(w, h)
 			end
 		end
 		return cpu.deltaCost(pd, baseResiduals, valueStore)
@@ -179,8 +197,8 @@ end
 util.makeComputeSearchCostParallel = function(data, cpu)
 	local terra searchCostParallel(pd : &data.PlanData, baseValues : data.imageType, baseResiduals : data.imageType, searchDirection : data.imageType, count : int, alphas : &float, costs : &float, valueStore : data.imageType)
 		for i = 0, count do
-			for h = 0, baseValues.H do
-				for w = 0, baseValues.W do
+			for h = 0, baseValues:H() do
+				for w = 0, baseValues:W() do
 					valueStore(w, h) = baseValues(w, h) + alphas[i] * searchDirection(w, h)
 				end
 			end
@@ -250,9 +268,32 @@ util.makeLineSearchQuadraticMinimum = function(data, cpu)
 			end
 		end
 		
-		return bestAlpha
+		return bestAlpha, bestCost
 	end
 	return lineSearchQuadraticMinimum
+end
+
+util.makeBiLineSearch = function(data, cpu)
+	local terra biLineSearch(pd : &data.PlanData, baseValues : data.imageType, baseResiduals : data.imageType, searchDirectionA : data.imageType, searchDirectionB : data.imageType, alphaGuess : float, betaGuess : float, valueStore : data.imageType)
+		
+		var bestAlpha, bestAlphaCost = cpu.lineSearchQuadraticMinimum(pd, baseValues, baseResiduals, searchDirectionA, valueStore, alphaGuess)
+		var bestBeta, bestBetaCost = cpu.lineSearchQuadraticMinimum(pd, baseValues, baseResiduals, searchDirectionA, valueStore, alphaGuess)
+		
+		var jointCost = cpu.computeBiSearchCost(pd, baseValues, baseResiduals, searchDirectionA, searchDirectionB, bestAlpha, bestBeta, valueStore)
+		
+		if jointCost < bestAlphaCost and jointCost < bestBetaCost then
+			return bestAlpha, bestBeta
+		end
+		
+		logSolver("bi-search minimization failed")
+		
+		if bestAlphaCost < bestBetaCost then
+			return bestAlpha, 0.0f
+		else
+			return 0.0f, bestBeta
+		end
+	end
+	return biLineSearch
 end
 
 util.makeLineSearchQuadraticFallback = function(data, cpu)
@@ -318,6 +359,48 @@ util.makeDumpLineSearch = function(data, cpu)
 	return dumpLineSearch
 end
 
+util.makeDumpBiLineSearch = function(data, cpu)
+	local terra dumpBiLineSearch(pd : &data.PlanData, baseValues : data.imageType, baseResiduals : data.imageType, searchDirectionA : data.imageType, searchDirectionB : data.imageType, valueStore : data.imageType)
+
+		-- Constants
+		var lineSearchMaxIters = 40
+		var lineSearchBruteForceStart = 0.0
+		var lineSearchBruteForceIncrement = 0.1
+				
+		var alpha = lineSearchBruteForceStart
+		
+		var file = C.fopen("C:/code/debug.txt", "wb")
+
+		var betaHeader = lineSearchBruteForceStart	
+		for lineSearchIndexB = 0, lineSearchMaxIters do
+			C.fprintf(file, "\t%15.15f", betaHeader)
+			betaHeader = betaHeader + lineSearchBruteForceIncrement
+		end
+		C.fprintf(file, "\n")
+		
+		for lineSearchIndexA = 0, lineSearchMaxIters do
+			var beta = lineSearchBruteForceStart
+			
+			C.fprintf(file, "%15.15f", alpha)
+			
+			for lineSearchIndexB = 0, lineSearchMaxIters do
+				var searchCost = cpu.computeBiSearchCost(pd, baseValues, baseResiduals, searchDirectionA, searchDirectionB, alpha, beta, valueStore)
+				beta = beta + lineSearchBruteForceIncrement
+			
+				C.fprintf(file, "\t%15.15f", searchCost)
+			end
+			
+			alpha = alpha + lineSearchBruteForceIncrement
+			C.fprintf(file, "\n")
+		end
+		
+		C.fclose(file)
+		logSolver("debug alpha outputted")
+		C.getchar()
+	end
+	return dumpBiLineSearch
+end
+
 local wrapGPUKernel = function(nakedKernel, PlanData, mapMemberName, params)
 	local terra wrappedKernel(pd : PlanData, [params])
 		var w = blockDim.x * blockIdx.x + threadIdx.x
@@ -361,7 +444,7 @@ local terra warpReduceSum(val : float)
 end
 
 
-local makeGPULauncher = function(compiledKernel, header, footer, tbl, PlanData, params)
+local makeGPULauncher = function(compiledKernel, header, footer, problemSpec, PlanData, params)
 	local terra GPULauncher(pd : &PlanData, [params])
 		var launch = terralib.CUDAParams { (pd.gradW - 1) / 32 + 1, (pd.gradH - 1) / 32 + 1, 1, 32, 32, 1, 0, nil }
 		[header(pd)]
@@ -375,7 +458,7 @@ end
 
 util.makeComputeCostGPU = function(data)
 	local terra computeCost(pd : &data.PlanData, w : int, h : int)
-		var cost = [float](data.tbl.cost.boundary(w, h, unpackstruct(pd.images)))
+		var cost = [float](data.problemSpec.cost.boundary(w, h, unpackstruct(pd.images)))
 		--cost = warpReduceSum(cost);
 		--if (laneid() == 0) then
 			atomicAdd(pd.scratchF, cost)
@@ -393,7 +476,7 @@ end
 util.makeComputeDeltaCostGPU = function(data)
 	-- haha ha
 	local terra costHack(pd : &data.PlanData, w : int, h : int, values : data.imageType)
-		return data.tbl.cost.boundary(w, h, values, pd.images.image0)
+		return data.problemSpec.cost.boundary(w, h, values, pd.images.image0)
 	end
 	local terra computeDeltaCost(pd : &data.PlanData, w : int, h : int, baseResiduals : data.imageType, currentValues : data.imageType)
 		var residual = [float](costHack(pd, w, h, currentValues))
@@ -443,7 +526,7 @@ end
 
 util.makeComputeGradientGPU = function(data)
 	local terra computeGradient(pd : &data.PlanData, w : int, h : int, gradientOut : data.imageType)
-		gradientOut(w, h) = data.tbl.gradient.boundary(w, h, unpackstruct(pd.images))
+		gradientOut(w, h) = data.problemSpec.gradient.boundary(w, h, unpackstruct(pd.images))
 	end
 	return { kernel = computeGradient, header = noHeader, footer = noFooter, params = {symbol(data.imageType)}, mapMemberName = "unknown" }
 end
@@ -481,7 +564,7 @@ end
 util.makeComputeResidualsGPU = function(data)
 	-- haha ha
 	local terra costHack(pd : &data.PlanData, w : int, h : int, values : data.imageType)
-		return data.tbl.cost.boundary(w, h, values, pd.images.image0)
+		return data.problemSpec.cost.boundary(w, h, values, pd.images.image0)
 	end
 	local terra computeResiduals(pd : &data.PlanData, w : int, h : int, residuals : data.imageType, values : data.imageType)
 		residuals(w, h) = costHack(pd, w, h, values)
@@ -606,11 +689,11 @@ util.makeLineSearchQuadraticFallbackGPU = function(data, gpu)
 	return lineSearchQuadraticFallback
 end
 
-util.makeCPUFunctions = function(tbl, vars, PlanData)
+util.makeCPUFunctions = function(problemSpec, vars, PlanData)
 	local cpu = {}
 	
 	local data = {}
-	data.tbl = tbl
+	data.problemSpec = problemSpec
 	data.PlanData = PlanData
 	data.imageType = vars.unknownType
 	
@@ -618,7 +701,8 @@ util.makeCPUFunctions = function(tbl, vars, PlanData)
 	cpu.setImage = util.makeSetImage(data.imageType)
 	cpu.addImage = util.makeAddImage(data.imageType)
 	cpu.scaleImage = util.makeScaleImage(data.imageType)
-	cpu.imageInnerProduct = util.makeImageInnerProduct(data.imageType)
+	cpu.clearImage = util.makeClearImage(data.imageType)
+	cpu.innerProduct = util.makeInnerProduct(data.imageType)
 	
 	cpu.computeCost = util.makeComputeCost(data)
 	cpu.computeGradient = util.makeComputeGradient(data)
@@ -626,22 +710,25 @@ util.makeCPUFunctions = function(tbl, vars, PlanData)
 	cpu.computeResiduals = util.makeComputeResiduals(data)
 	
 	cpu.computeSearchCost = util.makeComputeSearchCost(data, cpu)
+	cpu.computeBiSearchCost = util.makeComputeBiSearchCost(data, cpu)
 	cpu.computeSearchCostParallel = util.makeComputeSearchCostParallel(data, cpu)
 	cpu.dumpLineSearch = util.makeDumpLineSearch(data, cpu)
+	cpu.dumpBiLineSearch = util.makeDumpBiLineSearch(data, cpu)
 	cpu.lineSearchBruteForce = util.makeLineSearchBruteForce(data, cpu)
 	cpu.lineSearchQuadraticMinimum = util.makeLineSearchQuadraticMinimum(data, cpu)
 	cpu.lineSearchQuadraticFallback = util.makeLineSearchQuadraticFallback(data, cpu)
+	cpu.biLineSearch = util.makeBiLineSearch(data, cpu)
 	
 	return cpu
 end
 
-util.makeGPUFunctions = function(tbl, vars, PlanData, specializedKernels)
+util.makeGPUFunctions = function(problemSpec, vars, PlanData, specializedKernels)
 	local gpu = {}
 	local kernelTemplate = {}
 	local wrappedKernels = {}
 	
 	local data = {}
-	data.tbl = tbl
+	data.problemSpec = problemSpec
 	data.PlanData = PlanData
 	data.imageType = vars.unknownType
 	
@@ -669,7 +756,7 @@ util.makeGPUFunctions = function(tbl, vars, PlanData, specializedKernels)
 	local compiledKernels = terralib.cudacompile(wrappedKernels)
 	
 	for k, v in pairs(compiledKernels) do
-		gpu[k] = makeGPULauncher(compiledKernels[k], kernelTemplate[k].header, kernelTemplate[k].footer, tbl, PlanData, kernelTemplate[k].params)
+		gpu[k] = makeGPULauncher(compiledKernels[k], kernelTemplate[k].header, kernelTemplate[k].footer, problemSpec, PlanData, kernelTemplate[k].params)
 	end
 	
 	-- composite GPU functions
@@ -682,50 +769,4 @@ util.makeGPUFunctions = function(tbl, vars, PlanData, specializedKernels)
 	return gpu
 end
 
---[[
-
-inline __device__ void scanPart1(unsigned int threadIdx, unsigned int blockIdx, unsigned int threadsPerBlock, float* d_output)
-{
-	__syncthreads();
-	blockReduce(bucket, threadIdx, threadsPerBlock);
-	if(threadIdx == 0) d_output[blockIdx] = bucket[0];
-}
-
-inline __device__ void scanPart2(unsigned int threadIdx, unsigned int threadsPerBlock, unsigned int blocksPerGrid, float* d_tmp)
-{
-	if(threadIdx < blocksPerGrid) bucket[threadIdx] = d_tmp[threadIdx];
-	else						  bucket[threadIdx] = 0.0f;
-	
-	__syncthreads();
-	blockReduce(bucket, threadIdx, threadsPerBlock);
-	__syncthreads();
-}
-
-inline __device__ void warpReduce(volatile float* sdata, int threadIdx, unsigned int threadsPerBlock) // See Optimizing Parallel Reduction in CUDA by Mark Harris
-{
-	if(threadIdx < 32)
-	{
-		if(threadIdx + 32 < threadsPerBlock) sdata[threadIdx] = sdata[threadIdx] + sdata[threadIdx + 32];
-		if(threadIdx + 16 < threadsPerBlock) sdata[threadIdx] = sdata[threadIdx] + sdata[threadIdx + 16];
-		if(threadIdx +  8 < threadsPerBlock) sdata[threadIdx] = sdata[threadIdx] + sdata[threadIdx +  8];
-		if(threadIdx +  4 < threadsPerBlock) sdata[threadIdx] = sdata[threadIdx] + sdata[threadIdx +  4];
-		if(threadIdx +  2 < threadsPerBlock) sdata[threadIdx] = sdata[threadIdx] + sdata[threadIdx +  2];
-		if(threadIdx +  1 < threadsPerBlock) sdata[threadIdx] = sdata[threadIdx] + sdata[threadIdx +  1];
-	}
-}
-
-inline __device__ void blockReduce(volatile float* sdata, int threadIdx, unsigned int threadsPerBlock)
-{
-	#pragma unroll
-	for(unsigned int stride = threadsPerBlock/2 ; stride > 32; stride/=2)
-	{
-		if(threadIdx < stride) sdata[threadIdx] = sdata[threadIdx] + sdata[threadIdx+stride];
-
-		__syncthreads();
-	}
-
-	warpReduce(sdata, threadIdx, threadsPerBlock);
-}
-
-]]
 return util

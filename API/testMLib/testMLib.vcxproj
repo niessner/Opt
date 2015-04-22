@@ -102,6 +102,7 @@
     <None Include="..\src\o.t" />
     <None Include="example.t" />
     <None Include="imageSmoothing.t" />
+    <None Include="imageSmoothingAD.t" />
     <None Include="quadratic.t" />
     <None Include="quadraticSquared.t" />
   </ItemGroup>

@@ -11,7 +11,7 @@ local solversGPU = require("solversGPU")
 local C = util.C
 
 -- constants
-local verboseSolver = false
+local verboseSolver = true
 local verboseAD = false
 
 local function newclass(name)
@@ -100,7 +100,6 @@ end
 
 __syncthreads = cudalib.nvvm_barrier0
 
-local Problem = newclass("Problem")
 local Dim = newclass("dimension")
 
 
@@ -113,52 +112,41 @@ local problems = {}
 -- it should generate the field makePlan which is the terra function that 
 -- allocates the plan
 
-local function compilePlan(tbl, kind,params)
-	print("Compile Plan!")
+local function compilePlan(problemSpec, kind, params)
+	print("Compile Plan Start")
 	local vars = {
-		dimensions = tbl.dimensions,
-		dimIndex = { [1] = 0 },
-		costType = tbl.cost.boundary:gettype()
+		costFunctionType = problemSpec.cost.boundary:gettype()
 	}
 	
-	vars.unknownType = vars.costType.parameters[3] -- 3rd argument is the image that is the unknown we are mapping over
-		
-    for i, d in ipairs(vars.dimensions) do
-        assert(Dim:is(d))
-        vars.dimIndex[d] = i -- index into DimList, 0th entry is always 1
-    end
+	vars.unknownType = vars.costFunctionType.parameters[3] -- 3rd argument is the image that is the unknown we are mapping over
 
 	local PlanImages = terralib.types.newstruct ("PlanImages")
 	PlanImages.entries:insert( { "unknown", vars.unknownType } )
 	
-	for i = 4, #vars.costType.parameters do
-		PlanImages.entries:insert( { "image"..tostring(i - 4), vars.costType.parameters[i] } )
+	for i = 4, #vars.costFunctionType.parameters do
+		PlanImages.entries:insert( { "image"..tostring(i - 4), vars.costFunctionType.parameters[i] } )
 	end
 	
-	vars.planImagesType = PlanImages
-	
-	vars.gradWIndex = vars.dimIndex[ tbl.gradient.dimensions[1] ]
-	vars.gradHIndex = vars.dimIndex[ tbl.gradient.dimensions[2] ]
-	
-	vars.costWIndex = vars.dimIndex[ tbl.cost.dimensions[1] ]
-	vars.costHIndex = vars.dimIndex[ tbl.cost.dimensions[2] ]
+	vars.PlanImages = PlanImages
 
 	if kind == "gradientDescentCPU" then
-        return solversCPU.gradientDescentCPU(Problem, tbl, vars)
+        return solversCPU.gradientDescentCPU(problemSpec, vars)
 	elseif kind == "gradientDescentGPU" then
-		return solversGPU.gradientDescentGPU(Problem, tbl, vars)
+		return solversGPU.gradientDescentGPU(problemSpec, vars)
 	elseif kind == "conjugateGradientCPU" then
-		return solversCPU.conjugateGradientCPU(Problem, tbl, vars)
+		return solversCPU.conjugateGradientCPU(problemSpec, vars)
 	elseif kind == "linearizedConjugateGradientCPU" then
-		return solversCPU.linearizedConjugateGradientCPU(Problem, tbl, vars)
+		return solversCPU.linearizedConjugateGradientCPU(problemSpec, vars)
 	elseif kind == "linearizedConjugateGradientGPU" then
-		return solversGPU.linearizedConjugateGradientGPU(Problem, tbl, vars)
+		return solversGPU.linearizedConjugateGradientGPU(problemSpec, vars)
 	elseif kind == "lbfgsCPU" then
-		return solversCPU.lbfgsCPU(Problem, tbl, vars)
+		return solversCPU.lbfgsCPU(problemSpec, vars)
 	elseif kind == "vlbfgsCPU" then
-		return solversCPU.vlbfgsCPU(Problem, tbl, vars)
+		return solversCPU.vlbfgsCPU(problemSpec, vars)
 	elseif kind == "vlbfgsGPU" then
-		return solversGPU.vlbfgsGPU(Problem, tbl, vars)
+		return solversGPU.vlbfgsGPU(problemSpec, vars)
+	elseif kind == "bidirectionalVLBFGSCPU" then
+		return solversCPU.bidirectionalVLBFGSCPU(problemSpec, vars)
 	end
 	
 	error("unknown kind: "..kind)
@@ -170,7 +158,7 @@ struct opt.GradientDescentPlanParams {
 }
 
 struct opt.Plan(S.Object) {
-    impl : {&opaque,&opaque,&opaque} -> {}
+    impl : {&opaque,&&opaque,&opaque} -> {}
     data : &opaque
 } 
 
@@ -259,17 +247,23 @@ function opt.Image(typ, W, H, idx)
     return newImage(typ, assert(todim(W)), assert(todim(H)), elemsize, stride)
 end
 
+local allPlans = terralib.newlist()
+
 local function problemPlan(id, dimensions, elemsizes, strides, pplan)
     local success,p = xpcall(function() 
-        local problemmetadata = assert(problems[id])
+		local problemmetadata = assert(problems[id])
         opt.dimensions,opt.elemsizes,opt.strides = dimensions,elemsizes,strides
         local tbl = assert(terralib.loadfile(problemmetadata.filename))()
         assert(type(tbl) == "table")
-		pplan[0] = compilePlan(tbl,problemmetadata.kind,problemmetadata.params)
+		local result = compilePlan(tbl,problemmetadata.kind,problemmetadata.params)
+		allPlans:insert(result)
+		pplan[0] = result()
     end,function(err) print(debug.traceback(err,2)) end)
+	
+	print("Compile Plan End")
 end
 terra opt.ProblemPlan(problem : &opt.Problem, dimensions : &uint64, elemsizes : &uint64, strides : &uint64) : &opt.Plan
-	var p : &opt.Plan
+	var p : &opt.Plan = nil 
 	problemPlan(int(int64(problem)),dimensions,elemsizes,strides,&p)
 	return p
 end 
@@ -279,7 +273,7 @@ terra opt.PlanFree(plan : &opt.Plan)
     plan:delete()
 end
 
-terra opt.ProblemSolve(plan : &opt.Plan, images : &opaque, params : &opaque)
+terra opt.ProblemSolve(plan : &opt.Plan, images : &&opaque, params : &opaque)
 	return plan.impl(plan.data, images, params)
 end
 

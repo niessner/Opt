@@ -182,14 +182,14 @@ void TestFramework::runAllTests()
     }
 
     //TestExample example = makeRandomQuadratic(5);
-    TestExample example = makeImageSmoothing("smoothingExampleB.png", 0.1f);
+    TestExample example = makeImageSmoothing("smoothingExampleA.png", 0.1f);
 
     vector<TestMethod> methods;
 
     //
     // CPU methods
     //
-    //methods.push_back(TestMethod("gradientDescentCPU","no-params"));
+    methods.push_back(TestMethod("gradientDescentCPU","no-params"));
     //methods.push_back(TestMethod("conjugateGradientCPU", "no-params"));
     //methods.push_back(TestMethod("linearizedConjugateGradientCPU", "no-params"));
     //methods.push_back(TestMethod("lbfgsCPU", "no-params"));
@@ -198,7 +198,7 @@ void TestFramework::runAllTests()
     //
     // GPU methods
     //
-    methods.push_back(TestMethod("gradientDescentGPU", "no-params"));
+    //methods.push_back(TestMethod("gradientDescentGPU", "no-params"));
     //methods.push_back(TestMethod("vlbfgsGPU", "no-params"));
 
     for (auto &method : methods)
@@ -238,6 +238,13 @@ void TestFramework::runTest(const TestMethod &method, TestExample &example)
     }
     
     Plan * plan = Opt_ProblemPlan(optimizerState, prob, dims, elemsize.data(), stride.data());
+
+    if (!plan)
+    {
+        cout << "Opt_ProblemPlan failed" << endl;
+        cin.get();
+        return;
+    }
 
     bool isGPU = ml::util::endsWith(method.optimizerName, "GPU");
 
