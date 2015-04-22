@@ -61,7 +61,7 @@ TestExample TestFramework::makeImageSmoothing(const string &imageFilename, float
 
     LodePNG::save(testImage, "smoothingOutputLinearSolve.png");
 
-    TestExample result("imageSmoothing", "imageSmoothingAD.t", bmp.getWidth(), bmp.getHeight());
+    TestExample result("imageSmoothing", "imageSmoothing.t", bmp.getWidth(), bmp.getHeight());
 
     result.costFunction = [=](const OptImage &variables)
     {
@@ -200,9 +200,6 @@ void TestFramework::runAllTests()
     //
     methods.push_back(TestMethod("gradientDescentGPU", "no-params"));
     //methods.push_back(TestMethod("vlbfgsGPU", "no-params"));
-    
-    for (auto &image : example.images)
-        image.bind(optimizerState);
 
     for (auto &method : methods)
         runTest(method, example);
@@ -226,28 +223,32 @@ void TestFramework::runTest(const TestMethod &method, TestExample &example)
         cin.get();
         return;
     }
-
-    Plan * plan = Opt_ProblemPlan(optimizerState, prob, dims);
-
-    vector<ImageBinding *> imageBindingsCPU;
-    vector<ImageBinding *> imageBindingsGPU;
+    
+    std::vector<void*> imagesCPU;
+    std::vector<void*> imagesGPU;
+    std::vector<uint64_t> stride;
+    std::vector<uint64_t> elemsize;
     for (const auto &image : example.images)
     {
         image.syncCPUToGPU();
-        imageBindingsCPU.push_back(image.terraBindingCPU);
-        imageBindingsGPU.push_back(image.terraBindingGPU);
+        imagesCPU.push_back((void*)image.DataCPU());
+        imagesGPU.push_back((void*)image.DataGPU());
+        stride.push_back(image.dimX);
+        elemsize.push_back(sizeof(float));
     }
+    
+    Plan * plan = Opt_ProblemPlan(optimizerState, prob, dims, elemsize.data(), stride.data());
 
     bool isGPU = ml::util::endsWith(method.optimizerName, "GPU");
 
     if (isGPU)
     {
-        Opt_ProblemSolve(optimizerState, plan, imageBindingsGPU.data(), NULL);
+        Opt_ProblemSolve(optimizerState, plan, imagesGPU.data(), NULL);
         for (const auto &image : example.images)
             image.syncGPUToCPU();
     }
     else
-        Opt_ProblemSolve(optimizerState, plan, imageBindingsCPU.data(), NULL);
+        Opt_ProblemSolve(optimizerState, plan, imagesCPU.data(), NULL);
 
     //cout << "x(0, 0) = " << example.images[0](0, 0) << endl;
     //cout << "x(1, 0) = " << example.images[0](5, 0) << endl;

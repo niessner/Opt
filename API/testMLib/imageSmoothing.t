@@ -1,10 +1,10 @@
 local IO = terralib.includec("stdio.h")
 
-local W = opt.Dim("W")
-local H = opt.Dim("H")
+local W = opt.Dim("W",0)
+local H = opt.Dim("H",1)
 
-local X = opt.Image(float,W,H)
-local A = opt.Image(float,W,H)
+local X = opt.Image(float,W,H,0)
+local A = opt.Image(float,W,H,1)
 
 local C = terralib.includecstring [[
 #include <math.h>
@@ -19,11 +19,11 @@ local C = terralib.includecstring [[
 local w = 0.1
 
 local terra inLaplacianBounds(i : uint64, j : uint64, xImage : X)
-	return i > 0 and i < xImage.W - 1 and j > 0 and j < xImage.H - 1
+	return i > 0 and i < xImage:W() - 1 and j > 0 and j < xImage:H() - 1
 end
 
 local terra inImageBounds(i : uint64, j : uint64, xImage : X)
-	return i >= 0 and i <= xImage.W - 1 and j >= 0 and j <= xImage.H - 1
+	return i >= 0 and i <= xImage:W() - 1 and j >= 0 and j <= xImage:H() - 1
 end
 
 local terra laplacian(i : uint64, j : uint64, xImage : X)
@@ -80,7 +80,7 @@ local terra gradientPreconditioner(i : uint64, j : uint64)
 	return 24 + w * 2
 end
 
-return { dimensions = { W, H },
+return {
          cost = { dimensions = {W,H}, boundary = cost, interior = cost, stencil = {1,1} },
          gradient = { dimensions = {W,H}, boundary = gradient, interior = gradient, stencil = {2,2} },
 		 gradientPreconditioner = gradientPreconditioner }
