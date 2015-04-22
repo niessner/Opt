@@ -21,4 +21,5 @@ INTERACTIVEDLL_API void*         IVInit();
 INTERACTIVEDLL_API UINT32        IVProcessCommand(void *context, const char *s);
 INTERACTIVEDLL_API const char*   IVGetStringByName(void *context, const char *s);
 INTERACTIVEDLL_API int           IVGetIntegerByName(void *context, const char *s);
+INTERACTIVEDLL_API float         IVGetFloatByName(void *context, const char *s);
 INTERACTIVEDLL_API IVBitmapInfo* IVGetBitmapByName(void *context, const char *s);

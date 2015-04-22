@@ -38,6 +38,8 @@ namespace UIWindow
         public static extern IntPtr IVGetStringByName(IntPtr context, [In, MarshalAs(UnmanagedType.LPStr)] String stringName);
         [DllImport(InteractiveDLL)]
         public static extern Int32 IVGetIntegerByName(IntPtr context, [In, MarshalAs(UnmanagedType.LPStr)] String integerName);
+        [DllImport(InteractiveDLL)]
+        public static extern float IVGetFloatByName(IntPtr context, [In, MarshalAs(UnmanagedType.LPStr)] String floatName);
         
         public IntPtr interactiveDLLContext = (IntPtr)0;
 
@@ -76,6 +78,18 @@ namespace UIWindow
             {
                 return Marshal.PtrToStringAnsi(stringPtr);
             }
+        }
+
+        public int GetInt(String stringName)
+        {
+            return IVGetIntegerByName(interactiveDLLContext, stringName);
+            
+        }
+
+        public float GetFloat(String stringName)
+        {
+            return IVGetFloatByName(interactiveDLLContext, stringName);
+
         }
     }
 }

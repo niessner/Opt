@@ -341,19 +341,29 @@ local terra __shfl_down(v : float, delta : uint, width : int)
 	var ret : float;
     var c : int;
 	c = ((warpSize-width) << 8) or 0x1F;
-	ret = terralib.asm(float,"shfl.down.b32 %0, %1, %2, %3;","=f,f,r,r", v, delta, c)
+	ret = terralib.asm(float,"shfl.down.b32 $0, $1, $2, $3;","=f,f,r,r", true, v, delta, c)
 	return ret;
 end
 
 local terra laneid()
     var laneid : int;
-	laneid = terralib.asm(float,"mov.u32 %0, %laneid","=r")
+	laneid = terralib.asm(int,"mov.u32 $0, %laneid;","=r", true)
 	return laneid;
 end
 
+local terra warpReduceSum(val : float) 
+  var offset = warpSize/2
+  while offset > 0 do 
+    val = val + __shfl_down(val, offset, warpSize);
+    offset =  offset/2
+  end
+  return val;
+end
+
+
 local makeGPULauncher = function(compiledKernel, header, footer, tbl, PlanData, params)
 	local terra GPULauncher(pd : &PlanData, [params])
-		var launch = terralib.CUDAParams { (pd.gradW - 1) / 32 + 1, (pd.gradH - 1) / 32 + 1,1, 32,32,1, 0, nil }
+		var launch = terralib.CUDAParams { (pd.gradW - 1) / 32 + 1, (pd.gradH - 1) / 32 + 1, 1, 32, 32, 1, 0, nil }
 		[header(pd)]
 		compiledKernel(&launch, @pd, params)
 		C.cudaDeviceSynchronize()
@@ -366,7 +376,10 @@ end
 util.makeComputeCostGPU = function(data)
 	local terra computeCost(pd : &data.PlanData, w : int, h : int)
 		var cost = [float](data.tbl.cost.boundary(w, h, unpackstruct(pd.images)))
-		atomicAdd(pd.scratchF, cost)
+		--cost = warpReduceSum(cost);
+		--if (laneid() == 0) then
+			atomicAdd(pd.scratchF, cost)
+		--end
 	end
 	local function header(pd)
 		return quote @pd.scratchF = 0.0f end
@@ -410,24 +423,12 @@ util.makeInnerProductGPU = function(data)
 	return { kernel = innerProduct, header = header, footer = footer, params = {symbol(data.imageType), symbol(data.imageType)}, mapMemberName = "unknown" }
 end
 
-
-local terra warpReduceSum(val : float) 
-  var offset = warpSize/2
-  while offset > 0 do 
-    val = val + __shfl_down(val, offset);
-    offset =  offset/2
-  end
-  return val;
-end
-
-
 util.makeInnerProductReductionGPU = function(data)
 	local terra innerProductReduction(pd : &data.PlanData, w : int, h : int, imageA : data.imageType, imageB : data.imageType)
 		var v = imageA(w, h) * imageB(w, h)
-		var lane = threadIdx.x % warpSize;
 		v = warpReduceSum(v);
 		--TODO: switch to block reduce
-		if (laneid == 0) then
+		if (laneid() == 0) then
 			atomicAdd(pd.scratchF, v)
 		end
 	end
@@ -654,7 +655,7 @@ util.makeGPUFunctions = function(tbl, vars, PlanData, specializedKernels)
 	kernelTemplate.computeDeltaCost = util.makeComputeDeltaCostGPU(data)
 	kernelTemplate.computeResiduals = util.makeComputeResidualsGPU(data)
 	kernelTemplate.innerProduct = util.makeInnerProductGPU(data)
-	--kernelTemplate.innerProductReduction = util.makeInnerProductReductionGPU(data)
+	kernelTemplate.innerProductReduction = util.makeInnerProductReductionGPU(data)
 		
 	for k, v in pairs(specializedKernels) do
 		kernelTemplate[k] = v(data)

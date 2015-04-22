@@ -42,6 +42,15 @@
             this.resultImageBox = new System.Windows.Forms.PictureBox();
             this.timer = new System.Windows.Forms.Timer(this.components);
             this.optimizationMethodComboBox = new System.Windows.Forms.ComboBox();
+            this.label4 = new System.Windows.Forms.Label();
+            this.defineTimeBox = new System.Windows.Forms.TextBox();
+            this.label5 = new System.Windows.Forms.Label();
+            this.label6 = new System.Windows.Forms.Label();
+            this.label7 = new System.Windows.Forms.Label();
+            this.label8 = new System.Windows.Forms.Label();
+            this.planTimeBox = new System.Windows.Forms.TextBox();
+            this.cpuSolveTimeBox = new System.Windows.Forms.TextBox();
+            this.gpuSolveTimeBox = new System.Windows.Forms.TextBox();
             ((System.ComponentModel.ISupportInitialize)(this.pictureBoxMinimum)).BeginInit();
             ((System.ComponentModel.ISupportInitialize)(this.resultImageBox)).BeginInit();
             this.SuspendLayout();
@@ -74,7 +83,7 @@
             this.textBoxCompiler.Margin = new System.Windows.Forms.Padding(4);
             this.textBoxCompiler.Name = "textBoxCompiler";
             this.textBoxCompiler.ReadOnly = true;
-            this.textBoxCompiler.Size = new System.Drawing.Size(619, 148);
+            this.textBoxCompiler.Size = new System.Drawing.Size(518, 148);
             this.textBoxCompiler.TabIndex = 0;
             this.textBoxCompiler.Text = "";
             // 
@@ -168,11 +177,93 @@
             this.optimizationMethodComboBox.Size = new System.Drawing.Size(369, 27);
             this.optimizationMethodComboBox.TabIndex = 9;
             // 
+            // label4
+            // 
+            this.label4.AutoSize = true;
+            this.label4.Location = new System.Drawing.Point(538, 639);
+            this.label4.Name = "label4";
+            this.label4.Size = new System.Drawing.Size(57, 19);
+            this.label4.TabIndex = 10;
+            this.label4.Text = "Define:";
+            // 
+            // defineTimeBox
+            // 
+            this.defineTimeBox.Location = new System.Drawing.Point(602, 631);
+            this.defineTimeBox.Name = "defineTimeBox";
+            this.defineTimeBox.Size = new System.Drawing.Size(92, 27);
+            this.defineTimeBox.TabIndex = 11;
+            // 
+            // label5
+            // 
+            this.label5.AutoSize = true;
+            this.label5.Location = new System.Drawing.Point(538, 671);
+            this.label5.Name = "label5";
+            this.label5.Size = new System.Drawing.Size(43, 19);
+            this.label5.TabIndex = 12;
+            this.label5.Text = "Plan:";
+            // 
+            // label6
+            // 
+            this.label6.AutoSize = true;
+            this.label6.Location = new System.Drawing.Point(538, 701);
+            this.label6.Name = "label6";
+            this.label6.Size = new System.Drawing.Size(46, 19);
+            this.label6.TabIndex = 13;
+            this.label6.Text = "Solve";
+            // 
+            // label7
+            // 
+            this.label7.AutoSize = true;
+            this.label7.Location = new System.Drawing.Point(547, 720);
+            this.label7.Name = "label7";
+            this.label7.Size = new System.Drawing.Size(40, 19);
+            this.label7.TabIndex = 14;
+            this.label7.Text = "CPU:";
+            // 
+            // label8
+            // 
+            this.label8.AutoSize = true;
+            this.label8.Location = new System.Drawing.Point(547, 755);
+            this.label8.Name = "label8";
+            this.label8.Size = new System.Drawing.Size(42, 19);
+            this.label8.TabIndex = 15;
+            this.label8.Text = "GPU:";
+            // 
+            // planTimeBox
+            // 
+            this.planTimeBox.Location = new System.Drawing.Point(602, 665);
+            this.planTimeBox.Name = "planTimeBox";
+            this.planTimeBox.Size = new System.Drawing.Size(92, 27);
+            this.planTimeBox.TabIndex = 16;
+            // 
+            // cpuSolveTimeBox
+            // 
+            this.cpuSolveTimeBox.Location = new System.Drawing.Point(602, 718);
+            this.cpuSolveTimeBox.Name = "cpuSolveTimeBox";
+            this.cpuSolveTimeBox.Size = new System.Drawing.Size(92, 27);
+            this.cpuSolveTimeBox.TabIndex = 17;
+            // 
+            // gpuSolveTimeBox
+            // 
+            this.gpuSolveTimeBox.Location = new System.Drawing.Point(602, 752);
+            this.gpuSolveTimeBox.Name = "gpuSolveTimeBox";
+            this.gpuSolveTimeBox.Size = new System.Drawing.Size(92, 27);
+            this.gpuSolveTimeBox.TabIndex = 18;
+            // 
             // MainWindow
             // 
             this.AutoScaleDimensions = new System.Drawing.SizeF(8F, 19F);
             this.AutoScaleMode = System.Windows.Forms.AutoScaleMode.Font;
             this.ClientSize = new System.Drawing.Size(1340, 795);
+            this.Controls.Add(this.gpuSolveTimeBox);
+            this.Controls.Add(this.cpuSolveTimeBox);
+            this.Controls.Add(this.planTimeBox);
+            this.Controls.Add(this.label8);
+            this.Controls.Add(this.label7);
+            this.Controls.Add(this.label6);
+            this.Controls.Add(this.label5);
+            this.Controls.Add(this.defineTimeBox);
+            this.Controls.Add(this.label4);
             this.Controls.Add(this.optimizationMethodComboBox);
             this.Controls.Add(this.resultImageBox);
             this.Controls.Add(this.compileButton);
@@ -212,6 +303,15 @@
         private System.Windows.Forms.PictureBox resultImageBox;
         private System.Windows.Forms.Timer timer;
         private System.Windows.Forms.ComboBox optimizationMethodComboBox;
+        private System.Windows.Forms.Label label4;
+        private System.Windows.Forms.TextBox defineTimeBox;
+        private System.Windows.Forms.Label label5;
+        private System.Windows.Forms.Label label6;
+        private System.Windows.Forms.Label label7;
+        private System.Windows.Forms.Label label8;
+        private System.Windows.Forms.TextBox planTimeBox;
+        private System.Windows.Forms.TextBox cpuSolveTimeBox;
+        private System.Windows.Forms.TextBox gpuSolveTimeBox;
 
     }
 }

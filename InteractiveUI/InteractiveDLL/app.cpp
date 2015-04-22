@@ -17,6 +17,12 @@ UINT32 App::processCommand(const string &command)
     } else if (words[0] == "run") {
         string optimizationMethod = words[1];
         printf("%s\n", words[1].c_str());
+
+        _optDefineTime = 0;
+        _optPlanTime = 0;
+        _optSolveTime = 0;
+        _optSolveTimeGPU = 0;
+
         if (_queryBitmapInfo.colorData == NULL) {
             _errorString = "No image available";
             return -1;
@@ -27,6 +33,12 @@ UINT32 App::processCommand(const string &command)
         }
        
         uint64_t dims[] = { _test.getWidth(), _test.getHeight() };
+
+        cudaEventCreate(&_optSolveStart);
+        cudaEventCreate(&_optSolveEnd);
+
+        ml::Timer timer;
+        timer.start();
 
         OptState* optimizerState = Opt_NewState();
         if (optimizerState == nullptr)
@@ -39,6 +51,8 @@ UINT32 App::processCommand(const string &command)
             image.bind(optimizerState);
 
         Problem * prob = Opt_ProblemDefine(optimizerState, _terraFile.c_str(), optimizationMethod.c_str(), NULL);
+        timer.stop();
+        _optDefineTime = timer.getElapsedTimeMS();
 
         if (!prob)
         {
@@ -46,7 +60,10 @@ UINT32 App::processCommand(const string &command)
             return -1;
         }
 
+        timer.start();
         Plan * plan = Opt_ProblemPlan(optimizerState, prob, dims);
+        timer.stop();
+        _optPlanTime = timer.getElapsedTimeMS();
 
         if (!plan)
         {
@@ -65,14 +82,21 @@ UINT32 App::processCommand(const string &command)
 
         bool isGPU = ml::util::endsWith(optimizationMethod, "GPU");
 
+        timer.start();
         if (isGPU)
         {
+            cudaEventRecord(_optSolveStart);
             Opt_ProblemSolve(optimizerState, plan, imageBindingsGPU.data(), NULL);
+            cudaEventRecord(_optSolveEnd);
             for (const auto &image : _optImages)
                 image.syncGPUToCPU();
         }
-        else
+        else {
             Opt_ProblemSolve(optimizerState, plan, imageBindingsCPU.data(), NULL);
+        }
+        timer.stop();
+        _optSolveTime = timer.getElapsedTimeMS();
+        
       
         for (int y = 0; y < _test.getHeight(); ++y) {
             for (int x = 0; x < _test.getWidth(); ++x) {
@@ -80,6 +104,9 @@ UINT32 App::processCommand(const string &command)
                 _result.setPixel(x, y, ml::vec4uc(color, color, color, 1));
             }
         }
+
+        cudaEventSynchronize(_optSolveEnd);
+        cudaEventElapsedTime(&_optSolveTimeGPU, _optSolveStart, _optSolveEnd);
         
     } 
 
@@ -136,6 +163,31 @@ int App::getIntegerByName(const string &s)
 		MLIB_ERROR("Unknown integer");
 		return -1;
 	}
+}
+
+float App::getFloatByName(const string &s)
+{
+    if (s == "defineTime")
+    {
+        return _optDefineTime;
+    }
+    else if (s == "planTime")
+    {
+        return _optPlanTime;
+    }
+    else if (s == "solveTime")
+    {
+        return _optSolveTime;
+    }
+    else if (s == "solveTimeGPU")
+    {
+        return _optSolveTimeGPU;
+    }
+    else
+    {
+        MLIB_ERROR("Unknown integer");
+        return -1;
+    }
 }
 
 const char* App::getStringByName(const string &s)

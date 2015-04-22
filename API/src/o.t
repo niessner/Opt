@@ -11,8 +11,8 @@ local solversGPU = require("solversGPU")
 local C = util.C
 
 -- constants
-local verboseSolver = true
-local verboseAD = true
+local verboseSolver = false
+local verboseAD = false
 
 local function newclass(name)
     local mt = { __name = name }

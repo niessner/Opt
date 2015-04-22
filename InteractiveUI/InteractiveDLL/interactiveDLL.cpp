@@ -40,6 +40,17 @@ INTERACTIVEDLL_API int IVGetIntegerByName(void *context, const char *s)
     return result;
 }
 
+
+INTERACTIVEDLL_API float IVGetFloatByName(void *context, const char *s)
+{
+    if (context == NULL) return 0;
+    App &app = *(App*)context;
+    app._lock.lock();
+    float result = app.getFloatByName(s);
+    app._lock.unlock();
+    return result;
+}
+
 INTERACTIVEDLL_API IVBitmapInfo* IVGetBitmapByName(void *context, const char *s)
 {
     if(context == NULL) return 0;

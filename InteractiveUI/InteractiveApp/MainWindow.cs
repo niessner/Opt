@@ -124,7 +124,11 @@ namespace UIWindow
             else
             {
                 textBoxCompiler.Invoke(new Action<string>(s => textBoxCompiler.Text = s), "Success!");
-                textBoxCompiler.Invoke(new Action<Bitmap>(b => resultImageBox.Image = b), dll.GetBitmap("result"));
+                resultImageBox.Invoke(new Action<Bitmap>(b => resultImageBox.Image = b), dll.GetBitmap("result"));
+                defineTimeBox.Invoke(new Action<string>(s => defineTimeBox.Text = s), dll.GetFloat("defineTime").ToString() + "ms");
+                planTimeBox.Invoke(new Action<string>(s => planTimeBox.Text = s), dll.GetFloat("planTime").ToString() + "ms");
+                cpuSolveTimeBox.Invoke(new Action<string>(s => cpuSolveTimeBox.Text = s), dll.GetFloat("solveTime").ToString() + "ms");
+                gpuSolveTimeBox.Invoke(new Action<string>(s => gpuSolveTimeBox.Text = s), dll.GetFloat("solveTimeGPU").ToString() + "ms");
             }
         }
 
