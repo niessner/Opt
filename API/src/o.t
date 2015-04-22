@@ -223,7 +223,7 @@ local newImage = terralib.memoize(function(typ, W, H, elemsize, stride)
 	end
 	terra Image:initGPU()
 		var cudaError = C.cudaMalloc([&&opaque](&(self.data)), stride*H.size)
-		cudaError = C.cudaMemset([&opaque](self.impl.data), 0, stride*H.size)
+		cudaError = C.cudaMemset([&opaque](self.data), 0, stride*H.size)
 	end
 	local mm = Image.metamethods
 	mm.typ,mm.W,mm.H,mm.elemsize,mm.stride = typ,W,H,elemsize,stride

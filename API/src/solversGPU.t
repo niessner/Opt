@@ -13,7 +13,7 @@ local function noFooter(pd)
 	return quote end
 end
 
-solversGPU.gradientDescentGPU = function(Problem, tbl, vars)
+solversGPU.gradientDescentGPU = function(problemSpec, vars)
 
 	local struct PlanData(S.Object) {
 		plan : opt.Plan
@@ -32,7 +32,7 @@ solversGPU.gradientDescentGPU = function(Problem, tbl, vars)
 		return { kernel = updatePositionGPU, header = noHeader, footer = noFooter, params = {symbol(float)}, mapMemberName = "unknown" }
 	end
 	
-	local gpu = util.makeGPUFunctions(tbl, vars, PlanData, specializedKernels)
+	local gpu = util.makeGPUFunctions(problemSpec, vars, PlanData, specializedKernels)
 	
 	local terra impl(data_ : &opaque, images : &&opaque, params_ : &opaque)
 		var pd = [&PlanData](data_)
@@ -85,7 +85,7 @@ solversGPU.gradientDescentGPU = function(Problem, tbl, vars)
 		pd.plan.data = pd
 		pd.plan.impl = impl
 
-		pd.gradStore:initGPU(images.unknown:W(), images.unknown:H())
+		pd.gradStore:initGPU()
 		C.cudaMallocManaged([&&opaque](&(pd.scratchF)), sizeof(float), C.cudaMemAttachGlobal)
 
 		return &pd.plan
@@ -94,12 +94,13 @@ solversGPU.gradientDescentGPU = function(Problem, tbl, vars)
 end
 
 -- vector-free L-BFGS using two-loop recursion: http://papers.nips.cc/paper/5333-large-scale-l-bfgs-using-mapreduce.pdf
-solversGPU.vlbfgsGPU = function(Problem, tbl, vars)
+solversGPU.vlbfgsGPU = function(problemSpec, vars)
 
 	local maxIters = 1000
 	local m = 10
 	local b = 2 * m + 1
 
+	-- TODO: alphaList must be a custom image!
 	local struct PlanData(S.Object) {
 		plan : opt.Plan
 		images : vars.PlanImages
@@ -143,8 +144,8 @@ solversGPU.vlbfgsGPU = function(Problem, tbl, vars)
 	
 	local specializedKernels = {}
 	
-	local gpu = util.makeGPUFunctions(tbl, vars, PlanData, {})
-	local cpu = util.makeCPUFunctions(tbl, vars, PlanData)
+	local gpu = util.makeGPUFunctions(problemSpec, vars, PlanData, {})
+	local cpu = util.makeCPUFunctions(problemSpec, vars, PlanData)
 	
 	local terra impl(data_ : &opaque, images : &&opaque, params_ : &opaque)
 		
@@ -284,25 +285,26 @@ solversGPU.vlbfgsGPU = function(Problem, tbl, vars)
 		pd.plan.data = pd
 		pd.plan.impl = impl
 
-		pd.gradient:initGPU(images.unknown:W(), images.unknown:H())
-		pd.prevGradient:initGPU(images.unknown:W(), images.unknown:H())
+		pd.gradient:initGPU()
+		pd.prevGradient:initGPU()
 		
-		pd.currentValues:initGPU(images.unknown:W(), images.unknown:H())
-		pd.currentResiduals:initGPU(pd.costW, pd.costH)
+		pd.currentValues:initGPU()
+		pd.currentResiduals:initGPU()
 		
-		pd.p:initGPU(images.unknown:W(), images.unknown:H())
+		pd.p:initGPU()
 		
 		for i = 0, m do
-			pd.sList[i]:initGPU(images.unknown:W(), images.unknown:H())
-			pd.yList[i]:initGPU(images.unknown:W(), images.unknown:H())
+			pd.sList[i]:initGPU()
+			pd.yList[i]:initGPU()
 		end
 		
 		C.cudaMallocManaged([&&opaque](&(pd.scratchF)), sizeof(float), C.cudaMemAttachGlobal)
 		
 		-- CPU!
-		pd.dotProductMatrix:initCPU(b, b)
-		pd.dotProductMatrixStorage:initCPU(b, b)
-		pd.alphaList:initCPU(maxIters, 1)
+		pd.dotProductMatrix:initCPU()
+		pd.dotProductMatrixStorage:initCPU()
+		pd.alphaList:initCPU()
+		--pd.alphaList:initCPU(maxIters, 1)
 		
 
 		return &pd.plan

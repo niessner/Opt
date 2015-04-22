@@ -408,7 +408,7 @@ local wrapGPUKernel = function(nakedKernel, PlanData, mapMemberName, params)
 		var w = blockDim.x * blockIdx.x + threadIdx.x
 		var h = blockDim.y * blockIdx.y + threadIdx.y
 		
-		if w < pd.images.[mapMemberName].W and h < pd.images.[mapMemberName].H then
+		if w < pd.images.[mapMemberName]:W() and h < pd.images.[mapMemberName]:H() then
 			nakedKernel(&pd, w, h, params)
 		end
 	end
@@ -448,7 +448,7 @@ end
 
 local makeGPULauncher = function(compiledKernel, header, footer, problemSpec, PlanData, params)
 	local terra GPULauncher(pd : &PlanData, [params])
-		var launch = terralib.CUDAParams { (pd.gradW - 1) / 32 + 1, (pd.gradH - 1) / 32 + 1, 1, 32, 32, 1, 0, nil }
+		var launch = terralib.CUDAParams { (pd.images.unknown:W() - 1) / 32 + 1, (pd.images.unknown:H() - 1) / 32 + 1, 1, 32, 32, 1, 0, nil }
 		[header(pd)]
 		compiledKernel(&launch, @pd, params)
 		C.cudaDeviceSynchronize()
