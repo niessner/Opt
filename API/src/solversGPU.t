@@ -2,6 +2,7 @@
 local S = require("std")
 local util = require("util")
 local C = util.C
+local Timer = util.Timer
 
 solversGPU = {}
 
@@ -21,6 +22,8 @@ solversGPU.gradientDescentGPU = function(problemSpec, vars)
 		scratchF : &float
 		
 		gradStore : vars.unknownType
+
+		timer : Timer
 	}
 	
 	local specializedKernels = {}
@@ -36,6 +39,8 @@ solversGPU.gradientDescentGPU = function(problemSpec, vars)
 	
 	local terra impl(data_ : &opaque, images : &&opaque, params_ : &opaque)
 		var pd = [&PlanData](data_)
+		pd.timer:init()
+
 		var params = [&double](params_)
 
 		unpackstruct(pd.images) = [util.getImages(PlanData, images)]
@@ -51,7 +56,7 @@ solversGPU.gradientDescentGPU = function(problemSpec, vars)
 		var minLearningRate = 1e-25
 
 		var learningRate = initialLearningRate
-
+		
 		for iter = 0, maxIters do
 
 			var startCost = gpu.computeCost(pd)
@@ -77,7 +82,10 @@ solversGPU.gradientDescentGPU = function(problemSpec, vars)
 					break
 				end
 			end
+			pd.timer:nextIteration()
 		end
+		pd.timer:evaluate()
+		pd.timer:cleanup()
 	end
 
 	local terra makePlan() : &opt.Plan
@@ -111,6 +119,8 @@ solversGPU.vlbfgsGPU = function(problemSpec, vars)
 
 		p : vars.unknownType
 		
+		timer : Timer
+
 		sList : vars.unknownType[m]
 		yList : vars.unknownType[m]
 		
@@ -151,7 +161,7 @@ solversGPU.vlbfgsGPU = function(problemSpec, vars)
 		
 		var pd = [&PlanData](data_)
 		var params = [&double](params_)
-
+		pd.timer:init()
 		unpackstruct(pd.images) = [util.getImages(PlanData, images)]
 
 		var k = 0
@@ -278,6 +288,8 @@ solversGPU.vlbfgsGPU = function(problemSpec, vars)
 				break
 			end
 		end
+		pd.timer:evaluate()
+		pd.timer:cleanup()
 	end
 	
 	local terra makePlan() : &opt.Plan

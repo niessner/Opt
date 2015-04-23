@@ -47,9 +47,6 @@ UINT32 App::processCommand(const string &command)
             return -1;
         }
 
-        for (auto &image : _optImages)
-            image.bind(optimizerState);
-
         Problem * prob = Opt_ProblemDefine(optimizerState, _terraFile.c_str(), optimizationMethod.c_str(), NULL);
         timer.stop();
         _optDefineTime = timer.getElapsedTimeMS();
@@ -61,7 +58,21 @@ UINT32 App::processCommand(const string &command)
         }
 
         timer.start();
-        Plan * plan = Opt_ProblemPlan(optimizerState, prob, dims);
+
+        std::vector<void*> imagesCPU;
+        std::vector<void*> imagesGPU;
+        std::vector<uint64_t> stride;
+        std::vector<uint64_t> elemsize;
+        for (const auto &image : _optImages)
+        {
+            image.syncCPUToGPU();
+            imagesCPU.push_back((void*)image.DataCPU());
+            imagesGPU.push_back((void*)image.DataGPU());
+            stride.push_back(image.dimX * sizeof(float));
+            elemsize.push_back(sizeof(float));
+        }
+
+        Plan * plan = Opt_ProblemPlan(optimizerState, prob, dims, elemsize.data(), stride.data());
         timer.stop();
         _optPlanTime = timer.getElapsedTimeMS();
 
@@ -71,28 +82,19 @@ UINT32 App::processCommand(const string &command)
             return -1;
         }
 
-        vector<ImageBinding *> imageBindingsCPU;
-        vector<ImageBinding *> imageBindingsGPU;
-        for (const auto &image : _optImages)
-        {
-            image.syncCPUToGPU();
-            imageBindingsCPU.push_back(image.terraBindingCPU);
-            imageBindingsGPU.push_back(image.terraBindingGPU);
-        }
-
         bool isGPU = ml::util::endsWith(optimizationMethod, "GPU");
 
         timer.start();
         if (isGPU)
         {
             cudaEventRecord(_optSolveStart);
-            Opt_ProblemSolve(optimizerState, plan, imageBindingsGPU.data(), NULL);
+            Opt_ProblemSolve(optimizerState, plan, imagesGPU.data(), NULL);
             cudaEventRecord(_optSolveEnd);
             for (const auto &image : _optImages)
                 image.syncGPUToCPU();
         }
         else {
-            Opt_ProblemSolve(optimizerState, plan, imageBindingsCPU.data(), NULL);
+            Opt_ProblemSolve(optimizerState, plan, imagesCPU.data(), NULL);
         }
         timer.stop();
         _optSolveTime = timer.getElapsedTimeMS();

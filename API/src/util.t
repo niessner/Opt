@@ -1,4 +1,6 @@
 
+local timeIndividualKernels = true
+
 local S = require("std")
 
 local util = {}
@@ -12,8 +14,252 @@ util.C = terralib.includecstring [[
 ]]
 
 local C = util.C
+function Vector(T,debug)
+    local struct Vector(S.Object) {
+        _data : &T;
+        _size : int64;
+        _capacity : int64;
+    }
+    function Vector.metamethods.__typename() return ("Vector(%s)"):format(tostring(T)) end
+    local assert = debug and S.assert or macro(function() return quote end end)
+    terra Vector:init() : &Vector
+        self._data,self._size,self._capacity = nil,0,0
+        return self
+    end
+    terra Vector:init(cap : int64) : &Vector
+        self:init()
+        self:reserve(cap)
+        return self
+    end
+    terra Vector:reserve(cap : int64)
+        if cap > 0 and cap > self._capacity then
+            var oc = self._capacity
+            if self._capacity == 0 then
+                self._capacity = 16
+            end
+            while self._capacity < cap do
+                self._capacity = self._capacity * 2
+            end
+            self._data = [&T](S.realloc(self._data,sizeof(T)*self._capacity))
+        end
+    end
+    terra Vector:__destruct()
+        assert(self._capacity >= self._size)
+        for i = 0ULL,self._size do
+            S.rundestructor(self._data[i])
+        end
+        if self._data ~= nil then
+            C.free(self._data)
+            self._data = nil
+        end
+    end
+    terra Vector:size() return self._size end
+    
+    terra Vector:get(i : int64)
+        assert(i < self._size) 
+        return &self._data[i]
+    end
+    Vector.metamethods.__apply = macro(function(self,idx)
+        return `@self:get(idx)
+    end)
+    
+    terra Vector:insert(idx : int64, N : int64, v : T) : {}
+        assert(idx <= self._size)
+        self._size = self._size + N
+        self:reserve(self._size)
+
+        if self._size > N then
+            var i = self._size
+            while i > idx do
+                self._data[i - 1] = self._data[i - 1 - N]
+                i = i - 1
+            end
+        end
+
+        for i = 0ULL,N do
+            self._data[idx + i] = v
+        end
+    end
+    terra Vector:insert(idx : int64, v : T) : {}
+        return self:insert(idx,1,v)
+    end
+    terra Vector:insert(v : T) : {}
+        return self:insert(self._size,1,v)
+    end
+    terra Vector:insert() : &T
+        self._size = self._size + 1
+        self:reserve(self._size)
+        return self:get(self._size - 1)
+    end
+    terra Vector:remove(idx : int64) : T
+        assert(idx < self._size)
+        var v = self._data[idx]
+        self._size = self._size - 1
+        for i = idx,self._size do
+            self._data[i] = self._data[i + 1]
+        end
+        return v
+    end
+    terra Vector:remove() : T
+        assert(self._size > 0)
+        return self:remove(self._size - 1)
+    end
+
+    terra Vector:indexof(v : T) : int64
+    	for i = 0LL,self._size do
+            if (v == self._data[i]) then
+            	return i
+            end
+        end
+        return -1
+	end
+
+	terra Vector:contains(v : T) : bool
+    	return self:indexof(v) >= 0
+	end
+
+    return Vector
+end
+
+Vector = S.memoize(Vector)
+
 
 local warpSize = 32;
+
+
+struct util.TimingInfo {
+	startEvent : C.cudaEvent_t
+	endEvent : C.cudaEvent_t
+	duration : float
+	eventName : rawstring
+}
+local TimingInfo = util.TimingInfo
+
+struct util.Timer {
+	timingInfo : &Vector(TimingInfo)
+	currentIteration : int
+}
+local Timer = util.Timer
+
+terra Timer:init() 
+	self.timingInfo = [Vector(TimingInfo)].alloc():init()
+	self.currentIteration = 0
+end
+
+terra Timer:cleanup()
+	self.timingInfo:delete()
+end 
+
+terra Timer:nextIteration() 
+	self.currentIteration = self.currentIteration + 1
+end
+
+terra Timer:reset() 
+	self.timingInfo:fastclear()
+	self.currentIteration = 0
+end
+
+terra Timer:evaluate()
+	if ([timeIndividualKernels]) then
+		var aggregateTimingInfo = [Vector(tuple(float,int))].salloc():init()
+		var aggregateTimingNames = [Vector(rawstring)].salloc():init()
+		for i = 0,self.timingInfo:size() do
+			var eventInfo = self.timingInfo(i);
+			C.cudaEventSynchronize(eventInfo.endEvent)
+	    	C.cudaEventElapsedTime(&eventInfo.duration, eventInfo.startEvent, eventInfo.endEvent);
+	    	var index = aggregateTimingNames:indexof(eventInfo.eventName)
+	    	if index < 0 then
+	    		aggregateTimingNames:insert(eventInfo.eventName)
+	    		aggregateTimingInfo:insert({eventInfo.duration, 1})
+	    	else
+	    		aggregateTimingInfo(index)._0 = aggregateTimingInfo(index)._0 + eventInfo.duration
+	    		aggregateTimingInfo(index)._1 = aggregateTimingInfo(index)._1 + 1
+	    	end
+	    end
+
+		C.printf(		"--------------------------------------------------------\n")
+	    C.printf(		"        Kernel        |   Count  |   Total   | Average \n")
+		C.printf(		"----------------------+----------+-----------+----------\n")
+	    for i = 0, aggregateTimingNames:size() do
+	    	C.printf(	"----------------------+----------+-----------+----------\n")
+			C.printf(" %-20s |   %4d   | %8.3fms| %7.4fms\n", aggregateTimingNames(i), aggregateTimingInfo(i)._1, aggregateTimingInfo(i)._0, aggregateTimingInfo(i)._0/aggregateTimingInfo(i)._1)
+	    end
+	    C.printf(		"--------------------------------------------------------\n")
+	end
+    
+end
+
+
+local terra atomicAdd(sum : &float, value : float)
+	terralib.asm(terralib.types.unit,"red.global.add.f32 [$0],$1;","l,f", true, sum, value)
+end
+
+local terra __shfl_down(v : float, delta : uint, width : int)
+	var ret : float;
+    var c : int;
+	c = ((warpSize-width) << 8) or 0x1F;
+	ret = terralib.asm(float,"shfl.down.b32 $0, $1, $2, $3;","=f,f,r,r", true, v, delta, c)
+	return ret;
+end
+
+local terra laneid()
+    var laneid : int;
+	laneid = terralib.asm(int,"mov.u32 $0, %laneid;","=r", true)
+	return laneid;
+end
+
+-- Using the "Kepler Shuffle", see http://devblogs.nvidia.com/parallelforall/faster-parallel-reductions-kepler/
+local terra warpReduce(val : float) 
+
+  var offset = warpSize >> 1
+  while offset > 0 do 
+    val = val + __shfl_down(val, offset, warpSize);
+    offset =  offset >> 1
+  end
+-- Is unrolling worth it
+  return val;
+
+end
+
+--[[ HOLD IT! http://devblogs.nvidia.com/parallelforall/faster-parallel-reductions-kepler/ 
+claims that on Kepler, warpReduce followed by atomicAdd is either faster or the same as doing an optimized block reduce followed by atomicAdd.
+This is ostensibly good news, our code is kept short and clear while still being faster
+
+HOWEVER; floating point arithmetic is not associative; if we deem that important, we need to get rid of all atomics; so we should implement this anyways
+
+local vload = macro(function(x) return `terralib.attrload(x, {isvolatile = true}) end)
+local vstore = macro(function(x,v) return `terralib.attrstore(x,v, {isvolatile = true}) end)
+
+local terra blockReduce(sdata : &float, threadIdx : int, threadsPerBlock : uint)
+	--TODO: either we meta-program this ourself, or get #pragma unroll to work in Terra
+	var stride = threadsPerBlock / 2
+	while stride > 32 do
+		if threadIdx < stride then
+		    var t = vload(sdata + threadIdx) + vload(sdata + threadIdx + stride)
+		    vstore(sdata + threadIdx,t)
+		end
+		__syncthreads()   
+	    stride = stride / 2
+	end
+	warpReduce(sdata, threadIdx, threadsPerBlock)
+end
+
+local terra scanPart1(threadIdx : uint, blockIdx : uint, threadsPerBlock : uint, d_output : &float)
+	__syncthreads()
+	blockReduce(bucket, threadIdx, threadsPerBlock) 
+	if  threadIdx == 0 then d_output[blockIdx] = bucket[0] end
+end
+
+local terra scanPart2(threadIdx : uint, threadsPerBlock : uint, blocksPerGrid : uint, d_tmp : &float)
+	if threadIdx < blocksPerGrid then bucket[threadIdx] = d_tmp[threadIdx]
+	else bucket[threadIdx] = 0.0f end
+	
+	__syncthreads();
+	blockReduce(bucket, threadIdx, threadsPerBlock);
+	__syncthreads();
+end
+]]--
+
 
 util.max = terra(x : double, y : double)
 	return terralib.select(x > y, x, y)
@@ -418,39 +664,28 @@ local wrapGPUKernel = function(nakedKernel, PlanData, mapMemberName, params)
 	return wrappedKernel
 end
 
-local terra atomicAdd(sum : &float, value : float)
-	terralib.asm(terralib.types.unit,"red.global.add.f32 [$0],$1;","l,f", true, sum, value)
-end
 
-local terra __shfl_down(v : float, delta : uint, width : int)
-	var ret : float;
-    var c : int;
-	c = ((warpSize-width) << 8) or 0x1F;
-	ret = terralib.asm(float,"shfl.down.b32 $0, $1, $2, $3;","=f,f,r,r", true, v, delta, c)
-	return ret;
-end
-
-local terra laneid()
-    var laneid : int;
-	laneid = terralib.asm(int,"mov.u32 $0, %laneid;","=r", true)
-	return laneid;
-end
-
-local terra warpReduceSum(val : float) 
-  var offset = warpSize/2
-  while offset > 0 do 
-    val = val + __shfl_down(val, offset, warpSize);
-    offset =  offset/2
-  end
-  return val;
-end
-
-
-local makeGPULauncher = function(compiledKernel, header, footer, problemSpec, PlanData, params)
+local makeGPULauncher = function(compiledKernel, kernelName, header, footer, tbl, PlanData, params)
 	local terra GPULauncher(pd : &PlanData, [params])
 		var launch = terralib.CUDAParams { (pd.images.unknown:W() - 1) / 32 + 1, (pd.images.unknown:H() - 1) / 32 + 1, 1, 32, 32, 1, 0, nil }
 		[header(pd)]
+
+		var stream : C.cudaStream_t = nil
+		var timingInfo : TimingInfo 
+		if ([timeIndividualKernels]) then
+			C.cudaEventCreate(&timingInfo.startEvent)
+			C.cudaEventCreate(&timingInfo.endEvent)
+	        C.cudaEventRecord(timingInfo.startEvent, stream);
+	    end
+
 		compiledKernel(&launch, @pd, params)
+		
+		if ([timeIndividualKernels]) then
+			C.cudaEventRecord(timingInfo.endEvent, stream);
+			timingInfo.eventName = kernelName
+			pd.timer.timingInfo:insert(timingInfo)
+		end
+
 		C.cudaDeviceSynchronize()
 		[footer(pd)]
 	end
@@ -461,10 +696,10 @@ end
 util.makeComputeCostGPU = function(data)
 	local terra computeCost(pd : &data.PlanData, w : int, h : int)
 		var cost = [float](data.problemSpec.cost.boundary(w, h, unpackstruct(pd.images)))
-		--cost = warpReduceSum(cost);
-		--if (laneid() == 0) then
+		cost = warpReduce(cost);
+		if (laneid() == 0) then
 			atomicAdd(pd.scratchF, cost)
-		--end
+		end
 	end
 	local function header(pd)
 		return quote @pd.scratchF = 0.0f end
@@ -483,7 +718,10 @@ util.makeComputeDeltaCostGPU = function(data)
 	local terra computeDeltaCost(pd : &data.PlanData, w : int, h : int, baseResiduals : data.imageType, currentValues : data.imageType)
 		var residual = [float](costHack(pd, w, h, currentValues))
 		var delta = residual - baseResiduals(w, h)
-		atomicAdd(pd.scratchF, delta)
+		delta = warpReduce(delta);
+		if (laneid() == 0) then
+			atomicAdd(pd.scratchF, delta)
+		end
 	end
 	local function header(pd)
 		return quote @pd.scratchF = 0.0f end
@@ -494,24 +732,11 @@ util.makeComputeDeltaCostGPU = function(data)
 	return { kernel = computeDeltaCost, header = header, footer = footer, params = {symbol(data.imageType), symbol(data.imageType)}, mapMemberName = "unknown" }
 end
 
-util.makeInnerProductGPU = function(data)
-	local terra innerProduct(pd : &data.PlanData, w : int, h : int, imageA : data.imageType, imageB : data.imageType)
-		var v = imageA(w, h) * imageB(w, h)
-		atomicAdd(pd.scratchF, v)
-	end
-	local function header(pd)
-		return quote @pd.scratchF = 0.0f end
-	end
-	local function footer(pd)
-		return quote return @pd.scratchF end
-	end
-	return { kernel = innerProduct, header = header, footer = footer, params = {symbol(data.imageType), symbol(data.imageType)}, mapMemberName = "unknown" }
-end
 
 util.makeInnerProductReductionGPU = function(data)
 	local terra innerProductReduction(pd : &data.PlanData, w : int, h : int, imageA : data.imageType, imageB : data.imageType)
 		var v = imageA(w, h) * imageB(w, h)
-		v = warpReduceSum(v);
+		v = warpReduce(v);
 		--TODO: switch to block reduce
 		if (laneid() == 0) then
 			atomicAdd(pd.scratchF, v)
@@ -743,8 +968,7 @@ util.makeGPUFunctions = function(problemSpec, vars, PlanData, specializedKernels
 	kernelTemplate.combineImage = util.makeCombineImageGPU(data)
 	kernelTemplate.computeDeltaCost = util.makeComputeDeltaCostGPU(data)
 	kernelTemplate.computeResiduals = util.makeComputeResidualsGPU(data)
-	kernelTemplate.innerProduct = util.makeInnerProductGPU(data)
-	kernelTemplate.innerProductReduction = util.makeInnerProductReductionGPU(data)
+	kernelTemplate.innerProduct = util.makeInnerProductReductionGPU(data)
 		
 	for k, v in pairs(specializedKernels) do
 		kernelTemplate[k] = v(data)
@@ -758,7 +982,7 @@ util.makeGPUFunctions = function(problemSpec, vars, PlanData, specializedKernels
 	local compiledKernels = terralib.cudacompile(wrappedKernels)
 	
 	for k, v in pairs(compiledKernels) do
-		gpu[k] = makeGPULauncher(compiledKernels[k], kernelTemplate[k].header, kernelTemplate[k].footer, problemSpec, PlanData, kernelTemplate[k].params)
+		gpu[k] = makeGPULauncher(compiledKernels[k], wrappedKernels[k].name, kernelTemplate[k].header, kernelTemplate[k].footer, problemSpec, PlanData, kernelTemplate[k].params)
 	end
 	
 	-- composite GPU functions
