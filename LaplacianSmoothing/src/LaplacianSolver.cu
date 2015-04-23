@@ -9,6 +9,8 @@
 #include <stdio.h>
 #include <stdint.h>
 
+#include "CUDATimer.h"
+
 #ifdef _WIN32
 #include <conio.h>
 #endif
@@ -249,7 +251,13 @@ __global__ void EvalResidualDevice(SolverInput input, SolverState state, SolverP
 
 	if (x < N) {
 		float residual = evalFDevice(x, input, state, parameters);
-		atomicAdd(&state.d_sumResidual[0], residual);
+        residual = warpReduce(residual);
+        unsigned int laneid;
+        //This command gets the lane ID within the current warp
+        asm("mov.u32 %0, %%laneid;" : "=r"(laneid));
+        if (laneid == 0) {
+            atomicAdd(&state.d_sumResidual[0], residual);
+        }
 	}
 }
 
@@ -264,7 +272,7 @@ __global__ void EvalAllResidualsDevice(SolverInput input, SolverState state, Sol
 	}
 }
 
-float EvalResidual(SolverInput& input, SolverState& state, SolverParameters& parameters)
+float EvalResidual(SolverInput& input, SolverState& state, SolverParameters& parameters, CUDATimer& timer)
 {
 	float residual = 0.0f;
 
@@ -273,8 +281,9 @@ float EvalResidual(SolverInput& input, SolverState& state, SolverParameters& par
 		const unsigned int N = input.N; // Number of block variables
 		ResetResidualDevice << < 1, 1, 1 >> >(input, state, parameters);
 		cutilSafeCall(cudaDeviceSynchronize());
-
+        timer.startEvent("EvalResidual");
 		EvalResidualDevice << <(N + THREADS_PER_BLOCK - 1) / THREADS_PER_BLOCK, THREADS_PER_BLOCK >> >(input, state, parameters);
+        timer.endEvent();
 		cutilSafeCall(cudaDeviceSynchronize());
 
 		residual = state.getSumResidual();
@@ -326,14 +335,27 @@ __global__ void GradientDecentUpdateDevice(SolverInput input, SolverState state,
 }
 
 
-void GradientDecentStep(SolverInput& input, SolverState& state, SolverParameters& parameters, float stepSize)
+void ComputeGradient(SolverInput& input, SolverState& state, SolverParameters& parameters, CUDATimer& timer)
+{
+    const unsigned int N = input.N; // Number of block variables
+    timer.startEvent("ComputeGradient");
+    GradientDecentGradientDevice << <(N + THREADS_PER_BLOCK - 1) / THREADS_PER_BLOCK, THREADS_PER_BLOCK >> >(input, state, parameters);
+    timer.endEvent();
+    cutilSafeCall(cudaDeviceSynchronize());
+
+#ifdef _DEBUG
+    cutilSafeCall(cudaDeviceSynchronize());
+    cutilCheckMsg(__FUNCTION__);
+#endif
+
+}
+
+void UpdatePosition(SolverInput& input, SolverState& state, SolverParameters& parameters, float stepSize, CUDATimer& timer)
 {
 	const unsigned int N = input.N; // Number of block variables
-
-	GradientDecentGradientDevice << <(N + THREADS_PER_BLOCK - 1) / THREADS_PER_BLOCK, THREADS_PER_BLOCK >> >(input, state, parameters);
-	cutilSafeCall(cudaDeviceSynchronize());
-
+    timer.startEvent("UpdatePosition");
 	GradientDecentUpdateDevice << <(N + THREADS_PER_BLOCK - 1) / THREADS_PER_BLOCK, THREADS_PER_BLOCK >> >(input, state, parameters, stepSize);
+    timer.endEvent();
 	cutilSafeCall(cudaDeviceSynchronize());
 
 #ifdef _DEBUG
@@ -346,13 +368,15 @@ void GradientDecentStep(SolverInput& input, SolverState& state, SolverParameters
 
 
 
+
 ////////////////////////////////////////////////////////////////////
 // Main GN Solver Loop
 ////////////////////////////////////////////////////////////////////
 
 extern "C" void LaplacianSolveGNStub(SolverInput& input, SolverState& state, SolverParameters& parameters)
 {
-	printf("residual=%f\n", EvalResidual(input, state, parameters));
+    CUDATimer timer;
+	printf("residual=%f\n", EvalResidual(input, state, parameters, timer));
 
 	for (unsigned int nIter = 0; nIter < parameters.nNonLinearIterations; nIter++)
 	{
@@ -364,7 +388,7 @@ extern "C" void LaplacianSolveGNStub(SolverInput& input, SolverState& state, Sol
 
 		ApplyLinearUpdate(input, state, parameters);	//this should be also done in the last PCGIteration
 
-		printf("residual=%f\n", EvalResidual(input, state, parameters));
+        printf("residual=%f\n", EvalResidual(input, state, parameters, timer));
 
 		//std::cout << "enter for next loop...\n\n" << std::endl; 
 		//getchar();
@@ -377,6 +401,7 @@ extern "C" void LaplacianSolveGNStub(SolverInput& input, SolverState& state, Sol
 
 extern "C" void LaplacianSolveGDStub(SolverInput& input, SolverState& state, SolverParameters& parameters)
 {
+    CUDATimer timer;
 	float initialLearningRate = 0.01f;
 	float tolerance = 1e-10f;
 
@@ -386,16 +411,21 @@ extern "C" void LaplacianSolveGDStub(SolverInput& input, SolverState& state, Sol
 
 	float learningRate = initialLearningRate;
 
-	float residual = EvalResidual(input, state, parameters);
+    float residual = EvalResidual(input, state, parameters, timer);
 	printf("iter=%d, residual=%f, learningRate=%f\n", 0, residual, learningRate);
 
 	for (unsigned int i = 0; i < parameters.nNonLinearIterations; i++) {
-		float startCost = EvalResidual(input, state, parameters);
+        
+		float startCost = EvalResidual(input, state, parameters, timer);
+        
 
 		float stepSize = learningRate;
-		GradientDecentStep(input, state, parameters, stepSize);
+        ComputeGradient(input, state, parameters, timer);
 
-		float residual = EvalResidual(input, state, parameters);
+        UpdatePosition(input, state, parameters, stepSize, timer);
+        
+        float residual = EvalResidual(input, state, parameters, timer);
+        
 
 		//update the learningRate
 		float endCost = residual;
@@ -413,8 +443,10 @@ extern "C" void LaplacianSolveGDStub(SolverInput& input, SolverState& state, Sol
 				break;
 			}
 		}
-
+        timer.nextIteration();
 		printf("iter=%d, residual=%f, learningRate=%f\n", i + 1, residual, learningRate);
 	}
+    timer.evaluate();
+    
 
 }

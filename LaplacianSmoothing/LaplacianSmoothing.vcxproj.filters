@@ -17,9 +17,16 @@
     <ClInclude Include="src\SolverUtil.h">
       <Filter>CUDA</Filter>
     </ClInclude>
+    <ClInclude Include="src\CUDALaplacianSolver.h" />
+    <ClInclude Include="src\mLibInclude.h" />
+    <ClInclude Include="src\Smoothing.h" />
+    <ClInclude Include="src\CUDATimer.h" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="src\main.cpp" />
+    <ClCompile Include="src\CUDALaplacianSolver.cpp" />
+    <ClCompile Include="src\mLibSource.cpp" />
+    <ClCompile Include="src\Smoothing.cpp" />
   </ItemGroup>
   <ItemGroup>
     <Filter Include="CUDA">
