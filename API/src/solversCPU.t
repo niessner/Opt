@@ -168,7 +168,7 @@ solversCPU.conjugateGradientCPU = function(problemSpec, vars)
 			cpu.copyImage(pd.currentValues, pd.images.unknown)
 			cpu.computeResiduals(pd, pd.currentValues, pd.currentResiduals)
 			
-			var bestAlpha = cpu.lineSearchQuadraticFallback(pd, pd.currentValues, pd.currentResiduals, pd.searchDirection, pd.images.unknown, prevBestAlpha)
+			var bestAlpha, bestScore = cpu.lineSearchQuadraticFallback(pd, pd.currentValues, pd.currentResiduals, pd.searchDirection, pd.images.unknown, prevBestAlpha)
 			
 			for h = 0, pd.images.unknown:H() do
 				for w = 0, pd.images.unknown:W() do
@@ -382,7 +382,7 @@ solversCPU.lbfgsCPU = function(problemSpec, vars)
 			cpu.copyImage(pd.currentValues, pd.images.unknown)
 			cpu.computeResiduals(pd, pd.currentValues, pd.currentResiduals)
 			
-			var bestAlpha = cpu.lineSearchQuadraticFallback(pd, pd.currentValues, pd.currentResiduals, pd.p, pd.images.unknown, prevBestAlpha)
+			var bestAlpha, bestScore = cpu.lineSearchQuadraticFallback(pd, pd.currentValues, pd.currentResiduals, pd.p, pd.images.unknown, prevBestAlpha)
 			
 			-- compute new x and s
 			for h = 0, pd.images.unknown:H() do
@@ -590,7 +590,7 @@ solversCPU.vlbfgsCPU = function(problemSpec, vars)
 			cpu.copyImage(pd.currentValues, pd.images.unknown)
 			cpu.computeResiduals(pd, pd.currentValues, pd.currentResiduals)
 			
-			var bestAlpha = cpu.lineSearchQuadraticFallback(pd, pd.currentValues, pd.currentResiduals, pd.p, pd.images.unknown, prevBestAlpha)
+			var bestAlpha, bestScore = cpu.lineSearchQuadraticFallback(pd, pd.currentValues, pd.currentResiduals, pd.p, pd.images.unknown, prevBestAlpha)
 			
 			-- cycle the oldest s and y
 			var yListStore = pd.yList[0]
