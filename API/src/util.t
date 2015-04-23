@@ -365,15 +365,10 @@ util.makeComputeCost = function(data)
 end
 
 util.makeComputeGradient = function(data)
-	-- haha ha
-	local terra gradientHack(pd : &data.PlanData, w : int, h : int, values : data.imageType)
-		return data.problemSpec.gradient.boundary(w, h, values, pd.images.image0)
-	end
-	
 	local terra computeGradient(pd : &data.PlanData, gradientOut : data.imageType, values : data.imageType)
 		for h = 0, gradientOut:H() do
 			for w = 0, gradientOut:W() do
-				gradientOut(w, h) = gradientHack(pd, w, h, values)
+				gradientOut(w, h) = data.problemSpec.gradient.boundary(pd, w, h, values, unpackstruct(pd.images, 2))
 			end
 		end
 	end
@@ -715,12 +710,8 @@ util.makeComputeCostGPU = function(data)
 end
 
 util.makeComputeDeltaCostGPU = function(data)
-	-- haha ha
-	local terra costHack(pd : &data.PlanData, w : int, h : int, values : data.imageType)
-		return data.problemSpec.cost.boundary(w, h, values, pd.images.image0)
-	end
 	local terra computeDeltaCost(pd : &data.PlanData, w : int, h : int, baseResiduals : data.imageType, currentValues : data.imageType)
-		var residual = [float](costHack(pd, w, h, currentValues))
+		var residual = [float](data.problemSpec.cost.boundary(w, h, currentValues, unpackstruct(pd.images, 2)))
 		var delta = residual - baseResiduals(w, h)
 		delta = warpReduce(delta)
 		if (laneid() == 0) then

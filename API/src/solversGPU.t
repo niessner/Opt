@@ -105,14 +105,17 @@ end
 solversGPU.vlbfgsGPU = function(problemSpec, vars)
 
 	local maxIters = 1000
-	local m = 5
+	local m = 3
 	local b = 2 * m + 1
-
+	
+	local bDim = opt.InternalDim("b", b)
+	
 	local struct GPUStore {
 		-- These all live on the CPU!
-		dotProductMatrix : vars.unknownType
-		dotProductMatrixStorage : vars.unknownType
-		alphaList : vars.unknownType
+		dotProductMatrix : opt.InternalImage(float, bDim, bDim)
+		dotProductMatrixStorage : opt.InternalImage(float, bDim, bDim)
+		alphaList : opt.InternalImage(float, bDim, 1)
+		imageList : vars.unknownType[b]
 		coefficients : float[b]
 	}
 
@@ -156,10 +159,28 @@ solversGPU.vlbfgsGPU = function(problemSpec, vars)
 		return index + 1
 	end
 	
+	local makeDotProductPairs = function()
+		local pairs = terralib.newlist()
+		local insertAllPairs = function(j)
+			for i = 0, b do
+				pairs:insert( {j, i} )
+			end
+		end
+		
+		insertAllPairs(m - 1)
+		insertAllPairs(2 * m - 1)
+		insertAllPairs(2 * m)
+		
+		-- TODO: computing 3 unnecessary dot products
+		return pairs
+	end
+	
 	local specializedKernels = {}
 	
 	local gpu = util.makeGPUFunctions(problemSpec, vars, PlanData, {})
 	local cpu = util.makeCPUFunctions(problemSpec, vars, PlanData)
+	
+	local dotPairs = makeDotProductPairs()
 	
 	local terra impl(data_ : &opaque, images : &&opaque, params_ : &opaque)
 		
@@ -173,7 +194,7 @@ solversGPU.vlbfgsGPU = function(problemSpec, vars)
 		-- using an initial guess of alpha means that it will invoke quadratic optimization on the first iteration,
 		-- which is only sometimes a good idea.
 		var prevBestAlpha = 0.0
-		
+
 		gpu.computeGradient(pd, pd.gradient)
 
 		for iter = 0, maxIters - 1 do
@@ -190,14 +211,24 @@ solversGPU.vlbfgsGPU = function(problemSpec, vars)
 			else
 				-- note that much of this happens on the CPU!
 				
+				for i = 0, b do
+					pd.gpuStore.imageList[i] = imageFromIndex(pd, i)
+				end
+				
 				-- compute the top half of the dot product matrix
-				cpu.copyImage(pd.gpuStore.dotProductMatrixStorage, pd.gpuStore.dotProductMatrix)
+				--cpu.copyImage(pd.gpuStore.dotProductMatrixStorage, pd.gpuStore.dotProductMatrix)
+				for i = 0, b do
+					for j = 0, b do
+						pd.gpuStore.dotProductMatrixStorage(i, j) = pd.gpuStore.dotProductMatrix(i, j)
+					end
+				end
+				
 				for i = 0, b do
 					for j = i, b do
 						var prevI = nextCoefficientIndex(i)
 						var prevJ = nextCoefficientIndex(j)
 						if prevI == -1 or prevJ == -1 then
-							pd.gpuStore.dotProductMatrix(i, j) = gpu.innerProduct(pd, imageFromIndex(pd, i), imageFromIndex(pd, j))
+							pd.gpuStore.dotProductMatrix(i, j) = gpu.innerProduct(pd, pd.gpuStore.imageList[i], pd.gpuStore.imageList[j])
 							C.printf("%d dot %d\n", i, j)
 						else
 							pd.gpuStore.dotProductMatrix(i, j) = pd.gpuStore.dotProductMatrixStorage(prevI, prevJ)

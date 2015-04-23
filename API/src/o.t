@@ -178,9 +178,14 @@ terra opt.ProblemDelete(p : &opt.Problem)
     --TODO: remove from problem table
 end
 
-function opt.Dim(name,idx)
-    idx = assert(tonumber(idx),"expected an index for this dimension")
+function opt.Dim(name, idx)
+    idx = assert(tonumber(idx), "expected an index for this dimension")
     local size = tonumber(opt.dimensions[idx])
+    return Dim:new { name = name, size = size }
+end
+
+function opt.InternalDim(name, size)
+	size = assert(tonumber(size), "expected a number for size")
     return Dim:new { name = name, size = size }
 end
 
