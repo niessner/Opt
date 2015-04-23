@@ -194,13 +194,13 @@ void TestFramework::runAllTests()
     //methods.push_back(TestMethod("linearizedConjugateGradientCPU", "no-params"));
     //methods.push_back(TestMethod("lbfgsCPU", "no-params"));
     //methods.push_back(TestMethod("vlbfgsCPU", "no-params"));
-    //methods.push_back(TestMethod("bidirectionalVLBFGSCPU", "no-params"));
+    methods.push_back(TestMethod("bidirectionalVLBFGSCPU", "no-params"));
 
     //
     // GPU methods
     //
-    methods.push_back(TestMethod("gradientDescentGPU", "no-params"));
-    methods.push_back(TestMethod("vlbfgsGPU", "no-params"));
+    //methods.push_back(TestMethod("gradientDescentGPU", "no-params"));
+    //methods.push_back(TestMethod("vlbfgsGPU", "no-params"));
 
     for (auto &method : methods)
         runTest(method, example);

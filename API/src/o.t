@@ -113,7 +113,6 @@ local problems = {}
 -- allocates the plan
 
 local function compilePlan(problemSpec, kind, params)
-	print("Compile Plan Start")
 	local vars = {
 		costFunctionType = problemSpec.cost.boundary:gettype()
 	}
@@ -261,8 +260,6 @@ local function problemPlan(id, dimensions, elemsizes, strides, pplan)
 		allPlans:insert(result)
 		pplan[0] = result()
     end,function(err) print(debug.traceback(err,2)) end)
-	
-	print("Compile Plan End")
 end
 terra opt.ProblemPlan(problem : &opt.Problem, dimensions : &uint64, elemsizes : &uint64, strides : &uint64) : &opt.Plan
 	var p : &opt.Plan = nil 

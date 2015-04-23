@@ -709,6 +709,8 @@ solversCPU.bidirectionalVLBFGSCPU = function(problemSpec, vars)
 	
 	local terra impl(data_ : &opaque, images : &&opaque, params_ : &opaque)
 		
+		var file = C.fopen("C:/code/run.txt", "wb")
+		
 		var pd = [&PlanData](data_)
 		var params = [&double](params_)
 
@@ -718,16 +720,19 @@ solversCPU.bidirectionalVLBFGSCPU = function(problemSpec, vars)
 		
 		-- using an initial guess of alpha means that it will invoke quadratic optimization on the first iteration,
 		-- which is only sometimes a good idea.
-		var prevBestAlpha = 0.0
+		var prevBestSearch = 0.0
 		
 		cpu.computeGradient(pd, pd.gradient, pd.images.unknown)
 		
 		cpu.clearImage(pd.biSearchDirection, 1.0f)
 
 		for iter = 0, maxIters - 1 do
+		--for iter = 0, 10 do
 
 			var iterStartCost = cpu.computeCost(pd)
 			logSolver("iteration %d, cost=%f\n", iter, iterStartCost)
+			
+			C.fprintf(file, "%d\t%15.15f\n", iter, iterStartCost)
 			
 			--
 			-- compute the search direction p
@@ -807,6 +812,9 @@ solversCPU.bidirectionalVLBFGSCPU = function(problemSpec, vars)
 			var biScaleA = -bp / pp
 			cpu.addImage(pd.biSearchDirection, pd.biSearchDirection, biScaleA)
 			
+			-- bisearch direction should be a weighted average of gradients
+			--cpu.copyImage(pd.biSearchDirection, pd.gradient)
+			
 			-- bisearch should be the same scale as p, and point in the same direction as the negative gradient
 			var biScaleB = C.sqrtf(pp) / C.sqrtf(cpu.innerProduct(pd.biSearchDirection, pd.biSearchDirection))
 			var biSearchGrad = cpu.innerProduct(pd.biSearchDirection, pd.gradient)
@@ -817,8 +825,25 @@ solversCPU.bidirectionalVLBFGSCPU = function(problemSpec, vars)
 			cpu.copyImage(pd.currentValues, pd.images.unknown)
 			cpu.computeResiduals(pd, pd.currentValues, pd.currentResiduals)
 			
-			var bestAlpha = cpu.lineSearchQuadraticFallback(pd, pd.currentValues, pd.currentResiduals, pd.p, pd.images.unknown, prevBestAlpha)
-			cpu.dumpBiLineSearch(pd, pd.currentValues, pd.currentResiduals, pd.p, pd.biSearchDirection, pd.images.unknown)
+			var bestAlpha = 0.0f
+			var bestBeta = 0.0f
+			var bestScore = 0.0f
+			
+			if iter == 0 then
+				bestAlpha, bestScore = cpu.lineSearchQuadraticFallback(pd, pd.currentValues, pd.currentResiduals, pd.p, pd.images.unknown, prevBestSearch)
+			else
+				bestAlpha, bestBeta = cpu.biLineSearch(pd, pd.currentValues, pd.currentResiduals, pd.p, pd.biSearchDirection, prevBestSearch, prevBestSearch, pd.images.unknown)
+			end
+			
+			--bestAlpha, bestScore = cpu.lineSearchQuadraticFallback(pd, pd.currentValues, pd.currentResiduals, pd.p, pd.images.unknown, prevBestSearch)
+			--bestBeta = 0.0f
+			
+			if iter == 1 then
+				cpu.dumpBiLineSearch(pd, pd.currentValues, pd.currentResiduals, pd.p, pd.biSearchDirection, pd.images.unknown)
+				--cpu.dumpLineSearch(pd, pd.currentValues, pd.currentResiduals, pd.biSearchDirection, pd.images.unknown)
+			end
+			
+			
 			
 			-- cycle the oldest s and y
 			var yListStore = pd.yList[0]
@@ -833,7 +858,7 @@ solversCPU.bidirectionalVLBFGSCPU = function(problemSpec, vars)
 			-- compute new x and s
 			for h = 0, pd.images.unknown:H() do
 				for w = 0, pd.images.unknown:W() do
-					var delta = bestAlpha * pd.p(w, h)
+					var delta = bestAlpha * pd.p(w, h) + bestBeta * pd.biSearchDirection(w, h)
 					pd.images.unknown(w, h) = pd.currentValues(w, h) + delta
 					pd.sList[m - 1](w, h) = delta
 				end
@@ -850,15 +875,25 @@ solversCPU.bidirectionalVLBFGSCPU = function(problemSpec, vars)
 				end
 			end
 			
-			prevBestAlpha = bestAlpha
+			prevBestSearch = util.max(bestAlpha, bestBeta)
 			
+			--if prevBestSearch >= 1.0 then prevBestSearch = 1.0 end
+						
 			k = k + 1
 			
-			logSolver("alpha=%12.12f\n\n", bestAlpha)
-			if bestAlpha == 0.0 then
+			logSolver("alpha=%12.12f, beta=%12.12f\n\n", bestAlpha, bestBeta)
+			if prevBestSearch == 0.0 then
 				break
 			end
+			
+			if bestAlpha == 0.0 then
+				logSolver("alpha failed -- resetting")
+				k = 0
+				prevBestSearch = 0.0
+			end
 		end
+		
+		C.fclose(file)
 	end
 	
 	local terra makePlan() : &opt.Plan

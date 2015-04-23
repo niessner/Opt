@@ -353,7 +353,6 @@ end
 util.makeComputeCost = function(data)
 	local terra computeCost(pd : &data.PlanData)
 		var result = 0.0
-		--C.printf("W=%d,H=%d,size=%d,stride=%d\n", pd.images.unknown:H(), pd.images.unknown:W())
 		for h = 0, pd.images.unknown:H() do
 			for w = 0, pd.images.unknown:W() do
 				var v = data.problemSpec.cost.boundary(w, h, unpackstruct(pd.images))
@@ -523,8 +522,8 @@ end
 util.makeBiLineSearch = function(data, cpu)
 	local terra biLineSearch(pd : &data.PlanData, baseValues : data.imageType, baseResiduals : data.imageType, searchDirectionA : data.imageType, searchDirectionB : data.imageType, alphaGuess : float, betaGuess : float, valueStore : data.imageType)
 		
-		var bestAlpha, bestAlphaCost = cpu.lineSearchQuadraticMinimum(pd, baseValues, baseResiduals, searchDirectionA, valueStore, alphaGuess)
-		var bestBeta, bestBetaCost = cpu.lineSearchQuadraticMinimum(pd, baseValues, baseResiduals, searchDirectionA, valueStore, alphaGuess)
+		var bestAlpha, bestAlphaCost = cpu.lineSearchQuadraticFallback(pd, baseValues, baseResiduals, searchDirectionA, valueStore, alphaGuess)
+		var bestBeta, bestBetaCost = cpu.lineSearchQuadraticFallback(pd, baseValues, baseResiduals, searchDirectionB, valueStore, betaGuess)
 		
 		var jointCost = cpu.computeBiSearchCost(pd, baseValues, baseResiduals, searchDirectionA, searchDirectionB, bestAlpha, bestBeta, valueStore)
 		
@@ -532,7 +531,9 @@ util.makeBiLineSearch = function(data, cpu)
 			return bestAlpha, bestBeta
 		end
 		
-		logSolver("bi-search minimization failed")
+		logSolver("bi-search minimization failed\n")
+		
+		--cpu.dumpBiLineSearch(pd, baseValues, baseResiduals, searchDirectionA, searchDirectionB, valueStore)
 		
 		if bestAlphaCost < bestBetaCost then
 			return bestAlpha, 0.0f
@@ -561,7 +562,7 @@ util.makeLineSearchQuadraticFallback = function(data, cpu)
 					
 					--if iter >= 10 then
 					--else
-						--useBruteForce = true
+					useBruteForce = true
 					--end
 					--cpu.dumpLineSearch(baseValues, baseResiduals, searchDirection, valueStore, dataImages)
 				end
@@ -573,7 +574,7 @@ util.makeLineSearchQuadraticFallback = function(data, cpu)
 			bestAlpha = cpu.lineSearchBruteForce(pd, baseValues, baseResiduals, searchDirection, valueStore)
 		end
 		
-		return bestAlpha
+		return bestAlpha, bestCost
 	end
 	return lineSearchQuadraticFallback
 end

@@ -280,6 +280,7 @@ solversGPU.vlbfgsGPU = function(problemSpec, vars)
 			gpu.combineImage(pd, pd.yList[m - 1], pd.gradient, pd.prevGradient, -1.0f)
 			
 			prevBestAlpha = bestAlpha
+		
 			
 			k = k + 1
 			
