@@ -105,8 +105,16 @@ end
 solversGPU.vlbfgsGPU = function(problemSpec, vars)
 
 	local maxIters = 1000
-	local m = 10
+	local m = 5
 	local b = 2 * m + 1
+
+	local struct GPUStore {
+		-- These all live on the CPU!
+		dotProductMatrix : vars.unknownType
+		dotProductMatrixStorage : vars.unknownType
+		alphaList : vars.unknownType
+		coefficients : float[b]
+	}
 
 	-- TODO: alphaList must be a custom image!
 	local struct PlanData(S.Object) {
@@ -128,13 +136,9 @@ solversGPU.vlbfgsGPU = function(problemSpec, vars)
 		currentValues : vars.unknownType
 		currentResiduals : vars.unknownType
 		
-		-- These all live on the CPU!
-		dotProductMatrix : vars.unknownType
-		dotProductMatrixStorage : vars.unknownType
-		alphaList : vars.unknownType
-		coefficients : float[b]
+		gpuStore : GPUStore
 	}
-	
+		
 	local terra imageFromIndex(pd : &PlanData, index : int)
 		if index < m then
 			return pd.sList[index]
@@ -187,15 +191,16 @@ solversGPU.vlbfgsGPU = function(problemSpec, vars)
 				-- note that much of this happens on the CPU!
 				
 				-- compute the top half of the dot product matrix
-				cpu.copyImage(pd.dotProductMatrixStorage, pd.dotProductMatrix)
+				cpu.copyImage(pd.gpuStore.dotProductMatrixStorage, pd.gpuStore.dotProductMatrix)
 				for i = 0, b do
 					for j = i, b do
 						var prevI = nextCoefficientIndex(i)
 						var prevJ = nextCoefficientIndex(j)
 						if prevI == -1 or prevJ == -1 then
-							pd.dotProductMatrix(i, j) = gpu.innerProduct(pd, imageFromIndex(pd, i), imageFromIndex(pd, j))
+							pd.gpuStore.dotProductMatrix(i, j) = gpu.innerProduct(pd, imageFromIndex(pd, i), imageFromIndex(pd, j))
+							C.printf("%d dot %d\n", i, j)
 						else
-							pd.dotProductMatrix(i, j) = pd.dotProductMatrixStorage(prevI, prevJ)
+							pd.gpuStore.dotProductMatrix(i, j) = pd.gpuStore.dotProductMatrixStorage(prevI, prevJ)
 						end
 					end
 				end
@@ -203,12 +208,12 @@ solversGPU.vlbfgsGPU = function(problemSpec, vars)
 				-- compute the bottom half of the dot product matrix
 				for i = 1, b do
 					for j = 0, i - 1 do
-						pd.dotProductMatrix(i, j) = pd.dotProductMatrix(j, i)
+						pd.gpuStore.dotProductMatrix(i, j) = pd.gpuStore.dotProductMatrix(j, i)
 					end
 				end
 			
-				for i = 0, 2 * m do pd.coefficients[i] = 0.0 end
-				pd.coefficients[2 * m] = -1.0
+				for i = 0, 2 * m do pd.gpuStore.coefficients[i] = 0.0 end
+				pd.gpuStore.coefficients[2 * m] = -1.0
 				
 				for i = k - 1, k - m - 1, -1 do
 					if i < 0 then break end
@@ -216,16 +221,16 @@ solversGPU.vlbfgsGPU = function(problemSpec, vars)
 					
 					var num = 0.0
 					for q = 0, b do
-						num = num + pd.coefficients[q] * pd.dotProductMatrix(q, j)
+						num = num + pd.gpuStore.coefficients[q] * pd.gpuStore.dotProductMatrix(q, j)
 					end
-					var den = pd.dotProductMatrix(j, j + m)
-					pd.alphaList(i, 0) = num / den
-					pd.coefficients[j + m] = pd.coefficients[j + m] - pd.alphaList(i, 0)
+					var den = pd.gpuStore.dotProductMatrix(j, j + m)
+					pd.gpuStore.alphaList(i, 0) = num / den
+					pd.gpuStore.coefficients[j + m] = pd.gpuStore.coefficients[j + m] - pd.gpuStore.alphaList(i, 0)
 				end
 				
-				var scale = pd.dotProductMatrix(m - 1, 2 * m - 1) / pd.dotProductMatrix(2 * m - 1, 2 * m - 1)
+				var scale = pd.gpuStore.dotProductMatrix(m - 1, 2 * m - 1) / pd.gpuStore.dotProductMatrix(2 * m - 1, 2 * m - 1)
 				for i = 0, b do
-					pd.coefficients[i] = pd.coefficients[i] * scale
+					pd.gpuStore.coefficients[i] = pd.gpuStore.coefficients[i] * scale
 				end
 				
 				for i = k - m, k do
@@ -233,11 +238,11 @@ solversGPU.vlbfgsGPU = function(problemSpec, vars)
 						var j = i - (k - m)
 						var num = 0.0
 						for q = 0, b do
-							num = num + pd.coefficients[q] * pd.dotProductMatrix(q, m + j)
+							num = num + pd.gpuStore.coefficients[q] * pd.gpuStore.dotProductMatrix(q, m + j)
 						end
-						var den = pd.dotProductMatrix(j, j + m)
+						var den = pd.gpuStore.dotProductMatrix(j, j + m)
 						var beta = num / den
-						pd.coefficients[j] = pd.coefficients[j] + (pd.alphaList(i, 0) - beta)
+						pd.gpuStore.coefficients[j] = pd.gpuStore.coefficients[j] + (pd.gpuStore.alphaList(i, 0) - beta)
 					end
 				end
 				
@@ -245,7 +250,7 @@ solversGPU.vlbfgsGPU = function(problemSpec, vars)
 				gpu.copyImageScale(pd, pd.p, pd.p, 0.0f)
 				for i = 0, b do
 					var image = imageFromIndex(pd, i)
-					var coefficient = pd.coefficients[i]
+					var coefficient = pd.gpuStore.coefficients[i]
 					gpu.addImage(pd, pd.p, image, coefficient)
 				end
 			end
@@ -314,9 +319,9 @@ solversGPU.vlbfgsGPU = function(problemSpec, vars)
 		C.cudaMallocManaged([&&opaque](&(pd.scratchF)), sizeof(float), C.cudaMemAttachGlobal)
 		
 		-- CPU!
-		pd.dotProductMatrix:initCPU()
-		pd.dotProductMatrixStorage:initCPU()
-		pd.alphaList:initCPU()
+		pd.gpuStore.dotProductMatrix:initCPU()
+		pd.gpuStore.dotProductMatrixStorage:initCPU()
+		pd.gpuStore.alphaList:initCPU()
 		--pd.alphaList:initCPU(maxIters, 1)
 		
 
