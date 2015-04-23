@@ -180,7 +180,8 @@ end
 
 function opt.Dim(name,idx)
     idx = assert(tonumber(idx),"expected an index for this dimension")
-    return Dim:new { name = name, size = tonumber(opt.dimensions[idx]) }
+    local size = tonumber(opt.dimensions[idx])
+    return Dim:new { name = name, size = size }
 end
 
 terra opt.InBoundsCalc(x : int64, y : int64, W : int64, H : int64, sx : int64, sy : int64) : int
@@ -192,8 +193,8 @@ local newImage = terralib.memoize(function(typ, W, H, elemsize, stride)
 	local struct Image {
 		data : &uint8
 	}
-	function Image.metamethods.__tostring()
-	  return string.format("Image(%s,%s,%s)",tostring(typ),W.name, H.name)
+	function Image.metamethods.__typename()
+	  return string.format("Image(%s,%s,%s,%d,%d)",tostring(typ),W.name, H.name,elemsize,stride)
 	end
 	Image.metamethods.__apply = macro(function(self, x, y)
 	 return `@[&typ](self.data + y*stride + x*elemsize)
@@ -237,7 +238,7 @@ end
 
 function opt.InternalImage(typ,W,H)
     W,H = assert(todim(W)),assert(todim(H))
-    assert(terralib.type.istype(typ))
+    assert(terralib.types.istype(typ))
     local elemsize = terralib.sizeof(typ)
     return newImage(typ,W,H,elemsize,elemsize*W.size)
 end
@@ -315,7 +316,7 @@ local Image = newclass("Image")
 function ad.Image(name,W,H,idx)
     assert(W == 1 or Dim:is(W))
     assert(H == 1 or Dim:is(H))
-    return Image:new { name = tostring(name), W = W, H = H, idx = assert(tonumber(idx)) }
+    return Image:new { name = tostring(name), W = W, H = H, idx = idx }
 end
 
 function Image:__call(x,y)
@@ -352,7 +353,8 @@ local function createfunction(images,exp,usebounds)
     local imageindex = {}
     local imagesyms = terralib.newlist()
     for i,im in ipairs(images) do
-        local s = symbol(opt.Image(float,im.W,im.H,i-1),im.name)
+        local image = im.idx and opt.Image(float,im.W,im.H,im.idx) or opt.InternalImage(float,im.W,im.H)
+        local s = symbol(image,im.name)
         imageindex[im] = s
         imagesyms:insert(s)
     end
@@ -381,7 +383,6 @@ local function createfunction(images,exp,usebounds)
                 assert(usebounds) -- if we removed them, we shouldn't see any boundary accesses
                 r = symbol(int,tostring(a))
                 local W,H = unknownimage.type.metamethods.W.size,unknownimage.type.metamethods.H.size
-                print(W,H)
                 stmts:insert quote
                     var [r] = opt.InBoundsCalc(i+a.x,j+a.y,W,H,a.sx,a.sy)
                 end
@@ -399,7 +400,8 @@ local function createfunction(images,exp,usebounds)
     end
     generatedfn:compile()
     if verboseAD then
-        --generatedfn:disas()
+        --generatedfn:printpretty(true,false)
+        generatedfn:disas()
     end
     return generatedfn,stencil
 end
@@ -517,12 +519,13 @@ function ad.Cost(costexp_)
     end
     
     if SumOfSquares:is(costexp_) then
-        local P = ad.Image("P",unknown.W,unknown.H,#images+1)
+        local P = ad.Image("P",unknown.W,unknown.H)
+        local jtjimages = terralib.newlist()
+        jtjimages:insertall(images)
+        jtjimages:insert(P)
         local jtjexp = createjtj(costexp_.terms,unknown,P)
-        dprint("jtj with bounds:")
-        dprint(jtjexp)
-        dprint("jtj without bounds:")
-        dprint(removeboundaries(jtjexp))
+        dprint("jtj")
+        r.jtj = createfunctionset(jtjimages,jtjexp)
     end
     return r
 end
