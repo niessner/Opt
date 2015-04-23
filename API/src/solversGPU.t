@@ -59,7 +59,7 @@ solversGPU.gradientDescentGPU = function(problemSpec, vars)
 		
 		for iter = 0, maxIters do
 
-			var startCost = gpu.computeCost(pd)
+			var startCost = gpu.computeCost(pd, pd.images.unknown)
 			logSolver("iteration %d, cost=%f, learningRate=%f\n", iter, startCost, learningRate)
 			
 			gpu.computeGradient(pd, pd.gradStore)
@@ -72,7 +72,7 @@ solversGPU.gradientDescentGPU = function(problemSpec, vars)
 			--
 			-- update the learningRate
 			--
-			var endCost = gpu.computeCost(pd)
+			var endCost = gpu.computeCost(pd, pd.images.unknown)
 			if endCost < startCost then
 				learningRate = learningRate * learningGain
 			else
@@ -174,7 +174,7 @@ solversGPU.vlbfgsGPU = function(problemSpec, vars)
 
 		for iter = 0, maxIters - 1 do
 		
-			var iterStartCost = gpu.computeCost(pd)
+			var iterStartCost = gpu.computeCost(pd, pd.images.unknown)
 			
 			logSolver("iteration %d, cost=%f\n", iter, iterStartCost)
 			
@@ -254,9 +254,9 @@ solversGPU.vlbfgsGPU = function(problemSpec, vars)
 			-- line search
 			--
 			gpu.copyImage(pd, pd.currentValues, pd.images.unknown)
-			gpu.computeResiduals(pd, pd.currentResiduals, pd.currentValues)
+			--gpu.computeResiduals(pd, pd.currentResiduals, pd.currentValues)
 			
-			var bestAlpha = gpu.lineSearchQuadraticFallback(pd, pd.currentValues, pd.currentResiduals, pd.p, pd.images.unknown, prevBestAlpha)
+			var bestAlpha = gpu.lineSearchQuadraticFallback(pd, pd.currentValues, pd.currentResiduals, iterStartCost, pd.p, pd.images.unknown, prevBestAlpha)
 			
 			-- cycle the oldest s and y
 			var yListStore = pd.yList[0]
