@@ -16,7 +16,8 @@ local C = terralib.includecstring [[
 
 
 -- TODO: this should be factored into a parameter
-local w = 0.1
+local w_fit = 0.1
+local w_reg = 1.0
 
 local terra inLaplacianBounds(i : uint64, j : uint64, xImage : X)
 	return i > 0 and i < xImage:W() - 1 and j > 0 and j < xImage:H() - 1
@@ -53,16 +54,16 @@ local terra cost(i : uint64, j : uint64, xImage : X, aImage : A)
 	var laplacianCost = v * v
 
 	var v2 = x - a
-	var reconstructionCost = w * v2 * v2
+	var reconstructionCost = v2 * v2
 
-	return (float)(laplacianCost + reconstructionCost)
+	return (float)(w_reg*laplacianCost + w_fit*reconstructionCost)
 end
 
 local terra gradient(i : uint64, j : uint64, xImage : X, aImage : A)
 	var x = xImage(i, j)
 	var a = aImage(i, j)
 
-	var laplacianGradient = 0.0
+	var laplacianGradient = 0.0f
 
 	laplacianGradient = laplacianGradient + 8 * laplacian(i, j, xImage)
 
@@ -71,16 +72,31 @@ local terra gradient(i : uint64, j : uint64, xImage : X, aImage : A)
 	laplacianGradient = laplacianGradient + -2 * laplacian(i, j + 1, xImage)
 	laplacianGradient = laplacianGradient + -2 * laplacian(i, j - 1, xImage)
 
-	var reconstructionGradient = w * 2 * (x - a)
+	var reconstructionGradient = 2 * (x - a)
 
-	return (float)(laplacianGradient + reconstructionGradient)
+	return (float)(w_reg*laplacianGradient + w_fit*reconstructionGradient)
 end
 
 local terra gradientPreconditioner(i : uint64, j : uint64)
-	return 24 + w * 2
+	return w_reg*24.0f + w_fit*2.0f
+end
+
+-- eval 2*JTJ (note that we keep the '2' to make it consistent with the gradient
+local terra applyJTJ(i : uint64, j : uint64, xImage : X, aImage : A, pImage : X)
+ 
+	--fit
+	var e_fit = 2.0f*pImage(i, j)
+	
+	--reg
+	var e_reg = 4*laplacian(i + 0, j + 0, pImage)-laplacian(i + 1, j + 0, pImage)-laplacian(i - 1, j + 0, pImage)-laplacian(i + 0, j + 1, pImage)-laplacian(i + 0, j - 1, pImage)
+	e_reg = 2.0 * e_reg;
+	
+	
+	return w_fit*e_fit + w_reg*e_reg
 end
 
 return {
          cost = { dimensions = {W,H}, boundary = cost, interior = cost, stencil = {1,1} },
          gradient = { dimensions = {W,H}, boundary = gradient, interior = gradient, stencil = {2,2} },
+		 applyTJ = { dimensions = {W,H}, boundary = applyJTJ, interior = applyJTJ, stencil = {2,2} },
 		 gradientPreconditioner = gradientPreconditioner }
