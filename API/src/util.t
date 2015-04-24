@@ -11,6 +11,9 @@ util.C = terralib.includecstring [[
 #include <stdlib.h>
 #include <math.h>
 #include <cuda_runtime.h>
+#ifdef _WIN32
+	#include <io.h>
+#endif
 ]]
 
 local C = util.C
@@ -677,21 +680,22 @@ end
 local makeGPULauncher = function(compiledKernel, kernelName, header, footer, tbl, PlanData, params)
 	local terra GPULauncher(pd : &PlanData, [params])
 		var launch = terralib.CUDAParams { (pd.images.unknown:W() - 1) / 32 + 1, (pd.images.unknown:H() - 1) / 32 + 1, 1, 32, 32, 1, 0, nil }
+		C.cudaDeviceSynchronize()
 		[header(pd)]
-
+		C.cudaDeviceSynchronize()
 		var stream : C.cudaStream_t = nil
 		var timingInfo : TimingInfo 
 		if ([timeIndividualKernels]) then
 			C.cudaEventCreate(&timingInfo.startEvent)
 			C.cudaEventCreate(&timingInfo.endEvent)
 	        C.cudaEventRecord(timingInfo.startEvent, stream);
+			timingInfo.eventName = kernelName
 	    end
 
 		compiledKernel(&launch, @pd, params)
 		
 		if ([timeIndividualKernels]) then
 			C.cudaEventRecord(timingInfo.endEvent, stream);
-			timingInfo.eventName = kernelName
 			pd.timer.timingInfo:insert(timingInfo)
 		end
 

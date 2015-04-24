@@ -90,7 +90,7 @@
       <AdditionalDependencies>Opt.lib;cudart.lib;%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
     <PreBuildEvent>
-      <Command>optMake.bat</Command>
+      <Command>call "optMake.bat"</Command>
     </PreBuildEvent>
   </ItemDefinitionGroup>
   <ItemGroup>

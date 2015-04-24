@@ -3,16 +3,22 @@
 
 opt = {} --anchor it in global namespace, otherwise it can be collected
 local S = require("std")
-
+local ffi = require("ffi")
 local util = require("util")
 local solversCPU = require("solversCPU")
 local solversGPU = require("solversGPU")
 
 local C = util.C
 
+if false then
+    local fileHandle = C.fopen("crap.txt", 'w')
+    C._close(1)
+    C._dup2(C._fileno(fileHandle), 1)
+end
+
 -- constants
 local verboseSolver = true
-local verboseAD = false
+local verboseAD = true
 
 local function newclass(name)
     local mt = { __name = name }
@@ -52,6 +58,7 @@ local function createbuffer(args)
         [&int8](&buf)
     end
 end
+
 
 printf = macro(function(fmt,...)
     local buf = createbuffer({...})
@@ -264,13 +271,18 @@ local function problemPlan(id, dimensions, elemsizes, strides, pplan)
     local success,p = xpcall(function() 
 		local problemmetadata = assert(problems[id])
         opt.dimensions,opt.elemsizes,opt.strides = dimensions,elemsizes,strides
-        local tbl = assert(terralib.loadfile(problemmetadata.filename))()
+        local file, errorString = terralib.loadfile(problemmetadata.filename)
+        if not file then
+            error(errorString, 0)
+        end
+        local tbl = file()
         assert(type(tbl) == "table")
 		local result = compilePlan(tbl,problemmetadata.kind,problemmetadata.params)
 		allPlans:insert(result)
 		pplan[0] = result()
-    end,function(err) print(debug.traceback(err,2)) end)
+    end,function(err) errorPrint(debug.traceback(err,2)) end)
 end
+
 terra opt.ProblemPlan(problem : &opt.Problem, dimensions : &uint64, elemsizes : &uint64, strides : &uint64) : &opt.Plan
 	var p : &opt.Plan = nil 
 	problemPlan(int(int64(problem)),dimensions,elemsizes,strides,&p)
@@ -409,8 +421,8 @@ local function createfunction(images,exp,usebounds)
     end
     generatedfn:compile()
     if verboseAD then
-        --generatedfn:printpretty(true,false)
-        generatedfn:disas()
+        generatedfn:printpretty(false, false)
+        --generatedfn:disas()
     end
     return generatedfn,stencil
 end
