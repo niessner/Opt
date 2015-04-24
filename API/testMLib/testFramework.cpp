@@ -28,7 +28,7 @@ TestExample TestFramework::makeImageSmoothing(const string &imageFilename, float
     {
         return (x == 0 || y == 0 || x == dimX - 1 || y == dimY - 1);
     };
-    /*
+
     SparseMatrixf L(pixelCount, pixelCount);
     for (const auto &p : bmp)
     {
@@ -60,7 +60,7 @@ TestExample TestFramework::makeImageSmoothing(const string &imageFilename, float
         testImage(p.x, p.y) = vec4uc(util::boundToByte(x[getVariable(p.x, p.y)]));
 
     LodePNG::save(testImage, "smoothingOutputLinearSolve.png");
-    */
+    
     TestExample result("imageSmoothing", "imageSmoothingAD.t", bmp.getWidth(), bmp.getHeight());
 
     result.costFunction = [=](const OptImage &variables)
@@ -106,14 +106,14 @@ TestExample TestFramework::makeImageSmoothing(const string &imageFilename, float
     result.images[0].allocate(bmp.getWidth(), bmp.getHeight());
     result.images[1].allocate(bmp.getWidth(), bmp.getHeight());
     result.minimumValues = result.images[0];
-    /*
+    
     for (const auto &p : bmp)
     {
         result.images[0](p.x, p.y) = 0.0;
         result.images[1](p.x, p.y) = p.value.r;
         result.minimumValues(p.x, p.y) = x[getVariable((int)p.x, (int)p.y)];
     }
-    */
+    
     result.minimumCost = result.costFunction(result.minimumValues);
     
 
