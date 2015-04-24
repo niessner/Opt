@@ -109,11 +109,12 @@ solversGPU.vlbfgsGPU = function(problemSpec, vars)
 	local b = 2 * m + 1
 	
 	local bDim = opt.InternalDim("b", b)
+	local dpmType = opt.InternalImage(float, bDim, bDim)
 	
 	local struct GPUStore {
 		-- These all live on the CPU!
-		dotProductMatrix : opt.InternalImage(float, bDim, bDim)
-		dotProductMatrixStorage : opt.InternalImage(float, bDim, bDim)
+		dotProductMatrix : dpmType
+		dotProductMatrixStorage : dpmType
 		alphaList : opt.InternalImage(float, bDim, 1)
 		imageList : vars.unknownType[b]
 		coefficients : float[b]
@@ -174,14 +175,57 @@ solversGPU.vlbfgsGPU = function(problemSpec, vars)
 		-- TODO: computing 3 unnecessary dot products
 		return pairs
 	end
-	
+
+	local terra atomicReduce(a : float, b : &float) -- NYI
+	end
+
+	--[[local function makeDotProducts(dps, nImages, imageType)
+		local nDotProducts = #dps
+		local localOut = util.symTable(float, nDotProducts, "localOut")
+		local es = util.symTable(float, nImages, "e")
+		local terra outKernel(input : (&float)[nImages], out : dpmType, N : int)
+			var I = util.ceilingDivide(N, blockDim.x * gridDim.x)
+			escape
+				for i,l in ipairs(localOut) do
+					emit quote var [l] = 0.f end
+				end 
+			end
+			for i = 0,I do
+				var idx = blockIdx.x*blockDim.x*I + blockDim.x*i + threadIdx.x
+				if idx < N then
+					escape
+						for i,e in ipairs(es) do
+							emit quote var [e] = input[ [i-1] ][idx] end
+						end
+						for i,dp in ipairs(dps) do
+							--print(dp[1],dp[2],unpack(es))
+							emit quote
+								[localOut[i] ] = [localOut[i] ] + [es[dp[1] + 1] ] * [es[dp[2] + 1] ]
+							end
+						end
+					end
+				end
+			end
+			escape
+				for i,dp in ipairs(dps) do
+					emit quote atomicReduce([localOut[i] ],&out([dp[1] ], [dp[2] ])) end
+				end
+			end
+		end
+		return outKernel
+	end
+
+	local test = { {1,1}, {2,1}, {1,3} }
+	local r = makeDotProducts(test,3)
+	r:printpretty()]]
+
 	local specializedKernels = {}
 	
 	local gpu = util.makeGPUFunctions(problemSpec, vars, PlanData, {})
 	local cpu = util.makeCPUFunctions(problemSpec, vars, PlanData)
 	
 	local dotPairs = makeDotProductPairs()
-	
+		
 	local terra impl(data_ : &opaque, images : &&opaque, params_ : &opaque)
 		
 		var pd = [&PlanData](data_)

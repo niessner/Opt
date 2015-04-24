@@ -123,9 +123,19 @@ end
 
 Vector = S.memoize(Vector)
 
+local warpSize = 32
 
-local warpSize = 32;
+util.symTable = function(typ, N, name)
+	local r = terralib.newlist()
+	for i = 1, N do
+		r[i] = symbol(typ, name..tostring(i-1))
+	end
+	return r
+end
 
+util.ceilingDivide = terra(a : int64, b : int64)
+	return (a + b - 1) / b
+end
 
 struct util.TimingInfo {
 	startEvent : C.cudaEvent_t
