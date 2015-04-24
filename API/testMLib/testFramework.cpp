@@ -61,7 +61,7 @@ TestExample TestFramework::makeImageSmoothing(const string &imageFilename, float
 
     LodePNG::save(testImage, "smoothingOutputLinearSolve.png");
 
-    TestExample result("imageSmoothing", "imageSmoothing.t", bmp.getWidth(), bmp.getHeight());
+    TestExample result("imageSmoothing", "imageSmoothingAD.t", bmp.getWidth(), bmp.getHeight());
 
     result.costFunction = [=](const OptImage &variables)
     {
@@ -192,16 +192,16 @@ void TestFramework::runAllTests()
     /*methods.push_back(TestMethod("gradientDescentCPU","no-params"));
     methods.push_back(TestMethod("conjugateGradientCPU", "no-params"));
     methods.push_back(TestMethod("linearizedConjugateGradientCPU", "no-params"));
-    //methods.push_back(TestMethod("lbfgsCPU", "no-params"));
-    //methods.push_back(TestMethod("vlbfgsCPU", "no-params"));
+    methods.push_back(TestMethod("lbfgsCPU", "no-params"));
+    methods.push_back(TestMethod("vlbfgsCPU", "no-params"));
     methods.push_back(TestMethod("bidirectionalVLBFGSCPU", "no-params"));*/
 
     //
     // GPU methods
     //
     //methods.push_back(TestMethod("gradientDescentGPU", "no-params"));
-    //methods.push_back(TestMethod("vlbfgsGPU", "no-params"));
-	methods.push_back(TestMethod("gaussNewtonGPU", "no-params"));
+    methods.push_back(TestMethod("vlbfgsGPU", "no-params"));
+    //methods.push_back(TestMethod("adaDeltaGPU", "no-params"));
 
     for (auto &method : methods)
         runTest(method, example);

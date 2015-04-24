@@ -4,6 +4,20 @@ local util = require("util")
 local C = util.C
 local Timer = util.Timer
 
+local cuda_version = cudalib.localversion()
+local libdevice = terralib.cudahome..string.format("/nvvm/libdevice/libdevice.compute_%d.10.bc",cuda_version)
+terralib.linklibrary(libdevice)
+
+local sqrt = terralib.externfunction("__nv_sqrt", double -> double)
+local cos  = terralib.externfunction("__nv_cos",  double -> double)
+local acos = terralib.externfunction("__nv_acos", double -> double)
+local sin  = terralib.externfunction("__nv_sin",  double -> double)
+local asin = terralib.externfunction("__nv_asin", double -> double)
+local tan  = terralib.externfunction("__nv_tan",  double -> double)
+local atan = terralib.externfunction("__nv_atan", double -> double)
+local pow  = terralib.externfunction("__nv_pow",  {double, double} -> double)
+local fmod = terralib.externfunction("__nv_fmod", {double, double} -> double)
+
 solversGPU = {}
 
 local function noHeader(pd)
@@ -219,6 +233,123 @@ solversGPU.gradientDescentGPU = function(problemSpec, vars)
 	return makePlan
 end
 
+-- http://www.matthewzeiler.com/pubs/googleTR2012/googleTR2012.pdf
+solversGPU.adaDeltaGPU = function(problemSpec, vars)
+
+	local momentum = 0.95
+	local epsilon = 0.01
+	local annealingA = 1.0
+	local annealingB = 0.7
+	local annealingCutoff = 100
+	local struct PlanData(S.Object) {
+		plan : opt.Plan
+		images : vars.PlanImages
+		scratchF : &float
+		
+		gradient : vars.unknownType
+		Eg2 : vars.unknownType
+		Ex2 : vars.unknownType
+		xNext : vars.unknownType
+
+		timer : Timer
+	}
+	
+	local specializedKernels = {}
+	
+	specializedKernels.updatePositionA = function(data)
+		local terra updatePosition(pd : &data.PlanData, w : int, h : int)
+			var Eg2 = 0.0f
+			var Ex2 = 0.0f
+			for i = 0, 10 do
+				var g = data.problemSpec.gradient.boundary(w, h, pd.images.unknown, unpackstruct(pd.images, 2))
+				Eg2 = momentum * Eg2 + (1.0f - momentum) * g * g
+				var learningRate = -annealingA * sqrt((Ex2 + epsilon) / (Eg2 + epsilon))
+				var delta = learningRate * g
+				Ex2 = momentum * Ex2 + (1.0f - momentum) * delta * delta
+				pd.images.unknown(w, h) = pd.images.unknown(w, h) + delta
+				--pd.xNext(w, h) = pd.images.unknown(w, h) + delta
+			end
+		end
+		return { kernel = updatePosition, header = noHeader, footer = noFooter, params = {}, mapMemberName = "unknown" }
+	end
+	
+	specializedKernels.updatePositionB = function(data)
+		local terra updatePosition(pd : &data.PlanData, w : int, h : int)
+			var g = data.problemSpec.gradient.boundary(w, h, pd.images.unknown, unpackstruct(pd.images, 2))
+			var Eg2val = momentum * pd.Eg2(w, h) + (1.0f - momentum) * g * g
+			pd.Eg2(w, h) = Eg2val
+			var Ex2val = pd.Ex2(w, h)
+			var learningRate = -annealingB * sqrt((Ex2val + epsilon) / (Eg2val + epsilon))
+			var delta = learningRate * g
+			--var delta = -0.01 * g
+			pd.Ex2(w, h) = momentum * Ex2val + (1.0f - momentum) * delta * delta
+			pd.images.unknown(w, h) = pd.images.unknown(w, h) + delta
+			--pd.xNext(w, h) = pd.images.unknown(w, h) + delta
+		end
+		return { kernel = updatePosition, header = noHeader, footer = noFooter, params = {}, mapMemberName = "unknown" }
+	end
+	
+	local gpu = util.makeGPUFunctions(problemSpec, vars, PlanData, specializedKernels)
+	
+	local terra impl(data_ : &opaque, images : &&opaque, params_ : &opaque)
+		var pd = [&PlanData](data_)
+		pd.timer:init()
+
+		var params = [&double](params_)
+
+		unpackstruct(pd.images) = [util.getImages(PlanData, images)]
+
+		-- TODO: parameterize these
+		var maxIters = 10000
+		var tolerance = 1e-10
+		
+		var file = C.fopen("C:/code/run.txt", "wb")
+
+		for iter = 0, maxIters do
+
+			var startCost = gpu.computeCost(pd, pd.images.unknown)
+			logSolver("iteration %d, cost=%f\n", iter, startCost)
+			C.fprintf(file, "%d\t%15.15f\n", iter, startCost)
+			
+			if iter < annealingCutoff then
+				gpu.updatePositionA(pd)
+			else
+				gpu.updatePositionB(pd)
+			end
+			
+			--gpu.copyImage(pd, pd.images.unknown, pd.xNext)
+			
+			if iter == 2000 then
+				--gpu.copyImageScale(pd, pd.Eg2, pd.Eg2, 0.0f)
+				--gpu.copyImageScale(pd, pd.Ex2, pd.Ex2, 0.0f)
+			end
+			
+			pd.timer:nextIteration()
+		end
+		
+		C.fclose(file)
+		
+		pd.timer:evaluate()
+		pd.timer:cleanup()
+	end
+
+	local terra makePlan() : &opt.Plan
+		var pd = PlanData.alloc()
+		pd.plan.data = pd
+		pd.plan.impl = impl
+
+		pd.gradient:initGPU()
+		pd.Eg2:initGPU()
+		pd.Ex2:initGPU()
+		pd.xNext:initGPU()
+		
+		C.cudaMallocManaged([&&opaque](&(pd.scratchF)), sizeof(float), C.cudaMemAttachGlobal)
+
+		return &pd.plan
+	end
+	return makePlan
+end
+
 -- vector-free L-BFGS using two-loop recursion: http://papers.nips.cc/paper/5333-large-scale-l-bfgs-using-mapreduce.pdf
 solversGPU.vlbfgsGPU = function(problemSpec, vars)
 
@@ -391,7 +522,7 @@ solversGPU.vlbfgsGPU = function(problemSpec, vars)
 						var prevJ = nextCoefficientIndex(j)
 						if prevI == -1 or prevJ == -1 then
 							pd.gpuStore.dotProductMatrix(i, j) = gpu.innerProduct(pd, pd.gpuStore.imageList[i], pd.gpuStore.imageList[j])
-							C.printf("%d dot %d\n", i, j)
+							--C.printf("%d dot %d\n", i, j)
 						else
 							pd.gpuStore.dotProductMatrix(i, j) = pd.gpuStore.dotProductMatrixStorage(prevI, prevJ)
 						end
