@@ -14,6 +14,124 @@ local function noFooter(pd)
 	return quote end
 end
 
+
+-- GAUSS NEWTON (non-block version)
+solversGPU.gaussNewtonGPU = function(problemSpec, vars)
+
+	local struct PlanData(S.Object) {
+		plan : opt.Plan
+		images : vars.PlanImages
+		scratchF : &float
+		
+		r : vars.unknownType				--residuals -> num vars	--TODO this needs to be a 'residual type'
+		p : vars.unknownType				--decent direction -> num vars
+		preconditioner : vars.unknownType	--preconditioner for linear system -> num vars
+		rDotZOld : &float					--Old nominator (denominator) of alpha (beta)				
+		timer : Timer
+		
+		--TODO allocate the data in makePlan
+	}
+	
+	local specializedKernels = {}
+	specializedKernels.PCGInit1 = function(data)
+		local terra PCGInit1GPU(pd : &data.PlanData, w : int, h : int)
+			var residuum = -data.problemSpec.gradient.boundary(w, h, unpackstruct(pd.images))	-- residuum = J^T x -F - A x delta_0  => J^T x -F, since A x x_0 == 0 
+			pd.r(w, h) = residuum
+
+			-- TODO pd.precondition(w,h) needs to computed somehow (ideally in the gradient?
+			pd.preconditioner(w, h) = data.problemSpec.gradientPreconditioner(w, h)	-- TODO fix this hack... the preconditioner needs to be the diagonal of JTJ
+			var p = pd.preconditioner(w, h)*residuum				   -- apply preconditioner M^-1
+			pd.p(w, h) = p
+		
+			var d = residuum*p;										   -- x-th term of nomimator for computing alpha and denominator for computing beta
+			
+			d = util.warpReduce(d)	--TODO check for sizes != 32
+			if (util.laneid() == 0) then
+				util.atomicAdd(pd.rDotZOld, d)
+			end
+		end
+		return { kernel = PCGInit1GPU, header = noHeader, footer = noFooter, params = {}, mapMemberName = "unknown" }
+	end
+	
+
+	local gpu = util.makeGPUFunctions(problemSpec, vars, PlanData, specializedKernels)
+	
+	local terra impl(data_ : &opaque, images : &&opaque, params_ : &opaque)
+		var pd = [&PlanData](data_)
+		pd.timer:init()
+
+		var params = [&double](params_)
+
+		unpackstruct(pd.images) = [util.getImages(PlanData, images)]
+
+		var maxIters = 5000
+		
+		for iter = 0, maxIters do
+			--init
+			@pd.rDotZOld = 0.0
+			gpu.PCGInit1(pd)
+		end
+		--[[
+		-- TODO: parameterize these
+		var initialLearningRate = 0.01
+		var maxIters = 5000
+		var tolerance = 1e-10
+
+		-- Fixed constants (these do not need to be parameterized)
+		var learningLoss = 0.8
+		var learningGain = 1.1
+		var minLearningRate = 1e-25
+
+		var learningRate = initialLearningRate
+		
+		for iter = 0, maxIters do
+
+			var startCost = gpu.computeCost(pd)
+			logSolver("iteration %d, cost=%f, learningRate=%f\n", iter, startCost, learningRate)
+			
+			
+			--
+			-- move along the gradient by learningRate
+			--
+			gpu.updatePosition(pd, learningRate)
+			
+			--
+			-- update the learningRate
+			--
+			var endCost = gpu.computeCost(pd)
+			if endCost < startCost then
+				learningRate = learningRate * learningGain
+			else
+				learningRate = learningRate * learningLoss
+
+				if learningRate < minLearningRate then
+					break
+				end
+			end
+			pd.timer:nextIteration()
+		end
+		]]--
+		pd.timer:evaluate()
+		pd.timer:cleanup()
+	end
+
+	local terra makePlan() : &opt.Plan
+		var pd = PlanData.alloc()
+		pd.plan.data = pd
+		pd.plan.impl = impl
+
+		--pd.gradStore:initGPU()
+		C.cudaMallocManaged([&&opaque](&(pd.rDotZOld)), sizeof(float), C.cudaMemAttachGlobal)
+
+		return &pd.plan
+	end
+	return makePlan
+end
+
+
+
+
+
 solversGPU.gradientDescentGPU = function(problemSpec, vars)
 
 	local struct PlanData(S.Object) {

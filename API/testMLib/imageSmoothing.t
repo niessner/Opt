@@ -98,5 +98,5 @@ end
 return {
          cost = { dimensions = {W,H}, boundary = cost, interior = cost, stencil = {1,1} },
          gradient = { dimensions = {W,H}, boundary = gradient, interior = gradient, stencil = {2,2} },
-		 applyTJ = { dimensions = {W,H}, boundary = applyJTJ, interior = applyJTJ, stencil = {2,2} },
+		 applyJTJ = { dimensions = {W,H}, boundary = applyJTJ, interior = applyJTJ, stencil = {2,2} },
 		 gradientPreconditioner = gradientPreconditioner }

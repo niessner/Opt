@@ -203,6 +203,7 @@ end
 local terra atomicAdd(sum : &float, value : float)
 	terralib.asm(terralib.types.unit,"red.global.add.f32 [$0],$1;","l,f", true, sum, value)
 end
+util.atomicAdd = atomicAdd
 
 local terra __shfl_down(v : float, delta : uint, width : int)
 	var ret : float;
@@ -217,6 +218,7 @@ local terra laneid()
 	laneid = terralib.asm(int,"mov.u32 $0, %laneid;","=r", true)
 	return laneid;
 end
+util.laneid = laneid
 
 -- Using the "Kepler Shuffle", see http://devblogs.nvidia.com/parallelforall/faster-parallel-reductions-kepler/
 local terra warpReduce(val : float) 
@@ -230,6 +232,7 @@ local terra warpReduce(val : float)
   return val;
 
 end
+util.warpReduce = warpReduce
 
 --[[ HOLD IT! http://devblogs.nvidia.com/parallelforall/faster-parallel-reductions-kepler/ 
 claims that on Kepler, warpReduce followed by atomicAdd is either faster or the same as doing an optimized block reduce followed by atomicAdd.
@@ -721,7 +724,7 @@ end
 
 util.makeComputeDeltaCostGPU = function(data)
 	local terra computeDeltaCost(pd : &data.PlanData, w : int, h : int, baseResiduals : data.imageType, currentValues : data.imageType)
-		var residual = [float](data.problemSpec.cost.boundary(w, h, currentValues, unpackstruct(pd.images, 2)))
+		var residual = [float](data.problemSpec.cost.boundary(w, h, currentValues, pd.images.image0))		--HACK
 		var delta = residual - baseResiduals(w, h)
 		delta = warpReduce(delta)
 		if (laneid() == 0) then
