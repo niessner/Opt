@@ -384,7 +384,7 @@ util.makeComputeGradient = function(data)
 	local terra computeGradient(pd : &data.PlanData, gradientOut : data.imageType, values : data.imageType)
 		for h = 0, gradientOut:H() do
 			for w = 0, gradientOut:W() do
-				gradientOut(w, h) = data.problemSpec.gradient.boundary(pd, w, h, values, unpackstruct(pd.images, 2))
+				gradientOut(w, h) = data.problemSpec.gradient.boundary(w, h, values, unpackstruct(pd.images, 2))
 			end
 		end
 	end

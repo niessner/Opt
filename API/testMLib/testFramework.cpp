@@ -1,6 +1,8 @@
 
 #include "main.h"
 
+const bool groundTruth = true;
+
 TestExample TestFramework::makeImageSmoothing(const string &imageFilename, float w)
 {
     //
@@ -29,31 +31,35 @@ TestExample TestFramework::makeImageSmoothing(const string &imageFilename, float
         return (x == 0 || y == 0 || x == dimX - 1 || y == dimY - 1);
     };
 
-    SparseMatrixf L(pixelCount, pixelCount);
-    for (const auto &p : bmp)
+    MathVector<float> x(pixelCount);
+    if (groundTruth)
     {
-        if (isBorder(p.x, p.y))
-            continue;
+        SparseMatrixf L(pixelCount, pixelCount);
+        for (const auto &p : bmp)
+        {
+            if (isBorder(p.x, p.y))
+                continue;
 
-        size_t row = getVariable(p.x, p.y);
-        L(row, row) = 4.0;
-        L(row, getVariable(p.x - 1, p.y + 0)) = -1.0;
-        L(row, getVariable(p.x + 1, p.y + 0)) = -1.0;
-        L(row, getVariable(p.x + 0, p.y - 1)) = -1.0;
-        L(row, getVariable(p.x + 0, p.y + 1)) = -1.0;
+            size_t row = getVariable(p.x, p.y);
+            L(row, row) = 4.0;
+            L(row, getVariable(p.x - 1, p.y + 0)) = -1.0;
+            L(row, getVariable(p.x + 1, p.y + 0)) = -1.0;
+            L(row, getVariable(p.x + 0, p.y - 1)) = -1.0;
+            L(row, getVariable(p.x + 0, p.y + 1)) = -1.0;
+        }
+
+        MathVector<float> targetValues(pixelCount);
+        for (const auto &p : bmp)
+            targetValues[getVariable(p.x, p.y)] = p.value.r;
+
+        SparseMatrixf W = SparseMatrixf::identity(pixelCount) * w;
+
+        SparseMatrixf A = L.transpose() * L + W;
+        MathVector<float> b = W * targetValues;
+
+        LinearSolverConjugateGradient<float> solver;
+        x = solver.solve(A, b);
     }
-
-    MathVector<float> targetValues(pixelCount);
-    for (const auto &p : bmp)
-        targetValues[getVariable(p.x, p.y)] = p.value.r;
-
-    SparseMatrixf W = SparseMatrixf::identity(pixelCount) * w;
-
-    SparseMatrixf A = L.transpose() * L + W;
-    MathVector<float> b = W * targetValues;
-
-    LinearSolverConjugateGradient<float> solver;
-    MathVector<float> x = solver.solve(A, b);
 
     Bitmap testImage = bmp;
     for (const auto &p : bmp)
@@ -189,9 +195,9 @@ void TestFramework::runAllTests()
     //
     // CPU methods
     //
-    /*methods.push_back(TestMethod("gradientDescentCPU","no-params"));
+    //methods.push_back(TestMethod("gradientDescentCPU","no-params"));
     methods.push_back(TestMethod("conjugateGradientCPU", "no-params"));
-    methods.push_back(TestMethod("linearizedConjugateGradientCPU", "no-params"));
+    /*methods.push_back(TestMethod("linearizedConjugateGradientCPU", "no-params"));
     methods.push_back(TestMethod("lbfgsCPU", "no-params"));
     methods.push_back(TestMethod("vlbfgsCPU", "no-params"));
     methods.push_back(TestMethod("bidirectionalVLBFGSCPU", "no-params"));*/
@@ -200,8 +206,9 @@ void TestFramework::runAllTests()
     // GPU methods
     //
     //methods.push_back(TestMethod("gradientDescentGPU", "no-params"));
-    methods.push_back(TestMethod("vlbfgsGPU", "no-params"));
+    //methods.push_back(TestMethod("vlbfgsGPU", "no-params"));
     //methods.push_back(TestMethod("adaDeltaGPU", "no-params"));
+    methods.push_back(TestMethod("gaussNewtonGPU", "no-params"));
 
     for (auto &method : methods)
         runTest(method, example);
