@@ -60,7 +60,7 @@ __global__ void PCGInit_Kernel2(unsigned int N, SolverState state)
 	if (x < N) state.d_rDotzOld[x] = bucket[0];								// store result for next kernel call
 }
 
-void Initialization(SolverInput& input, SolverState& state, SolverParameters& parameters)
+void Initialization(SolverInput& input, SolverState& state, SolverParameters& parameters, CUDATimer& timer)
 {
 	const unsigned int N = input.N;
 
@@ -72,16 +72,17 @@ void Initialization(SolverInput& input, SolverState& state, SolverParameters& pa
 		std::cout << "Too many variables for this block size. Maximum number of variables for two kernel scan: " << THREADS_PER_BLOCK*THREADS_PER_BLOCK << std::endl;
 		while (1);
 	}
-
+    timer.startEvent("PCGInit_Kernel1");
 	PCGInit_Kernel1 << <blocksPerGrid, THREADS_PER_BLOCK, shmem_size >> >(input, state, parameters);
+    timer.endEvent();
 
 #ifdef _DEBUG
 	cutilSafeCall(cudaDeviceSynchronize());
 	cutilCheckMsg(__FUNCTION__);
 #endif
-
+    timer.startEvent("PCGInit_Kernel2");
 	PCGInit_Kernel2 << <blocksPerGrid, THREADS_PER_BLOCK, shmem_size >> >(N, state);
-
+    timer.endEvent();
 #ifdef _DEBUG
 	cutilSafeCall(cudaDeviceSynchronize());
 	cutilCheckMsg(__FUNCTION__);
@@ -164,7 +165,7 @@ __global__ void PCGStep_Kernel3(SolverInput input, SolverState state)
 	}
 }
 
-void PCGIteration(SolverInput& input, SolverState& state, SolverParameters& parameters)
+void PCGIteration(SolverInput& input, SolverState& state, SolverParameters& parameters, CUDATimer& timer)
 {
 	const unsigned int N = input.N;	// Number of block variables
 
@@ -177,23 +178,25 @@ void PCGIteration(SolverInput& input, SolverState& state, SolverParameters& para
 		std::cout << "Too many variables for this block size. Maximum number of variables for two kernel scan: " << THREADS_PER_BLOCK*THREADS_PER_BLOCK << std::endl;
 		while (1);
 	}
-
-	PCGStep_Kernel1 << <blocksPerGrid, THREADS_PER_BLOCK, shmem_size >> >(input, state, parameters);
+    timer.startEvent("PCGStep_Kernel1");
+    PCGStep_Kernel1 << <blocksPerGrid, THREADS_PER_BLOCK, shmem_size >> >(input, state, parameters);
+    timer.endEvent();
+	
 
 #ifdef _DEBUG
 	cutilSafeCall(cudaDeviceSynchronize());
 	cutilCheckMsg(__FUNCTION__);
 #endif
-
+    timer.startEvent("PCGStep_Kernel2");
 	PCGStep_Kernel2 << <blocksPerGrid, THREADS_PER_BLOCK, shmem_size >> >(input, state);
-
+    timer.endEvent();
 #ifdef _DEBUG
 	cutilSafeCall(cudaDeviceSynchronize());
 	cutilCheckMsg(__FUNCTION__);
 #endif
-
+    timer.startEvent("PCGStep_Kernel3");
 	PCGStep_Kernel3 << <blocksPerGrid, THREADS_PER_BLOCK, shmem_size >> >(input, state);
-
+    timer.endEvent();
 #ifdef _DEBUG
 	cutilSafeCall(cudaDeviceSynchronize());
 	cutilCheckMsg(__FUNCTION__);
@@ -217,12 +220,12 @@ __global__ void ApplyLinearUpdateDevice(SolverInput input, SolverState state, So
 
 
 
-void ApplyLinearUpdate(SolverInput& input, SolverState& state, SolverParameters& parameters)
+void ApplyLinearUpdate(SolverInput& input, SolverState& state, SolverParameters& parameters, CUDATimer& timer)
 {
 	const unsigned int N = input.N; // Number of block variables
-
+    timer.startEvent("ApplyLinearUpdateDevice");
 	ApplyLinearUpdateDevice << <(N + THREADS_PER_BLOCK - 1) / THREADS_PER_BLOCK, THREADS_PER_BLOCK >> >(input, state, parameters);
-
+    timer.endEvent();
 	cutilSafeCall(cudaDeviceSynchronize());
 
 #ifdef _DEBUG
@@ -380,19 +383,21 @@ extern "C" void LaplacianSolveGNStub(SolverInput& input, SolverState& state, Sol
 
 	for (unsigned int nIter = 0; nIter < parameters.nNonLinearIterations; nIter++)
 	{
-		Initialization(input, state, parameters);
+		Initialization(input, state, parameters, timer);
 
 		for (unsigned int linIter = 0; linIter < parameters.nLinIterations; linIter++) {
-			PCGIteration(input, state, parameters);
+			PCGIteration(input, state, parameters, timer);
 		}
 
-		ApplyLinearUpdate(input, state, parameters);	//this should be also done in the last PCGIteration
+		ApplyLinearUpdate(input, state, parameters, timer);	//this should be also done in the last PCGIteration
 
         printf("residual=%f\n", EvalResidual(input, state, parameters, timer));
 
 		//std::cout << "enter for next loop...\n\n" << std::endl; 
 		//getchar();
+        timer.nextIteration();
 	}
+    timer.evaluate();
 }
 
 ////////////////////////////////////////////////////////////////////

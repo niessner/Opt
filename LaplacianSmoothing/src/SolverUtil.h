@@ -34,6 +34,11 @@ __inline__ __device__ bool isInsideImage(int i, int j, unsigned int width, unsig
 	return (i >= 0 && i < height && j >= 0 && j < width);
 }
 
+__inline__ __device__ bool inLaplacianBounds(int i, int j, unsigned int width, unsigned int height)
+{
+    return (i > 0 && i < (height-1) && j > 0 && j < (width - 1));
+}
+
 inline __device__ void warpReduce(volatile float* sdata, int threadIdx, unsigned int threadsPerBlock) // See Optimizing Parallel Reduction in CUDA by Mark Harris
 {
 	if(threadIdx < 32)

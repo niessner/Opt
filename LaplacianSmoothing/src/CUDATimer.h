@@ -70,14 +70,14 @@ struct CUDATimer {
                 aggregateCounts[index]  = aggregateCounts[index]    + 1;
             }
         }
-        printf("--------------------------------------------------------\n");
-        printf("        Kernel        |   Count  |   Total   | Average \n");
-        printf("----------------------+----------+-----------+----------\n");
+        printf("------------------------------------------------------------\n");
+        printf("          Kernel          |   Count  |   Total   | Average \n");
+        printf("--------------------------+----------+-----------+----------\n");
         for (int i = 0; i < aggregateTimingNames.size(); ++i) {
-            printf("----------------------+----------+-----------+----------\n");
-            printf(" %-20s |   %4d   | %8.3fms| %7.4fms\n", aggregateTimingNames[i].c_str(), aggregateCounts[i], aggregateTimes[i], aggregateTimes[i] / aggregateCounts[i]);
+            printf("--------------------------+----------+-----------+----------\n");
+            printf(" %-24s |   %4d   | %8.3fms| %7.4fms\n", aggregateTimingNames[i].c_str(), aggregateCounts[i], aggregateTimes[i], aggregateTimes[i] / aggregateCounts[i]);
         }
-        printf("--------------------------------------------------------\n");
+        printf("------------------------------------------------------------\n");
     }
 };
 

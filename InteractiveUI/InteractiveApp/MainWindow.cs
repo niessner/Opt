@@ -29,7 +29,8 @@ namespace UIWindow
             "linearizedConjugateGradientGPU", 
             "lbfgsCPU",
             "vlbfgsCPU",
-            "vlbfgsGPU"};
+            "vlbfgsGPU",
+            };
 
         public MainWindow()
         {

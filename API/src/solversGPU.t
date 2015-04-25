@@ -53,7 +53,8 @@ solversGPU.gaussNewtonGPU = function(problemSpec, vars)
 			pd.r(w, h) = residuum
 
 			-- TODO pd.precondition(w,h) needs to computed somehow (ideally in the gradient?
-			pd.preconditioner(w, h) = data.problemSpec.gradientPreconditioner(w, h)	-- TODO fix this hack... the preconditioner needs to be the diagonal of JTJ
+			-- TODO: don't let this be 0
+			pd.preconditioner(w, h) = 1 --data.problemSpec.gradientPreconditioner(w, h)	-- TODO fix this hack... the preconditioner needs to be the diagonal of JTJ
 			var p = pd.preconditioner(w, h)*residuum				   -- apply preconditioner M^-1
 			pd.p(w, h) = p
 		
@@ -82,7 +83,7 @@ solversGPU.gaussNewtonGPU = function(problemSpec, vars)
 		
 		for iter = 0, maxIters do
 			--init
-			@pd.rDotZOld = 0.0
+			pd.rDotZOld[0] = 0.0
 			gpu.PCGInit1(pd)
 		end
 		--[[
@@ -134,6 +135,9 @@ solversGPU.gaussNewtonGPU = function(problemSpec, vars)
 		pd.plan.data = pd
 		pd.plan.impl = impl
 
+		pd.r:initGPU()			
+		pd.p:initGPU()		
+		pd.preconditioner:initGPU()
 		--pd.gradStore:initGPU()
 		C.cudaMallocManaged([&&opaque](&(pd.rDotZOld)), sizeof(float), C.cudaMemAttachGlobal)
 
