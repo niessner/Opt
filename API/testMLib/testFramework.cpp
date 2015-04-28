@@ -1,7 +1,7 @@
 
 #include "main.h"
 
-const bool groundTruth = false;
+const bool groundTruth = true;
 
 TestExample TestFramework::makeImageSmoothing(const string &imageFilename, float w)
 {
@@ -188,7 +188,7 @@ void TestFramework::runAllTests()
     }
 
     //TestExample example = makeRandomQuadratic(5);
-    TestExample example = makeImageSmoothing("smoothingExampleD.png", 0.1f);
+    TestExample example = makeImageSmoothing("smoothingExampleB.png", 0.1f);
 
     vector<TestMethod> methods;
 
@@ -196,7 +196,7 @@ void TestFramework::runAllTests()
     // CPU methods
     //
     //methods.push_back(TestMethod("gradientDescentCPU","no-params"));
-    //methods.push_back(TestMethod("conjugateGradientCPU", "no-params"));
+    methods.push_back(TestMethod("conjugateGradientCPU", "no-params"));
     /*methods.push_back(TestMethod("linearizedConjugateGradientCPU", "no-params"));
     methods.push_back(TestMethod("lbfgsCPU", "no-params"));
     methods.push_back(TestMethod("vlbfgsCPU", "no-params"));
@@ -208,7 +208,7 @@ void TestFramework::runAllTests()
     //methods.push_back(TestMethod("gradientDescentGPU", "no-params"));
     //methods.push_back(TestMethod("vlbfgsGPU", "no-params"));
     //methods.push_back(TestMethod("adaDeltaGPU", "no-params"));
-    methods.push_back(TestMethod("gaussNewtonGPU", "no-params"));
+    //methods.push_back(TestMethod("gaussNewtonGPU", "no-params"));
 
     for (auto &method : methods)
         runTest(method, example);
@@ -233,10 +233,11 @@ void TestFramework::runTest(const TestMethod &method, TestExample &example)
         return;
     }
     
-    std::vector<void*> imagesCPU;
-    std::vector<void*> imagesGPU;
-    std::vector<uint64_t> stride;
-    std::vector<uint64_t> elemsize;
+    vector<void*> imagesCPU;
+    vector<void*> imagesGPU;
+    vector<uint64_t> stride;
+    vector<uint64_t> elemsize;
+
     for (const auto &image : example.images)
     {
         image.syncCPUToGPU();
@@ -245,8 +246,16 @@ void TestFramework::runTest(const TestMethod &method, TestExample &example)
         stride.push_back(image.dimX * sizeof(float));
         elemsize.push_back(sizeof(float));
     }
+
+    vector<uint64_t*> adjacencyOffsetsCPU;
+    vector<uint64_t*> adjacencyListsCPU;
+    vector<void*> edgeValuesCPU;
     
     Plan * plan = Opt_ProblemPlan(optimizerState, prob, dims, elemsize.data(), stride.data());
+    
+    //Plan * plan = Opt_ProblemPlan(optimizerState, prob, dims,
+    //    elemsize.data(), stride.data(),
+    //    adjacencyOffsetsCPU.data(), adjacencyListsCPU.data());
 
     if (!plan)
     {
@@ -257,6 +266,8 @@ void TestFramework::runTest(const TestMethod &method, TestExample &example)
 
     bool isGPU = ml::util::endsWith(method.optimizerName, "GPU");
 
+
+
     if (isGPU)
     {
         Opt_ProblemSolve(optimizerState, plan, imagesGPU.data(), NULL);
@@ -264,13 +275,14 @@ void TestFramework::runTest(const TestMethod &method, TestExample &example)
             image.syncGPUToCPU();
     }
     else
-        Opt_ProblemSolve(optimizerState, plan, imagesCPU.data(), NULL);
+    {
+        Opt_ProblemSolve(optimizerState, plan, imagesCPU.data(), edgeValuesCPU.data());
+        //Opt_ProblemSolve(optimizerState, plan, imagesCPU.data(), edgeValuesCPU.data(), NULL);
+    }
 
     //cout << "x(0, 0) = " << example.images[0](0, 0) << endl;
     //cout << "x(1, 0) = " << example.images[0](5, 0) << endl;
     //cout << "x(0, 1) = " << example.images[0](0, 5) << endl;
-
-
 
     // TODO: this is not always accurate, in cases where costFunction does not exactly match the cost function in the terra file.  This should just call terra's cost function.
     cout << "optimized cost: " << example.costFunction(example.images[0]) << endl;

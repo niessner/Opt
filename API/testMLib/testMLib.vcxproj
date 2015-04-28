@@ -103,6 +103,8 @@
     <None Include="example.t" />
     <None Include="imageSmoothing.t" />
     <None Include="imageSmoothingAD.t" />
+    <None Include="meshSmoothing.t" />
+    <None Include="meshSmoothingAD.t" />
     <None Include="quadratic.t" />
     <None Include="quadraticSquared.t" />
   </ItemGroup>

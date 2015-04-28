@@ -22,6 +22,12 @@
     <None Include="imageSmoothingAD.t">
       <Filter>tests</Filter>
     </None>
+    <None Include="meshSmoothing.t">
+      <Filter>tests</Filter>
+    </None>
+    <None Include="meshSmoothingAD.t">
+      <Filter>tests</Filter>
+    </None>
   </ItemGroup>
   <ItemGroup>
     <Filter Include="tests">
