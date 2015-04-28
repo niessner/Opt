@@ -8,6 +8,7 @@ local cuda_version = cudalib.localversion()
 local libdevice = terralib.cudahome..string.format("/nvvm/libdevice/libdevice.compute_%d.10.bc",cuda_version)
 terralib.linklibrary(libdevice)
 
+-- TODO everything should be flaot; the double functions are massively slower
 local sqrt = terralib.externfunction("__nv_sqrt", double -> double)
 local cos  = terralib.externfunction("__nv_cos",  double -> double)
 local acos = terralib.externfunction("__nv_acos", double -> double)
@@ -28,7 +29,7 @@ local function noFooter(pd)
 	return quote end
 end
 
-
+local FLOAT_EPSILON = `0.000001f
 -- GAUSS NEWTON (non-block version)
 solversGPU.gaussNewtonGPU = function(problemSpec, vars)
 
@@ -38,10 +39,15 @@ solversGPU.gaussNewtonGPU = function(problemSpec, vars)
 		scratchF : &float
 		
 		r : vars.unknownType				--residuals -> num vars	--TODO this needs to be a 'residual type'
+		z : vars.unknownType				--preconditioned residuals -> num vars	--TODO this needs to be a 'residual type'
 		p : vars.unknownType				--decent direction -> num vars
 		Ap_X : vars.unknownType				--cache values for next kernel call after A = J^T x J x p -> num vars
-		preconditioner : vars.unknownType	--preconditioner for linear system -> num vars
-		rDotZOld : &float					--Old nominator (denominator) of alpha (beta)				
+		preconditioner : vars.unknownType	--pre-conditioner for linear system -> num vars
+		rDotZOld : vars.unknownType			--Old nominator (denominator) of alpha (beta) -> num vars	
+
+		scanAlpha : &float					-- tmp variable for alpha scan
+		scanBeta : &float					-- tmp variable for alpha scan
+		
 		timer : Timer
 		
 		--TODO allocate the data in makePlan
@@ -55,15 +61,16 @@ solversGPU.gaussNewtonGPU = function(problemSpec, vars)
 
 			-- TODO pd.precondition(w,h) needs to computed somehow (ideally in the gradient?
 			-- TODO: don't let this be 0
-			pd.preconditioner(w, h) = 1 --data.problemSpec.gradientPreconditioner(w, h)	-- TODO fix this hack... the preconditioner needs to be the diagonal of JTJ
+			pd.preconditioner(w, h) = 1 --data.problemSpec.gradientPreconditioner(w, h)	-- TODO fix this hack... the pre-conditioner needs to be the diagonal of JTJ
 			var p = pd.preconditioner(w, h)*residuum				   -- apply preconditioner M^-1
 			pd.p(w, h) = p
 		
-			var d = residuum*p;										   -- x-th term of nomimator for computing alpha and denominator for computing beta
+			var d = residuum*p;										   -- x-th term of nominator for computing alpha and denominator for computing beta
 			
+			--TODO this needs do be outside of the boundary check
 			d = util.warpReduce(d)	--TODO check for sizes != 32
 			if (util.laneid() == 0) then
-				util.atomicAdd(pd.rDotZOld, d)
+				util.atomicAdd(pd.rDotZOld, d)	--TODO MICHI
 			end
 		end
 		return { kernel = PCGInit1GPU, header = noHeader, footer = noFooter, params = {}, mapMemberName = "unknown" }
@@ -72,20 +79,67 @@ solversGPU.gaussNewtonGPU = function(problemSpec, vars)
 	specializedKernels.PCGStep1 = function(data)
 		local terra PCGStep1GPU(pd : &data.PlanData, w : int, h : int)
 		
-			var d = 0.f -- TODO this must be ouside of the boundary check to make the warp reduce work
+			var d = 0.0f -- TODO this must be outside of the boundary check to make the warp reduce work
 			var tmp = applyJTJDevice(w, h, unpackstruct(pd.images), pd.p) -- A x p_k  => J^T x J x p_k 
 			pd.Ap_X(w, h) = tmp								  -- store for next kernel call
 			d = pd.p(w, h)*tmp					              -- x-th term of denominator of alpha
 
 			
+			--TODO this needs do be outside of the boundary check
 			d = util.warpReduce(d)	--TODO check for sizes != 32
 			if (util.laneid() == 0) then
-				util.atomicAdd(pd.rDotZOld, d)
+				util.atomicAdd(pd.rDotZOld, d)	--TODO MICHI
 			end
 		end
 		return { kernel = PCGStep1GPU, header = noHeader, footer = noFooter, params = {}, mapMemberName = "unknown" }
 	end
 	
+	specializedKernels.PCGStep2 = function(data)
+		local terra PCGStep2GPU(pd : &data.PlanData, w : int, h : int)
+		
+			-- sum over block results to compute denominator of alpha
+			var dotProduct = bucket[0];
+	
+			var b = 0.0f -- TODO this must be outside of the boundary check to make the warp reduce work
+			var alpha = 0.0f
+			
+			-- update step size alpha
+			if dotProduct > FLOAT_EPSILON then alpha = dp.rDotzOld(w, h)/dotProduct end 
+		
+			dp.delta(w, h) = dp.delta(w, h)+alpha*dp.p(w,h)		-- do a decent step
+			
+			var r = dp.r(w,h)-alpha*dp.Ap_X(w,h)				-- update residuum
+			dp.r(w,h) = r										-- store for next kernel call
+		
+			var z = dp.precondioner(w,h)*r						-- apply pre-conditioner M^-1
+			dp.z(w,h) = z;										-- save for next kernel call
+			
+			b = z*r;											-- compute x-th term of the nominator of beta
+
+			
+			b = util.warpReduce(b)	--TODO check for sizes != 32
+			if (util.laneid() == 0) then
+				util.atomicAdd(pd.rDotZOld, b)
+			end
+		end
+		return { kernel = PCGStep2GPU, header = noHeader, footer = noFooter, params = {}, mapMemberName = "unknown" }
+	end
+	
+	specializedKernels.PCGStep3 = function(data)
+		local terra PCGStep3GPU(pd : &data.PlanData, w : int, h : int)
+		
+		var rDotzNew = bucket[0]										-- get new nominator
+		var rDotzOld = dp.rDotzOld(w,h)									-- get old denominator
+
+		var beta = 0.0f														 
+		if rDotzOld > FLOAT_EPSILON then beta = rDotzNew/rDotzOld end	-- update step size beta
+	
+		dp.rDotzOld(w,h) = rDotzNew										-- save new rDotz for next iteration
+		dp.p(w,h) = dp.z(w,h)+beta*dp.p(w,h)							-- update decent direction
+
+		end
+		return { kernel = PCGStep3GPU, header = noHeader, footer = noFooter, params = {}, mapMemberName = "unknown" }
+	end
 
 	local gpu = util.makeGPUFunctions(problemSpec, vars, PlanData, specializedKernels)
 	
