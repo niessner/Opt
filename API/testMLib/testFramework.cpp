@@ -188,7 +188,7 @@ void TestFramework::runAllTests()
     }
 
     //TestExample example = makeRandomQuadratic(5);
-    TestExample example = makeImageSmoothing("smoothingExampleB.png", 0.1f);
+    TestExample example = makeImageSmoothing("smoothingExampleD.png", 0.1f);
 
     vector<TestMethod> methods;
 
