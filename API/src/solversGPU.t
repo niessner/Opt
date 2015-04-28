@@ -70,15 +70,21 @@ solversGPU.gaussNewtonGPU = function(problemSpec, vars)
 			--TODO this needs do be outside of the boundary check
 			d = util.warpReduce(d)	--TODO check for sizes != 32
 			if (util.laneid() == 0) then
-				util.atomicAdd(pd.rDotZOld, d)	--TODO MICHI
+				util.atomicAdd(pd.scanAlpha, d)
 			end
 		end
 		return { kernel = PCGInit1GPU, header = noHeader, footer = noFooter, params = {}, mapMemberName = "unknown" }
 	end
 	
+	specializedKernels.PCGInit2 = function(data)
+		local terra PCGInit2GPU(pd : &data.PlanData, w : int, h : int)
+			dp.rDotzOld(w,h) = pd.scanAlpha[0]
+		end
+		return { kernel = PCGInit2GPU, header = noHeader, footer = noFooter, params = {}, mapMemberName = "unknown" }
+	end
+	
 	specializedKernels.PCGStep1 = function(data)
 		local terra PCGStep1GPU(pd : &data.PlanData, w : int, h : int)
-		
 			var d = 0.0f -- TODO this must be outside of the boundary check to make the warp reduce work
 			var tmp = applyJTJDevice(w, h, unpackstruct(pd.images), pd.p) -- A x p_k  => J^T x J x p_k 
 			pd.Ap_X(w, h) = tmp								  -- store for next kernel call
@@ -88,7 +94,7 @@ solversGPU.gaussNewtonGPU = function(problemSpec, vars)
 			--TODO this needs do be outside of the boundary check
 			d = util.warpReduce(d)	--TODO check for sizes != 32
 			if (util.laneid() == 0) then
-				util.atomicAdd(pd.rDotZOld, d)	--TODO MICHI
+				util.atomicAdd(pd.scanAlpha, d)
 			end
 		end
 		return { kernel = PCGStep1GPU, header = noHeader, footer = noFooter, params = {}, mapMemberName = "unknown" }
