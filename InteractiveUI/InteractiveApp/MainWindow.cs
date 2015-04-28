@@ -30,6 +30,7 @@ namespace UIWindow
             "lbfgsCPU",
             "vlbfgsCPU",
             "vlbfgsGPU",
+            "gaussNewtonGPU"
             };
 
         public MainWindow()
@@ -37,7 +38,7 @@ namespace UIWindow
             InitializeComponent();
             foreach (string method in optimizationMethods)
                 optimizationMethodComboBox.Items.Add(method);
-            optimizationMethodComboBox.SelectedItem = "vlbfgsCPU";
+            optimizationMethodComboBox.SelectedItem = "gaussNewtonGPU";
         }
 
         private void MainWindow_Load(object sender, EventArgs e)

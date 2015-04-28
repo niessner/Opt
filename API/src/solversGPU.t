@@ -60,8 +60,9 @@ solversGPU.gaussNewtonGPU = function(problemSpec, vars)
 
 			-- TODO pd.precondition(w,h) needs to computed somehow (ideally in the gradient?
 			-- TODO: don't let this be 0
-			pd.preconditioner(w, h) = 1 --data.problemSpec.gradientPreconditioner(w, h)	-- TODO fix this hack... the pre-conditioner needs to be the diagonal of JTJ
-			var p = pd.preconditioner(w, h)*residuum				   -- apply preconditioner M^-1
+			-- pd.preconditioner(w, h) = 1 --data.problemSpec.gradientPreconditioner(w, h)	-- TODO fix this hack... the pre-conditioner needs to be the diagonal of JTJ
+			pd.preconditioner(w,h) = data.problemSpec.gradientPreconditioner(w,h)
+			var p = pd.preconditioner(w, h)*residuum				   -- apply pre-conditioner M^-1
 			pd.p(w, h) = p
 		
 			var d = residuum*p;										   -- x-th term of nominator for computing alpha and denominator for computing beta
