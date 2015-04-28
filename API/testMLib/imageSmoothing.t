@@ -82,7 +82,7 @@ local terra gradientPreconditioner(i : uint64, j : uint64)
 end
 
 -- eval 2*JTJ (note that we keep the '2' to make it consistent with the gradient
-local terra applyJTJ(i : uint64, j : uint64, xImage : X, aImage : A, pImage : X)
+local terra applyJTJ(i : uint64, j : uint64, pImage : X, xImage : X, aImage : A)
  
 	--fit
 	var e_fit = 2.0f*pImage(i, j)

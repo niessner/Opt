@@ -38,12 +38,13 @@ solversGPU.gaussNewtonGPU = function(problemSpec, vars)
 		images : vars.PlanImages
 		scratchF : &float
 		
+		delta : vars.unknownType			--current linear update to be computed -> num vars
 		r : vars.unknownType				--residuals -> num vars	--TODO this needs to be a 'residual type'
 		z : vars.unknownType				--preconditioned residuals -> num vars	--TODO this needs to be a 'residual type'
 		p : vars.unknownType				--decent direction -> num vars
 		Ap_X : vars.unknownType				--cache values for next kernel call after A = J^T x J x p -> num vars
 		preconditioner : vars.unknownType	--pre-conditioner for linear system -> num vars
-		rDotZOld : vars.unknownType			--Old nominator (denominator) of alpha (beta) -> num vars	
+		rDotzOld : vars.unknownType			--Old nominator (denominator) of alpha (beta) -> num vars	
 
 		scanAlpha : &float					-- tmp variable for alpha scan
 		scanBeta : &float					-- tmp variable for alpha scan
@@ -78,7 +79,7 @@ solversGPU.gaussNewtonGPU = function(problemSpec, vars)
 	
 	specializedKernels.PCGInit2 = function(data)
 		local terra PCGInit2GPU(pd : &data.PlanData, w : int, h : int)
-			dp.rDotzOld(w,h) = pd.scanAlpha[0]
+			pd.rDotzOld(w,h) = pd.scanAlpha[0]
 		end
 		return { kernel = PCGInit2GPU, header = noHeader, footer = noFooter, params = {}, mapMemberName = "unknown" }
 	end
@@ -86,7 +87,7 @@ solversGPU.gaussNewtonGPU = function(problemSpec, vars)
 	specializedKernels.PCGStep1 = function(data)
 		local terra PCGStep1GPU(pd : &data.PlanData, w : int, h : int)
 			var d = 0.0f -- TODO this must be outside of the boundary check to make the warp reduce work
-			var tmp = applyJTJDevice(w, h, unpackstruct(pd.images), pd.p) -- A x p_k  => J^T x J x p_k 
+			var tmp = data.problemSpec.applyJTJ.boundary(w, h, pd.p, unpackstruct(pd.images)) -- A x p_k  => J^T x J x p_k 
 			pd.Ap_X(w, h) = tmp								  -- store for next kernel call
 			d = pd.p(w, h)*tmp					              -- x-th term of denominator of alpha
 
@@ -110,15 +111,15 @@ solversGPU.gaussNewtonGPU = function(problemSpec, vars)
 			var alpha = 0.0f
 			
 			-- update step size alpha
-			if dotProduct > FLOAT_EPSILON then alpha = dp.rDotzOld(w, h)/dotProduct end 
+			if dotProduct > FLOAT_EPSILON then alpha = pd.rDotzOld(w, h)/dotProduct end 
 		
-			dp.delta(w, h) = dp.delta(w, h)+alpha*dp.p(w,h)		-- do a decent step
+			pd.delta(w, h) = pd.delta(w, h)+alpha*pd.p(w,h)		-- do a decent step
 			
-			var r = dp.r(w,h)-alpha*dp.Ap_X(w,h)				-- update residuum
-			dp.r(w,h) = r										-- store for next kernel call
+			var r = pd.r(w,h)-alpha*pd.Ap_X(w,h)				-- update residuum
+			pd.r(w,h) = r										-- store for next kernel call
 		
-			var z = dp.precondioner(w,h)*r						-- apply pre-conditioner M^-1
-			dp.z(w,h) = z;										-- save for next kernel call
+			var z = pd.preconditioner(w,h)*r						-- apply pre-conditioner M^-1
+			pd.z(w,h) = z;										-- save for next kernel call
 			
 			b = z*r;											-- compute x-th term of the nominator of beta
 
@@ -134,14 +135,14 @@ solversGPU.gaussNewtonGPU = function(problemSpec, vars)
 	specializedKernels.PCGStep3 = function(data)
 		local terra PCGStep3GPU(pd : &data.PlanData, w : int, h : int)
 		
-		var rDotzNew = scanBeta[0]										-- get new nominator
-		var rDotzOld = dp.rDotzOld(w,h)									-- get old denominator
+		var rDotzNew =  pd.scanBeta[0]										-- get new nominator
+		var rDotzOld = pd.rDotzOld(w,h)									-- get old denominator
 
 		var beta = 0.0f														 
 		if rDotzOld > FLOAT_EPSILON then beta = rDotzNew/rDotzOld end	-- update step size beta
 	
-		dp.rDotzOld(w,h) = rDotzNew										-- save new rDotz for next iteration
-		dp.p(w,h) = dp.z(w,h)+beta*dp.p(w,h)							-- update decent direction
+		pd.rDotzOld(w,h) = rDotzNew										-- save new rDotz for next iteration
+		pd.p(w,h) = pd.z(w,h)+beta*pd.p(w,h)							-- update decent direction
 
 		end
 		return { kernel = PCGStep3GPU, header = noHeader, footer = noFooter, params = {}, mapMemberName = "unknown" }
@@ -157,53 +158,23 @@ solversGPU.gaussNewtonGPU = function(problemSpec, vars)
 
 		unpackstruct(pd.images) = [util.getImages(PlanData, images)]
 
-		var maxIters = 5000
+		var nIterations = 5	--non-linear iterations
+		var lIterations = 5	--linear iterations
 		
-		for iter = 0, maxIters do
+		for nIter = 0, nIterations do
 			--init
-			pd.rDotZOld[0] = 0.0
+			pd.scanAlpha[0] = 0.0
+			pd.scanBeta[0] = 0.0
 			gpu.PCGInit1(pd)
-		end
-		--[[
-		-- TODO: parameterize these
-		var initialLearningRate = 0.01
-		var maxIters = 5000
-		var tolerance = 1e-10
-
-		-- Fixed constants (these do not need to be parameterized)
-		var learningLoss = 0.8
-		var learningGain = 1.1
-		var minLearningRate = 1e-25
-
-		var learningRate = initialLearningRate
-		
-		for iter = 0, maxIters do
-
-			var startCost = gpu.computeCost(pd)
-			logSolver("iteration %d, cost=%f, learningRate=%f\n", iter, startCost, learningRate)
+			gpu.PCGInit2(pd)
 			
-			
-			--
-			-- move along the gradient by learningRate
-			--
-			gpu.updatePosition(pd, learningRate)
-			
-			--
-			-- update the learningRate
-			--
-			var endCost = gpu.computeCost(pd)
-			if endCost < startCost then
-				learningRate = learningRate * learningGain
-			else
-				learningRate = learningRate * learningLoss
-
-				if learningRate < minLearningRate then
-					break
-				end
+			for lIter = 0, lIterations do
+				gpu.PCGStep1(pd)
+				gpu.PCGStep2(pd)
+				gpu.PCGStep3(pd)
 			end
-			pd.timer:nextIteration()
 		end
-		]]--
+
 		pd.timer:evaluate()
 		pd.timer:cleanup()
 	end
@@ -213,12 +184,17 @@ solversGPU.gaussNewtonGPU = function(problemSpec, vars)
 		pd.plan.data = pd
 		pd.plan.impl = impl
 
-		pd.r:initGPU()			
-		pd.p:initGPU()		
+		pd.delta:initGPU()
+		pd.r:initGPU()
+		pd.z:initGPU()
+		pd.p:initGPU()
+		pd.Ap_X:initGPU()
 		pd.preconditioner:initGPU()
-		--pd.gradStore:initGPU()
-		C.cudaMallocManaged([&&opaque](&(pd.rDotZOld)), sizeof(float), C.cudaMemAttachGlobal)
-
+		pd.rDotzOld:initGPU()
+		
+		--TODO make this exclusively GPU
+		C.cudaMallocManaged([&&opaque](&(pd.scanAlpha)), sizeof(float), C.cudaMemAttachGlobal)
+		C.cudaMallocManaged([&&opaque](&(pd.scanBeta)), sizeof(float), C.cudaMemAttachGlobal)
 		return &pd.plan
 	end
 	return makePlan
