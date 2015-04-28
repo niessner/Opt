@@ -78,6 +78,7 @@ solversGPU.gaussNewtonGPU = function(problemSpec, vars)
 	specializedKernels.PCGInit2 = function(data)
 		local terra PCGInit2GPU(pd : &data.PlanData, w : int, h : int)
 			pd.rDotzOld(w,h) = pd.scanAlpha[0]
+			pd.delta(w,h) = 0.0f
 		end
 		return { kernel = PCGInit2GPU, header = noHeader, footer = noFooter, params = {}, mapMemberName = "unknown" }
 	end
@@ -161,13 +162,16 @@ solversGPU.gaussNewtonGPU = function(problemSpec, vars)
 
 		unpackstruct(pd.images) = [util.getImages(PlanData, images)]
 
-		var nIterations = 5	--non-linear iterations
-		var lIterations = 5	--linear iterations
+		var nIterations = 10	--non-linear iterations
+		var lIterations = 25	--linear iterations
 		
 		for nIter = 0, nIterations do
 
 			pd.scanAlpha[0] = 0.0	--scan in PCGInit1 requires reset
 			gpu.PCGInit1(pd)
+			--var a = pd.scanAlpha[0]
+			--C.printf("Alpha %15.15f\n", a)
+			--break
 			gpu.PCGInit2(pd)
 			
 			for lIter = 0, lIterations do

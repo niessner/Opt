@@ -385,13 +385,10 @@ extern "C" void LaplacianSolveGNStub(SolverInput& input, SolverState& state, Sol
 	{
 		Initialization(input, state, parameters, timer);
 
-		float alpha;
-		cudaMemcpy(&alpha, &state.d_rDotzOld[0], sizeof(float), cudaMemcpyDeviceToHost);
-		printf("Alpha %15.15f\n", alpha);
-
-
-
-		getchar();
+		//float alpha;
+		//cudaMemcpy(&alpha, &state.d_rDotzOld[0], sizeof(float), cudaMemcpyDeviceToHost);
+		//printf("Alpha %15.15f\n", alpha);
+		//getchar();
 
 		for (unsigned int linIter = 0; linIter < parameters.nLinIterations; linIter++) {
 			PCGIteration(input, state, parameters, timer);

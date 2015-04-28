@@ -114,6 +114,7 @@ __inline__ __device__ float evalMinusJTFDevice(unsigned int variableIdx, SolverI
 	if (validTarget) p += 2.0f*parameters.weightFitting;	//e_reg
 	p += 2.0f*parameters.weightRegularizer*(n*n + n);
 
+	p = 1.0f; 
 	if (p > FLOAT_EPSILON)	state.d_precondioner[variableIdx] = 1.0f / p;
 	else					state.d_precondioner[variableIdx] = 1.0f;
 
