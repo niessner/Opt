@@ -50,8 +50,6 @@ solversGPU.gaussNewtonGPU = function(problemSpec, vars)
 		scanBeta : &float					-- tmp variable for alpha scan
 		
 		timer : Timer
-		
-		--TODO allocate the data in makePlan
 	}
 	
 	local specializedKernels = {}
@@ -133,19 +131,24 @@ solversGPU.gaussNewtonGPU = function(problemSpec, vars)
 	end
 	
 	specializedKernels.PCGStep3 = function(data)
-		local terra PCGStep3GPU(pd : &data.PlanData, w : int, h : int)
+		local terra PCGStep3GPU(pd : &data.PlanData, w : int, h : int)			
+			var rDotzNew =  pd.scanBeta[0]									-- get new nominator
+			var rDotzOld = pd.rDotzOld(w,h)									-- get old denominator
+
+			var beta = 0.0f														 
+			if rDotzOld > FLOAT_EPSILON then beta = rDotzNew/rDotzOld end	-- update step size beta
 		
-		var rDotzNew =  pd.scanBeta[0]										-- get new nominator
-		var rDotzOld = pd.rDotzOld(w,h)									-- get old denominator
-
-		var beta = 0.0f														 
-		if rDotzOld > FLOAT_EPSILON then beta = rDotzNew/rDotzOld end	-- update step size beta
-	
-		pd.rDotzOld(w,h) = rDotzNew										-- save new rDotz for next iteration
-		pd.p(w,h) = pd.z(w,h)+beta*pd.p(w,h)							-- update decent direction
-
+			pd.rDotzOld(w,h) = rDotzNew										-- save new rDotz for next iteration
+			pd.p(w,h) = pd.z(w,h)+beta*pd.p(w,h)							-- update decent direction
 		end
 		return { kernel = PCGStep3GPU, header = noHeader, footer = noFooter, params = {}, mapMemberName = "unknown" }
+	end
+	
+	specializedKernels.PCGLinearUpdate = function(data)
+		local terra PCGLinearUpdateGPU(pd : &data.PlanData, w : int, h : int)
+			pd.images.unknown(w,h) = pd.images.unknown(w,h) + pd.delta(w,h)
+		end
+		return { kernel = PCGLinearUpdateGPU, header = noHeader, footer = noFooter, params = {}, mapMemberName = "unknown" }
 	end
 
 	local gpu = util.makeGPUFunctions(problemSpec, vars, PlanData, specializedKernels)
@@ -162,17 +165,20 @@ solversGPU.gaussNewtonGPU = function(problemSpec, vars)
 		var lIterations = 5	--linear iterations
 		
 		for nIter = 0, nIterations do
-			--init
-			pd.scanAlpha[0] = 0.0
-			pd.scanBeta[0] = 0.0
+
+			pd.scanAlpha[0] = 0.0	--scan in PCGInit1 requires reset
 			gpu.PCGInit1(pd)
 			gpu.PCGInit2(pd)
 			
 			for lIter = 0, lIterations do
+				pd.scanAlpha[0] = 0.0	--scan in PCGStep1 requires reset
 				gpu.PCGStep1(pd)
+				pd.scanBeta[0] = 0.0	--scan in PCGStep2 requires reset
 				gpu.PCGStep2(pd)
 				gpu.PCGStep3(pd)
 			end
+			
+			gpu.PCGLinearUpdate(pd)
 		end
 
 		pd.timer:evaluate()
