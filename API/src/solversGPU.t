@@ -39,6 +39,7 @@ solversGPU.gaussNewtonGPU = function(problemSpec, vars)
 		
 		r : vars.unknownType				--residuals -> num vars	--TODO this needs to be a 'residual type'
 		p : vars.unknownType				--decent direction -> num vars
+		Ap_X : vars.unknownType				--cache values for next kernel call after A = J^T x J x p -> num vars
 		preconditioner : vars.unknownType	--preconditioner for linear system -> num vars
 		rDotZOld : &float					--Old nominator (denominator) of alpha (beta)				
 		timer : Timer
@@ -66,6 +67,23 @@ solversGPU.gaussNewtonGPU = function(problemSpec, vars)
 			end
 		end
 		return { kernel = PCGInit1GPU, header = noHeader, footer = noFooter, params = {}, mapMemberName = "unknown" }
+	end
+	
+	specializedKernels.PCGStep1 = function(data)
+		local terra PCGStep1GPU(pd : &data.PlanData, w : int, h : int)
+		
+			var d = 0.f -- TODO this must be ouside of the boundary check to make the warp reduce work
+			var tmp = applyJTJDevice(w, h, unpackstruct(pd.images), pd.p) -- A x p_k  => J^T x J x p_k 
+			pd.Ap_X(w, h) = tmp								  -- store for next kernel call
+			d = pd.p(w, h)*tmp					              -- x-th term of denominator of alpha
+
+			
+			d = util.warpReduce(d)	--TODO check for sizes != 32
+			if (util.laneid() == 0) then
+				util.atomicAdd(pd.rDotZOld, d)
+			end
+		end
+		return { kernel = PCGStep1GPU, header = noHeader, footer = noFooter, params = {}, mapMemberName = "unknown" }
 	end
 	
 
