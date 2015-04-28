@@ -104,7 +104,7 @@ solversGPU.gaussNewtonGPU = function(problemSpec, vars)
 		local terra PCGStep2GPU(pd : &data.PlanData, w : int, h : int)
 		
 			-- sum over block results to compute denominator of alpha
-			var dotProduct = bucket[0];
+			var dotProduct = pd.scanAlpha[0]
 	
 			var b = 0.0f -- TODO this must be outside of the boundary check to make the warp reduce work
 			var alpha = 0.0f
@@ -125,7 +125,7 @@ solversGPU.gaussNewtonGPU = function(problemSpec, vars)
 			
 			b = util.warpReduce(b)	--TODO check for sizes != 32
 			if (util.laneid() == 0) then
-				util.atomicAdd(pd.rDotZOld, b)
+				util.atomicAdd(pd.scanBeta, b)
 			end
 		end
 		return { kernel = PCGStep2GPU, header = noHeader, footer = noFooter, params = {}, mapMemberName = "unknown" }
@@ -134,7 +134,7 @@ solversGPU.gaussNewtonGPU = function(problemSpec, vars)
 	specializedKernels.PCGStep3 = function(data)
 		local terra PCGStep3GPU(pd : &data.PlanData, w : int, h : int)
 		
-		var rDotzNew = bucket[0]										-- get new nominator
+		var rDotzNew = scanBeta[0]										-- get new nominator
 		var rDotzOld = dp.rDotzOld(w,h)									-- get old denominator
 
 		var beta = 0.0f														 
