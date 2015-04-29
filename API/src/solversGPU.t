@@ -295,7 +295,8 @@ solversGPU.gradientDescentGPU = function(problemSpec, vars)
 		pd.plan.impl = impl
 
 		pd.gradStore:initGPU()
-		C.cudaMallocManaged([&&opaque](&(pd.scratchF)), sizeof(float), C.cudaMemAttachGlobal)
+		var err = C.cudaMallocManaged([&&opaque](&(pd.scratchF)), sizeof(float), C.cudaMemAttachGlobal)
+		if err ~= 0 then C.printf("cudaMallocManaged error: %d", err) end
 
 		return &pd.plan
 	end

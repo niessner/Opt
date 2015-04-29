@@ -1,7 +1,7 @@
 
 #include "main.h"
 
-const bool groundTruth = false;
+const bool groundTruth = true;
 
 TestExample TestFramework::makeImageSmoothing(const string &imageFilename, float w)
 {
