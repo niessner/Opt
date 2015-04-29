@@ -18,7 +18,7 @@ end
 
 -- constants
 local verboseSolver = true
-local verboseAD = false
+local verboseAD = true
 
 local function newclass(name)
     local mt = { __name = name }
@@ -544,7 +544,7 @@ function ad.Cost(costexp_)
         local jtjimages = terralib.newlist()
         jtjimages:insertall(images)
         jtjimages:insert(P)
-        local jtjexp = createjtj(costexp_.terms,unknown,P)
+        local jtjexp = 2.0*createjtj(costexp_.terms,unknown,P)
         dprint("jtj")
         r.applyJTJ = createfunctionset(jtjimages,jtjexp)
     end
