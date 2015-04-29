@@ -11,14 +11,16 @@ TestExample TestFramework::makeMeshSmoothing(const string &imageFilename, float 
 
     const size_t pixelCount = bmp.size();
 
+    OptGraphf graph;
+
+    TestExample result("meshSmoothing", "meshSmoothing.t", bmp.getWidth(), bmp.getHeight());
+
+    result.graphs.push_back(graph);
+
+    /*
     auto getVariable = [=](size_t x, size_t y)
     {
         return (size_t)(y * dimX + x);
-    };
-
-    auto isBorder = [=](size_t x, size_t y)
-    {
-        return (x == 0 || y == 0 || x == dimX - 1 || y == dimY - 1);
     };
 
     MathVector<float> x(pixelCount);
@@ -56,8 +58,6 @@ TestExample TestFramework::makeMeshSmoothing(const string &imageFilename, float 
         testImage(p.x, p.y) = vec4uc(util::boundToByte(x[getVariable(p.x, p.y)]));
 
     LodePNG::save(testImage, "smoothingOutputLinearSolve.png");
-
-    TestExample result("imageSmoothing", "imageSmoothing.t", bmp.getWidth(), bmp.getHeight());
 
     result.costFunction = [=](const OptImage &variables)
     {
@@ -113,5 +113,5 @@ TestExample TestFramework::makeMeshSmoothing(const string &imageFilename, float 
     result.minimumCost = result.costFunction(result.minimumValues);
 
 
-    return result;
+    return result;*/
 }

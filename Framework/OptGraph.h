@@ -23,12 +23,13 @@ struct OptGraph
 
     struct Node
     {
+        int index;
         vector<Edge> edges;
     };
 
     OptGraph()
     {
-        dataGPU = nullptr;
+        
     }
 
     OptGraph(int nodeCount)
@@ -39,7 +40,8 @@ struct OptGraph
     void allocate(int nodeCount)
     {
         nodes.resize(nodeCount);
-        //cudaMalloc(&dataGPU, sizeof(float) * dimX * dimY);
+        for (int n = 0; n < nodeCount; n++)
+            nodes[n].index = n;
     }
 
     void finalize()
@@ -55,6 +57,8 @@ struct OptGraph
             adjacencyListsCPU.push_back(n)
         }
         adjacencyOffsetsCPU.push_back(adjacencyListsCPU.size());
+
+        //cudaMalloc(&dataGPU, sizeof(float) * dimX * dimY);
     }
 
     void syncCPUToGPU() const
@@ -75,8 +79,6 @@ struct OptGraph
     vector<uint64_t> adjacencyOffsetsCPU;
     vector<uint64_t> adjacencyListsCPU;
     vector<EdgeValueType> edgeValuesCPU;
-    void *dataGPU;
-    int nodeCount;
 };
 
 typedef OptGraph<float> OptGraphf;
