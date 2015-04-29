@@ -111,6 +111,8 @@
     <None Include="quadraticSquared.t" />
   </ItemGroup>
   <ItemGroup>
+    <ClCompile Include="exampleImageSmoothing.cpp" />
+    <ClCompile Include="exampleMeshSmoothing.cpp" />
     <ClCompile Include="main.cpp" />
     <ClCompile Include="mLibSource.cpp" />
     <ClCompile Include="testFramework.cpp" />
