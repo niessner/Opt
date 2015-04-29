@@ -87,7 +87,7 @@ solversGPU.gaussNewtonGPU = function(problemSpec, vars)
 	specializedKernels.PCGStep1 = function(data)
 		local terra PCGStep1GPU(pd : &data.PlanData, w : int, h : int)
 			var d = 0.0f -- TODO this must be outside of the boundary check to make the warp reduce work
-			var tmp = data.problemSpec.applyJTJ.boundary(w, h, pd.p, unpackstruct(pd.images)) -- A x p_k  => J^T x J x p_k 
+			var tmp = data.problemSpec.applyJTJ.boundary(w, h, unpackstruct(pd.images), pd.p) -- A x p_k  => J^T x J x p_k 
 			pd.Ap_X(w, h) = tmp								  -- store for next kernel call
 			d = pd.p(w, h)*tmp					              -- x-th term of denominator of alpha
 

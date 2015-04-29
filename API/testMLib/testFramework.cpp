@@ -63,7 +63,7 @@ void TestFramework::runAllTests()
     }
 
     //TestExample example = makeRandomQuadratic(5);
-    TestExample example = makeImageSmoothing("smoothingExampleB.png", 0.1f);
+    TestExample example = makeImageSmoothing("smoothingExampleD.png", 0.1f);
 
     vector<TestMethod> methods;
 
@@ -71,7 +71,7 @@ void TestFramework::runAllTests()
     // CPU methods
     //
     //methods.push_back(TestMethod("gradientDescentCPU","no-params"));
-    methods.push_back(TestMethod("conjugateGradientCPU", "no-params"));
+    //methods.push_back(TestMethod("conjugateGradientCPU", "no-params"));
     /*methods.push_back(TestMethod("linearizedConjugateGradientCPU", "no-params"));
     methods.push_back(TestMethod("lbfgsCPU", "no-params"));
     methods.push_back(TestMethod("vlbfgsCPU", "no-params"));
@@ -83,7 +83,7 @@ void TestFramework::runAllTests()
     //methods.push_back(TestMethod("gradientDescentGPU", "no-params"));
     //methods.push_back(TestMethod("vlbfgsGPU", "no-params"));
     //methods.push_back(TestMethod("adaDeltaGPU", "no-params"));
-    //methods.push_back(TestMethod("gaussNewtonGPU", "no-params"));
+    methods.push_back(TestMethod("gaussNewtonGPU", "no-params"));
 
     for (auto &method : methods)
         runTest(method, example);
