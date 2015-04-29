@@ -75,9 +75,6 @@ struct OptGraph
         //cudaMemcpy((void *)dataCPU.data(), dataGPU, sizeof(float) * dimX * dimY, cudaMemcpyDeviceToHost);
     }
 
-    const void * DataCPU() const { return dataCPU.data(); }
-    const void * DataGPU() const { return dataGPU; }
-
     vector<Node> nodes;
 
     vector<uint64_t> adjacencyOffsetsCPU;
