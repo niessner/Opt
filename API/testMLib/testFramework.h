@@ -27,6 +27,7 @@ struct TestExample
     string terraCodeFilename;
 
     vector<OptImage> images;
+    vector<OptGraphf> graphs;
 
     float minimumCost;
     OptImage minimumValues;
@@ -44,6 +45,7 @@ private:
 
     TestExample makeRandomQuadratic(int count);
     TestExample makeImageSmoothing(const string &imageFilename, float w);
+    TestExample makeMeshSmoothing(const string &imageFilename, float w);
 
     vector<TestMethod> methods;
     vector<TestExample> examples;

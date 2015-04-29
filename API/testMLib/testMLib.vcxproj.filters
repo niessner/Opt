@@ -4,6 +4,8 @@
     <ClInclude Include="main.h" />
     <ClInclude Include="testFramework.h" />
     <ClInclude Include="mLibInclude.h" />
+    <ClInclude Include="..\..\Framework\OptGraph.h" />
+    <ClInclude Include="..\..\Framework\OptImage.h" />
   </ItemGroup>
   <ItemGroup>
     <None Include="..\src\o.t" />

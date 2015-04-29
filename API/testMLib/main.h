@@ -15,6 +15,7 @@ extern "C" {
 #include <functional>
 
 #include "OptImage.h"
+#include "OptGraph.h"
 
 using namespace std;
 

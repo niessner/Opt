@@ -94,6 +94,8 @@
     </PreBuildEvent>
   </ItemDefinitionGroup>
   <ItemGroup>
+    <ClInclude Include="..\..\Framework\OptGraph.h" />
+    <ClInclude Include="..\..\Framework\OptImage.h" />
     <ClInclude Include="main.h" />
     <ClInclude Include="mLibInclude.h" />
     <ClInclude Include="testFramework.h" />
