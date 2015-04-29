@@ -1,7 +1,7 @@
 
 #include "main.h"
 
-const bool groundTruth = true;
+const bool groundTruth = false;
 
 TestExample TestFramework::makeImageSmoothing(const string &imageFilename, float w)
 {
@@ -67,7 +67,7 @@ TestExample TestFramework::makeImageSmoothing(const string &imageFilename, float
 
     LodePNG::save(testImage, "smoothingOutputLinearSolve.png");
     
-    TestExample result("imageSmoothing", "imageSmoothing.t", bmp.getWidth(), bmp.getHeight());
+    TestExample result("imageSmoothing", "imageSmoothingAD.t", bmp.getWidth(), bmp.getHeight());
 
     result.costFunction = [=](const OptImage &variables)
     {

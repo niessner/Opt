@@ -3,6 +3,7 @@
 
 const bool groundTruth = true;
 
+/*
 TestExample TestFramework::makeMeshSmoothing(const string &imageFilename, float w)
 {
     const Bitmap bmp = LodePNG::load(imageFilename);
@@ -17,7 +18,7 @@ TestExample TestFramework::makeMeshSmoothing(const string &imageFilename, float 
 
     result.graphs.push_back(graph);
 
-    /*
+    
     auto getVariable = [=](size_t x, size_t y)
     {
         return (size_t)(y * dimX + x);
@@ -113,5 +114,6 @@ TestExample TestFramework::makeMeshSmoothing(const string &imageFilename, float 
     result.minimumCost = result.costFunction(result.minimumValues);
 
 
-    return result;*/
+    return result;
 }
+*/
