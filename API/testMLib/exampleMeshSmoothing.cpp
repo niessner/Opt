@@ -3,47 +3,71 @@
 
 const bool groundTruth = true;
 
-/*
 TestExample TestFramework::makeMeshSmoothing(const string &imageFilename, float w)
 {
     const Bitmap bmp = LodePNG::load(imageFilename);
     const int dimX = bmp.getWidth();
     const int dimY = bmp.getHeight();
 
-    const size_t pixelCount = bmp.size();
+    const int pixelCount = bmp.size();
 
-    OptGraphf graph;
+    OptGraphf graph(pixelCount);
 
-    TestExample result("meshSmoothing", "meshSmoothing.t", bmp.getWidth(), bmp.getHeight());
-
-    result.graphs.push_back(graph);
-
-    
-    auto getVariable = [=](size_t x, size_t y)
+    auto getVariable = [=](int x, int y)
     {
-        return (size_t)(y * dimX + x);
+        return (y * dimX + x);
     };
+
+    for (const auto &p : bmp)
+    {
+        graph.nodes[getVariable((int)p.x, (int)p.y)].x = (int)p.x;
+        graph.nodes[getVariable((int)p.x, (int)p.y)].y = (int)p.y;
+    }
+
+    auto getNode = [&](int x, int y) -> OptGraphf::Node&
+    {
+        return graph.nodes[getVariable(x, y)];
+    };
+
+    auto addEdge = [&](int xStart, int yStart, int xOffset, int yOffset)
+    {
+        int x = xStart + xOffset;
+        int y = yStart + yOffset;
+        if (x >= 0 && x < dimX && y >= 0 && y < dimY)
+        {
+            auto &nodeStart = getNode(xStart, yStart);
+            auto &nodeEnd = getNode(x, y);
+            nodeStart.edges.push_back(OptGraphf::Edge(nodeEnd.index, 1.0f));
+        }
+    };
+
+    for (const auto &p : bmp)
+    {
+        addEdge((int)p.x, (int)p.y, -1, 0);
+        addEdge((int)p.x, (int)p.y, 1, 0);
+        addEdge((int)p.x, (int)p.y, 0, -1);
+        addEdge((int)p.x, (int)p.y, 0, 1);
+    }
 
     MathVector<float> x(pixelCount);
     if (groundTruth)
     {
         SparseMatrixf L(pixelCount, pixelCount);
-        for (const auto &p : bmp)
-        {
-            if (isBorder(p.x, p.y))
-                continue;
+        MathVector<float> targetValues(pixelCount);
 
-            size_t row = getVariable(p.x, p.y);
-            L(row, row) = 4.0;
-            L(row, getVariable(p.x - 1, p.y + 0)) = -1.0;
-            L(row, getVariable(p.x + 1, p.y + 0)) = -1.0;
-            L(row, getVariable(p.x + 0, p.y - 1)) = -1.0;
-            L(row, getVariable(p.x + 0, p.y + 1)) = -1.0;
+        for (const auto &n : graph.nodes)
+        {
+            L(n.index, n.index) = (float)n.edges.size();
+
+            for (const auto &e : n.edges)
+            {
+                L(n.index, e.end) = -1.0;
+            }
         }
 
-        MathVector<float> targetValues(pixelCount);
+        
         for (const auto &p : bmp)
-            targetValues[getVariable(p.x, p.y)] = p.value.r;
+            targetValues[getVariable((int)p.x, (int)p.y)] = p.value.r;
 
         SparseMatrixf W = SparseMatrixf::identity(pixelCount) * w;
 
@@ -54,33 +78,32 @@ TestExample TestFramework::makeMeshSmoothing(const string &imageFilename, float 
         x = solver.solve(A, b);
     }
 
+    TestExample result("meshSmoothing", "meshSmoothing.t", bmp.getWidth(), bmp.getHeight());
+
+    result.graphs.push_back(graph);
+
     Bitmap testImage = bmp;
     for (const auto &p : bmp)
-        testImage(p.x, p.y) = vec4uc(util::boundToByte(x[getVariable(p.x, p.y)]));
+        testImage(p.x, p.y) = vec4uc(util::boundToByte(x[getVariable((int)p.x, (int)p.y)]));
 
     LodePNG::save(testImage, "smoothingOutputLinearSolve.png");
 
     result.costFunction = [=](const OptImage &variables)
     {
-        //(4 * x_i - (neighbors) ) ^2 ) + sum_i( w * (x_i - target_i)^2
         float sum = 0.0;
 
         //
         // Laplacian cost
         //
-        for (const auto &p : bmp)
+        for (const auto &n : graph.nodes)
         {
-            if (isBorder(p.x, p.y))
-                continue;
+            const float x = variables(n.x, n.y);
 
-            const float x = variables(p.x, p.y);
+            float nsum = 0.0f;
+            for (const auto &e : n.edges)
+                nsum += variables(graph.nodes[e.end].x, graph.nodes[e.end].y) * e.value;
 
-            const float n0 = variables(p.x - 1, p.y);
-            const float n1 = variables(p.x + 1, p.y);
-            const float n2 = variables(p.x, p.y - 1);
-            const float n3 = variables(p.x, p.y + 1);
-
-            const float laplacianCost = 4 * x - (n0 + n1 + n2 + n3);
+            const float laplacianCost = n.edges.size() * x - nsum;
 
             sum += laplacianCost * laplacianCost;
         }
@@ -113,7 +136,5 @@ TestExample TestFramework::makeMeshSmoothing(const string &imageFilename, float 
 
     result.minimumCost = result.costFunction(result.minimumValues);
 
-
     return result;
 }
-*/

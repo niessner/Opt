@@ -24,6 +24,10 @@ struct OptGraph
     struct Node
     {
         int index;
+
+        // these are only relevant when the node maps over an image domain
+        int x, y;
+
         vector<Edge> edges;
     };
 
