@@ -63,7 +63,7 @@ local function toexp(n)
         elseif type(n) == "number" then return getconst(n)
         elseif type(n) == "table" then
             local mt = getmetatable(n)
-            if type(mt.__toadexp) == "function" then
+            if mt and type(mt.__toadexp) == "function" then
                 return toexp(mt.__toadexp(n))
             end
         end

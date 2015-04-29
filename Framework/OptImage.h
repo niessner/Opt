@@ -1,7 +1,7 @@
 #ifndef OptImage_h
 #define OptImage_h
 #include "cuda_runtime.h"
-
+#include <algorithm>
 struct OptImage
 {
     OptImage()
@@ -69,7 +69,7 @@ struct OptImage
     const void * DataCPU() const { return dataCPU.data(); }
     const void * DataGPU() const { return dataGPU; }
 
-    vector<float> dataCPU;
+    std::vector<float> dataCPU;
     void *dataGPU;
     int dimX, dimY;
 };

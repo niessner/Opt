@@ -394,7 +394,7 @@ end
 util.makeComputeResiduals = function(data)
 	-- haha ha
 	local terra costHack(pd : &data.PlanData, w : int, h : int, values : data.imageType)
-		return data.problemSpec.cost.boundary(w, h, values, pd.images.image0)
+		return data.problemSpec.cost.boundary(w, h, values, unpackstruct(pd.images, 2))
 	end
 	
 	local terra computeResiduals(pd : &data.PlanData, values : data.imageType, residuals : data.imageType)
@@ -410,7 +410,7 @@ end
 util.makeComputeDeltaCost = function(data)
 	-- haha ha
 	local terra costHack(pd : &data.PlanData, w : int, h : int, values : data.imageType)
-		return data.problemSpec.cost.boundary(w, h, values, pd.images.image0)
+		return data.problemSpec.cost.boundary(w, h, values, unpackstruct(pd.images, 2))
 	end
 	
 	local terra deltaCost(pd : &data.PlanData, baseResiduals : data.imageType, currentValues : data.imageType)
