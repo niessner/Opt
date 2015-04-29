@@ -546,7 +546,7 @@ function ad.Cost(costexp_)
         jtjimages:insert(P)
         local jtjexp = createjtj(costexp_.terms,unknown,P)
         dprint("jtj")
-        r.jtj = createfunctionset(jtjimages,jtjexp)
+        r.applyJTJ = createfunctionset(jtjimages,jtjexp)
     end
     return r
 end
