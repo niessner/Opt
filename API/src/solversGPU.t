@@ -360,7 +360,7 @@ solversGPU.conjugateGradientGPU = function(problemSpec, vars)
 	specializedKernels.CGDirection = function(data)
 		local terra CGDirection(pd : &data.PlanData, w : int, h : int, beta : float)
 			var g = pd.gradient(w, h)
-			var @addr = &pd.searchDirection(w, h)
+			var addr = &pd.searchDirection(w, h)
 			@addr = beta * @addr - g
 			pd.prevGradient(w, h) = g
 		end
@@ -403,6 +403,7 @@ solversGPU.conjugateGradientGPU = function(problemSpec, vars)
 				
 				curCost = @pd.scratchCost
 				
+				-- ask zach about beta stack vs. beta dynamic
 				beta = util.max(@pd.scratchNum / @pd.scratchDen, 0.0f)
 				
 				gpu.CGDirection(pd, beta)
