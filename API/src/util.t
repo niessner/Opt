@@ -651,12 +651,19 @@ util.makeDumpBiLineSearch = function(data, cpu)
 	return dumpBiLineSearch
 end
 
+local positionForValidLane = macro(function(pd,mapMemberName,pw,ph)
+	mapMemberName = mapMemberName:asvalue()
+	return quote
+		@pw,@ph = blockDim.x * blockIdx.x + threadIdx.x, blockDim.y * blockIdx.y + threadIdx.y
+	in
+		 @pw < pd.images.[mapMemberName]:W() and @ph < pd.images.[mapMemberName]:H() 
+	end
+end)
+
 local wrapGPUKernel = function(nakedKernel, PlanData, mapMemberName, params)
 	local terra wrappedKernel(pd : PlanData, [params])
-		var w = blockDim.x * blockIdx.x + threadIdx.x
-		var h = blockDim.y * blockIdx.y + threadIdx.y
-		
-		if w < pd.images.[mapMemberName]:W() and h < pd.images.[mapMemberName]:H() then
+		var w : int64, h : int64
+		if positionForValidLane(pd, mapMemberName, &w, &h) then
 			nakedKernel(&pd, w, h, params)
 		end
 	end
