@@ -324,6 +324,7 @@ solversGPU.conjugateGradientGPU = function(problemSpec, vars)
 		residualStorage : vars.unknownType
 		
 		timer : Timer
+		timerWall : Timer
 	}
 	
 	local specializedKernels = {}
@@ -333,7 +334,6 @@ solversGPU.conjugateGradientGPU = function(problemSpec, vars)
 	-- 
 	specializedKernels.PRConj = function(data)
 		local terra PRConj(pd : &data.PlanData, w : int, h : int)
-			-- make odd and even versions to mimic ring buffer?
 			var cost = data.problemSpec.cost.boundary(w, h, unpackstruct(pd.images))
 			
 			var g = data.problemSpec.gradient.boundary(w, h, unpackstruct(pd.images))
@@ -371,8 +371,15 @@ solversGPU.conjugateGradientGPU = function(problemSpec, vars)
 	
 	local terra impl(data_ : &opaque, images : &&opaque, params_ : &opaque)
 		var pd = [&PlanData](data_)
+		pd.timerWall:init()
 		pd.timer:init()
 
+		var timingInfo : util.TimingInfo
+		C.cudaEventCreate(&timingInfo.startEvent)
+		C.cudaEventCreate(&timingInfo.endEvent)
+		C.cudaEventRecord(timingInfo.startEvent, nil)
+		timingInfo.eventName = "wallClock"
+		
 		var params = [&double](params_)
 
 		unpackstruct(pd.images) = [util.getImages(PlanData, images)]
@@ -395,6 +402,7 @@ solversGPU.conjugateGradientGPU = function(problemSpec, vars)
 				gpu.copyImageScale(pd, pd.searchDirection, pd.gradient, -1.0f)
 				gpu.copyImage(pd, pd.prevGradient, pd.gradient)
 			else
+				-- cuda memset this instead
 				@pd.scratchCost = 0.0f
 				@pd.scratchNum = 0.0f
 				@pd.scratchDen = 0.0f
@@ -416,15 +424,22 @@ solversGPU.conjugateGradientGPU = function(problemSpec, vars)
 			prevBestAlpha = bestAlpha
 			
 			logSolver("iteration %d, cost=%f\n", iter, curCost)
-			
 			logSolver("alpha=%12.12f, beta=%12.12f\n\n", bestAlpha, beta)
+			
 			if bestAlpha == 0.0 and beta == 0.0 then
 				break
 			end
 			
 			pd.timer:nextIteration()
 		end
+		
+		C.cudaEventRecord(timingInfo.endEvent, nil)
+		pd.timerWall.timingInfo:insert(timingInfo)
+		
+		pd.timerWall:evaluate()
 		pd.timer:evaluate()
+		
+		pd.timerWall:cleanup()
 		pd.timer:cleanup()
 	end
 
