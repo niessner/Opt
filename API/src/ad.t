@@ -187,6 +187,7 @@ local x,y,z = v[1],v[2],v[3]
 local ad = {}
 ad.v = v
 ad.toexp = toexp
+ad.newclass = newclass
 
 setmetatable(ad, { __index = function(self,idx) -- for just this file, auto-generate an op 
     local name = assert(type(idx) == "string" and idx)

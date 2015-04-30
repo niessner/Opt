@@ -194,7 +194,7 @@ end
 function opt.Dim(name, idx)
     idx = assert(tonumber(idx), "expected an index for this dimension")
     local size = tonumber(opt.dimensions[idx])
-    return Dim:new { name = name, size = size }
+    return Dim:new { name = name, size = size, _index = idx }
 end
 
 function opt.InternalDim(name, size)
@@ -302,11 +302,29 @@ end
 
 ad = require("ad")
 
+local VarDef = ad.newclass("VarDef") -- meta-data attached to each ad variable about what actual value it is
+local ImageAccess = VarDef:Variant("ImageAccess") -- access into one particular image
+local BoundsAccess = VarDef:Variant("BoundsAccess") -- query about the bounds of an image
+local IndexValue = VarDef:Variant("IndexValue") -- query of the numeric index
 
-local ImageTable = newclass("ImageTable") -- a context that keeps a mapping from image accesses im(0,-1) to the ad variable object that represents the access
+function ImageAccess:__tostring()
+    local xn,yn = tostring(self.x):gsub("-","m"),tostring(self.y):gsub("-","m")
+    return ("%s_%s_%s_%s"):format(self.image.name,self.field,xn,yn)
+end
+function BoundsAccess:__tostring() return ("bounds_%d_%d_%d_%d"):format(self.x,self.y,self.sx,self.sy) end
+function IndexValue:__tostring() return ({[0] = "i","j","k"})[self.dim._index] end
+ImageAccess.get = terralib.memoize(function(self,im,field,x,y)
+    return ImageAccess:new { image = im, field = field, x = x, y = y}
+end)
 
-local ImageAccess = newclass("ImageAccess")
-local BoundsAccess = newclass("BoundsAccess")
+BoundsAccess.get = terralib.memoize(function(self,x,y,sx,sy)
+    return BoundsAccess:new { x = x, y = y, sx = sx, sy = sy }
+end)
+IndexValue.get = terralib.memoize(function(self,dim,shift)
+    return IndexValue:new { _shift = tonumber(shift) or 0, dim = assert(todim(dim),"expected a dimension object") } 
+end)
+function Dim:index() return ad.v[IndexValue:get(self)] end
+
 local SumOfSquares = newclass("SumOfSquares")
 function SumOfSquares:__toadexp()
     local sum = 0
@@ -320,18 +338,6 @@ function ad.sumsquared(...)
     exp = exp:map(function(x) return assert(ad.toexp(x), "expected an ad expression") end)
     return SumOfSquares:new { terms = exp }
 end
-ImageAccess.get = terralib.memoize(function(self,im,field,x,y)
-    return ImageAccess:new { image = im, field = field, x = x, y = y}
-end)
-
-function ImageAccess:__tostring()
-    local xn,yn = tostring(self.x):gsub("-","m"),tostring(self.y):gsub("-","m")
-    return ("%s_%s_%s_%s"):format(self.image.name,self.field,xn,yn)
-end
-function BoundsAccess:__tostring() return ("bounds_%d_%d_%d_%d"):format(self.x,self.y,self.sx,self.sy) end
-BoundsAccess.get = terralib.memoize(function(self,x,y,sx,sy)
-    return BoundsAccess:new { x = x, y = y, sx = sx, sy = sy }
-end)
 
 local Image = newclass("Image")
 -- Z: this will eventually be opt.Image, but that is currently used by our direct methods
@@ -354,6 +360,10 @@ function BoundsAccess:shift(x,y)
 end
 function ImageAccess:shift(x,y)
     return ImageAccess:get(self.image,self.field,self.x + x, self.y + y)
+end
+function IndexValue:shift(x,y)
+    local v = {[0] = x,y}
+    return IndexValue:get(self.dim,self._shift + assert(v[self.dim._index]))
 end
 local function shiftexp(exp,x,y)
     local function rename(a)
@@ -385,13 +395,14 @@ local function createfunction(images,exp,usebounds)
     
     local unknownimage = imagesyms[1]
     local i,j = symbol(int64,"i"), symbol(int64,"j")
+    local indexes = {[0] = i,j }
     local stmts = terralib.newlist()
     local accesssyms = {}
     local vartosym = {}
     local function emitvar(a)
         if not accesssyms[a] then
             local r 
-            if ImageAccess:is(a) then
+            if "ImageAccess" == a.kind then
                 local im = assert(imageindex[a.image],("cost function uses image %s not listed in parameters."):format(a.image))
                 r = symbol(float,tostring(a))
                 stmts:insert quote
@@ -402,7 +413,7 @@ local function createfunction(images,exp,usebounds)
                 end
                 stencil[1] = math.max(stencil[1],math.abs(a.x))
                 stencil[2] = math.max(stencil[2],math.abs(a.y))
-            else --bounds calculation
+            elseif "BoundsAccess" == a.kind then--bounds calculation
                 assert(usebounds) -- if we removed them, we shouldn't see any boundary accesses
                 r = symbol(int,tostring(a))
                 local W,H = unknownimage.type.metamethods.W.size,unknownimage.type.metamethods.H.size
@@ -411,6 +422,8 @@ local function createfunction(images,exp,usebounds)
                 end
                 stencil[1] = math.max(stencil[1],math.abs(a.x)+a.sx)
                 stencil[2] = math.max(stencil[2],math.abs(a.y)+a.sy)
+            else assert("IndexValue" == a.kind)
+                r = `[ assert(indexes[a.dim._index]) ] + a._shift 
             end
             accesssyms[a] = r
         end
