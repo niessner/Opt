@@ -309,6 +309,8 @@ solversGPU.conjugateGradientGPU = function(problemSpec, vars)
 		plan : opt.Plan
 		images : vars.PlanImages
 		scratchF : &float
+		
+		scratchCost : &float
 		scratchNum : &float
 		scratchDen : &float
 		
@@ -331,16 +333,22 @@ solversGPU.conjugateGradientGPU = function(problemSpec, vars)
 	-- 
 	specializedKernels.PRConj = function(data)
 		local terra PRConj(pd : &data.PlanData, w : int, h : int)
+			-- make odd and even versions to mimic ring buffer?
+			var cost = data.problemSpec.cost.boundary(w, h, unpackstruct(pd.images))
 			
-			var g = pd.gradient(w, h)
+			var g = data.problemSpec.gradient.boundary(w, h, unpackstruct(pd.images))
+			pd.gradient(w, h) = g
+			
 			var p = pd.prevGradient(w, h)
-						
+			
 			var num = (-g * (-g + p))
 			var den = p * p
 			
+			cost = util.warpReduce(cost)
 			num = util.warpReduce(num)
 			den = util.warpReduce(den)
 			if util.laneid() == 0 then
+				util.atomicAdd(pd.scratchCost, cost)
 				util.atomicAdd(pd.scratchNum, num)
 				util.atomicAdd(pd.scratchDen, den)
 			end
@@ -351,7 +359,10 @@ solversGPU.conjugateGradientGPU = function(problemSpec, vars)
 	
 	specializedKernels.CGDirection = function(data)
 		local terra CGDirection(pd : &data.PlanData, w : int, h : int, beta : float)
-			pd.searchDirection(w, h) = -pd.gradient(w, h) + beta * pd.searchDirection(w, h)
+			var g = pd.gradient(w, h)
+			var @addr = &pd.searchDirection(w, h)
+			@addr = beta * @addr - g
+			pd.prevGradient(w, h) = g
 		end
 		return { kernel = CGDirection, header = noHeader, footer = noFooter, params = {symbol(float)}, mapMemberName = "unknown" }
 	end
@@ -368,44 +379,42 @@ solversGPU.conjugateGradientGPU = function(problemSpec, vars)
 
 		var maxIters = 1000
 		
-		var prevBestAlpha = 0.0
+		var prevBestAlpha = 0.0f
 
 		for iter = 0, maxIters do
 
-			var iterStartCost = gpu.computeCost(pd, pd.images.unknown)
-			logSolver("iteration %d, cost=%f\n", iter, iterStartCost)
-
-			gpu.computeGradient(pd, pd.gradient)
+			var curCost = 0.0f
 			
 			--
 			-- compute the search direction
 			--
 			var beta = 0.0f
 			if iter == 0 then
+				curCost = gpu.computeCost(pd, pd.images.unknown)
+				gpu.computeGradient(pd, pd.gradient)
 				gpu.copyImageScale(pd, pd.searchDirection, pd.gradient, -1.0f)
+				gpu.copyImage(pd, pd.prevGradient, pd.gradient)
 			else
+				@pd.scratchCost = 0.0f
 				@pd.scratchNum = 0.0f
 				@pd.scratchDen = 0.0f
 				
 				gpu.PRConj(pd)
 				
-				beta = util.max(@pd.scratchNum / @pd.scratchDen, 0.0f)
+				curCost = @pd.scratchCost
 				
-				var epsilon = 1e-5f
-				if @pd.scratchDen > -epsilon and @pd.scratchDen < epsilon then
-					beta = 0.0f
-				end
+				beta = util.max(@pd.scratchNum / @pd.scratchDen, 0.0f)
 				
 				gpu.CGDirection(pd, beta)
 			end
 			
-			gpu.copyImage(pd, pd.prevGradient, pd.gradient)
-			
-			var bestAlpha = gpu.lineSearchQuadraticFallback(pd, pd.images.unknown, pd.residualStorage, iterStartCost, pd.searchDirection, pd.valueStore, prevBestAlpha)
+			var bestAlpha = gpu.lineSearchQuadraticFallback(pd, pd.images.unknown, pd.residualStorage, curCost, pd.searchDirection, pd.valueStore, prevBestAlpha)
 			
 			gpu.addImage(pd, pd.images.unknown, pd.searchDirection, bestAlpha)
 			
 			prevBestAlpha = bestAlpha
+			
+			logSolver("iteration %d, cost=%f\n", iter, curCost)
 			
 			logSolver("alpha=%12.12f, beta=%12.12f\n\n", bestAlpha, beta)
 			if bestAlpha == 0.0 and beta == 0.0 then
@@ -430,6 +439,7 @@ solversGPU.conjugateGradientGPU = function(problemSpec, vars)
 		pd.residualStorage:initGPU()
 		
 		C.cudaMallocManaged([&&opaque](&(pd.scratchF)), sizeof(float), C.cudaMemAttachGlobal)
+		C.cudaMallocManaged([&&opaque](&(pd.scratchCost)), sizeof(float), C.cudaMemAttachGlobal)
 		C.cudaMallocManaged([&&opaque](&(pd.scratchNum)), sizeof(float), C.cudaMemAttachGlobal)
 		C.cudaMallocManaged([&&opaque](&(pd.scratchDen)), sizeof(float), C.cudaMemAttachGlobal)
 
