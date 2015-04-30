@@ -303,12 +303,14 @@ solversGPU.gradientDescentGPU = function(problemSpec, vars)
 	return makePlan
 end
 
---[[solversGPU.conjugateGradientGPU = function(problemSpec, vars)
+solversGPU.conjugateGradientGPU = function(problemSpec, vars)
 
 	local struct PlanData(S.Object) {
 		plan : opt.Plan
 		images : vars.PlanImages
 		scratchF : &float
+		scratchNum : &float
+		scratchDen : &float
 		
 		valueStore : vars.unknownType
 		
@@ -316,17 +318,42 @@ end
 		prevGradient : vars.unknownType
 		
 		searchDirection : vars.unknownType
+
+		residualStorage : vars.unknownType
 		
 		timer : Timer
 	}
 	
 	local specializedKernels = {}
+	
+	--
+	-- Polak-Ribiere conjugacy
+	-- 
 	specializedKernels.PRConj = function(data)
 		local terra PRConj(pd : &data.PlanData, w : int, h : int)
-			var delta = -learningRate * pd.gradStore(w, h)
-			pd.images.unknown(w, h) = pd.images.unknown(w, h) + delta
+			
+			var g = pd.gradient(w, h)
+			var p = pd.prevGradient(w, h)
+						
+			var num = (-g * (-g + p))
+			var den = p * p
+			
+			num = util.warpReduce(num)
+			den = util.warpReduce(den)
+			if util.laneid() == 0 then
+				util.atomicAdd(pd.scratchNum, num)
+				util.atomicAdd(pd.scratchDen, den)
+			end
+			
 		end
-		return { kernel = PRConj, header = noHeader, footer = noFooter, params = {symbol(float)}, mapMemberName = "unknown" }
+		return { kernel = PRConj, header = noHeader, footer = noFooter, params = {}, mapMemberName = "unknown" }
+	end
+	
+	specializedKernels.CGDirection = function(data)
+		local terra CGDirection(pd : &data.PlanData, w : int, h : int, beta : float)
+			pd.searchDirection(w, h) = -pd.gradient(w, h) + beta * pd.searchDirection(w, h)
+		end
+		return { kernel = CGDirection, header = noHeader, footer = noFooter, params = {symbol(float)}, mapMemberName = "unknown" }
 	end
 	
 	local gpu = util.makeGPUFunctions(problemSpec, vars, PlanData, specializedKernels)
@@ -345,61 +372,38 @@ end
 
 		for iter = 0, maxIters do
 
-			var iterStartCost = gpu.computeCost(pd)
+			var iterStartCost = gpu.computeCost(pd, pd.images.unknown)
 			logSolver("iteration %d, cost=%f\n", iter, iterStartCost)
 
-			gpu.computeGradient(pd, pd.gradient, pd.images.unknown)
+			gpu.computeGradient(pd, pd.gradient)
 			
 			--
 			-- compute the search direction
 			--
-			var beta = 0.0
+			var beta = 0.0f
 			if iter == 0 then
-				gpu.copyImageWithScale(pd, pd.searchDirection, pd.gradient, -1.0f)
+				gpu.copyImageScale(pd, pd.searchDirection, pd.gradient, -1.0f)
 			else
-				var num = 0.0
-				var den = 0.0
+				@pd.scratchNum = 0.0f
+				@pd.scratchDen = 0.0f
 				
-				--
-				-- Polak-Ribiere conjugacy
-				-- 
-				for h = 0, pd.images.unknown:H() do
-					for w = 0, pd.images.unknown:W() do
-						var g = pd.gradient(w, h)
-						var p = pd.prevGradient(w, h)
-						num = num + (-g * (-g + p))
-						den = den + p * p
-					end
-				end
-				beta = util.max(num / den, 0.0)
+				gpu.PRConj(pd)
 				
-				var epsilon = 1e-5
-				if den > -epsilon and den < epsilon then
-					beta = 0.0
+				beta = util.max(@pd.scratchNum / @pd.scratchDen, 0.0f)
+				
+				var epsilon = 1e-5f
+				if @pd.scratchDen > -epsilon and @pd.scratchDen < epsilon then
+					beta = 0.0f
 				end
 				
-				for h = 0, pd.images.unknown:H() do
-					for w = 0, pd.images.unknown:W() do
-						pd.searchDirection(w, h) = -pd.gradient(w, h) + beta * pd.searchDirection(w, h)
-					end
-				end
+				gpu.CGDirection(pd, beta)
 			end
 			
-			cpu.copyImage(pd.prevGradient, pd.gradient)
+			gpu.copyImage(pd, pd.prevGradient, pd.gradient)
 			
-			--
-			-- line search
-			--
-			cpu.copyImage(pd.currentValues, pd.images.unknown)
-			cpu.computeResiduals(pd, pd.currentValues, pd.currentResiduals)
+			var bestAlpha = gpu.lineSearchQuadraticFallback(pd, pd.images.unknown, pd.residualStorage, iterStartCost, pd.searchDirection, pd.valueStore, prevBestAlpha)
 			
-			var bestAlpha, bestScore = cpu.lineSearchQuadraticFallback(pd, pd.currentValues, pd.currentResiduals, pd.searchDirection, pd.images.unknown, prevBestAlpha)
-			
-			for h = 0, pd.images.unknown:H() do
-				for w = 0, pd.images.unknown:W() do
-					pd.images.unknown(w, h) = pd.currentValues(w, h) + bestAlpha * pd.searchDirection(w, h)
-				end
-			end
+			gpu.addImage(pd, pd.images.unknown, pd.searchDirection, bestAlpha)
 			
 			prevBestAlpha = bestAlpha
 			
@@ -419,14 +423,20 @@ end
 		pd.plan.data = pd
 		pd.plan.impl = impl
 
-		pd.gradStore:initGPU()
-		var err = C.cudaMallocManaged([&&opaque](&(pd.scratchF)), sizeof(float), C.cudaMemAttachGlobal)
-		if err ~= 0 then C.printf("cudaMallocManaged error: %d", err) end
+		pd.valueStore:initGPU()
+		pd.gradient:initGPU()
+		pd.prevGradient:initGPU()
+		pd.searchDirection:initGPU()
+		pd.residualStorage:initGPU()
+		
+		C.cudaMallocManaged([&&opaque](&(pd.scratchF)), sizeof(float), C.cudaMemAttachGlobal)
+		C.cudaMallocManaged([&&opaque](&(pd.scratchNum)), sizeof(float), C.cudaMemAttachGlobal)
+		C.cudaMallocManaged([&&opaque](&(pd.scratchDen)), sizeof(float), C.cudaMemAttachGlobal)
 
 		return &pd.plan
 	end
 	return makePlan
-end]]
+end
 
 -- http://www.matthewzeiler.com/pubs/googleTR2012/googleTR2012.pdf
 solversGPU.adaDeltaGPU = function(problemSpec, vars)

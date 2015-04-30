@@ -155,6 +155,8 @@ local function compilePlan(problemSpec, kind, params)
 		return solversCPU.bidirectionalVLBFGSCPU(problemSpec, vars)
 	elseif kind == "adaDeltaGPU" then
 		return solversGPU.adaDeltaGPU(problemSpec, vars)
+	elseif kind == "conjugateGradientGPU" then
+		return solversGPU.conjugateGradientGPU(problemSpec, vars)
 	elseif kind == "gaussNewtonGPU" then
 		return solversGPU.gaussNewtonGPU(problemSpec, vars)
 	end
