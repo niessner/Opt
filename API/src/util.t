@@ -392,15 +392,10 @@ util.makeComputeGradient = function(data)
 end
 
 util.makeComputeResiduals = function(data)
-	-- haha ha
-	local terra costHack(pd : &data.PlanData, w : int, h : int, values : data.imageType)
-		return data.problemSpec.cost.boundary(w, h, values, unpackstruct(pd.images, 2))
-	end
-	
 	local terra computeResiduals(pd : &data.PlanData, values : data.imageType, residuals : data.imageType)
 		for h = 0, values:H() do
 			for w = 0, values:W() do
-				residuals(w, h) = costHack(pd, w, h, values)
+				residuals(w, h) = data.problemSpec.cost.boundary(w, h, values, unpackstruct(pd.images, 2))
 			end
 		end
 	end
@@ -408,16 +403,11 @@ util.makeComputeResiduals = function(data)
 end
 
 util.makeComputeDeltaCost = function(data)
-	-- haha ha
-	local terra costHack(pd : &data.PlanData, w : int, h : int, values : data.imageType)
-		return data.problemSpec.cost.boundary(w, h, values, unpackstruct(pd.images, 2))
-	end
-	
 	local terra deltaCost(pd : &data.PlanData, baseResiduals : data.imageType, currentValues : data.imageType)
 		var result : double = 0.0
 		for h = 0, currentValues:H() do
 			for w = 0, currentValues:W() do
-				var residual = costHack(pd, w, h, currentValues)
+				var residual = data.problemSpec.cost.boundary(w, h, currentValues, unpackstruct(pd.images, 2))
 				var delta = residual - baseResiduals(w, h)
 				result = result + delta
 			end
@@ -707,11 +697,8 @@ local makeGPULauncher = function(compiledKernel, kernelName, header, footer, tbl
 end
 
 util.makeComputeCostGPU = function(data)
-	local terra costHack(pd : &data.PlanData, w : int, h : int, values : data.imageType)
-		return data.problemSpec.cost.boundary(w, h, values, pd.images.image0)
-	end
 	local terra computeCost(pd : &data.PlanData, w : int, h : int, currentValues : data.imageType)
-		var cost = [float](costHack(pd, w, h, currentValues))
+		var cost = [float](data.problemSpec.cost.boundary(w, h, currentValues, unpackstruct(pd.images, 2)))
 		cost = warpReduce(cost)
 		if (laneid() == 0) then
 			atomicAdd(pd.scratchF, cost)
@@ -728,7 +715,7 @@ end
 
 util.makeComputeDeltaCostGPU = function(data)
 	local terra computeDeltaCost(pd : &data.PlanData, w : int, h : int, baseResiduals : data.imageType, currentValues : data.imageType)
-		var residual = [float](data.problemSpec.cost.boundary(w, h, currentValues, pd.images.image0))		--HACK
+		var residual = [float](data.problemSpec.cost.boundary(w, h, currentValues, unpackstruct(pd.images, 2)))
 		var delta = residual - baseResiduals(w, h)
 		delta = warpReduce(delta)
 		if (laneid() == 0) then
@@ -801,12 +788,8 @@ end
 
 -- TODO: residuals should map over cost, not unknowns!!
 util.makeComputeResidualsGPU = function(data)
-	-- haha ha
-	local terra costHack(pd : &data.PlanData, w : int, h : int, values : data.imageType)
-		return data.problemSpec.cost.boundary(w, h, values, pd.images.image0)
-	end
 	local terra computeResiduals(pd : &data.PlanData, w : int, h : int, residuals : data.imageType, values : data.imageType)
-		residuals(w, h) = costHack(pd, w, h, values)
+		residuals(w, h) = data.problemSpec.cost.boundary(w, h, values, unpackstruct(pd.images, 2))
 	end
 	return { kernel = computeResiduals, header = noHeader, footer = noFooter, params = {symbol(data.imageType), symbol(data.imageType)}, mapMemberName = "unknown" }
 end

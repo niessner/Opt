@@ -184,7 +184,7 @@ solversCPU.conjugateGradientCPU = function(problemSpec, vars)
 			end
 		end
 	end
-
+	
 	local terra makePlan() : &opt.Plan
 		var pd = PlanData.alloc()
 		pd.plan.data = pd

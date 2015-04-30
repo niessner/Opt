@@ -303,6 +303,131 @@ solversGPU.gradientDescentGPU = function(problemSpec, vars)
 	return makePlan
 end
 
+--[[solversGPU.conjugateGradientGPU = function(problemSpec, vars)
+
+	local struct PlanData(S.Object) {
+		plan : opt.Plan
+		images : vars.PlanImages
+		scratchF : &float
+		
+		valueStore : vars.unknownType
+		
+		gradient : vars.unknownType
+		prevGradient : vars.unknownType
+		
+		searchDirection : vars.unknownType
+		
+		timer : Timer
+	}
+	
+	local specializedKernels = {}
+	specializedKernels.PRConj = function(data)
+		local terra PRConj(pd : &data.PlanData, w : int, h : int)
+			var delta = -learningRate * pd.gradStore(w, h)
+			pd.images.unknown(w, h) = pd.images.unknown(w, h) + delta
+		end
+		return { kernel = PRConj, header = noHeader, footer = noFooter, params = {symbol(float)}, mapMemberName = "unknown" }
+	end
+	
+	local gpu = util.makeGPUFunctions(problemSpec, vars, PlanData, specializedKernels)
+	
+	local terra impl(data_ : &opaque, images : &&opaque, params_ : &opaque)
+		var pd = [&PlanData](data_)
+		pd.timer:init()
+
+		var params = [&double](params_)
+
+		unpackstruct(pd.images) = [util.getImages(PlanData, images)]
+
+		var maxIters = 1000
+		
+		var prevBestAlpha = 0.0
+
+		for iter = 0, maxIters do
+
+			var iterStartCost = gpu.computeCost(pd)
+			logSolver("iteration %d, cost=%f\n", iter, iterStartCost)
+
+			gpu.computeGradient(pd, pd.gradient, pd.images.unknown)
+			
+			--
+			-- compute the search direction
+			--
+			var beta = 0.0
+			if iter == 0 then
+				gpu.copyImageWithScale(pd, pd.searchDirection, pd.gradient, -1.0f)
+			else
+				var num = 0.0
+				var den = 0.0
+				
+				--
+				-- Polak-Ribiere conjugacy
+				-- 
+				for h = 0, pd.images.unknown:H() do
+					for w = 0, pd.images.unknown:W() do
+						var g = pd.gradient(w, h)
+						var p = pd.prevGradient(w, h)
+						num = num + (-g * (-g + p))
+						den = den + p * p
+					end
+				end
+				beta = util.max(num / den, 0.0)
+				
+				var epsilon = 1e-5
+				if den > -epsilon and den < epsilon then
+					beta = 0.0
+				end
+				
+				for h = 0, pd.images.unknown:H() do
+					for w = 0, pd.images.unknown:W() do
+						pd.searchDirection(w, h) = -pd.gradient(w, h) + beta * pd.searchDirection(w, h)
+					end
+				end
+			end
+			
+			cpu.copyImage(pd.prevGradient, pd.gradient)
+			
+			--
+			-- line search
+			--
+			cpu.copyImage(pd.currentValues, pd.images.unknown)
+			cpu.computeResiduals(pd, pd.currentValues, pd.currentResiduals)
+			
+			var bestAlpha, bestScore = cpu.lineSearchQuadraticFallback(pd, pd.currentValues, pd.currentResiduals, pd.searchDirection, pd.images.unknown, prevBestAlpha)
+			
+			for h = 0, pd.images.unknown:H() do
+				for w = 0, pd.images.unknown:W() do
+					pd.images.unknown(w, h) = pd.currentValues(w, h) + bestAlpha * pd.searchDirection(w, h)
+				end
+			end
+			
+			prevBestAlpha = bestAlpha
+			
+			logSolver("alpha=%12.12f, beta=%12.12f\n\n", bestAlpha, beta)
+			if bestAlpha == 0.0 and beta == 0.0 then
+				break
+			end
+			
+			pd.timer:nextIteration()
+		end
+		pd.timer:evaluate()
+		pd.timer:cleanup()
+	end
+
+	local terra makePlan() : &opt.Plan
+		var pd = PlanData.alloc()
+		pd.plan.data = pd
+		pd.plan.impl = impl
+
+		pd.gradStore:initGPU()
+		var err = C.cudaMallocManaged([&&opaque](&(pd.scratchF)), sizeof(float), C.cudaMemAttachGlobal)
+		if err ~= 0 then C.printf("cudaMallocManaged error: %d", err) end
+
+		return &pd.plan
+	end
+	return makePlan
+end]]
+
 -- http://www.matthewzeiler.com/pubs/googleTR2012/googleTR2012.pdf
 solversGPU.adaDeltaGPU = function(problemSpec, vars)
 
