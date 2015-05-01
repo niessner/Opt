@@ -10,16 +10,10 @@
 #define INTERACTIVEDLL_API __declspec(dllimport)
 #endif
 
-struct IVBitmapInfo
-{
-    UINT width;
-    UINT height;
-    BYTE *colorData;
-};
-
 INTERACTIVEDLL_API void*         IVInit();
 INTERACTIVEDLL_API UINT32        IVProcessCommand(void *context, const char *s);
+INTERACTIVEDLL_API UINT32        IVRunApp(void *context);
 INTERACTIVEDLL_API const char*   IVGetStringByName(void *context, const char *s);
 INTERACTIVEDLL_API int           IVGetIntegerByName(void *context, const char *s);
 INTERACTIVEDLL_API float         IVGetFloatByName(void *context, const char *s);
-INTERACTIVEDLL_API IVBitmapInfo* IVGetBitmapByName(void *context, const char *s);
+INTERACTIVEDLL_API UINT32        IVMoveWindow(void *context, int x, int y, int width, int height);

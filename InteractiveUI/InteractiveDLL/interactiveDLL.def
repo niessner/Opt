@@ -2,8 +2,9 @@ LIBRARY Interactive.dll
 
 EXPORTS
     IVInit
+    IVRunApp
 	IVProcessCommand
 	IVGetStringByName
 	IVGetIntegerByName
     IVGetFloatByName
-	IVGetBitmapByName
+    IVMoveWindow

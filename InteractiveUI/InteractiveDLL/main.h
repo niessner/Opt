@@ -1,16 +1,11 @@
-
 #pragma once
-
 #include "mLibInclude.h"
-
+#define _WINSOCKAPI_
 #include <windows.h>
 
-using namespace ml;
+//using namespace ml;
 using Bitmap = ml::ColorImageR8G8B8A8;
 
-extern "C" {
-#include "Opt.h"
-}
 
 using namespace std;
 

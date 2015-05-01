@@ -8,6 +8,7 @@ using System.Text;
 using System.Threading.Tasks;
 using System.Windows.Forms;
 using System.IO;
+using System.Threading;
 
 namespace UIWindow
 {
@@ -44,6 +45,7 @@ namespace UIWindow
         private void MainWindow_Load(object sender, EventArgs e)
         {
             dll = new DLLInterface();
+            RunApp();
         }
 
         private void loadSourceFile(string filename)
@@ -53,14 +55,6 @@ namespace UIWindow
             Util.formatSourceLine(textBoxEnergy, 0, textBoxEnergy.Text.Length);
         }
 
-        private void loadImageFile(string filename)
-        {
-            imageFilename = filename;
-            // TODO: Extend to handle multiple images
-            dll.ProcessCommand("loadImage\t" + imageFilename);
-            pictureBoxMinimum.Image = dll.GetBitmap("test");
-            resultImageBox.Image = dll.GetBitmap("result");
-        }
 
         private void buttonLoad_Click(object sender, EventArgs e)
         {
@@ -93,26 +87,6 @@ namespace UIWindow
             saveCode();
         }
 
-        private void buttonLoadImage_Click(object sender, EventArgs e)
-        {
-            OpenFileDialog dialog = new OpenFileDialog();
-
-            dialog.Filter = "image Files (.png)|*.png|All Files (*.*)|*.*";
-            dialog.FilterIndex = 1;
-
-            var relativePath = @"\..\..\API\testMlib";
-            dialog.InitialDirectory = Path.GetFullPath(Path.Combine(Directory.GetCurrentDirectory() + relativePath));
-
-            dialog.Multiselect = false;
-
-            DialogResult result = dialog.ShowDialog();
-
-            if (result == DialogResult.OK)
-            {
-                loadImageFile(dialog.FileName);
-            }
-        }
-
         private void runOptimizer()
         {
             var optimizationMethod = (string)textBoxEnergy.Invoke(new Func<string>(() => optimizationMethodComboBox.SelectedItem.ToString()));
@@ -126,7 +100,6 @@ namespace UIWindow
             else
             {
                 textBoxCompiler.Invoke(new Action<string>(s => textBoxCompiler.Text = s), "Success!");
-                resultImageBox.Invoke(new Action<Bitmap>(b => resultImageBox.Image = b), dll.GetBitmap("result"));
                 defineTimeBox.Invoke(new Action<string>(s => defineTimeBox.Text = s), dll.GetFloat("defineTime").ToString() + "ms");
                 planTimeBox.Invoke(new Action<string>(s => planTimeBox.Text = s), dll.GetFloat("planTime").ToString() + "ms");
                 cpuSolveTimeBox.Invoke(new Action<string>(s => cpuSolveTimeBox.Text = s), dll.GetFloat("solveTime").ToString() + "ms");
@@ -145,6 +118,42 @@ namespace UIWindow
             compiling = false;
         }
 
+        public static Task<bool> StartSTATask(Action func)
+        {
+            var tcs = new TaskCompletionSource<bool>();
+            Thread thread = new Thread(() =>
+            {
+                try
+                {
+                    func();
+                    tcs.SetResult(true);
+                }
+                catch (Exception e)
+                {
+                    tcs.SetException(e);
+                }
+            });
+            thread.SetApartmentState(ApartmentState.STA);
+            thread.Start();
+            return tcs.Task;
+        }
+        private Task<bool> RunApp()
+        {
+            return StartSTATask(() =>
+            {
+                dll.RunApp();
+            });
+        }
+
+        /*
+        private async Task RunApp() // No async because the method does not need await
+        {
+            await Task.Run(() =>
+            {
+                dll.RunApp();
+            });
+        }*/
+
         private void compileButton_Click(object sender, EventArgs e)
         {
             if (!compiling)
@@ -155,6 +164,7 @@ namespace UIWindow
 
         private void timer_Tick(object sender, EventArgs e)
         {
+            
             if (textChangedSinceLastCompile && !textChangedSinceLastTick && !compiling)
             {
                 Compile();
@@ -167,6 +177,12 @@ namespace UIWindow
         {
             textChangedSinceLastCompile = true;
             textChangedSinceLastTick = true;
+        }
+
+        private void fastTimer_Tick(object sender, EventArgs e)
+        {
+            Point location = pictureBoxMinimum.PointToScreen(Point.Empty);
+            dll.MoveWindow(location.X, location.Y, pictureBoxMinimum.Width, pictureBoxMinimum.Height);
         }
 
     

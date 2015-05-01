@@ -1,0 +1,25 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup>
+    <ClCompile Include="app.cpp" />
+    <ClCompile Include="DLLMain.cpp" />
+    <ClCompile Include="interactiveDLL.cpp" />
+    <ClCompile Include="main.cpp" />
+    <ClCompile Include="mLibSource.cpp" />
+    <ClCompile Include="G3DVisualizer.cpp" />
+    <ClCompile Include="Optimizer.cpp" />
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="..\..\API\build\Opt.h" />
+    <ClInclude Include="app.h" />
+    <ClInclude Include="interactiveDLL.h" />
+    <ClInclude Include="main.h" />
+    <ClInclude Include="mLibInclude.h" />
+    <ClInclude Include="parameters.h" />
+    <ClInclude Include="G3DVisualizer.h" />
+    <ClInclude Include="Optimizer.h" />
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="interactiveDLL.def" />
+  </ItemGroup>
+</Project>

@@ -3,15 +3,27 @@
 INTERACTIVEDLL_API void* IVInit()
 {
     App *app = new App;
-
-    app->init();
-
 	return app;
+}
+
+INTERACTIVEDLL_API UINT32 IVRunApp(void *context)
+{
+    return ((App*)context)->launchG3DVisualizer();
+}
+
+INTERACTIVEDLL_API UINT32 IVMoveWindow(void *context, int x, int y, int width, int height)
+{
+    if (context == NULL) return 0;
+    App &app = *(App*)context;
+    app._lock.lock();
+    UINT32 result = app.moveWindow(x,y, width, height);
+    app._lock.unlock();
+    return result; 
 }
 
 INTERACTIVEDLL_API UINT32 IVProcessCommand(void *context, const char *s)
 {
-    if(context == NULL) return 1;
+    if(context == NULL) return 0;
     App &app = *(App*)context;
     app._lock.lock();
     UINT32 result = app.processCommand(string(s));
@@ -51,12 +63,3 @@ INTERACTIVEDLL_API float IVGetFloatByName(void *context, const char *s)
     return result;
 }
 
-INTERACTIVEDLL_API IVBitmapInfo* IVGetBitmapByName(void *context, const char *s)
-{
-    if(context == NULL) return 0;
-    App &app = *(App*)context;
-    app._lock.lock();
-    IVBitmapInfo* result = app.getBitmapByName(s);
-    app._lock.unlock();
-    return result;
-}

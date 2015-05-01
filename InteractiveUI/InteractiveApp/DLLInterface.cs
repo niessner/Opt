@@ -31,15 +31,17 @@ namespace UIWindow
         [DllImport(InteractiveDLL, CharSet = CharSet.Unicode)]
         public static extern IntPtr IVInit();
         [DllImport(InteractiveDLL)]
-        private static extern UInt32 IVProcessCommand(IntPtr context, [In, MarshalAs(UnmanagedType.LPStr)] String command);
+        private static extern UInt32 IVRunApp(IntPtr context);
         [DllImport(InteractiveDLL)]
-        public static extern IntPtr IVGetBitmapByName(IntPtr context, [In, MarshalAs(UnmanagedType.LPStr)] String bitmapName);
+        private static extern UInt32 IVProcessCommand(IntPtr context, [In, MarshalAs(UnmanagedType.LPStr)] String command);
         [DllImport(InteractiveDLL)]
         public static extern IntPtr IVGetStringByName(IntPtr context, [In, MarshalAs(UnmanagedType.LPStr)] String stringName);
         [DllImport(InteractiveDLL)]
         public static extern Int32 IVGetIntegerByName(IntPtr context, [In, MarshalAs(UnmanagedType.LPStr)] String integerName);
         [DllImport(InteractiveDLL)]
         public static extern float IVGetFloatByName(IntPtr context, [In, MarshalAs(UnmanagedType.LPStr)] String floatName);
+        [DllImport(InteractiveDLL)]
+        private static extern UInt32 IVMoveWindow(IntPtr context, int x, int y, int width, int height);
         
         public IntPtr interactiveDLLContext = (IntPtr)0;
 
@@ -56,15 +58,14 @@ namespace UIWindow
             return IVProcessCommand(interactiveDLLContext, command);
         }
 
-        public Bitmap GetBitmap(String bitmapName)
+        public UInt32 RunApp()
         {
-            IntPtr bitmapInfoUnmanaged = IVGetBitmapByName(interactiveDLLContext, bitmapName);
-            if (bitmapInfoUnmanaged == (IntPtr)0) return null;
+            return IVRunApp(interactiveDLLContext);
+        }
 
-            IVBitmapInfo bitmapInfo = (IVBitmapInfo)Marshal.PtrToStructure(bitmapInfoUnmanaged, typeof(IVBitmapInfo));
-            if (bitmapInfo.width == 0 || bitmapInfo.height == 0 || bitmapInfo.colorData == null) return null;
-
-            return new Bitmap(bitmapInfo.width, bitmapInfo.height, bitmapInfo.width * 4, System.Drawing.Imaging.PixelFormat.Format32bppRgb, bitmapInfo.colorData);
+        public UInt32 MoveWindow(int x, int y, int width, int height)
+        {
+            return IVMoveWindow(interactiveDLLContext, x, y, width, height);
         }
 
         public String GetString(String stringName)

@@ -1,158 +1,49 @@
 #include "main.h"
 #include <OptImage.h>
+
+/** \file App.cpp */
+#include "App.h"
+
+
+int App::launchG3DVisualizer() {
+    GApp::Settings settings;
+    settings.window.framed = false;
+    // Change the window and other startup parameters by modifying the
+    // settings class.  For example:
+    settings.window.width = 1280;
+    settings.window.height = 720;
+    settings.window.alwaysOnTop = true;
+    _g3dVisualizer = new G3DVisualizer(settings);
+    return _g3dVisualizer->run();
+}
+
 void App::init()
 {
-    
+    _g3dVisualizer = NULL;
+}
+
+UINT32 App::moveWindow(int x, int y, int width, int height) {
+    if (notNull(_g3dVisualizer) && _g3dVisualizer->initialized()) {
+        _g3dVisualizer->sendMoveMessage(x, y, width, height);
+    }
+    return 0;
 }
 
 UINT32 App::processCommand(const string &command)
 {
-	vector<string> words = util::split(command, "\t");
+	vector<string> words = ml::util::split(command, "\t");
 	//while(words.Length() < 5) words.PushEnd("");
     _errorString = " ";
     if (words[0] == "load") {
         _terraFile = words[1];
-    } else if (words[0] == "loadImage") {
-        loadPNGIntoTest(words[1]);
     } else if (words[0] == "run") {
         string optimizationMethod = words[1];
-        printf("%s\n", words[1].c_str());
-
-        _optDefineTime = 0;
-        _optPlanTime = 0;
-        _optSolveTime = 0;
-        _optSolveTimeGPU = 0;
-
-        if (_queryBitmapInfo.colorData == NULL) {
-            _errorString = "No image available";
-            return -1;
-        }
-        for (const auto &p : _test)
-        {
-            _optImages[0](p.x, p.y) = 0.0;
-        }
-       
-        uint64_t dims[] = { _test.getWidth(), _test.getHeight() };
-
-        cudaEventCreate(&_optSolveStart);
-        cudaEventCreate(&_optSolveEnd);
-
-        ml::Timer timer;
-        timer.start();
-
-        OptState* optimizerState = Opt_NewState();
-        if (optimizerState == nullptr)
-        {
-            _errorString = "Opt_NewState failed";
-            return -1;
-        }
-
-        Problem * prob = Opt_ProblemDefine(optimizerState, _terraFile.c_str(), optimizationMethod.c_str(), NULL);
-        timer.stop();
-        _optDefineTime = timer.getElapsedTimeMS();
-
-        if (!prob)
-        {
-            _errorString = "Opt_ProblemDefine failed";
-            return -1;
-        }
-
-        timer.start();
-
-        std::vector<void*> imagesCPU;
-        std::vector<void*> imagesGPU;
-        std::vector<uint64_t> stride;
-        std::vector<uint64_t> elemsize;
-        for (const auto &image : _optImages)
-        {
-            image.syncCPUToGPU();
-            imagesCPU.push_back((void*)image.DataCPU());
-            imagesGPU.push_back((void*)image.DataGPU());
-            stride.push_back(image.dimX * sizeof(float));
-            elemsize.push_back(sizeof(float));
-        }
-
-        Plan * plan = Opt_ProblemPlan(optimizerState, prob, dims, elemsize.data(), stride.data());
-        timer.stop();
-        _optPlanTime = timer.getElapsedTimeMS();
-
-        if (!plan)
-        {
-            _errorString = "Opt_ProblemPlan failed";
-            return -1;
-        }
-
-        bool isGPU = ml::util::endsWith(optimizationMethod, "GPU");
-
-        timer.start();
-        if (isGPU)
-        {
-            cudaEventRecord(_optSolveStart);
-            Opt_ProblemSolve(optimizerState, plan, imagesGPU.data(), NULL);
-            cudaEventRecord(_optSolveEnd);
-            for (const auto &image : _optImages)
-                image.syncGPUToCPU();
-        }
-        else {
-            Opt_ProblemSolve(optimizerState, plan, imagesCPU.data(), NULL);
-        }
-        timer.stop();
-        _optSolveTime = timer.getElapsedTimeMS();
-        
-      
-        for (int y = 0; y < _test.getHeight(); ++y) {
-            for (int x = 0; x < _test.getWidth(); ++x) {
-                float color = math::clamp(_optImages[0].dataCPU[y*_test.getWidth() + x], 0.0f, 255.0f);
-                _result.setPixel(x, y, ml::vec4uc(color, color, color, 1));
-            }
-        }
-
-        cudaEventSynchronize(_optSolveEnd);
-        cudaEventElapsedTime(&_optSolveTimeGPU, _optSolveStart, _optSolveEnd);
-        
+        _g3dVisualizer->sendRunOptMessage(_terraFile, optimizationMethod);
     } 
 
-	
 	return 0;
 }
 
-void App::loadPNGIntoTest(const string& path) {
-    _test = LodePNG::load(path);
-    _result = Bitmap(ml::vec2i(_test.getWidth(), _test.getHeight()));
-    for (const auto &p : _result)
-        _result(p.x, p.y) = ml::vec4uc(0, 0, 0, 1);
-    _optImages.resize(2);
-    _optImages[0].allocate(_test.getWidth(), _test.getHeight());
-    _optImages[1].allocate(_test.getWidth(), _test.getHeight());
-    for (const auto &p : _test)
-    {
-        _optImages[0](p.x, p.y) = 0.0;
-        _optImages[1](p.x, p.y) = p.value.r;
-    }
-}
-
-
-IVBitmapInfo* App::getBitmapByName(const string &name)
-{
-	Bitmap *resultPtr = NULL;
-
-    if (name == "test")
-    {
-        resultPtr = &_test;
-    }
-    else if (name == "result")
-    {
-        resultPtr = &_result;
-    }
-
-	if(resultPtr == NULL) return NULL;
-
-	//resultPtr->FlipBlueAndRed();
-	_queryBitmapInfo.width = resultPtr->getWidth();
-    _queryBitmapInfo.height = resultPtr->getHeight();
-	_queryBitmapInfo.colorData = (BYTE*)resultPtr->getPointer();
-	return &_queryBitmapInfo;
-}
 
 int App::getIntegerByName(const string &s)
 {
@@ -169,21 +60,22 @@ int App::getIntegerByName(const string &s)
 
 float App::getFloatByName(const string &s)
 {
+    OptimizationTimingInfo timingInfo = _g3dVisualizer->acquireTimingInfo();
     if (s == "defineTime")
     {
-        return _optDefineTime;
+        return timingInfo.optDefineTime;
     }
     else if (s == "planTime")
     {
-        return _optPlanTime;
+        return timingInfo.optPlanTime;
     }
     else if (s == "solveTime")
     {
-        return _optSolveTime;
+        return timingInfo.optSolveTime;
     }
     else if (s == "solveTimeGPU")
     {
-        return _optSolveTimeGPU;
+        return timingInfo.optSolveTimeGPU;
     }
     else
     {
