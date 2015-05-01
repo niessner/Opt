@@ -3,12 +3,13 @@ local S = require("std")
 local util = require("util")
 local C = util.C
 local Timer = util.Timer
+local positionForValidLane = util.positionForValidLane
 
 local cuda_version = cudalib.localversion()
 local libdevice = terralib.cudahome..string.format("/nvvm/libdevice/libdevice.compute_%d.10.bc",cuda_version)
 terralib.linklibrary(libdevice)
 
--- TODO everything should be flaot; the double functions are massively slower
+-- TODO everything should be float; the double functions are massively slower
 local sqrt = terralib.externfunction("__nv_sqrt", double -> double)
 local cos  = terralib.externfunction("__nv_cos",  double -> double)
 local acos = terralib.externfunction("__nv_acos", double -> double)
@@ -54,21 +55,23 @@ solversGPU.gaussNewtonGPU = function(problemSpec, vars)
 	
 	local specializedKernels = {}
 	specializedKernels.PCGInit1 = function(data)
-		local terra PCGInit1GPU(pd : &data.PlanData, w : int, h : int)
-			var residuum = -data.problemSpec.gradient.boundary(w, h, unpackstruct(pd.images))	-- residuum = J^T x -F - A x delta_0  => J^T x -F, since A x x_0 == 0 
-			pd.r(w, h) = residuum
+		local terra PCGInit1GPU(pd : &data.PlanData)
+			var d = 0.0f -- init for out of bounds lanes
+			var w : int, h : int
+			if positionForValidLane(pd, "unknown", &w, &h) then
+				var residuum = -data.problemSpec.gradient.boundary(w, h, unpackstruct(pd.images))	-- residuum = J^T x -F - A x delta_0  => J^T x -F, since A x x_0 == 0 
+				pd.r(w, h) = residuum
 
-			-- TODO pd.precondition(w,h) needs to computed somehow (ideally in the gradient?
-			-- TODO: don't let this be 0
-			pd.preconditioner(w, h) = 1 --data.problemSpec.gradientPreconditioner(w, h)	-- TODO fix this hack... the pre-conditioner needs to be the diagonal of JTJ
-			--pd.preconditioner(w,h) = data.problemSpec.gradientPreconditioner(w,h)
-			var p = pd.preconditioner(w, h)*residuum				   -- apply pre-conditioner M^-1
-			pd.p(w, h) = p
-		
-			var d = residuum*p;										   -- x-th term of nominator for computing alpha and denominator for computing beta
+				-- TODO pd.precondition(w,h) needs to computed somehow (ideally in the gradient?
+				-- TODO: don't let this be 0
+				pd.preconditioner(w, h) = 1 --data.problemSpec.gradientPreconditioner(w, h)	-- TODO fix this hack... the pre-conditioner needs to be the diagonal of JTJ
+				--pd.preconditioner(w,h) = data.problemSpec.gradientPreconditioner(w,h)
+				var p = pd.preconditioner(w, h)*residuum				   -- apply pre-conditioner M^-1
+				pd.p(w, h) = p
 			
-			--TODO this needs do be outside of the boundary check
-			d = util.warpReduce(d)	--TODO check for sizes != 32
+				d = residuum*p;										   -- x-th term of nominator for computing alpha and denominator for computing beta
+			end 
+			d = util.warpReduce(d)	
 			if (util.laneid() == 0) then
 				util.atomicAdd(pd.scanAlpha, d)
 			end
@@ -77,23 +80,26 @@ solversGPU.gaussNewtonGPU = function(problemSpec, vars)
 	end
 	
 	specializedKernels.PCGInit2 = function(data)
-		local terra PCGInit2GPU(pd : &data.PlanData, w : int, h : int)
-			pd.rDotzOld(w,h) = pd.scanAlpha[0]
-			pd.delta(w,h) = 0.0f
+		local terra PCGInit2GPU(pd : &data.PlanData)
+			var w : int, h : int
+			if positionForValidLane(pd, "unknown", &w, &h) then
+				pd.rDotzOld(w,h) = pd.scanAlpha[0]
+				pd.delta(w,h) = 0.0f
+			end
 		end
 		return { kernel = PCGInit2GPU, header = noHeader, footer = noFooter, params = {}, mapMemberName = "unknown" }
 	end
 	
 	specializedKernels.PCGStep1 = function(data)
-		local terra PCGStep1GPU(pd : &data.PlanData, w : int, h : int)
-			var d = 0.0f -- TODO this must be outside of the boundary check to make the warp reduce work
-			var tmp = data.problemSpec.applyJTJ.boundary(w, h, unpackstruct(pd.images), pd.p) -- A x p_k  => J^T x J x p_k 
-			pd.Ap_X(w, h) = tmp								  -- store for next kernel call
-			d = pd.p(w, h)*tmp					              -- x-th term of denominator of alpha
-
-			
-			--TODO this needs do be outside of the boundary check
-			d = util.warpReduce(d)	--TODO check for sizes != 32
+		local terra PCGStep1GPU(pd : &data.PlanData)
+			var d = 0.0f
+			var w : int, h : int
+			if positionForValidLane(pd, "unknown", &w, &h) then
+				var tmp = data.problemSpec.applyJTJ.boundary(w, h, unpackstruct(pd.images), pd.p) -- A x p_k  => J^T x J x p_k 
+				pd.Ap_X(w, h) = tmp								  -- store for next kernel call
+				d = pd.p(w, h)*tmp					              -- x-th term of denominator of alpha
+			end
+			d = util.warpReduce(d)
 			if (util.laneid() == 0) then
 				util.atomicAdd(pd.scanAlpha, d)
 			end
@@ -102,29 +108,28 @@ solversGPU.gaussNewtonGPU = function(problemSpec, vars)
 	end
 	
 	specializedKernels.PCGStep2 = function(data)
-		local terra PCGStep2GPU(pd : &data.PlanData, w : int, h : int)
-		
-			-- sum over block results to compute denominator of alpha
-			var dotProduct = pd.scanAlpha[0]
-	
-			var b = 0.0f -- TODO this must be outside of the boundary check to make the warp reduce work
-			var alpha = 0.0f
+		local terra PCGStep2GPU(pd : &data.PlanData)
+			var b = 0.0f 
+			var w : int, h : int
+			if positionForValidLane(pd, "unknown", &w, &h) then
+				-- sum over block results to compute denominator of alpha
+				var dotProduct = pd.scanAlpha[0]
+				var alpha = 0.0f
+				
+				-- update step size alpha
+				if dotProduct > FLOAT_EPSILON then alpha = pd.rDotzOld(w, h)/dotProduct end 
 			
-			-- update step size alpha
-			if dotProduct > FLOAT_EPSILON then alpha = pd.rDotzOld(w, h)/dotProduct end 
-		
-			pd.delta(w, h) = pd.delta(w, h)+alpha*pd.p(w,h)		-- do a decent step
+				pd.delta(w, h) = pd.delta(w, h)+alpha*pd.p(w,h)		-- do a decent step
+				
+				var r = pd.r(w,h)-alpha*pd.Ap_X(w,h)				-- update residuum
+				pd.r(w,h) = r										-- store for next kernel call
 			
-			var r = pd.r(w,h)-alpha*pd.Ap_X(w,h)				-- update residuum
-			pd.r(w,h) = r										-- store for next kernel call
-		
-			var z = pd.preconditioner(w,h)*r						-- apply pre-conditioner M^-1
-			pd.z(w,h) = z;										-- save for next kernel call
-			
-			b = z*r;											-- compute x-th term of the nominator of beta
-
-			
-			b = util.warpReduce(b)	--TODO check for sizes != 32
+				var z = pd.preconditioner(w,h)*r						-- apply pre-conditioner M^-1
+				pd.z(w,h) = z;										-- save for next kernel call
+				
+				b = z*r;											-- compute x-th term of the nominator of beta
+			end
+			b = util.warpReduce(b)
 			if (util.laneid() == 0) then
 				util.atomicAdd(pd.scanBeta, b)
 			end
@@ -133,22 +138,28 @@ solversGPU.gaussNewtonGPU = function(problemSpec, vars)
 	end
 	
 	specializedKernels.PCGStep3 = function(data)
-		local terra PCGStep3GPU(pd : &data.PlanData, w : int, h : int)			
-			var rDotzNew =  pd.scanBeta[0]									-- get new nominator
-			var rDotzOld = pd.rDotzOld(w,h)									-- get old denominator
+		local terra PCGStep3GPU(pd : &data.PlanData)			
+			var w : int, h : int
+			if positionForValidLane(pd, "unknown", &w, &h) then
+				var rDotzNew =  pd.scanBeta[0]									-- get new nominator
+				var rDotzOld = pd.rDotzOld(w,h)									-- get old denominator
 
-			var beta = 0.0f														 
-			if rDotzOld > FLOAT_EPSILON then beta = rDotzNew/rDotzOld end	-- update step size beta
-		
-			pd.rDotzOld(w,h) = rDotzNew										-- save new rDotz for next iteration
-			pd.p(w,h) = pd.z(w,h)+beta*pd.p(w,h)							-- update decent direction
+				var beta = 0.0f														 
+				if rDotzOld > FLOAT_EPSILON then beta = rDotzNew/rDotzOld end	-- update step size beta
+			
+				pd.rDotzOld(w,h) = rDotzNew										-- save new rDotz for next iteration
+				pd.p(w,h) = pd.z(w,h)+beta*pd.p(w,h)							-- update decent direction
+			end
 		end
 		return { kernel = PCGStep3GPU, header = noHeader, footer = noFooter, params = {}, mapMemberName = "unknown" }
 	end
 	
 	specializedKernels.PCGLinearUpdate = function(data)
-		local terra PCGLinearUpdateGPU(pd : &data.PlanData, w : int, h : int)
-			pd.images.unknown(w,h) = pd.images.unknown(w,h) + pd.delta(w,h)
+		local terra PCGLinearUpdateGPU(pd : &data.PlanData)
+			var w : int, h : int
+			if positionForValidLane(pd, "unknown", &w, &h) then
+				pd.images.unknown(w,h) = pd.images.unknown(w,h) + pd.delta(w,h)
+			end
 		end
 		return { kernel = PCGLinearUpdateGPU, header = noHeader, footer = noFooter, params = {}, mapMemberName = "unknown" }
 	end
@@ -229,9 +240,12 @@ solversGPU.gradientDescentGPU = function(problemSpec, vars)
 	
 	local specializedKernels = {}
 	specializedKernels.updatePosition = function(data)
-		local terra updatePositionGPU(pd : &data.PlanData, w : int, h : int, learningRate : float)
-			var delta = -learningRate * pd.gradStore(w, h)
-			pd.images.unknown(w, h) = pd.images.unknown(w, h) + delta
+		local terra updatePositionGPU(pd : &data.PlanData, learningRate : float)
+			var w : int, h : int
+			if positionForValidLane(pd, "unknown", &w, &h) then
+				var delta = -learningRate * pd.gradStore(w, h)
+				pd.images.unknown(w, h) = pd.images.unknown(w, h) + delta
+			end
 		end
 		return { kernel = updatePositionGPU, header = noHeader, footer = noFooter, params = {symbol(float)}, mapMemberName = "unknown" }
 	end
@@ -333,16 +347,22 @@ solversGPU.conjugateGradientGPU = function(problemSpec, vars)
 	-- Polak-Ribiere conjugacy
 	-- 
 	specializedKernels.PRConj = function(data)
-		local terra PRConj(pd : &data.PlanData, w : int, h : int)
-			var cost = data.problemSpec.cost.boundary(w, h, unpackstruct(pd.images))
-			
-			var g = data.problemSpec.gradient.boundary(w, h, unpackstruct(pd.images))
-			pd.gradient(w, h) = g
-			
-			var p = pd.prevGradient(w, h)
-			
-			var num = (-g * (-g + p))
-			var den = p * p
+		local terra PRConj(pd : &data.PlanData)
+			var cost = 0.0f
+			var num = 0.0f
+			var den = 0.0f
+			var w : int, h : int
+			if positionForValidLane(pd, "unknown", &w, &h) then
+				cost = data.problemSpec.cost.boundary(w, h, unpackstruct(pd.images))
+				
+				var g = data.problemSpec.gradient.boundary(w, h, unpackstruct(pd.images))
+				pd.gradient(w, h) = g
+				
+				var p = pd.prevGradient(w, h)
+				
+				num = (-g * (-g + p))
+				den = p * p
+			end
 			
 			cost = util.warpReduce(cost)
 			num = util.warpReduce(num)
@@ -358,11 +378,14 @@ solversGPU.conjugateGradientGPU = function(problemSpec, vars)
 	end
 	
 	specializedKernels.CGDirection = function(data)
-		local terra CGDirection(pd : &data.PlanData, w : int, h : int, beta : float)
-			var g = pd.gradient(w, h)
-			var addr = &pd.searchDirection(w, h)
-			@addr = beta * @addr - g
-			pd.prevGradient(w, h) = g
+		local terra CGDirection(pd : &data.PlanData, beta : float)
+			var w : int, h : int
+			if positionForValidLane(pd, "unknown", &w, &h) then
+				var g = pd.gradient(w, h)
+				var addr = &pd.searchDirection(w, h)
+				@addr = beta * @addr - g
+				pd.prevGradient(w, h) = g
+			end
 		end
 		return { kernel = CGDirection, header = noHeader, footer = noFooter, params = {symbol(float)}, mapMemberName = "unknown" }
 	end
@@ -488,34 +511,40 @@ solversGPU.adaDeltaGPU = function(problemSpec, vars)
 	local specializedKernels = {}
 	
 	specializedKernels.updatePositionA = function(data)
-		local terra updatePosition(pd : &data.PlanData, w : int, h : int)
-			var Eg2 = 0.0f
-			var Ex2 = 0.0f
-			for i = 0, 10 do
-				var g = data.problemSpec.gradient.boundary(w, h, pd.images.unknown, unpackstruct(pd.images, 2))
-				Eg2 = momentum * Eg2 + (1.0f - momentum) * g * g
-				var learningRate = -annealingA * sqrt((Ex2 + epsilon) / (Eg2 + epsilon))
-				var delta = learningRate * g
-				Ex2 = momentum * Ex2 + (1.0f - momentum) * delta * delta
-				pd.images.unknown(w, h) = pd.images.unknown(w, h) + delta
-				--pd.xNext(w, h) = pd.images.unknown(w, h) + delta
+		local terra updatePosition(pd : &data.PlanData)
+			var w : int, h : int
+			if positionForValidLane(pd, "unknown", &w, &h) then
+				var Eg2 = 0.0f
+				var Ex2 = 0.0f
+				for i = 0, 10 do
+					var g = data.problemSpec.gradient.boundary(w, h, pd.images.unknown, unpackstruct(pd.images, 2))
+					Eg2 = momentum * Eg2 + (1.0f - momentum) * g * g
+					var learningRate = -annealingA * sqrt((Ex2 + epsilon) / (Eg2 + epsilon))
+					var delta = learningRate * g
+					Ex2 = momentum * Ex2 + (1.0f - momentum) * delta * delta
+					pd.images.unknown(w, h) = pd.images.unknown(w, h) + delta
+					--pd.xNext(w, h) = pd.images.unknown(w, h) + delta
+				end
 			end
 		end
 		return { kernel = updatePosition, header = noHeader, footer = noFooter, params = {}, mapMemberName = "unknown" }
 	end
 	
 	specializedKernels.updatePositionB = function(data)
-		local terra updatePosition(pd : &data.PlanData, w : int, h : int)
-			var g = data.problemSpec.gradient.boundary(w, h, pd.images.unknown, unpackstruct(pd.images, 2))
-			var Eg2val = momentum * pd.Eg2(w, h) + (1.0f - momentum) * g * g
-			pd.Eg2(w, h) = Eg2val
-			var Ex2val = pd.Ex2(w, h)
-			var learningRate = -annealingB * sqrt((Ex2val + epsilon) / (Eg2val + epsilon))
-			var delta = learningRate * g
-			--var delta = -0.01 * g
-			pd.Ex2(w, h) = momentum * Ex2val + (1.0f - momentum) * delta * delta
-			pd.images.unknown(w, h) = pd.images.unknown(w, h) + delta
-			--pd.xNext(w, h) = pd.images.unknown(w, h) + delta
+		local terra updatePosition(pd : &data.PlanData)
+			var w : int, h : int
+			if positionForValidLane(pd, "unknown", &w, &h) then
+				var g = data.problemSpec.gradient.boundary(w, h, pd.images.unknown, unpackstruct(pd.images, 2))
+				var Eg2val = momentum * pd.Eg2(w, h) + (1.0f - momentum) * g * g
+				pd.Eg2(w, h) = Eg2val
+				var Ex2val = pd.Ex2(w, h)
+				var learningRate = -annealingB * sqrt((Ex2val + epsilon) / (Eg2val + epsilon))
+				var delta = learningRate * g
+				--var delta = -0.01 * g
+				pd.Ex2(w, h) = momentum * Ex2val + (1.0f - momentum) * delta * delta
+				pd.images.unknown(w, h) = pd.images.unknown(w, h) + delta
+				--pd.xNext(w, h) = pd.images.unknown(w, h) + delta
+			end
 		end
 		return { kernel = updatePosition, header = noHeader, footer = noFooter, params = {}, mapMemberName = "unknown" }
 	end
