@@ -317,11 +317,15 @@ function Exp:__tostring()
     return expstostring(terralib.newlist{self})
 end
 
-function ad.toterra(es,varmap_) 
+local function defaultgenerator(op) return op.generator end
+
+function ad.toterra(es,varmap_,generatormap_) 
     es = terralib.islist(es) and es or terralib.newlist(es)
      --varmap is a function or table mapping keys to what terra code should go there
     local varmap = type(varmap_) == "table" and function(v) return varmap_[v] end or varmap_
     assert(varmap)
+    local generatormap = generatormap_ == "table" and function(op) return generatormap_[op] end
+                       or generatormap_ or defaultgenerator
     local manyuses = countuses(es)
     local nvars = 0
     local results = terralib.newlist {}
@@ -335,8 +339,9 @@ function ad.toterra(es,varmap_)
             return `float(e.v)
         elseif "Apply" == e.kind then
             if emitted[e] then return emitted[e] end
-            assert(e.op.generator)
-            local exp = e.op.generator(unpack(e.args:map(emit)))
+            local exp
+            local generator = assert(generatormap(e.op) or defaultgenerator(e.op))
+            local exp = generator(unpack(e.args:map(emit)))
             if manyuses[e] then
                 local v = symbol(float,"e")
                 emitted[e] = v

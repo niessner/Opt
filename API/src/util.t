@@ -4,6 +4,17 @@ local timeIndividualKernels = true
 local S = require("std")
 
 local util = {}
+util.C = terralib.includecstring [[
+#include <stdio.h>
+#include <string.h>
+#include <stdlib.h>
+#include <math.h>
+#include <cuda_runtime.h>
+#ifdef _WIN32
+	#include <io.h>
+#endif
+]]
+local C = util.C
 
 local mathParamCount = {sqrt = 1,
 cos  = 1,
@@ -15,29 +26,18 @@ atan = 1,
 pow  = 2,
 fmod = 2}
 
-cuMath = {}
+util.gpuMath = {}
+util.cpuMath = {}
 for k,v in pairs(mathParamCount) do
 	local params = {}
 	for i = 1,v do
 		params[i] = float
 	end
-	cuMath[k] = terralib.externfunction(("__nv_%sf"):format(k), params -> float)
+	util.gpuMath[k] = terralib.externfunction(("__nv_%sf"):format(k), params -> float)
+    util.cpuMath[k] = C[k.."f"]
 end
 
-util.cuMath = cuMath
 
-util.C = terralib.includecstring [[
-#include <stdio.h>
-#include <string.h>
-#include <stdlib.h>
-#include <math.h>
-#include <cuda_runtime.h>
-#ifdef _WIN32
-	#include <io.h>
-#endif
-]]
-
-local C = util.C
 function Vector(T,debug)
     local struct Vector(S.Object) {
         _data : &T;

@@ -273,6 +273,7 @@ local function problemPlan(id, dimensions, elemsizes, strides, pplan)
     local success,p = xpcall(function() 
 		local problemmetadata = assert(problems[id])
         opt.dimensions,opt.elemsizes,opt.strides = dimensions,elemsizes,strides
+        opt.math = problemmetadata.kind:match("GPU") and util.gpuMath or util.cpuMath
         local file, errorString = terralib.loadfile(problemmetadata.filename)
         if not file then
             error(errorString, 0)
@@ -429,7 +430,17 @@ local function createfunction(images,exp,usebounds)
         end
         return accesssyms[a]
     end
-    local result = ad.toterra({exp},emitvar)
+    -- NOTE: math is set globally for the particular plan being compiled to either util.gpuMath or util.cpuMath
+    local function generatormap(op) 
+        local fn = opt.math[op.name]
+        if fn then
+            return function(...) 
+                local args = {...} 
+                return `fn(args)
+            end
+        end 
+    end
+    local result = ad.toterra({exp},emitvar,generatormap)
     local terra generatedfn([i] : int64, [j] : int64, [imagesyms])
         [stmts]
         return result

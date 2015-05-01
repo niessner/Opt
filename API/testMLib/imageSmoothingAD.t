@@ -25,7 +25,7 @@ local C = terralib.includecstring [[
 #include <stdio.h>
 ]]
 
-tbl.applyJTJ = terra(i : uint64, j : uint64, xImage : X, aImage : A, pImage : X)
+tbl.applyJTJ.boundary = terra(i : uint64, j : uint64, xImage : X, aImage : A, pImage : X)
     var v  = orig.applyJTJ.boundary(i,j,xImage,aImage,pImage)
     var v2 = applyJTJ.boundary(i,j,xImage,aImage,pImage)
     C.printf("%d %d %f %f\n",i,j,v,v2)

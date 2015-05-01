@@ -19,7 +19,7 @@ TEST = test/test
 TESTMLIB = testMLib/testMLib
 
 EXECUTABLES = $(EXAMPLE) $(TEST) $(TESTMLIB)
-all:	$(EXECUTABLES)
+all:	$(TESTMLIB)
 
 TERRA = $(HOME)/terra/terra
 
@@ -35,7 +35,7 @@ $(EXAMPLE):	example/example.o
 $(TEST):	test/testFramework.o test/main.o
 	$(LINK) $^ -o $@ $(LFLAGS)
 	
-$(TESTMLIB):	testMLib/main.o testMLib/mLibSource.o testMLib/testFramework.o
+$(TESTMLIB):	testMLib/main.o testMLib/mLibSource.o testMLib/testFramework.o testMLib/exampleImageSmoothing.o
 	$(LINK) $^ -o $@ $(LFLAGS)
 	
 clean:

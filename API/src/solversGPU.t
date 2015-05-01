@@ -5,7 +5,7 @@ local C = util.C
 local Timer = util.Timer
 local positionForValidLane = util.positionForValidLane
 
-local cuMath = util.cuMath
+local gpuMath = util.gpuMath
 
 local cuda_version = cudalib.localversion()
 local libdevice = terralib.cudahome..string.format("/nvvm/libdevice/libdevice.compute_%d.10.bc",cuda_version)
@@ -511,7 +511,7 @@ solversGPU.adaDeltaGPU = function(problemSpec, vars)
 				for i = 0, 10 do
 					var g = data.problemSpec.gradient.boundary(w, h, pd.images.unknown, unpackstruct(pd.images, 2))
 					Eg2 = momentum * Eg2 + (1.0f - momentum) * g * g
-					var learningRate = -annealingA * cuMath.sqrt((Ex2 + epsilon) / (Eg2 + epsilon))
+					var learningRate = -annealingA * gpuMath.sqrt((Ex2 + epsilon) / (Eg2 + epsilon))
 					var delta = learningRate * g
 					Ex2 = momentum * Ex2 + (1.0f - momentum) * delta * delta
 					pd.images.unknown(w, h) = pd.images.unknown(w, h) + delta
@@ -530,7 +530,7 @@ solversGPU.adaDeltaGPU = function(problemSpec, vars)
 				var Eg2val = momentum * pd.Eg2(w, h) + (1.0f - momentum) * g * g
 				pd.Eg2(w, h) = Eg2val
 				var Ex2val = pd.Ex2(w, h)
-				var learningRate = -annealingB * cuMath.sqrt((Ex2val + epsilon) / (Eg2val + epsilon))
+				var learningRate = -annealingB * gpuMath.sqrt((Ex2val + epsilon) / (Eg2val + epsilon))
 				var delta = learningRate * g
 				--var delta = -0.01 * g
 				pd.Ex2(w, h) = momentum * Ex2val + (1.0f - momentum) * delta * delta
