@@ -11,6 +11,7 @@
 #include <G3D/G3DAll.h>
 #include <mutex>
 #include "Optimizer.h"
+#include "OptimizationStatusInfo.h"
 class G3DVisualizer : public GApp {
 private:
     /** Signal that we can receive events */
@@ -31,10 +32,6 @@ private:
 
     Optimizer m_optimizer;
 
-    
-    OptimizationTimingInfo m_optimizationTiming;
-    std::mutex             m_oTimingMutex;
-
     struct RunOptMessage {
         std::mutex  mutex;
         std::string terraFilename;
@@ -54,15 +51,6 @@ private:
             optMethod       = m_lastRunMessage.optimizationMethod;
             terraFilename   = m_lastRunMessage.terraFilename;
         } m_lastRunMessage.mutex.unlock();
-    }
-
-    
-
-
-    void writeTimingInfo(const OptimizationTimingInfo& t) {
-        m_oTimingMutex.lock(); {
-            m_optimizationTiming = t;
-        } m_oTimingMutex.unlock();
     }
 
     Array<OptimizationInput>    m_inputs;
@@ -88,7 +76,32 @@ private:
 
     void repositionVisualizations();
 
+
+    void writeStatusInfo(const OptimizationTimingInfo& timingInfo, std::string errorMessage) {
+        m_statusMutex.lock(); {
+            m_statusInfo.compilerMessage = errorMessage;
+            m_statusInfo.timingInfo = timingInfo;
+            m_statusInfo.currentlyCompiling = false;
+            m_statusInfo.informationReadSinceCompilation = false;
+        } m_statusMutex.unlock();
+    }
+    void signalCompilation() {
+        m_statusMutex.lock(); {
+            m_statusInfo.currentlyCompiling = true;
+        } m_statusMutex.unlock();
+    }
+    OptimizationStatusInfo m_statusInfo;
+    std::mutex m_statusMutex;
+
 public:
+
+    void getStatusInfo(OptimizationStatusInfo& statusInfo) {
+        m_statusMutex.lock(); {
+            statusInfo = m_statusInfo;
+            m_statusInfo.informationReadSinceCompilation = true;
+        } m_statusMutex.unlock();
+    }
+
     void sendMoveMessage(int x, int y, int width, int height) {
         m_moveMessage.mutex.lock(); {
             m_moveMessage.x = x;
@@ -115,13 +128,7 @@ public:
         } m_lastRunMessage.mutex.unlock();
     }
 
-    OptimizationTimingInfo acquireTimingInfo() {
-        OptimizationTimingInfo copy;
-        m_oTimingMutex.lock(); {
-            copy = m_optimizationTiming;
-        } m_oTimingMutex.unlock();
-        return copy;
-    }
+    
 
     void loadNewInput();
 

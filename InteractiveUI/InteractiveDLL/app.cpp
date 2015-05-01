@@ -33,7 +33,6 @@ UINT32 App::processCommand(const string &command)
 {
 	vector<string> words = ml::util::split(command, "\t");
 	//while(words.Length() < 5) words.PushEnd("");
-    _errorString = " ";
     if (words[0] == "load") {
         _terraFile = words[1];
     } else if (words[0] == "run") {
@@ -58,24 +57,29 @@ int App::getIntegerByName(const string &s)
 	}
 }
 
+void App::getUpdatedInfo() {
+    _g3dVisualizer->getStatusInfo(_statusInfo);
+}
+
 float App::getFloatByName(const string &s)
 {
-    OptimizationTimingInfo timingInfo = _g3dVisualizer->acquireTimingInfo();
+    getUpdatedInfo();
+    
     if (s == "defineTime")
     {
-        return timingInfo.optDefineTime;
+        return _statusInfo.timingInfo.optDefineTime;
     }
     else if (s == "planTime")
     {
-        return timingInfo.optPlanTime;
+        return _statusInfo.timingInfo.optPlanTime;
     }
     else if (s == "solveTime")
     {
-        return timingInfo.optSolveTime;
+        return _statusInfo.timingInfo.optSolveTime;
     }
     else if (s == "solveTimeGPU")
     {
-        return timingInfo.optSolveTimeGPU;
+        return _statusInfo.timingInfo.optSolveTimeGPU;
     }
     else
     {
@@ -92,7 +96,8 @@ const char* App::getStringByName(const string &s)
         _queryString = _terraFile;
 	}
     else if (s == "error") {
-        _queryString = _errorString;
+        getUpdatedInfo();
+        _queryString = _statusInfo.compilerMessage;
     } else {
         MLIB_ERROR("Unknown string");
 		return NULL;

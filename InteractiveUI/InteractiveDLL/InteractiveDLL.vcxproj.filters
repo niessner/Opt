@@ -18,6 +18,7 @@
     <ClInclude Include="parameters.h" />
     <ClInclude Include="G3DVisualizer.h" />
     <ClInclude Include="Optimizer.h" />
+    <ClInclude Include="OptimizationStatusInfo.h" />
   </ItemGroup>
   <ItemGroup>
     <None Include="interactiveDLL.def" />

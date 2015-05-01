@@ -15,7 +15,7 @@ local u_x = 320
 local u_y = 240
 
 function magnitude(point) 
-	return sqrt(point[1]*point[1] + point[2]*point[2] + point[3]*point[3])
+	return ad.sqrt(point[1]*point[1] + point[2]*point[2] + point[3]*point[3])
 end
 
 function times(number,point)

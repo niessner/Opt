@@ -244,8 +244,9 @@ void G3DVisualizer::onSimulation(RealTime rdt, SimTime sdt, SimTime idt) {
         m_lastOptimizationRunTime = lastMessageTime;
         OptimizationTimingInfo timingInfo;
         m_optimizer.setOptData(RenderDevice::current, m_inputs, m_output);
+        signalCompilation();
         m_optimizer.run(terraFile, optimizationMethod, timingInfo, errorString);
-        writeTimingInfo(timingInfo);
+        writeStatusInfo(timingInfo, errorString);
         m_optimizer.renderOutput(RenderDevice::current, m_output);
     }
 

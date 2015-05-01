@@ -26,6 +26,7 @@
     <ClInclude Include="interactiveDLL.h" />
     <ClInclude Include="main.h" />
     <ClInclude Include="mLibInclude.h" />
+    <ClInclude Include="OptimizationStatusInfo.h" />
     <ClInclude Include="Optimizer.h" />
     <ClInclude Include="parameters.h" />
   </ItemGroup>

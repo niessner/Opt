@@ -5,6 +5,27 @@ local S = require("std")
 
 local util = {}
 
+local mathParamCount = {sqrt = 1,
+cos  = 1,
+acos = 1,
+sin  = 1,
+asin = 1,
+tan  = 1,
+atan = 1,
+pow  = 2,
+fmod = 2}
+
+cuMath = {}
+for k,v in pairs(mathParamCount) do
+	local params = {}
+	for i = 1,v do
+		params[i] = float
+	end
+	cuMath[k] = terralib.externfunction(("__nv_%sf"):format(k), params -> float)
+end
+
+util.cuMath = cuMath
+
 util.C = terralib.includecstring [[
 #include <stdio.h>
 #include <string.h>
