@@ -1,4 +1,5 @@
-local orig = require("imageSmoothing")
+local origFile = terralib.loadfile("E:/Projects/DSL/Optimization/API/testMLib/imageSmoothing.t")
+local orig = origFile()
 local W,H = orig.cost.dimensions[1],orig.cost.dimensions[2] --opt.Dim("W",0), opt.Dim("H",1)
 local X = ad.Image("X",W,H,0)
 local A = ad.Image("A",W,H,1)

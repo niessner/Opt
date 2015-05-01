@@ -2,6 +2,7 @@ Owner       | Task
 -----------------------------------------------------------------------------------------------------
 Zach        | terra function -> lua function with structs or suchlike produces useless error, fix.
 Zach		| Make math functions work on CPU and GPU
+Michael     | Figure out whether rendered image is passed into SFS function or we do it inside kernel JIT
 Michael		| Implement SFS energy function
 Michael		| Stripped down SFS C++/CUDA with timing
 Michael		| Terra port of C++/CUDA version
