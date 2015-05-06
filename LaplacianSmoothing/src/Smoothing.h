@@ -7,6 +7,7 @@
 #include <cudaUtil.h>
 
 #include "CUDALaplacianSolver.h"
+#include "CUSparseLaplacianSolver.h"
 
 class Smoothing {
 public:
@@ -22,22 +23,25 @@ public:
 		SAFE_DELETE_ARRAY(h_result);
 
 		m_laplacianSolver = new CUDALaplacianSolver(m_image.getWidth(), m_image.getHeight());
+		m_cusparseLaplacianSolver = new CUSparseLaplacianSolver(m_image.getWidth(), m_image.getHeight());
 	}
 
 	~Smoothing() {
 		cutilSafeCall(cudaFree(d_image));
 		cutilSafeCall(cudaFree(d_result));
 		SAFE_DELETE(m_laplacianSolver);
+		SAFE_DELETE(m_cusparseLaplacianSolver);
 	}
 
 	ColorImageR32 solve() {
 		float weightFit = 0.1f;
 		float weightReg = 1.0f;
 
-        unsigned int nonLinearIter = 3200;
-		unsigned int linearIter = 50;
+        unsigned int nonLinearIter = 32;
+		unsigned int linearIter = 1000;
 		m_laplacianSolver->solveGN(d_image, d_result, nonLinearIter, linearIter, weightFit, weightReg);
 		//m_laplacianSolver->solveGD(d_image, d_result, nonLinearIter, weightFit, weightReg);
+		//m_cusparseLaplacianSolver->solvePCG(d_image, d_result, linearIter, weightFit, weightReg);
 		return copyResultToCPU();
 	}
 
@@ -52,5 +56,6 @@ private:
 	float* d_image;
 	float* d_result;
 
-	CUDALaplacianSolver* m_laplacianSolver;
+	CUDALaplacianSolver*	 m_laplacianSolver;
+	CUSparseLaplacianSolver* m_cusparseLaplacianSolver;
 };

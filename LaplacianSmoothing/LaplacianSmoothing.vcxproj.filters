@@ -21,12 +21,14 @@
     <ClInclude Include="src\mLibInclude.h" />
     <ClInclude Include="src\Smoothing.h" />
     <ClInclude Include="src\CUDATimer.h" />
+    <ClInclude Include="src\CUSparseLaplacianSolver.h" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="src\main.cpp" />
     <ClCompile Include="src\CUDALaplacianSolver.cpp" />
     <ClCompile Include="src\mLibSource.cpp" />
     <ClCompile Include="src\Smoothing.cpp" />
+    <ClCompile Include="src\CUSparseLaplacianSolver.cpp" />
   </ItemGroup>
   <ItemGroup>
     <Filter Include="CUDA">
