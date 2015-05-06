@@ -19,7 +19,9 @@ public:
 		
 		float* h_result = new float[m_image.getWidth()*m_image.getHeight()];
 		memset(h_result, 0, sizeof(float)*m_image.getWidth()*m_image.getHeight());
-		cutilSafeCall(cudaMemcpy(d_result, h_result, sizeof(float)*m_image.getWidth()*m_image.getHeight(), cudaMemcpyHostToDevice));
+
+		cutilSafeCall(cudaMemcpy(d_result, m_image.getPointer(), sizeof(float)*m_image.getWidth()*m_image.getHeight(), cudaMemcpyHostToDevice));
+		//cutilSafeCall(cudaMemcpy(d_result, h_result, sizeof(float)*m_image.getWidth()*m_image.getHeight(), cudaMemcpyHostToDevice));
 		SAFE_DELETE_ARRAY(h_result);
 
 		m_laplacianSolver = new CUDALaplacianSolver(m_image.getWidth(), m_image.getHeight());
@@ -35,13 +37,13 @@ public:
 
 	ColorImageR32 solve() {
 		float weightFit = 0.1f;
-		float weightReg = 1.0f;
+		float weightReg = 0.1f;
 
-        unsigned int nonLinearIter = 32;
-		unsigned int linearIter = 1000;
-		m_laplacianSolver->solveGN(d_image, d_result, nonLinearIter, linearIter, weightFit, weightReg);
+        unsigned int nonLinearIter = 1;
+		unsigned int linearIter = 10;
+		//m_laplacianSolver->solveGN(d_image, d_result, nonLinearIter, linearIter, weightFit, weightReg);
 		//m_laplacianSolver->solveGD(d_image, d_result, nonLinearIter, weightFit, weightReg);
-		//m_cusparseLaplacianSolver->solvePCG(d_image, d_result, linearIter, weightFit, weightReg);
+		m_cusparseLaplacianSolver->solvePCG(d_image, d_result, linearIter, weightFit, weightReg);
 		return copyResultToCPU();
 	}
 
