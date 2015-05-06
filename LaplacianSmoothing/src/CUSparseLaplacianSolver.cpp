@@ -1,9 +1,11 @@
 #include "CUSparseLaplacianSolver.h"
 #include <iostream>
+#include "CUDATimer.h"
 
 void CUSparseLaplacianSolver::genLaplace(int *row_ptr, int *col_ind, float *val, int N, int nz, float *rhs, float wFit, float wReg, float* target)
 {
 	int n = (int)sqrt((double)N);
+	std::cout << n << std::endl;
 	int idx = 0;
 	for (int i = 0; i<N; i++)
 	{
@@ -21,7 +23,7 @@ void CUSparseLaplacianSolver::genLaplace(int *row_ptr, int *col_ind, float *val,
 		// up
 		if (iy > 0)
 		{
-			val[idx] = 1.0*wReg;
+			val[idx] = -1.0*wReg;
 			col_ind[idx] = i - n;
 			idx++;
 		}
@@ -29,13 +31,13 @@ void CUSparseLaplacianSolver::genLaplace(int *row_ptr, int *col_ind, float *val,
 		// left
 		if (ix > 0)
 		{
-			val[idx] = 1.0*wReg;
+			val[idx] = -1.0*wReg;
 			col_ind[idx] = i - 1;
 			idx++;
 		}
 
 		// center
-		val[idx] = -count*wReg+wFit;
+		val[idx] = count*wReg+wFit;
 		col_ind[idx] = i;
 		idx++;
 
@@ -44,7 +46,7 @@ void CUSparseLaplacianSolver::genLaplace(int *row_ptr, int *col_ind, float *val,
 		//right
 		if (ix  < n - 1)
 		{
-			val[idx] = 1.0*wReg;
+			val[idx] = -1.0*wReg;
 			col_ind[idx] = i + 1;
 			idx++;
 		}
@@ -52,7 +54,7 @@ void CUSparseLaplacianSolver::genLaplace(int *row_ptr, int *col_ind, float *val,
 		//down
 		if (iy  < n - 1)
 		{
-			val[idx] = 1.0*wReg;
+			val[idx] = -1.0*wReg;
 			col_ind[idx] = i + n;
 			idx++;
 		}
@@ -96,7 +98,7 @@ void CUSparseLaplacianSolver::solvePCG(float* d_targetDepth, float* d_result, un
 	float* h_targetDepth = new float[N];
 	cutilSafeCall(cudaMemcpy(h_targetDepth, d_targetDepth, N*sizeof(float), cudaMemcpyDeviceToHost)); // Free that array
 
-	genLaplace(I, J, val, N, nz, rhs, weightFitting, weightRegularizer, h_targetDepth);
+	genLaplace(I, J, val, N, nz, rhs, 2*sqrtf(weightFitting), sqrtf(weightRegularizer), h_targetDepth);
 		
 	/* Create CUBLAS context */
 	cublasStatus = cublasCreate(&cublasHandle);
@@ -136,15 +138,19 @@ void CUSparseLaplacianSolver::solvePCG(float* d_targetDepth, float* d_result, un
 	Follows the description by Golub & Van Loan, "Matrix Computations 3rd ed.", Section 10.2.6  */
 
 	printf("Convergence of conjugate gradient without preconditioning: \n");
-	k = 0;
-	r0 = 0;
+	
+	CUDATimer timer;
 
-	cusparseScsrmv(cusparseHandle, CUSPARSE_OPERATION_NON_TRANSPOSE, N, N, nz, &floatMinusOne, descr, d_val, d_row, d_col, d_result, &floatone, d_r);
+	timer.startEvent("PCGInit");
+		k = 0;
+		r0 = 0;
+		cusparseScsrmv(cusparseHandle, CUSPARSE_OPERATION_NON_TRANSPOSE, N, N, nz, &floatMinusOne, descr, d_val, d_row, d_col, d_result, &floatone, d_r);
+		cublasSdot(cublasHandle, N, d_r, 1, d_r, 1, &r1);
+	timer.endEvent();
 
-	cublasSdot(cublasHandle, N, d_r, 1, d_r, 1, &r1);
-
-	while (k <= nIterations) // r1 > tol*tol && 
+	while (k < nIterations) // r1 > tol*tol && 
 	{
+		timer.startEvent("PCG");
 		k++;
 
 		if (k == 1)
@@ -166,7 +172,11 @@ void CUSparseLaplacianSolver::solvePCG(float* d_targetDepth, float* d_result, un
 		cublasSaxpy(cublasHandle, N, &nalpha, d_omega, 1, d_r, 1);
 		r0 = r1;
 		cublasSdot(cublasHandle, N, d_r, 1, d_r, 1, &r1);
+
+		timer.endEvent();
+		timer.nextIteration();
 	}
+	timer.evaluate();
 
 	std::cout << "nIter: " << k << std::endl;
 }
