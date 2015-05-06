@@ -144,6 +144,22 @@ $$E_{\Delta^2} = \sum_{(i,j) \in \mathcal{I}} w_{\mathit{fit}} E_{\mathit{fit}}(
 
 
 
+\section{Results}
+
+\subsection{Comparison with CUSparse PCG Solver Reference Implementation}
+
+CUSparse can not:
+\begin{itemize}
+\item Exploit shared memory (locality)
+\item Has to read weights from matrix (can not compute them on the fly), this is bad for the GPU
+\item Has to navigate to neighbour variables by traversing (CRS), even so the indices could be computed. Therefore more expensive.
+\item More kernel calls (can not interleave stages of the PCG), we minimize sync points
+\item Bad if system matrix changes alot (GN Solver!), since matrix has to be build each time, before solving
+\item It is even worse if the non zero structure (layout of the CRS changes), this is normally the case for articulated/non-rigid ICP variants.
+\item No batched/block reads, for example for mesh vertices, this results in 3 float reads instead of one float3/4 read
+\end{itemize}
+
+
 %\section*{Acknowledgements}
 
 \bibliographystyle{acmsiggraph}
