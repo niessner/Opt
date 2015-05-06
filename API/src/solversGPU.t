@@ -7,11 +7,6 @@ local positionForValidLane = util.positionForValidLane
 
 local gpuMath = util.gpuMath
 
-local cuda_version = cudalib.localversion()
-local libdevice = terralib.cudahome..string.format("/nvvm/libdevice/libdevice.compute_%d.10.bc",cuda_version)
-terralib.linklibrary(libdevice)
-
-
 solversGPU = {}
 
 local function noHeader(pd)
@@ -166,11 +161,12 @@ solversGPU.gaussNewtonGPU = function(problemSpec, vars)
 
 		unpackstruct(pd.images) = [util.getImages(PlanData, images)]
 
-		var nIterations = 5	--non-linear iterations
-		var lIterations = 15	--linear iterations
+		var nIterations = 30	--non-linear iterations
+		var lIterations = 30	--linear iterations
 		
 		for nIter = 0, nIterations do
-
+            --var startCost = gpu.computeCost(pd, pd.images.unknown)
+			--logSolver("iteration %d, cost=%f", nIter, startCost)
 			pd.scanAlpha[0] = 0.0	--scan in PCGInit1 requires reset
 			gpu.PCGInit1(pd)
 			--var a = pd.scanAlpha[0]

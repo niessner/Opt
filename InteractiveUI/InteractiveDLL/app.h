@@ -10,7 +10,6 @@ private:
     OptimizationStatusInfo _statusInfo;
 
     G3DVisualizer* _g3dVisualizer;
-    void getUpdatedInfo();
 public:
 
     int launchG3DVisualizer();

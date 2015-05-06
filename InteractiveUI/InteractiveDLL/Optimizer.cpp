@@ -27,6 +27,10 @@ void Optimizer::setOptData(RenderDevice* rd, Array<OptimizationInput>& input, co
         shared_ptr<PixelTransferBuffer> ptb = inputIm.lastInput->toPixelTransferBuffer();
         m_optImages.push_back(OptImage(inputIm.sourceImage->width(), inputIm.sourceImage->height()));
         ptb->getData(const_cast<void*>(m_optImages[m_optImages.size() - 1].DataCPU()));
+        // Hack for SFS
+        if (inputIm.sourceImage->name() == "Sensor Depth Image") {
+            ptb->getData(const_cast<void*>(m_optImages[0].DataCPU()));
+        }
     }
     
 }
@@ -47,12 +51,6 @@ bool Optimizer::run(const std::string& terraFile, const std::string& optimizatio
     if (m_optImages.size() < 2) {
         errorString = "No image available";
         return -1;
-    }
-
-    for (int x = 0; x < m_optImages[0].dimX; ++x) {
-        for (int y = 0; y < m_optImages[0].dimY; ++y) {
-            m_optImages[0](x, y) = 0.0;
-        }
     }
 
     uint64_t dims[] = { m_optImages[0].dimX, m_optImages[0].dimY };

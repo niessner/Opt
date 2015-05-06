@@ -61,61 +61,67 @@ void G3DVisualizer::makeGUI() {
     debugWindow->setRect(Rect2D::xywh(0, 0, (float)window()->width(), debugWindow->rect().height()));
 }
 
-void G3DVisualizer::loadNewInput() {
+void G3DVisualizer::loadInputFromFile(const String& filename) {
+
     // TODO: MASSIVE CLEANUP
-    if (FileDialog::getFilename(m_currentFilename, "png,sensor", false)) {
-        loadInput(m_currentFilename, m_inputs.size());
-        m_inputDropDownList->setList(indexStrings(m_inputs.size()));
-        for (int i = 0; i < m_textureBrowserWindows.size(); ++i) {
-            if (notNull(m_textureBrowserWindows[i])) {
-                m_textureBrowserWindows[i]->close();
-            }
+    loadInput(filename, m_inputs.size());
+    m_inputDropDownList->setList(indexStrings(m_inputs.size()));
+    for (int i = 0; i < m_textureBrowserWindows.size(); ++i) {
+        if (notNull(m_textureBrowserWindows[i])) {
+            m_textureBrowserWindows[i]->close();
         }
-        m_textureBrowserWindows.fastClear();
-        for (int i = 0; i < m_inputs.size(); ++i) {
-            m_textureBrowserWindows.append(TextureBrowserWindow::create(developerWindow->theme()));
-            Array<String> textureNames;
-            m_textureBrowserWindows[i]->getTextureList(textureNames);
-            m_inputs[i].sourceImage->visualization.documentGamma = 2.2;
-            int texIndex = textureNames.findIndex(m_inputs[i].sourceImage->name());
-            m_textureBrowserWindows[i]->setMinSize(Vector2(0, 0));
-            m_textureBrowserWindows[i]->setTextureIndex(texIndex);
-
-            float maxWidth = 400;
-            float heightToWidthRatio = m_inputs[i].sourceImage->height() / (float)m_inputs[i].sourceImage->width();
-
-            float browserWidth = min(maxWidth, (float)m_inputs[i].sourceImage->width());
-            m_textureBrowserWindows[i]->textureBox()->setSizeFromInterior(Vector2(browserWidth, browserWidth * heightToWidthRatio));
-
-            m_textureBrowserWindows[i]->pack();
-
-            addWidget(m_textureBrowserWindows[i]);
-            
-            m_textureBrowserWindows[i]->setVisible(true);
-            m_textureBrowserWindows[i]->moveTo(Vector2((maxWidth + 10) * i, window()->height() / 2 - m_inputs[i].sourceImage->height()));
-        }
-        int i = m_textureBrowserWindows.size();
+    }
+    m_textureBrowserWindows.fastClear();
+    for (int i = 0; i < m_inputs.size(); ++i) {
         m_textureBrowserWindows.append(TextureBrowserWindow::create(developerWindow->theme()));
         Array<String> textureNames;
-        
         m_textureBrowserWindows[i]->getTextureList(textureNames);
-        m_output.outputImage->visualization.documentGamma = 2.2;
-        m_output.outputImage->visualization.channels = Texture::Visualization::RasL;
-        int texIndex = textureNames.findIndex(m_output.outputImage->name());
+        m_inputs[i].sourceImage->visualization.documentGamma = 2.2;
+        int texIndex = textureNames.findIndex(m_inputs[i].sourceImage->name());
         m_textureBrowserWindows[i]->setMinSize(Vector2(0, 0));
         m_textureBrowserWindows[i]->setTextureIndex(texIndex);
 
         float maxWidth = 400;
-        float heightToWidthRatio = m_output.outputImage->height() / (float)m_output.outputImage->width();
+        float heightToWidthRatio = m_inputs[i].sourceImage->height() / (float)m_inputs[i].sourceImage->width();
 
-        float browserWidth = min(maxWidth, (float)m_output.outputImage->width());
+        float browserWidth = min(maxWidth, (float)m_inputs[i].sourceImage->width());
         m_textureBrowserWindows[i]->textureBox()->setSizeFromInterior(Vector2(browserWidth, browserWidth * heightToWidthRatio));
+
         m_textureBrowserWindows[i]->pack();
 
         addWidget(m_textureBrowserWindows[i]);
+
         m_textureBrowserWindows[i]->setVisible(true);
-        
-        m_repositionVisualizationNextFrame = true;
+        m_textureBrowserWindows[i]->moveTo(Vector2((maxWidth + 10) * i, window()->height() / 2 - m_inputs[i].sourceImage->height()));
+    }
+    int i = m_textureBrowserWindows.size();
+    m_textureBrowserWindows.append(TextureBrowserWindow::create(developerWindow->theme()));
+    Array<String> textureNames;
+
+    m_textureBrowserWindows[i]->getTextureList(textureNames);
+    m_output.outputImage->visualization.documentGamma = 2.2;
+    m_output.outputImage->visualization.channels = Texture::Visualization::RasL;
+    int texIndex = textureNames.findIndex(m_output.outputImage->name());
+    m_textureBrowserWindows[i]->setMinSize(Vector2(0, 0));
+    m_textureBrowserWindows[i]->setTextureIndex(texIndex);
+
+    float maxWidth = 400;
+    float heightToWidthRatio = m_output.outputImage->height() / (float)m_output.outputImage->width();
+
+    float browserWidth = min(maxWidth, (float)m_output.outputImage->width());
+    m_textureBrowserWindows[i]->textureBox()->setSizeFromInterior(Vector2(browserWidth, browserWidth * heightToWidthRatio));
+    m_textureBrowserWindows[i]->pack();
+
+    addWidget(m_textureBrowserWindows[i]);
+    m_textureBrowserWindows[i]->setVisible(true);
+
+    m_repositionVisualizationNextFrame = true;
+    
+}
+
+void G3DVisualizer::loadNewInput() {
+    if (FileDialog::getFilename(m_currentFilename, "png,sensor", false)) {
+        loadInputFromFile(m_currentFilename);
     }
 }
 
@@ -131,6 +137,7 @@ void G3DVisualizer::onInit() {
     makeGUI();
     m_repositionVisualizationNextFrame = false;
     showRenderingStats = false;
+    loadInputFromFile("E:/Projects/DSL/Optimization/API/testMLib/recordingRaw.sensor");
 
 }
 
@@ -157,6 +164,9 @@ void G3DVisualizer::loadDepthColorFrame(const String& filename, int inputIndex) 
     ml::BinaryDataStreamFile inputStream(filename.c_str(), false);
     ml::CalibratedSensorData sensorData;
     inputStream >> sensorData;
+    for (int i = 0; i < sensorData.m_DepthImageHeight*sensorData.m_DepthImageWidth; ++i) {
+        sensorData.m_DepthImages[0][i] += Random::common().uniform()*0.2;
+    }
     shared_ptr<Texture> depthTexture = Texture::fromPixelTransferBuffer("Sensor Depth Image",
         CPUPixelTransferBuffer::fromData(sensorData.m_DepthImageWidth, sensorData.m_DepthImageHeight, ImageFormat::R32F(), sensorData.m_DepthImages[0]));
     depthTexture->visualization.channels = Texture::Visualization::RasL;

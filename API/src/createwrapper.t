@@ -107,7 +107,7 @@ local function saveaslibrary(libraryname, terrasourcefile)
         S.L = L
         if L == nil then return doerror(L) end
         C.luaL_openlibs(L)
-        var o  = C.terra_Options { verbose = 0, debug = 1, usemcjit = 0 }
+        var o  = C.terra_Options { verbose = 0, debug = 1, usemcjit = 1 }
         C.terra_initwithoptions(L,&o)
         
         setupsigsegv(L)

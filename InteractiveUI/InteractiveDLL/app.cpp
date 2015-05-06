@@ -25,8 +25,11 @@ void App::init()
 UINT32 App::moveWindow(int x, int y, int width, int height) {
     if (notNull(_g3dVisualizer) && _g3dVisualizer->initialized()) {
         _g3dVisualizer->sendMoveMessage(x, y, width, height);
+        return 0;
+    } else {
+        return 2;
     }
-    return 0;
+    
 }
 
 UINT32 App::processCommand(const string &command)
@@ -36,9 +39,24 @@ UINT32 App::processCommand(const string &command)
     if (words[0] == "load") {
         _terraFile = words[1];
     } else if (words[0] == "run") {
-        string optimizationMethod = words[1];
-        _g3dVisualizer->sendRunOptMessage(_terraFile, optimizationMethod);
-    } 
+        if (notNull(_g3dVisualizer) && _g3dVisualizer->initialized()) {
+            string optimizationMethod = words[1];
+            _g3dVisualizer->sendRunOptMessage(_terraFile, optimizationMethod);
+        }
+        else {
+            return 2;
+        }
+    } else if (words[0] == "check") {
+
+        if (notNull(_g3dVisualizer) && _g3dVisualizer->initialized()) {
+            _g3dVisualizer->getStatusInfo(_statusInfo);
+            if (_statusInfo.informationReadSinceCompilation == false) {
+                return 1;
+            }
+        }else {
+            return 2;
+        }
+    }
 
 	return 0;
 }
@@ -57,13 +75,9 @@ int App::getIntegerByName(const string &s)
 	}
 }
 
-void App::getUpdatedInfo() {
-    _g3dVisualizer->getStatusInfo(_statusInfo);
-}
 
 float App::getFloatByName(const string &s)
 {
-    getUpdatedInfo();
     
     if (s == "defineTime")
     {
@@ -96,7 +110,6 @@ const char* App::getStringByName(const string &s)
         _queryString = _terraFile;
 	}
     else if (s == "error") {
-        getUpdatedInfo();
         _queryString = _statusInfo.compilerMessage;
     } else {
         MLIB_ERROR("Unknown string");

@@ -16,6 +16,10 @@ util.C = terralib.includecstring [[
 ]]
 local C = util.C
 
+local cuda_version = cudalib.localversion()
+local libdevice = terralib.cudahome..string.format("/nvvm/libdevice/libdevice.compute_%d.10.bc",cuda_version)
+terralib.linklibrary(libdevice)
+
 local mathParamCount = {sqrt = 1,
 cos  = 1,
 acos = 1,

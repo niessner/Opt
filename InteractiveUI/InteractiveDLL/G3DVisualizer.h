@@ -95,6 +95,8 @@ private:
 
 public:
 
+    void loadInputFromFile(const String& filename);
+
     void getStatusInfo(OptimizationStatusInfo& statusInfo) {
         m_statusMutex.lock(); {
             statusInfo = m_statusInfo;

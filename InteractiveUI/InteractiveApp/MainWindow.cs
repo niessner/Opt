@@ -27,7 +27,6 @@ namespace UIWindow
             "gradientDescentGPU",
             "conjugateGradientCPU",
             "linearizedConjugateGradientCPU",
-            "linearizedConjugateGradientGPU", 
             "lbfgsCPU",
             "vlbfgsCPU",
             "vlbfgsGPU",
@@ -39,13 +38,14 @@ namespace UIWindow
             InitializeComponent();
             foreach (string method in optimizationMethods)
                 optimizationMethodComboBox.Items.Add(method);
-            optimizationMethodComboBox.SelectedItem = "gaussNewtonGPU";
+            optimizationMethodComboBox.SelectedItem = "gradientDescentGPU";
         }
 
         private void MainWindow_Load(object sender, EventArgs e)
         {
             dll = new DLLInterface();
             RunApp();
+            loadSourceFile("E:/Projects/DSL/Optimization/API/testMLib/shapeFromShadingAD.t");
         }
 
         private void loadSourceFile(string filename)
@@ -90,32 +90,22 @@ namespace UIWindow
         private void runOptimizer()
         {
             var optimizationMethod = (string)textBoxEnergy.Invoke(new Func<string>(() => optimizationMethodComboBox.SelectedItem.ToString()));
-            
+            compiling = true;
             uint result = dll.ProcessCommand("run\t" + optimizationMethod);
-            if (result != 0)
+            if (result == 2)
             {
-                string errorString = dll.GetString("error");
-                textBoxCompiler.Invoke(new Action<string>(s => textBoxCompiler.Text = s), errorString);
-            }
-            else
-            {
-                textBoxCompiler.Invoke(new Action<string>(s => textBoxCompiler.Text = s), "Success!");
-                defineTimeBox.Invoke(new Action<string>(s => defineTimeBox.Text = s), dll.GetFloat("defineTime").ToString() + "ms");
-                planTimeBox.Invoke(new Action<string>(s => planTimeBox.Text = s), dll.GetFloat("planTime").ToString() + "ms");
-                cpuSolveTimeBox.Invoke(new Action<string>(s => cpuSolveTimeBox.Text = s), dll.GetFloat("solveTime").ToString() + "ms");
-                gpuSolveTimeBox.Invoke(new Action<string>(s => gpuSolveTimeBox.Text = s), dll.GetFloat("solveTimeGPU").ToString() + "ms");
+                compiling = false;
             }
         }
 
         private async Task Compile() // No async because the method does not need await
         {
-            compiling = true;
+            
             await Task.Run(() =>
             {
                 saveCode();
                 runOptimizer();
             });
-            compiling = false;
         }
 
         public static Task<bool> StartSTATask(Action func)
@@ -162,9 +152,25 @@ namespace UIWindow
             }
         }
 
+        private void checkStatus()
+        {
+            UInt32 status = dll.ProcessCommand("check");
+            if (status == 1)
+            {
+                string errorString = dll.GetString("error");
+                textBoxCompiler.Invoke(new Action<string>(s => textBoxCompiler.Text = s), errorString);
+                defineTimeBox.Invoke(new Action<string>(s => defineTimeBox.Text = s), dll.GetFloat("defineTime").ToString() + "ms");
+                planTimeBox.Invoke(new Action<string>(s => planTimeBox.Text = s), dll.GetFloat("planTime").ToString() + "ms");
+                cpuSolveTimeBox.Invoke(new Action<string>(s => cpuSolveTimeBox.Text = s), dll.GetFloat("solveTime").ToString() + "ms");
+                gpuSolveTimeBox.Invoke(new Action<string>(s => gpuSolveTimeBox.Text = s), dll.GetFloat("solveTimeGPU").ToString() + "ms");
+                compiling = false;
+            }
+        }
+
         private void timer_Tick(object sender, EventArgs e)
         {
-            
+
+            checkStatus();
             if (textChangedSinceLastCompile && !textChangedSinceLastTick && !compiling)
             {
                 Compile();

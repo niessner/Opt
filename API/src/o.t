@@ -14,6 +14,8 @@ if false then
     local fileHandle = C.fopen("crap.txt", 'w')
     C._close(1)
     C._dup2(C._fileno(fileHandle), 1)
+    C._close(2)
+    C._dup2(C._fileno(fileHandle), 2)
 end
 
 -- constants
@@ -445,7 +447,7 @@ local function createfunction(images,exp,usebounds)
         [stmts]
         return result
     end
-    generatedfn:compile()
+    --generatedfn:gettype()
     if verboseAD then
         generatedfn:printpretty(false, false)
         --generatedfn:disas()
