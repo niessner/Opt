@@ -64,7 +64,7 @@
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
     <LinkIncremental>false</LinkIncremental>
     <ExecutablePath>$(DXSDK_DIR)Utilities\bin\x64;$(DXSDK_DIR)Utilities\bin\x86;$(ExecutablePath)</ExecutablePath>
-    <IncludePath>C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA\v6.5\include;$(IncludePath);$(DXSDK_DIR)Include;$(KINECTSDK10_DIR)\inc;$(CUDA_INC_PATH);..\..\mLib\include;..\..\..\mLib\include</IncludePath>
+    <IncludePath>C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA\v6.5\include;$(IncludePath);$(DXSDK_DIR)Include;$(KINECTSDK10_DIR)\inc;$(CUDA_INC_PATH);..\..\mLib\include;..\..\..\mLib\include;..\cusp-v0.5.1\cusp</IncludePath>
     <LibraryPath>C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA\v6.5\lib\x64;$(LibraryPath);$(DXSDK_DIR)Lib\x64;$(KINECTSDK10_DIR)\lib\amd64;$(CUDA_LIB_PATH)</LibraryPath>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='DLL|x64'">
