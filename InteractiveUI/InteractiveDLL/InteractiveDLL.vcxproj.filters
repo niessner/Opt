@@ -8,6 +8,13 @@
     <ClCompile Include="mLibSource.cpp" />
     <ClCompile Include="G3DVisualizer.cpp" />
     <ClCompile Include="Optimizer.cpp" />
+    <ClCompile Include="CUDASolverSHLighting.cpp">
+      <Filter>CUDAHelpers</Filter>
+    </ClCompile>
+    <ClCompile Include="G3DShapeFromShading.cpp" />
+    <ClCompile Include="CudaImage.cpp">
+      <Filter>CUDAHelpers</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="..\..\API\build\Opt.h" />
@@ -19,8 +26,58 @@
     <ClInclude Include="G3DVisualizer.h" />
     <ClInclude Include="Optimizer.h" />
     <ClInclude Include="OptimizationStatusInfo.h" />
+    <ClInclude Include="SFSHelpers.h">
+      <Filter>CUDAHelpers</Filter>
+    </ClInclude>
+    <ClInclude Include="SolverSHLightingState.h">
+      <Filter>CUDAHelpers</Filter>
+    </ClInclude>
+    <ClInclude Include="CUDASolverSHLighting.h">
+      <Filter>CUDAHelpers</Filter>
+    </ClInclude>
+    <ClInclude Include="SolverSFSState.h">
+      <Filter>CUDAHelpers</Filter>
+    </ClInclude>
+    <ClInclude Include="Eigen.h">
+      <Filter>ExternalHelpers</Filter>
+    </ClInclude>
+    <ClInclude Include="CameraParams.h">
+      <Filter>CUDAHelpers</Filter>
+    </ClInclude>
+    <ClInclude Include="G3DShapeFromShading.h" />
+    <ClInclude Include="cuda_SimpleMatrixUtil.h">
+      <Filter>CUDAHelpers</Filter>
+    </ClInclude>
+    <ClInclude Include="cudaUtil.h">
+      <Filter>CUDAHelpers</Filter>
+    </ClInclude>
+    <ClInclude Include="CudaImage.h">
+      <Filter>CUDAHelpers</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <None Include="interactiveDLL.def" />
+    <None Include="SFSHelper.cu">
+      <Filter>CUDAHelpers</Filter>
+    </None>
+  </ItemGroup>
+  <ItemGroup>
+    <Filter Include="CUDAHelpers">
+      <UniqueIdentifier>{6fc115b2-4ffd-4f9b-ba2d-a2c3495b7a4d}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="CUDAHelpers\cutil">
+      <UniqueIdentifier>{dd3b35d5-13b1-4b83-b0b3-cc82e8ae0630}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="ExternalHelpers">
+      <UniqueIdentifier>{0b916739-af75-42dc-a039-0053c00dedff}</UniqueIdentifier>
+    </Filter>
+  </ItemGroup>
+  <ItemGroup>
+    <CudaCompile Include="SolverSHLighting.cu">
+      <Filter>CUDAHelpers</Filter>
+    </CudaCompile>
+    <CudaCompile Include="CameraUtil.cu">
+      <Filter>CUDAHelpers</Filter>
+    </CudaCompile>
   </ItemGroup>
 </Project>

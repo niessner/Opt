@@ -2,13 +2,14 @@
 #include <mLibCore.h>
 #include <mLibDepthCamera.h>
 
+
 G3DVisualizer::G3DVisualizer(const GApp::Settings& settings) : GApp(settings), m_initialized(false) {
     renderDevice->setColorClearValue(Color3::white());
 }
 
 
 void G3DVisualizer::moveWindow(int x, int y, int width, int height) {
-    window()->setClientRect(Rect2D::xywh(x, y, width, height));
+    window()->setClientRect(Rect2D::xywh(float(x), float(y), float(width), float(height)));
 }
 
 void G3DVisualizer::repositionVisualizations() {
@@ -19,7 +20,7 @@ void G3DVisualizer::repositionVisualizations() {
         float browserWidth = min(maxWidth, (float)m_inputs[i].sourceImage->width());
         m_textureBrowserWindows[i]->textureBox()->setSizeFromInterior(Vector2(browserWidth, browserWidth * heightToWidthRatio));
 
-        m_textureBrowserWindows[i]->moveTo(Vector2((maxWidth + 10) * i, window()->height() / 2 - m_inputs[i].sourceImage->height()));
+        m_textureBrowserWindows[i]->moveTo(Vector2(float(maxWidth + 10) * i, float(window()->height()) / 2 - m_inputs[i].sourceImage->height()));
     }
     if (m_textureBrowserWindows.size() > 0) {
         int i = m_textureBrowserWindows.size() - 1;
@@ -28,7 +29,7 @@ void G3DVisualizer::repositionVisualizations() {
         float browserWidth = min(maxWidth, (float)m_output.outputImage->width());
         m_textureBrowserWindows[i]->textureBox()->setSizeFromInterior(Vector2(browserWidth, browserWidth * heightToWidthRatio));
 
-        m_textureBrowserWindows[i]->moveTo(Vector2(0, window()->height() / 2));
+        m_textureBrowserWindows[i]->moveTo(Vector2(0.0f, float(window()->height()) / 2));
     }
 }
 
@@ -63,8 +64,14 @@ void G3DVisualizer::makeGUI() {
 
 void G3DVisualizer::loadInputFromFile(const String& filename) {
 
-    // TODO: MASSIVE CLEANUP
+    
     loadInput(filename, m_inputs.size());
+    setupVisualizationWidgets();
+    
+}
+
+void G3DVisualizer::setupVisualizationWidgets() {
+    // TODO: MASSIVE CLEANUP
     m_inputDropDownList->setList(indexStrings(m_inputs.size()));
     for (int i = 0; i < m_textureBrowserWindows.size(); ++i) {
         if (notNull(m_textureBrowserWindows[i])) {
@@ -76,7 +83,7 @@ void G3DVisualizer::loadInputFromFile(const String& filename) {
         m_textureBrowserWindows.append(TextureBrowserWindow::create(developerWindow->theme()));
         Array<String> textureNames;
         m_textureBrowserWindows[i]->getTextureList(textureNames);
-        m_inputs[i].sourceImage->visualization.documentGamma = 2.2;
+        m_inputs[i].sourceImage->visualization.documentGamma = 2.2f;
         int texIndex = textureNames.findIndex(m_inputs[i].sourceImage->name());
         m_textureBrowserWindows[i]->setMinSize(Vector2(0, 0));
         m_textureBrowserWindows[i]->setTextureIndex(texIndex);
@@ -92,14 +99,14 @@ void G3DVisualizer::loadInputFromFile(const String& filename) {
         addWidget(m_textureBrowserWindows[i]);
 
         m_textureBrowserWindows[i]->setVisible(true);
-        m_textureBrowserWindows[i]->moveTo(Vector2((maxWidth + 10) * i, window()->height() / 2 - m_inputs[i].sourceImage->height()));
+        m_textureBrowserWindows[i]->moveTo(Vector2((maxWidth + 10.0f) * i, float(window()->height()) / 2 - m_inputs[i].sourceImage->height()));
     }
     int i = m_textureBrowserWindows.size();
     m_textureBrowserWindows.append(TextureBrowserWindow::create(developerWindow->theme()));
     Array<String> textureNames;
 
     m_textureBrowserWindows[i]->getTextureList(textureNames);
-    m_output.outputImage->visualization.documentGamma = 2.2;
+    m_output.outputImage->visualization.documentGamma = 2.2f;
     m_output.outputImage->visualization.channels = Texture::Visualization::RasL;
     int texIndex = textureNames.findIndex(m_output.outputImage->name());
     m_textureBrowserWindows[i]->setMinSize(Vector2(0, 0));
@@ -116,7 +123,6 @@ void G3DVisualizer::loadInputFromFile(const String& filename) {
     m_textureBrowserWindows[i]->setVisible(true);
 
     m_repositionVisualizationNextFrame = true;
-    
 }
 
 void G3DVisualizer::loadNewInput() {
@@ -138,6 +144,7 @@ void G3DVisualizer::onInit() {
     m_repositionVisualizationNextFrame = false;
     showRenderingStats = false;
     loadInputFromFile("E:/Projects/DSL/Optimization/API/testMLib/recordingRaw.sensor");
+    generateSFSInput(m_inputs[1].sourceImage, m_inputs[0].sourceImage);
 
 }
 
@@ -164,8 +171,8 @@ void G3DVisualizer::loadDepthColorFrame(const String& filename, int inputIndex) 
     ml::BinaryDataStreamFile inputStream(filename.c_str(), false);
     ml::CalibratedSensorData sensorData;
     inputStream >> sensorData;
-    for (int i = 0; i < sensorData.m_DepthImageHeight*sensorData.m_DepthImageWidth; ++i) {
-        sensorData.m_DepthImages[0][i] += Random::common().uniform()*0.2;
+    for (unsigned int i = 0; i < sensorData.m_DepthImageHeight*sensorData.m_DepthImageWidth; ++i) {
+        //sensorData.m_DepthImages[0][i] += Random::common().uniform()*0.2f;
     }
     shared_ptr<Texture> depthTexture = Texture::fromPixelTransferBuffer("Sensor Depth Image",
         CPUPixelTransferBuffer::fromData(sensorData.m_DepthImageWidth, sensorData.m_DepthImageHeight, ImageFormat::R32F(), sensorData.m_DepthImages[0]));
@@ -180,6 +187,20 @@ void G3DVisualizer::loadDepthColorFrame(const String& filename, int inputIndex) 
     if (m_inputs.size() == 2) {
         m_output.set(depthTexture->width(), depthTexture->height(), 1);
     }
+}
+
+void G3DVisualizer::generateSFSInput(shared_ptr<Texture> color, shared_ptr<Texture> depth) {
+    Array<float> lightingCoefficients;
+    static shared_ptr<Texture> outputAlbedo = Texture::createEmpty("Albedo Texture", color->width(), color->height(), ImageFormat::RGBA32F());
+    m_sfs.estimateLightingAndAlbedo(color, depth, outputAlbedo, lightingCoefficients);
+    for (int i = 0; i < lightingCoefficients.size(); ++i) {
+        debugPrintf("%d: %f\n", i, lightingCoefficients[i]);
+    }
+    shared_ptr<Texture> luminance = Texture::createEmpty("Albedo Luminance Texture", color->width(), color->height(), ImageFormat::R32F());
+    Texture::copy(outputAlbedo, luminance);
+    m_inputs.resize(m_inputs.size() + 1);
+    m_inputs[m_inputs.size() - 1].set(luminance);
+    setupVisualizationWidgets();
 }
 
 void G3DVisualizer::loadInput(const String& filename, int inputIndex) {
@@ -216,7 +237,7 @@ void G3DVisualizer::onGraphics3D(RenderDevice* rd, Array<shared_ptr<Surface> >& 
     static shared_ptr<GFont> font = GFont::fromFile(System::findDataFile("arial.fnt"));
     rd->push2D(); {
         if (m_inputs.size() == 0) {
-            font->draw2D(rd, "No inputs", Point2(window()->width() / 2, window()->height() / 2), 60.0, Color3::black(), Color4::clear(), GFont::XAlign::XALIGN_CENTER, GFont::YAlign::YALIGN_CENTER);
+            font->draw2D(rd, "No inputs", Point2(window()->width() / 2.0f, window()->height() / 2.0f), 60.0f, Color3::black(), Color4::clear(), GFont::XAlign::XALIGN_CENTER, GFont::YAlign::YALIGN_CENTER);
         } else {
             /*
             Draw::rect2D(Rect2D::xywh(0, window()->height() / 2 - 1, window()->width(), 2), rd, Color3::black());

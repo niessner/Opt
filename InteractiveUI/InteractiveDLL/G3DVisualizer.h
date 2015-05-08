@@ -12,8 +12,12 @@
 #include <mutex>
 #include "Optimizer.h"
 #include "OptimizationStatusInfo.h"
+#include "G3DShapeFromShading.h"
 class G3DVisualizer : public GApp {
 private:
+
+    G3DShapeFromShading m_sfs;
+
     /** Signal that we can receive events */
     bool m_initialized;
 
@@ -76,6 +80,7 @@ private:
 
     void repositionVisualizations();
 
+    void setupVisualizationWidgets();
 
     void writeStatusInfo(const OptimizationTimingInfo& timingInfo, std::string errorMessage) {
         m_statusMutex.lock(); {
@@ -96,6 +101,8 @@ private:
 public:
 
     void loadInputFromFile(const String& filename);
+
+    void generateSFSInput(shared_ptr<Texture> color, shared_ptr<Texture> depth);
 
     void getStatusInfo(OptimizationStatusInfo& statusInfo) {
         m_statusMutex.lock(); {

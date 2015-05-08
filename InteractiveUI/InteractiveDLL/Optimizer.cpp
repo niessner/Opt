@@ -50,7 +50,7 @@ bool Optimizer::run(const std::string& terraFile, const std::string& optimizatio
 
     if (m_optImages.size() < 2) {
         errorString = "No image available";
-        return -1;
+        return false;
     }
 
     uint64_t dims[] = { m_optImages[0].dimX, m_optImages[0].dimY };
@@ -65,7 +65,7 @@ bool Optimizer::run(const std::string& terraFile, const std::string& optimizatio
     if (optimizerState == nullptr)
     {
         errorString = "Opt_NewState failed";
-        return -1;
+        return false;
     }
 
     Problem * prob = Opt_ProblemDefine(optimizerState, terraFile.c_str(), optimizationMethod.c_str(), NULL);
@@ -75,7 +75,7 @@ bool Optimizer::run(const std::string& terraFile, const std::string& optimizatio
     if (!prob)
     {
         errorString = "Opt_ProblemDefine failed";
-        return -1;
+        return false;
     }
 
     timer.tick();
@@ -100,7 +100,7 @@ bool Optimizer::run(const std::string& terraFile, const std::string& optimizatio
     if (!plan)
     {
         errorString = "Opt_ProblemPlan failed";
-        return -1;
+        return false;
     }
 
     bool isGPU = endsWith(optimizationMethod.c_str(), "GPU");
@@ -118,7 +118,7 @@ bool Optimizer::run(const std::string& terraFile, const std::string& optimizatio
         Opt_ProblemSolve(optimizerState, plan, imagesCPU.data(), NULL);
     }
     timer.tock();
-    t.optSolveTime = timer.elapsedTime() / units::milliseconds();
+    t.optSolveTime = float(timer.elapsedTime() / units::milliseconds());
 
     cudaEventSynchronize(m_optSolveEnd);
     cudaEventElapsedTime(&t.optSolveTimeGPU, m_optSolveStart, m_optSolveEnd);

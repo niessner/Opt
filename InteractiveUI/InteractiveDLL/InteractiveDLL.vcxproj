@@ -12,7 +12,10 @@
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="app.cpp" />
+    <ClCompile Include="CudaImage.cpp" />
+    <ClCompile Include="CUDASolverSHLighting.cpp" />
     <ClCompile Include="DLLMain.cpp" />
+    <ClCompile Include="G3DShapeFromShading.cpp" />
     <ClCompile Include="G3DVisualizer.cpp" />
     <ClCompile Include="interactiveDLL.cpp" />
     <ClCompile Include="main.cpp" />
@@ -22,6 +25,13 @@
   <ItemGroup>
     <ClInclude Include="..\..\API\build\Opt.h" />
     <ClInclude Include="app.h" />
+    <ClInclude Include="CameraParams.h" />
+    <ClInclude Include="CudaImage.h" />
+    <ClInclude Include="CUDASolverSHLighting.h" />
+    <ClInclude Include="cudaUtil.h" />
+    <ClInclude Include="cuda_SimpleMatrixUtil.h" />
+    <ClInclude Include="Eigen.h" />
+    <ClInclude Include="G3DShapeFromShading.h" />
     <ClInclude Include="G3DVisualizer.h" />
     <ClInclude Include="interactiveDLL.h" />
     <ClInclude Include="main.h" />
@@ -29,9 +39,17 @@
     <ClInclude Include="OptimizationStatusInfo.h" />
     <ClInclude Include="Optimizer.h" />
     <ClInclude Include="parameters.h" />
+    <ClInclude Include="SFSHelpers.h" />
+    <ClInclude Include="SolverSFSState.h" />
+    <ClInclude Include="SolverSHLightingState.h" />
   </ItemGroup>
   <ItemGroup>
+    <CudaCompile Include="CameraUtil.cu" />
+    <CudaCompile Include="SolverSHLighting.cu" />
     <None Include="interactiveDLL.def" />
+    <CudaCompile Include="SFSHelpers.cu">
+      <FileType>Document</FileType>
+    </CudaCompile>
   </ItemGroup>
   <PropertyGroup Label="Globals">
     <ProjectGuid>{7069D556-5164-4065-8F38-B1F107AD2BEA}</ProjectGuid>
@@ -53,6 +71,7 @@
   </PropertyGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.props" />
   <ImportGroup Label="ExtensionSettings">
+    <Import Project="$(VCTargetsPath)\BuildCustomizations\CUDA 6.5.props" />
   </ImportGroup>
   <ImportGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'" Label="PropertySheets">
     <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
@@ -74,7 +93,7 @@
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
     <TargetName>Interactive</TargetName>
     <OutDir>$(SolutionDir)$(Configuration)\</OutDir>
-    <IncludePath>C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA\v6.5\include;../../Framework;E:\Projects\g3d\G3D10\build\include;$(VC_IncludePath);$(WindowsSDK_IncludePath);</IncludePath>
+    <IncludePath>C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA\v6.5\include;../../Framework;../../../../mLibExternal/include;$(IncludePath)</IncludePath>
     <LibraryPath>C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA\v6.5\lib\x64;E:\Projects\g3d\G3D10\build\lib;$(VCInstallDir)lib\amd64;$(VCInstallDir)atlmfc\lib\amd64;$(WindowsSDK_LibraryPath_x64);</LibraryPath>
   </PropertyGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
@@ -83,7 +102,7 @@
       <Optimization>Disabled</Optimization>
       <SDLCheck>true</SDLCheck>
       <PreprocessorDefinitions>INTERACTIVEDLL_EXPORTS;_CRT_SECURE_NO_DEPRECATE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
-      <AdditionalIncludeDirectories>..\..\API\build\;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>cutil\inc;..\..\API\build\;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
     </ClCompile>
     <Link>
       <GenerateDebugInformation>true</GenerateDebugInformation>
@@ -95,6 +114,10 @@
       <Command>
       </Command>
     </PostBuildEvent>
+    <CudaCompile>
+      <TargetMachinePlatform>64</TargetMachinePlatform>
+      <CodeGeneration>compute_30,sm_30</CodeGeneration>
+    </CudaCompile>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
     <ClCompile>
@@ -104,7 +127,7 @@
       <IntrinsicFunctions>true</IntrinsicFunctions>
       <SDLCheck>true</SDLCheck>
       <PreprocessorDefinitions>INTERACTIVEDLL_EXPORTS;_CRT_SECURE_NO_DEPRECATE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
-      <AdditionalIncludeDirectories>..\..\API\build\;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>cutil\inc;..\..\API\build\;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
     </ClCompile>
     <Link>
       <GenerateDebugInformation>true</GenerateDebugInformation>
@@ -118,8 +141,13 @@
       <Command>
       </Command>
     </PostBuildEvent>
+    <CudaCompile>
+      <TargetMachinePlatform>64</TargetMachinePlatform>
+      <CodeGeneration>compute_30,sm_30</CodeGeneration>
+    </CudaCompile>
   </ItemDefinitionGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">
+    <Import Project="$(VCTargetsPath)\BuildCustomizations\CUDA 6.5.targets" />
   </ImportGroup>
 </Project>
