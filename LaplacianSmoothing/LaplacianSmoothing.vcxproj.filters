@@ -42,5 +42,8 @@
     <CudaCompile Include="src\CameraUtil.cu">
       <Filter>CUDA</Filter>
     </CudaCompile>
+    <CudaCompile Include="src\LaplacianSolverCusp.cu">
+      <Filter>CUDA</Filter>
+    </CudaCompile>
   </ItemGroup>
 </Project>

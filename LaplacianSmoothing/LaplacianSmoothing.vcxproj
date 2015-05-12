@@ -196,6 +196,7 @@
   <ItemGroup>
     <CudaCompile Include="src\CameraUtil.cu" />
     <CudaCompile Include="src\LaplacianSolver.cu" />
+    <CudaCompile Include="src\LaplacianSolverCusp.cu" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">
