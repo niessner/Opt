@@ -28,7 +28,8 @@ asin = 1,
 tan  = 1,
 atan = 1,
 pow  = 2,
-fmod = 2}
+fmod = 2
+}
 
 util.gpuMath = {}
 util.cpuMath = {}

@@ -161,8 +161,8 @@ solversGPU.gaussNewtonGPU = function(problemSpec, vars)
 
 		unpackstruct(pd.images) = [util.getImages(PlanData, images)]
 
-		var nIterations = 30	--non-linear iterations
-		var lIterations = 30	--linear iterations
+		var nIterations = 10	--non-linear iterations
+		var lIterations = 10	--linear iterations
 		
 		for nIter = 0, nIterations do
             --var startCost = gpu.computeCost(pd, pd.images.unknown)

@@ -1,4 +1,4 @@
-local origFile = terralib.loadfile("E:/Projects/DSL/Optimization/API/testMLib/imageSmoothing.t")
+local origFile = terralib.loadfile("E:/Work/DSL/Optimization/API/testMLib/imageSmoothing.t")
 local orig = origFile()
 local W,H = orig.cost.dimensions[1],orig.cost.dimensions[2] --opt.Dim("W",0), opt.Dim("H",1)
 local X = ad.Image("X",W,H,0)
@@ -25,11 +25,21 @@ local C = terralib.includecstring [[
 #include <stdio.h>
 ]]
 
+local vprintf = terralib.externfunction("vprintf", {&int8,&int8} -> int)
+
 tbl.applyJTJ.boundary = terra(i : uint64, j : uint64, xImage : X, aImage : A, pImage : X)
-    var v  = orig.applyJTJ.boundary(i,j,xImage,aImage,pImage)
-    var v2 = applyJTJ.boundary(i,j,xImage,aImage,pImage)
-    C.printf("%d %d %f %f\n",i,j,v,v2)
-    return v
+    var v : float  = orig.applyJTJ.boundary(i,j,xImage,aImage,pImage)
+    var v2 : float = applyJTJ.boundary(i,j,xImage,aImage,pImage)
+	--if i == 10 and j == 10 then
+	var a : float = v - v2
+	if a < 0.0f then a = -a end
+	--if a > 0.001f then 
+	--if i == 0 and j == 0 then
+	var b  = 3
+	if i >= b and i < xImage:W()-b and j >= b and j < xImage:H()-b and a > 0.1f then
+		printf("%d %d %f %f\n",int(i),int(j),v,v2)
+	end
+  return v2
 end
 
 return tbl

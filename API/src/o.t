@@ -39,7 +39,7 @@ local function newclass(name)
     return mt
 end
 
-local vprintf = terralib.externfunction("cudart:vprintf", {&int8,&int8} -> int)
+local vprintf = terralib.externfunction("vprintf", {&int8,&int8} -> int)
 
 local function createbuffer(args)
     local Buf = terralib.types.newstruct()
@@ -385,6 +385,7 @@ end
 local function createfunction(images,exp,usebounds)
     if not usebounds then
         exp = removeboundaries(exp)
+		print("expression: ", exp)
     end
     local imageindex = {}
     local imagesyms = terralib.newlist()
@@ -513,21 +514,33 @@ end
 
 local function createjtj(Fs,unknown,P)
     local P_hat = 0
+	local x = unknown(0,0)
     for _,F in ipairs(Fs) do
         local P_F = 0
         local unknownvars = unknowns(F)
-        local dfdx = F:gradient(unknownvars)
-        local shifts,shifttooverlap = shiftswithoverlappingstencil(unknownvars)
+        local J = terralib.newlist()
+		local dfdxshifts = F:gradient(unknownvars)
+		local dfshiftsdx = terralib.newlist()
+		for _,u in ipairs(unknownvars) do --Loop over the symmetries
+			local a = u:key()
+			local F_shift = shiftexp(F,a.x,a.y)
+			dfshiftsdx:insert(F_shift:d(x))
+		end
+		local shifts,shifttooverlap = shiftswithoverlappingstencil(unknownvars)
         for _,shift in pairs(shifts) do
             local overlaps = shifttooverlap[shift]
             --print("shift",shift.x,shift.y)
             local sum = 0
             for i,o in ipairs(overlaps) do
                 --print("considering  ", unknownvars[o.left],unknownvars[o.right])
-                local alpha = dfdx[o.left]
-                local beta = shiftexp(dfdx[o.right],shift.x,shift.y)
+                local alpha = dfdxshifts[o.right]
+				--alpha = removeboundaries(alpha)
+				local beta = dfshiftsdx[o.left]
+                --local beta = shiftexp(dfdx[o.right],shift.x,shift.y)
                 sum = sum + alpha*beta
             end
+			print(shift.x, shift.y)
+			print(sum)
             P_F = P_F + P(shift.x,shift.y) * sum  
         end
         P_hat = P_hat + P_F
@@ -573,7 +586,7 @@ function ad.Cost(costexp_)
         jtjimages:insertall(images)
         jtjimages:insert(P)
         local jtjexp = 2.0*createjtj(costexp_.terms,unknown,P)
-        dprint("jtj")
+        dprint("jtj", jtjexp)
         r.applyJTJ = createfunctionset(jtjimages,jtjexp)
     end
     return r
