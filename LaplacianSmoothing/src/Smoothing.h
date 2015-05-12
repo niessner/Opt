@@ -8,6 +8,8 @@
 
 #include "CUDALaplacianSolver.h"
 #include "CUSparseLaplacianSolver.h"
+#include "CuspSparseLaplacianSolver.h"
+#include "CuspSparseLaplacianSolverLinearOp.h"
 
 class Smoothing {
 public:
@@ -26,6 +28,8 @@ public:
 
 		m_laplacianSolver = new CUDALaplacianSolver(m_image.getWidth(), m_image.getHeight());
 		m_cusparseLaplacianSolver = new CUSparseLaplacianSolver(m_image.getWidth(), m_image.getHeight());
+		m_cuspLaplacianSolver = new CuspSparseLaplacianSolver(m_image.getWidth(), m_image.getHeight());
+		m_cuspLaplacianSolverLinearOp = new CuspSparseLaplacianSolverLinearOp(m_image.getWidth(), m_image.getHeight());
 	}
 
 	~Smoothing() {
@@ -43,7 +47,9 @@ public:
 		unsigned int linearIter = 100;
 		//m_laplacianSolver->solveGN(d_image, d_result, nonLinearIter, linearIter, weightFit, weightReg);
 		//m_laplacianSolver->solveGD(d_image, d_result, nonLinearIter, weightFit, weightReg);
-		m_cusparseLaplacianSolver->solvePCG(d_image, d_result, linearIter, weightFit, weightReg);
+		//m_cusparseLaplacianSolver->solvePCG(d_image, d_result, linearIter, weightFit, weightReg);
+		//m_cuspLaplacianSolver->solvePCG(d_image, d_result, linearIter, weightFit, weightReg);
+		m_cuspLaplacianSolverLinearOp->solvePCG(d_image, d_result, linearIter, weightFit, weightReg);
 		return copyResultToCPU();
 	}
 
@@ -58,6 +64,8 @@ private:
 	float* d_image;
 	float* d_result;
 
-	CUDALaplacianSolver*	 m_laplacianSolver;
-	CUSparseLaplacianSolver* m_cusparseLaplacianSolver;
+	CUDALaplacianSolver*				m_laplacianSolver;
+	CUSparseLaplacianSolver*			m_cusparseLaplacianSolver;
+	CuspSparseLaplacianSolver*			m_cuspLaplacianSolver;
+	CuspSparseLaplacianSolverLinearOp*  m_cuspLaplacianSolverLinearOp;
 };

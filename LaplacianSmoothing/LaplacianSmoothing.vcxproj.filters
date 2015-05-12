@@ -22,6 +22,8 @@
     <ClInclude Include="src\Smoothing.h" />
     <ClInclude Include="src\CUDATimer.h" />
     <ClInclude Include="src\CUSparseLaplacianSolver.h" />
+    <ClInclude Include="src\CuspSparseLaplacianSolver.h" />
+    <ClInclude Include="src\CuspSparseLaplacianSolverLinearOp.h" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="src\main.cpp" />
@@ -29,6 +31,8 @@
     <ClCompile Include="src\mLibSource.cpp" />
     <ClCompile Include="src\Smoothing.cpp" />
     <ClCompile Include="src\CUSparseLaplacianSolver.cpp" />
+    <ClCompile Include="src\CuspSparseLaplacianSolver.cpp" />
+    <ClCompile Include="src\CuspSparseLaplacianSolverLinearOp.cpp" />
   </ItemGroup>
   <ItemGroup>
     <Filter Include="CUDA">
@@ -43,6 +47,9 @@
       <Filter>CUDA</Filter>
     </CudaCompile>
     <CudaCompile Include="src\LaplacianSolverCusp.cu">
+      <Filter>CUDA</Filter>
+    </CudaCompile>
+    <CudaCompile Include="src\LaplacianSolverCuspLinearOp.cu">
       <Filter>CUDA</Filter>
     </CudaCompile>
   </ItemGroup>

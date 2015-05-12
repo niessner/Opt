@@ -169,6 +169,8 @@
   <ItemGroup>
     <ClCompile Include="src\CUDALaplacianSolver.cpp" />
     <ClCompile Include="src\CUSparseLaplacianSolver.cpp" />
+    <ClCompile Include="src\CuspSparseLaplacianSolver.cpp" />
+    <ClCompile Include="src\CuspSparseLaplacianSolverLinearOp.cpp" />
     <ClCompile Include="src\main.cpp" />
     <ClCompile Include="src\mLibSource.cpp" />
     <ClCompile Include="src\Smoothing.cpp" />
@@ -177,6 +179,8 @@
     <ClInclude Include="src\CUDALaplacianSolver.h" />
     <ClInclude Include="src\CUDATimer.h" />
     <ClInclude Include="src\CUSparseLaplacianSolver.h" />
+    <ClInclude Include="src\CuspSparseLaplacianSolver.h" />
+    <ClInclude Include="src\CuspSparseLaplacianSolverLinearOp.h" />
     <ClInclude Include="src\LaplacianSolverEquations.h" />
     <ClInclude Include="src\LaplacianSolverParameters.h" />
     <ClInclude Include="src\LaplacianSolverState.h" />
@@ -197,6 +201,7 @@
     <CudaCompile Include="src\CameraUtil.cu" />
     <CudaCompile Include="src\LaplacianSolver.cu" />
     <CudaCompile Include="src\LaplacianSolverCusp.cu" />
+    <CudaCompile Include="src\LaplacianSolverCuspLinearOp.cu" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

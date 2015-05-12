@@ -2,97 +2,31 @@
 #include <iostream>
 #include "CUDATimer.h"
 
-void CuspSparseLaplacianSolver::genLaplace(int *row_ptr, int *col_ind, float *val, int N, int nz, float *rhs, float wFit, float wReg, float* target)
-{
-	int n = (int)sqrt((double)N);
-	std::cout << n << std::endl;
-	int idx = 0;
-	for (int i = 0; i<N; i++)
-	{
-		int ix = i%n;
-		int iy = i/n;
-
-		row_ptr[i] = idx;
-
-		int count = 0;
-		if (iy > 0)		count++;
-		if (ix > 0)		count++;
-		if (ix < n - 1) count++;
-		if (iy < n - 1) count++;
-
-		// up
-		if (iy > 0)
-		{
-			val[idx] = -1.0*wReg;
-			col_ind[idx] = i - n;
-			idx++;
-		}
-
-		// left
-		if (ix > 0)
-		{
-			val[idx] = -1.0*wReg;
-			col_ind[idx] = i - 1;
-			idx++;
-		}
-
-		// center
-		val[idx] = count*wReg+wFit;
-		col_ind[idx] = i;
-		idx++;
-
-		rhs[i] = wFit*target[iy*n + ix];
-
-		//right
-		if (ix  < n - 1)
-		{
-			val[idx] = -1.0*wReg;
-			col_ind[idx] = i + 1;
-			idx++;
-		}
-
-		//down
-		if (iy  < n - 1)
-		{
-			val[idx] = -1.0*wReg;
-			col_ind[idx] = i + n;
-			idx++;
-		}
-	}
-
-	row_ptr[N] = idx;
-}
+extern "C" void solve(unsigned int N, unsigned int nz, float wFit, float wReg, float* target, float* x, int nIterations);
 
 CuspSparseLaplacianSolver::CuspSparseLaplacianSolver(unsigned int imageWidth, unsigned int imageHeight) : m_imageWidth(imageWidth), m_imageHeight(imageHeight)
 {
-
 }
 
 CuspSparseLaplacianSolver::~CuspSparseLaplacianSolver()
 {
-
 }
 
 void CuspSparseLaplacianSolver::solvePCG(float* d_targetDepth, float* d_result, unsigned int nIterations, float weightFitting, float weightRegularizer)
 {
-
-
 	printf("Convergence of conjugate gradient without preconditioning: \n");
 	
 	CUDATimer timer;
-
-	timer.startEvent("PCGInit");
 	
-	timer.endEvent();
+	int N = m_imageWidth*m_imageHeight;
+	int nz = 5 * N - 4 * (int)sqrt((double)N);
 
-
-		timer.startEvent("PCG");
+	float* h_x = new float[N];
 	
-
-		timer.endEvent();
-		timer.nextIteration();
+	float* h_targetDepth = new float[N];
+	cutilSafeCall(cudaMemcpy(h_targetDepth, d_targetDepth, N*sizeof(float), cudaMemcpyDeviceToHost)); // Free that array
 	
-		timer.evaluate();
-
-	//std::cout << "nIter: " << k << std::endl;
+	solve(N, nz, weightFitting, weightRegularizer, h_targetDepth, h_x, nIterations);
+	
+	cutilSafeCall(cudaMemcpy(d_result, h_x, N*sizeof(float), cudaMemcpyHostToDevice));
 }
