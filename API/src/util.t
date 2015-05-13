@@ -315,13 +315,18 @@ local function noFooter(pd)
 	return quote end
 end
 
-util.getImages = function(PlanData, images)
-	local results = terralib.newlist()
-	for i, field in ipairs(PlanData:getfield("images").type:getfields()) do
-		results:insert(`field.type 
-		 { data = [&uint8](images[i - 1])})
+util.getParameters = function(ProblemSpec, images, edgeValues)
+	local inits = terralib.newlist()
+	for _, entry in ipairs(ProblemSpec.parameters) do
+		if entry.kind == "image" then
+			inits:insert(`entry.type { data = [&uint8](images[entry.idx])})
+		elseif entry.kind == "adjacency" then
+			inits:insert(`@entry.obj)
+		elseif entry.kind == "edgevalues" then
+			inits:insert(`entry.type { data = [&entry.type.metamethods.type](edgeValues[entry.idx]) })
+		end
 	end
-	return results
+	return `[ProblemSpec:ParameterType()]{ inits }
 end
 
 util.makeInnerProduct = function(imageType)
@@ -395,9 +400,9 @@ end
 util.makeComputeCost = function(data)
 	local terra computeCost(pd : &data.PlanData)
 		var result = 0.0
-		for h = 0, pd.images.unknown:H() do
-			for w = 0, pd.images.unknown:W() do
-				var v = data.problemSpec.cost.boundary(w, h, unpackstruct(pd.images))
+		for h = 0, pd.parameters.X:H() do
+			for w = 0, pd.parameters.X:W() do
+				var v = data.problemSpec.functions.cost.boundary(w, h, pd.parameters)
 				result = result + v
 			end
 		end
@@ -408,9 +413,11 @@ end
 
 util.makeComputeGradient = function(data)
 	local terra computeGradient(pd : &data.PlanData, gradientOut : data.imageType, values : data.imageType)
+		var params = pd.parameters
+		params.X = values
 		for h = 0, gradientOut:H() do
 			for w = 0, gradientOut:W() do
-				gradientOut(w, h) = data.problemSpec.gradient.boundary(w, h, values, unpackstruct(pd.images, 2))
+				gradientOut(w, h) = data.problemSpec.functions.gradient.boundary(w, h, params)
 			end
 		end
 	end
@@ -419,9 +426,11 @@ end
 
 util.makeComputeResiduals = function(data)
 	local terra computeResiduals(pd : &data.PlanData, values : data.imageType, residuals : data.imageType)
+		var params = pd.parameters
+		params.X = values
 		for h = 0, values:H() do
 			for w = 0, values:W() do
-				residuals(w, h) = data.problemSpec.cost.boundary(w, h, values, unpackstruct(pd.images, 2))
+				residuals(w, h) = data.problemSpec.functions.cost.boundary(w, h, params)
 			end
 		end
 	end
@@ -431,9 +440,11 @@ end
 util.makeComputeDeltaCost = function(data)
 	local terra deltaCost(pd : &data.PlanData, baseResiduals : data.imageType, currentValues : data.imageType)
 		var result : double = 0.0
+		var params = pd.parameters
+		params.X = currentValues
 		for h = 0, currentValues:H() do
 			for w = 0, currentValues:W() do
-				var residual = data.problemSpec.cost.boundary(w, h, currentValues, unpackstruct(pd.images, 2))
+				var residual = data.problemSpec.functions.cost.boundary(w, h, params)
 				var delta = residual - baseResiduals(w, h)
 				result = result + delta
 			end
@@ -700,7 +711,7 @@ end
 
 local makeGPULauncher = function(compiledKernel, kernelName, header, footer, tbl, PlanData, params)
 	local terra GPULauncher(pd : &PlanData, [params])
-		var launch = terralib.CUDAParams { (pd.images.unknown:W() - 1) / 32 + 1, (pd.images.unknown:H() - 1) / 32 + 1, 1, 32, 32, 1, 0, nil }
+		var launch = terralib.CUDAParams { (pd.parameters.X:W() - 1) / 32 + 1, (pd.parameters.X:H() - 1) / 32 + 1, 1, 32, 32, 1, 0, nil }
 		C.cudaDeviceSynchronize()
 		[header(pd)]
 		C.cudaDeviceSynchronize()
@@ -732,7 +743,7 @@ util.makeComputeCostGPU = function(data)
 		var cost = 0.0f
 		var w : int, h : int
 		if positionForValidLane(pd, "unknown", &w, &h) then
-			cost = [float](data.problemSpec.cost.boundary(w, h, currentValues, unpackstruct(pd.images, 2)))
+			cost = [float](data.problemSpec.functions.cost.boundary(w, h, currentValues, unpackstruct(pd.images, 2)))
 		end
 
 		cost = warpReduce(cost)
@@ -754,7 +765,7 @@ util.makeComputeDeltaCostGPU = function(data)
 		var delta = 0.0f
 		var w : int, h : int
 		if positionForValidLane(pd, "unknown", &w, &h) then
-			var residual = [float](data.problemSpec.cost.boundary(w, h, currentValues, unpackstruct(pd.images, 2)))
+			var residual = [float](data.problemSpec.functions.cost.boundary(w, h, currentValues, unpackstruct(pd.images, 2)))
 			delta = residual - baseResiduals(w, h)
 		end
 		delta = warpReduce(delta)
@@ -798,7 +809,7 @@ util.makeComputeGradientGPU = function(data)
 	local terra computeGradient(pd : &data.PlanData,  gradientOut : data.imageType)
 		var w : int, h : int
 		if positionForValidLane(pd, "unknown", &w, &h) then
-			gradientOut(w, h) = data.problemSpec.gradient.boundary(w, h, unpackstruct(pd.images))
+			gradientOut(w, h) = data.problemSpec.functions.gradient.boundary(w, h, unpackstruct(pd.images))
 		end
 	end
 	return { kernel = computeGradient, header = noHeader, footer = noFooter, params = {symbol(data.imageType)}, mapMemberName = "unknown" }
@@ -850,7 +861,7 @@ util.makeComputeResidualsGPU = function(data)
 	local terra computeResiduals(pd : &data.PlanData, residuals : data.imageType, values : data.imageType)
 		var w : int, h : int
 		if positionForValidLane(pd, "unknown", &w, &h) then
-			residuals(w, h) = data.problemSpec.cost.boundary(w, h, values, unpackstruct(pd.images, 2))
+			residuals(w, h) = data.problemSpec.functions.cost.boundary(w, h, values, unpackstruct(pd.images, 2))
 		end
 	end
 	return { kernel = computeResiduals, header = noHeader, footer = noFooter, params = {symbol(data.imageType), symbol(data.imageType)}, mapMemberName = "unknown" }
@@ -980,7 +991,7 @@ util.makeCPUFunctions = function(problemSpec, vars, PlanData)
 	local data = {}
 	data.problemSpec = problemSpec
 	data.PlanData = PlanData
-	data.imageType = vars.unknownType
+	data.imageType = problemSpec:UnknownType()
 	
 	cpu.copyImage = util.makeCopyImage(data.imageType)
 	cpu.setImage = util.makeSetImage(data.imageType)

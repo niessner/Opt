@@ -67,7 +67,7 @@ TestExample TestFramework::makeImageSmoothing(const string &imageFilename, float
 
     LodePNG::save(testImage, "smoothingOutputLinearSolve.png");
     
-    TestExample result("imageSmoothing", "meshSmoothing.t", bmp.getWidth(), bmp.getHeight());
+    TestExample result("imageSmoothing", "imageSmoothing.t", bmp.getWidth(), bmp.getHeight());
 
     result.costFunction = [=](const OptImage &variables)
     {

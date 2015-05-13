@@ -123,19 +123,8 @@ local problems = {}
 
 local function compilePlan(problemSpec, kind, params)
 	local vars = {
-		costFunctionType = problemSpec.cost.boundary:gettype()
+		costFunctionType = problemSpec.functions.cost.boundary:gettype()
 	}
-	
-	vars.unknownType = vars.costFunctionType.parameters[3] -- 3rd argument is the image that is the unknown we are mapping over
-
-	local PlanImages = terralib.types.newstruct ("PlanImages")
-	PlanImages.entries:insert( { "unknown", vars.unknownType } )
-	
-	for i = 4, #vars.costFunctionType.parameters do
-		PlanImages.entries:insert( { "image"..tostring(i - 4), vars.costFunctionType.parameters[i] } )
-	end
-	
-	vars.PlanImages = PlanImages
 
 	if kind == "gradientDescentCPU" then
         return solversCPU.gradientDescentCPU(problemSpec, vars)
@@ -362,6 +351,7 @@ local newEdgeValues = terralib.memoize(function(typ,adj)
      local struct EdgeValues {
         data : &typ
      }
+	 EdgeValues.metamethods.type = typ
      terra EdgeValues:get(a : adj.metamethods.entry) : &typ
         return self.data + a.y*[adj.metamethods.toDim[1].size] + a.x
      end

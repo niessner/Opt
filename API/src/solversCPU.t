@@ -8,23 +8,24 @@ solversCPU = {}
 solversCPU.gradientDescentCPU = function(problemSpec, vars)
 	local struct PlanData(S.Object) {
 		plan : opt.Plan
-		images : vars.PlanImages
+		parameters : problemSpec:ParameterType()
 		
-		gradient : vars.unknownType
+		gradient : problemSpec:UnknownType()
 	}
 
 	local cpu = util.makeCPUFunctions(problemSpec, vars, PlanData)
 	
-	local terra impl(data_ : &opaque, images : &&opaque, params_ : &opaque)
+	local terra impl(data_ : &opaque, images : &&opaque, edgeValues : &&opaque, params_ : &opaque)
 
 		var pd = [&PlanData](data_)
 		var params = [&double](params_)
 		
-		unpackstruct(pd.images) = [util.getImages(PlanData, images)]
+		--unpackstruct(pd.images) = [util.getImages(PlanData, images)]
+		pd.parameters = [util.getParameters(problemSpec, images, edgeValues)]
 
 		-- TODO: parameterize these
 		var initialLearningRate = 0.01
-		var maxIters = 10
+		var maxIters = 10000
 		var tolerance = 1e-10
 
 		-- Fixed constants (these do not need to be parameterized)
@@ -39,16 +40,16 @@ solversCPU.gradientDescentCPU = function(problemSpec, vars)
 			logSolver("iteration %d, cost=%f, learningRate=%f\n", iter, startCost, learningRate)
 			--C.getchar()
 
-			cpu.computeGradient(pd, pd.gradient, pd.images.unknown)
+			cpu.computeGradient(pd, pd.gradient, pd.parameters.X)
 			
 			--
 			-- move along the gradient by learningRate
 			--
 			var maxDelta = 0.0
-			for h = 0, pd.images.unknown:H() do
-				for w = 0, pd.images.unknown:W() do
+			for h = 0, pd.parameters.X:H() do
+				for w = 0, pd.parameters.X:W() do
 					var delta = -learningRate * pd.gradient(w, h)
-					pd.images.unknown(w, h) = pd.images.unknown(w, h) + delta
+					pd.parameters.X(w, h) = pd.parameters.X(w, h) + delta
 					maxDelta = util.max(C.fabsf(delta), maxDelta)
 				end
 			end
@@ -90,7 +91,7 @@ end
 solversCPU.conjugateGradientCPU = function(problemSpec, vars)
 	local struct PlanData(S.Object) {
 		plan : opt.Plan
-		images : vars.PlanImages
+		parameters : problemSpec:ParameterType()
 				
 		currentValues : vars.unknownType
 		currentResiduals : vars.unknownType
@@ -119,15 +120,15 @@ solversCPU.conjugateGradientCPU = function(problemSpec, vars)
 			var iterStartCost = cpu.computeCost(pd)
 			logSolver("iteration %d, cost=%f\n", iter, iterStartCost)
 
-			cpu.computeGradient(pd, pd.gradient, pd.images.unknown)
+			cpu.computeGradient(pd, pd.gradient, pd.parameters.X)
 			
 			--
 			-- compute the search direction
 			--
 			var beta = 0.0
 			if iter == 0 then
-				for h = 0, pd.images.unknown:H() do
-					for w = 0, pd.images.unknown:W() do
+				for h = 0, pd.parameters.X:H() do
+					for w = 0, pd.parameters.X:W() do
 						pd.searchDirection(w, h) = -pd.gradient(w, h)
 					end
 				end
@@ -138,8 +139,8 @@ solversCPU.conjugateGradientCPU = function(problemSpec, vars)
 				--
 				-- Polak-Ribiere conjugacy
 				-- 
-				for h = 0, pd.images.unknown:H() do
-					for w = 0, pd.images.unknown:W() do
+				for h = 0, pd.parameters.X:H() do
+					for w = 0, pd.parameters.X:W() do
 						var g = pd.gradient(w, h)
 						var p = pd.prevGradient(w, h)
 						num = num + (-g * (-g + p))
@@ -153,8 +154,8 @@ solversCPU.conjugateGradientCPU = function(problemSpec, vars)
 					beta = 0.0
 				end
 				
-				for h = 0, pd.images.unknown:H() do
-					for w = 0, pd.images.unknown:W() do
+				for h = 0, pd.parameters.X:H() do
+					for w = 0, pd.parameters.X:W() do
 						pd.searchDirection(w, h) = -pd.gradient(w, h) + beta * pd.searchDirection(w, h)
 					end
 				end
@@ -165,14 +166,14 @@ solversCPU.conjugateGradientCPU = function(problemSpec, vars)
 			--
 			-- line search
 			--
-			cpu.copyImage(pd.currentValues, pd.images.unknown)
+			cpu.copyImage(pd.currentValues, pd.parameters.X)
 			cpu.computeResiduals(pd, pd.currentValues, pd.currentResiduals)
 			
-			var bestAlpha, bestScore = cpu.lineSearchQuadraticFallback(pd, pd.currentValues, pd.currentResiduals, pd.searchDirection, pd.images.unknown, prevBestAlpha)
+			var bestAlpha, bestScore = cpu.lineSearchQuadraticFallback(pd, pd.currentValues, pd.currentResiduals, pd.searchDirection, pd.parameters.X, prevBestAlpha)
 			
-			for h = 0, pd.images.unknown:H() do
-				for w = 0, pd.images.unknown:W() do
-					pd.images.unknown(w, h) = pd.currentValues(w, h) + bestAlpha * pd.searchDirection(w, h)
+			for h = 0, pd.parameters.X:H() do
+				for w = 0, pd.parameters.X:W() do
+					pd.parameters.X(w, h) = pd.currentValues(w, h) + bestAlpha * pd.searchDirection(w, h)
 				end
 			end
 			
@@ -207,7 +208,7 @@ end
 solversCPU.linearizedConjugateGradientCPU = function(problemSpec, vars)
 	local struct PlanData(S.Object) {
 		plan : opt.Plan
-		images : vars.PlanImages
+		parameters : problemSpec:ParameterType()
 		
 		b : vars.unknownType
 		r : vars.unknownType
@@ -228,17 +229,17 @@ solversCPU.linearizedConjugateGradientCPU = function(problemSpec, vars)
 		var maxIters = 1000
 		var tolerance = 1e-5
 
-		cpu.computeGradient(pd, pd.r, pd.images.unknown)
+		cpu.computeGradient(pd, pd.r, pd.parameters.X)
 		cpu.scaleImage(pd.r, -1.0f)
 		
-		cpu.copyImage(pd.images.unknown, pd.zeroes)
-		cpu.computeGradient(pd, pd.b, pd.images.unknown)
+		cpu.copyImage(pd.parameters.X, pd.zeroes)
+		cpu.computeGradient(pd, pd.b, pd.parameters.X)
 		
 		cpu.copyImage(pd.p, pd.r)
 		
-		--for h = 0, pd.images.unknown:H() do
-		--	for w = 0, pd.images.unknown:W() do
-		--		pd.r(w, h) = -problemSpec.gradient.boundary(w, h, pd.images.unknown, vars.dataImages)
+		--for h = 0, pd.parameters.X:H() do
+		--	for w = 0, pd.parameters.X:W() do
+		--		pd.r(w, h) = -problemSpec.gradient.boundary(w, h, pd.parameters.X, vars.dataImages)
 		--		pd.b(w, h) = problemSpec.gradient.boundary(w, h, pd.zeroes, vars.dataImages)
 		--		pd.p(w, h) = pd.r(w, h)
 		--	end
@@ -253,8 +254,8 @@ solversCPU.linearizedConjugateGradientCPU = function(problemSpec, vars)
 			cpu.computeGradient(pd, pd.Ap, pd.p)
 			cpu.addImage(pd.Ap, pd.b, -1.0f)
 			
-			--[[for h = 0, pd.images.unknown:H() do
-				for w = 0, pd.images.unknown:W() do
+			--[[for h = 0, pd.parameters.X:H() do
+				for w = 0, pd.parameters.X:W() do
 					pd.Ap(w, h) = problemSpec.gradient.boundary(w, h, pd.p, vars.dataImages) - pd.b(w, h)
 				end
 			end]]
@@ -262,12 +263,12 @@ solversCPU.linearizedConjugateGradientCPU = function(problemSpec, vars)
 			var den = cpu.innerProduct(pd.p, pd.Ap)
 			var alpha = rTr / den
 			
-			cpu.addImage(pd.images.unknown, pd.p, alpha)
+			cpu.addImage(pd.parameters.X, pd.p, alpha)
 			cpu.addImage(pd.r, pd.Ap, -alpha)
 			
-			--for h = 0, pd.images.unknown:H() do
-			--	for w = 0, pd.images.unknown:W() do
-			--		pd.images.unknown(w, h) = pd.images.unknown(w, h) + alpha * pd.p(w, h)
+			--for h = 0, pd.parameters.X:H() do
+			--	for w = 0, pd.parameters.X:W() do
+			--		pd.parameters.X(w, h) = pd.parameters.X(w, h) + alpha * pd.p(w, h)
 			--		pd.r(w, h) = pd.r(w, h) - alpha * pd.Ap(w, h)
 			--	end
 			--end
@@ -280,8 +281,8 @@ solversCPU.linearizedConjugateGradientCPU = function(problemSpec, vars)
 			
 			var beta = rTrNew / rTr
 			
-			for h = 0, pd.images.unknown:H() do
-				for w = 0, pd.images.unknown:W() do
+			for h = 0, pd.parameters.X:H() do
+				for w = 0, pd.parameters.X:W() do
 					pd.p(w, h) = pd.r(w, h) + beta * pd.p(w, h)
 				end
 			end
@@ -315,7 +316,7 @@ solversCPU.lbfgsCPU = function(problemSpec, vars)
 	
 	local struct PlanData(S.Object) {
 		plan : opt.Plan
-		images : vars.PlanImages
+		parameters : problemSpec:ParameterType()
 		
 		gradient : vars.unknownType
 		prevGradient : vars.unknownType
@@ -348,7 +349,7 @@ solversCPU.lbfgsCPU = function(problemSpec, vars)
 		
 		var prevBestAlpha = 0.0
 		
-		cpu.computeGradient(pd, pd.gradient, pd.images.unknown)
+		cpu.computeGradient(pd, pd.gradient, pd.parameters.X)
 
 		for iter = 0, maxIters - 1 do
 
@@ -379,27 +380,27 @@ solversCPU.lbfgsCPU = function(problemSpec, vars)
 			--
 			-- line search
 			--
-			cpu.copyImage(pd.currentValues, pd.images.unknown)
+			cpu.copyImage(pd.currentValues, pd.parameters.X)
 			cpu.computeResiduals(pd, pd.currentValues, pd.currentResiduals)
 			
-			var bestAlpha, bestScore = cpu.lineSearchQuadraticFallback(pd, pd.currentValues, pd.currentResiduals, pd.p, pd.images.unknown, prevBestAlpha)
+			var bestAlpha, bestScore = cpu.lineSearchQuadraticFallback(pd, pd.currentValues, pd.currentResiduals, pd.p, pd.parameters.X, prevBestAlpha)
 			
 			-- compute new x and s
-			for h = 0, pd.images.unknown:H() do
-				for w = 0, pd.images.unknown:W() do
+			for h = 0, pd.parameters.X:H() do
+				for w = 0, pd.parameters.X:W() do
 					var delta = bestAlpha * pd.p(w, h)
-					pd.images.unknown(w, h) = pd.currentValues(w, h) + delta
+					pd.parameters.X(w, h) = pd.currentValues(w, h) + delta
 					pd.sList[k](w, h) = delta
 				end
 			end
 			
 			cpu.copyImage(pd.prevGradient, pd.gradient)
 			
-			cpu.computeGradient(pd, pd.gradient, pd.images.unknown)
+			cpu.computeGradient(pd, pd.gradient, pd.parameters.X)
 			
 			-- compute new y
-			for h = 0, pd.images.unknown:H() do
-				for w = 0, pd.images.unknown:W() do
+			for h = 0, pd.parameters.X:H() do
+				for w = 0, pd.parameters.X:W() do
 					pd.yList[k](w, h) = pd.gradient(w, h) - pd.prevGradient(w, h)
 				end
 			end
@@ -454,7 +455,7 @@ solversCPU.vlbfgsCPU = function(problemSpec, vars)
 	
 	local struct PlanData(S.Object) {
 		plan : opt.Plan
-		images : vars.PlanImages
+		parameters : problemSpec:ParameterType()
 		
 		gradient : vars.unknownType
 		prevGradient : vars.unknownType
@@ -505,7 +506,7 @@ solversCPU.vlbfgsCPU = function(problemSpec, vars)
 		-- which is only sometimes a good idea.
 		var prevBestAlpha = 1.0
 		
-		cpu.computeGradient(pd, pd.gradient, pd.images.unknown)
+		cpu.computeGradient(pd, pd.gradient, pd.parameters.X)
 
 		for iter = 0, maxIters - 1 do
 
@@ -587,10 +588,10 @@ solversCPU.vlbfgsCPU = function(problemSpec, vars)
 			--
 			-- line search
 			--
-			cpu.copyImage(pd.currentValues, pd.images.unknown)
+			cpu.copyImage(pd.currentValues, pd.parameters.X)
 			cpu.computeResiduals(pd, pd.currentValues, pd.currentResiduals)
 			
-			var bestAlpha, bestScore = cpu.lineSearchQuadraticFallback(pd, pd.currentValues, pd.currentResiduals, pd.p, pd.images.unknown, prevBestAlpha)
+			var bestAlpha, bestScore = cpu.lineSearchQuadraticFallback(pd, pd.currentValues, pd.currentResiduals, pd.p, pd.parameters.X, prevBestAlpha)
 			
 			-- cycle the oldest s and y
 			var yListStore = pd.yList[0]
@@ -603,21 +604,21 @@ solversCPU.vlbfgsCPU = function(problemSpec, vars)
 			pd.sList[m - 1] = sListStore
 			
 			-- compute new x and s
-			for h = 0, pd.images.unknown:H() do
-				for w = 0, pd.images.unknown:W() do
+			for h = 0, pd.parameters.X:H() do
+				for w = 0, pd.parameters.X:W() do
 					var delta = bestAlpha * pd.p(w, h)
-					pd.images.unknown(w, h) = pd.currentValues(w, h) + delta
+					pd.parameters.X(w, h) = pd.currentValues(w, h) + delta
 					pd.sList[m - 1](w, h) = delta
 				end
 			end
 			
 			cpu.copyImage(pd.prevGradient, pd.gradient)
 			
-			cpu.computeGradient(pd, pd.gradient, pd.images.unknown)
+			cpu.computeGradient(pd, pd.gradient, pd.parameters.X)
 			
 			-- compute new y
-			for h = 0, pd.images.unknown:H() do
-				for w = 0, pd.images.unknown:W() do
+			for h = 0, pd.parameters.X:H() do
+				for w = 0, pd.parameters.X:W() do
 					pd.yList[m - 1](w, h) = pd.gradient(w, h) - pd.prevGradient(w, h)
 				end
 			end
@@ -668,7 +669,7 @@ solversCPU.bidirectionalVLBFGSCPU = function(problemSpec, vars)
 	
 	local struct PlanData(S.Object) {
 		plan : opt.Plan
-		images : vars.PlanImages
+		parameters : problemSpec:ParameterType()
 		
 		gradient : vars.unknownType
 		prevGradient : vars.unknownType
@@ -722,7 +723,7 @@ solversCPU.bidirectionalVLBFGSCPU = function(problemSpec, vars)
 		-- which is only sometimes a good idea.
 		var prevBestSearch = 0.0
 		
-		cpu.computeGradient(pd, pd.gradient, pd.images.unknown)
+		cpu.computeGradient(pd, pd.gradient, pd.parameters.X)
 		
 		cpu.clearImage(pd.biSearchDirection, 1.0f)
 
@@ -822,7 +823,7 @@ solversCPU.bidirectionalVLBFGSCPU = function(problemSpec, vars)
 			cpu.scaleImage(pd.biSearchDirection, biScaleB)
 			
 			-- line search
-			cpu.copyImage(pd.currentValues, pd.images.unknown)
+			cpu.copyImage(pd.currentValues, pd.parameters.X)
 			cpu.computeResiduals(pd, pd.currentValues, pd.currentResiduals)
 			
 			var bestAlpha = 0.0f
@@ -830,17 +831,17 @@ solversCPU.bidirectionalVLBFGSCPU = function(problemSpec, vars)
 			var bestScore = 0.0f
 			
 			if iter == 0 then
-				bestAlpha, bestScore = cpu.lineSearchQuadraticFallback(pd, pd.currentValues, pd.currentResiduals, pd.p, pd.images.unknown, prevBestSearch)
+				bestAlpha, bestScore = cpu.lineSearchQuadraticFallback(pd, pd.currentValues, pd.currentResiduals, pd.p, pd.parameters.X, prevBestSearch)
 			else
-				bestAlpha, bestBeta = cpu.biLineSearch(pd, pd.currentValues, pd.currentResiduals, pd.p, pd.biSearchDirection, prevBestSearch, prevBestSearch, pd.images.unknown)
+				bestAlpha, bestBeta = cpu.biLineSearch(pd, pd.currentValues, pd.currentResiduals, pd.p, pd.biSearchDirection, prevBestSearch, prevBestSearch, pd.parameters.X)
 			end
 			
-			--bestAlpha, bestScore = cpu.lineSearchQuadraticFallback(pd, pd.currentValues, pd.currentResiduals, pd.p, pd.images.unknown, prevBestSearch)
+			--bestAlpha, bestScore = cpu.lineSearchQuadraticFallback(pd, pd.currentValues, pd.currentResiduals, pd.p, pd.parameters.X, prevBestSearch)
 			--bestBeta = 0.0f
 			
 			if iter == 1 then
-				cpu.dumpBiLineSearch(pd, pd.currentValues, pd.currentResiduals, pd.p, pd.biSearchDirection, pd.images.unknown)
-				--cpu.dumpLineSearch(pd, pd.currentValues, pd.currentResiduals, pd.biSearchDirection, pd.images.unknown)
+				cpu.dumpBiLineSearch(pd, pd.currentValues, pd.currentResiduals, pd.p, pd.biSearchDirection, pd.parameters.X)
+				--cpu.dumpLineSearch(pd, pd.currentValues, pd.currentResiduals, pd.biSearchDirection, pd.parameters.X)
 			end
 			
 			
@@ -856,21 +857,21 @@ solversCPU.bidirectionalVLBFGSCPU = function(problemSpec, vars)
 			pd.sList[m - 1] = sListStore
 			
 			-- compute new x and s
-			for h = 0, pd.images.unknown:H() do
-				for w = 0, pd.images.unknown:W() do
+			for h = 0, pd.parameters.X:H() do
+				for w = 0, pd.parameters.X:W() do
 					var delta = bestAlpha * pd.p(w, h) + bestBeta * pd.biSearchDirection(w, h)
-					pd.images.unknown(w, h) = pd.currentValues(w, h) + delta
+					pd.parameters.X(w, h) = pd.currentValues(w, h) + delta
 					pd.sList[m - 1](w, h) = delta
 				end
 			end
 			
 			cpu.copyImage(pd.prevGradient, pd.gradient)
 			
-			cpu.computeGradient(pd, pd.gradient, pd.images.unknown)
+			cpu.computeGradient(pd, pd.gradient, pd.parameters.X)
 			
 			-- compute new y
-			for h = 0, pd.images.unknown:H() do
-				for w = 0, pd.images.unknown:W() do
+			for h = 0, pd.parameters.X:H() do
+				for w = 0, pd.parameters.X:W() do
 					pd.yList[m - 1](w, h) = pd.gradient(w, h) - pd.prevGradient(w, h)
 				end
 			end

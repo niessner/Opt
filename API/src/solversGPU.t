@@ -218,7 +218,7 @@ solversGPU.gradientDescentGPU = function(problemSpec, vars)
 
 	local struct PlanData(S.Object) {
 		plan : opt.Plan
-		images : vars.PlanImages
+		parameters : problemSpec:ParameterType()
 		scratchF : &float
 		
 		gradStore : vars.unknownType

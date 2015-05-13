@@ -63,7 +63,7 @@ void TestFramework::runAllTests()
     }
 
     //TestExample example = makeRandomQuadratic(5);
-    TestExample example = makeImageSmoothing("smoothingExampleD.png", 0.1f);
+    TestExample example = makeImageSmoothing("smoothingExampleB.png", 0.1f);
 
     vector<TestMethod> methods;
 
@@ -84,7 +84,7 @@ void TestFramework::runAllTests()
 
     //methods.push_back(TestMethod("vlbfgsGPU", "no-params"));
     //methods.push_back(TestMethod("adaDeltaGPU", "no-params"));
-    methods.push_back(TestMethod("gaussNewtonGPU", "no-params"));
+    //methods.push_back(TestMethod("gaussNewtonGPU", "no-params"));
 
     for (auto &method : methods)
         runTest(method, example);
