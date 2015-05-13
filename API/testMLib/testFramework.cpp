@@ -70,7 +70,7 @@ void TestFramework::runAllTests()
     //
     // CPU methods
     //
-    //methods.push_back(TestMethod("gradientDescentCPU","no-params"));
+    methods.push_back(TestMethod("gradientDescentCPU","no-params"));
     //methods.push_back(TestMethod("conjugateGradientCPU", "no-params"));
     //methods.push_back(TestMethod("linearizedConjugateGradientCPU", "no-params"));
     //methods.push_back(TestMethod("lbfgsCPU", "no-params"));
@@ -105,7 +105,9 @@ void TestFramework::runTest(const TestMethod &method, TestExample &example)
     if (!prob)
     {
         cout << "Opt_ProblemDefine failed" << endl;
+        #ifdef _WIN32
         cin.get();
+        #endif
         return;
     }
     
@@ -127,7 +129,7 @@ void TestFramework::runTest(const TestMethod &method, TestExample &example)
     vector<uint64_t*> adjacencyListsCPU;
     vector<void*> edgeValuesCPU;
     
-    Plan * plan = Opt_ProblemPlan(optimizerState, prob, dims, elemsize.data(), stride.data());
+    Plan * plan = Opt_ProblemPlan(optimizerState, prob, dims, elemsize.data(), stride.data(), (int64_t**)stride.data(),(int64_t**)stride.data(),(int64_t**)stride.data());
     
     //Plan * plan = Opt_ProblemPlan(optimizerState, prob, dims,
     //    elemsize.data(), stride.data(),
@@ -136,7 +138,9 @@ void TestFramework::runTest(const TestMethod &method, TestExample &example)
     if (!plan)
     {
         cout << "Opt_ProblemPlan failed" << endl;
+        #ifdef _WIN32
         cin.get();
+        #endif
         return;
     }
 
@@ -146,14 +150,14 @@ void TestFramework::runTest(const TestMethod &method, TestExample &example)
 
     if (isGPU)
     {
-        Opt_ProblemSolve(optimizerState, plan, imagesGPU.data(), NULL);
+        Opt_ProblemSolve(optimizerState, plan, imagesGPU.data(), edgeValuesCPU.data(), NULL);
         for (const auto &image : example.images)
             image.syncGPUToCPU();
     }
     else
     {
-        Opt_ProblemSolve(optimizerState, plan, imagesCPU.data(), edgeValuesCPU.data());
-        //Opt_ProblemSolve(optimizerState, plan, imagesCPU.data(), edgeValuesCPU.data(), NULL);
+        //Opt_ProbledemSolve(optimizerState, plan, imagesCPU.data(), edgeValuesCPU.data());
+        Opt_ProblemSolve(optimizerState, plan, imagesCPU.data(), edgeValuesCPU.data(), NULL);
     }
 
     //cout << "x(0, 0) = " << example.images[0](0, 0) << endl;

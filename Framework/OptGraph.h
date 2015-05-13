@@ -59,7 +59,7 @@ struct OptGraph
                 adjacencyListsCPU.push_back(e.end);
                 edgeValuesCPU.push_back(e.value);
             }
-            adjacencyListsCPU.push_back(n)
+            adjacencyListsCPU.push_back(n);
         }
         adjacencyOffsetsCPU.push_back(adjacencyListsCPU.size());
 

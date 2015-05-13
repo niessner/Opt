@@ -172,7 +172,7 @@ struct opt.GradientDescentPlanParams {
 }
 
 struct opt.Plan(S.Object) {
-    impl : {&opaque,&&opaque,&opaque} -> {}
+    impl : {&opaque,&&opaque,&&opaque,&opaque} -> {}
     data : &opaque
 } 
 
@@ -191,6 +191,39 @@ end
 terra opt.ProblemDelete(p : &opt.Problem)
     var id = int64(p)
     --TODO: remove from problem table
+end
+
+local ProblemSpec = newclass("ProblemSpec")
+function opt.ProblemSpec()
+    return ProblemSpec:new { 
+                             parameters = terralib.newlist(),-- listing of each parameter, {name = <string>, kind = <image|adjacency|edgevalue>, idx = <number>, type = <thetypeusedtostoreit>, obj = <theobject for adj> }
+                             names = {}, -- name -> index in parameters list
+                             ProblemParameters = terralib.types.newstruct("ProblemParameters"),
+                             functions = {}
+                           }
+end
+
+function ProblemSpec:toname(name)
+    name = assert(tostring(name))
+    assert(not self.names[name],string.format("name %s already in use",name))
+    self.names[name] = #self.parameters + 1
+    return name
+end
+function ProblemSpec:newparameter(name,kind,idx,typ,obj)
+    self.parameters:insert { name = self:toname(name), kind = kind, idx = idx, type = typ, obj = obj }
+    self.ProblemParameters.entries:insert { name, typ }
+end
+function ProblemSpec:ParameterType() return self.ProblemParameters end
+function ProblemSpec:UnknownType() return self:TypeOf("X") end
+function ProblemSpec:TypeOf(name) 
+    return self.parameters[assert(self.names[name],"unknown name")].type
+end
+
+function ProblemSpec:Function(name,dimensions,stencil,boundary,interior)
+    interior = interior or boundary
+    interior:gettype() -- check this typechecks
+    interior:printpretty(true,false)
+    self.functions[name] = { name = name, dimensions = dimensions, stencil = stencil, boundary = boundary, interior = interior }
 end
 
 function opt.Dim(name, idx)
@@ -256,41 +289,120 @@ local function todim(d)
     return Dim:is(d) and d or d == 1 and unity
 end
 
+function ProblemSpec:Image(name,typ,W,H,idx)
+    assert(terralib.types.istype(typ))
+    local elemsize = assert(tonumber(opt.elemsizes[idx]))
+    local stride = assert(tonumber(opt.strides[idx]))
+    local r = newImage(typ, assert(todim(W)), assert(todim(H)), elemsize, stride)
+    self:newparameter(name,"image",idx,r,nil)
+end
+
+
 function opt.InternalImage(typ,W,H)
     W,H = assert(todim(W)),assert(todim(H))
     assert(terralib.types.istype(typ))
     local elemsize = terralib.sizeof(typ)
     return newImage(typ,W,H,elemsize,elemsize*W.size)
 end
-function opt.Image(typ, W, H, idx)
-    assert(terralib.types.istype(typ))
-    local elemsize = assert(tonumber(opt.elemsizes[idx]))
-    local stride = assert(tonumber(opt.strides[idx]))
-    return newImage(typ, assert(todim(W)), assert(todim(H)), elemsize, stride)
+
+local newAdjacency = terralib.memoize(function(w0,h0,w1,h1)
+    local struct Adj {
+        rowpointer : &int64 --size: w0*h0+1
+        x : &int64 --size is number of total edges in graph
+        y : &int64
+    }
+    local struct AdjEntry {
+        x : int64
+        y : int64
+    }
+    function Adj.metamethods.__typename()
+	  return string.format("Adj( {%s,%s}, {%s,%s} )",w0.name, h0.name,w1.name,h1.name)
+	end
+    local mm = Adj.metamethods
+    terra Adj:count(i : int64, j : int64)
+        var idx = j*w0.size + i
+        return self.rowpointer[idx+1] - self.rowpointer[idx]
+    end
+    terra Adj:W0() return w0.size end
+    terra Adj:H0() return h0.size end
+    terra Adj:W1() return w1.size end
+    terra Adj:H1() return h1.size end
+    local struct AdjIter {
+        adj : &Adj
+        idx : int64
+    }
+    terra Adj:neighbors(i : int64, j : int64)
+        return AdjIter { self, j*self:W0() + i }
+    end
+    AdjIter.metamethods.__for = function(syms,iter,body)
+        return syms, quote
+            var it = iter
+            for i = it.adj.rowpointer[it.idx], it.adj.rowpointer[it.idx+1] do
+                var [syms[1]] : AdjEntry = AdjEntry { it.adj.x[i], it.adj.y[i] }
+                body
+            end
+        end
+    end
+    mm.fromDim = {w0,h0}
+    mm.toDim = {w1,h1}
+    mm.entry = AdjEntry
+    return Adj
+end)
+
+
+function ProblemSpec:Adjacency(name,fromDim,toDim,idx)
+    local w0,h0,w1,h1 = assert(todim(fromDim[1])),assert(todim(fromDim[2])),assert(todim(toDim[1])),assert(todim(toDim[2]))
+    local Adj = newAdjacency(w0,h0,w1,h1)
+    local obj = terralib.new(Adj,{assert(opt.rowindexes[idx]),assert(opt.xs[idx]),assert(opt.ys[idx])})
+    self:newparameter(name,"adjacency",idx,Adj,obj)
+end
+
+local newEdgeValues = terralib.memoize(function(typ,adj)
+     assert(terralib.types.istype(typ))
+     local struct EdgeValues {
+        data : &typ
+     }
+     terra EdgeValues:get(a : adj.metamethods.entry) : &typ
+        return self.data + a.y*[adj.metamethods.toDim[1].size] + a.x
+     end
+     EdgeValues.metamethods.__apply = macro(function(self, a)
+	    return `@self:get(a)
+	 end)
+	 return EdgeValues
+end)
+
+function ProblemSpec:EdgeValues(name,typ,adjName, idx)
+    local param = self.parameters[assert(self.names[adjName],"unknown adjacency")]
+    assert(param.kind == "adjacency", "expected the name of an adjacency")
+    local ev = newEdgeValues(typ, param.type)
+    self:newparameter(name,"edgevalues",idx,ev,nil)
 end
 
 local allPlans = terralib.newlist()
 
-local function problemPlan(id, dimensions, elemsizes, strides, pplan)
+errorPrint = rawget(_G,"errorPrint") or print
+
+local function problemPlan(id, dimensions, elemsizes, strides, rowindexes, xs, ys, pplan)
     local success,p = xpcall(function() 
 		local problemmetadata = assert(problems[id])
         opt.dimensions,opt.elemsizes,opt.strides = dimensions,elemsizes,strides
+        opt.rowindexes,opt.xs,opt.ys = rowindexes,xs,ys
         opt.math = problemmetadata.kind:match("GPU") and util.gpuMath or util.cpuMath
         local file, errorString = terralib.loadfile(problemmetadata.filename)
         if not file then
             error(errorString, 0)
         end
         local tbl = file()
-        assert(type(tbl) == "table")
+        assert(ProblemSpec:is(tbl))
 		local result = compilePlan(tbl,problemmetadata.kind,problemmetadata.params)
 		allPlans:insert(result)
 		pplan[0] = result()
     end,function(err) errorPrint(debug.traceback(err,2)) end)
 end
 
-terra opt.ProblemPlan(problem : &opt.Problem, dimensions : &uint64, elemsizes : &uint64, strides : &uint64) : &opt.Plan
+terra opt.ProblemPlan(problem : &opt.Problem, dimensions : &uint64, elemsizes : &uint64, strides : &uint64, rowindexes : &&int64, xs : &&int64, ys : &&int64) : &opt.Plan
 	var p : &opt.Plan = nil 
-	problemPlan(int(int64(problem)),dimensions,elemsizes,strides,&p)
+	problemPlan(int(int64(problem)),dimensions,elemsizes,strides,rowindexes,xs,ys,&p)
 	return p
 end 
 
@@ -299,8 +411,8 @@ terra opt.PlanFree(plan : &opt.Plan)
     plan:delete()
 end
 
-terra opt.ProblemSolve(plan : &opt.Plan, images : &&opaque, params : &opaque)
-	return plan.impl(plan.data, images, params)
+terra opt.ProblemSolve(plan : &opt.Plan, images : &&opaque, edgevalues : &&opaque, params : &opaque)
+	return plan.impl(plan.data, images, edgevalues, params)
 end
 
 ad = require("ad")

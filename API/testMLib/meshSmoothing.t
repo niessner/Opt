@@ -1,14 +1,14 @@
 local IO = terralib.includec("stdio.h")
 
+local P = opt.ProblemSpec()
+
 local W = opt.Dim("W", 0)
 local H = opt.Dim("H", 1)
 
-local X = opt.Image(float, W, H, 0)
-local A = opt.Image(float, W, H, 1)
-
-local imageAdj = opt.Adjacency( {W, H}, {W, H}, 0)
-
-local weights = opt.EdgeValues (float, imageAdj, 0)
+P:Image("X",float,W,H,0)
+P:Image("A",float,W,H,1)
+P:Adjacency("iAdj", {W,H}, {W,H}, 0)
+P:EdgeValues("w", float, "iAdj", 0)
 
 local C = terralib.includecstring [[
 #include <math.h>
@@ -17,11 +17,11 @@ local C = terralib.includecstring [[
 local w_fit = 0.1
 local w_reg = 1.0
 
-local terra laplacian(i : uint64, j : uint64, xImage : X, w : weights, iAdj : imageAdj)
+local terra laplacian(i : uint64, j : uint64, X : P:TypeOf("X"), iAdj : P:TypeOf("iAdj"), w : P:TypeOf("w"))
 
-	var x = xImage(i, j)
+	var x = X(i, j)
 
-	var sumValue = 0.0
+	var sum = 0.0
 	var sumWeights = 0.0
 	for a in iAdj:neighbors(i, j) do
 		sum = sum + X(a.x, a.y) * w(a)
@@ -33,11 +33,11 @@ local terra laplacian(i : uint64, j : uint64, xImage : X, w : weights, iAdj : im
 	return v
 end
 
-local terra cost(i : uint64, j : uint64, xImage : X, aImage : A, w : weights, iAdj : imageAdj)
-	var x = xImage(i, j)
-	var a = aImage(i, j)
+local terra cost(i : uint64, j : uint64, self : P:ParameterType())
+	var x = self.X(i, j)
+	var a = self.A(i, j)
 
-	var v = laplacian(i, j, xImage, w, iAdj)
+	var v = laplacian(i, j, self.X, self.iAdj, self.w)
 	var laplacianCost = v * v
 
 	var v2 = x - a
@@ -46,7 +46,5 @@ local terra cost(i : uint64, j : uint64, xImage : X, aImage : A, w : weights, iA
 	return (float)(w_reg*laplacianCost + w_fit*reconstructionCost)
 end
 
-return
-{
-	cost = { dimensions = {W, H}, boundary = cost, interior = cost, stencil = { uses = {{A,0,0},{X,0,0}}, indirections = {{imageAdj, { uses = {{X,0,0}}}, {weights} }} }
-}
+P:Function("cost", {W,H}, {0,0}, cost)
+return P
