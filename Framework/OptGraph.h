@@ -51,17 +51,25 @@ struct OptGraph
 
     void finalize()
     {
+        adjacencyOffsetsCPU.clear();
+        adjacencyListsXCPU.clear();
+        adjacencyListsYCPU.clear();
+        edgeValuesCPU.clear();
+
         for (const Node &n : nodes)
         {
-            adjacencyOffsetsCPU.push_back(adjacencyListsCPU.size());
+            adjacencyOffsetsCPU.push_back(adjacencyListsXCPU.size());
             for (const Edge &e : n.edges)
             {
-                adjacencyListsCPU.push_back(e.end);
+                adjacencyListsXCPU.push_back(e.end);
                 edgeValuesCPU.push_back(e.value);
             }
-            adjacencyListsCPU.push_back(n);
         }
-        adjacencyOffsetsCPU.push_back(adjacencyListsCPU.size());
+        adjacencyOffsetsCPU.push_back(adjacencyListsXCPU.size());
+
+        adjacencyListsYCPU = adjacencyListsXCPU;
+        for (auto &x : adjacencyListsYCPU)
+            x = 0;
 
         //cudaMalloc(&dataGPU, sizeof(float) * dimX * dimY);
     }
@@ -79,7 +87,8 @@ struct OptGraph
     std::vector<Node> nodes;
 
     std::vector<uint64_t> adjacencyOffsetsCPU;
-    std::vector<uint64_t> adjacencyListsCPU;
+    std::vector<uint64_t> adjacencyListsXCPU;
+    std::vector<uint64_t> adjacencyListsYCPU;
     std::vector<EdgeValueType> edgeValuesCPU;
 };
 

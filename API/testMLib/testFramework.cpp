@@ -63,7 +63,8 @@ void TestFramework::runAllTests()
     }
 
     //TestExample example = makeRandomQuadratic(5);
-    TestExample example = makeImageSmoothing("smoothingExampleB.png", 0.1f);
+    //TestExample example = makeImageSmoothing("smoothingExampleB.png", 0.1f);
+    TestExample example = makeMeshSmoothing("smoothingExampleB.png", 0.1f);
 
     vector<TestMethod> methods;
 
@@ -125,11 +126,20 @@ void TestFramework::runTest(const TestMethod &method, TestExample &example)
         elemsize.push_back(sizeof(float));
     }
 
-    vector<uint64_t*> adjacencyOffsetsCPU;
-    vector<uint64_t*> adjacencyListsCPU;
+    vector<int64_t*> adjacencyOffsetsCPU;
+    vector<int64_t*> adjacencyListsXCPU;
+    vector<int64_t*> adjacencyListsYCPU;
     vector<void*> edgeValuesCPU;
+
+    for (auto &graph : example.graphs)
+    {
+        graph.finalize();
+        adjacencyOffsetsCPU.push_back((int64_t *)graph.adjacencyOffsetsCPU.data());
+        adjacencyListsXCPU.push_back((int64_t *)graph.adjacencyListsXCPU.data());
+        adjacencyListsXCPU.push_back((int64_t *)graph.adjacencyListsYCPU.data());
+    }
     
-    Plan * plan = Opt_ProblemPlan(optimizerState, prob, dims, elemsize.data(), stride.data(), (int64_t**)stride.data(),(int64_t**)stride.data(),(int64_t**)stride.data());
+    Plan * plan = Opt_ProblemPlan(optimizerState, prob, dims, elemsize.data(), stride.data(), adjacencyOffsetsCPU.data(), adjacencyListsXCPU.data(), adjacencyListsYCPU.data());
     
     //Plan * plan = Opt_ProblemPlan(optimizerState, prob, dims,
     //    elemsize.data(), stride.data(),
