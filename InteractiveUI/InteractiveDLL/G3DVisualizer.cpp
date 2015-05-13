@@ -143,7 +143,8 @@ void G3DVisualizer::onInit() {
     makeGUI();
     m_repositionVisualizationNextFrame = false;
     showRenderingStats = false;
-    loadInputFromFile("E:/Projects/DSL/Optimization/API/testMLib/recordingRaw.sensor");
+    loadInputFromFile("E:/Projects/DSL/Optimization/API/testMLib/refined.sensor");
+    //loadInputFromFile("E:/Projects/DSL/Optimization/API/testMLib/recordingRaw.sensor");
     generateSFSInput(m_inputs[1].sourceImage, m_inputs[0].sourceImage);
 
 }
@@ -174,32 +175,48 @@ void G3DVisualizer::loadDepthColorFrame(const String& filename, int inputIndex) 
     for (unsigned int i = 0; i < sensorData.m_DepthImageHeight*sensorData.m_DepthImageWidth; ++i) {
         //sensorData.m_DepthImages[0][i] += Random::common().uniform()*0.2f;
     }
-    shared_ptr<Texture> depthTexture = Texture::fromPixelTransferBuffer("Sensor Depth Image",
+    shared_ptr<Texture> depthTexture = Texture::fromPixelTransferBuffer("Initial Sensor Depth Image",
         CPUPixelTransferBuffer::fromData(sensorData.m_DepthImageWidth, sensorData.m_DepthImageHeight, ImageFormat::R32F(), sensorData.m_DepthImages[0]));
-    depthTexture->visualization.channels = Texture::Visualization::RasL;
+    
 
-    shared_ptr<Texture> colorTexture = Texture::fromPixelTransferBuffer("Sensor Color Image",
+    shared_ptr<Texture> colorTexture = Texture::fromPixelTransferBuffer("Initial Sensor Color Image",
         CPUPixelTransferBuffer::fromData(sensorData.m_ColorImageWidth, sensorData.m_ColorImageHeight, ImageFormat::BGRA8(), sensorData.m_ColorImages[0]));
-    colorTexture->visualization.documentGamma = 2.2f;
+    
+    shared_ptr<Texture> resampledDepth = Texture::createEmpty("Sensor Depth Image", sensorData.m_DepthImageWidth, sensorData.m_DepthImageHeight, ImageFormat::R32F());
+    shared_ptr<Texture> resampledColor = Texture::createEmpty("Sensor Color Image", sensorData.m_DepthImageWidth, sensorData.m_DepthImageHeight, ImageFormat::RGBA32F());
+    m_sfs.resampleImages(depthTexture, colorTexture, resampledDepth, resampledColor);
+    resampledDepth->visualization.channels = Texture::Visualization::RasL;
+    resampledDepth->visualization.min = 0.35f;
+    resampledDepth->visualization.max = 0.50f;
+    resampledColor->visualization.documentGamma = 2.2f;
 
-    m_inputs[inputIndex].set(depthTexture);
-    m_inputs[inputIndex+1].set(colorTexture);
+    m_inputs[inputIndex].set(resampledDepth);
+    m_inputs[inputIndex + 1].set(resampledColor);
     if (m_inputs.size() == 2) {
-        m_output.set(depthTexture->width(), depthTexture->height(), 1);
+        m_output.set(resampledDepth->width(), resampledDepth->height(), 1);
     }
 }
 
 void G3DVisualizer::generateSFSInput(shared_ptr<Texture> color, shared_ptr<Texture> depth) {
     Array<float> lightingCoefficients;
     static shared_ptr<Texture> outputAlbedo = Texture::createEmpty("Albedo Texture", color->width(), color->height(), ImageFormat::RGBA32F());
-    m_sfs.estimateLightingAndAlbedo(color, depth, outputAlbedo, lightingCoefficients);
+    static shared_ptr<Texture> targetLuminance = Texture::createEmpty("Target Luminance", color->width(), color->height(), ImageFormat::R32F());
+    shared_ptr<Texture> albedoLuminance = Texture::createEmpty("Albedo Luminance Texture", color->width(), color->height(), ImageFormat::R32F());
+    m_sfs.estimateLightingAndAlbedo(color, depth, outputAlbedo, targetLuminance, albedoLuminance, lightingCoefficients);
     for (int i = 0; i < lightingCoefficients.size(); ++i) {
         debugPrintf("%d: %f\n", i, lightingCoefficients[i]);
     }
-    shared_ptr<Texture> luminance = Texture::createEmpty("Albedo Luminance Texture", color->width(), color->height(), ImageFormat::R32F());
-    Texture::copy(outputAlbedo, luminance);
+    targetLuminance->visualization.channels = Texture::Visualization::RasL;
+    targetLuminance->visualization.documentGamma = 2.2f;
+    albedoLuminance->visualization.channels = Texture::Visualization::RasL;
+    albedoLuminance->visualization.documentGamma = 2.2f;
+
+    m_inputs[m_inputs.size() - 1].set(targetLuminance);
     m_inputs.resize(m_inputs.size() + 1);
-    m_inputs[m_inputs.size() - 1].set(luminance);
+    m_inputs[m_inputs.size() - 1].set(albedoLuminance);
+    m_output.outputImage->visualization = Texture::Visualization::RasL;
+    m_output.outputImage->visualization.documentGamma = 2.2f;
+    m_output.outputImage->visualization.max = 2.0f;
     setupVisualizationWidgets();
 }
 
@@ -272,6 +289,7 @@ void G3DVisualizer::onSimulation(RealTime rdt, SimTime sdt, SimTime idt) {
     std::string terraFile, optimizationMethod, errorString;
     getRunOptMessage(terraFile, optimizationMethod, lastMessageTime);
     if (lastMessageTime > m_lastOptimizationRunTime) {
+        
         m_lastOptimizationRunTime = lastMessageTime;
         OptimizationTimingInfo timingInfo;
         m_optimizer.setOptData(RenderDevice::current, m_inputs, m_output);
@@ -279,6 +297,18 @@ void G3DVisualizer::onSimulation(RealTime rdt, SimTime sdt, SimTime idt) {
         m_optimizer.run(terraFile, optimizationMethod, timingInfo, errorString);
         writeStatusInfo(timingInfo, errorString);
         m_optimizer.renderOutput(RenderDevice::current, m_output);
+        static shared_ptr<Texture> diffTexture = Texture::createEmpty("Diff Tex", m_output.outputImage->width(), m_output.outputImage->height(), ImageFormat::RG32F());
+        diffTexture->visualization.channels = Texture::Visualization::RasL;
+        static shared_ptr<Framebuffer> fb = Framebuffer::create(diffTexture);
+        RenderDevice::current->push2D(fb); {
+            Args args;
+            m_inputs[0].sourceImage->setShaderArgs(args, "input0_", Sampler::buffer());
+            m_output.outputImage->setShaderArgs(args, "input1_", Sampler::buffer());
+            args.setRect(RenderDevice::current->viewport());
+            LAUNCH_SHADER("diff.pix", args);
+        } RenderDevice::current->pop2D();
+       
+
     }
 
     // Example GUI dynamic layout code.  Resize the debugWindow to fill

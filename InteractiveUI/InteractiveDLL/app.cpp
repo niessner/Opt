@@ -13,6 +13,7 @@ int App::launchG3DVisualizer() {
     settings.window.width = 1280;
     settings.window.height = 720;
     settings.window.alwaysOnTop = true;
+    settings.dataDir = "../InteractiveDLL/data-files";
     _g3dVisualizer = new G3DVisualizer(settings);
     return _g3dVisualizer->run();
 }

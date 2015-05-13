@@ -11,22 +11,22 @@ local posX = W:index()
 local posY = H:index()
 
 -- TODO: accept these 4 as input uniforms?
-local f_x = 532.569458
-local f_y = 531.541077
+local f_x = 574.0528
+local f_y = 574.0528
 local u_x = 320.0
 local u_y = 240.0
 
 -- Lighting coefficients
 local L = {
-	0.457601,
-0.088744,
-0.028842,
--0.131277,
--0.298849,
-0.014181,
-0.018311,
-0.182775,
-0.023668
+0.797717,
+0.049798,
+0.215536,
+-0.219520,
+-0.045038,
+0.165281,
+0.070058,
+-0.298625,
+0.012538
 }
 
 function sqMagnitude(point) 
@@ -87,16 +87,13 @@ for i=-2,2 do
 		squareStencilSum = squareStencilSum + D_i(i,j)			
 	end
 end
+
 local squareStencilValid = ad.greater(squareStencilSum, 0.0)
-
-local E_g_h = ad.select(squareStencilValid, B(0,0) - B(1,0) - (I(0,0) - I(1,0)), 0)
-local E_g_v = ad.select(squareStencilValid, B(0,0) - B(0,1) - (I(0,0) - I(0,1)), 0)
-
-
 local crossStencilValid = ad.greater(D_i(0,0)+D_i(1,0)+D_i(0,1)+D_i(-1,0)+D_i(0,-1), 0.0)
 local pointValid = ad.greater(D_i(0,0), 0.0)
 
-
+local E_g_h = ad.select(squareStencilValid, B(0,0) - B(1,0) - (I(0,0) - I(1,0)), 0)
+local E_g_v = ad.select(squareStencilValid, B(0,0) - B(0,1) - (I(0,0) - I(0,1)), 0)
 
 --local E_s = p(0,0) - 0.25*(p(-1,0) + p(0,-1) + p(1, 0) + p(0,1)) 
 local E_s_beforeSelect = sqMagnitude(plus(p(0,0), times(-0.25, plus(plus(p(-1,0), p(0,-1)),plus(p(1, 0), p(0,1))))))

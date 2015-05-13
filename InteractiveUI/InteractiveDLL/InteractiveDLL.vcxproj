@@ -46,6 +46,7 @@
   <ItemGroup>
     <CudaCompile Include="CameraUtil.cu" />
     <CudaCompile Include="SolverSHLighting.cu" />
+    <None Include="data-files\diff.pix" />
     <None Include="interactiveDLL.def" />
     <CudaCompile Include="SFSHelpers.cu">
       <FileType>Document</FileType>

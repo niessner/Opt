@@ -4,9 +4,23 @@ extern "C" {
 #include "Opt.h"
 }
 
+void OptimizationInput::set(shared_ptr<ArticulatedModel> am) {
+    Set<ArticulatedModel::Geometry*> seenGeo;
+    for (auto mesh : am->meshArray()) {
+        if (!seenGeo.contains(mesh->geometry)) {
+            for (auto v : mesh->geometry->cpuVertexArray.vertex) {
+                meshGraph.nodes.append(Vector4(v.position, 0.0f));
+            }
+        }
+
+        
+    }
+}
 
 void OptimizationOutput::set(int width, int height, int numChannels) {
     outputImage = Texture::createEmpty("Optimization Output", width, height, ImageFormat::floatFormat(numChannels));
+    outputImage->visualization.min = 0.35f;
+    outputImage->visualization.min = 0.50f;
     RenderDevice::current->pushState(); {
         RenderDevice::current->setColorClearValue(Color3::black());
         outputImage->clear();

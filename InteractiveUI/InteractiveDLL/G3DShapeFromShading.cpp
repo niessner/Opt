@@ -6,26 +6,66 @@
 using G3D::PixelTransferBuffer;
 using G3D::GLPixelTransferBuffer;
 using G3D::ImageFormat;
+using G3D::Vector2int32;
 
 extern "C" void computeNormals(float4* d_output, float4* d_input, unsigned int width, unsigned int height);
 extern "C" void convertDepthFloatToCameraSpaceFloat4(float4* d_output, float* d_input, float4x4 intrinsicsInv, unsigned int width, unsigned int height);
 extern "C" void convertColorToIntensityFloat(float* d_output, float4* d_input, unsigned int width, unsigned int height);
 
-void G3DShapeFromShading::estimateLightingAndAlbedo(shared_ptr<Texture> color, shared_ptr<Texture> depth, shared_ptr<Texture> outputAlbedo, Array<float>& lightinSHCoefficients) {
+extern "C" void copyFloat4Map(float4* d_output, float4* d_input, unsigned int width, unsigned int height);
+
+extern "C" void convertDepthRawToFloat(float* d_output, unsigned short* d_input, unsigned int width, unsigned int height, float minDepth, float maxDepth);
+extern "C" void convertColorRawToFloat4(float4* d_output, BYTE* d_input, unsigned int width, unsigned int height);
+
+extern "C" void resampleFloatMap(float* d_colorMapResampledFloat, unsigned int outputWidth, unsigned int outputHeight, float* d_colorMapFloat, unsigned int inputWidth, unsigned int inputHeight, float* d_depthMaskMap);
+extern "C" void resampleFloat4Map(float4* d_colorMapResampledFloat4, unsigned int outputWidth, unsigned int outputHeight, float4* d_colorMapFloat4, unsigned int inputWidth, unsigned int inputHeight);
+
+
+void G3DShapeFromShading::resampleImages(shared_ptr<Texture> inputDepth, shared_ptr<Texture> inputColor, shared_ptr<Texture> outputDepth, shared_ptr<Texture> outputColor) {
+    alwaysAssertM(outputDepth->width() == outputColor->width() && outputDepth->height() == outputColor->height(), "Target texture must be same size");
+    Vector2int32 targetDim(outputDepth->width(), outputDepth->height());
+    ////////////////////////////////////////////////////////////////////////////////////
+    // Process Color
+    ////////////////////////////////////////////////////////////////////////////////////
+
+    shared_ptr<CudaImage> cudaColorMapRaw = CudaImage::fromTexture(inputColor);
+    shared_ptr<CudaImage> colorMapFloat = CudaImage::createEmpty(inputColor->width(), inputColor->height(), ImageFormat::RGBA32F());
+    shared_ptr<CudaImage> colorMapResampled = CudaImage::createEmpty(targetDim.x, targetDim.y, ImageFormat::RGBA32F());
+    convertColorRawToFloat4((float4*)colorMapFloat->data(), (BYTE*)cudaColorMapRaw->data(), inputColor->width(), inputColor->height());
+    cutilSafeCall(cudaDeviceSynchronize());
+    if ((inputColor->width() == targetDim.x) && (inputColor->height() == targetDim.y)) copyFloat4Map((float4*)colorMapResampled->data(), (float4*)colorMapFloat->data(), targetDim.x, targetDim.y);
+    else																						   resampleFloat4Map((float4*)colorMapResampled->data(), targetDim.x, targetDim.y, (float4*)colorMapFloat->data(), inputColor->width(), inputColor->height());
+    cutilSafeCall(cudaDeviceSynchronize());
+
+    ////////////////////////////////////////////////////////////////////////////////////
+    // Process Depth
+    ////////////////////////////////////////////////////////////////////////////////////
+    shared_ptr<CudaImage> depthMapFloat = CudaImage::fromTexture(inputDepth);
+    shared_ptr<CudaImage> depthMapResampled = CudaImage::createEmpty(targetDim.x, targetDim.y, ImageFormat::R32F());
+    cutilSafeCall(cudaDeviceSynchronize());
+    resampleFloatMap((float*)depthMapResampled->data(), targetDim.x, targetDim.y, (float*)depthMapFloat->data(), inputDepth->width(), inputDepth->height(), NULL);
+    cutilSafeCall(cudaDeviceSynchronize());
+    depthMapResampled->updateTexture(outputDepth);
+    colorMapResampled->updateTexture(outputColor);
+    cutilSafeCall(cudaDeviceSynchronize());
+}
+
+void G3DShapeFromShading::estimateLightingAndAlbedo(shared_ptr<Texture> color, shared_ptr<Texture> depth, shared_ptr<Texture> outputAlbedo, shared_ptr<Texture> targetLuminance, shared_ptr<Texture> albedoLuminance, Array<float>& lightinSHCoefficients) {
     if (G3D::isNull(m_sfsHelpers)) {
         m_sfsHelpers = shared_ptr<SFSHelpers>(new SFSHelpers());
     }
     int width = color->width();
     int height = color->height();
 
-    static shared_ptr<Texture> targetIntensity  = Texture::createEmpty("SFSTargetIntensity", width, height, ImageFormat::R32F());
     static shared_ptr<Texture> targetColor      = Texture::createEmpty("SFSTargetColor", width, height, ImageFormat::RGBA32F());
     Texture::copy(color, targetColor);
+
+    static shared_ptr<Texture> normals = Texture::createEmpty("SFSNormalEstimate", width, height, ImageFormat::RGBA32F());
 
     shared_ptr<CudaImage> cudaDepthImage = CudaImage::fromTexture(depth);
     shared_ptr<CudaImage> cudaCSPosition    = CudaImage::createEmpty(width, height, ImageFormat::RGBA32F());
     shared_ptr<CudaImage> cudaTargetColor = CudaImage::fromTexture(targetColor);
-    shared_ptr<CudaImage> cudaTargetIntensity = CudaImage::createEmpty(width, height, ImageFormat::R32F());
+    shared_ptr<CudaImage> cudaTargetIntensity = CudaImage::fromTexture(targetLuminance);
 
     float horizontalFieldOfView = 1.082104;
     float verticalFieldOfView = 0.848230;
@@ -55,7 +95,7 @@ void G3DShapeFromShading::estimateLightingAndAlbedo(shared_ptr<Texture> color, s
 
     shared_ptr<CudaImage> cudaNormals = CudaImage::createEmpty(width, height, ImageFormat::RGBA32F());
     shared_ptr<CudaImage> cudaAlbedo = CudaImage::createEmpty(width, height, ImageFormat::RGBA32F());
-
+    shared_ptr<CudaImage> cudaAlbedoLuminance = CudaImage::fromTexture(albedoLuminance);
     computeNormals((float4*)cudaNormals->data(), (float4*)cudaCSPosition->data(), width, height);
     
     convertColorToIntensityFloat((float*)cudaTargetIntensity->data(), (float4*)cudaTargetColor->data(), width, height);
@@ -65,8 +105,11 @@ void G3DShapeFromShading::estimateLightingAndAlbedo(shared_ptr<Texture> color, s
     m_sfsHelpers->solveLighting((float*)cudaDepthImage->data(), (float*)cudaTargetIntensity->data(), (float4*)cudaNormals->data(), NULL, (float*)lightingCoefficients->data(), thres_depth, color->width(), color->height());
     m_sfsHelpers->solveReflectance((float*)cudaDepthImage->data(), (float4*)cudaTargetColor->data(), (float4*)cudaNormals->data(), (float*)lightingCoefficients->data(), (float4*)cudaAlbedo->data(), width, height);
 
-    cudaTargetIntensity->updateTexture(targetIntensity);
+    convertColorToIntensityFloat((float*)cudaAlbedoLuminance->data(), (float4*)cudaAlbedo->data(), width, height);
+    cudaAlbedoLuminance->updateTexture(albedoLuminance);
+    cudaTargetIntensity->updateTexture(targetLuminance);
     cudaAlbedo->updateTexture(outputAlbedo);
+    cudaNormals->updateTexture(normals);
 
     float coeffs[9];
     CUDA_SAFE_CALL(cudaMemcpy(coeffs, lightingCoefficients->data(), sizeof(float) * 9, cudaMemcpyDeviceToHost));

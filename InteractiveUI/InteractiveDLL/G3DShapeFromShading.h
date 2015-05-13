@@ -8,7 +8,9 @@ class SFSHelpers;
 class G3DShapeFromShading {
     shared_ptr<SFSHelpers> m_sfsHelpers;
 public:
-    void estimateLightingAndAlbedo(shared_ptr<Texture> color, shared_ptr<Texture> depth, shared_ptr<Texture> outputAlbedo, Array<float>& lightinSHCoefficients);
+    void estimateLightingAndAlbedo(shared_ptr<Texture> color, shared_ptr<Texture> depth, shared_ptr<Texture> outputAlbedo, shared_ptr<Texture> targetLuminance, shared_ptr<Texture> albedoLuminance, Array<float>& lightinSHCoefficients);
+
+    void resampleImages(shared_ptr<Texture> inputDepth, shared_ptr<Texture> inputColor, shared_ptr<Texture> outputDepth, shared_ptr<Texture> outputColor);
 };
 
 #endif

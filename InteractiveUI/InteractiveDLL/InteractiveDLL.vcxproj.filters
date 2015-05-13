@@ -60,6 +60,9 @@
     <None Include="SFSHelper.cu">
       <Filter>CUDAHelpers</Filter>
     </None>
+    <None Include="data-files\diff.pix">
+      <Filter>Shaders</Filter>
+    </None>
   </ItemGroup>
   <ItemGroup>
     <Filter Include="CUDAHelpers">
@@ -70,6 +73,9 @@
     </Filter>
     <Filter Include="ExternalHelpers">
       <UniqueIdentifier>{0b916739-af75-42dc-a039-0053c00dedff}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Shaders">
+      <UniqueIdentifier>{702db8fa-e0d3-4192-9eda-78f87631d698}</UniqueIdentifier>
     </Filter>
   </ItemGroup>
   <ItemGroup>

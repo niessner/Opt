@@ -1,5 +1,6 @@
 #ifndef OptGraph_h
 #define OptGraph_h
+#include <stdint.h>
 #include "cuda_runtime.h"
 
 //
@@ -28,7 +29,7 @@ struct OptGraph
         // these are only relevant when the node maps over an image domain
         int x, y;
 
-        vector<Edge> edges;
+        std::vector<Edge> edges;
     };
 
     OptGraph()
@@ -75,11 +76,11 @@ struct OptGraph
         //cudaMemcpy((void *)dataCPU.data(), dataGPU, sizeof(float) * dimX * dimY, cudaMemcpyDeviceToHost);
     }
 
-    vector<Node> nodes;
+    std::vector<Node> nodes;
 
-    vector<uint64_t> adjacencyOffsetsCPU;
-    vector<uint64_t> adjacencyListsCPU;
-    vector<EdgeValueType> edgeValuesCPU;
+    std::vector<uint64_t> adjacencyOffsetsCPU;
+    std::vector<uint64_t> adjacencyListsCPU;
+    std::vector<EdgeValueType> edgeValuesCPU;
 };
 
 typedef OptGraph<float> OptGraphf;

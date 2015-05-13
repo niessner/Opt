@@ -16,7 +16,7 @@ protected:
     void copyTo(void* dst);
 
     int sizeInMemory() {
-        return m_width*m_height*m_format->numComponents*sizeof(float);
+        return m_width*m_height*m_format->cpuBitsPerPixel / 8;
     }
 
 public:

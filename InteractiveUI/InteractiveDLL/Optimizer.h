@@ -3,8 +3,14 @@
 #include <string>
 #include <vector>
 #include <OptImage.h>
+#include <OptGraph.h>
 #include <cuda_runtime.h>
 #include <G3D/G3DAll.h>
+
+struct SimpleMeshGraph {
+    Array<Vector4>      nodes;
+    Array<Array<int>>   connectivity;
+};
 
 struct OptimizationInput {
     G3D_DECLARE_ENUM_CLASS(Type, IMAGE, VIDEO, DENSE_GRID, MESH);
@@ -14,6 +20,9 @@ struct OptimizationInput {
 
     /** Last JIT rendered input to the optimizer based on sourceImage and preprocessing */
     shared_ptr<Texture> lastInput;
+
+    SimpleMeshGraph meshGraph;
+
     //ImagePreprocessing preprocessing;
     OptimizationInput() : type(Type::IMAGE) {}
     OptimizationInput(shared_ptr<Texture> image) : type(Type::IMAGE), sourceImage(image) {}
@@ -21,6 +30,7 @@ struct OptimizationInput {
         sourceImage = image;
         type = Type::IMAGE;
     }
+    void set(shared_ptr<ArticulatedModel> model);
 };
 
 struct OptimizationOutput {
