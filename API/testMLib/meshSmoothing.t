@@ -47,19 +47,24 @@ local terra cost(i : uint64, j : uint64, self : P:ParameterType())
 
 	return (float)(w_reg*laplacianCost + w_fit*reconstructionCost)
 end
+
 local terra gradient(i : uint64, j : uint64, self : P:ParameterType())
 	var x = self.X(i, j)
 	var a = self.A(i, j)
 
-	var v = laplacian(i, j, self.X, self.iAdj, self.w)
-	var laplacianCost = v * v
-
-	var v2 = x - a
-	var reconstructionCost = v2 * v2
-
-	return (float)(w_reg*laplacianCost + w_fit*reconstructionCost)
+	var reconstructionGradient = 2 * (x - a)
+	
+	var sum = 0.0
+	var sumWeights = 0.0
+	for a in iAdj:neighbors(i, j) do
+	    sum = sum + laplacian(a.x, a.y, self.X, self.iAdj, self.w) * self.w(a)
+		sumWeights = sumWeights + self.w(a)
+	end
+	
+	var laplacianGradient = 2.0 * (sumWeights * laplacian(a.x, a.y, self.X, self.iAdj, self.w) - sum)
+	
+	return w_reg*laplacianGradient + w_fit*reconstructionGradient
 end
-
 
 P:Function("cost", {W,H}, {0,0}, cost)
 P:Function("gradient", {W,H}, {0,0}, gradient)
