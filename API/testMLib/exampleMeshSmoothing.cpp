@@ -57,11 +57,11 @@ TestExample TestFramework::makeMeshSmoothing(const string &imageFilename, float 
 
         for (const auto &n : graph.nodes)
         {
-            L(n.index, n.index) = (float)n.edges.size();
+            L((size_t)n.index, (size_t)n.index) = (float)n.edges.size();
 
             for (const auto &e : n.edges)
             {
-                L(n.index, e.end) = -1.0;
+                L((size_t)n.index, (size_t)e.end) = -1.0;
             }
         }
 

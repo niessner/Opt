@@ -321,7 +321,7 @@ util.getParameters = function(ProblemSpec, images, edgeValues)
 		if entry.kind == "image" then
 			inits:insert(`entry.type { data = [&uint8](images[entry.idx])})
 		elseif entry.kind == "adjacency" then
-			inits:insert(`@entry.obj)
+			inits:insert(`entry.obj)
 		elseif entry.kind == "edgevalues" then
 			inits:insert(`entry.type { data = [&entry.type.metamethods.type](edgeValues[entry.idx]) })
 		end

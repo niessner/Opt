@@ -136,9 +136,9 @@ void TestFramework::runTest(const TestMethod &method, TestExample &example)
         graph.finalize();
         adjacencyOffsetsCPU.push_back((int64_t *)graph.adjacencyOffsetsCPU.data());
         adjacencyListsXCPU.push_back((int64_t *)graph.adjacencyListsXCPU.data());
-        adjacencyListsXCPU.push_back((int64_t *)graph.adjacencyListsYCPU.data());
+        adjacencyListsYCPU.push_back((int64_t *)graph.adjacencyListsYCPU.data());
+        edgeValuesCPU.push_back((void*)graph.edgeValuesCPU.data());
     }
-    
     Plan * plan = Opt_ProblemPlan(optimizerState, prob, dims, elemsize.data(), stride.data(), adjacencyOffsetsCPU.data(), adjacencyListsXCPU.data(), adjacencyListsYCPU.data());
     
     //Plan * plan = Opt_ProblemPlan(optimizerState, prob, dims,

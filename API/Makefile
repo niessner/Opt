@@ -35,7 +35,7 @@ $(EXAMPLE):	example/example.o
 $(TEST):	test/testFramework.o test/main.o
 	$(LINK) $^ -o $@ $(LFLAGS)
 	
-$(TESTMLIB):	testMLib/main.o testMLib/mLibSource.o testMLib/testFramework.o testMLib/exampleImageSmoothing.o
+$(TESTMLIB):	testMLib/main.o testMLib/mLibSource.o testMLib/testFramework.o testMLib/exampleImageSmoothing.o testMLib/exampleMeshSmoothing.o
 	$(LINK) $^ -o $@ $(LFLAGS)
 	
 clean:

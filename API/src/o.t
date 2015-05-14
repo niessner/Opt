@@ -378,6 +378,7 @@ local function problemPlan(id, dimensions, elemsizes, strides, rowindexes, xs, y
         opt.dimensions,opt.elemsizes,opt.strides = dimensions,elemsizes,strides
         opt.rowindexes,opt.xs,opt.ys = rowindexes,xs,ys
         opt.math = problemmetadata.kind:match("GPU") and util.gpuMath or util.cpuMath
+		
         local file, errorString = terralib.loadfile(problemmetadata.filename)
         if not file then
             error(errorString, 0)
