@@ -25,7 +25,7 @@ local terra laplacian(i : uint64, j : uint64, X : P:TypeOf("X"), iAdj : P:TypeOf
 	var sum = 0.0
 	var sumWeights = 0.0
 	for a in iAdj:neighbors(i, j) do
-	    C.printf("%d %d -> %d %d\n",int(i),int(j),int(a.x),int(a.y))
+	    --C.printf("%d %d -> %d %d\n",int(i),int(j),int(a.x),int(a.y))
 		sum = sum + X(a.x, a.y) * w(a)
 		sumWeights = sumWeights + w(a)
 	end
@@ -56,12 +56,12 @@ local terra gradient(i : uint64, j : uint64, self : P:ParameterType())
 	
 	var sum = 0.0
 	var sumWeights = 0.0
-	for a in iAdj:neighbors(i, j) do
+	for a in self.iAdj:neighbors(i, j) do
 	    sum = sum + laplacian(a.x, a.y, self.X, self.iAdj, self.w) * self.w(a)
 		sumWeights = sumWeights + self.w(a)
 	end
 	
-	var laplacianGradient = 2.0 * (sumWeights * laplacian(a.x, a.y, self.X, self.iAdj, self.w) - sum)
+	var laplacianGradient = 2.0 * (sumWeights * laplacian(i, j, self.X, self.iAdj, self.w) - sum)
 	
 	return w_reg*laplacianGradient + w_fit*reconstructionGradient
 end
