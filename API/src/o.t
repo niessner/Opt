@@ -444,13 +444,25 @@ function ad.sumsquared(...)
     exp = exp:map(function(x) return assert(ad.toexp(x), "expected an ad expression") end)
     return SumOfSquares:new { terms = exp }
 end
+local ProblemSpecAD = newclass("ProblemSpecAD")
+
+function ad.ProblemSpec()
+    return ProblemSpecAD:new { P = opt.ProblemSpec() }
+end
+
 
 local Image = newclass("Image")
 -- Z: this will eventually be opt.Image, but that is currently used by our direct methods
 -- so this is going in the ad table for now
-function ad.Image(name,W,H,idx)
+-- small workaround: idx > 0 means it is part of ProblemSpec struct
+-- idx < 0 means that it is the -idx-th argument to the function begin generated after the ProblemSpec struct. (.e.g -1 is the first argument) 
+function ProblemSpecAD:Image(name,W,H,idx)
     assert(W == 1 or Dim:is(W))
     assert(H == 1 or Dim:is(H))
+    idx = assert(tonumber(idx))
+    if idx >= 0 then
+        self.P:Image(name,float,W,H,idx)
+    end
     return Image:new { name = tostring(name), W = W, H = H, idx = idx }
 end
 
@@ -485,47 +497,50 @@ local function removeboundaries(exp)
     end
     return exp:rename(nobounds)
 end
-local function createfunction(images,exp,usebounds)
+local function createfunction(problemspec,exp,usebounds,W,H)
     if not usebounds then
         exp = removeboundaries(exp)
-		print("expression: ", exp)
     end
-    local imageindex = {}
-    local imagesyms = terralib.newlist()
-    for i,im in ipairs(images) do
-        local image = im.idx and opt.Image(float,im.W,im.H,im.idx) or opt.InternalImage(float,im.W,im.H)
-        local s = symbol(image,im.name)
-        imageindex[im] = s
-        imagesyms:insert(s)
-    end
+    
+    local P = symbol(problemspec.P:ParameterType(),"P")
+    local extraimages = terralib.newlist()
+    local imagetosym = {} 
+    local imageinits = terralib.newlist()
+    local stmts = terralib.newlist()
+    
     local stencil = {0,0}
     
-    local unknownimage = imagesyms[1]
     local i,j = symbol(int64,"i"), symbol(int64,"j")
     local indexes = {[0] = i,j }
-    local stmts = terralib.newlist()
     local accesssyms = {}
     local vartosym = {}
     local function emitvar(a)
         if not accesssyms[a] then
             local r 
             if "ImageAccess" == a.kind then
-                local im = assert(imageindex[a.image],("cost function uses image %s not listed in parameters."):format(a.image))
+                local im = imagetosym[a.image] 
+                if not im then
+                    if a.image.idx >= 0 then
+                        im = symbol(problemspec.P:TypeOf(a.image.name),a.image.name)
+                        imageinits:insert(quote var [im] = P.[a.image.name] end)
+                    else
+                        local imtype = opt.InternalImage(float,a.image.W,a.image.H)
+                        im = symbol(imtype,a.image.name)
+                        extraimages[-a.image.idx] = im
+                    end
+                    imagetosym[a.image] = im
+                end
                 r = symbol(float,tostring(a))
                 stmts:insert quote
                     var [r] = [ usebounds and (`im:get(i+[a.x],j+[a.y])) or (`im(i+[a.x],j+[a.y])) ]
-                    --if i < 4 and j < 4 then
-                    --    C.printf("%s(%d + %d,%d + %d) = %f,%f\n",[a.image.name],i,[a.x],j,[a.y],[r.v],[r.bounds])
-                    --end
                 end
                 stencil[1] = math.max(stencil[1],math.abs(a.x))
                 stencil[2] = math.max(stencil[2],math.abs(a.y))
             elseif "BoundsAccess" == a.kind then--bounds calculation
                 assert(usebounds) -- if we removed them, we shouldn't see any boundary accesses
                 r = symbol(int,tostring(a))
-                local W,H = unknownimage.type.metamethods.W.size,unknownimage.type.metamethods.H.size
                 stmts:insert quote
-                    var [r] = opt.InBoundsCalc(i+a.x,j+a.y,W,H,a.sx,a.sy)
+                    var [r] = opt.InBoundsCalc(i+a.x,j+a.y,W.size,H.size,a.sx,a.sy)
                 end
                 stencil[1] = math.max(stencil[1],math.abs(a.x)+a.sx)
                 stencil[2] = math.max(stencil[2],math.abs(a.y)+a.sy)
@@ -547,23 +562,27 @@ local function createfunction(images,exp,usebounds)
         end 
     end
     local result = ad.toterra({exp},emitvar,generatormap)
-    local terra generatedfn([i] : int64, [j] : int64, [imagesyms])
+    local terra generatedfn([i] : int64, [j] : int64, [P], [extraimages])
+        [imageinits]
         [stmts]
         return result
     end
-    --generatedfn:gettype()
     if verboseAD then
         generatedfn:printpretty(false, false)
-        --generatedfn:disas()
     end
     return generatedfn,stencil
 end
-local function createfunctionset(images,exp)
+local function createfunctionset(problemspec,name,exp)
+    local ut = problemspec.P:UnknownType()
+    local W,H = ut.metamethods.W,ut.metamethods.H
+    
+    dprint("function set for: ",name)
     dprint("bound")
-    local boundary,stencil = createfunction(images,exp,true)
+    local boundary,stencil = createfunction(problemspec,exp,true,W,H)
     dprint("interior")
-    local interior = createfunction(images,exp,false)
-    return { boundary = boundary, stencil = stencil, interior = interior, dimensions = {images[1].W,images[1].H} }
+    local interior = createfunction(problemspec,exp,false,W,H)
+    
+    problemspec.P:Function(name,{W,H},stencil,boundary,interior)
 end
 local function unknowns(exp)
     local seenunknown = {}
@@ -632,18 +651,12 @@ local function createjtj(Fs,unknown,P)
 		local shifts,shifttooverlap = shiftswithoverlappingstencil(unknownvars)
         for _,shift in pairs(shifts) do
             local overlaps = shifttooverlap[shift]
-            --print("shift",shift.x,shift.y)
             local sum = 0
             for i,o in ipairs(overlaps) do
-                --print("considering  ", unknownvars[o.left],unknownvars[o.right])
                 local alpha = dfdxshifts[o.right]
-				--alpha = removeboundaries(alpha)
 				local beta = dfshiftsdx[o.left]
-                --local beta = shiftexp(dfdx[o.right],shift.x,shift.y)
                 sum = sum + alpha*beta
             end
-			print(shift.x, shift.y)
-			print(sum)
             P_F = P_F + P(shift.x,shift.y) * sum  
         end
         P_hat = P_hat + P_F
@@ -651,7 +664,7 @@ local function createjtj(Fs,unknown,P)
     return P_hat
 end
 
-function ad.Cost(costexp_)
+function ProblemSpecAD:Cost(costexp_)
     local costexp = assert(ad.toexp(costexp_))
     local images = imagesusedinexpression(costexp)
     local unknown = images[1]
@@ -674,24 +687,18 @@ function ad.Cost(costexp_)
     dprint("grad gather")
     dprint(ad.tostrings({gradientgathered}))
     
-    dprint("cost")
-    local cost = createfunctionset(images,costexp)
-    dprint("grad")
-    local gradient = createfunctionset(images,gradientgathered)
-    local r = { cost = cost, gradient = gradient }
-    if verboseAD then
-        terralib.tree.printraw(r)
-    end
+    createfunctionset(self,"cost",costexp)
+    createfunctionset(self,"gradient",gradientgathered)
     
     if SumOfSquares:is(costexp_) then
-        local P = ad.Image("P",unknown.W,unknown.H)
-        local jtjimages = terralib.newlist()
-        jtjimages:insertall(images)
-        jtjimages:insert(P)
+        local P = self:Image("P",unknown.W,unknown.H,-1)
         local jtjexp = 2.0*createjtj(costexp_.terms,unknown,P)
-        dprint("jtj", jtjexp)
-        r.applyJTJ = createfunctionset(jtjimages,jtjexp)
+        createfunctionset(self,"applyJTJ",jtjexp)
     end
-    return r
+    if verboseAD then
+        terralib.tree.printraw(self)
+    end
+    return self.P
 end
+
 return opt
