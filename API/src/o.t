@@ -150,6 +150,8 @@ local function compilePlan(problemSpec, kind, params)
 		return solversGPU.conjugateGradientGPU(problemSpec, vars)
 	elseif kind == "gaussNewtonGPU" then
 		return solversGPU.gaussNewtonGPU(problemSpec, vars)
+	elseif kind == "gaussNewtonBlockGPU" then
+		return solversGPU.gaussNewtonBlockGPU(problemSpec, vars)
 	end
 	
 	error("unknown kind: "..kind)
