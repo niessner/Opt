@@ -693,7 +693,8 @@ util.positionForValidLane = macro(function(pd,mapMemberName,pw,ph)
 	return quote
 		@pw,@ph = blockDim.x * blockIdx.x + threadIdx.x, blockDim.y * blockIdx.y + threadIdx.y
 	in
-		 @pw < pd.images.[mapMemberName]:W() and @ph < pd.images.[mapMemberName]:H() 
+		 @pw < pd.parameters.[mapMemberName]:W() and @ph < pd.parameters.[mapMemberName]:H() 
+		 --@pw < pd.parameters.X:W() and @ph < pd.parameters.X:H()
 	end
 end)
 local positionForValidLane = util.positionForValidLane
@@ -742,8 +743,9 @@ util.makeComputeCostGPU = function(data)
 	local terra computeCost(pd : &data.PlanData,  currentValues : data.imageType)
 		var cost = 0.0f
 		var w : int, h : int
-		if positionForValidLane(pd, "unknown", &w, &h) then
-			cost = [float](data.problemSpec.functions.cost.boundary(w, h, currentValues, unpackstruct(pd.images, 2)))
+		if positionForValidLane(pd, "X", &w, &h) then
+			var params = pd.parameters
+			cost = [float](data.problemSpec.functions.cost.boundary(w, h, params))
 		end
 
 		cost = warpReduce(cost)
@@ -757,15 +759,17 @@ util.makeComputeCostGPU = function(data)
 	local function footer(pd)
 		return quote return @pd.scratchF end
 	end
-	return { kernel = computeCost, header = header, footer = footer, params = {symbol(data.imageType)}, mapMemberName = "unknown" }
+	return { kernel = computeCost, header = header, footer = footer, params = {symbol(data.imageType)}, mapMemberName = "X" }
 end
 
 util.makeComputeDeltaCostGPU = function(data)
 	local terra computeDeltaCost(pd : &data.PlanData, baseResiduals : data.imageType, currentValues : data.imageType)
 		var delta = 0.0f
 		var w : int, h : int
-		if positionForValidLane(pd, "unknown", &w, &h) then
-			var residual = [float](data.problemSpec.functions.cost.boundary(w, h, currentValues, unpackstruct(pd.images, 2)))
+		if positionForValidLane(pd, "X", &w, &h) then
+			var params = pd.parameters
+			params.X = currentValues
+			var residual = [float](data.problemSpec.functions.cost.boundary(w, h, params))
 			delta = residual - baseResiduals(w, h)
 		end
 		delta = warpReduce(delta)
@@ -779,7 +783,7 @@ util.makeComputeDeltaCostGPU = function(data)
 	local function footer(pd)
 		return quote return @pd.scratchF end
 	end
-	return { kernel = computeDeltaCost, header = header, footer = footer, params = {symbol(data.imageType), symbol(data.imageType)}, mapMemberName = "unknown" }
+	return { kernel = computeDeltaCost, header = header, footer = footer, params = {symbol(data.imageType), symbol(data.imageType)}, mapMemberName = "X" }
 end
 
 
@@ -787,7 +791,7 @@ util.makeInnerProductReductionGPU = function(data)
 	local terra innerProductReduction(pd : &data.PlanData,  imageA : data.imageType, imageB : data.imageType)
 		var v = 0.0f
 		var w : int, h : int
-		if positionForValidLane(pd, "unknown", &w, &h) then
+		if positionForValidLane(pd, "X", &w, &h) then
 			v = imageA(w, h) * imageB(w, h)
 		end
 		v = warpReduce(v);
@@ -802,69 +806,71 @@ util.makeInnerProductReductionGPU = function(data)
 	local function footer(pd)
 		return quote return @pd.scratchF end
 	end
-	return { kernel = innerProductReduction, header = header, footer = footer, params = {symbol(data.imageType), symbol(data.imageType)}, mapMemberName = "unknown" }
+	return { kernel = innerProductReduction, header = header, footer = footer, params = {symbol(data.imageType), symbol(data.imageType)}, mapMemberName = "X" }
 end
 
 util.makeComputeGradientGPU = function(data)
 	local terra computeGradient(pd : &data.PlanData,  gradientOut : data.imageType)
 		var w : int, h : int
-		if positionForValidLane(pd, "unknown", &w, &h) then
-			gradientOut(w, h) = data.problemSpec.functions.gradient.boundary(w, h, unpackstruct(pd.images))
+		if positionForValidLane(pd, "X", &w, &h) then
+			gradientOut(w, h) = data.problemSpec.functions.gradient.boundary(w, h, pd.parameters)
 		end
 	end
-	return { kernel = computeGradient, header = noHeader, footer = noFooter, params = {symbol(data.imageType)}, mapMemberName = "unknown" }
+	return { kernel = computeGradient, header = noHeader, footer = noFooter, params = {symbol(data.imageType)}, mapMemberName = "X" }
 end
 
 util.makeCopyImageGPU = function(data)
 	local terra copyImage(pd : &data.PlanData, imageOut : data.imageType, imageIn : data.imageType)
 		var w : int, h : int
-		if positionForValidLane(pd, "unknown", &w, &h) then
+		if positionForValidLane(pd, "X", &w, &h) then
 			imageOut(w, h) = imageIn(w, h)
 		end
 	end
-	return { kernel = copyImage, header = noHeader, footer = noFooter, params = {symbol(data.imageType), symbol(data.imageType)}, mapMemberName = "unknown" }
+	return { kernel = copyImage, header = noHeader, footer = noFooter, params = {symbol(data.imageType), symbol(data.imageType)}, mapMemberName = "X" }
 end
 
 util.makeCopyImageScaleGPU = function(data)
 	local terra copyImageScale(pd : &data.PlanData, imageOut : data.imageType, imageIn : data.imageType, scale : float)
 		var w : int, h : int
-		if positionForValidLane(pd, "unknown", &w, &h) then
+		if positionForValidLane(pd, "X", &w, &h) then
 			imageOut(w, h) = imageIn(w, h) * scale
 		end
 	end
-	return { kernel = copyImageScale, header = noHeader, footer = noFooter, params = {symbol(data.imageType), symbol(data.imageType), symbol(float)}, mapMemberName = "unknown" }
+	return { kernel = copyImageScale, header = noHeader, footer = noFooter, params = {symbol(data.imageType), symbol(data.imageType), symbol(float)}, mapMemberName = "X" }
 end
 
 util.makeAddImageGPU = function(data)
 	local terra addImage(pd : &data.PlanData, imageOut : data.imageType, imageIn : data.imageType, scale : float)
 		var w : int, h : int
-		if positionForValidLane(pd, "unknown", &w, &h) then
+		if positionForValidLane(pd, "X", &w, &h) then
 			imageOut(w, h) = imageOut(w, h) + imageIn(w, h) * scale
 		end
 	end
-	return { kernel = addImage, header = noHeader, footer = noFooter, params = {symbol(data.imageType), symbol(data.imageType), symbol(float)}, mapMemberName = "unknown" }
+	return { kernel = addImage, header = noHeader, footer = noFooter, params = {symbol(data.imageType), symbol(data.imageType), symbol(float)}, mapMemberName = "X" }
 end
 
 -- out = A + B * scale
 util.makeCombineImageGPU = function(data)
 	local terra combineImage(pd : &data.PlanData,  imageOut : data.imageType, imageA : data.imageType, imageB : data.imageType, scale : float)
 		var w : int, h : int
-		if positionForValidLane(pd, "unknown", &w, &h) then
+		if positionForValidLane(pd, "X", &w, &h) then
 			imageOut(w, h) = imageA(w, h) + imageB(w, h) * scale
 		end
 	end
-	return { kernel = combineImage, header = noHeader, footer = noFooter, params = {symbol(data.imageType), symbol(data.imageType), symbol(data.imageType), symbol(float)}, mapMemberName = "unknown" }
+	return { kernel = combineImage, header = noHeader, footer = noFooter, params = {symbol(data.imageType), symbol(data.imageType), symbol(data.imageType), symbol(float)}, mapMemberName = "X" }
 end
 
 -- TODO: residuals should map over cost, not unknowns!!
 util.makeComputeResidualsGPU = function(data)
 	local terra computeResiduals(pd : &data.PlanData, residuals : data.imageType, values : data.imageType)
 		var w : int, h : int
-		if positionForValidLane(pd, "unknown", &w, &h) then
-			residuals(w, h) = data.problemSpec.functions.cost.boundary(w, h, values, unpackstruct(pd.images, 2))
+		if positionForValidLane(pd, "X", &w, &h) then
+			var params = pd.parameters
+			params.X = values
+			residuals(w, h) = data.problemSpec.functions.cost.boundary(w, h, params)
 		end
 	end
-	return { kernel = computeResiduals, header = noHeader, footer = noFooter, params = {symbol(data.imageType), symbol(data.imageType)}, mapMemberName = "unknown" }
+	return { kernel = computeResiduals, header = noHeader, footer = noFooter, params = {symbol(data.imageType), symbol(data.imageType)}, mapMemberName = "X" }
 end
 
 util.makeComputeSearchCostGPU = function(data, gpu)
@@ -1026,7 +1032,7 @@ util.makeGPUFunctions = function(problemSpec, vars, PlanData, specializedKernels
 	local data = {}
 	data.problemSpec = problemSpec
 	data.PlanData = PlanData
-	data.imageType = vars.unknownType
+	data.imageType = problemSpec:UnknownType()
 	
 	-- accumulate all naked kernels
 	kernelTemplate.computeCost = util.makeComputeCostGPU(data)

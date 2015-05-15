@@ -23,16 +23,16 @@ solversGPU.gaussNewtonGPU = function(problemSpec, vars)
 
 	local struct PlanData(S.Object) {
 		plan : opt.Plan
-		images : vars.PlanImages
+		parameters : problemSpec:ParameterType()
 		scratchF : &float
 		
-		delta : vars.unknownType			--current linear update to be computed -> num vars
-		r : vars.unknownType				--residuals -> num vars	--TODO this needs to be a 'residual type'
-		z : vars.unknownType				--preconditioned residuals -> num vars	--TODO this needs to be a 'residual type'
-		p : vars.unknownType				--decent direction -> num vars
-		Ap_X : vars.unknownType				--cache values for next kernel call after A = J^T x J x p -> num vars
-		preconditioner : vars.unknownType	--pre-conditioner for linear system -> num vars
-		rDotzOld : vars.unknownType			--Old nominator (denominator) of alpha (beta) -> num vars	
+		delta : problemSpec:UnknownType()	--current linear update to be computed -> num vars
+		r : problemSpec:UnknownType()		--residuals -> num vars	--TODO this needs to be a 'residual type'
+		z : problemSpec:UnknownType()		--preconditioned residuals -> num vars	--TODO this needs to be a 'residual type'
+		p : problemSpec:UnknownType()		--decent direction -> num vars
+		Ap_X : problemSpec:UnknownType()	--cache values for next kernel call after A = J^T x J x p -> num vars
+		preconditioner : problemSpec:UnknownType() --pre-conditioner for linear system -> num vars
+		rDotzOld : problemSpec:UnknownType()	--Old nominator (denominator) of alpha (beta) -> num vars	
 
 		scanAlpha : &float					-- tmp variable for alpha scan
 		scanBeta : &float					-- tmp variable for alpha scan
@@ -45,8 +45,8 @@ solversGPU.gaussNewtonGPU = function(problemSpec, vars)
 		local terra PCGInit1GPU(pd : &data.PlanData)
 			var d = 0.0f -- init for out of bounds lanes
 			var w : int, h : int
-			if positionForValidLane(pd, "unknown", &w, &h) then
-				var residuum = -data.problemSpec.gradient.boundary(w, h, unpackstruct(pd.images))	-- residuum = J^T x -F - A x delta_0  => J^T x -F, since A x x_0 == 0 
+			if positionForValidLane(pd, "X", &w, &h) then
+				var residuum = -data.problemSpec.functions.gradient.boundary(w, h, pd.parameters)	-- residuum = J^T x -F - A x delta_0  => J^T x -F, since A x x_0 == 0 
 				pd.r(w, h) = residuum
 
 				-- TODO pd.precondition(w,h) needs to computed somehow (ideally in the gradient?
@@ -63,26 +63,26 @@ solversGPU.gaussNewtonGPU = function(problemSpec, vars)
 				util.atomicAdd(pd.scanAlpha, d)
 			end
 		end
-		return { kernel = PCGInit1GPU, header = noHeader, footer = noFooter, params = {}, mapMemberName = "unknown" }
+		return { kernel = PCGInit1GPU, header = noHeader, footer = noFooter, params = {}, mapMemberName = "X" }
 	end
 	
 	specializedKernels.PCGInit2 = function(data)
 		local terra PCGInit2GPU(pd : &data.PlanData)
 			var w : int, h : int
-			if positionForValidLane(pd, "unknown", &w, &h) then
+			if positionForValidLane(pd, "X", &w, &h) then
 				pd.rDotzOld(w,h) = pd.scanAlpha[0]
 				pd.delta(w,h) = 0.0f
 			end
 		end
-		return { kernel = PCGInit2GPU, header = noHeader, footer = noFooter, params = {}, mapMemberName = "unknown" }
+		return { kernel = PCGInit2GPU, header = noHeader, footer = noFooter, params = {}, mapMemberName = "X" }
 	end
 	
 	specializedKernels.PCGStep1 = function(data)
 		local terra PCGStep1GPU(pd : &data.PlanData)
 			var d = 0.0f
 			var w : int, h : int
-			if positionForValidLane(pd, "unknown", &w, &h) then
-				var tmp = data.problemSpec.applyJTJ.boundary(w, h, unpackstruct(pd.images), pd.p) -- A x p_k  => J^T x J x p_k 
+			if positionForValidLane(pd, "X", &w, &h) then
+				var tmp = data.problemSpec.functions.applyJTJ.boundary(w, h, pd.parameters, pd.p) -- A x p_k  => J^T x J x p_k 
 				pd.Ap_X(w, h) = tmp								  -- store for next kernel call
 				d = pd.p(w, h)*tmp					              -- x-th term of denominator of alpha
 			end
@@ -91,14 +91,14 @@ solversGPU.gaussNewtonGPU = function(problemSpec, vars)
 				util.atomicAdd(pd.scanAlpha, d)
 			end
 		end
-		return { kernel = PCGStep1GPU, header = noHeader, footer = noFooter, params = {}, mapMemberName = "unknown" }
+		return { kernel = PCGStep1GPU, header = noHeader, footer = noFooter, params = {}, mapMemberName = "X" }
 	end
 	
 	specializedKernels.PCGStep2 = function(data)
 		local terra PCGStep2GPU(pd : &data.PlanData)
 			var b = 0.0f 
 			var w : int, h : int
-			if positionForValidLane(pd, "unknown", &w, &h) then
+			if positionForValidLane(pd, "X", &w, &h) then
 				-- sum over block results to compute denominator of alpha
 				var dotProduct = pd.scanAlpha[0]
 				var alpha = 0.0f
@@ -121,13 +121,13 @@ solversGPU.gaussNewtonGPU = function(problemSpec, vars)
 				util.atomicAdd(pd.scanBeta, b)
 			end
 		end
-		return { kernel = PCGStep2GPU, header = noHeader, footer = noFooter, params = {}, mapMemberName = "unknown" }
+		return { kernel = PCGStep2GPU, header = noHeader, footer = noFooter, params = {}, mapMemberName = "X" }
 	end
 	
 	specializedKernels.PCGStep3 = function(data)
 		local terra PCGStep3GPU(pd : &data.PlanData)			
 			var w : int, h : int
-			if positionForValidLane(pd, "unknown", &w, &h) then
+			if positionForValidLane(pd, "X", &w, &h) then
 				var rDotzNew =  pd.scanBeta[0]									-- get new nominator
 				var rDotzOld = pd.rDotzOld(w,h)									-- get old denominator
 
@@ -138,28 +138,29 @@ solversGPU.gaussNewtonGPU = function(problemSpec, vars)
 				pd.p(w,h) = pd.z(w,h)+beta*pd.p(w,h)							-- update decent direction
 			end
 		end
-		return { kernel = PCGStep3GPU, header = noHeader, footer = noFooter, params = {}, mapMemberName = "unknown" }
+		return { kernel = PCGStep3GPU, header = noHeader, footer = noFooter, params = {}, mapMemberName = "X" }
 	end
 	
 	specializedKernels.PCGLinearUpdate = function(data)
 		local terra PCGLinearUpdateGPU(pd : &data.PlanData)
 			var w : int, h : int
-			if positionForValidLane(pd, "unknown", &w, &h) then
-				pd.images.unknown(w,h) = pd.images.unknown(w,h) + pd.delta(w,h)
+			if positionForValidLane(pd, "X", &w, &h) then
+				pd.parameters.X(w,h) = pd.parameters.X(w,h) + pd.delta(w,h)
 			end
 		end
-		return { kernel = PCGLinearUpdateGPU, header = noHeader, footer = noFooter, params = {}, mapMemberName = "unknown" }
+		return { kernel = PCGLinearUpdateGPU, header = noHeader, footer = noFooter, params = {}, mapMemberName = "X" }
 	end
 
 	local gpu = util.makeGPUFunctions(problemSpec, vars, PlanData, specializedKernels)
 	
-	local terra impl(data_ : &opaque, images : &&opaque, params_ : &opaque)
+	local terra impl(data_ : &opaque, images : &&opaque, edgeValues : &&opaque, params_ : &opaque)
 		var pd = [&PlanData](data_)
 		pd.timer:init()
 
 		var params = [&double](params_)
 
-		unpackstruct(pd.images) = [util.getImages(PlanData, images)]
+		--unpackstruct(pd.images) = [util.getImages(PlanData, images)]
+		pd.parameters = [util.getParameters(problemSpec, images, edgeValues)]
 
 		var nIterations = 10	--non-linear iterations
 		var lIterations = 10	--linear iterations
@@ -221,7 +222,7 @@ solversGPU.gradientDescentGPU = function(problemSpec, vars)
 		parameters : problemSpec:ParameterType()
 		scratchF : &float
 		
-		gradStore : vars.unknownType
+		gradStore : problemSpec:UnknownType()
 
 		timer : Timer
 	}
@@ -230,23 +231,24 @@ solversGPU.gradientDescentGPU = function(problemSpec, vars)
 	specializedKernels.updatePosition = function(data)
 		local terra updatePositionGPU(pd : &data.PlanData, learningRate : float)
 			var w : int, h : int
-			if positionForValidLane(pd, "unknown", &w, &h) then
+			if positionForValidLane(pd, "X", &w, &h) then
 				var delta = -learningRate * pd.gradStore(w, h)
-				pd.images.unknown(w, h) = pd.images.unknown(w, h) + delta
+				pd.parameters.X(w, h) = pd.parameters.X(w, h) + delta
 			end
 		end
-		return { kernel = updatePositionGPU, header = noHeader, footer = noFooter, params = {symbol(float)}, mapMemberName = "unknown" }
+		return { kernel = updatePositionGPU, header = noHeader, footer = noFooter, params = {symbol(float)}, mapMemberName = "X" }
 	end
 	
 	local gpu = util.makeGPUFunctions(problemSpec, vars, PlanData, specializedKernels)
 	
-	local terra impl(data_ : &opaque, images : &&opaque, params_ : &opaque)
+	local terra impl(data_ : &opaque, images : &&opaque, edgeValues : &&opaque, params_ : &opaque)
 		var pd = [&PlanData](data_)
 		pd.timer:init()
 
 		var params = [&double](params_)
 
-		unpackstruct(pd.images) = [util.getImages(PlanData, images)]
+		--unpackstruct(pd.images) = [util.getImages(PlanData, images)]
+		pd.parameters = [util.getParameters(problemSpec, images, edgeValues)]
 
 		-- TODO: parameterize these
 		var initialLearningRate = 0.01
@@ -262,11 +264,10 @@ solversGPU.gradientDescentGPU = function(problemSpec, vars)
 		
 		for iter = 0, maxIters do
 
-			var startCost = gpu.computeCost(pd, pd.images.unknown)
+			var startCost = gpu.computeCost(pd, pd.parameters.X)
 			logSolver("iteration %d, cost=%f, learningRate=%f\n", iter, startCost, learningRate)
 			
 			gpu.computeGradient(pd, pd.gradStore)
-			
 			--
 			-- move along the gradient by learningRate
 			--
@@ -275,7 +276,7 @@ solversGPU.gradientDescentGPU = function(problemSpec, vars)
 			--
 			-- update the learningRate
 			--
-			var endCost = gpu.computeCost(pd, pd.images.unknown)
+			var endCost = gpu.computeCost(pd, pd.parameters.X)
 			if endCost < startCost then
 				learningRate = learningRate * learningGain
 			else
@@ -340,7 +341,7 @@ solversGPU.conjugateGradientGPU = function(problemSpec, vars)
 			var num = 0.0f
 			var den = 0.0f
 			var w : int, h : int
-			if positionForValidLane(pd, "unknown", &w, &h) then
+			if positionForValidLane(pd, "X", &w, &h) then
 				cost = data.problemSpec.cost.boundary(w, h, unpackstruct(pd.images))
 				
 				var g = data.problemSpec.gradient.boundary(w, h, unpackstruct(pd.images))
@@ -362,20 +363,20 @@ solversGPU.conjugateGradientGPU = function(problemSpec, vars)
 			end
 			
 		end
-		return { kernel = PRConj, header = noHeader, footer = noFooter, params = {}, mapMemberName = "unknown" }
+		return { kernel = PRConj, header = noHeader, footer = noFooter, params = {}, mapMemberName = "X" }
 	end
 	
 	specializedKernels.CGDirection = function(data)
 		local terra CGDirection(pd : &data.PlanData, beta : float)
 			var w : int, h : int
-			if positionForValidLane(pd, "unknown", &w, &h) then
+			if positionForValidLane(pd, "X", &w, &h) then
 				var g = pd.gradient(w, h)
 				var addr = &pd.searchDirection(w, h)
 				@addr = beta * @addr - g
 				pd.prevGradient(w, h) = g
 			end
 		end
-		return { kernel = CGDirection, header = noHeader, footer = noFooter, params = {symbol(float)}, mapMemberName = "unknown" }
+		return { kernel = CGDirection, header = noHeader, footer = noFooter, params = {symbol(float)}, mapMemberName = "X" }
 	end
 	
 	local gpu = util.makeGPUFunctions(problemSpec, vars, PlanData, specializedKernels)
@@ -501,7 +502,7 @@ solversGPU.adaDeltaGPU = function(problemSpec, vars)
 	specializedKernels.updatePositionA = function(data)
 		local terra updatePosition(pd : &data.PlanData)
 			var w : int, h : int
-			if positionForValidLane(pd, "unknown", &w, &h) then
+			if positionForValidLane(pd, "X", &w, &h) then
 				var Eg2 = 0.0f
 				var Ex2 = 0.0f
 				for i = 0, 10 do
@@ -515,13 +516,13 @@ solversGPU.adaDeltaGPU = function(problemSpec, vars)
 				end
 			end
 		end
-		return { kernel = updatePosition, header = noHeader, footer = noFooter, params = {}, mapMemberName = "unknown" }
+		return { kernel = updatePosition, header = noHeader, footer = noFooter, params = {}, mapMemberName = "X" }
 	end
 	
 	specializedKernels.updatePositionB = function(data)
 		local terra updatePosition(pd : &data.PlanData)
 			var w : int, h : int
-			if positionForValidLane(pd, "unknown", &w, &h) then
+			if positionForValidLane(pd, "X", &w, &h) then
 				var g = data.problemSpec.gradient.boundary(w, h, pd.images.unknown, unpackstruct(pd.images, 2))
 				var Eg2val = momentum * pd.Eg2(w, h) + (1.0f - momentum) * g * g
 				pd.Eg2(w, h) = Eg2val
@@ -534,7 +535,7 @@ solversGPU.adaDeltaGPU = function(problemSpec, vars)
 				--pd.xNext(w, h) = pd.images.unknown(w, h) + delta
 			end
 		end
-		return { kernel = updatePosition, header = noHeader, footer = noFooter, params = {}, mapMemberName = "unknown" }
+		return { kernel = updatePosition, header = noHeader, footer = noFooter, params = {}, mapMemberName = "X" }
 	end
 	
 	local gpu = util.makeGPUFunctions(problemSpec, vars, PlanData, specializedKernels)

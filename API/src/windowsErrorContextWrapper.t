@@ -1,7 +1,7 @@
 
 local ffi = require("ffi")
 errorPrint = print -- make global
-if ffi.os == "Windows" then
+if false and ffi.os == "Windows" then
     debugOutput = terralib.externfunction("OutputDebugStringA", rawstring->{})
     errorPrint = function (rawstring) 
         local correctedString = rawstring:gsub(":([0-9]+):", "(%1):")

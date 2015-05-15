@@ -45,6 +45,7 @@ local terra laplacian(i : uint64, j : uint64, xImage : P:UnknownType())
 end
 
 local terra cost(i : uint64, j : uint64, self : P:ParameterType())
+	
 	var x = self.X(i, j)
 	var a = self.A(i, j)
 

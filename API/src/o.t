@@ -211,7 +211,6 @@ end
 function ProblemSpec:Function(name,dimensions,stencil,boundary,interior)
     interior = interior or boundary
     interior:gettype() -- check this typechecks
-    interior:printpretty(true,false)
     self.functions[name] = { name = name, dimensions = dimensions, stencil = stencil, boundary = boundary, interior = interior }
 end
 
