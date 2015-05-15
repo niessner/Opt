@@ -256,7 +256,6 @@ local newImage = terralib.memoize(function(typ, W, H, elemsize, stride)
 	terra Image:W() return W.size end
 	terra Image:elemsize() return elemsize end
 	terra Image:stride() return stride end
-	terra Image:typ() return typ end
 	terra Image:initCPU()
 		self.data = [&uint8](C.malloc(stride*H.size))
 		for h = 0, H.size do
