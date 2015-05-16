@@ -326,7 +326,7 @@ util.getParameters = function(ProblemSpec, images, edgeValues)
 			inits:insert(`entry.type { data = [&entry.type.metamethods.type](edgeValues[entry.idx]) })
 		end
 	end
-	return `[ProblemSpec:ParameterType()]{ inits }
+	return `[ProblemSpec:ParameterType(false)]{ inits }	--don't use the blocked version
 end
 
 util.makeInnerProduct = function(imageType)
@@ -402,7 +402,7 @@ util.makeComputeCost = function(data)
 		var result = 0.0
 		for h = 0, pd.parameters.X:H() do
 			for w = 0, pd.parameters.X:W() do
-				var v = data.problemSpec.functions.cost.boundary(w, h, pd.parameters)
+				var v = data.problemSpec.functions.cost.boundary(w, h, w, h, pd.parameters)
 				result = result + v
 			end
 		end
@@ -417,7 +417,7 @@ util.makeComputeGradient = function(data)
 		params.X = values
 		for h = 0, gradientOut:H() do
 			for w = 0, gradientOut:W() do
-				gradientOut(w, h) = data.problemSpec.functions.gradient.boundary(w, h, params)
+				gradientOut(w, h) = data.problemSpec.functions.gradient.boundary(w, h, w, h, params)
 			end
 		end
 	end
@@ -430,7 +430,7 @@ util.makeComputeResiduals = function(data)
 		params.X = values
 		for h = 0, values:H() do
 			for w = 0, values:W() do
-				residuals(w, h) = data.problemSpec.functions.cost.boundary(w, h, params)
+				residuals(w, h) = data.problemSpec.functions.cost.boundary(w, h, w, h, params)
 			end
 		end
 	end
@@ -444,7 +444,7 @@ util.makeComputeDeltaCost = function(data)
 		params.X = currentValues
 		for h = 0, currentValues:H() do
 			for w = 0, currentValues:W() do
-				var residual = data.problemSpec.functions.cost.boundary(w, h, params)
+				var residual = data.problemSpec.functions.cost.boundary(w, h, w, h, params)
 				var delta = residual - baseResiduals(w, h)
 				result = result + delta
 			end
@@ -694,7 +694,6 @@ util.positionForValidLane = macro(function(pd,mapMemberName,pw,ph)
 		@pw,@ph = blockDim.x * blockIdx.x + threadIdx.x, blockDim.y * blockIdx.y + threadIdx.y
 	in
 		 @pw < pd.parameters.[mapMemberName]:W() and @ph < pd.parameters.[mapMemberName]:H() 
-		 --@pw < pd.parameters.X:W() and @ph < pd.parameters.X:H()
 	end
 end)
 local positionForValidLane = util.positionForValidLane
@@ -745,7 +744,7 @@ util.makeComputeCostGPU = function(data)
 		var w : int, h : int
 		if positionForValidLane(pd, "X", &w, &h) then
 			var params = pd.parameters
-			cost = [float](data.problemSpec.functions.cost.boundary(w, h, params))
+			cost = [float](data.problemSpec.functions.cost.boundary(w, h, w, h, params))
 		end
 
 		cost = warpReduce(cost)
@@ -762,6 +761,7 @@ util.makeComputeCostGPU = function(data)
 	return { kernel = computeCost, header = header, footer = footer, params = {symbol(data.imageType)}, mapMemberName = "X" }
 end
 
+
 util.makeComputeDeltaCostGPU = function(data)
 	local terra computeDeltaCost(pd : &data.PlanData, baseResiduals : data.imageType, currentValues : data.imageType)
 		var delta = 0.0f
@@ -769,7 +769,7 @@ util.makeComputeDeltaCostGPU = function(data)
 		if positionForValidLane(pd, "X", &w, &h) then
 			var params = pd.parameters
 			params.X = currentValues
-			var residual = [float](data.problemSpec.functions.cost.boundary(w, h, params))
+			var residual = [float](data.problemSpec.functions.cost.boundary(w, h, w, h, params))
 			delta = residual - baseResiduals(w, h)
 		end
 		delta = warpReduce(delta)
@@ -813,7 +813,7 @@ util.makeComputeGradientGPU = function(data)
 	local terra computeGradient(pd : &data.PlanData,  gradientOut : data.imageType)
 		var w : int, h : int
 		if positionForValidLane(pd, "X", &w, &h) then
-			gradientOut(w, h) = data.problemSpec.functions.gradient.boundary(w, h, pd.parameters)
+			gradientOut(w, h) = data.problemSpec.functions.gradient.boundary(w, h, w, h, pd.parameters)
 		end
 	end
 	return { kernel = computeGradient, header = noHeader, footer = noFooter, params = {symbol(data.imageType)}, mapMemberName = "X" }
@@ -860,6 +860,7 @@ util.makeCombineImageGPU = function(data)
 	return { kernel = combineImage, header = noHeader, footer = noFooter, params = {symbol(data.imageType), symbol(data.imageType), symbol(data.imageType), symbol(float)}, mapMemberName = "X" }
 end
 
+
 -- TODO: residuals should map over cost, not unknowns!!
 util.makeComputeResidualsGPU = function(data)
 	local terra computeResiduals(pd : &data.PlanData, residuals : data.imageType, values : data.imageType)
@@ -867,7 +868,7 @@ util.makeComputeResidualsGPU = function(data)
 		if positionForValidLane(pd, "X", &w, &h) then
 			var params = pd.parameters
 			params.X = values
-			residuals(w, h) = data.problemSpec.functions.cost.boundary(w, h, params)
+			residuals(w, h) = data.problemSpec.functions.cost.boundary(w, h, w, h, params)
 		end
 	end
 	return { kernel = computeResiduals, header = noHeader, footer = noFooter, params = {symbol(data.imageType), symbol(data.imageType)}, mapMemberName = "X" }
@@ -997,7 +998,7 @@ util.makeCPUFunctions = function(problemSpec, vars, PlanData)
 	local data = {}
 	data.problemSpec = problemSpec
 	data.PlanData = PlanData
-	data.imageType = problemSpec:UnknownType()
+	data.imageType = problemSpec:UnknownType(false)
 	
 	cpu.copyImage = util.makeCopyImage(data.imageType)
 	cpu.setImage = util.makeSetImage(data.imageType)
@@ -1032,18 +1033,18 @@ util.makeGPUFunctions = function(problemSpec, vars, PlanData, specializedKernels
 	local data = {}
 	data.problemSpec = problemSpec
 	data.PlanData = PlanData
-	data.imageType = problemSpec:UnknownType()
+	data.imageType = problemSpec:UnknownType(false) -- get non-blocked version
 	
-	-- accumulate all naked kernels
+	---- accumulate all naked kernels
 	kernelTemplate.computeCost = util.makeComputeCostGPU(data)
 	kernelTemplate.computeGradient = util.makeComputeGradientGPU(data)
-	kernelTemplate.copyImage = util.makeCopyImageGPU(data)
-	kernelTemplate.copyImageScale = util.makeCopyImageScaleGPU(data)
-	kernelTemplate.addImage = util.makeAddImageGPU(data)
-	kernelTemplate.combineImage = util.makeCombineImageGPU(data)
-	kernelTemplate.computeDeltaCost = util.makeComputeDeltaCostGPU(data)
-	kernelTemplate.computeResiduals = util.makeComputeResidualsGPU(data)
-	kernelTemplate.innerProduct = util.makeInnerProductReductionGPU(data)
+	--kernelTemplate.copyImage = util.makeCopyImageGPU(data)
+	--kernelTemplate.copyImageScale = util.makeCopyImageScaleGPU(data)
+	--kernelTemplate.addImage = util.makeAddImageGPU(data)
+	--kernelTemplate.combineImage = util.makeCombineImageGPU(data)
+	--kernelTemplate.computeDeltaCost = util.makeComputeDeltaCostGPU(data)
+	--kernelTemplate.computeResiduals = util.makeComputeResidualsGPU(data)
+	--kernelTemplate.innerProduct = util.makeInnerProductReductionGPU(data)
 		
 	for k, v in pairs(specializedKernels) do
 		kernelTemplate[k] = v(data)
@@ -1060,12 +1061,12 @@ util.makeGPUFunctions = function(problemSpec, vars, PlanData, specializedKernels
 		gpu[k] = makeGPULauncher(compiledKernels[k], wrappedKernels[k].name, kernelTemplate[k].header, kernelTemplate[k].footer, problemSpec, PlanData, kernelTemplate[k].params)
 	end
 	
-	-- composite GPU functions
-	gpu.computeSearchCost = util.makeComputeSearchCostGPU(data, gpu)
-	gpu.computeSearchCostParallel = util.makeComputeSearchCostParallelGPU(data, gpu)
-	gpu.lineSearchBruteForce = util.makeLineSearchBruteForceGPU(data, gpu)
-	gpu.lineSearchQuadraticMinimum = util.makeLineSearchQuadraticMinimumGPU(data, gpu)
-	gpu.lineSearchQuadraticFallback = util.makeLineSearchQuadraticFallbackGPU(data, gpu)
+	---- composite GPU functions
+	--gpu.computeSearchCost = util.makeComputeSearchCostGPU(data, gpu)
+	--gpu.computeSearchCostParallel = util.makeComputeSearchCostParallelGPU(data, gpu)
+	--gpu.lineSearchBruteForce = util.makeLineSearchBruteForceGPU(data, gpu)
+	--gpu.lineSearchQuadraticMinimum = util.makeLineSearchQuadraticMinimumGPU(data, gpu)
+	--gpu.lineSearchQuadraticFallback = util.makeLineSearchQuadraticFallbackGPU(data, gpu)
 	
 	return gpu
 end

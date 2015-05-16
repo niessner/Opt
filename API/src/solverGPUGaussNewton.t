@@ -23,7 +23,7 @@ return function(problemSpec, vars)
 
 	local struct PlanData(S.Object) {
 		plan : opt.Plan
-		parameters : problemSpec:ParameterType()
+		parameters : problemSpec:ParameterType(false)	--get the non-blocked version
 		scratchF : &float
 		
 		delta : problemSpec:UnknownType()	--current linear update to be computed -> num vars
@@ -46,7 +46,7 @@ return function(problemSpec, vars)
 			var d = 0.0f -- init for out of bounds lanes
 			var w : int, h : int
 			if positionForValidLane(pd, "X", &w, &h) then
-				var residuum = -data.problemSpec.functions.gradient.boundary(w, h, pd.parameters)	-- residuum = J^T x -F - A x delta_0  => J^T x -F, since A x x_0 == 0 
+				var residuum = -data.problemSpec.functions.gradient.boundary(w, h, w, h, pd.parameters)	-- residuum = J^T x -F - A x delta_0  => J^T x -F, since A x x_0 == 0 
 				pd.r(w, h) = residuum
 
 				-- TODO pd.precondition(w,h) needs to computed somehow (ideally in the gradient?
@@ -82,7 +82,7 @@ return function(problemSpec, vars)
 			var d = 0.0f
 			var w : int, h : int
 			if positionForValidLane(pd, "X", &w, &h) then
-				var tmp = data.problemSpec.functions.applyJTJ.boundary(w, h, pd.parameters, pd.p) -- A x p_k  => J^T x J x p_k 
+				var tmp = data.problemSpec.functions.applyJTJ.boundary(w, h, w, h, pd.parameters, pd.p) -- A x p_k  => J^T x J x p_k 
 				pd.Ap_X(w, h) = tmp								  -- store for next kernel call
 				d = pd.p(w, h)*tmp					              -- x-th term of denominator of alpha
 			end

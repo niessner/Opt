@@ -187,9 +187,11 @@ end
 local ProblemSpec = newclass("ProblemSpec")
 function opt.ProblemSpec()
     return ProblemSpec:new { 
+	                         shouldblock = opt.problemkind:match("Block") or false,
                              parameters = terralib.newlist(),-- listing of each parameter, {name = <string>, kind = <image|adjacency|edgevalue>, idx = <number>, type = <thetypeusedtostoreit>, obj = <theobject for adj> }
                              names = {}, -- name -> index in parameters list
                              ProblemParameters = terralib.types.newstruct("ProblemParameters"),
+							 BlockedProblemParameters = terralib.types.newstruct("BlockedProblemParameters"),
                              functions = {}
                            }
 end
@@ -200,14 +202,38 @@ function ProblemSpec:toname(name)
     self.names[name] = #self.parameters + 1
     return name
 end
+
+local newImage 
+
 function ProblemSpec:newparameter(name,kind,idx,typ,obj)
-    self.parameters:insert { name = self:toname(name), kind = kind, idx = idx, type = typ, obj = obj }
-    self.ProblemParameters.entries:insert { name, typ }
+	local blockedtype
+	if kind == "image" then
+		local elemsize = terralib.sizeof(typ.metamethods.typ)
+		blockedtype = newImage(typ.metamethods.typ, typ.metamethods.W, typ.metamethods.H, elemsize, elemsize*opt.BLOCK_SIZE)
+	else
+		blockedtype = typ
+	end
+
+    self.parameters:insert { name = self:toname(name), kind = kind, idx = idx, type = typ, obj = obj, blockedtype = blockedtype }
+	self.ProblemParameters.entries:insert { name, typ }
+	self.BlockedProblemParameters.entries:insert { name, blockedtype }
 end
-function ProblemSpec:ParameterType() return self.ProblemParameters end
-function ProblemSpec:UnknownType() return self:TypeOf("X") end
-function ProblemSpec:TypeOf(name) 
-    return self.parameters[assert(self.names[name],"unknown name")].type
+
+function ProblemSpec:ParameterType(blocked) 
+	if blocked == nil then
+		blocked = self.shouldblock
+	end
+	return blocked and self.BlockedProblemParameters or  self.ProblemParameters
+end
+function ProblemSpec:UnknownType(blocked) 
+	return self:TypeOf("X",blocked) 
+end
+function ProblemSpec:TypeOf(name,blocked)
+	if blocked == nil then
+		blocked = self.shouldblock
+	end 
+	local p = self.parameters[assert(self.names[name],"unknown name")] 
+    return blocked and p.blockedtype or p.type
 end
 
 function ProblemSpec:Function(name,dimensions,stencil,boundary,interior)
@@ -232,7 +258,7 @@ terra opt.InBoundsCalc(x : int64, y : int64, W : int64, H : int64, sx : int64, s
     return int(minx >= 0) and int(maxx < W) and int(miny >= 0) and int(maxy < H)
 end 
 
-local newImage = terralib.memoize(function(typ, W, H, elemsize, stride)
+newImage = terralib.memoize(function(typ, W, H, elemsize, stride)
 	local struct Image {
 		data : &uint8
 	}
@@ -379,6 +405,7 @@ local function problemPlan(id, dimensions, elemsizes, strides, rowindexes, xs, y
         opt.dimensions,opt.elemsizes,opt.strides = dimensions,elemsizes,strides
         opt.rowindexes,opt.xs,opt.ys = rowindexes,xs,ys
         opt.math = problemmetadata.kind:match("GPU") and util.gpuMath or util.cpuMath
+		opt.problemkind = problemmetadata.kind
 		
         local file, errorString = terralib.loadfile(problemmetadata.filename)
         if not file then

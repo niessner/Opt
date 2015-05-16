@@ -19,7 +19,7 @@ return function(problemSpec, vars)
 
 	local struct PlanData(S.Object) {
 		plan : opt.Plan
-		parameters : problemSpec:ParameterType()
+		parameters : problemSpec:ParameterType(false)	--get the non-blocked version
 		scratchF : &float
 		
 		gradStore : problemSpec:UnknownType()
@@ -38,6 +38,8 @@ return function(problemSpec, vars)
 		end
 		return { kernel = updatePositionGPU, header = noHeader, footer = noFooter, params = {symbol(float)}, mapMemberName = "X" }
 	end
+	
+
 	
 	local gpu = util.makeGPUFunctions(problemSpec, vars, PlanData, specializedKernels)
 	
@@ -66,7 +68,7 @@ return function(problemSpec, vars)
 
 			var startCost = gpu.computeCost(pd, pd.parameters.X)
 			logSolver("iteration %d, cost=%f, learningRate=%f\n", iter, startCost, learningRate)
-			
+
 			gpu.computeGradient(pd, pd.gradStore)
 			--
 			-- move along the gradient by learningRate
