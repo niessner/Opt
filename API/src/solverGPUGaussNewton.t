@@ -40,8 +40,8 @@ return function(problemSpec, vars)
 		timer : Timer
 	}
 	
-	local specializedKernels = {}
-	specializedKernels.PCGInit1 = function(data)
+	local kernels = {}
+	kernels.PCGInit1 = function(data)
 		local terra PCGInit1GPU(pd : &data.PlanData)
 			var d = 0.0f -- init for out of bounds lanes
 			var w : int, h : int
@@ -66,7 +66,7 @@ return function(problemSpec, vars)
 		return { kernel = PCGInit1GPU, header = noHeader, footer = noFooter, params = {}, mapMemberName = "X" }
 	end
 	
-	specializedKernels.PCGInit2 = function(data)
+	kernels.PCGInit2 = function(data)
 		local terra PCGInit2GPU(pd : &data.PlanData)
 			var w : int, h : int
 			if positionForValidLane(pd, "X", &w, &h) then
@@ -77,7 +77,7 @@ return function(problemSpec, vars)
 		return { kernel = PCGInit2GPU, header = noHeader, footer = noFooter, params = {}, mapMemberName = "X" }
 	end
 	
-	specializedKernels.PCGStep1 = function(data)
+	kernels.PCGStep1 = function(data)
 		local terra PCGStep1GPU(pd : &data.PlanData)
 			var d = 0.0f
 			var w : int, h : int
@@ -94,7 +94,7 @@ return function(problemSpec, vars)
 		return { kernel = PCGStep1GPU, header = noHeader, footer = noFooter, params = {}, mapMemberName = "X" }
 	end
 	
-	specializedKernels.PCGStep2 = function(data)
+	kernels.PCGStep2 = function(data)
 		local terra PCGStep2GPU(pd : &data.PlanData)
 			var b = 0.0f 
 			var w : int, h : int
@@ -124,7 +124,7 @@ return function(problemSpec, vars)
 		return { kernel = PCGStep2GPU, header = noHeader, footer = noFooter, params = {}, mapMemberName = "X" }
 	end
 	
-	specializedKernels.PCGStep3 = function(data)
+	kernels.PCGStep3 = function(data)
 		local terra PCGStep3GPU(pd : &data.PlanData)			
 			var w : int, h : int
 			if positionForValidLane(pd, "X", &w, &h) then
@@ -141,7 +141,7 @@ return function(problemSpec, vars)
 		return { kernel = PCGStep3GPU, header = noHeader, footer = noFooter, params = {}, mapMemberName = "X" }
 	end
 	
-	specializedKernels.PCGLinearUpdate = function(data)
+	kernels.PCGLinearUpdate = function(data)
 		local terra PCGLinearUpdateGPU(pd : &data.PlanData)
 			var w : int, h : int
 			if positionForValidLane(pd, "X", &w, &h) then
@@ -151,7 +151,7 @@ return function(problemSpec, vars)
 		return { kernel = PCGLinearUpdateGPU, header = noHeader, footer = noFooter, params = {}, mapMemberName = "X" }
 	end
 
-	local gpu = util.makeGPUFunctions(problemSpec, vars, PlanData, specializedKernels)
+	local gpu = util.makeGPUFunctions(problemSpec, vars, PlanData, kernels)
 	
 	local terra impl(data_ : &opaque, images : &&opaque, edgeValues : &&opaque, params_ : &opaque)
 		var pd = [&PlanData](data_)

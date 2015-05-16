@@ -27,8 +27,8 @@ return function(problemSpec, vars)
 		timer : Timer
 	}
 	
-	local specializedKernels = {}
-	specializedKernels.updatePosition = function(data)
+	local kernels = {}
+	kernels.updatePosition = function(data)
 		local terra updatePositionGPU(pd : &data.PlanData, learningRate : float)
 			var w : int, h : int
 			if positionForValidLane(pd, "X", &w, &h) then
@@ -39,8 +39,18 @@ return function(problemSpec, vars)
 		return { kernel = updatePositionGPU, header = noHeader, footer = noFooter, params = {symbol(float)}, mapMemberName = "X" }
 	end
 	
+	kernels.computeGradient = function(data)
+		local terra computeGradientGPU(pd : &data.PlanData,  gradientOut : data.imageType)
+			var w : int, h : int
+			if positionForValidLane(pd, "X", &w, &h) then
+				gradientOut(w, h) = data.problemSpec.functions.gradient.boundary(w, h, w, h, pd.parameters)
+			end
+		end
+		return { kernel = computeGradientGPU, header = noHeader, footer = noFooter, params = {symbol(data.imageType)}, mapMemberName = "X" }
+	end
 	
-	local gpu = util.makeGPUFunctions(problemSpec, vars, PlanData, specializedKernels)
+	
+	local gpu = util.makeGPUFunctions(problemSpec, vars, PlanData, kernels)
 	
 	local terra impl(data_ : &opaque, images : &&opaque, edgeValues : &&opaque, params_ : &opaque)
 		var pd = [&PlanData](data_)
