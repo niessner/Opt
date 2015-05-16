@@ -118,17 +118,17 @@ return function(problemSpec, vars)
 	local P = cudalib.sharedmemory(float,SHARED_MEM_SIZE_VARIABLES)
 	local patchBucket = cudalib.sharedmemory(float,SHARED_MEM_SIZE_VARIABLES)
 
-	local sharedMem = {}
-	local blockImageType = {}
-	for i,p in ipairs(problemSpec.parameters) do
-		--TODO fix shared_mem_size_variables; make it based on the cost function
-		sharedMem[p.name] = cudalib.sharedmemory(p.type.metamethods.typ, SHARED_MEM_SIZE_VARIABLES)
-		
-		
-	end 
+	--TODO compute this automatically
+	local blockStencil = 1 -- = error("TODO")
+
+	local CopyToShared = terralib.memoize(function(Image,ImageBlock)
+		return terra(x : int64, y : int64, image : Image, block : ImageBlock)
+			--...
+		end
+	end)
 	
-	local specializedKernels = {}
-	specializedKernels.PCGStepBlock = function(data)
+	local kernels = {}
+	kernels.PCGStepBlock = function(data)
 		local terra PCGStepBlockGPU(pd : &data.PlanData, ox : int, oy : int)
 			
 			var W = pd.parameters.X:W()
@@ -140,6 +140,26 @@ return function(problemSpec, vars)
 	
 			var gId_j : int = blockIdx.x * blockDim.x + threadIdx.x - ox -- global col idx
 			var gId_i : int = blockIdx.y * blockDim.y + threadIdx.y - oy -- global row idx
+			
+			var blockCornerX : int = blockIdx.x * blockDim.x - ox
+			var blockCornerY : int = blockIdx.y * blockDim.y - oy
+			var blockParams : problemSpec:ParameterType(true)
+			
+			escape
+				for i,p in ipairs(problemSpec.parameters) do
+					if p.kind ~= "image" then
+						emit quote
+							blockParams.[p.name] = pd.parameters.[p.name]
+						end
+					else 
+						local shmem = cudalib.sharedmemory(p.type.metamethods.typ, SHARED_MEM_SIZE_VARIABLES)
+						emit quote 
+							blockParams.[p.name] = [p.blockedtype] { data = [&uint8](shmem) } 
+							[CopyToShared(p.type,p.blockedtype)](blockCornerX, blockCornerY, pd.parameters.[p.name], blockParams.[p.name])
+						end
+					end
+				end
+			end
 
 			--[[
 			loadPatchToCache(X, pd.parameters.X, tId_i, tId_j, gId_i, gId_j, W, H)
@@ -256,7 +276,7 @@ return function(problemSpec, vars)
 		return { kernel = PCGStepBlockGPU, header = noHeader, footer = noFooter, params = {symbol(int), symbol(int)}, mapMemberName = "X" }
 	end
 	
-	specializedKernels.PCGLinearUpdateBlock = function(data)
+	kernels.PCGLinearUpdateBlock = function(data)
 		local terra PCGLinearUpdateBlockGPU(pd : &data.PlanData)
 			var w : int, h : int
 			if positionForValidLane(pd, "X", &w, &h) then
@@ -266,7 +286,7 @@ return function(problemSpec, vars)
 		return { kernel = PCGLinearUpdateBlockGPU, header = noHeader, footer = noFooter, params = {}, mapMemberName = "X" }
 	end
 	
-	local gpu = util.makeGPUFunctions(problemSpec, vars, PlanData, specializedKernels)
+	local gpu = util.makeGPUFunctions(problemSpec, vars, PlanData, kernels)
 
 	
 
