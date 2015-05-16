@@ -39,7 +39,6 @@ return function(problemSpec, vars)
 		return { kernel = updatePositionGPU, header = noHeader, footer = noFooter, params = {symbol(float)}, mapMemberName = "X" }
 	end
 	
-
 	
 	local gpu = util.makeGPUFunctions(problemSpec, vars, PlanData, specializedKernels)
 	

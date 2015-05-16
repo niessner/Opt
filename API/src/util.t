@@ -1025,7 +1025,7 @@ util.makeCPUFunctions = function(problemSpec, vars, PlanData)
 	return cpu
 end
 
-util.makeGPUFunctions = function(problemSpec, vars, PlanData, specializedKernels)
+util.makeGPUFunctions = function(problemSpec, vars, PlanData, kernels)
 	local gpu = {}
 	local kernelTemplate = {}
 	local wrappedKernels = {}
@@ -1036,8 +1036,10 @@ util.makeGPUFunctions = function(problemSpec, vars, PlanData, specializedKernels
 	data.imageType = problemSpec:UnknownType(false) -- get non-blocked version
 	
 	---- accumulate all naked kernels
-	kernelTemplate.computeCost = util.makeComputeCostGPU(data)
-	kernelTemplate.computeGradient = util.makeComputeGradientGPU(data)
+	if not problemSpec.shouldblock then
+		kernelTemplate.computeCost = util.makeComputeCostGPU(data)
+		kernelTemplate.computeGradient = util.makeComputeGradientGPU(data)
+	end
 	--kernelTemplate.copyImage = util.makeCopyImageGPU(data)
 	--kernelTemplate.copyImageScale = util.makeCopyImageScaleGPU(data)
 	--kernelTemplate.addImage = util.makeAddImageGPU(data)
@@ -1046,7 +1048,7 @@ util.makeGPUFunctions = function(problemSpec, vars, PlanData, specializedKernels
 	--kernelTemplate.computeResiduals = util.makeComputeResidualsGPU(data)
 	--kernelTemplate.innerProduct = util.makeInnerProductReductionGPU(data)
 		
-	for k, v in pairs(specializedKernels) do
+	for k, v in pairs(kernels) do
 		kernelTemplate[k] = v(data)
 	end
 	

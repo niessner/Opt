@@ -83,9 +83,9 @@ void TestFramework::runAllTests()
     //
 	//methods.push_back(TestMethod("vlbfgsGPU", "no-params"));
 	//methods.push_back(TestMethod("adaDeltaGPU", "no-params"));
-    methods.push_back(TestMethod("gradientDescentGPU", "no-params"));
-    //methods.push_back(TestMethod("gaussNewtonGPU", "no-params"));
-	//methods.push_back(TestMethod("gaussNewtonBlockGPU", "no-params"));
+    //methods.push_back(TestMethod("gradientDescentGPU", "no-params"));
+	//methods.push_back(TestMethod("gaussNewtonGPU", "no-params"));
+	methods.push_back(TestMethod("gaussNewtonBlockGPU", "no-params"));
 
     for (auto &method : methods)
         runTest(method, example);
