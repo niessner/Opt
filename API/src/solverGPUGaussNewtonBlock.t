@@ -185,8 +185,8 @@ return function(problemSpec, vars)
 			
 			__syncthreads()
 
-			--TODO MAKE SURE THA TTHIS IS CALLED THE RIGHT WAY (make sure to call pd.blockParams
-			--gradientOut(w, h) = data.problemSpec.functions.gradient.boundary(tId_i, tId_j, gId_i, gId_j, pd.blockParams)
+			--TODO MAKE SURE THA TTHIS IS CALLED THE RIGHT WAY (make sure to call blockParams
+			data.problemSpec.functions.gradient.boundary(tId_i, tId_j, gId_i, gId_j, blockParams)
 			
 			--[[
 			loadPatchToCache(X, pd.parameters.X, tId_i, tId_j, gId_i, gId_j, W, H)
