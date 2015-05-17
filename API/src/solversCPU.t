@@ -15,13 +15,13 @@ solversCPU.gradientDescentCPU = function(problemSpec, vars)
 
 	local cpu = util.makeCPUFunctions(problemSpec, vars, PlanData)
 	
-	local terra impl(data_ : &opaque, images : &&opaque, edgeValues : &&opaque, params_ : &opaque)
+	local terra impl(data_ : &opaque, images : &&opaque, edgeValues : &&opaque, params_ : &&opaque)
 
 		var pd = [&PlanData](data_)
 		var params = [&double](params_)
 		
 		--unpackstruct(pd.images) = [util.getImages(PlanData, images)]
-		pd.parameters = [util.getParameters(problemSpec, images, edgeValues)]
+		pd.parameters = [util.getParameters(problemSpec, images, edgeValues,params_)]
 
 		-- TODO: parameterize these
 		var initialLearningRate = 0.01

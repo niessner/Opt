@@ -145,7 +145,7 @@ void TestFramework::runTest(const TestMethod &method, TestExample &example)
 
     bool isGPU = ml::util::endsWith(method.optimizerName, "GPU");
 
-    int a = 4;
+    int a = 0;
     void * list[] = { &a };
 
     if (isGPU)

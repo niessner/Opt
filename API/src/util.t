@@ -277,7 +277,7 @@ local function noFooter(pd)
 	return quote end
 end
 
-util.getParameters = function(ProblemSpec, images, edgeValues)
+util.getParameters = function(ProblemSpec, images, edgeValues, paramValues)
 	local inits = terralib.newlist()
 	for _, entry in ipairs(ProblemSpec.parameters) do
 		if entry.kind == "image" then
@@ -286,6 +286,8 @@ util.getParameters = function(ProblemSpec, images, edgeValues)
 			inits:insert(`entry.obj)
 		elseif entry.kind == "edgevalues" then
 			inits:insert(`entry.type { data = [&entry.type.metamethods.type](edgeValues[entry.idx]) })
+		elseif entry.kind == "param"then
+		    inits:insert `@[&entry.type](paramValues[entry.idx])
 		end
 	end
 	return `[ProblemSpec:ParameterType(false)]{ inits }	--don't use the blocked version

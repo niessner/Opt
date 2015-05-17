@@ -163,7 +163,7 @@ struct opt.GradientDescentPlanParams {
 }
 
 struct opt.Plan(S.Object) {
-    impl : {&opaque,&&opaque,&&opaque,&opaque} -> {}
+    impl : {&opaque,&&opaque,&&opaque,&&opaque} -> {}
     data : &opaque
 } 
 
@@ -270,6 +270,9 @@ function ProblemSpec:Function(name,dimensions,stencil,boundary,interior)
     interior:gettype() -- check this typechecks
     self.functions[name] = { name = name, dimensions = dimensions, stencil = stencil, boundary = boundary, interior = interior }
 end
+function ProblemSpec:Param(name,typ,idx)
+    self:newparameter(name,"param",idx,typ)
+end
 
 function opt.Dim(name, idx)
     idx = assert(tonumber(idx), "expected an index for this dimension")
@@ -300,13 +303,14 @@ newImage = terralib.memoize(function(typ, W, H, elemsize, stride)
 	terra Image:inbounds(x : int64, y : int64)
 	    return x >= 0 and y >= 0 and x < W.size and y < H.size
 	end
-	terra Image:get(x : int64, y : int64)
+	terra Image:get(x : int64, y : int64, gx : int64, gy : int64) : typ
 	    var v : typ = 0.f --TODO:only works for single precision things
-	    if opt.InBoundsCalc(x,y,W.size,H.size,0,0) ~= 0 then
+	    if opt.InBoundsCalc(gx,gy,W.size,H.size,0,0) ~= 0 then
 	        v = self(x,y)
 	    end
 	    return v
 	end
+	terra Image:get(x : int64, y : int64) : typ return self:get(x,y,x,y) end
 	terra Image:H() return H.size end
 	terra Image:W() return W.size end
 	terra Image:elemsize() return elemsize end
@@ -459,7 +463,7 @@ terra opt.PlanFree(plan : &opt.Plan)
     plan:delete()
 end
 
-terra opt.ProblemSolve(plan : &opt.Plan, images : &&opaque, edgevalues : &&opaque, params : &opaque)
+terra opt.ProblemSolve(plan : &opt.Plan, images : &&opaque, edgevalues : &&opaque, params : &&opaque)
 	return plan.impl(plan.data, images, edgevalues, params)
 end
 
@@ -469,6 +473,7 @@ local VarDef = ad.newclass("VarDef") -- meta-data attached to each ad variable a
 local ImageAccess = VarDef:Variant("ImageAccess") -- access into one particular image
 local BoundsAccess = VarDef:Variant("BoundsAccess") -- query about the bounds of an image
 local IndexValue = VarDef:Variant("IndexValue") -- query of the numeric index
+local ParamValue = VarDef:Variant("ParamValue") -- get one of the global parameter values
 
 function ImageAccess:__tostring()
     local xn,yn = tostring(self.x):gsub("-","m"),tostring(self.y):gsub("-","m")
@@ -476,6 +481,8 @@ function ImageAccess:__tostring()
 end
 function BoundsAccess:__tostring() return ("bounds_%d_%d_%d_%d"):format(self.x,self.y,self.sx,self.sy) end
 function IndexValue:__tostring() return ({[0] = "i","j","k"})[self.dim._index] end
+function ParamValue:__tostring() return "param_"..self.name end
+
 ImageAccess.get = terralib.memoize(function(self,im,field,x,y)
     return ImageAccess:new { image = im, field = field, x = x, y = y}
 end)
@@ -486,6 +493,7 @@ end)
 IndexValue.get = terralib.memoize(function(self,dim,shift)
     return IndexValue:new { _shift = tonumber(shift) or 0, dim = assert(todim(dim),"expected a dimension object") } 
 end)
+
 function Dim:index() return ad.v[IndexValue:get(self)] end
 
 local SumOfSquares = newclass("SumOfSquares")
@@ -523,6 +531,10 @@ function ProblemSpecAD:Image(name,W,H,idx)
     return Image:new { name = tostring(name), W = W, H = H, idx = idx }
 end
 
+function ProblemSpecAD:Param(name,typ,idx)
+    self.P:Param(name,float,idx)
+    return ad.v[ParamValue:new { name = name, type = typ }]
+end
 function Image:__call(x,y)
     x,y = assert(tonumber(x)),assert(tonumber(y))
     return ad.v[ImageAccess:get(self,"v",x,y)]
@@ -540,6 +552,8 @@ function IndexValue:shift(x,y)
     local v = {[0] = x,y}
     return IndexValue:get(self.dim,self._shift + assert(v[self.dim._index]))
 end
+function ParamValue:shift(x,y) return self end
+
 local function shiftexp(exp,x,y)
     local function rename(a)
         return ad.v[a:shift(x,y)]
@@ -567,7 +581,7 @@ local function createfunction(problemspec,exp,usebounds,W,H)
     
     local stencil = {0,0}
     
-    local i,j = symbol(int64,"i"), symbol(int64,"j")
+    local i,j,gi,gj = symbol(int64,"i"), symbol(int64,"j"),symbol(int64,"gi"), symbol(int64,"gj")
     local indexes = {[0] = i,j }
     local accesssyms = {}
     local vartosym = {}
@@ -589,7 +603,7 @@ local function createfunction(problemspec,exp,usebounds,W,H)
                 end
                 r = symbol(float,tostring(a))
                 stmts:insert quote
-                    var [r] = [ usebounds and (`im:get(i+[a.x],j+[a.y])) or (`im(i+[a.x],j+[a.y])) ]
+                    var [r] = [ usebounds and (`im:get(i+[a.x],j+[a.y],gi+[a.x],gj+[a.y])) or (`im(i+[a.x],j+[a.y])) ]
                 end
                 stencil[1] = math.max(stencil[1],math.abs(a.x))
                 stencil[2] = math.max(stencil[2],math.abs(a.y))
@@ -597,12 +611,14 @@ local function createfunction(problemspec,exp,usebounds,W,H)
                 assert(usebounds) -- if we removed them, we shouldn't see any boundary accesses
                 r = symbol(int,tostring(a))
                 stmts:insert quote
-                    var [r] = opt.InBoundsCalc(i+a.x,j+a.y,W.size,H.size,a.sx,a.sy)
+                    var [r] = opt.InBoundsCalc(gi+a.x,gj+a.y,W.size,H.size,a.sx,a.sy)
                 end
                 stencil[1] = math.max(stencil[1],math.abs(a.x)+a.sx)
                 stencil[2] = math.max(stencil[2],math.abs(a.y)+a.sy)
-            else assert("IndexValue" == a.kind)
+            elseif "IndexValue" == a.kind then
                 r = `[ assert(indexes[a.dim._index]) ] + a._shift 
+            else assert("ParamValue" == a.kind)
+                r = `float(P.[a.name])
             end
             accesssyms[a] = r
         end
@@ -619,7 +635,7 @@ local function createfunction(problemspec,exp,usebounds,W,H)
         end 
     end
     local result = ad.toterra({exp},emitvar,generatormap)
-    local terra generatedfn([i] : int64, [j] : int64, [P], [extraimages])
+    local terra generatedfn([i], [j], [gi], [gj], [P], [extraimages])
         [imageinits]
         [stmts]
         return result
