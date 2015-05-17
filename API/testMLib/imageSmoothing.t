@@ -6,6 +6,7 @@ local H = opt.Dim("H",1)
 
 P:Image("X",float,W,H,0)
 P:Image("A",float,W,H,1)
+P:Param("Foo",int,0)
 
 local C = terralib.includecstring [[
 #include <math.h>

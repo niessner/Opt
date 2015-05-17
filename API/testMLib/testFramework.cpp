@@ -134,10 +134,6 @@ void TestFramework::runTest(const TestMethod &method, TestExample &example)
     }
     Plan * plan = Opt_ProblemPlan(optimizerState, prob, dims, elemsize.data(), stride.data(), adjacencyOffsetsCPU.data(), adjacencyListsXCPU.data(), adjacencyListsYCPU.data());
     
-    //Plan * plan = Opt_ProblemPlan(optimizerState, prob, dims,
-    //    elemsize.data(), stride.data(),
-    //    adjacencyOffsetsCPU.data(), adjacencyListsCPU.data());
-
     if (!plan)
     {
         cout << "Opt_ProblemPlan failed" << endl;
@@ -149,18 +145,19 @@ void TestFramework::runTest(const TestMethod &method, TestExample &example)
 
     bool isGPU = ml::util::endsWith(method.optimizerName, "GPU");
 
-
+    int a = 4;
+    void * list[] = { &a };
 
     if (isGPU)
     {
-        Opt_ProblemSolve(optimizerState, plan, imagesGPU.data(), edgeValuesCPU.data(), NULL);
+        Opt_ProblemSolve(optimizerState, plan, imagesGPU.data(), edgeValuesCPU.data(), list);
         for (const auto &image : example.images)
             image.syncGPUToCPU();
     }
     else
     {
-        //Opt_ProbledemSolve(optimizerState, plan, imagesCPU.data(), edgeValuesCPU.data());
-        Opt_ProblemSolve(optimizerState, plan, imagesCPU.data(), edgeValuesCPU.data(), NULL);
+
+        Opt_ProblemSolve(optimizerState, plan, imagesCPU.data(), edgeValuesCPU.data(),list);
     }
 
     //cout << "x(0, 0) = " << example.images[0](0, 0) << endl;
