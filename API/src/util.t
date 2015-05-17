@@ -315,9 +315,14 @@ end
 
 
 --TODO FIX THE CUDA DEVICE SYNCS
-local makeGPULauncher = function(compiledKernel, kernelName, header, footer, tbl, PlanData, params)
+--TODO 
+local makeGPULauncher = function(compiledKernel, kernelName, header, footer, problemSpec, PlanData, params)
+	assert(problemSpec)
+	assert(problemSpec:BlockSize())
 	local terra GPULauncher(pd : &PlanData, [params])
-		var launch = terralib.CUDAParams { (pd.parameters.X:W() - 1) / 32 + 1, (pd.parameters.X:H() - 1) / 32 + 1, 1, 32, 32, 1, 0, nil }
+		var BLOCK_SIZE : int = [problemSpec:BlockSize()]
+		var launch = terralib.CUDAParams { (pd.parameters.X:W() - 1) / BLOCK_SIZE + 1, (pd.parameters.X:H() - 1) / BLOCK_SIZE + 1, 1, BLOCK_SIZE, BLOCK_SIZE, 1, 0, nil }
+		--var launch = terralib.CUDAParams { (pd.parameters.X:W() - 1) / 32 + 1, (pd.parameters.X:H() - 1) / 32 + 1, 1, 32, 32, 1, 0, nil }
 		C.cudaDeviceSynchronize()
 		[header(pd)]
 		C.cudaDeviceSynchronize()

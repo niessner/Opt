@@ -186,14 +186,27 @@ end
 
 local ProblemSpec = newclass("ProblemSpec")
 function opt.ProblemSpec()
-    return ProblemSpec:new { 
+    local BlockedProblemParameters = terralib.types.newstruct("BlockedProblemParameters")
+	local problemSpec = ProblemSpec:new { 
 	                         shouldblock = opt.problemkind:match("Block") or false,
                              parameters = terralib.newlist(),-- listing of each parameter, {name = <string>, kind = <image|adjacency|edgevalue>, idx = <number>, type = <thetypeusedtostoreit>, obj = <theobject for adj> }
                              names = {}, -- name -> index in parameters list
                              ProblemParameters = terralib.types.newstruct("ProblemParameters"),
-							 BlockedProblemParameters = terralib.types.newstruct("BlockedProblemParameters"),
-                             functions = {}
+                             BlockedProblemParameters = BlockedProblemParameters,
+							 functions = {}
                            }
+	function BlockedProblemParameters.metamethods.__getentries(self)
+		local entries = {}
+		for i,p in ipairs(problemSpec.parameters) do
+			if p.kind ~= "image" then
+				entries[i] = {p.name,p.type}
+			else
+				entries[i] = {p.name,problemSpec:BlockedTypeForImage(p)}
+			end
+		end
+		return entries
+	end
+	return problemSpec
 end
 
 function ProblemSpec:toname(name)
@@ -205,18 +218,34 @@ end
 
 local newImage 
 
-function ProblemSpec:newparameter(name,kind,idx,typ,obj)
-	local blockedtype
-	if kind == "image" then
-		local elemsize = terralib.sizeof(typ.metamethods.typ)
-		blockedtype = newImage(typ.metamethods.typ, typ.metamethods.W, typ.metamethods.H, elemsize, elemsize*opt.BLOCK_SIZE)
-	else
-		blockedtype = typ
+function ProblemSpec:MaxStencil()
+	if not self.maxstencil then
+		local m = 0
+		for i,f in ipairs(self.functions) do
+			m = math.max(m,math.max(f.stencil[1],f.stencil[2]))
+		end
+		self.maxstencil = m
 	end
+	return self.maxstencil
+end
 
-    self.parameters:insert { name = self:toname(name), kind = kind, idx = idx, type = typ, obj = obj, blockedtype = blockedtype }
+function ProblemSpec:BlockSize()
+	--TODO: compute based on problem
+	--return opt.BLOCK_SIZE
+	return 16
+end
+
+function ProblemSpec:BlockStride() return 2*self:MaxStencil() + self:BlockSize() end
+
+function ProblemSpec:BlockedTypeForImage(p)
+	local typ = p.type
+	local elemsize = terralib.sizeof(typ.metamethods.typ)
+	return newImage(typ.metamethods.typ, typ.metamethods.W, typ.metamethods.H, elemsize, elemsize*self:BlockStride())
+end
+
+function ProblemSpec:newparameter(name,kind,idx,typ,obj)
+    self.parameters:insert { name = self:toname(name), kind = kind, idx = idx, type = typ, obj = obj }
 	self.ProblemParameters.entries:insert { name, typ }
-	self.BlockedProblemParameters.entries:insert { name, blockedtype }
 end
 
 function ProblemSpec:ParameterType(blocked) 
@@ -233,7 +262,7 @@ function ProblemSpec:TypeOf(name,blocked)
 		blocked = self.shouldblock
 	end 
 	local p = self.parameters[assert(self.names[name],"unknown name")] 
-    return blocked and p.blockedtype or p.type
+    return blocked and self:BlockedTypeForImage(p) or p.type
 end
 
 function ProblemSpec:Function(name,dimensions,stencil,boundary,interior)

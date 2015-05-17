@@ -24,18 +24,18 @@ local MINF = -math.huge
 
 --TODO this stuff needs to come from the cost function (patch size and stencil overlap)
 opt.BLOCK_SIZE = 16
-local PATCH_SIZE				=  opt.BLOCK_SIZE
-local SHARED_MEM_SIZE_PATCH	   	= ((PATCH_SIZE+2)*(PATCH_SIZE+2))
-local SHARED_MEM_SIZE_VARIABLES = ((PATCH_SIZE)*(PATCH_SIZE))
+local BLOCK_SIZE 				=  opt.BLOCK_SIZE
+local SHARED_MEM_SIZE_BLOCK	   	= ((BLOCK_SIZE+2)*(BLOCK_SIZE+2))
+local SHARED_MEM_SIZE_VARIABLES = ((BLOCK_SIZE)*(BLOCK_SIZE))
 local SHARED_MEM_SIZE_RESIDUUMS = ((SHARED_MEM_SIZE_VARIABLES)+4*(SHARED_MEM_SIZE_VARIABLES))
 
 local function constanttable(tbl)
 	return terralib.constant(terralib.new(int[#tbl],tbl))
 end
 
-local offsetX = constanttable{math.floor(0.0*PATCH_SIZE), math.floor((1.0/2.0)*PATCH_SIZE), math.floor((1.0/4.0)*PATCH_SIZE), math.floor((3.0/4.0)*PATCH_SIZE), math.floor((1.0/8.0)*PATCH_SIZE), math.floor((5.0/8.0)*PATCH_SIZE), math.floor((3.0/8.0)*PATCH_SIZE), math.floor((7.0/8.0)*PATCH_SIZE)} -- Halton sequence base 2
+local offsetX = constanttable{math.floor(0.0*BLOCK_SIZE), math.floor((1.0/2.0)*BLOCK_SIZE), math.floor((1.0/4.0)*BLOCK_SIZE), math.floor((3.0/4.0)*BLOCK_SIZE), math.floor((1.0/8.0)*BLOCK_SIZE), math.floor((5.0/8.0)*BLOCK_SIZE), math.floor((3.0/8.0)*BLOCK_SIZE), math.floor((7.0/8.0)*BLOCK_SIZE)} -- Halton sequence base 2
 
-local offsetY = constanttable{math.floor(0.0*PATCH_SIZE), math.floor((1.0/3.0)*PATCH_SIZE), math.floor((2.0/3.0)*PATCH_SIZE), math.floor((1.0/9.0)*PATCH_SIZE), math.floor((4.0/9.0)*PATCH_SIZE), math.floor((7.0/9.0)*PATCH_SIZE), math.floor((2.0/9.0)*PATCH_SIZE), math.floor((5.0/9.0)*PATCH_SIZE)}	-- Halton sequence base 3
+local offsetY = constanttable{math.floor(0.0*BLOCK_SIZE), math.floor((1.0/3.0)*BLOCK_SIZE), math.floor((2.0/3.0)*BLOCK_SIZE), math.floor((1.0/9.0)*BLOCK_SIZE), math.floor((4.0/9.0)*BLOCK_SIZE), math.floor((7.0/9.0)*BLOCK_SIZE), math.floor((2.0/9.0)*BLOCK_SIZE), math.floor((5.0/9.0)*BLOCK_SIZE)}	-- Halton sequence base 3
 
 	
 local terra min(a : float, b : float) : float
@@ -58,43 +58,43 @@ end
 
 
 local terra isOnBoundary(tId_i : int, tId_j : int) : bool
-	return (tId_i<0 or tId_i>=PATCH_SIZE or tId_j<0 or tId_j>=PATCH_SIZE);
+	return (tId_i<0 or tId_i>=BLOCK_SIZE or tId_j<0 or tId_j>=BLOCK_SIZE);
 end
 
 local terra getLinearThreadId(tId_i : int, tId_j : int) : uint
-	return tId_i*PATCH_SIZE+tId_j;
+	return tId_i*BLOCK_SIZE+tId_j;
 end
 
 --cache is volatile
 local terra readValueFromCache2D(cache : &float, tId_i : int, tId_j : int)
-	--return cache[(tId_i+1)*(PATCH_SIZE+2)+(tId_j+1)];
-	return vload(cache + (tId_i+1)*(PATCH_SIZE+2)+(tId_j+1))
+	--return cache[(tId_i+1)*(BLOCK_SIZE+2)+(tId_j+1)];
+	return vload(cache + (tId_i+1)*(BLOCK_SIZE+2)+(tId_j+1))
 end
 
 --cache is volatile
 local terra loadVariableToCache(cache : &float, data : &float, tId_i : int, tId_j : int, gId_i : int, gId_j : int, W : uint, H : uint)
-	-- cache[(tId_i+1)*(PATCH_SIZE+2)+(tId_j+1)] = data[gId_i*W+gId_j]
-	vstore(cache + (tId_i+1)*(PATCH_SIZE+2)+(tId_j+1), data[gId_i*W+gId_j])	
+	-- cache[(tId_i+1)*(BLOCK_SIZE+2)+(tId_j+1)] = data[gId_i*W+gId_j]
+	vstore(cache + (tId_i+1)*(BLOCK_SIZE+2)+(tId_j+1), data[gId_i*W+gId_j])	
 end
 
 --cache is volatile
 local terra loadPatchToCache(cache : &float, data : &float, tId_i : int, tId_j : int, gId_i : int, gId_j : int, W : uint, H : uint)
 	if tId_i == 0 				
 		then loadVariableToCache(cache, data, tId_i-1, tId_j  , min(max(gId_i-1, 0), H-1), min(max(gId_j  , 0), W-1), W, H) end
-	if tId_i == PATCH_SIZE-1 	
+	if tId_i == BLOCK_SIZE-1 	
 		then loadVariableToCache(cache, data, tId_i+1, tId_j  , min(max(gId_i+1, 0), H-1), min(max(gId_j  , 0), W-1), W, H) end
 	loadVariableToCache(cache, data, tId_i,   tId_j  , min(max(gId_i,   0), H-1), min(max(gId_j  , 0), W-1), W, H)
 	if tId_j == 0			  	
 		then loadVariableToCache(cache, data, tId_i,   tId_j-1, min(max(gId_i,   0), H-1), min(max(gId_j-1, 0), W-1), W, H) end 
-	if tId_j == PATCH_SIZE-1	
+	if tId_j == BLOCK_SIZE-1	
 		then loadVariableToCache(cache, data, tId_i,   tId_j+1, min(max(gId_i,   0), H-1), min(max(gId_j+1, 0), W-1), W, H) end
 	if tId_i == 0 and tId_j == 0
 		then loadVariableToCache(cache, data, tId_i-1, tId_j-1, min(max(gId_i-1, 0), H-1), min(max(gId_j-1, 0), W-1), W, H) end
-	if tId_i == PATCH_SIZE-1 and tId_j == 0
+	if tId_i == BLOCK_SIZE-1 and tId_j == 0
 		then loadVariableToCache(cache, data, tId_i+1, tId_j-1, min(max(gId_i+1, 0), H-1), min(max(gId_j-1, 0), W-1), W, H) end
-	if tId_i == 0			 and tId_j == PATCH_SIZE-1 
+	if tId_i == 0			 and tId_j == BLOCK_SIZE-1 
 		then loadVariableToCache(cache, data, tId_i-1, tId_j+1, min(max(gId_i-1, 0), H-1), min(max(gId_j+1, 0), W-1), W, H) end
-	if tId_i == PATCH_SIZE-1 and tId_j == PATCH_SIZE-1
+	if tId_i == BLOCK_SIZE-1 and tId_j == BLOCK_SIZE-1
 		then loadVariableToCache(cache, data, tId_i+1, tId_j+1, min(max(gId_i+1, 0), H-1), min(max(gId_j+1, 0), W-1), W, H) end
 end
 
@@ -111,19 +111,37 @@ return function(problemSpec, vars)
 		timer : Timer
 	}
 	
-	--TODO fix 'float' and size
-	local X = cudalib.sharedmemory(problemSpec:UnknownType().metamethods.typ,SHARED_MEM_SIZE_PATCH)
-	local TargetDepth = cudalib.sharedmemory(float,SHARED_MEM_SIZE_PATCH)
-
-	local P = cudalib.sharedmemory(float,SHARED_MEM_SIZE_VARIABLES)
 	local patchBucket = cudalib.sharedmemory(float,SHARED_MEM_SIZE_VARIABLES)
 
 	--TODO compute this automatically
 	local blockStencil = 1 -- = error("TODO")
 
 	local CopyToShared = terralib.memoize(function(Image,ImageBlock)
-		return terra(x : int64, y : int64, image : Image, block : ImageBlock)
-			--...
+			
+		local stencil = problemSpec:MaxStencil()
+		local offset = stencil*problemSpec:BlockStride() + stencil
+		local blockStride = problemSpec:BlockStride()
+		
+		return terra(blockCornerX : int64, blockCornerY : int64, image : Image, imageBlock : ImageBlock)
+
+			
+			var numBlockThreads : int = blockDim.x * blockDim.y			
+			var numVariables : int = blockStride*blockStride
+			
+			var baseIdx : int = threadIdx.x + threadIdx.y*blockDim.x
+			for i = 0,numVariables,numBlockThreads do
+				var linearIdx : int = baseIdx + i
+				
+				if linearIdx < numVariables then				
+					var localX = linearIdx % blockStride - stencil
+					var localY = linearIdx / blockStride - stencil
+					
+					var globalX = localX + blockCornerX
+					var globalY = localY + blockCornerY
+					
+					imageBlock(localX, localY) = image:get(globalX, globalY)	--bounded check
+				end
+			end			
 		end
 	end)
 	
@@ -134,17 +152,18 @@ return function(problemSpec, vars)
 			var W = pd.parameters.X:W()
 			var H = pd.parameters.X:H()
 	
-			var tId_j : int = threadIdx.x -- local col idx
-			var tId_i : int = threadIdx.y -- local row idx
+			var tId_i : int = threadIdx.x -- local col idx
+			var tId_j : int = threadIdx.y -- local row idx
 	
 	
-			var gId_j : int = blockIdx.x * blockDim.x + threadIdx.x - ox -- global col idx
-			var gId_i : int = blockIdx.y * blockDim.y + threadIdx.y - oy -- global row idx
+			var gId_i : int = blockIdx.x * blockDim.x + threadIdx.x - ox -- global col idx
+			var gId_j : int = blockIdx.y * blockDim.y + threadIdx.y - oy -- global row idx
 			
 			var blockCornerX : int = blockIdx.x * blockDim.x - ox
 			var blockCornerY : int = blockIdx.y * blockDim.y - oy
 			var blockParams : problemSpec:ParameterType(true)
 			
+			-- load everything into shared memory
 			escape
 				for i,p in ipairs(problemSpec.parameters) do
 					if p.kind ~= "image" then
@@ -152,15 +171,23 @@ return function(problemSpec, vars)
 							blockParams.[p.name] = pd.parameters.[p.name]
 						end
 					else 
+						local blockedType = problemSpec:BlockedTypeForImage(p)
+						local stencil = problemSpec:MaxStencil()
+						local offset = stencil*problemSpec:BlockStride() + stencil
 						local shmem = cudalib.sharedmemory(p.type.metamethods.typ, SHARED_MEM_SIZE_VARIABLES)
 						emit quote 
-							blockParams.[p.name] = [p.blockedtype] { data = [&uint8](shmem) } 
-							[CopyToShared(p.type,p.blockedtype)](blockCornerX, blockCornerY, pd.parameters.[p.name], blockParams.[p.name])
+							blockParams.[p.name] = [blockedType] { data = [&uint8](shmem + offset) } 
+							[CopyToShared(p.type,blockedType)](blockCornerX, blockCornerY, pd.parameters.[p.name], blockParams.[p.name])
 						end
 					end
 				end
 			end
+			
+			__syncthreads()
 
+			--TODO MAKE SURE THA TTHIS IS CALLED THE RIGHT WAY (make sure to call pd.blockParams
+			--gradientOut(w, h) = data.problemSpec.functions.gradient.boundary(tId_i, tId_j, gId_i, gId_j, pd.blockParams)
+			
 			--[[
 			loadPatchToCache(X, pd.parameters.X, tId_i, tId_j, gId_i, gId_j, W, H)
 			--TODO fix the shared memory here (replace pd.X with input.d_targetDepth)
