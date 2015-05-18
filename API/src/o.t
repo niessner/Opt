@@ -261,7 +261,7 @@ function ProblemSpec:TypeOf(name,blocked)
 	if blocked == nil then
 		blocked = self.shouldblock
 	end 
-	local p = self.parameters[assert(self.names[name],"unknown name")] 
+	local p = self.parameters[assert(self.names[name],"unknown name: " .. name)] 
     return blocked and self:BlockedTypeForImage(p) or p.type
 end
 
