@@ -67,7 +67,7 @@
       <AdditionalDependencies>Opt.lib;cudart.lib;%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
     <PreBuildEvent>
-      <Command>optMake.bat</Command>
+      <Command>call "../common/optMake.bat" "$(ProjectDir)/../../../terra" "$(ProjectDir)/../build" "$(ProjectDir)"</Command>
     </PreBuildEvent>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
@@ -90,7 +90,7 @@
       <AdditionalDependencies>Opt.lib;cudart.lib;%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
     <PreBuildEvent>
-      <Command>call "optMake.bat"</Command>
+      <Command>call "../common/optMake.bat" "$(ProjectDir)/../../../terra" "$(ProjectDir)/../build" "$(ProjectDir)"</Command>
     </PreBuildEvent>
   </ItemDefinitionGroup>
   <ItemGroup>
