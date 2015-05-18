@@ -15,6 +15,7 @@ local function noFooter(pd)
 	return quote end
 end
 
+__syncthreads = cudalib.nvvm_barrier0
 
 local vload = macro(function(x) return `terralib.attrload(x, {isvolatile = true}) end)
 local vstore = macro(function(x,v) return `terralib.attrstore(x,v, {isvolatile = true}) end)
@@ -47,55 +48,42 @@ local terra max(a : float, b : float) : float
 	if a > b then return a	else return b end
 end
 
-local terra get1DIdx(i : int, j : int, width : uint, height : uint) : uint
-	return i*width+j
-end
-
-
 local terra isInsideImage(i : int, j : int, width : uint, height : uint) : bool
 	return i >= 0 and i < height and j >= 0 and j < width
-end
-
-
-local terra isOnBoundary(tId_i : int, tId_j : int) : bool
-	return (tId_i<0 or tId_i>=BLOCK_SIZE or tId_j<0 or tId_j>=BLOCK_SIZE);
 end
 
 local terra getLinearThreadId(tId_i : int, tId_j : int) : uint
 	return tId_i*BLOCK_SIZE+tId_j;
 end
 
---cache is volatile
-local terra readValueFromCache2D(cache : &float, tId_i : int, tId_j : int)
-	--return cache[(tId_i+1)*(BLOCK_SIZE+2)+(tId_j+1)];
-	return vload(cache + (tId_i+1)*(BLOCK_SIZE+2)+(tId_j+1))
+
+local vload = macro(function(x) return `terralib.attrload(x, {isvolatile = true}) end)
+local vstore = macro(function(x,v) return `terralib.attrstore(x,v, {isvolatile = true}) end)
+
+local terra warpReduce(sdata : &float, threadIdx : int, threadsPerBlock : uint) --See Optimizing Parallel Reduction in CUDA by Mark Harris
+	if threadIdx < 32 then
+	    escape
+	        for i = 5,0,-1 do
+	            emit quote
+	                if threadIdx + [2^i] < threadsPerBlock then vstore(sdata+threadIdx, vload(sdata+threadIdx) + vload(sdata + threadIdx + [2^i])) end
+	            end
+	        end
+	    end
+	end
 end
 
---cache is volatile
-local terra loadVariableToCache(cache : &float, data : &float, tId_i : int, tId_j : int, gId_i : int, gId_j : int, W : uint, H : uint)
-	-- cache[(tId_i+1)*(BLOCK_SIZE+2)+(tId_j+1)] = data[gId_i*W+gId_j]
-	vstore(cache + (tId_i+1)*(BLOCK_SIZE+2)+(tId_j+1), data[gId_i*W+gId_j])	
-end
-
---cache is volatile
-local terra loadPatchToCache(cache : &float, data : &float, tId_i : int, tId_j : int, gId_i : int, gId_j : int, W : uint, H : uint)
-	if tId_i == 0 				
-		then loadVariableToCache(cache, data, tId_i-1, tId_j  , min(max(gId_i-1, 0), H-1), min(max(gId_j  , 0), W-1), W, H) end
-	if tId_i == BLOCK_SIZE-1 	
-		then loadVariableToCache(cache, data, tId_i+1, tId_j  , min(max(gId_i+1, 0), H-1), min(max(gId_j  , 0), W-1), W, H) end
-	loadVariableToCache(cache, data, tId_i,   tId_j  , min(max(gId_i,   0), H-1), min(max(gId_j  , 0), W-1), W, H)
-	if tId_j == 0			  	
-		then loadVariableToCache(cache, data, tId_i,   tId_j-1, min(max(gId_i,   0), H-1), min(max(gId_j-1, 0), W-1), W, H) end 
-	if tId_j == BLOCK_SIZE-1	
-		then loadVariableToCache(cache, data, tId_i,   tId_j+1, min(max(gId_i,   0), H-1), min(max(gId_j+1, 0), W-1), W, H) end
-	if tId_i == 0 and tId_j == 0
-		then loadVariableToCache(cache, data, tId_i-1, tId_j-1, min(max(gId_i-1, 0), H-1), min(max(gId_j-1, 0), W-1), W, H) end
-	if tId_i == BLOCK_SIZE-1 and tId_j == 0
-		then loadVariableToCache(cache, data, tId_i+1, tId_j-1, min(max(gId_i+1, 0), H-1), min(max(gId_j-1, 0), W-1), W, H) end
-	if tId_i == 0			 and tId_j == BLOCK_SIZE-1 
-		then loadVariableToCache(cache, data, tId_i-1, tId_j+1, min(max(gId_i-1, 0), H-1), min(max(gId_j+1, 0), W-1), W, H) end
-	if tId_i == BLOCK_SIZE-1 and tId_j == BLOCK_SIZE-1
-		then loadVariableToCache(cache, data, tId_i+1, tId_j+1, min(max(gId_i+1, 0), H-1), min(max(gId_j+1, 0), W-1), W, H) end
+local terra blockReduce(sdata : &float, threadIdx : int, threadsPerBlock : uint)
+	--TODO: either we meta-program this ourself, or get #pragma unroll to work in Terra
+	var stride = threadsPerBlock / 2
+	while stride > 32 do
+		if threadIdx < stride then
+		    var t = vload(sdata + threadIdx) + vload(sdata + threadIdx + stride)
+		    vstore(sdata + threadIdx,t)
+		end
+		__syncthreads()   
+	    stride = stride / 2
+	end
+	warpReduce(sdata, threadIdx, threadsPerBlock)
 end
 
 
@@ -111,11 +99,9 @@ return function(problemSpec, vars)
 		timer : Timer
 	}
 	
+	--local patchBucket = cudalib.sharedmemory(float, math:ceil(SHARED_MEM_SIZE_VARIABLES / util.warpSize))
 	local patchBucket = cudalib.sharedmemory(float,SHARED_MEM_SIZE_VARIABLES)
-
-	--TODO compute this automatically
-	local blockStencil = 1 -- = error("TODO")
-
+	
 	local CopyToShared = terralib.memoize(function(Image,ImageBlock)
 			
 		local stencil = problemSpec:MaxStencil()
@@ -123,7 +109,6 @@ return function(problemSpec, vars)
 		local blockStride = problemSpec:BlockStride()
 		
 		return terra(blockCornerX : int64, blockCornerY : int64, image : Image, imageBlock : ImageBlock)
-
 			
 			var numBlockThreads : int = blockDim.x * blockDim.y			
 			var numVariables : int = blockStride*blockStride
@@ -147,7 +132,7 @@ return function(problemSpec, vars)
 	
 	local kernels = {}
 	kernels.PCGStepBlock = function(data)
-		local terra PCGStepBlockGPU(pd : &data.PlanData, ox : int, oy : int)
+		local terra PCGStepBlockGPU(pd : &data.PlanData, ox : int, oy : int, nBlockIterations : uint)
 			
 			var W = pd.parameters.X:W()
 			var H = pd.parameters.X:H()
@@ -162,9 +147,9 @@ return function(problemSpec, vars)
 			var blockCornerX : int = blockIdx.x * blockDim.x - ox
 			var blockCornerY : int = blockIdx.y * blockDim.y - oy
 			var blockParams : problemSpec:ParameterType(true)
-			
+			var P : problemSpec:UnknownType(true)
 			-- load everything into shared memory
-			escape
+			escape				
 				for i,p in ipairs(problemSpec.parameters) do
 					if p.kind ~= "image" then
 						emit quote
@@ -175,6 +160,7 @@ return function(problemSpec, vars)
 						local stencil = problemSpec:MaxStencil()
 						local offset = stencil*problemSpec:BlockStride() + stencil
 						local shmem = cudalib.sharedmemory(p.type.metamethods.typ, SHARED_MEM_SIZE_VARIABLES)
+						
 						emit quote 
 							blockParams.[p.name] = [blockedType] { data = [&uint8](shmem + offset) } 
 							[CopyToShared(p.type,blockedType)](blockCornerX, blockCornerY, pd.parameters.[p.name], blockParams.[p.name])
@@ -183,15 +169,21 @@ return function(problemSpec, vars)
 				end
 			end
 			
+			-- allocate Pre-conditioner (P)
+			escape
+				local blockedType = problemSpec:UnknownType(true)
+				local shmem = cudalib.sharedmemory(problemSpec:UnknownType().metamethods.typ, SHARED_MEM_SIZE_VARIABLES)		--pre-conditioner
+				emit quote
+					P = [blockedType] { data = [&uint8](shmem) } 
+				end
+			end
+			
 			__syncthreads()
 
-			--TODO MAKE SURE THA TTHIS IS CALLED THE RIGHT WAY (make sure to call blockParams
-			data.problemSpec.functions.gradient.boundary(tId_i, tId_j, gId_i, gId_j, blockParams)
 			
-			--[[
-			loadPatchToCache(X, pd.parameters.X, tId_i, tId_j, gId_i, gId_j, W, H)
+			--loadPatchToCache(X, pd.parameters.X, tId_i, tId_j, gId_i, gId_j, W, H)
 			--TODO fix the shared memory here (replace pd.X with input.d_targetDepth)
-			loadPatchToCache(TargetDepth, pd.parameters.X, tId_i, tId_j, gId_i, gId_j, W, H)
+			--loadPatchToCache(TargetDepth, pd.parameters.X, tId_i, tId_j, gId_i, gId_j, W, H)
 	
 			var Delta : problemSpec:UnknownType().metamethods.typ = 0.0f
 			var R : problemSpec:UnknownType().metamethods.typ
@@ -206,58 +198,65 @@ return function(problemSpec, vars)
 			--// Initialize linear patch systems
 			--//////////////////////////////////////////////////////////////////////////////////////////
 
-			--var w : int, h : int
-			--if positionForValidLane(pd, "X", &w, &h) then
-				--var delta = -learningRate * pd.gradStore(w, h)
-				--pd.parameters.X(w, h) = pd.parameters.X(w, h) + delta
-			--end
 			
-			var d : float = 0.0f
+			var d : problemSpec:UnknownType().metamethods.typ = 0.0f
+
 			if isInsideImage(gId_i, gId_j, W, H) then
-				R = evalMinusJTFDevice(tId_i, tId_j, gId_i, gId_j, W, H, TargetDepth, X, parameters, &Pre) -- residuum = J^T x -F - A x delta_0  => J^T x -F, since A x x_0 == 0
+				--R = evalMinusJTFDevice(tId_i, tId_j, gId_i, gId_j, W, H, TargetDepth, X, parameters, &Pre) -- residuum = J^T x -F - A x delta_0  => J^T x -F, since A x x_0 == 0
+				--TODO MAKE SURE THAT THIS IS CALLED THE RIGHT WAY (make sure to call blockParams
+				--R = -data.problemSpec.functions.gradient.boundary(tId_i, tId_j, gId_i, gId_j, blockParams)
+				R = 1.0f
+				Pre = 1	--TODO fix this hack... the pre-conditioner needs to be the diagonal of JTJ
 				var preRes : float = Pre*R																  -- apply preconditioner M^-1 
-				P[getLinearThreadId(tId_i, tId_j)] = preRes											   	  -- save for later
+				if tId_i == 0 and tId_j == 0 and gId_i == 0 and gId_j == 0 then
+					printf("%f ", preRes)
+				end
+				P(tId_i, tId_j) = preRes											   	  -- save for later
 				d = R*preRes
 			end
-
+			
 			patchBucket[getLinearThreadId(tId_i, tId_j)] = d;											   -- x-th term of nomimator for computing alpha and denominator for computing beta
 
 			__syncthreads()
 			blockReduce(patchBucket, getLinearThreadId(tId_i, tId_j), SHARED_MEM_SIZE_VARIABLES)
-			__syncthreads()
+			__syncthreads()	-- TODO I'm not quire sure if we need this one
 
 			if isInsideImage(gId_i, gId_j, W, H) then 
 				RDotZOld = patchBucket[0]							   -- read result for later on
 			end
 	
 			__syncthreads()
-	
-	
+		
+			
+			
 			--///////////////////////
 			--Do patch PCG iterations
 			--///////////////////////
-			for patchIter = 0,parameters.nPatchIterations,1 do 
-				var currentP : float = P[getLinearThreadId(tId_i, tId_j)];
-				
-				var d : float = 0.0f;
-				
+			for patchIter = 0,nBlockIterations,1 do 
+			
+				var currentP : problemSpec:UnknownType().metamethods.typ = P(tId_i, tId_j)				
+				var d : float = 0.0f
+					
 				if isInsideImage(gId_i, gId_j, W, H) then
-					AP = applyJTJDevice(tId_i, tId_j, gId_i, gId_j, W, H, TargetDepth, P, X, parameters);	-- A x p_k  => J^T x J x p_k 
-					d = currentP*AP;																		-- x-th term of denominator of alpha
+					--AP = applyJTJDevice(tId_i, tId_j, gId_i, gId_j, W, H, TargetDepth, P, X, parameters);	-- A x p_k  => J^T x J x p_k 
+					--d = currentP*AP;																		-- x-th term of denominator of alpha
+					--AP = data.problemSpec.functions.applyJTJ.boundary(tId_i, tId_j, gId_i, gId_j, blockParams, P) -- A x p_k  => J^T x J x p_k 
+					AP = 1.0f
+					d = currentP*AP
 				end
 			
-				patchBucket[getLinearThreadId(tId_i, tId_j)] = d;
-				
-				__syncthreads();
-				blockReduce(patchBucket, getLinearThreadId(tId_i, tId_j), SHARED_MEM_SIZE_VARIABLES);	
-				__syncthreads();	
-			
-				var dotProduct : float = patchBucket[0];
+				patchBucket[getLinearThreadId(tId_i, tId_j)] = d
 		
-				var b : float = 0.0f;
+				__syncthreads()
+				blockReduce(patchBucket, getLinearThreadId(tId_i, tId_j), SHARED_MEM_SIZE_VARIABLES)	
+				__syncthreads()
+	
+				var dotProduct : float = patchBucket[0]
+		
+				var b : float = 0.0f
 		
 				if isInsideImage(gId_i, gId_j, W, H) then
-					var alpha : float = 0.0f;
+					var alpha : float = 0.0f
 					
 					if dotProduct > FLOAT_EPSILON then	-- update step size alpha
 						alpha = RDotZOld/dotProduct;
@@ -268,7 +267,7 @@ return function(problemSpec, vars)
 					b = Z*R;						-- compute x-th term of the nominator of beta
 				end
 			
-				__syncthreads(); -- Only write if every thread in the block has has read bucket[0]
+				__syncthreads() -- Only write if every thread in the block has has read bucket[0]
 		
 				patchBucket[getLinearThreadId(tId_i, tId_j)] = b;
 		
@@ -284,7 +283,7 @@ return function(problemSpec, vars)
 						beta = rDotzNew/RDotZOld -- update step size beta
 					end
 					RDotZOld = rDotzNew -- save new rDotz for next iteration
-					P[getLinearThreadId(tId_i, tId_j)] = Z+beta*currentP -- update decent direction
+					P(tId_i, tId_j) = Z+beta*currentP -- update decent direction
 				end
 				
 				__syncthreads()
@@ -296,11 +295,12 @@ return function(problemSpec, vars)
 			
 			
 			if isInsideImage(gId_i, gId_j, W, H) then 
-				pd.delta[get1DIdx(gId_i, gId_j, W, H)] = Delta
+				--pd.delta[get1DIdx(gId_i, gId_j, W, H)] = Delta
+				pd.delta(gId_i, gId_j) = Delta
 			end
-			--]]
+			
 		end
-		return { kernel = PCGStepBlockGPU, header = noHeader, footer = noFooter, params = {symbol(int), symbol(int)}, mapMemberName = "X" }
+		return { kernel = PCGStepBlockGPU, header = noHeader, footer = noFooter, params = {symbol(int), symbol(int), symbol(uint)}, mapMemberName = "X" }
 	end
 	
 	kernels.PCGLinearUpdateBlock = function(data)
@@ -328,6 +328,7 @@ return function(problemSpec, vars)
 
 		var nIterations = 10	--non-linear iterations
 		var lIterations = 10	--linear iterations
+		var bIterations = 10	--block iterations
 		
 		for nIter = 0, nIterations do
             --var startCost = gpu.computeCost(pd, pd.images.unknown)
@@ -335,7 +336,7 @@ return function(problemSpec, vars)
 			
 			var o : int = 0
 			for lIter = 0, lIterations do
-				gpu.PCGStepBlock(pd, offsetX[o], offsetY[o])
+				gpu.PCGStepBlock(pd, offsetX[o], offsetY[o], bIterations)
 				gpu.PCGLinearUpdateBlock(pd)
 				o = (o+1)%8
 			end	

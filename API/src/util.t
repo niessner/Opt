@@ -153,6 +153,7 @@ end
 Vector = S.memoize(Vector)
 
 local warpSize = 32
+util.warpSize = warpSize
 
 util.symTable = function(typ, N, name)
 	local r = terralib.newlist()
