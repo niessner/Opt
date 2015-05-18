@@ -25,10 +25,13 @@ public:
 			{
 				h_urshape[i*m_image.getWidth() + j] = make_float2((float)i, (float)j);
 
+				h_constraints[i*m_image.getWidth() + j] = make_float2(-1, -1);
 				for (unsigned int k = 0; k < constraints.size(); k++)
 				{
-					if (constraints[k][0] == i && constraints[k][1] == j) h_constraints[i*m_image.getWidth() + j] = make_float2((float)constraints[k][2], (float)constraints[k][3]);
-					else												  h_constraints[i*m_image.getWidth() + j] = make_float2(-1, -1);
+					if (constraints[k][0] == i && constraints[k][1] == j)
+					{
+						h_constraints[i*m_image.getWidth() + j] = make_float2((float)constraints[k][2], (float)constraints[k][3]);
+					}
 				}
 			}
 		}
@@ -53,11 +56,11 @@ public:
 	}
 
 	ColorImageR32 solve() {
-		float weightFit = 0.1f;
-		float weightReg = 1.0f;
+		float weightFit = 5.0f;
+		float weightReg = 10.0f;
 
-        unsigned int nonLinearIter = 10;
-		unsigned int linearIter = 10;
+        unsigned int nonLinearIter = 1;
+		unsigned int linearIter = 500;
 		m_warpingSolver->solveGN(d_urshape, d_warpField, d_warpAngles, d_constraints, nonLinearIter, linearIter, weightFit, weightReg);
 
 		return copyResultToCPU();
@@ -69,7 +72,19 @@ public:
 		float2* h_warpField = new float2[m_image.getWidth()*m_image.getHeight()];
 		cutilSafeCall(cudaMemcpy(h_warpField, d_warpField, sizeof(float2)*m_image.getWidth()*m_image.getHeight(), cudaMemcpyDeviceToHost));
 		
-		// apply warp field
+		for (unsigned int i = 0; i < m_image.getHeight(); i++)
+		{
+			for (unsigned int j = 0; j < m_image.getWidth(); j++)
+			{
+				float2 pos = h_warpField[i*m_image.getWidth()+j];
+
+				unsigned int x = (unsigned int)(pos.x + 0.5f);
+				unsigned int y = (unsigned int)(pos.y + 0.5f);
+
+				if (x < m_image.getHeight() && y < m_image.getWidth()) result(i, j) = m_image(x, y);
+				else												   result(i, j) = 0;
+			}
+		}
 		
 		delete h_warpField;
 

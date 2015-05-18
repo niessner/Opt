@@ -10,13 +10,10 @@
 #include "WarpingSolverState.h"
 #include "WarpingSolverParameters.h"
 
-
-
 __inline__ __device__ float2 evalLaplacian(unsigned int i, unsigned int j, SolverInput& input, SolverState& state, SolverParameters& parameters)
 {
 	if (!isInsideImage(i, j, input.width, input.height)) return make_float2(0.0f, 0.0f);
 
-	// in the case of a graph/mesh these 'neighbor' indices need to be obtained by the domain data structure (e.g., CRS/CCS)
 	const int n0_i = i;		const int n0_j = j - 1; const bool validN0 = isInsideImage(n0_i, n0_j, input.width, input.height);
 	const int n1_i = i;		const int n1_j = j + 1; const bool validN1 = isInsideImage(n1_i, n1_j, input.width, input.height);
 	const int n2_i = i - 1; const int n2_j = j;		const bool validN2 = isInsideImage(n2_i, n2_j, input.width, input.height);
@@ -61,13 +58,13 @@ __inline__ __device__ float2 evalFDevice(unsigned int variableIdx, SolverInput& 
 	// E_fit
 	float2 targetUV = input.d_constraints[variableIdx]; bool validTarget = (targetUV.x >= 0 && targetUV.y >= 0);
 	if (validTarget) {
-		float2 e_fit = (state.d_x[variableIdx] - targetUV);	//e_fit = e_fit * e_fit; // This is wrong // Also to much checks // actually ok!
-		e += (parameters.weightFitting) * e_fit;
+		float2 e_fit = (state.d_x[variableIdx] - targetUV);
+		e += (parameters.weightFitting) * e_fit * e_fit;
 	}
 
 	// E_reg
 	float2 e_reg = evalLaplacian(variableIdx, input, state, parameters);
-	e += (parameters.weightRegularizer) * e_reg * e_reg; //?
+	e += (parameters.weightRegularizer) * e_reg * e_reg;
 
 	return e;
 }
@@ -88,7 +85,7 @@ __inline__ __device__ float2 evalMinusJTFDevice(unsigned int variableIdx, Solver
 
 	float2 targetUV = input.d_constraints[variableIdx]; bool validTarget = (targetUV.x >= 0 && targetUV.y >= 0);
 	if (validTarget) {
-		b += -2.0f*parameters.weightFitting*(state.d_x[variableIdx] - targetUV); // why 2 ??
+		b += -parameters.weightFitting*(state.d_x[variableIdx] - targetUV);
 	}
 
 	// E_reg
@@ -96,25 +93,27 @@ __inline__ __device__ float2 evalMinusJTFDevice(unsigned int variableIdx, Solver
 
 	int i; int j; get2DIdx(variableIdx, input.width, input.height, i, j);
 
-	float2 l_m = evalLaplacian(variableIdx, input, state, parameters);
-	float n = getNumNeighbors(i, j, input);
+	float2 l = evalLaplacian(variableIdx, input, state, parameters);
+	float  n = getNumNeighbors(i, j, input);
 
-	b += -parameters.weightRegularizer*2.0f*(l_m);
+	b += -parameters.weightRegularizer*l;
 
 	// Preconditioner depends on last solution P(input.d_x)
-	float2 p = make_float2(0.0f, 1.0f);
+	float2 p = make_float2(0.0f, 0.0f);
 
-	if (validTarget) p.x += 2.0f*parameters.weightFitting;	//e_reg
-	p += 2.0f*parameters.weightRegularizer*n;
+	if(validTarget) p.x += parameters.weightFitting;
+	p.x += parameters.weightRegularizer*n;
 
+	if(validTarget) p.y += parameters.weightFitting;
+	p.y += parameters.weightRegularizer*n;
 
 	if (p.x > FLOAT_EPSILON) p.x = 1.0f / p.x;
 	else					 p.x = 1.0f;
 
-	// do same for y !!!
+	if (p.y > FLOAT_EPSILON) p.y = 1.0f / p.y;
+	else					 p.y = 1.0f;
 
 	state.d_precondioner[variableIdx] = p;
-
 	return b;
 }
 
@@ -131,7 +130,7 @@ __inline__ __device__ float2 applyJTJDevice(unsigned int variableIdx, SolverInpu
 
 	float2 targetUV = input.d_constraints[variableIdx]; bool validTarget = (targetUV.x >= 0 && targetUV.y >= 0);
 	if (validTarget) {
-		b += 2.0f*parameters.weightFitting*state.d_p[variableIdx];
+		b += parameters.weightFitting*state.d_p[variableIdx];
 	}
 
 	// E_reg
@@ -140,11 +139,10 @@ __inline__ __device__ float2 applyJTJDevice(unsigned int variableIdx, SolverInpu
 	int i; int j; get2DIdx(variableIdx, input.width, input.height, i, j);
 
 	float2 e_reg = make_float2(0.0f, 0.0f);
-	float n = getNumNeighbors(i, j, input);
+	float  n = getNumNeighbors(i, j, input);
 
 	e_reg += n*state.d_p[variableIdx];	//diagonal of A
 
-	
 	// direct neighbors
 	const int n0_i = i;		const int n0_j = j - 1; const bool validN0 = isInsideImage(n0_i, n0_j, input.width, input.height);
 	const int n1_i = i;		const int n1_j = j + 1; const bool validN1 = isInsideImage(n1_i, n1_j, input.width, input.height);
@@ -156,10 +154,9 @@ __inline__ __device__ float2 applyJTJDevice(unsigned int variableIdx, SolverInpu
 	if (validN2) e_reg += -(state.d_p[get1DIdx(n2_i, n2_j, input.width, input.height)]);
 	if (validN3) e_reg += -(state.d_p[get1DIdx(n3_i, n3_j, input.width, input.height)]);
 	
-	b += 2.0f*parameters.weightRegularizer*e_reg;
+	b += parameters.weightRegularizer*e_reg;
 
 	return b;
 }
-
 
 #endif
