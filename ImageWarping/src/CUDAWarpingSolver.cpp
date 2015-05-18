@@ -12,14 +12,20 @@ CUDAWarpingSolver::CUDAWarpingSolver(unsigned int imageWidth, unsigned int image
 
 	// State
 	cutilSafeCall(cudaMalloc(&m_solverState.d_delta,		sizeof(float2)*numberOfVariables));
+	cutilSafeCall(cudaMalloc(&m_solverState.d_deltaA,		sizeof(float3)*numberOfVariables));
 	cutilSafeCall(cudaMalloc(&m_solverState.d_r,			sizeof(float2)*numberOfVariables));
+	cutilSafeCall(cudaMalloc(&m_solverState.d_rA,			sizeof(float3)*numberOfVariables));
 	cutilSafeCall(cudaMalloc(&m_solverState.d_z,			sizeof(float2)*numberOfVariables));
+	cutilSafeCall(cudaMalloc(&m_solverState.d_zA,			sizeof(float3)*numberOfVariables));
 	cutilSafeCall(cudaMalloc(&m_solverState.d_p,			sizeof(float2)*numberOfVariables));
+	cutilSafeCall(cudaMalloc(&m_solverState.d_pA,			sizeof(float3)*numberOfVariables));
 	cutilSafeCall(cudaMalloc(&m_solverState.d_Ap_X,			sizeof(float2)*numberOfVariables));
+	cutilSafeCall(cudaMalloc(&m_solverState.d_Ap_XA,		sizeof(float3)*numberOfVariables));
 	cutilSafeCall(cudaMalloc(&m_solverState.d_scanAlpha,	sizeof(float)*tmpBufferSize));
 	cutilSafeCall(cudaMalloc(&m_solverState.d_scanBeta,		sizeof(float)*tmpBufferSize));
 	cutilSafeCall(cudaMalloc(&m_solverState.d_rDotzOld,		sizeof(float)*numberOfVariables));
 	cutilSafeCall(cudaMalloc(&m_solverState.d_precondioner, sizeof(float2)*numberOfVariables));
+	cutilSafeCall(cudaMalloc(&m_solverState.d_precondionerA,sizeof(float3)*numberOfVariables));
 	cutilSafeCall(cudaMalloc(&m_solverState.d_sumResidual,	sizeof(float)));
 }
 
@@ -27,14 +33,20 @@ CUDAWarpingSolver::~CUDAWarpingSolver()
 {
 	// State
 	cutilSafeCall(cudaFree(m_solverState.d_delta));
+	cutilSafeCall(cudaFree(m_solverState.d_deltaA));
 	cutilSafeCall(cudaFree(m_solverState.d_r));
+	cutilSafeCall(cudaFree(m_solverState.d_rA));
 	cutilSafeCall(cudaFree(m_solverState.d_z));
+	cutilSafeCall(cudaFree(m_solverState.d_zA));
 	cutilSafeCall(cudaFree(m_solverState.d_p));
+	cutilSafeCall(cudaFree(m_solverState.d_pA));
 	cutilSafeCall(cudaFree(m_solverState.d_Ap_X));
+	cutilSafeCall(cudaFree(m_solverState.d_Ap_XA));
 	cutilSafeCall(cudaFree(m_solverState.d_scanAlpha));
 	cutilSafeCall(cudaFree(m_solverState.d_scanBeta));
 	cutilSafeCall(cudaFree(m_solverState.d_rDotzOld));
 	cutilSafeCall(cudaFree(m_solverState.d_precondioner));
+	cutilSafeCall(cudaFree(m_solverState.d_precondionerA));
 	cutilSafeCall(cudaFree(m_solverState.d_sumResidual));
 }
 
@@ -42,7 +54,7 @@ void CUDAWarpingSolver::solveGN(float2* d_urshape, float2* d_warpField, float3* 
 {
 	m_solverState.d_urshape = d_urshape;
 	m_solverState.d_x = d_warpField;
-	m_solverState.d_a = d_warpAngles;
+	m_solverState.d_A = d_warpAngles;
 
 	SolverParameters parameters;
 	parameters.weightFitting = weightFitting;

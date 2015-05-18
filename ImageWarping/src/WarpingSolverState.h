@@ -34,15 +34,20 @@ struct SolverState
 {
 	// State of the GN Solver
 	float2*	 d_delta;					// Current linear update to be computed
+	float3*	 d_deltaA;					// Current linear update to be computed
 	float2*  d_x;						// Current state pos
+	float3*  d_A;						// Current state pos
 	float2*  d_urshape;					// Current state urshape pos
-	float3*  d_a;						// Current state angle
-
+	
 	float2*	d_r;						// Residuum
+	float3*	d_rA;						// Residuum
 	float2*	d_z;						// Predconditioned residuum
+	float3*	d_zA;						// Predconditioned residuum
 	float2*	d_p;						// Decent direction
+	float3*	d_pA;						// Decent direction
 	
 	float2*	d_Ap_X;						// Cache values for next kernel call after A = J^T x J x p
+	float3*	d_Ap_XA;						// Cache values for next kernel call after A = J^T x J x p
 
 	float*	d_scanAlpha;				// Tmp memory for alpha scan
 	float*	d_scanBeta;					// Tmp memory for beta scan
@@ -50,6 +55,7 @@ struct SolverState
 	float*	d_rDotzOld;					// Old nominator (denominator) of alpha (beta)
 	
 	float2*	d_precondioner;				// Preconditioner for linear system
+	float3*	d_precondionerA;				// Preconditioner for linear system
 
 	float*	d_sumResidual;				// sum of the squared residuals
 

@@ -12,8 +12,9 @@ int main(int argc, const char * argv[]) {
 		}
 	}
 
-	std::vector<std::vector<int>> constraints; constraints.resize(1);
-	constraints[0].push_back(128); constraints[0].push_back(128); constraints[0].push_back(20); constraints[0].push_back(20); // (128, 128) -> (0, 0)
+	std::vector<std::vector<int>> constraints; constraints.resize(2);
+	constraints[0].push_back(128); constraints[0].push_back(128); constraints[0].push_back(20); constraints[0].push_back(20);
+	constraints[1].push_back(128); constraints[1].push_back(200); constraints[1].push_back(50); constraints[1].push_back(50);
 
 	for (unsigned int i = 0; i < image.getHeight(); i++)
 	{

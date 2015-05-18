@@ -51,9 +51,10 @@ __inline__ __device__ float getNumNeighbors(int i, int j, SolverInput& input) {
 	return res;
 }
 
-__inline__ __device__ float2 evalFDevice(unsigned int variableIdx, SolverInput& input, SolverState& state, SolverParameters& parameters)
+__inline__ __device__ float2 evalFDevice(unsigned int variableIdx, SolverInput& input, SolverState& state, SolverParameters& parameters, float3& eA)
 {
 	float2 e = make_float2(0.0f, 0.0f);
+	eA = make_float3(0.0f, 0.0f, 0.0f);
 
 	// E_fit
 	float2 targetUV = input.d_constraints[variableIdx]; bool validTarget = (targetUV.x >= 0 && targetUV.y >= 0);
@@ -73,12 +74,14 @@ __inline__ __device__ float2 evalFDevice(unsigned int variableIdx, SolverInput& 
 // applyJT : this function is called per variable and evaluates each residual influencing that variable (i.e., each energy term per variable)
 ////////////////////////////////////////
 
-__inline__ __device__ float2 evalMinusJTFDevice(unsigned int variableIdx, SolverInput& input, SolverState& state, SolverParameters& parameters)
+__inline__ __device__ float2 evalMinusJTFDevice(unsigned int variableIdx, SolverInput& input, SolverState& state, SolverParameters& parameters, float3& bA)
 {
 	float2 b = make_float2(0.0f, 0.0f);
+	bA = make_float3(0.0f, 0.0f, 0.0f);
 
 	// Reset linearized update vector
 	state.d_delta[variableIdx] = make_float2(0.0f, 0.0f);
+	state.d_deltaA[variableIdx] = make_float3(0.0f, 0.0f, 0.0f);
 
 	// E_fit
 	// J depends on last solution J(input.d_x) and multiplies it with d_Jp returns result
@@ -114,6 +117,7 @@ __inline__ __device__ float2 evalMinusJTFDevice(unsigned int variableIdx, Solver
 	else					 p.y = 1.0f;
 
 	state.d_precondioner[variableIdx] = p;
+	state.d_precondionerA[variableIdx] = make_float3(0.0f, 0.0f, 0.0f);
 	return b;
 }
 
@@ -121,9 +125,10 @@ __inline__ __device__ float2 evalMinusJTFDevice(unsigned int variableIdx, Solver
 // applyJTJ : this function is called per variable and evaluates each residual influencing that variable (i.e., each energy term per variable)
 ////////////////////////////////////////
 
-__inline__ __device__ float2 applyJTJDevice(unsigned int variableIdx, SolverInput& input, SolverState& state, SolverParameters& parameters)
+__inline__ __device__ float2 applyJTJDevice(unsigned int variableIdx, SolverInput& input, SolverState& state, SolverParameters& parameters, float3& bA)
 {
 	float2 b = make_float2(0.0f, 0.0f);
+	bA = make_float3(0.0f, 0.0f, 0.0f);
 
 	// E_fit
 	// J depends on last solution J(input.d_x) and multiplies it with d_Jp returns result
