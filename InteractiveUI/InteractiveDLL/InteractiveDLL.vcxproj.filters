@@ -15,6 +15,12 @@
     <ClCompile Include="CudaImage.cpp">
       <Filter>CUDAHelpers</Filter>
     </ClCompile>
+    <ClCompile Include="PatchSolverSFS\CUDAPatchSolverSFS.cpp">
+      <Filter>CUDAHelpers\PatchSolverSFS</Filter>
+    </ClCompile>
+    <ClCompile Include="CudaScan.cpp">
+      <Filter>CUDAHelpers</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="..\..\API\build\Opt.h" />
@@ -54,13 +60,40 @@
     <ClInclude Include="CudaImage.h">
       <Filter>CUDAHelpers</Filter>
     </ClInclude>
+    <ClInclude Include="PatchSolverSFS\CUDAPatchSolverSFS.h">
+      <Filter>CUDAHelpers\PatchSolverSFS</Filter>
+    </ClInclude>
+    <ClInclude Include="PatchSolverSFS\PatchSolverSFSEquations.h">
+      <Filter>CUDAHelpers\PatchSolverSFS</Filter>
+    </ClInclude>
+    <ClInclude Include="PatchSolverSFS\PatchSolverSFSParameters.h">
+      <Filter>CUDAHelpers\PatchSolverSFS</Filter>
+    </ClInclude>
+    <ClInclude Include="PatchSolverSFS\PatchSolverSFSState.h">
+      <Filter>CUDAHelpers\PatchSolverSFS</Filter>
+    </ClInclude>
+    <ClInclude Include="PatchSolverSFS\PatchSolverSFSUtil.h">
+      <Filter>CUDAHelpers\PatchSolverSFS</Filter>
+    </ClInclude>
+    <ClInclude Include="ICUDASolverSFS.h">
+      <Filter>CUDAHelpers</Filter>
+    </ClInclude>
+    <ClInclude Include="ConvergenceAnalysis.h">
+      <Filter>CUDAHelpers</Filter>
+    </ClInclude>
+    <ClInclude Include="SolverUtil.h">
+      <Filter>CUDAHelpers</Filter>
+    </ClInclude>
+    <ClInclude Include="CUDAScan.h">
+      <Filter>CUDAHelpers</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <None Include="interactiveDLL.def" />
-    <None Include="SFSHelper.cu">
-      <Filter>CUDAHelpers</Filter>
+    <None Include="data-files\scene\default.Scene.Any">
+      <Filter>Scenes</Filter>
     </None>
-    <None Include="data-files\diff.pix">
+    <None Include="data-files\shader\diff.pix">
       <Filter>Shaders</Filter>
     </None>
   </ItemGroup>
@@ -77,12 +110,25 @@
     <Filter Include="Shaders">
       <UniqueIdentifier>{702db8fa-e0d3-4192-9eda-78f87631d698}</UniqueIdentifier>
     </Filter>
+    <Filter Include="Scenes">
+      <UniqueIdentifier>{496423c5-0667-453a-80fd-ba84faee5ee2}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="CUDAHelpers\PatchSolverSFS">
+      <UniqueIdentifier>{d8ef8ce2-905f-46a2-a313-a7f591a13ea0}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
   <ItemGroup>
     <CudaCompile Include="SolverSHLighting.cu">
       <Filter>CUDAHelpers</Filter>
     </CudaCompile>
     <CudaCompile Include="CameraUtil.cu">
+      <Filter>CUDAHelpers</Filter>
+    </CudaCompile>
+    <CudaCompile Include="SFSHelpers.cu" />
+    <CudaCompile Include="PatchSolverSFS\PatchSolverSFS.cu">
+      <Filter>CUDAHelpers\PatchSolverSFS</Filter>
+    </CudaCompile>
+    <CudaCompile Include="ScanCS.cu">
       <Filter>CUDAHelpers</Filter>
     </CudaCompile>
   </ItemGroup>

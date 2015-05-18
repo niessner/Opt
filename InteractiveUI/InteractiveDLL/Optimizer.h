@@ -12,15 +12,22 @@ struct SimpleMeshGraph {
     Array<Array<int>>   connectivity;
 };
 
+
+
 struct OptimizationInput {
     G3D_DECLARE_ENUM_CLASS(Type, IMAGE, VIDEO, DENSE_GRID, MESH);
     Type type;
+
+    // For images
     /** JIT produce the target image. */
     shared_ptr<Texture> sourceImage;
-
     /** Last JIT rendered input to the optimizer based on sourceImage and preprocessing */
     shared_ptr<Texture> lastInput;
 
+
+    // For meshes
+    SmallTable<int, int> geoToPositionOffsets;
+    shared_ptr<ArticulatedModel> originalAM;
     SimpleMeshGraph meshGraph;
 
     //ImagePreprocessing preprocessing;
@@ -37,9 +44,18 @@ struct OptimizationOutput {
     G3D_DECLARE_ENUM_CLASS(Type, IMAGE, DENSE_GRID, MESH);
     Type type;
     shared_ptr<Texture> outputImage;
+
+    // For meshes
+    SmallTable<int, int> geoToPositionOffsets;
+    shared_ptr<ArticulatedModel> originalAM;
+    SimpleMeshGraph meshGraph;
+
     OptimizationOutput() : type(Type::IMAGE) {}
     /** Initializes an image output */
     void set(int width, int height, int numChannels);
+
+    /** Creates an optimization output that is duplicate in form from the optimization input */
+    void set(const OptimizationInput& input);
 };
 
 struct OptimizationTimingInfo {
@@ -54,7 +70,8 @@ private:
     cudaEvent_t m_optSolveStart;
     cudaEvent_t m_optSolveEnd;
 
-    std::vector<OptImage> m_optImages;
+    std::vector<OptImage>       m_optImages;
+    std::vector<OptGraph<float>> m_optGraphs;
 
 public:
     void renderOutput(RenderDevice* rd, const OptimizationOutput& output);

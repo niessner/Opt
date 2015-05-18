@@ -3,6 +3,7 @@
 #include "cuda_SimpleMatrixUtil.h"
 #include "mLibCore.h"
 #include "CudaImage.h"
+#include "PatchSolverSFS/CUDAPatchSolverSFS.h"
 using G3D::PixelTransferBuffer;
 using G3D::GLPixelTransferBuffer;
 using G3D::ImageFormat;
@@ -50,7 +51,7 @@ void G3DShapeFromShading::resampleImages(shared_ptr<Texture> inputDepth, shared_
     cutilSafeCall(cudaDeviceSynchronize());
 }
 
-void G3DShapeFromShading::estimateLightingAndAlbedo(shared_ptr<Texture> color, shared_ptr<Texture> depth, shared_ptr<Texture> outputAlbedo, shared_ptr<Texture> targetLuminance, shared_ptr<Texture> albedoLuminance, Array<float>& lightinSHCoefficients) {
+void G3DShapeFromShading::estimateLightingAndAlbedo(shared_ptr<Texture> color, shared_ptr<Texture> depth, shared_ptr<Texture> outputAlbedo, shared_ptr<Texture> targetLuminance, shared_ptr<Texture> albedoLuminance, G3D::Array<float>& lightinSHCoefficients) {
     if (G3D::isNull(m_sfsHelpers)) {
         m_sfsHelpers = shared_ptr<SFSHelpers>(new SFSHelpers());
     }
@@ -116,4 +117,15 @@ void G3DShapeFromShading::estimateLightingAndAlbedo(shared_ptr<Texture> color, s
     for (int i = 0; i < 9; ++i) {
         G3D::debugPrintf("L[%d] = %f\n", i, coeffs[i]);
     }
+}
+
+void G3DShapeFromShading::solveSFS(shared_ptr<Texture> result, shared_ptr<Texture> targetDepth, shared_ptr<Texture> outputAlbedo, shared_ptr<Texture> targetLuminance, shared_ptr<Texture> albedoLuminance, const G3D::Array<float>& lightingSHCoefficients) {
+   /* Matrix4f M(colorIntrinsics.getPointer()); M.transposeInPlace();	//TODO check!
+    CUDAPatchSolverSFS* patchSolver = new CUDAPatchSolverSFS(M, result->width(), result->height(), 0);
+
+
+
+
+    patchSolver->solveSFS(d_depthMapColorSpaceFloat, d_depthMapRefinedLastFrameFloat, d_depthMapMaskMorphFloat, d_intensityMapFloat, d_maskEdgeMapUchar, deltaTransform, GlobalAppState::get().s_nNonLinearIterations, GlobalAppState::get().s_nLinearIterations, GlobalAppState::get().s_nPatchIterations, GlobalAppState::get().s_weightFitting, GlobalAppState::get().s_weightShadingIncrement, GlobalAppState::get().s_weightShadingStart, GlobalAppState::get().s_weightBoundary, GlobalAppState::get().s_weightRegularizer, GlobalAppState::get().s_weightPrior, d_lightingCoeffFloat, NULL, d_depthMapRefinedFloat, GlobalAppState::get().s_refineForeground);
+*/
 }

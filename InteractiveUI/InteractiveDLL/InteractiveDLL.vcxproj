@@ -13,6 +13,7 @@
   <ItemGroup>
     <ClCompile Include="app.cpp" />
     <ClCompile Include="CudaImage.cpp" />
+    <ClCompile Include="CudaScan.cpp" />
     <ClCompile Include="CUDASolverSHLighting.cpp" />
     <ClCompile Include="DLLMain.cpp" />
     <ClCompile Include="G3DShapeFromShading.cpp" />
@@ -21,32 +22,45 @@
     <ClCompile Include="main.cpp" />
     <ClCompile Include="mLibSource.cpp" />
     <ClCompile Include="Optimizer.cpp" />
+    <ClCompile Include="PatchSolverSFS\CUDAPatchSolverSFS.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="..\..\API\build\Opt.h" />
     <ClInclude Include="app.h" />
     <ClInclude Include="CameraParams.h" />
+    <ClInclude Include="ConvergenceAnalysis.h" />
     <ClInclude Include="CudaImage.h" />
+    <ClInclude Include="CUDAScan.h" />
     <ClInclude Include="CUDASolverSHLighting.h" />
     <ClInclude Include="cudaUtil.h" />
     <ClInclude Include="cuda_SimpleMatrixUtil.h" />
     <ClInclude Include="Eigen.h" />
     <ClInclude Include="G3DShapeFromShading.h" />
     <ClInclude Include="G3DVisualizer.h" />
+    <ClInclude Include="ICUDASolverSFS.h" />
     <ClInclude Include="interactiveDLL.h" />
     <ClInclude Include="main.h" />
     <ClInclude Include="mLibInclude.h" />
     <ClInclude Include="OptimizationStatusInfo.h" />
     <ClInclude Include="Optimizer.h" />
     <ClInclude Include="parameters.h" />
+    <ClInclude Include="PatchSolverSFS\CUDAPatchSolverSFS.h" />
+    <ClInclude Include="PatchSolverSFS\PatchSolverSFSEquations.h" />
+    <ClInclude Include="PatchSolverSFS\PatchSolverSFSParameters.h" />
+    <ClInclude Include="PatchSolverSFS\PatchSolverSFSState.h" />
+    <ClInclude Include="PatchSolverSFS\PatchSolverSFSUtil.h" />
     <ClInclude Include="SFSHelpers.h" />
     <ClInclude Include="SolverSFSState.h" />
     <ClInclude Include="SolverSHLightingState.h" />
+    <ClInclude Include="SolverUtil.h" />
   </ItemGroup>
   <ItemGroup>
     <CudaCompile Include="CameraUtil.cu" />
+    <CudaCompile Include="PatchSolverSFS\PatchSolverSFS.cu" />
+    <CudaCompile Include="ScanCS.cu" />
     <CudaCompile Include="SolverSHLighting.cu" />
-    <None Include="data-files\diff.pix" />
+    <None Include="data-files\scene\default.Scene.Any" />
+    <None Include="data-files\shader\diff.pix" />
     <None Include="interactiveDLL.def" />
     <CudaCompile Include="SFSHelpers.cu">
       <FileType>Document</FileType>

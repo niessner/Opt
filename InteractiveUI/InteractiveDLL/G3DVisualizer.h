@@ -98,7 +98,11 @@ private:
     OptimizationStatusInfo m_statusInfo;
     std::mutex m_statusMutex;
 
+    void cudaSFS();
+
 public:
+
+    void visualizeModel(shared_ptr<Texture> outputTexture, shared_ptr<ArticulatedModel> am);
 
     void loadInputFromFile(const String& filename);
 
@@ -144,6 +148,8 @@ public:
     void loadInput(const String& filename, int inputIndex);
 
     void loadImage(const String& filename, int inputIndex);
+
+    void loadArticulatedModel(const String& filename, int inputIndex);
 
     void loadDepthColorFrame(const String& filename, int inputIndex);
 
