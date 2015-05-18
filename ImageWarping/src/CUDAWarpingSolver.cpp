@@ -1,8 +1,6 @@
 #include "CUDAWarpingSolver.h"
 
-extern "C" void copyFloatMapFill(float* d_output, float* d_input, unsigned int width, unsigned int height);
-extern "C" void LaplacianSolveGNStub(SolverInput& input, SolverState& state, SolverParameters& parameters);	// gauss newton
-extern "C" void LaplacianSolveGDStub(SolverInput& input, SolverState& state, SolverParameters& parameters);	// gradient decent
+extern "C" void ImageWarpiungSolveGNStub(SolverInput& input, SolverState& state, SolverParameters& parameters);	// gauss newton
 
 CUDAWarpingSolver::CUDAWarpingSolver(unsigned int imageWidth, unsigned int imageHeight) : m_imageWidth(imageWidth), m_imageHeight(imageHeight)
 {
@@ -12,21 +10,17 @@ CUDAWarpingSolver::CUDAWarpingSolver(unsigned int imageWidth, unsigned int image
 	const unsigned int N = m_imageWidth*m_imageHeight;
 	const unsigned int numberOfVariables = N;
 
-	const unsigned int numberOfResiduums = N+4*N;
-
 	// State
-	cutilSafeCall(cudaMalloc(&m_solverState.d_delta,		sizeof(float)*numberOfVariables));
-	cutilSafeCall(cudaMalloc(&m_solverState.d_r,			sizeof(float)*numberOfVariables));
-	cutilSafeCall(cudaMalloc(&m_solverState.d_z,			sizeof(float)*numberOfVariables));
-	cutilSafeCall(cudaMalloc(&m_solverState.d_p,			sizeof(float)*numberOfVariables));
-	//cutilSafeCall(cudaMalloc(&m_solverState.d_Jp,			sizeof(float)*numberOfResiduums));
-	cutilSafeCall(cudaMalloc(&m_solverState.d_Ap_X,			sizeof(float)*numberOfVariables));
+	cutilSafeCall(cudaMalloc(&m_solverState.d_delta,		sizeof(float2)*numberOfVariables));
+	cutilSafeCall(cudaMalloc(&m_solverState.d_r,			sizeof(float2)*numberOfVariables));
+	cutilSafeCall(cudaMalloc(&m_solverState.d_z,			sizeof(float2)*numberOfVariables));
+	cutilSafeCall(cudaMalloc(&m_solverState.d_p,			sizeof(float2)*numberOfVariables));
+	cutilSafeCall(cudaMalloc(&m_solverState.d_Ap_X,			sizeof(float2)*numberOfVariables));
 	cutilSafeCall(cudaMalloc(&m_solverState.d_scanAlpha,	sizeof(float)*tmpBufferSize));
 	cutilSafeCall(cudaMalloc(&m_solverState.d_scanBeta,		sizeof(float)*tmpBufferSize));
 	cutilSafeCall(cudaMalloc(&m_solverState.d_rDotzOld,		sizeof(float)*numberOfVariables));
-	cutilSafeCall(cudaMalloc(&m_solverState.d_precondioner, sizeof(float)*numberOfVariables));
+	cutilSafeCall(cudaMalloc(&m_solverState.d_precondioner, sizeof(float2)*numberOfVariables));
 	cutilSafeCall(cudaMalloc(&m_solverState.d_sumResidual,	sizeof(float)));
-
 }
 
 CUDAWarpingSolver::~CUDAWarpingSolver()
@@ -36,7 +30,6 @@ CUDAWarpingSolver::~CUDAWarpingSolver()
 	cutilSafeCall(cudaFree(m_solverState.d_r));
 	cutilSafeCall(cudaFree(m_solverState.d_z));
 	cutilSafeCall(cudaFree(m_solverState.d_p));
-	//cutilSafeCall(cudaFree(m_solverState.d_Jp));
 	cutilSafeCall(cudaFree(m_solverState.d_Ap_X));
 	cutilSafeCall(cudaFree(m_solverState.d_scanAlpha));
 	cutilSafeCall(cudaFree(m_solverState.d_scanBeta));
@@ -45,12 +38,11 @@ CUDAWarpingSolver::~CUDAWarpingSolver()
 	cutilSafeCall(cudaFree(m_solverState.d_sumResidual));
 }
 
-
-void CUDAWarpingSolver::solveGN(float* d_targetDepth, float* d_result, unsigned int nNonLinearIterations, unsigned int nLinearIterations, float weightFitting, float weightRegularizer)
+void CUDAWarpingSolver::solveGN(float2* d_urshape, float2* d_warpField, float3* d_warpAngles, float2* d_constraints, unsigned int nNonLinearIterations, unsigned int nLinearIterations, float weightFitting, float weightRegularizer)
 {
-	//copyFloatMapFill(d_result, d_targetDepth, m_imageWidth, m_imageHeight);
-
-	m_solverState.d_x = d_result;
+	m_solverState.d_urshape = d_urshape;
+	m_solverState.d_x = d_warpField;
+	m_solverState.d_a = d_warpAngles;
 
 	SolverParameters parameters;
 	parameters.weightFitting = weightFitting;
@@ -62,8 +54,7 @@ void CUDAWarpingSolver::solveGN(float* d_targetDepth, float* d_result, unsigned 
 	solverInput.N = m_imageWidth*m_imageHeight;
 	solverInput.width = m_imageWidth;
 	solverInput.height = m_imageHeight;
-	solverInput.d_targetDepth = d_targetDepth;
+	solverInput.d_constraints = d_constraints;
 
-
-	LaplacianSolveGNStub(solverInput, m_solverState, parameters);
+	ImageWarpiungSolveGNStub(solverInput, m_solverState, parameters);
 }

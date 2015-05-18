@@ -14,10 +14,8 @@ class CUDAWarpingSolver
 		~CUDAWarpingSolver();
 
 		//! gauss newton
-		void solveGN(float* d_targetDepth, float* d_result, unsigned int nNonLinearIterations, unsigned int nLinearIterations, float weightFitting, float weightRegularizer);
+		void solveGN(float2* d_urshape, float2* d_warpField, float3* d_warpAngles, float2* d_constraints, unsigned int nNonLinearIterations, unsigned int nLinearIterations, float weightFitting, float weightRegularizer);
 		
-		//! gradient decent
-		void solveGD(float* d_targetDepth, float* d_result, unsigned int nIterations, float weightFitting, float weightRegularizer);
 	private:
 
 		SolverState	m_solverState;
@@ -25,4 +23,3 @@ class CUDAWarpingSolver
 		unsigned int m_imageWidth;
 		unsigned int m_imageHeight;
 };
-

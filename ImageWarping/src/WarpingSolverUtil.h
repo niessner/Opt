@@ -22,8 +22,6 @@ __inline__ __device__ float warpReduce(float val) {
     return val;
 }
 
-
-
 extern __shared__ float bucket[];
 
 __inline__ __device__ bool getGlobalNeighbourIdxFromLocalNeighourIdx(int centerIdx, int localNeighbourIdx, const SolverInput& input, int& outGlobalNeighbourIdx)

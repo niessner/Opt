@@ -27,10 +27,9 @@ int main(int argc, const char * argv[]) {
 			out(x, y) = vec4uc(p, p, p, 255);
 		}
 	}
-	LodePNG::save(out, "tmp.png");
+	LodePNG::save(out, "output.png");
 
 	getchar();
 
 	return 0;
 }
-
