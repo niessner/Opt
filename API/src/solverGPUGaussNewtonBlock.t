@@ -110,6 +110,7 @@ return function(problemSpec, vars)
 		
 		return terra(blockCornerX : int64, blockCornerY : int64, image : Image, imageBlock : ImageBlock)
 			
+			
 			var numBlockThreads : int = blockDim.x * blockDim.y			
 			var numVariables : int = blockStride*blockStride
 			
@@ -123,17 +124,97 @@ return function(problemSpec, vars)
 					
 					var globalX = localX + blockCornerX
 					var globalY = localY + blockCornerY
-					
-					imageBlock(localX, localY) = image:get(globalX, globalY)	--bounded check
+					--[[
+					if globalX >= 0 and globalX < image:W() and globalY >= 0 and globalY < image:H() then
+					if threadIdx.x + threadIdx.y*blockDim.x == 0 then
+						printf("stride: %d\n", imageBlock:stride())
+						printf("width: %d -- height: %d\n", imageBlock:W(), imageBlock:H())
+						printf("local(%d | %d) -- global(%d | %d)\n\n", localX, localY, globalX, globalY)
+						if localX >= 0 and localX < 16 and localY >= 0 and localY < 16 then
+							--imageBlock(localX, localY) = 1.0f
+							--imageBlock(0,0) = 1.0f
+						end
+					end
+					end
+					]]--
+					imageBlock(localX, localY) = image:get(globalX, globalY)	--bounded check		
 				end
 			end			
 		end
 	end)
 	
 	local kernels = {}
+	
+	kernels.computeCost = function(data)
+		local terra computeCostGPU(pd : &data.PlanData)
+		
+			var W = pd.parameters.X:W()
+			var H = pd.parameters.X:H()
+	
+			var tId_i : int = threadIdx.x -- local col idx
+			var tId_j : int = threadIdx.y -- local row idx
+	
+	
+			var gId_i : int = blockIdx.x * blockDim.x + threadIdx.x -- global col idx
+			var gId_j : int = blockIdx.y * blockDim.y + threadIdx.y -- global row idx
+			
+			var blockCornerX : int = blockIdx.x * blockDim.x
+			var blockCornerY : int = blockIdx.y * blockDim.y
+			var blockParams : problemSpec:ParameterType(true)
+			var P : problemSpec:UnknownType(true)
+			
+
+			-- load everything into shared memory
+			escape				
+				for i,p in ipairs(problemSpec.parameters) do
+					if p.kind ~= "image" then
+						emit quote
+							blockParams.[p.name] = pd.parameters.[p.name]
+						end
+					else 
+						local blockedType = problemSpec:BlockedTypeForImageEntry(p)
+						local stencil = problemSpec:MaxStencil()
+						local offset = stencil*problemSpec:BlockStride() + stencil
+						local shared_mem_size = (problemSpec:BlockSize()+2.0*problemSpec:MaxStencil())*(problemSpec:BlockSize()+2.0*problemSpec:MaxStencil())
+						local shmem = cudalib.sharedmemory(p.type.metamethods.typ, shared_mem_size)
+						
+						emit quote 
+							blockParams.[p.name] = [blockedType] { data = [&uint8](shmem + offset) } 
+							[CopyToShared(p.type,blockedType)](blockCornerX, blockCornerY, pd.parameters.[p.name], blockParams.[p.name])
+						end
+					end
+				end
+			end
+			
+			__syncthreads()
+			
+			
+			var cost = 0.0f
+			var w : int, h : int
+			if positionForValidLane(pd, "X", &w, &h) then
+				cost = [float](data.problemSpec.functions.cost.boundary(tId_i, tId_j, gId_i, gId_j, blockParams))
+			end
+
+			cost = util.warpReduce(cost)
+			if (util.laneid() == 0) then
+				util.atomicAdd(pd.scratchF, cost)
+			end
+			
+			
+		end
+		local function header(pd)
+			return quote @pd.scratchF = 0.0f end
+		end
+		local function footer(pd)
+			return quote return @pd.scratchF end
+		end
+		
+		return { kernel = computeCostGPU, header = header, footer = footer, params = {}, mapMemberName = "X" }
+	end
+
+
 	kernels.PCGStepBlock = function(data)
 		local terra PCGStepBlockGPU(pd : &data.PlanData, ox : int, oy : int, nBlockIterations : uint)
-			
 			
 			var W = pd.parameters.X:W()
 			var H = pd.parameters.X:H()
@@ -162,7 +243,8 @@ return function(problemSpec, vars)
 						local blockedType = problemSpec:BlockedTypeForImageEntry(p)
 						local stencil = problemSpec:MaxStencil()
 						local offset = stencil*problemSpec:BlockStride() + stencil
-						local shmem = cudalib.sharedmemory(p.type.metamethods.typ, SHARED_MEM_SIZE_VARIABLES)
+						local shared_mem_size = (problemSpec:BlockSize()+2.0*problemSpec:MaxStencil())*(problemSpec:BlockSize()+2.0*problemSpec:MaxStencil())
+						local shmem = cudalib.sharedmemory(p.type.metamethods.typ, shared_mem_size)
 						
 						emit quote 
 							blockParams.[p.name] = [blockedType] { data = [&uint8](shmem + offset) } 
@@ -180,13 +262,7 @@ return function(problemSpec, vars)
 					P = [blockedType] { data = [&uint8](shmem) } 
 				end
 			end
-			
-			__syncthreads()
-
-			--loadPatchToCache(X, pd.parameters.X, tId_i, tId_j, gId_i, gId_j, W, H)
-			--TODO fix the shared memory here (replace pd.X with input.d_targetDepth)
-			--loadPatchToCache(TargetDepth, pd.parameters.X, tId_i, tId_j, gId_i, gId_j, W, H)
-	
+				
 			var Delta : problemSpec:UnknownType().metamethods.typ = 0.0f
 			var R : problemSpec:UnknownType().metamethods.typ
 			var Z : problemSpec:UnknownType().metamethods.typ
@@ -207,7 +283,7 @@ return function(problemSpec, vars)
 				--R = evalMinusJTFDevice(tId_i, tId_j, gId_i, gId_j, W, H, TargetDepth, X, parameters, &Pre) -- residuum = J^T x -F - A x delta_0  => J^T x -F, since A x x_0 == 0
 				R = -data.problemSpec.functions.gradient.boundary(tId_i, tId_j, gId_i, gId_j, blockParams)
 				--R = 1.0f
-				Pre = 1	--TODO fix this hack... the pre-conditioner needs to be the diagonal of JTJ
+				Pre = 1.0f	--TODO fix this hack... the pre-conditioner needs to be the diagonal of JTJ
 				var preRes : float = Pre*R																  -- apply preconditioner M^-1 
 				P(tId_i, tId_j) = preRes											   	  -- save for later
 				d = R*preRes
@@ -222,6 +298,9 @@ return function(problemSpec, vars)
 
 			if isInsideImage(gId_i, gId_j, W, H) then 
 				RDotZOld = patchBucket[0]							   -- read result for later on
+				--if gId_i == 0 and gId_j == 0 then
+				--	printf("RDotZOld: %f\n", RDotZOld)
+				--end
 			end
 	
 			__syncthreads()
@@ -294,7 +373,6 @@ return function(problemSpec, vars)
 			
 			
 			if isInsideImage(gId_i, gId_j, W, H) then 
-				--pd.delta[get1DIdx(gId_i, gId_j, W, H)] = Delta
 				pd.delta(gId_i, gId_j) = Delta
 			end
 			
@@ -303,13 +381,29 @@ return function(problemSpec, vars)
 	end
 	
 	kernels.PCGLinearUpdateBlock = function(data)
-		local terra PCGLinearUpdateBlockGPU(pd : &data.PlanData)
-			var w : int, h : int
-			if positionForValidLane(pd, "X", &w, &h) then
-				pd.parameters.X(w,h) = pd.parameters.X(w,h) + pd.delta(w,h)
+		local terra PCGLinearUpdateBlockGPU(pd : &data.PlanData, ox : int, oy : int)
+		
+			var W = pd.parameters.X:W()
+			var H = pd.parameters.X:H()
+	
+			var tId_i : int = threadIdx.x -- local col idx
+			var tId_j : int = threadIdx.y -- local row idx
+	
+	
+			var gId_i : int = blockIdx.x * blockDim.x + threadIdx.x - ox -- global col idx
+			var gId_j : int = blockIdx.y * blockDim.y + threadIdx.y - oy -- global row idx
+			
+			if isInsideImage(gId_i, gId_j, W, H) then 
+				pd.parameters.X(gId_i,gId_j) = pd.parameters.X(gId_i,gId_j) + pd.delta(gId_i,gId_j)
 			end
+			
+			--var w : int, h : int
+			--if positionForValidLane(pd, "X", &w, &h) then
+			--	printf("delta: %f\n", pd.delta(w,h))
+			--	pd.parameters.X(w,h) = pd.parameters.X(w,h) + pd.delta(w,h)
+			--end
 		end
-		return { kernel = PCGLinearUpdateBlockGPU, header = noHeader, footer = noFooter, params = {}, mapMemberName = "X" }
+		return { kernel = PCGLinearUpdateBlockGPU, header = noHeader, footer = noFooter, params = {symbol(int), symbol(int)}, mapMemberName = "X" }
 	end
 	
 	local gpu = util.makeGPUFunctions(problemSpec, vars, PlanData, kernels)
@@ -325,24 +419,23 @@ return function(problemSpec, vars)
 		--unpackstruct(pd.images) = [util.getImages(PlanData, images)]
 		pd.parameters = [util.getParameters(problemSpec, images, edgeValues,params_)]
 
-		var nIterations = 10	--non-linear iterations
-		var lIterations = 10	--linear iterations
-		var bIterations = 10	--block iterations
+		var nIterations = 10		--non-linear iterations
+		var lIterations = 1		--linear iterations
+		var bIterations = 1		--block iterations
 		
 		for nIter = 0, nIterations do
-            --var startCost = gpu.computeCost(pd, pd.images.unknown)
-			--logSolver("iteration %d, cost=%f", nIter, startCost)
+            var startCost = gpu.computeCost(pd)
+			logSolver("iteration %d, cost=%f\n", nIter, startCost)
+			
 			
 			var o : int = 0
 			for lIter = 0, lIterations do
-				printf("iter %d", lIter)
 				gpu.PCGStepBlock(pd, offsetX[o], offsetY[o], bIterations)
-				gpu.PCGLinearUpdateBlock(pd)
+				gpu.PCGLinearUpdateBlock(pd, offsetX[o], offsetY[o])
 				o = (o+1)%8
-				C.cudaDeviceSynchronize()
-				printf(" done!\n")
+				C.cudaDeviceSynchronize()			
 			end	
-			
+		
 		end
 
 		pd.timer:evaluate()
@@ -356,6 +449,7 @@ return function(problemSpec, vars)
 
 		pd.delta:initGPU()
 		
+		C.cudaMallocManaged([&&opaque](&(pd.scratchF)), sizeof(float), C.cudaMemAttachGlobal)
 		--var err = C.cudaMallocManaged([&&opaque](&(pd.scratchF)), sizeof(float), C.cudaMemAttachGlobal)
 		--if err ~= 0 then C.printf("cudaMallocManaged error: %d", err) end
 		return &pd.plan
