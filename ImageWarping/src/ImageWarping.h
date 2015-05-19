@@ -14,7 +14,7 @@ public:
 	
 		cutilSafeCall(cudaMalloc(&d_urshape,    sizeof(float2)*m_image.getWidth()*m_image.getHeight()));
 		cutilSafeCall(cudaMalloc(&d_warpField,  sizeof(float2)*m_image.getWidth()*m_image.getHeight()));
-		cutilSafeCall(cudaMalloc(&d_warpAngles, sizeof(float3)*m_image.getWidth()*m_image.getHeight()));
+		cutilSafeCall(cudaMalloc(&d_warpAngles, sizeof(float)*m_image.getWidth()*m_image.getHeight()));
 		cutilSafeCall(cudaMalloc(&d_constraints, sizeof(float2)*m_image.getWidth()*m_image.getHeight()));
 
 		float2* h_urshape = new float2[m_image.getWidth()*m_image.getHeight()];
@@ -39,7 +39,7 @@ public:
 		cutilSafeCall(cudaMemcpy(d_urshape, h_urshape, sizeof(float2)*m_image.getWidth()*m_image.getHeight(), cudaMemcpyHostToDevice));
 		cutilSafeCall(cudaMemcpy(d_constraints, h_constraints, sizeof(float2)*m_image.getWidth()*m_image.getHeight(), cudaMemcpyHostToDevice));
 		cutilSafeCall(cudaMemcpy(d_warpField, h_urshape, sizeof(float2)*m_image.getWidth()*m_image.getHeight(), cudaMemcpyHostToDevice));
-		cutilSafeCall(cudaMemset(d_warpAngles, 0, sizeof(float3)*m_image.getWidth()*m_image.getHeight()));
+		cutilSafeCall(cudaMemset(d_warpAngles, 0, sizeof(float)*m_image.getWidth()*m_image.getHeight()));
 		delete h_urshape;
 		delete h_constraints;
 
@@ -59,8 +59,8 @@ public:
 		float weightFit = 5.0f;
 		float weightReg = 10.0f;
 
-        unsigned int nonLinearIter = 1;
-		unsigned int linearIter = 500;
+        unsigned int nonLinearIter = 100;
+		unsigned int linearIter = 100;
 		m_warpingSolver->solveGN(d_urshape, d_warpField, d_warpAngles, d_constraints, nonLinearIter, linearIter, weightFit, weightReg);
 
 		return copyResultToCPU();
@@ -97,7 +97,7 @@ private:
 	float2*	d_urshape;
 	float2* d_warpField;
 	float2* d_constraints;
-	float3* d_warpAngles;
+	float* d_warpAngles;
 
 	CUDAWarpingSolver*	m_warpingSolver;
 };

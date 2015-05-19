@@ -10,62 +10,30 @@
 #include "WarpingSolverState.h"
 #include "WarpingSolverParameters.h"
 
-__inline__ __device__ float2 evalLaplacian(unsigned int i, unsigned int j, SolverInput& input, SolverState& state, SolverParameters& parameters)
-{
-	if (!isInsideImage(i, j, input.width, input.height)) return make_float2(0.0f, 0.0f);
-
-	const int n0_i = i;		const int n0_j = j - 1; const bool validN0 = isInsideImage(n0_i, n0_j, input.width, input.height);
-	const int n1_i = i;		const int n1_j = j + 1; const bool validN1 = isInsideImage(n1_i, n1_j, input.width, input.height);
-	const int n2_i = i - 1; const int n2_j = j;		const bool validN2 = isInsideImage(n2_i, n2_j, input.width, input.height);
-	const int n3_i = i + 1; const int n3_j = j;		const bool validN3 = isInsideImage(n3_i, n3_j, input.width, input.height);
-
-	float2 e_reg = make_float2(0.0f, 0.0f);
-	if (validN0) e_reg += state.d_x[get1DIdx(i, j, input.width, input.height)] - state.d_x[get1DIdx(n0_i, n0_j, input.width, input.height)];
-	if (validN1) e_reg += state.d_x[get1DIdx(i, j, input.width, input.height)] - state.d_x[get1DIdx(n1_i, n1_j, input.width, input.height)];
-	if (validN2) e_reg += state.d_x[get1DIdx(i, j, input.width, input.height)] - state.d_x[get1DIdx(n2_i, n2_j, input.width, input.height)];
-	if (validN3) e_reg += state.d_x[get1DIdx(i, j, input.width, input.height)] - state.d_x[get1DIdx(n3_i, n3_j, input.width, input.height)];
-
-	return e_reg;
-}
-
-__inline__ __device__ float2 evalLaplacian(unsigned int variableIdx, SolverInput& input, SolverState& state, SolverParameters& parameters)
-{
-	// E_reg
-	int i; int j; get2DIdx(variableIdx, input.width, input.height, i, j);
-	return evalLaplacian((unsigned int)i, (unsigned int)j, input, state, parameters);
-}
-
-__inline__ __device__ float getNumNeighbors(int i, int j, SolverInput& input) {
-
-	// in the case of a graph/mesh these 'neighbor' indices need to be obtained by the domain data structure (e.g., CRS/CCS)
-	const int n0_i = i;		const int n0_j = j - 1; const bool validN0 = isInsideImage(n0_i, n0_j, input.width, input.height);
-	const int n1_i = i;		const int n1_j = j + 1; const bool validN1 = isInsideImage(n1_i, n1_j, input.width, input.height);
-	const int n2_i = i - 1; const int n2_j = j;		const bool validN2 = isInsideImage(n2_i, n2_j, input.width, input.height);
-	const int n3_i = i + 1; const int n3_j = j;		const bool validN3 = isInsideImage(n3_i, n3_j, input.width, input.height);
-
-	float res = 0.0f;
-	if (validN0) res += 1.0f;
-	if (validN1) res += 1.0f;
-	if (validN2) res += 1.0f;
-	if (validN3) res += 1.0f;
-	return res;
-}
-
-__inline__ __device__ float2 evalFDevice(unsigned int variableIdx, SolverInput& input, SolverState& state, SolverParameters& parameters, float3& eA)
+__inline__ __device__ float2 evalFDevice(unsigned int variableIdx, SolverInput& input, SolverState& state, SolverParameters& parameters)
 {
 	float2 e = make_float2(0.0f, 0.0f);
-	eA = make_float3(0.0f, 0.0f, 0.0f);
+
+	int i; int j; get2DIdx(variableIdx, input.width, input.height, i, j);
+	const int n0_i = i;		const int n0_j = j - 1; const bool validN0 = isInsideImage(n0_i, n0_j, input.width, input.height);
+	const int n1_i = i;		const int n1_j = j + 1; const bool validN1 = isInsideImage(n1_i, n1_j, input.width, input.height);
+	const int n2_i = i - 1; const int n2_j = j;		const bool validN2 = isInsideImage(n2_i, n2_j, input.width, input.height);
+	const int n3_i = i + 1; const int n3_j = j;		const bool validN3 = isInsideImage(n3_i, n3_j, input.width, input.height);
 
 	// E_fit
 	float2 targetUV = input.d_constraints[variableIdx]; bool validTarget = (targetUV.x >= 0 && targetUV.y >= 0);
-	if (validTarget) {
-		float2 e_fit = (state.d_x[variableIdx] - targetUV);
-		e += (parameters.weightFitting) * e_fit * e_fit;
-	}
+	if (validTarget) { float2 e_fit = (state.d_x[variableIdx] - targetUV); e += parameters.weightFitting*e_fit*e_fit; }
 
 	// E_reg
-	float2 e_reg = evalLaplacian(variableIdx, input, state, parameters);
-	e += (parameters.weightRegularizer) * e_reg * e_reg;
+	float2x2 R = evalR(state.d_A[get1DIdx(i, j, input.width, input.height)]);
+	float2   p = state.d_x[get1DIdx(i, j, input.width, input.height)];
+	float2   pHat = state.d_urshape[get1DIdx(i, j, input.width, input.height)];
+	float2 e_reg = make_float2(0.0f, 0.0f);
+	if (validN0) { float2 q = state.d_x[get1DIdx(n0_i, n0_j, input.width, input.height)]; float2 qHat = state.d_urshape[get1DIdx(n0_i, n0_j, input.width, input.height)]; float2 d = (p - q) - R*(pHat - qHat); e_reg += d*d; }
+	if (validN1) { float2 q = state.d_x[get1DIdx(n1_i, n1_j, input.width, input.height)]; float2 qHat = state.d_urshape[get1DIdx(n1_i, n1_j, input.width, input.height)]; float2 d = (p - q) - R*(pHat - qHat); e_reg += d*d; }
+	if (validN2) { float2 q = state.d_x[get1DIdx(n2_i, n2_j, input.width, input.height)]; float2 qHat = state.d_urshape[get1DIdx(n2_i, n2_j, input.width, input.height)]; float2 d = (p - q) - R*(pHat - qHat); e_reg += d*d; }
+	if (validN3) { float2 q = state.d_x[get1DIdx(n3_i, n3_j, input.width, input.height)]; float2 qHat = state.d_urshape[get1DIdx(n3_i, n3_j, input.width, input.height)]; float2 d = (p - q) - R*(pHat - qHat); e_reg += d*d; }
+	e += parameters.weightRegularizer*e_reg;
 
 	return e;
 }
@@ -74,50 +42,58 @@ __inline__ __device__ float2 evalFDevice(unsigned int variableIdx, SolverInput& 
 // applyJT : this function is called per variable and evaluates each residual influencing that variable (i.e., each energy term per variable)
 ////////////////////////////////////////
 
-__inline__ __device__ float2 evalMinusJTFDevice(unsigned int variableIdx, SolverInput& input, SolverState& state, SolverParameters& parameters, float3& bA)
+__inline__ __device__ float2 evalMinusJTFDevice(unsigned int variableIdx, SolverInput& input, SolverState& state, SolverParameters& parameters, float& bA)
 {
-	float2 b = make_float2(0.0f, 0.0f);
-	bA = make_float3(0.0f, 0.0f, 0.0f);
-
-	// Reset linearized update vector
 	state.d_delta[variableIdx] = make_float2(0.0f, 0.0f);
-	state.d_deltaA[variableIdx] = make_float3(0.0f, 0.0f, 0.0f);
+	state.d_deltaA[variableIdx] = 0.0f;
 
-	// E_fit
-	// J depends on last solution J(input.d_x) and multiplies it with d_Jp returns result
+	float2 b = make_float2(0.0f, 0.0f);
+	bA = 0.0f;
 
-	float2 targetUV = input.d_constraints[variableIdx]; bool validTarget = (targetUV.x >= 0 && targetUV.y >= 0);
-	if (validTarget) {
-		b += -parameters.weightFitting*(state.d_x[variableIdx] - targetUV);
-	}
-
-	// E_reg
-	// J depends on last solution J(input.d_x) and multiplies it with d_Jp returns result
+	float2 pre = make_float2(0.0f, 0.0f);
+	float preA = 0.0f;
 
 	int i; int j; get2DIdx(variableIdx, input.width, input.height, i, j);
+	const int n0_i = i;		const int n0_j = j - 1; const bool validN0 = isInsideImage(n0_i, n0_j, input.width, input.height);
+	const int n1_i = i;		const int n1_j = j + 1; const bool validN1 = isInsideImage(n1_i, n1_j, input.width, input.height);
+	const int n2_i = i - 1; const int n2_j = j;		const bool validN2 = isInsideImage(n2_i, n2_j, input.width, input.height);
+	const int n3_i = i + 1; const int n3_j = j;		const bool validN3 = isInsideImage(n3_i, n3_j, input.width, input.height);
 
-	float2 l = evalLaplacian(variableIdx, input, state, parameters);
-	float  n = getNumNeighbors(i, j, input);
+	// fit/pos
+	float2 constraintUV = input.d_constraints[variableIdx];	bool validConstraint = (constraintUV.x >= 0 && constraintUV.y >= 0);
+	if (validConstraint) { b += -parameters.weightFitting*(state.d_x[variableIdx] - constraintUV); pre += parameters.weightFitting*make_float2(1.0f, 1.0f); }
 
-	b += -parameters.weightRegularizer*l;
+	// reg/pos
+	float2	 p = state.d_x[get1DIdx(i, j, input.width, input.height)];
+	float2	 pHat = state.d_urshape[get1DIdx(i, j, input.width, input.height)];
+	float2x2 R_i = evalR(state.d_A[get1DIdx(i, j, input.width, input.height)]);
+	float2 e_reg = make_float2(0.0f, 0.0f);
+	if (validN0){ float2 q = state.d_x[get1DIdx(n0_i, n0_j, input.width, input.height)]; float2 qHat = state.d_urshape[get1DIdx(n0_i, n0_j, input.width, input.height)]; float2x2 R_j = evalR(state.d_A[get1DIdx(n0_i, n0_j, input.width, input.height)]); e_reg += 2 * (p - q) - float2(mat2x2(R_i + R_j)*mat2x1(pHat - qHat)); pre += 2.0f*parameters.weightRegularizer; }
+	if (validN1){ float2 q = state.d_x[get1DIdx(n1_i, n1_j, input.width, input.height)]; float2 qHat = state.d_urshape[get1DIdx(n1_i, n1_j, input.width, input.height)]; float2x2 R_j = evalR(state.d_A[get1DIdx(n1_i, n1_j, input.width, input.height)]); e_reg += 2 * (p - q) - float2(mat2x2(R_i + R_j)*mat2x1(pHat - qHat)); pre += 2.0f*parameters.weightRegularizer; }
+	if (validN2){ float2 q = state.d_x[get1DIdx(n2_i, n2_j, input.width, input.height)]; float2 qHat = state.d_urshape[get1DIdx(n2_i, n2_j, input.width, input.height)]; float2x2 R_j = evalR(state.d_A[get1DIdx(n2_i, n2_j, input.width, input.height)]); e_reg += 2 * (p - q) - float2(mat2x2(R_i + R_j)*mat2x1(pHat - qHat)); pre += 2.0f*parameters.weightRegularizer; }
+	if (validN3){ float2 q = state.d_x[get1DIdx(n3_i, n3_j, input.width, input.height)]; float2 qHat = state.d_urshape[get1DIdx(n3_i, n3_j, input.width, input.height)]; float2x2 R_j = evalR(state.d_A[get1DIdx(n3_i, n3_j, input.width, input.height)]); e_reg += 2 * (p - q) - float2(mat2x2(R_i + R_j)*mat2x1(pHat - qHat)); pre += 2.0f*parameters.weightRegularizer; }
+	b += -parameters.weightRegularizer*e_reg;
 
-	// Preconditioner depends on last solution P(input.d_x)
-	float2 p = make_float2(0.0f, 0.0f);
+	// reg/angle
+	float2x2 R = evalR(state.d_A[get1DIdx(i, j, input.width, input.height)]);
+	float2x2 dR = evalR_dR(state.d_A[get1DIdx(i, j, input.width, input.height)]);
+	float e_reg_angle = 0.0f;
+	if (validN0) { float2 q = state.d_x[get1DIdx(n0_i, n0_j, input.width, input.height)]; float2 qHat = state.d_urshape[get1DIdx(n0_i, n0_j, input.width, input.height)]; mat2x1 D = -mat2x1(dR*(pHat - qHat)); e_reg_angle += D.getTranspose()*mat2x1((p - q) - R*(pHat - qHat)); preA += D.getTranspose()*D*parameters.weightRegularizer; }
+	if (validN1) { float2 q = state.d_x[get1DIdx(n1_i, n1_j, input.width, input.height)]; float2 qHat = state.d_urshape[get1DIdx(n1_i, n1_j, input.width, input.height)]; mat2x1 D = -mat2x1(dR*(pHat - qHat)); e_reg_angle += D.getTranspose()*mat2x1((p - q) - R*(pHat - qHat)); preA += D.getTranspose()*D*parameters.weightRegularizer; }
+	if (validN2) { float2 q = state.d_x[get1DIdx(n2_i, n2_j, input.width, input.height)]; float2 qHat = state.d_urshape[get1DIdx(n2_i, n2_j, input.width, input.height)]; mat2x1 D = -mat2x1(dR*(pHat - qHat)); e_reg_angle += D.getTranspose()*mat2x1((p - q) - R*(pHat - qHat)); preA += D.getTranspose()*D*parameters.weightRegularizer; }
+	if (validN3) { float2 q = state.d_x[get1DIdx(n3_i, n3_j, input.width, input.height)]; float2 qHat = state.d_urshape[get1DIdx(n3_i, n3_j, input.width, input.height)]; mat2x1 D = -mat2x1(dR*(pHat - qHat)); e_reg_angle += D.getTranspose()*mat2x1((p - q) - R*(pHat - qHat)); preA += D.getTranspose()*D*parameters.weightRegularizer; }
+	bA += -parameters.weightRegularizer*e_reg_angle;
 
-	if(validTarget) p.x += parameters.weightFitting;
-	p.x += parameters.weightRegularizer*n;
+	// Preconditioner
+	if (pre.x > FLOAT_EPSILON) pre = 1.0f / pre;
+	else				       pre = make_float2(1.0f, 1.0f);
+	state.d_precondioner[variableIdx] = pre;
 
-	if(validTarget) p.y += parameters.weightFitting;
-	p.y += parameters.weightRegularizer*n;
-
-	if (p.x > FLOAT_EPSILON) p.x = 1.0f / p.x;
-	else					 p.x = 1.0f;
-
-	if (p.y > FLOAT_EPSILON) p.y = 1.0f / p.y;
-	else					 p.y = 1.0f;
-
-	state.d_precondioner[variableIdx] = p;
-	state.d_precondionerA[variableIdx] = make_float3(0.0f, 0.0f, 0.0f);
+	// Preconditioner
+	if (preA > FLOAT_EPSILON) preA = 1.0f / preA;
+	else					  preA = 1.0f;
+	state.d_precondionerA[variableIdx] = preA;
+	
 	return b;
 }
 
@@ -125,41 +101,39 @@ __inline__ __device__ float2 evalMinusJTFDevice(unsigned int variableIdx, Solver
 // applyJTJ : this function is called per variable and evaluates each residual influencing that variable (i.e., each energy term per variable)
 ////////////////////////////////////////
 
-__inline__ __device__ float2 applyJTJDevice(unsigned int variableIdx, SolverInput& input, SolverState& state, SolverParameters& parameters, float3& bA)
+__inline__ __device__ float2 applyJTJDevice(unsigned int variableIdx, SolverInput& input, SolverState& state, SolverParameters& parameters, float& bA)
 {
 	float2 b = make_float2(0.0f, 0.0f);
-	bA = make_float3(0.0f, 0.0f, 0.0f);
-
-	// E_fit
-	// J depends on last solution J(input.d_x) and multiplies it with d_Jp returns result
-
-	float2 targetUV = input.d_constraints[variableIdx]; bool validTarget = (targetUV.x >= 0 && targetUV.y >= 0);
-	if (validTarget) {
-		b += parameters.weightFitting*state.d_p[variableIdx];
-	}
-
-	// E_reg
-	// J depends on last solution J(input.d_x) and multiplies it with d_Jp returns result
+	bA = 0.0f;
 
 	int i; int j; get2DIdx(variableIdx, input.width, input.height, i, j);
-
-	float2 e_reg = make_float2(0.0f, 0.0f);
-	float  n = getNumNeighbors(i, j, input);
-
-	e_reg += n*state.d_p[variableIdx];	//diagonal of A
-
-	// direct neighbors
 	const int n0_i = i;		const int n0_j = j - 1; const bool validN0 = isInsideImage(n0_i, n0_j, input.width, input.height);
 	const int n1_i = i;		const int n1_j = j + 1; const bool validN1 = isInsideImage(n1_i, n1_j, input.width, input.height);
 	const int n2_i = i - 1; const int n2_j = j;		const bool validN2 = isInsideImage(n2_i, n2_j, input.width, input.height);
 	const int n3_i = i + 1; const int n3_j = j;		const bool validN3 = isInsideImage(n3_i, n3_j, input.width, input.height);
 
-	if (validN0) e_reg += -(state.d_p[get1DIdx(n0_i, n0_j, input.width, input.height)]);
-	if (validN1) e_reg += -(state.d_p[get1DIdx(n1_i, n1_j, input.width, input.height)]);
-	if (validN2) e_reg += -(state.d_p[get1DIdx(n2_i, n2_j, input.width, input.height)]);
-	if (validN3) e_reg += -(state.d_p[get1DIdx(n3_i, n3_j, input.width, input.height)]);
-	
+	// pos/constraint
+	float2 constraintUV = input.d_constraints[variableIdx]; bool validConstraint = (constraintUV.x >= 0 && constraintUV.y >= 0);
+	if (validConstraint) { b += parameters.weightFitting*state.d_p[variableIdx]; }
+
+	// pos/reg
+	float2 e_reg = make_float2(0.0f, 0.0f);
+	if (validN0) e_reg += 2.0f*(state.d_p[variableIdx] - state.d_p[get1DIdx(n0_i, n0_j, input.width, input.height)]);
+	if (validN1) e_reg += 2.0f*(state.d_p[variableIdx] - state.d_p[get1DIdx(n1_i, n1_j, input.width, input.height)]);
+	if (validN2) e_reg += 2.0f*(state.d_p[variableIdx] - state.d_p[get1DIdx(n2_i, n2_j, input.width, input.height)]);
+	if (validN3) e_reg += 2.0f*(state.d_p[variableIdx] - state.d_p[get1DIdx(n3_i, n3_j, input.width, input.height)]);
 	b += parameters.weightRegularizer*e_reg;
+
+	// angle/reg
+	float	 e_reg_angle = 0.0f;
+	float	 angleP		 = state.d_pA[variableIdx];
+	float2x2 dR			 = evalR_dR(state.d_A[variableIdx]);
+	float2   pHat		 = state.d_urshape[get1DIdx(i, j, input.width, input.height)];
+	if (validN0) { float2 qHat = state.d_urshape[get1DIdx(n0_i, n0_j, input.width, input.height)]; mat2x1 D = mat2x1(dR*(pHat - qHat)); e_reg_angle += D.getTranspose()*D*angleP; }
+	if (validN1) { float2 qHat = state.d_urshape[get1DIdx(n1_i, n1_j, input.width, input.height)]; mat2x1 D = mat2x1(dR*(pHat - qHat)); e_reg_angle += D.getTranspose()*D*angleP; }
+	if (validN2) { float2 qHat = state.d_urshape[get1DIdx(n2_i, n2_j, input.width, input.height)]; mat2x1 D = mat2x1(dR*(pHat - qHat)); e_reg_angle += D.getTranspose()*D*angleP; }
+	if (validN3) { float2 qHat = state.d_urshape[get1DIdx(n3_i, n3_j, input.width, input.height)]; mat2x1 D = mat2x1(dR*(pHat - qHat)); e_reg_angle += D.getTranspose()*D*angleP; }
+	bA += parameters.weightRegularizer*e_reg_angle;
 
 	return b;
 }

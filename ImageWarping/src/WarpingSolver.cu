@@ -34,17 +34,18 @@ __global__ void PCGInit_Kernel1(SolverInput input, SolverState state, SolverPara
 	float d = 0.0f;
 	if (x < N)
 	{
-		float3 residuumA;
+		float residuumA;
 		const float2 residuum = evalMinusJTFDevice(x, input, state, parameters, residuumA); // residuum = J^T x -F - A x delta_0  => J^T x -F, since A x x_0 == 0 
 		state.d_r[x]  = residuum;												 // store for next iteration
 		state.d_rA[x] = residuumA;												 // store for next iteration
 
 		const float2 p  = state.d_precondioner[x]  * residuum;					 // apply preconditioner M^-1
-		const float3 pA = state.d_precondionerA[x] * residuumA;					 // apply preconditioner M^-1
 		state.d_p[x] = p;
+
+		const float pA = state.d_precondionerA[x] * residuumA;					 // apply preconditioner M^-1
 		state.d_pA[x] = pA;
 
-		d = dot(residuum, p) + dot(residuumA, pA);								 // x-th term of nomimator for computing alpha and denominator for computing beta
+		d = dot(residuum, p) + residuumA * pA;								 // x-th term of nomimator for computing alpha and denominator for computing beta
 	}
 
 	bucket[threadIdx.x] = d;
@@ -103,13 +104,13 @@ __global__ void PCGStep_Kernel1(SolverInput input, SolverState state, SolverPara
 	float d = 0.0f;
 	if (x < N)
 	{
-		float3 tmpA;
+		float tmpA;
 		const float2 tmp = applyJTJDevice(x, input, state, parameters, tmpA);		// A x p_k  => J^T x J x p_k 
 
-		state.d_Ap_X[x]  = tmp;												// store for next kernel call
-		state.d_Ap_XA[x] = tmpA;											// store for next kernel call
+		state.d_Ap_X[x]  = tmp;														// store for next kernel call
+		state.d_Ap_XA[x] = tmpA;													// store for next kernel call
 
-		d = dot(state.d_p[x], tmp) + dot(state.d_pA[x], tmpA);				// x-th term of denominator of alpha
+		d = dot(state.d_p[x], tmp) + state.d_pA[x] * tmpA;							// x-th term of denominator of alpha
 	}
 
 	bucket[threadIdx.x] = d;
@@ -132,21 +133,21 @@ __global__ void PCGStep_Kernel2(SolverInput input, SolverState state)
 		if (dotProduct > FLOAT_EPSILON) alpha = state.d_rDotzOld[x] / dotProduct;  // update step size alpha
 
 		state.d_delta[x]  = state.d_delta[x]  + alpha*state.d_p[x];				// do a decent step
-		state.d_deltaA[x] = state.d_deltaA[x] + alpha*state.d_pA[x];				// do a decent step
+		state.d_deltaA[x] = state.d_deltaA[x] + alpha*state.d_pA[x];			// do a decent step
 
 		float2 r = state.d_r[x] - alpha*state.d_Ap_X[x];					// update residuum
 		state.d_r[x] = r;													// store for next kernel call
 
-		float3 rA = state.d_rA[x] - alpha*state.d_Ap_XA[x];					// update residuum
+		float rA = state.d_rA[x] - alpha*state.d_Ap_XA[x];					// update residuum
 		state.d_rA[x] = rA;													// store for next kernel call
 
 		float2 z = state.d_precondioner[x] * r;								// apply preconditioner M^-1
 		state.d_z[x] = z;													// save for next kernel call
 
-		float3 zA = state.d_precondionerA[x] * rA;							// apply preconditioner M^-1
+		float zA = state.d_precondionerA[x] * rA;							// apply preconditioner M^-1
 		state.d_zA[x] = zA;													// save for next kernel call
 
-		b = dot(z, r) + dot(zA, rA);										// compute x-th term of the nominator of beta
+		b = dot(z, r) + zA * rA;										// compute x-th term of the nominator of beta
 	}
 
 	__syncthreads();														// Only write if every thread in the block has has read bucket[0]
@@ -227,7 +228,7 @@ __global__ void ApplyLinearUpdateDevice(SolverInput input, SolverState state, So
 
 	if (x < N) {
 		state.d_x[x] = state.d_x[x] + state.d_delta[x];
-		//state.d_A[x] = state.d_A[x] + state.d_deltaA[x]; // comment in
+		state.d_A[x] = state.d_A[x] + state.d_deltaA[x];
 	}
 }
 
@@ -262,9 +263,8 @@ __global__ void EvalResidualDevice(SolverInput input, SolverState state, SolverP
 	const unsigned int x = blockIdx.x * blockDim.x + threadIdx.x;
 
 	if (x < N) {
-		float3 residualA;
-		float2 residual = evalFDevice(x, input, state, parameters, residualA);
-		float out = warpReduce(residual.x + residual.y + residualA.x + residualA.y + residualA.z);
+		float2 residual = evalFDevice(x, input, state, parameters);
+		float out = warpReduce(residual.x + residual.y);
         unsigned int laneid;
         //This command gets the lane ID within the current warp
         asm("mov.u32 %0, %%laneid;" : "=r"(laneid));
