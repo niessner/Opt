@@ -553,13 +553,17 @@ local Image = newclass("Image")
 -- Z: this will eventually be opt.Image, but that is currently used by our direct methods
 -- so this is going in the ad table for now
 -- small workaround: idx > 0 means it is part of ProblemSpec struct
--- idx < 0 means that it is the -idx-th argument to the function begin generated after the ProblemSpec struct. (.e.g -1 is the first argument) 
-function ProblemSpecAD:Image(name,W,H,idx)
+-- idx < 0 means that it is the -idx-th argument to the function begin generated after the Parameters struct. (.e.g -1 is the first argument) 
+function ProblemSpecAD:Image(name,typ,W,H,idx)
+    if not terralib.types.istype(typ) then
+        typ,W,H,idx = float,typ,W,H --shift arguments left
+    end
+    assert(typ:isarithmetic())
     assert(W == 1 or Dim:is(W))
     assert(H == 1 or Dim:is(H))
     idx = assert(tonumber(idx))
     if idx >= 0 then
-        self.P:Image(name,float,W,H,idx)
+        self.P:Image(name,typ,W,H,idx)
     end
     return Image:new { name = tostring(name), W = W, H = H, idx = idx }
 end
@@ -635,6 +639,7 @@ local function createfunction(problemspec,exp,usebounds,W,H)
                     imagetosym[a.image] = im
                 end
                 r = symbol(float,tostring(a))
+                -- note: implicit cast to float happens here for non-float images.
                 stmts:insert quote
                     var [r] = [ usebounds and (`im:get(i+[a.x],j+[a.y],gi+[a.x],gj+[a.y])) or (`im(i+[a.x],j+[a.y])) ]
                 end
