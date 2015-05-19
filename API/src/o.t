@@ -788,41 +788,66 @@ local function createjtj(Fs,unknown,P)
     return P_hat
 end
 
+local lastTime = nil
+function timeSinceLast(name)
+    local currentTime = terralib.currenttimeinseconds()
+    if (lastTime) then
+        local deltaTime = currentTime-lastTime
+        print(name,": ", deltaTime,"s")
+    end
+    lastTime = currentTime
+end
+
 function ProblemSpecAD:Cost(costexp_)
+    timeSinceLast("Cost begin")
     local costexp = assert(ad.toexp(costexp_))
+    timeSinceLast("costexp")
     local images = imagesusedinexpression(costexp)
+    timeSinceLast("imagesusedinexpression")
     local unknown = images[1]
     
     local unknownvars = unknowns(costexp)
+    timeSinceLast("unknowns")
     local gradient = costexp:gradient(unknownvars)
+    timeSinceLast("gradient")
     
     dprint("cost expression")
     dprint(ad.tostrings({assert(costexp)}))
     dprint("grad expression")
     local names = table.concat(unknownvars:map(function(v) return tostring(v:key()) end),", ")
     dprint(names.." = "..ad.tostrings(gradient))
-    
+    timeSinceLast("names")
     local gradientgathered = 0
     for i,u in ipairs(unknownvars) do
         local a = u:key()
-        gradientgathered = gradientgathered + shiftexp(gradient[i],-a.x,-a.y)
+        local shif = shiftexp(gradient[i],-a.x,-a.y)
+        print(shif)
+        gradientgathered = gradientgathered + shif
+        timeSinceLast("gradientgathered"..i)
     end
-    
+    timeSinceLast("gradientgathered")
     dprint("grad gather")
     dprint(ad.tostrings({gradientgathered}))
     
     self.P:Stencil(stencilforexpression(costexp))
+    timeSinceLast("stencilforexpression(costexp)")
     self.P:Stencil(stencilforexpression(gradientgathered))
+    timeSinceLast("stencilforexpression(gradientgathered)")
     
     if SumOfSquares:is(costexp_) then
         local P = self:Image("P",unknown.W,unknown.H,-1)
         local jtjexp = 2.0*createjtj(costexp_.terms,unknown,P)
+        timeSinceLast("createjtj(costexp_.terms,unknown,P)")
         self.P:Stencil(stencilforexpression(jtjexp))
+        timeSinceLast("stencilforexpression(jtjexp)")
         createfunctionset(self,"applyJTJ",jtjexp)
+        timeSinceLast("createfunctionset(self,'applyJTJ',jtjexp)")
     end
     
     createfunctionset(self,"cost",costexp)
+    timeSinceLast("createfunctionset(self,'cost',costexp)")
     createfunctionset(self,"gradient",gradientgathered)
+    timeSinceLast("createfunctionset(self,'gradient',gradientgathered)")
     
     if verboseAD then
         terralib.tree.printraw(self)

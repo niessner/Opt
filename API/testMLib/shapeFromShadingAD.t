@@ -73,13 +73,16 @@ end
 
 -- equation 10
 function n(offX, offY)
-	local i = offX + posX
-    local j = offY + posY
+	local i = offX + posX -- good
+    local j = offY + posY -- good
+    --f_x good, f_y good
 
     local n_x = D(offX, offY - 1) * (D(offX, offY) - D(offX - 1, offY)) / f_y
     local n_y = D(offX - 1, offY) * (D(offX, offY) - D(offX, offY - 1)) / f_x
     local n_z = (n_x * (u_x - i) / f_x) + (n_y * (u_y - j) / f_y) - (D(offX-1, offY)*D(offX, offY-1) / f_x*f_y)
-    return {n_x, n_y, n_z}
+    local inverseMagnitude = 1.0/ad.sqrt(n_x*n_x + n_y*n_y + n_z*n_z)
+    return times(inverseMagnitude, {n_x, n_y, n_z})
+    --return {inverseMagnitude,inverseMagnitude,inverseMagnitude}
 end
 
 function B(offX, offY)
@@ -114,10 +117,12 @@ local E_s = ad.select(inBounds,ad.select(crossStencilValid, E_s_beforeSelect ,0)
 
 local E_p = ad.select(pointValid, D(0,0) - D_i(0,0)	,0)
 
+--local E_p = ad.select(squareStencilValid, D(0,0) 	,0)
+
 local E_r_h = 0 --temporal constraint, unimplemented
 local E_r_v = 0 --temporal constraint, unimplemented
 local E_r_d = 0 --temporal constraint, unimplemented
 
---local cost = ad.sumsquared(w_g*E_g_h, w_g*E_g_v, w_s*E_s, w_p*E_p, w_r*E_r_h, w_r*E_r_v, w_r*E_r_d)
-local cost = ad.sumsquared(w_p*E_p)
+local cost = ad.sumsquared(w_g*E_g_h, w_g*E_g_v, w_s*E_s, w_p*E_p, w_r*E_r_h, w_r*E_r_v, w_r*E_r_d)
+--local cost = ad.sumsquared(w_p*E_p)
 return S:Cost(cost)
