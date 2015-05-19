@@ -55,6 +55,7 @@ local terra cost(i : int64, j : int64, gi : int64, gj : int64, self : P:Paramete
 
 	var res = (float)(w_reg*laplacianCost + w_fit*reconstructionCost)
 	return res
+	
 end
 
 local terra gradient(i : int64, j : int64, gi : int64, gj : int64, self : P:ParameterType())
