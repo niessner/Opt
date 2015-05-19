@@ -264,6 +264,33 @@ local terra warpReduce(val : float)
 end
 util.warpReduce = warpReduce
 
+__syncthreads = cudalib.nvvm_barrier0
+
+-- Straightforward implementation of: http://devblogs.nvidia.com/parallelforall/faster-parallel-reductions-kepler/
+-- sdata must be a block of 128 bytes of shared memory we are free to trash
+local terra blockReduce(val : float, sdata : &float, threadIdx : int, threadsPerBlock : uint)
+	var lane = laneid()
+  	var wid = threadIdx / 32 -- TODO: check if this is right for 2D domains
+
+  	val = warpReduce(val); -- Each warp performs partial reduction
+
+  	if (lane==0) then
+  		sdata[wid]=val; -- Write reduced value to shared memory
+  	end
+
+  	__syncthreads();   -- Wait for all partial reductions
+
+  	--read from shared memory only if that warp existed
+  	val = 0
+  	if (threadIdx < threadsPerBlock / 32) then
+  		val = sdata[lane]
+  	end
+
+  	if (wid==0) then
+		val = warpReduce(val); --Final reduce within first warp
+  	end
+end
+util.blockReduce = blockReduce
 
 
 util.max = terra(x : double, y : double)
