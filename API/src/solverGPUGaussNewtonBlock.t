@@ -150,11 +150,7 @@ return function(problemSpec, vars)
 			var blockParams : problemSpec:ParameterType(true)
 			var P : problemSpec:UnknownType(true)
 			
-			if threadIdx.x == 0 and threadIdx.y == 0 and blockIdx.x == 0 and blockIdx.y == 0 then
-				printf("bla\n")
-				printf("(%d | %d)\n",gId_i, gId_j)
-			end
-			
+		
 			-- load everything into shared memory
 			escape				
 				for i,p in ipairs(problemSpec.parameters) do
@@ -213,9 +209,6 @@ return function(problemSpec, vars)
 				--R = 1.0f
 				Pre = 1	--TODO fix this hack... the pre-conditioner needs to be the diagonal of JTJ
 				var preRes : float = Pre*R																  -- apply preconditioner M^-1 
-				if gId_i == 0 and gId_j == 0 then
-					printf("%f ", preRes)
-				end
 				P(tId_i, tId_j) = preRes											   	  -- save for later
 				d = R*preRes
 			end
@@ -265,12 +258,12 @@ return function(problemSpec, vars)
 					var alpha : float = 0.0f
 					
 					if dotProduct > FLOAT_EPSILON then	-- update step size alpha
-						alpha = RDotZOld/dotProduct;
+						alpha = RDotZOld/dotProduct
 					end
-					Delta = Delta+alpha*currentP;	-- do a decent step		
-					R = R-alpha*AP;					-- update residuum						
-					Z = Pre*R;						-- apply pre-conditioner M^-1
-					b = Z*R;						-- compute x-th term of the nominator of beta
+					Delta = Delta+alpha*currentP	-- do a decent step		
+					R = R-alpha*AP					-- update residuum						
+					Z = Pre*R						-- apply pre-conditioner M^-1
+					b = Z*R							-- compute x-th term of the nominator of beta
 				end
 			
 				__syncthreads() -- Only write if every thread in the block has has read bucket[0]
@@ -282,9 +275,9 @@ return function(problemSpec, vars)
 				__syncthreads()
 		
 				if isInsideImage(gId_i, gId_j, W, H) then
-					var rDotzNew : float = patchBucket[0];	-- get new nominator
+					var rDotzNew : float = patchBucket[0]	-- get new nominator
 					
-					var beta : float = 0.0f;														 
+					var beta : float = 0.0f														 
 					if RDotZOld > FLOAT_EPSILON then
 						beta = rDotzNew/RDotZOld -- update step size beta
 					end
@@ -343,8 +336,7 @@ return function(problemSpec, vars)
 			var o : int = 0
 			for lIter = 0, lIterations do
 				printf("iter %d", lIter)
-				--gpu.PCGStepBlock(pd, offsetX[o], offsetY[o], bIterations)
-				gpu.PCGStepBlock(pd, 0, 0, bIterations)
+				gpu.PCGStepBlock(pd, offsetX[o], offsetY[o], bIterations)
 				gpu.PCGLinearUpdateBlock(pd)
 				o = (o+1)%8
 				C.cudaDeviceSynchronize()
