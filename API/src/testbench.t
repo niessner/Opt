@@ -1,7 +1,12 @@
 local opt = require("o")
-opt.dimensions = {[0] = 1, 2, 3 }
-opt.elemsizes = {[0] = 4,4,4}
-opt.strides = {[0] = 4,4,4}
+
+local bigt = setmetatable({}, { __index = function(idx) return 3 end })
+
+opt.dimensions = bigt
+opt.elemsizes = bigt
+opt.strides = bigt
+opt.problemkind = ""
+
 opt.math = require("util").cpuMath
-package.terrapath = package.terrapath..";../testMLib/?.t"
-require("imageSmoothingAD")
+package.terrapath = package.terrapath..";../testMLib/?.t;"
+require("shapeFromShadingAD")

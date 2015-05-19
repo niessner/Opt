@@ -227,14 +227,29 @@ for i,o in ipairs(mo) do
 end
 Exp.__unm = function(a) return ad.unm(a) end
 
-function Var:rename(vars)
-    local nv = type(vars) == "function" and vars(self:key()) or vars[self:key()] 
-    return assert(toexp(nv),
-                  ("rename: unknown invalid mapping for variable %s which maps to %s"):format(tostring(self:key()),tostring(nv)))
-end
-function Const:rename(vars) return self end
-function Apply:rename(vars)
-    return self.op(unpack(self.args:map("rename",vars)))
+function Exp:rename(vars)
+    local varsf = type(vars) == "function" and vars or function(k) return vars[k] end
+    local visitcached
+    local function visit(self) 
+        if self.kind == "Apply" then
+            return self.op(unpack(self.args:map(visitcached,vars)))
+        elseif self.kind == "Const" then
+            return self
+        elseif self.kind == "Var" then
+            local nv = toexp(varsf(self:key()))
+            return assert(nv,
+                          ("rename: unknown invalid mapping for variable %s which maps to %s"):format(tostring(self:key()),tostring(nv)))
+        end
+    end
+    local cached = {} 
+    function visitcached(self)
+        local r = cached[self]
+        if r then return r end
+        r = visit(self)
+        cached[self] = r
+        return r
+    end
+    return visitcached(self)
 end
 
 local function countuses(es)
