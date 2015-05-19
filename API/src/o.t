@@ -185,6 +185,7 @@ terra opt.ProblemDelete(p : &opt.Problem)
 end
 
 local ProblemSpec = newclass("ProblemSpec")
+local PROBLEM_STAGES  = { inputs = 0, functions = 1 }
 function opt.ProblemSpec()
     local BlockedProblemParameters = terralib.types.newstruct("BlockedProblemParameters")
 	local problemSpec = ProblemSpec:new { 
@@ -194,7 +195,8 @@ function opt.ProblemSpec()
                              ProblemParameters = terralib.types.newstruct("ProblemParameters"),
                              BlockedProblemParameters = BlockedProblemParameters,
 							 functions = {},
-							 maxStencil = 0
+							 maxStencil = 0,
+							 stage = "inputs"
                            }
 	function BlockedProblemParameters.metamethods.__getentries(self)
 		local entries = {}
@@ -210,6 +212,11 @@ function opt.ProblemSpec()
 	return problemSpec
 end
 
+function ProblemSpec:Stage(name)
+    assert(PROBLEM_STAGES[self.stage] <= PROBLEM_STAGES[name], "all inputs must be specified before functions are added")
+    self.stage = name
+end
+
 function ProblemSpec:toname(name)
     name = assert(tostring(name))
     assert(not self.names[name],string.format("name %s already in use",name))
@@ -220,27 +227,35 @@ end
 local newImage 
 
 function ProblemSpec:MaxStencil()
+    self:Stage "functions"
 	return self.maxStencil
 end
 
 function ProblemSpec:Stencil(stencil) 
+    self:Stage "inputs"
 	self.maxStencil = math.max(stencil, self.maxStencil)
 end
 
 
 function ProblemSpec:BlockSize()
+    self:Stage "functions"
 	--TODO: compute based on problem
 	--return opt.BLOCK_SIZE
 	return 16
 end
 
-function ProblemSpec:BlockStride() return 2*self:MaxStencil() + self:BlockSize() end
+function ProblemSpec:BlockStride() 
+    self:Stage "functions"
+    return 2*self:MaxStencil() + self:BlockSize() 
+end
 
 function ProblemSpec:BlockedTypeForImage(W,H,typ)
+    self:Stage "functions"
 	local elemsize = terralib.sizeof(assert(typ))
 	return newImage(typ, W, H, elemsize, elemsize*self:BlockStride())
 end
 function ProblemSpec:BlockedTypeForImageEntry(p)
+    self:Stage "functions"
 	local mm = p.type.metamethods
 	return self:BlockedTypeForImage(mm.W,mm.H,mm.typ)
 end
@@ -256,10 +271,12 @@ function ProblemSpec:ParameterType(blocked)
 	end
 	return blocked and self.BlockedProblemParameters or  self.ProblemParameters
 end
-function ProblemSpec:UnknownType(blocked) 
+function ProblemSpec:UnknownType(blocked)
+    self:Stage "functions"
 	return self:TypeOf("X",blocked) 
 end
 function ProblemSpec:TypeOf(name,blocked)
+    self:Stage "functions"
 	if blocked == nil then
 		blocked = self.shouldblock
 	end 
@@ -268,11 +285,13 @@ function ProblemSpec:TypeOf(name,blocked)
 end
 
 function ProblemSpec:Function(name,dimensions,boundary,interior)
+    self:Stage "functions"
     interior = interior or boundary
     interior:gettype() -- check this typechecks
     self.functions[name] = { name = name, dimensions = dimensions, boundary = boundary, interior = interior }
 end
 function ProblemSpec:Param(name,typ,idx)
+    self:Stage "inputs"
     self:newparameter(name,"param",idx,typ)
 end
 
@@ -341,6 +360,7 @@ local function todim(d)
 end
 
 function ProblemSpec:Image(name,typ,W,H,idx)
+    self:Stage "inputs"
     assert(terralib.types.istype(typ))
     local elemsize = assert(tonumber(opt.elemsizes[idx]))
     local stride = assert(tonumber(opt.strides[idx]))
@@ -350,6 +370,7 @@ end
 
 
 function ProblemSpec:InternalImage(typ,W,H,blocked)
+    self:Stage "functions"
 	if blocked == nil then
 		blocked = self.shouldblock
 	end
@@ -410,6 +431,7 @@ end)
 
 
 function ProblemSpec:Adjacency(name,fromDim,toDim,idx)
+    self:Stage "inputs"
     local w0,h0,w1,h1 = assert(todim(fromDim[1])),assert(todim(fromDim[2])),assert(todim(toDim[1])),assert(todim(toDim[2]))
     local Adj = newAdjacency(w0,h0,w1,h1)
     local obj = terralib.new(Adj,{assert(opt.rowindexes[idx]),assert(opt.xs[idx]),assert(opt.ys[idx])})
@@ -432,6 +454,7 @@ local newEdgeValues = terralib.memoize(function(typ,adj)
 end)
 
 function ProblemSpec:EdgeValues(name,typ,adjName, idx)
+    self:Stage "inputs"
     local param = self.parameters[assert(self.names[adjName],"unknown adjacency")]
     assert(param.kind == "adjacency", "expected the name of an adjacency")
     local ev = newEdgeValues(typ, param.type)
@@ -655,13 +678,26 @@ local function createfunction(problemspec,exp,usebounds,W,H)
     end
     return generatedfn,stencil
 end
+
+local function stencilforexpression(exp)
+    local stencil = 0
+    exp:rename(function(a)
+        if "ImageAccess" == a.kind then
+            stencil = math.max(stencil,math.max(math.abs(a.x),math.abs(a.y))) 
+        elseif "BoundsAccess" == a.kind then--bounds calculation
+            stencil = math.max(stencil,math.max(math.abs(a.x)+a.sx,math.abs(a.y)+a.sy))
+        end
+        return ad.v[a]
+    end)
+    return stencil
+end
 local function createfunctionset(problemspec,name,exp)
     local ut = problemspec.P:UnknownType()
     local W,H = ut.metamethods.W,ut.metamethods.H
     
     dprint("function set for: ",name)
     dprint("bound")
-    local boundary,stencil = createfunction(problemspec,exp,true,W,H)
+    local boundary = createfunction(problemspec,exp,true,W,H)
     dprint("interior")
     local interior = createfunction(problemspec,exp,false,W,H)
     
@@ -770,14 +806,19 @@ function ProblemSpecAD:Cost(costexp_)
     dprint("grad gather")
     dprint(ad.tostrings({gradientgathered}))
     
-    createfunctionset(self,"cost",costexp)
-    createfunctionset(self,"gradient",gradientgathered)
+    self.P:Stencil(stencilforexpression(costexp))
+    self.P:Stencil(stencilforexpression(gradientgathered))
     
     if SumOfSquares:is(costexp_) then
         local P = self:Image("P",unknown.W,unknown.H,-1)
         local jtjexp = 2.0*createjtj(costexp_.terms,unknown,P)
+        self.P:Stencil(stencilforexpression(jtjexp))
         createfunctionset(self,"applyJTJ",jtjexp)
     end
+    
+    createfunctionset(self,"cost",costexp)
+    createfunctionset(self,"gradient",gradientgathered)
+    
     if verboseAD then
         terralib.tree.printraw(self)
     end
