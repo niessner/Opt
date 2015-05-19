@@ -193,7 +193,8 @@ function opt.ProblemSpec()
                              names = {}, -- name -> index in parameters list
                              ProblemParameters = terralib.types.newstruct("ProblemParameters"),
                              BlockedProblemParameters = BlockedProblemParameters,
-							 functions = {}
+							 functions = {},
+							 maxStencil = 0
                            }
 	function BlockedProblemParameters.metamethods.__getentries(self)
 		local entries = {}
@@ -201,7 +202,7 @@ function opt.ProblemSpec()
 			if p.kind ~= "image" then
 				entries[i] = {p.name,p.type}
 			else
-				entries[i] = {p.name,problemSpec:BlockedTypeForImage(p)}
+				entries[i] = {p.name,problemSpec:BlockedTypeForImageEntry(p)}
 			end
 		end
 		return entries
@@ -219,15 +220,13 @@ end
 local newImage 
 
 function ProblemSpec:MaxStencil()
-	if not self.maxstencil then
-		local m = 0
-		for i,f in ipairs(self.functions) do
-			m = math.max(m,math.max(f.stencil[1],f.stencil[2]))
-		end
-		self.maxstencil = m
-	end
-	return self.maxstencil
+	return self.maxStencil
 end
+
+function ProblemSpec:Stencil(stencil) 
+	self.maxStencil = math.max(stencil, self.maxStencil)
+end
+
 
 function ProblemSpec:BlockSize()
 	--TODO: compute based on problem
@@ -237,10 +236,13 @@ end
 
 function ProblemSpec:BlockStride() return 2*self:MaxStencil() + self:BlockSize() end
 
-function ProblemSpec:BlockedTypeForImage(p)
-	local typ = p.type
-	local elemsize = terralib.sizeof(typ.metamethods.typ)
-	return newImage(typ.metamethods.typ, typ.metamethods.W, typ.metamethods.H, elemsize, elemsize*self:BlockStride())
+function ProblemSpec:BlockedTypeForImage(W,H,typ)
+	local elemsize = terralib.sizeof(assert(typ))
+	return newImage(typ, W, H, elemsize, elemsize*self:BlockStride())
+end
+function ProblemSpec:BlockedTypeForImageEntry(p)
+	local mm = p.type.metamethods
+	return self:BlockedTypeForImage(mm.W,mm.H,mm.typ)
 end
 
 function ProblemSpec:newparameter(name,kind,idx,typ,obj)
@@ -262,13 +264,13 @@ function ProblemSpec:TypeOf(name,blocked)
 		blocked = self.shouldblock
 	end 
 	local p = self.parameters[assert(self.names[name],"unknown name: " .. name)] 
-    return blocked and self:BlockedTypeForImage(p) or p.type
+	return blocked and self:BlockedTypeForImageEntry(p) or p.type
 end
 
-function ProblemSpec:Function(name,dimensions,stencil,boundary,interior)
+function ProblemSpec:Function(name,dimensions,boundary,interior)
     interior = interior or boundary
     interior:gettype() -- check this typechecks
-    self.functions[name] = { name = name, dimensions = dimensions, stencil = stencil, boundary = boundary, interior = interior }
+    self.functions[name] = { name = name, dimensions = dimensions, boundary = boundary, interior = interior }
 end
 function ProblemSpec:Param(name,typ,idx)
     self:newparameter(name,"param",idx,typ)
@@ -347,12 +349,20 @@ function ProblemSpec:Image(name,typ,W,H,idx)
 end
 
 
-function opt.InternalImage(typ,W,H)
-    W,H = assert(todim(W)),assert(todim(H))
-    assert(terralib.types.istype(typ))
-    local elemsize = terralib.sizeof(typ)
-    return newImage(typ,W,H,elemsize,elemsize*W.size)
+function ProblemSpec:InternalImage(typ,W,H,blocked)
+	if blocked == nil then
+		blocked = self.shouldblock
+	end
+	if blocked then
+		return self:BlockedTypeForImage(W,H,typ)
+	else
+		W,H = assert(todim(W)),assert(todim(H))
+		assert(terralib.types.istype(typ))
+		local elemsize = terralib.sizeof(typ)
+		return newImage(typ,W,H,elemsize,elemsize*W.size)
+	end
 end
+
 
 local newAdjacency = terralib.memoize(function(w0,h0,w1,h1)
     local struct Adj {
@@ -595,7 +605,7 @@ local function createfunction(problemspec,exp,usebounds,W,H)
                         im = symbol(problemspec.P:TypeOf(a.image.name),a.image.name)
                         imageinits:insert(quote var [im] = P.[a.image.name] end)
                     else
-                        local imtype = opt.InternalImage(float,a.image.W,a.image.H)
+                        local imtype = problemspec.P:InternalImage(float,a.image.W,a.image.H)
                         im = symbol(imtype,a.image.name)
                         extraimages[-a.image.idx] = im
                     end
@@ -655,7 +665,7 @@ local function createfunctionset(problemspec,name,exp)
     dprint("interior")
     local interior = createfunction(problemspec,exp,false,W,H)
     
-    problemspec.P:Function(name,{W,H},stencil,boundary,interior)
+    problemspec.P:Function(name,{W,H},boundary,interior)
 end
 local function unknowns(exp)
     local seenunknown = {}

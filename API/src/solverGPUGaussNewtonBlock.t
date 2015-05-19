@@ -134,6 +134,7 @@ return function(problemSpec, vars)
 	kernels.PCGStepBlock = function(data)
 		local terra PCGStepBlockGPU(pd : &data.PlanData, ox : int, oy : int, nBlockIterations : uint)
 			
+			
 			var W = pd.parameters.X:W()
 			var H = pd.parameters.X:H()
 	
@@ -148,6 +149,12 @@ return function(problemSpec, vars)
 			var blockCornerY : int = blockIdx.y * blockDim.y - oy
 			var blockParams : problemSpec:ParameterType(true)
 			var P : problemSpec:UnknownType(true)
+			
+			if threadIdx.x == 0 and threadIdx.y == 0 and blockIdx.x == 0 and blockIdx.y == 0 then
+				printf("bla\n")
+				printf("(%d | %d)\n",gId_i, gId_j)
+			end
+			
 			-- load everything into shared memory
 			escape				
 				for i,p in ipairs(problemSpec.parameters) do
@@ -156,7 +163,7 @@ return function(problemSpec, vars)
 							blockParams.[p.name] = pd.parameters.[p.name]
 						end
 					else 
-						local blockedType = problemSpec:BlockedTypeForImage(p)
+						local blockedType = problemSpec:BlockedTypeForImageEntry(p)
 						local stencil = problemSpec:MaxStencil()
 						local offset = stencil*problemSpec:BlockStride() + stencil
 						local shmem = cudalib.sharedmemory(p.type.metamethods.typ, SHARED_MEM_SIZE_VARIABLES)
@@ -180,7 +187,6 @@ return function(problemSpec, vars)
 			
 			__syncthreads()
 
-			
 			--loadPatchToCache(X, pd.parameters.X, tId_i, tId_j, gId_i, gId_j, W, H)
 			--TODO fix the shared memory here (replace pd.X with input.d_targetDepth)
 			--loadPatchToCache(TargetDepth, pd.parameters.X, tId_i, tId_j, gId_i, gId_j, W, H)
@@ -200,20 +206,20 @@ return function(problemSpec, vars)
 
 			
 			var d : problemSpec:UnknownType().metamethods.typ = 0.0f
-
+			
 			if isInsideImage(gId_i, gId_j, W, H) then
 				--R = evalMinusJTFDevice(tId_i, tId_j, gId_i, gId_j, W, H, TargetDepth, X, parameters, &Pre) -- residuum = J^T x -F - A x delta_0  => J^T x -F, since A x x_0 == 0
-				--TODO MAKE SURE THAT THIS IS CALLED THE RIGHT WAY (make sure to call blockParams
-				--R = -data.problemSpec.functions.gradient.boundary(tId_i, tId_j, gId_i, gId_j, blockParams)
-				R = 1.0f
+				R = -data.problemSpec.functions.gradient.boundary(tId_i, tId_j, gId_i, gId_j, blockParams)
+				--R = 1.0f
 				Pre = 1	--TODO fix this hack... the pre-conditioner needs to be the diagonal of JTJ
 				var preRes : float = Pre*R																  -- apply preconditioner M^-1 
-				if tId_i == 0 and tId_j == 0 and gId_i == 0 and gId_j == 0 then
+				if gId_i == 0 and gId_j == 0 then
 					printf("%f ", preRes)
 				end
 				P(tId_i, tId_j) = preRes											   	  -- save for later
 				d = R*preRes
 			end
+			
 			
 			patchBucket[getLinearThreadId(tId_i, tId_j)] = d;											   -- x-th term of nomimator for computing alpha and denominator for computing beta
 
@@ -240,8 +246,8 @@ return function(problemSpec, vars)
 				if isInsideImage(gId_i, gId_j, W, H) then
 					--AP = applyJTJDevice(tId_i, tId_j, gId_i, gId_j, W, H, TargetDepth, P, X, parameters);	-- A x p_k  => J^T x J x p_k 
 					--d = currentP*AP;																		-- x-th term of denominator of alpha
-					--AP = data.problemSpec.functions.applyJTJ.boundary(tId_i, tId_j, gId_i, gId_j, blockParams, P) -- A x p_k  => J^T x J x p_k 
-					AP = 1.0f
+					AP = data.problemSpec.functions.applyJTJ.boundary(tId_i, tId_j, gId_i, gId_j, blockParams, P) -- A x p_k  => J^T x J x p_k 
+					--AP = 1.0f
 					d = currentP*AP
 				end
 			
@@ -336,9 +342,13 @@ return function(problemSpec, vars)
 			
 			var o : int = 0
 			for lIter = 0, lIterations do
-				gpu.PCGStepBlock(pd, offsetX[o], offsetY[o], bIterations)
+				printf("iter %d", lIter)
+				--gpu.PCGStepBlock(pd, offsetX[o], offsetY[o], bIterations)
+				gpu.PCGStepBlock(pd, 0, 0, bIterations)
 				gpu.PCGLinearUpdateBlock(pd)
 				o = (o+1)%8
+				C.cudaDeviceSynchronize()
+				printf(" done!\n")
 			end	
 			
 		end
