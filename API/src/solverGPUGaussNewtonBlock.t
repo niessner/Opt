@@ -137,11 +137,13 @@ return function(problemSpec, vars)
 					]]--
 					imageBlock(localX, localY) = image:get(globalX, globalY)	--bounded check		
 					
+					--[[
 					if globalX == 31 and globalY == 16 then
 						printf("st: (%d|%d) -- (%d|%d)\n", localX, localY, globalX, globalY)
 						printf("local: %f\n", imageBlock(localX, localY))
 						printf("global: %f\n", image:get(globalX, globalY))
 					end
+					--]]
 				end
 			end			
 		end
@@ -248,7 +250,6 @@ return function(problemSpec, vars)
 						local offset = stencil*problemSpec:BlockStride() + stencil
 						local shared_mem_size = (problemSpec:BlockSize()+2*problemSpec:MaxStencil())*(problemSpec:BlockSize()+2*problemSpec:MaxStencil())
 						local shmem = cudalib.sharedmemory(p.type.metamethods.typ, shared_mem_size)
-						print("offset: ", offset, " shmem: ", shmem)
 						emit quote 
 							blockParams.[p.name] = [blockedType] { data = [&uint8](shmem + offset) } 
 							[CopyToShared(p.type,blockedType)](blockCornerX, blockCornerY, pd.parameters.[p.name], blockParams.[p.name])
@@ -260,10 +261,12 @@ return function(problemSpec, vars)
 			-- allocate Pre-conditioner (P)
 			escape
 				local blockedType = problemSpec:UnknownType(true)
-				local shared_mem_size = problemSpec:BlockSize()*problemSpec:BlockSize()	-- no need for overlap here
+				local stencil = problemSpec:MaxStencil()
+				local offset = stencil*problemSpec:BlockStride() + stencil
+				local shared_mem_size = (problemSpec:BlockSize()+2*problemSpec:MaxStencil())*(problemSpec:BlockSize()+2*problemSpec:MaxStencil())
 				local shmem = cudalib.sharedmemory(problemSpec:UnknownType().metamethods.typ, shared_mem_size)		--pre-conditioner
 				emit quote
-					P = [blockedType] { data = [&uint8](shmem) } 
+					P = [blockedType] { data = [&uint8](shmem + offset) } 
 				end
 			end
 			
@@ -276,7 +279,7 @@ return function(problemSpec, vars)
 
 			__syncthreads()	--after here, everything should be in shared memory
 			
-			
+			--[[
 			if tId_i == 0 and tId_j == 0 
 			and blockCornerX == 16 and blockCornerY == 16
 			then
@@ -294,7 +297,7 @@ return function(problemSpec, vars)
 				end
 			end
 			
-			
+			--]]
 			if isInsideImage(gId_i, gId_j, W, H) then
 				var g : float = pd.parameters.A(gId_i, gId_j)
 				var l : float = blockParams.A(tId_i, tId_j)
@@ -302,6 +305,7 @@ return function(problemSpec, vars)
 					printf("ERROR: (%d|%d)\t%f %f\n", gId_i, gId_j, g, l)
 				end
 			end
+			
 			
 	
 			--//////////////////////////////////////////////////////////////////////////////////////////
@@ -318,7 +322,7 @@ return function(problemSpec, vars)
 				pd.delta(gId_i, gId_j) = 0.01f * R
 				Pre = 1.0f	--TODO fix this hack... the pre-conditioner needs to be the diagonal of JTJ
 				var preRes : float = Pre*R																  -- apply preconditioner M^-1 
-				P(tId_i, tId_j) = preRes											   	  -- save for later
+				--P(tId_i, tId_j) = preRes											   	  -- save for later
 				d = R*preRes
 			end
 			
@@ -450,8 +454,8 @@ return function(problemSpec, vars)
 
 		pd.parameters = [util.getParameters(problemSpec, images, edgeValues,params_)]
 
-		var nIterations = 1	--non-linear iterations
-		var lIterations = 20	--linear iterations
+		var nIterations = 2000	--non-linear iterations
+		var lIterations = 1	--linear iterations
 		var bIterations = 1	--block iterations
 		
 		for nIter = 0, nIterations do
@@ -467,7 +471,8 @@ return function(problemSpec, vars)
 				gpu.PCGStepBlock(pd, offsetX[o], offsetY[o], bIterations)
 				gpu.PCGLinearUpdateBlock(pd, offsetX[o], offsetY[o])
 				o = (o+1)%8
-				C.cudaDeviceSynchronize()			
+				C.cudaDeviceSynchronize()	
+break				
 			end	
 
 		end
