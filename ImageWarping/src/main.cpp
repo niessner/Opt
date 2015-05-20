@@ -4,7 +4,7 @@
 int main(int argc, const char * argv[]) {
 
 	const std::string inputImage = "smoothingExampleD.png";
-	const ColorImageR8G8B8A8 image = LodePNG::load(inputImage);
+	ColorImageR8G8B8A8 image = LodePNG::load(inputImage);
 	ColorImageR32 imageR32(image.getWidth(), image.getHeight());
 	for (unsigned int y = 0; y < image.getHeight(); y++) {
 		for (unsigned int x = 0; x < image.getWidth(); x++) {
@@ -12,10 +12,20 @@ int main(int argc, const char * argv[]) {
 		}
 	}
 
-	std::vector<std::vector<int>> constraints; constraints.resize(2);
-	constraints[0].push_back(128); constraints[0].push_back(128); constraints[0].push_back(20); constraints[0].push_back(20);
-	constraints[1].push_back(128); constraints[1].push_back(200); constraints[1].push_back(50); constraints[1].push_back(50);
+	const std::string inputImageMask = "smoothingExampleDMask.png";
+	const ColorImageR8G8B8A8 imageMask = LodePNG::load(inputImageMask);
+	ColorImageR32 imageR32Mask(imageMask.getWidth(), imageMask.getHeight());
+	for (unsigned int y = 0; y < imageMask.getHeight(); y++) {
+		for (unsigned int x = 0; x < imageMask.getWidth(); x++) {
+			imageR32Mask(y, x) = imageMask(y, x).x;
+		}
+	}
 
+	std::vector<std::vector<int>> constraints; constraints.resize(4);
+	constraints[0].push_back(95);  constraints[0].push_back(118); constraints[0].push_back(80);  constraints[0].push_back(118);
+	constraints[1].push_back(120); constraints[1].push_back(118); constraints[1].push_back(130); constraints[1].push_back(118);
+	constraints[2].push_back(163); constraints[2].push_back(111); constraints[2].push_back(153); constraints[2].push_back(111);
+	constraints[3].push_back(183); constraints[3].push_back(111); constraints[3].push_back(193); constraints[3].push_back(111);
 	for (unsigned int i = 0; i < image.getHeight(); i++)
 	{
 		for (unsigned int j = 0; j < image.getWidth(); j++)
@@ -28,7 +38,7 @@ int main(int argc, const char * argv[]) {
 		}
 	}
 
-	ImageWarping warping(imageR32, constraints);
+	ImageWarping warping(imageR32, imageR32Mask, constraints);
 
 	ColorImageR32 res = warping.solve();
 	ColorImageR8G8B8A8 out(res.getWidth(), res.getHeight());
@@ -36,9 +46,26 @@ int main(int argc, const char * argv[]) {
 		for (unsigned int x = 0; x < res.getWidth(); x++) {
 			unsigned char p = math::round(math::clamp(res(y, x), 0.0f, 255.0f));
 			out(y, x) = vec4uc(p, p, p, 255);
+
+			for (unsigned int k = 0; k < constraints.size(); k++)
+			{
+				if (constraints[k][2] == y && constraints[k][3] == x) 
+				{
+					if (imageR32Mask(y, x) == 0)
+					{
+						out(y, x) = vec4uc(255, 0, 0, 255);
+					}
+				}
+
+				if (constraints[k][0] == y && constraints[k][1] == x)
+				{
+					image(y, x) = vec4uc(255, 0, 0, 255);
+				}
+			}
 		}
 	}
 	LodePNG::save(out, "output.png");
+	LodePNG::save(image, "inputMark.png");
 
 	getchar();
 
