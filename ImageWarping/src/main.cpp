@@ -4,7 +4,7 @@
 int main(int argc, const char * argv[]) {
 
 	//const std::string inputImage = "smoothingExampleD.png";
-	const std::string inputImage = "bend.png";
+	const std::string inputImage = "bend2.png";
 
 	ColorImageR8G8B8A8 image = LodePNG::load(inputImage);
 	ColorImageR32 imageR32(image.getWidth(), image.getHeight());
@@ -31,10 +31,10 @@ int main(int argc, const char * argv[]) {
 	//constraints[2].push_back(163); constraints[2].push_back(111); constraints[2].push_back(153); constraints[2].push_back(111);
 	//constraints[3].push_back(183); constraints[3].push_back(111); constraints[3].push_back(193); constraints[3].push_back(111);
 	
-	std::vector<std::vector<int>> constraints; constraints.resize(2);
+	std::vector<std::vector<int>> constraints; constraints.resize(3);
 	constraints[0].push_back(48); constraints[0].push_back(61); constraints[0].push_back(144); constraints[0].push_back(69);
-	constraints[1].push_back(80); constraints[1].push_back(61); constraints[1].push_back(165); constraints[1].push_back(92);
-	
+	constraints[1].push_back(64); constraints[1].push_back(61); constraints[1].push_back(154); constraints[1].push_back(82);
+	constraints[2].push_back(80); constraints[2].push_back(61); constraints[2].push_back(165); constraints[2].push_back(92);
 	
 	
 	for (unsigned int i = 0; i < image.getHeight(); i++)
