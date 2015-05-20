@@ -14,7 +14,7 @@ class CUDAWarpingSolver
 		~CUDAWarpingSolver();
 
 		//! gauss newton
-		void solveGN(float2* d_urshape, float2* d_warpField, float* d_warpAngles, float2* d_constraints, unsigned int nNonLinearIterations, unsigned int nLinearIterations, float weightFitting, float weightRegularizer);
+		void solveGN(float2* d_urshape, float2* d_warpField, float* d_warpAngles, float2* d_constraints, float* d_mask, unsigned int nNonLinearIterations, unsigned int nLinearIterations, float weightFitting, float weightRegularizer);
 		
 	private:
 

@@ -38,6 +38,7 @@ struct SolverState
 	float2*  d_x;						// Current state pos
 	float*   d_A;						// Current state pos
 	float2*  d_urshape;					// Current state urshape pos
+	float*	 d_mask;
 	
 	float2*	d_r;						// Residuum
 	float*	d_rA;						// Residuum

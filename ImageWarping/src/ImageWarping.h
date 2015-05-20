@@ -13,27 +13,32 @@ public:
 		m_image = image;
 		m_imageMask = imageMask;
 
-		cutilSafeCall(cudaMalloc(&d_urshape,    sizeof(float2)*m_image.getWidth()*m_image.getHeight()));
-		cutilSafeCall(cudaMalloc(&d_warpField,  sizeof(float2)*m_image.getWidth()*m_image.getHeight()));
-		cutilSafeCall(cudaMalloc(&d_warpAngles, sizeof(float)*m_image.getWidth()*m_image.getHeight()));
+		cutilSafeCall(cudaMalloc(&d_urshape,     sizeof(float2)*m_image.getWidth()*m_image.getHeight()));
+		cutilSafeCall(cudaMalloc(&d_warpField,   sizeof(float2)*m_image.getWidth()*m_image.getHeight()));
+		cutilSafeCall(cudaMalloc(&d_warpAngles,  sizeof(float)*m_image.getWidth()*m_image.getHeight()));
 		cutilSafeCall(cudaMalloc(&d_constraints, sizeof(float2)*m_image.getWidth()*m_image.getHeight()));
+		cutilSafeCall(cudaMalloc(&d_mask,		 sizeof(float)*m_image.getWidth()*m_image.getHeight()));
 
 		float2* h_urshape = new float2[m_image.getWidth()*m_image.getHeight()];
+		float*  h_mask    = new float [m_image.getWidth()*m_image.getHeight()];
 		
 		for (unsigned int i = 0; i < m_image.getHeight(); i++)
 		{
 			for (unsigned int j = 0; j < m_image.getWidth(); j++)
 			{
 				h_urshape[i*m_image.getWidth() + j] = make_float2((float)i, (float)j);
+				h_mask[i*m_image.getWidth() + j] = m_imageMask(i, j);
 			}
 		}
 
-		setConstraintImage(0.5f);
+		setConstraintImage(1.0f);
 
 		cutilSafeCall(cudaMemcpy(d_urshape, h_urshape, sizeof(float2)*m_image.getWidth()*m_image.getHeight(), cudaMemcpyHostToDevice));
 		cutilSafeCall(cudaMemcpy(d_warpField, h_urshape, sizeof(float2)*m_image.getWidth()*m_image.getHeight(), cudaMemcpyHostToDevice));
 		cutilSafeCall(cudaMemset(d_warpAngles, 0, sizeof(float)*m_image.getWidth()*m_image.getHeight()));
+		cutilSafeCall(cudaMemcpy(d_mask, h_mask, sizeof(float)*m_image.getWidth()*m_image.getHeight(), cudaMemcpyHostToDevice));
 		delete h_urshape;
+		delete h_mask;
 
 		m_warpingSolver = new CUDAWarpingSolver(m_image.getWidth(), m_image.getHeight());
 	}
@@ -76,7 +81,7 @@ public:
 		SAFE_DELETE(m_warpingSolver);
 	}
 
-	ColorImageR32 solve() {
+	ColorImageR32* solve() {
 		float weightFit = 100.0f;
 		float weightReg = 0.01f;
 
@@ -86,45 +91,97 @@ public:
 
 			unsigned int nonLinearIter = 10;
 			unsigned int linearIter = 50;
-			m_warpingSolver->solveGN(d_urshape, d_warpField, d_warpAngles, d_constraints, nonLinearIter, linearIter, weightFit, weightReg);
+			m_warpingSolver->solveGN(d_urshape, d_warpField, d_warpAngles, d_constraints, d_mask, nonLinearIter, linearIter, weightFit, weightReg);
 		}
 
-		return copyResultToCPU();
+		copyResultToCPU();
+
+		return &m_result;
 	}
 
-	ColorImageR32 copyResultToCPU() {
-		ColorImageR32 result(m_image.getWidth(), m_image.getHeight());
+	void copyResultToCPU() {
+		m_result = ColorImageR32(m_image.getWidth(), m_image.getHeight());
+		m_result.setPixels(255);
 
 		float2* h_warpField = new float2[m_image.getWidth()*m_image.getHeight()];
 		cutilSafeCall(cudaMemcpy(h_warpField, d_warpField, sizeof(float2)*m_image.getWidth()*m_image.getHeight(), cudaMemcpyDeviceToHost));
 		
+	
+
+		unsigned int c = 3;
 		for (unsigned int i = 0; i < m_image.getHeight(); i++)
 		{
 			for (unsigned int j = 0; j < m_image.getWidth(); j++)
 			{
-				float2 pos = h_warpField[i*m_image.getWidth()+j];
+				if (i + 1 < m_image.getHeight() && j + 1 < m_image.getWidth())
+				{
+					if (m_imageMask(i, j) == 0)
+					{
+						float2 pos00 = h_warpField[i*m_image.getWidth() + j];
+						float2 pos01 = h_warpField[i*m_image.getWidth() + (j + 1)];
+						float2 pos10 = h_warpField[(i + 1)*m_image.getWidth() + j];
+						float2 pos11 = h_warpField[(i + 1)*m_image.getWidth() + (j + 1)];
 
-				unsigned int x = (unsigned int)(pos.x + 0.5f);
-				unsigned int y = (unsigned int)(pos.y + 0.5f);
+						float v00 = m_image(i, j);
+						float v01 = m_image(i, (j + 1));
+						float v10 = m_image((i + 1), j);
+						float v11 = m_image((i + 1), (j + 1));
 
-				if (x < m_image.getHeight() && y < m_image.getWidth()) result(x, y) = m_image(i, j);
-				else												   result(x, y) = 0;
+						for (unsigned int g = 0; g < c; g++)
+						{
+							for (unsigned int h = 0; h < c; h++)
+							{
+								float alpha = (float)g / (float)c;
+								float beta = (float)h / (float)c;
+
+								bool valid00 = (m_imageMask(i, j) == 0);
+								bool valid01 = (m_imageMask(i, j+1) == 0);
+								bool valid10 = (m_imageMask(i+1, j) == 0);
+								bool valid11 = (m_imageMask(i+1, j+1) == 0);
+
+								if (valid00 && valid01 && valid10 && valid11)
+								{
+									float2 pos0 = (1 - alpha)*pos00 + alpha* pos01;
+									float2 pos1 = (1 - alpha)*pos10 + alpha* pos11;
+									float2 pos = (1 - beta)*pos0 + beta*pos1;
+
+									float v0 = (1 - alpha)*v00 + alpha* v01;
+									float v1 = (1 - alpha)*v10 + alpha* v11;
+									float v = (1 - beta)*v0 + beta * v1;
+
+									unsigned int x = (unsigned int)(pos.x + 0.5f);
+									unsigned int y = (unsigned int)(pos.y + 0.5f);
+									if (x < m_result.getHeight() && y < m_result.getWidth()) m_result(x, y) = v;
+								}
+								else
+								{
+									float2 pos = pos00;
+									float v = v00;
+									unsigned int x = (unsigned int)(pos.x + 0.5f);
+									unsigned int y = (unsigned int)(pos.y + 0.5f);
+									if (x < m_result.getHeight() && y < m_result.getWidth()) m_result(x, y) = v;
+								}
+							}
+						}
+					}
+				}
 			}
 		}
 		
 		delete h_warpField;
-
-		return result;
 	}
 
 private:
 	ColorImageR32 m_image;
 	ColorImageR32 m_imageMask;
 
+	ColorImageR32 m_result;
+
 	float2*	d_urshape;
 	float2* d_warpField;
 	float2* d_constraints;
 	float*  d_warpAngles;
+	float*  d_mask;
 
 	std::vector<std::vector<int>>& m_constraints;
 
