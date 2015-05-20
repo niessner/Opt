@@ -63,7 +63,7 @@ return function(problemSpec, vars)
 
 		-- TODO: parameterize these
 		var initialLearningRate = 0.01
-		var maxIters = 5000
+		var maxIters = 20
 		var tolerance = 1e-10
 
 		-- Fixed constants (these do not need to be parameterized)
@@ -83,7 +83,8 @@ return function(problemSpec, vars)
 			-- move along the gradient by learningRate
 			--
 			gpu.updatePosition(pd, learningRate)
-			
+
+			--[[
 			--
 			-- update the learningRate
 			--
@@ -97,6 +98,7 @@ return function(problemSpec, vars)
 					break
 				end
 			end
+			--]]
 			pd.timer:nextIteration()
 		end
 		pd.timer:evaluate()

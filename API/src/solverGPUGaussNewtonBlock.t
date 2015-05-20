@@ -49,13 +49,12 @@ local terra max(a : float, b : float) : float
 end
 
 local terra isInsideImage(i : int, j : int, width : uint, height : uint) : bool
-	return i >= 0 and i < height and j >= 0 and j < width
+	return i >= 0 and i < width and j >= 0 and j < height
 end
 
 local terra getLinearThreadId(tId_i : int, tId_j : int) : uint
-	return tId_i*BLOCK_SIZE+tId_j;
+	return tId_j*BLOCK_SIZE + tId_i;
 end
-
 
 local vload = macro(function(x) return `terralib.attrload(x, {isvolatile = true}) end)
 local vstore = macro(function(x,v) return `terralib.attrstore(x,v, {isvolatile = true}) end)
@@ -108,8 +107,7 @@ return function(problemSpec, vars)
 		local offset = stencil*problemSpec:BlockStride() + stencil
 		local blockStride = problemSpec:BlockStride()
 		
-		return terra(blockCornerX : int64, blockCornerY : int64, image : Image, imageBlock : ImageBlock)
-			
+		return terra(blockCornerX : int64, blockCornerY : int64, image : Image, imageBlock : ImageBlock)			
 			
 			var numBlockThreads : int = blockDim.x * blockDim.y			
 			var numVariables : int = blockStride*blockStride
@@ -119,11 +117,11 @@ return function(problemSpec, vars)
 				var linearIdx : int = baseIdx + i
 				
 				if linearIdx < numVariables then				
-					var localX = linearIdx % blockStride - stencil
-					var localY = linearIdx / blockStride - stencil
+					var localX : int = linearIdx % blockStride - stencil
+					var localY : int = linearIdx / blockStride - stencil
 					
-					var globalX = localX + blockCornerX
-					var globalY = localY + blockCornerY
+					var globalX : int = localX + blockCornerX
+					var globalY : int = localY + blockCornerY
 					--[[
 					if globalX >= 0 and globalX < image:W() and globalY >= 0 and globalY < image:H() then
 					if threadIdx.x + threadIdx.y*blockDim.x == 0 then
@@ -138,6 +136,12 @@ return function(problemSpec, vars)
 					end
 					]]--
 					imageBlock(localX, localY) = image:get(globalX, globalY)	--bounded check		
+					
+					if globalX == 31 and globalY == 16 then
+						printf("st: (%d|%d) -- (%d|%d)\n", localX, localY, globalX, globalY)
+						printf("local: %f\n", imageBlock(localX, localY))
+						printf("global: %f\n", image:get(globalX, globalY))
+					end
 				end
 			end			
 		end
@@ -220,18 +224,17 @@ return function(problemSpec, vars)
 			var H = pd.parameters.X:H()
 	
 			var tId_i : int = threadIdx.x -- local col idx
-			var tId_j : int = threadIdx.y -- local row idx
+			var tId_j : int = threadIdx.y -- local row idx	
 	
-	
-			var gId_i : int = blockIdx.x * blockDim.x + threadIdx.x - ox -- global col idx
-			var gId_j : int = blockIdx.y * blockDim.y + threadIdx.y - oy -- global row idx
+			var gId_i : int = blockIdx.x*blockDim.x + threadIdx.x - ox -- global col idx
+			var gId_j : int = blockIdx.y*blockDim.y + threadIdx.y - oy -- global row idx
 			
-			var blockCornerX : int = blockIdx.x * blockDim.x - ox
-			var blockCornerY : int = blockIdx.y * blockDim.y - oy
+			var blockCornerX : int = blockIdx.x*blockDim.x - ox
+			var blockCornerY : int = blockIdx.y*blockDim.y - oy
 			var blockParams : problemSpec:ParameterType(true)
 			var P : problemSpec:UnknownType(true)
 			
-		
+	
 			-- load everything into shared memory
 			escape				
 				for i,p in ipairs(problemSpec.parameters) do
@@ -243,9 +246,9 @@ return function(problemSpec, vars)
 						local blockedType = problemSpec:BlockedTypeForImageEntry(p)
 						local stencil = problemSpec:MaxStencil()
 						local offset = stencil*problemSpec:BlockStride() + stencil
-						local shared_mem_size = (problemSpec:BlockSize()+2.0*problemSpec:MaxStencil())*(problemSpec:BlockSize()+2.0*problemSpec:MaxStencil())
+						local shared_mem_size = (problemSpec:BlockSize()+2*problemSpec:MaxStencil())*(problemSpec:BlockSize()+2*problemSpec:MaxStencil())
 						local shmem = cudalib.sharedmemory(p.type.metamethods.typ, shared_mem_size)
-						
+						print("offset: ", offset, " shmem: ", shmem)
 						emit quote 
 							blockParams.[p.name] = [blockedType] { data = [&uint8](shmem + offset) } 
 							[CopyToShared(p.type,blockedType)](blockCornerX, blockCornerY, pd.parameters.[p.name], blockParams.[p.name])
@@ -257,12 +260,13 @@ return function(problemSpec, vars)
 			-- allocate Pre-conditioner (P)
 			escape
 				local blockedType = problemSpec:UnknownType(true)
-				local shmem = cudalib.sharedmemory(problemSpec:UnknownType().metamethods.typ, SHARED_MEM_SIZE_VARIABLES)		--pre-conditioner
+				local shared_mem_size = problemSpec:BlockSize()*problemSpec:BlockSize()	-- no need for overlap here
+				local shmem = cudalib.sharedmemory(problemSpec:UnknownType().metamethods.typ, shared_mem_size)		--pre-conditioner
 				emit quote
 					P = [blockedType] { data = [&uint8](shmem) } 
 				end
 			end
-				
+			
 			var Delta : problemSpec:UnknownType().metamethods.typ = 0.0f
 			var R : problemSpec:UnknownType().metamethods.typ
 			var Z : problemSpec:UnknownType().metamethods.typ
@@ -270,7 +274,35 @@ return function(problemSpec, vars)
 			var RDotZOld : problemSpec:UnknownType().metamethods.typ
 			var AP : problemSpec:UnknownType().metamethods.typ
 
-			__syncthreads()
+			__syncthreads()	--after here, everything should be in shared memory
+			
+			
+			if tId_i == 0 and tId_j == 0 
+			and blockCornerX == 16 and blockCornerY == 16
+			then
+				printf("(%d | %d)\t", blockCornerX, blockCornerY)
+				--printf("X: %f\n", blockParams.X(-1,-1))
+				--printf("A: %f\n", blockParams.A(-1,-1))
+				for i = 0, 16+2, 1 do
+					var localIdX : int = -2+i
+					var localIdY : int = 0
+					var globalIdX : int = blockCornerX + localIdX
+					var globalIdY : int = blockCornerY + localIdY
+					printf("(%d|%d) -- (%d|%d)\n", tId_i, tId_j, gId_i, gId_j)
+					printf("(%d|%d) -- (%d|%d)\t", localIdX, localIdY, globalIdX, globalIdY)
+					printf("Al: %f \t Ag: %f \n", blockParams.A(localIdX,localIdY), pd.parameters.A(globalIdX, globalIdY))
+				end
+			end
+			
+			
+			if isInsideImage(gId_i, gId_j, W, H) then
+				var g : float = pd.parameters.A(gId_i, gId_j)
+				var l : float = blockParams.A(tId_i, tId_j)
+				if g ~= l then
+					printf("ERROR: (%d|%d)\t%f %f\n", gId_i, gId_j, g, l)
+				end
+			end
+			
 	
 			--//////////////////////////////////////////////////////////////////////////////////////////
 			--// Initialize linear patch systems
@@ -282,12 +314,15 @@ return function(problemSpec, vars)
 			if isInsideImage(gId_i, gId_j, W, H) then
 				--R = evalMinusJTFDevice(tId_i, tId_j, gId_i, gId_j, W, H, TargetDepth, X, parameters, &Pre) -- residuum = J^T x -F - A x delta_0  => J^T x -F, since A x x_0 == 0
 				R = -data.problemSpec.functions.gradient.boundary(tId_i, tId_j, gId_i, gId_j, blockParams)
-				--R = 1.0f
+				
+				pd.delta(gId_i, gId_j) = 0.01f * R
 				Pre = 1.0f	--TODO fix this hack... the pre-conditioner needs to be the diagonal of JTJ
 				var preRes : float = Pre*R																  -- apply preconditioner M^-1 
 				P(tId_i, tId_j) = preRes											   	  -- save for later
 				d = R*preRes
 			end
+			
+			--[[
 			
 			
 			patchBucket[getLinearThreadId(tId_i, tId_j)] = d;											   -- x-th term of nomimator for computing alpha and denominator for computing beta
@@ -303,8 +338,7 @@ return function(problemSpec, vars)
 				--end
 			end
 	
-			__syncthreads()
-		
+			__syncthreads()	
 			
 			
 			--///////////////////////
@@ -315,12 +349,10 @@ return function(problemSpec, vars)
 				var currentP : problemSpec:UnknownType().metamethods.typ = P(tId_i, tId_j)				
 				var d : float = 0.0f
 					
-				if isInsideImage(gId_i, gId_j, W, H) then
-					--AP = applyJTJDevice(tId_i, tId_j, gId_i, gId_j, W, H, TargetDepth, P, X, parameters);	-- A x p_k  => J^T x J x p_k 
-					--d = currentP*AP;																		-- x-th term of denominator of alpha
+				if isInsideImage(gId_i, gId_j, W, H) then																	
 					AP = data.problemSpec.functions.applyJTJ.boundary(tId_i, tId_j, gId_i, gId_j, blockParams, P) -- A x p_k  => J^T x J x p_k 
-					--AP = 1.0f
 					d = currentP*AP
+					-- x-th term of denominator of alpha
 				end
 			
 				patchBucket[getLinearThreadId(tId_i, tId_j)] = d
@@ -375,7 +407,7 @@ return function(problemSpec, vars)
 			if isInsideImage(gId_i, gId_j, W, H) then 
 				pd.delta(gId_i, gId_j) = Delta
 			end
-			
+			--]]
 		end
 		return { kernel = PCGStepBlockGPU, header = noHeader, footer = noFooter, params = {symbol(int), symbol(int), symbol(uint)}, mapMemberName = "X" }
 	end
@@ -416,26 +448,28 @@ return function(problemSpec, vars)
 
 		var params = [&double](params_)
 
-		--unpackstruct(pd.images) = [util.getImages(PlanData, images)]
 		pd.parameters = [util.getParameters(problemSpec, images, edgeValues,params_)]
 
-		var nIterations = 10		--non-linear iterations
-		var lIterations = 1		--linear iterations
-		var bIterations = 1		--block iterations
+		var nIterations = 1	--non-linear iterations
+		var lIterations = 20	--linear iterations
+		var bIterations = 1	--block iterations
 		
 		for nIter = 0, nIterations do
-            var startCost = gpu.computeCost(pd)
-			logSolver("iteration %d, cost=%f\n", nIter, startCost)
-			
+
 			
 			var o : int = 0
 			for lIter = 0, lIterations do
+			    var startCost = gpu.computeCost(pd)
+				logSolver("iteration %d, cost=%f\n", lIter, startCost)	
+			
+				if o == 1 then break end
+				--o = 0
 				gpu.PCGStepBlock(pd, offsetX[o], offsetY[o], bIterations)
 				gpu.PCGLinearUpdateBlock(pd, offsetX[o], offsetY[o])
 				o = (o+1)%8
 				C.cudaDeviceSynchronize()			
 			end	
-		
+
 		end
 
 		pd.timer:evaluate()
