@@ -31,6 +31,7 @@ __global__ void PCGStepPatch_Kernel(PatchSolverInput input, PatchSolverState sta
 	__shared__ float2 X [SHARED_MEM_SIZE_PATCH]; loadPatchToCache(X , state.d_x,	   tId_i, tId_j, gId_i, gId_j, W, H);
 	__shared__ float  XA[SHARED_MEM_SIZE_PATCH]; loadPatchToCache(XA, state.d_A,	   tId_i, tId_j, gId_i, gId_j, W, H);
 	__shared__ float  M [SHARED_MEM_SIZE_PATCH]; loadPatchToCache(M , state.d_mask,	   tId_i, tId_j, gId_i, gId_j, W, H);
+	
 	__shared__ float2 U [SHARED_MEM_SIZE_PATCH]; loadPatchToCache(U , state.d_urshape, tId_i, tId_j, gId_i, gId_j, W, H);
 	
 	__shared__ float2 P [SHARED_MEM_SIZE_PATCH]; setPatchToZero(P,  tId_i, tId_j);
@@ -38,13 +39,16 @@ __global__ void PCGStepPatch_Kernel(PatchSolverInput input, PatchSolverState sta
 
 	__shared__ float patchBucket[SHARED_MEM_SIZE_VARIABLES];
 
+	__syncthreads();
+
 	//////////////////////////////////////////////////////////////////////////////////////////
 	// CACHE data to registers
 	//////////////////////////////////////////////////////////////////////////////////////////
 
 	register float2 X_CC  = readValueFromCache2D(X,  tId_i, tId_j);
 	register float  XA_CC = readValueFromCache2D(XA, tId_i, tId_j);
-	register bool   isValidPixel = isValid(X_CC);
+	register float  M_CC  = readValueFromCache2D(M,  tId_i, tId_j);
+	register bool   isValidPixel = isValid(X_CC) && M_CC == 0;
 
 	register float2 constraintUV = make_float2(0.0f, 0.0f);
 	if (isValidPixel) constraintUV = input.d_constraints[gId_i*W + gId_j];

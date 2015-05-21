@@ -88,16 +88,15 @@ public:
 		float weightFit = 100.0f;
 		float weightReg = 0.01f;
 
-		for (unsigned int i = 0; i < 10; i++)
+		for (unsigned int i = 0; i < 20; i++)
 		{
-			setConstraintImage((float)i/(float)9);
+			setConstraintImage((float)i/(float)20);
 		
 			//unsigned int nonLinearIter = 10;
 			//unsigned int linearIter = 50;
 			//m_warpingSolver->solveGN(d_urshape, d_warpField, d_warpAngles, d_constraints, d_mask, nonLinearIter, linearIter, weightFit, weightReg);
-
+			
 			unsigned int nonLinearIter = 100;
-			unsigned int linearIter = 1;
 			unsigned int patchIter = 32;
 			m_warpingSolverPatch->solveGN(d_urshape, d_warpField, d_warpAngles, d_constraints, d_mask, nonLinearIter, patchIter, weightFit, weightReg);
 		}
@@ -113,8 +112,6 @@ public:
 
 		float2* h_warpField = new float2[m_image.getWidth()*m_image.getHeight()];
 		cutilSafeCall(cudaMemcpy(h_warpField, d_warpField, sizeof(float2)*m_image.getWidth()*m_image.getHeight(), cudaMemcpyDeviceToHost));
-		
-	
 
 		unsigned int c = 3;
 		for (unsigned int i = 0; i < m_image.getHeight(); i++)

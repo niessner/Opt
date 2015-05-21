@@ -28,10 +28,10 @@ __inline__ __device__ float2 evalMinusJTFDevice(int tId_i, int tId_j, int gId_i,
 	float2 X_MC = readValueFromCache2D(inX, tId_i - 1, tId_j); float M_MC = readValueFromCache2D(inMask, tId_i - 1, tId_j); float2 U_MC = readValueFromCache2D(inUrshape, tId_i - 1, tId_j); float A_MC = readValueFromCache2D(inA, tId_i - 1, tId_j);
 	float2 X_PC = readValueFromCache2D(inX, tId_i + 1, tId_j); float M_PC = readValueFromCache2D(inMask, tId_i + 1, tId_j); float2 U_PC = readValueFromCache2D(inUrshape, tId_i + 1, tId_j); float A_PC = readValueFromCache2D(inA, tId_i + 1, tId_j);
 
-	const bool validN0 = isValid(X_CM) && isValid(M_CM);
-	const bool validN1 = isValid(X_CP) && isValid(M_CP);
-	const bool validN2 = isValid(X_MC) && isValid(M_MC);
-	const bool validN3 = isValid(X_PC) && isValid(M_PC);
+	const bool validN0 = isValid(X_CM) && M_CM == 0;
+	const bool validN1 = isValid(X_CP) && M_CP == 0;
+	const bool validN2 = isValid(X_MC) && M_MC == 0;
+	const bool validN3 = isValid(X_PC) && M_PC == 0;
 
 	// fit/pos
 	bool validConstraint = (constraintUV.x >= 0 && constraintUV.y >= 0) && M_CC == 0;
@@ -52,10 +52,10 @@ __inline__ __device__ float2 evalMinusJTFDevice(int tId_i, int tId_j, int gId_i,
 	float2x2 R = evalR(A_CC);
 	float2x2 dR = evalR_dR(A_CC);
 	float e_reg_angle = 0.0f;
-	if (validN0) { float2 q = X_CM; float2 qHat = U_CM;; mat2x1 D = -mat2x1(dR*(pHat - qHat)); e_reg_angle += D.getTranspose()*mat2x1((p - q) - R*(pHat - qHat)); preA += D.getTranspose()*D*parameters.weightRegularizer; }
-	if (validN1) { float2 q = X_CP; float2 qHat = U_CP;; mat2x1 D = -mat2x1(dR*(pHat - qHat)); e_reg_angle += D.getTranspose()*mat2x1((p - q) - R*(pHat - qHat)); preA += D.getTranspose()*D*parameters.weightRegularizer; }
-	if (validN2) { float2 q = X_MC; float2 qHat = U_MC;; mat2x1 D = -mat2x1(dR*(pHat - qHat)); e_reg_angle += D.getTranspose()*mat2x1((p - q) - R*(pHat - qHat)); preA += D.getTranspose()*D*parameters.weightRegularizer; }
-	if (validN3) { float2 q = X_PC; float2 qHat = U_PC;; mat2x1 D = -mat2x1(dR*(pHat - qHat)); e_reg_angle += D.getTranspose()*mat2x1((p - q) - R*(pHat - qHat)); preA += D.getTranspose()*D*parameters.weightRegularizer; }
+	if (validN0) { float2 q = X_CM; float2 qHat = U_CM; mat2x1 D = -mat2x1(dR*(pHat - qHat)); e_reg_angle += D.getTranspose()*mat2x1((p - q) - R*(pHat - qHat)); preA += D.getTranspose()*D*parameters.weightRegularizer; }
+	if (validN1) { float2 q = X_CP; float2 qHat = U_CP; mat2x1 D = -mat2x1(dR*(pHat - qHat)); e_reg_angle += D.getTranspose()*mat2x1((p - q) - R*(pHat - qHat)); preA += D.getTranspose()*D*parameters.weightRegularizer; }
+	if (validN2) { float2 q = X_MC; float2 qHat = U_MC; mat2x1 D = -mat2x1(dR*(pHat - qHat)); e_reg_angle += D.getTranspose()*mat2x1((p - q) - R*(pHat - qHat)); preA += D.getTranspose()*D*parameters.weightRegularizer; }
+	if (validN3) { float2 q = X_PC; float2 qHat = U_PC; mat2x1 D = -mat2x1(dR*(pHat - qHat)); e_reg_angle += D.getTranspose()*mat2x1((p - q) - R*(pHat - qHat)); preA += D.getTranspose()*D*parameters.weightRegularizer; }
 	bA += -parameters.weightRegularizer*e_reg_angle;
 
 	// Preconditioner
@@ -86,10 +86,10 @@ __inline__ __device__ float2 applyJTJDevice(int tId_i, int tId_j, int gId_i, int
 	float2 X_MC = readValueFromCache2D(inX, tId_i - 1, tId_j); float M_MC = readValueFromCache2D(inMask, tId_i - 1, tId_j); float2 U_MC = readValueFromCache2D(inUrshape, tId_i - 1, tId_j); float A_MC = readValueFromCache2D(inA, tId_i - 1, tId_j); float2 P_MC = readValueFromCache2D(inP, tId_i - 1, tId_j); float PA_MC = readValueFromCache2D(inPA, tId_i - 1, tId_j);
 	float2 X_PC = readValueFromCache2D(inX, tId_i + 1, tId_j); float M_PC = readValueFromCache2D(inMask, tId_i + 1, tId_j); float2 U_PC = readValueFromCache2D(inUrshape, tId_i + 1, tId_j); float A_PC = readValueFromCache2D(inA, tId_i + 1, tId_j); float2 P_PC = readValueFromCache2D(inP, tId_i + 1, tId_j); float PA_PC = readValueFromCache2D(inPA, tId_i + 1, tId_j);
 
-	const bool validN0 = isValid(X_CM) && isValid(M_CM);
-	const bool validN1 = isValid(X_CP) && isValid(M_CP);
-	const bool validN2 = isValid(X_MC) && isValid(M_MC);
-	const bool validN3 = isValid(X_PC) && isValid(M_PC);
+	const bool validN0 = isValid(X_CM) && M_CM == 0;
+	const bool validN1 = isValid(X_CP) && M_CP == 0;
+	const bool validN2 = isValid(X_MC) && M_MC == 0;
+	const bool validN3 = isValid(X_PC) && M_PC == 0;
 
 	// pos/constraint
 	bool validConstraint = (constraintUV.x >= 0 && constraintUV.y >= 0) && M_CC == 0;
