@@ -495,29 +495,24 @@ return function(problemSpec, vars)
 		pd.parameters = [util.getParameters(problemSpec, images, edgeValues,params_)]
 
 		var nIterations = 5		--non-linear iterations
-		var lIterations = 10		--linear iterations
-		var bIterations = 50		--block iterations
+		var lIterations = 8		--linear iterations
+		var bIterations = 10		--block iterations
 		
 		for nIter = 0, nIterations do
 			
 			var o : int = 0
 			for lIter = 0, lIterations do
-			    var startCost = gpu.computeCost(pd)
-				logSolver("iteration %d, cost=%f\n", lIter, startCost)	
+			    --var startCost = gpu.computeCost(pd)
+				--logSolver("iteration %d, cost=%f\n", lIter, startCost)	
 			
-				--if o == 1 then break end
 				var oX : int = offsetX[o]
 				var oY : int = offsetY[o]
 				
-				--oX = 0
-				--oY = 0
-				
-				printf("Hoffset: (%d | %d)\n", oX, oY)
+				--printf("Hoffset: (%d | %d)\n", oX, oY)
 				gpu.PCGStepBlock(pd, oX, oY, bIterations)
 				gpu.PCGLinearUpdateBlock(pd, oX, oY)
 				o = (o+1)%8
-				C.cudaDeviceSynchronize()	
-				--break				
+				C.cudaDeviceSynchronize()				
 			end	
 
 		end
