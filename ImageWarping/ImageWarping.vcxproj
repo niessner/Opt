@@ -167,14 +167,20 @@
     </CudaCompile>
   </ItemDefinitionGroup>
   <ItemGroup>
+    <ClCompile Include="src\CUDAPatchSolverWarping.cpp" />
     <ClCompile Include="src\CUDAWarpingSolver.cpp" />
     <ClCompile Include="src\main.cpp" />
     <ClCompile Include="src\mLibSource.cpp" />
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="src\CUDAPatchSolverWarping.h" />
     <ClInclude Include="src\CUDATimer.h" />
     <ClInclude Include="src\CUDAWarpingSolver.h" />
     <ClInclude Include="src\ImageWarping.h" />
+    <ClInclude Include="src\PatchSolverWarpingParameters.h" />
+    <ClInclude Include="src\PatchSolverWarpingEquations.h" />
+    <ClInclude Include="src\PatchSolverWarpingState.h" />
+    <ClInclude Include="src\PatchSolverWarpingUtil.h" />
     <ClInclude Include="src\WarpingSolverEquations.h" />
     <ClInclude Include="src\WarpingSolverParameters.h" />
     <ClInclude Include="src\WarpingSolverState.h" />
@@ -191,6 +197,7 @@
     <Reference Include="System.Xml" />
   </ItemGroup>
   <ItemGroup>
+    <CudaCompile Include="src\PatchSolverWarping.cu" />
     <CudaCompile Include="src\WarpingSolver.cu" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />

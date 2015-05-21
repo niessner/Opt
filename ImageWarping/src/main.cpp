@@ -3,8 +3,24 @@
 
 int main(int argc, const char * argv[]) {
 
+	// DOG
 	//const std::string inputImage = "smoothingExampleD.png";
+	//const std::string inputImageMask = "smoothingExampleDMask.png";
+	//std::vector<std::vector<int>> constraints; constraints.resize(4);
+	//constraints[0].push_back(95);  constraints[0].push_back(118); constraints[0].push_back(80);  constraints[0].push_back(118);
+	//constraints[1].push_back(120); constraints[1].push_back(118); constraints[1].push_back(130); constraints[1].push_back(118);
+	//constraints[2].push_back(163); constraints[2].push_back(111); constraints[2].push_back(153); constraints[2].push_back(111);
+	//constraints[3].push_back(183); constraints[3].push_back(111); constraints[3].push_back(193); constraints[3].push_back(111);
+
+	// COLUMN
 	const std::string inputImage = "bend2.png";
+	const std::string inputImageMask = "bendMask.png";
+	std::vector<std::vector<int>> constraints; constraints.resize(3);
+	constraints[0].push_back(48); constraints[0].push_back(61); constraints[0].push_back(144); constraints[0].push_back(69);
+	constraints[1].push_back(64); constraints[1].push_back(61); constraints[1].push_back(154); constraints[1].push_back(82);
+	constraints[2].push_back(80); constraints[2].push_back(61); constraints[2].push_back(165); constraints[2].push_back(92);
+
+
 
 	ColorImageR8G8B8A8 image = LodePNG::load(inputImage);
 	ColorImageR32 imageR32(image.getWidth(), image.getHeight());
@@ -14,9 +30,6 @@ int main(int argc, const char * argv[]) {
 		}
 	}
 
-	//const std::string inputImageMask = "smoothingExampleDMask.png";
-	const std::string inputImageMask = "bendMask.png";
-
 	const ColorImageR8G8B8A8 imageMask = LodePNG::load(inputImageMask);
 	ColorImageR32 imageR32Mask(imageMask.getWidth(), imageMask.getHeight());
 	for (unsigned int y = 0; y < imageMask.getHeight(); y++) {
@@ -24,17 +37,6 @@ int main(int argc, const char * argv[]) {
 			imageR32Mask(y, x) = imageMask(y, x).x;
 		}
 	}
-
-	//std::vector<std::vector<int>> constraints; constraints.resize(4);
-	//constraints[0].push_back(95);  constraints[0].push_back(118); constraints[0].push_back(80);  constraints[0].push_back(118);
-	//constraints[1].push_back(120); constraints[1].push_back(118); constraints[1].push_back(130); constraints[1].push_back(118);
-	//constraints[2].push_back(163); constraints[2].push_back(111); constraints[2].push_back(153); constraints[2].push_back(111);
-	//constraints[3].push_back(183); constraints[3].push_back(111); constraints[3].push_back(193); constraints[3].push_back(111);
-	
-	std::vector<std::vector<int>> constraints; constraints.resize(3);
-	constraints[0].push_back(48); constraints[0].push_back(61); constraints[0].push_back(144); constraints[0].push_back(69);
-	constraints[1].push_back(64); constraints[1].push_back(61); constraints[1].push_back(154); constraints[1].push_back(82);
-	constraints[2].push_back(80); constraints[2].push_back(61); constraints[2].push_back(165); constraints[2].push_back(92);
 	
 	
 	for (unsigned int i = 0; i < image.getHeight(); i++)

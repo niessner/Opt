@@ -6,6 +6,7 @@
 #include <cudaUtil.h>
 
 #include "CUDAWarpingSolver.h"
+#include "CUDAPatchSolverWarping.h"
 
 class ImageWarping {
 public:
@@ -40,7 +41,8 @@ public:
 		delete h_urshape;
 		delete h_mask;
 
-		m_warpingSolver = new CUDAWarpingSolver(m_image.getWidth(), m_image.getHeight());
+		m_warpingSolver		 = new CUDAWarpingSolver(m_image.getWidth(), m_image.getHeight());
+		m_warpingSolverPatch = new CUDAPatchSolverWarping(m_image.getWidth(), m_image.getHeight());
 	}
 
 	void setConstraintImage(float alpha)
@@ -79,6 +81,7 @@ public:
 		cutilSafeCall(cudaFree(d_warpAngles));
 
 		SAFE_DELETE(m_warpingSolver);
+		SAFE_DELETE(m_warpingSolverPatch);
 	}
 
 	ColorImageR32* solve() {
@@ -88,10 +91,15 @@ public:
 		for (unsigned int i = 0; i < 10; i++)
 		{
 			setConstraintImage((float)i/(float)9);
+		
+			//unsigned int nonLinearIter = 10;
+			//unsigned int linearIter = 50;
+			//m_warpingSolver->solveGN(d_urshape, d_warpField, d_warpAngles, d_constraints, d_mask, nonLinearIter, linearIter, weightFit, weightReg);
 
-			unsigned int nonLinearIter = 10;
-			unsigned int linearIter = 50;
-			m_warpingSolver->solveGN(d_urshape, d_warpField, d_warpAngles, d_constraints, d_mask, nonLinearIter, linearIter, weightFit, weightReg);
+			unsigned int nonLinearIter = 100;
+			unsigned int linearIter = 1;
+			unsigned int patchIter = 32;
+			m_warpingSolverPatch->solveGN(d_urshape, d_warpField, d_warpAngles, d_constraints, d_mask, nonLinearIter, patchIter, weightFit, weightReg);
 		}
 
 		copyResultToCPU();
@@ -185,5 +193,6 @@ private:
 
 	std::vector<std::vector<int>>& m_constraints;
 
-	CUDAWarpingSolver*	m_warpingSolver;
+	CUDAWarpingSolver*	    m_warpingSolver;
+	CUDAPatchSolverWarping* m_warpingSolverPatch;
 };
