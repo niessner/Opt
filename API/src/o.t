@@ -723,6 +723,9 @@ local function createfunctionset(problemspec,name,exp)
     
     problemspec.P:Function(name,{W,H},boundary,interior)
 end
+
+local getpair = terralib.memoize(function(x,y) return {x = x, y = y} end)
+
 local function unknowns(exp)
     local seenunknown = {}
     local unknownvars = terralib.newlist()
@@ -736,6 +739,14 @@ local function unknowns(exp)
     end)
     return unknownvars
 end
+
+local function getunknownpairs(exp)
+    local seenunknown = {}
+    local unknownvars = terralib.newlist()
+    local u = unknowns(exp)
+	return u:map(function(v) return getpair(v:key().x,v:key().y) end)
+end
+
 local function imagesusedinexpression(exp)
     local N = 0
     local idxtoimage = terralib.newlist{}
@@ -753,16 +764,15 @@ local function imagesusedinexpression(exp)
     return idxtoimage
 end
 
-local getshift = terralib.memoize(function(x,y) return {x = x, y = y} end)
-
-local function shiftswithoverlappingstencil(unknownvars)
+local function shiftswithoverlappingstencil(residualpairs,unknownpairs)
     local shifttooverlap = {}
     local shifts = terralib.newlist()
-    for i,a_ in ipairs(unknownvars) do
-        local a = a_:key()
-        for j,b_ in ipairs(unknownvars) do
-            local b = b_:key()
-            local s = getshift(a.x - b.x, a.y - b.y) -- at what shift from a to b does a's (a.x,a.y) overlap with b's (b.x,b.y)
+    for i,r in ipairs(residualpairs) do
+        for j,u in ipairs(unknownpairs) do         
+			
+			
+			
+			local s = getpair(b.x - a.x, b.y - a.y) -- at what shift from a to b does a's (a.x,a.y) overlap with b's (b.x,b.y)
             if not shifttooverlap[s] then
                 shifttooverlap[s] = terralib.newlist()
                 shifts:insert(s)
@@ -778,28 +788,66 @@ local function createjtj(Fs,unknown,P)
 	local x = unknown(0,0)
     for _,F in ipairs(Fs) do
         local P_F = 0
-        local unknownvars = unknowns(F)
-        local J = terralib.newlist()
-		local dfdxshifts = F:gradient(unknownvars)
-		local dfshiftsdx = terralib.newlist()
-		for _,u in ipairs(unknownvars) do --Loop over the symmetries
-			local a = u:key()
-			local F_shift = shiftexp(F,-a.x,-a.y)
-			dfshiftsdx:insert(F_shift:d(x))
+        local unknownpairs = getunknownpairs(F)
+		
+		local allunknownpairs = {}
+		local allresidualpairs = {}
+		
+		local residualpairs = terralib.newlist()
+		
+		local dfdx00 = {} 
+		for _,u in ipairs(unknownpairs) do --Loop over the symmetries
+			local k = getpair(-u.x,-u.y)
+			residualpairs:insert(k)
+			dfdx00[k] = shiftexp(F,k.x,k.y):d(x)
+			for _,u2 in ipairs(unknownpairs) do
+				allunknownpairs[getpair(k.x + u2.x, k.y + u2.y)] = true
+			end	
+			print(("df(%d,%d)/dx(0,0) = %s"):format(k.x,k.y,tostring(dfdx00[k])))
 		end
-		local shifts,shifttooverlap = shiftswithoverlappingstencil(unknownvars)
+
+		for _,u in ipairs(allunknownpairs) do
+			allunknownpairs[getpair(k.x + u2.x, k.y + u2.y)] = true
+		end
+		
+		for u,_ in pairs(allunknownpairs) do
+			local sum = 0
+		    for i,r in ipairs(residualpairs) do
+				local X_shift = unknown(u.x, u.y)		
+				
+				local alpha = dfdx00[r]
+				local beta = shiftexp(F,r.x,r.y):d(X_shift)
+				sum = sum + alpha * beta
+				
+				print(("df(%d,%d)/dx(%d,%d) * df(%d,%d)/dx(%d,%d)"):format(r.x,r.y,0,0,r.x,r.y,u.x,u.y))
+				print("first: ",alpha)
+				print("second: ",beta)
+			end
+			P_F = P_F + P(u.x,u.y) * sum  
+		end
+		--[[
+		local c,shifttooverlap = shiftswithoverlappingstencil(residualpairs,unknownpairs)
+		
         for _,shift in pairs(shifts) do
             local overlaps = shifttooverlap[shift]
             local sum = 0
-            for i,o in ipairs(overlaps) do
-                local alpha = shiftexp(dfdxshifts[o.right],-shift.x,-shift.y)
-				local beta = dfshiftsdx[o.left]
-				print(-shift.x, -shift.y, alpha,beta)
-                sum = sum + alpha*beta
+            local X_shift = unknown(shift.x,shift.y)
+			for i,o in ipairs(overlaps) do
+				
+				local rl = unknownvars[o.right]:key()
+				local ll = unknownvars[o.left]:key()
+				
+				local alpha = dfdx00[o.left]
+				local beta = shiftexp(F,ll.x,ll.y):d(X_shift)
+				print(("df(%d,%d)/dx(%d,%d) * df(%d,%d)/dx(%d,%d)"):format(ll.x,ll.y,0,0,ll.x,ll.y,shift.x,shift.y))
+				print("first: ",alpha)
+				print("second: ",beta)
+				sum = sum + alpha*beta
             end
-			print(-shift.x, -shift.y, sum)
-            P_F = P_F + P(-shift.x,-shift.y) * sum  
+			print(shift.x, shift.y, sum)
+            P_F = P_F + P(shift.x,shift.y) * sum  
         end
+		--]]
         P_hat = P_hat + P_F
     end
     return P_hat
@@ -855,12 +903,14 @@ function ProblemSpecAD:Cost(costexp_)
         local P = self:Image("P",unknown.W,unknown.H,-1)
         local jtjexp = 2.0*createjtj(costexp_.terms,unknown,P)
 		print("THE ENTIRE EXPRESSION ", jtjexp)
-		print("WITH SOME BOUNDS REMOVED ",removesomeboundaries(jtjexp))
+		local special = removesomeboundaries(jtjexp)
+		print("WITH SOME BOUNDS REMOVED ",special)
 		--error("DONE")
         timeSinceLast("createjtj(costexp_.terms,unknown,P)")
         self.P:Stencil(stencilforexpression(jtjexp))
         timeSinceLast("stencilforexpression(jtjexp)")
         createfunctionset(self,"applyJTJ",jtjexp)
+		createfunctionset(self,"special",special)
         timeSinceLast("createfunctionset(self,'applyJTJ',jtjexp)")
     end
     
