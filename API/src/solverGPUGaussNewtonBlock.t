@@ -506,9 +506,9 @@ return function(problemSpec, vars)
 				--logSolver("iteration %d, cost=%f\n", lIter, startCost)	
 			
 				var oX : int = offsetX[o]
-				var oY : int = offsetY[o]
-				
-				--printf("Hoffset: (%d | %d)\n", oX, oY)
+				var oY : int = offsetY[o]				
+			
+				--C.printf("offset: (%d | %d)\n", oX, oY)
 				gpu.PCGStepBlock(pd, oX, oY, bIterations)
 				gpu.PCGLinearUpdateBlock(pd, oX, oY)
 				o = (o+1)%8

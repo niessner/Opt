@@ -20,7 +20,7 @@ end
 
 -- constants
 local verboseSolver = true
-local verboseAD = false
+local verboseAD = true
 
 local function newclass(name)
     local mt = { __name = name }
@@ -295,10 +295,14 @@ function ProblemSpec:Param(name,typ,idx)
     self:newparameter(name,"param",idx,typ)
 end
 
+local newDim = terralib.memoize(function(name,size,idx)
+	return Dim:new { name = name, size = size, _index = idx }
+end)
+
 function opt.Dim(name, idx)
     idx = assert(tonumber(idx), "expected an index for this dimension")
     local size = tonumber(opt.dimensions[idx])
-    return Dim:new { name = name, size = size, _index = idx }
+    return newDim(name,size,idx)
 end
 
 function opt.InternalDim(name, size)
@@ -605,6 +609,17 @@ local function removeboundaries(exp)
     end
     return exp:rename(nobounds)
 end
+
+local function removesomeboundaries(exp)
+    local function nobounds(a)
+        if BoundsAccess:is(a) then 
+			if a.x >= 1 then return ad.toexp(1) end
+			return ad.toexp(0)
+        else return ad.v[a] end
+    end
+    return exp:rename(nobounds)
+end
+
 local function createfunction(problemspec,exp,usebounds,W,H)
     if not usebounds then
         exp = removeboundaries(exp)
@@ -769,7 +784,7 @@ local function createjtj(Fs,unknown,P)
 		local dfshiftsdx = terralib.newlist()
 		for _,u in ipairs(unknownvars) do --Loop over the symmetries
 			local a = u:key()
-			local F_shift = shiftexp(F,a.x,a.y)
+			local F_shift = shiftexp(F,-a.x,-a.y)
 			dfshiftsdx:insert(F_shift:d(x))
 		end
 		local shifts,shifttooverlap = shiftswithoverlappingstencil(unknownvars)
@@ -777,11 +792,13 @@ local function createjtj(Fs,unknown,P)
             local overlaps = shifttooverlap[shift]
             local sum = 0
             for i,o in ipairs(overlaps) do
-                local alpha = dfdxshifts[o.right]
+                local alpha = shiftexp(dfdxshifts[o.right],-shift.x,-shift.y)
 				local beta = dfshiftsdx[o.left]
+				print(-shift.x, -shift.y, alpha,beta)
                 sum = sum + alpha*beta
             end
-            P_F = P_F + P(shift.x,shift.y) * sum  
+			print(-shift.x, -shift.y, sum)
+            P_F = P_F + P(-shift.x,-shift.y) * sum  
         end
         P_hat = P_hat + P_F
     end
@@ -837,6 +854,9 @@ function ProblemSpecAD:Cost(costexp_)
     if SumOfSquares:is(costexp_) then
         local P = self:Image("P",unknown.W,unknown.H,-1)
         local jtjexp = 2.0*createjtj(costexp_.terms,unknown,P)
+		print("THE ENTIRE EXPRESSION ", jtjexp)
+		print("WITH SOME BOUNDS REMOVED ",removesomeboundaries(jtjexp))
+		--error("DONE")
         timeSinceLast("createjtj(costexp_.terms,unknown,P)")
         self.P:Stencil(stencilforexpression(jtjexp))
         timeSinceLast("stencilforexpression(jtjexp)")

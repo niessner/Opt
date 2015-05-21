@@ -64,7 +64,7 @@ void TestFramework::runAllTests()
 
     //TestExample example = makeRandomQuadratic(5);
     //TestExample example = makeMeshSmoothing("smoothingExampleE.png", 0.1f);
-	TestExample example = makeImageSmoothing("smoothingExampleF.png", 0.1f);	
+	TestExample example = makeImageSmoothing("smoothingExampleE.png", 0.1f);	
 
     vector<TestMethod> methods;
 
@@ -77,8 +77,8 @@ void TestFramework::runAllTests()
     // GPU methods
     //
     //methods.push_back(TestMethod("gradientDescentGPU", "no-params"));
-	//methods.push_back(TestMethod("gaussNewtonGPU", "no-params"));
-	methods.push_back(TestMethod("gaussNewtonBlockGPU", "no-params"));
+	methods.push_back(TestMethod("gaussNewtonGPU", "no-params"));
+	//methods.push_back(TestMethod("gaussNewtonBlockGPU", "no-params"));
 
     for (auto &method : methods)
         runTest(method, example);
