@@ -1,0 +1,73 @@
+// -*- html -*-
+/** \file journal.dox
+\page Journal Development Journal
+
+\tableofcontents
+
+<i>Newest entries are at the top</i>
+
+\section notes Formatting Notes
+Put the newest entry at the top of this file, like a blog. 
+Begin the title of each section with a date in ISO format (YYYY-MM-DD).
+Press F4 and F6 to embed screenshots and video in this journal.
+
+Doxygen supports [markdown syntax](http://www.stack.nl/~dimitri/doxygen/manual/markdown.html),
+[many HTML commands](http://www.stack.nl/~dimitri/doxygen/manual/htmlcmds.html),
+and LaTeX-like [Doxygen commands](http://www.stack.nl/~dimitri/doxygen/manual/commands.html)
+for formatting in this file. The most frequently used of these are:
+
+\verbatim
+[Link syntax](http://g3d.sf.net)
+
+Table    | Syntax
+-------: | ---------
+  100 ms |  Hello
+  5 ms   |  World
+
+- List
+- Syntax
+  + Subbullet
+
+~~~~~~~~~~~~~
+// Code syntax in C++
+for (int i = 0; i < 10; ++i) {
+   printf("%d\n", i);
+}
+~~~~~~~~~~~~~
+\endverbatim
+
+which produce:
+
+[Link syntax](http://g3d.sf.net)
+
+Table  | Syntax
+-----: | ---------
+  1 ms |  Hello
+500 ms |  World
+
+- List
+- Syntax
+  + Subbullet
+
+~~~~~~~~~~~~~
+// Code syntax in C++
+for (int i = 0; i < 10; ++i) {
+   printf("%d\n", i);
+}
+~~~~~~~~~~~~~
+
+You can manually embed images in this file using the custom G3D Doxygen commands:
+
+\verbatim
+\thumbnail{imagefilename}
+\thumbnail{imagefilename, caption}
+\video{videofilename, caption}
+\endverbatim
+
+The `imagefilename` does not need to include a path.  Put the images
+in the `journal/` or `doc-files/` directories.  They will
+automatically be copied to the `build/doc` directory when you run Doxygen.
+
+If you have Latex installed, then you can display inline (\f$ \int_{-\infty}^{\infty} e^{-x^2} dx \f$) and display math equations, for example: \f[ \int_{-\infty}^{\infty} e^{-x^2} dx \f]
+
+*/

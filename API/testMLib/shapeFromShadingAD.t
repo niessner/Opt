@@ -1,12 +1,14 @@
 local W,H 	= opt.Dim("W",0), opt.Dim("H",1)
 local S 	= ad.ProblemSpec()
 local D 	= S:Image("X",W,H,0) -- Refined Depth
-local D_i 	= S:Image("D_i",W,H,1) -- Depth input
+local D_i 	= S:Image("Y",W,H,1) -- Depth input
 local I 	= S:Image("I",W,H,2) -- Target Intensity
-local D_p 	= S:Image("D_p",W,H,3) -- Previous Depth
+local D_p 	= S:Image("Z",W,H,3) -- Previous Depth
 --local edgeMask 	= S:Image("edgeMask",W,H,3) -- Edge mask. Currently unused
 
-local inBounds = opt.InBounds(2,2)
+local inBounds = opt.InBounds(3,3)
+
+local epsilon = 0.00001
 
 -- See TerraSolverParameters
 local w_p						= S:Param("w_p",float,0)-- Is initialized by the solver!
@@ -80,7 +82,7 @@ function n(offX, offY)
     local n_x = D(offX, offY - 1) * (D(offX, offY) - D(offX - 1, offY)) / f_y
     local n_y = D(offX - 1, offY) * (D(offX, offY) - D(offX, offY - 1)) / f_x
     local n_z = (n_x * (u_x - i) / f_x) + (n_y * (u_y - j) / f_y) - (D(offX-1, offY)*D(offX, offY-1) / f_x*f_y)
-    local inverseMagnitude = 1.0/ad.sqrt(n_x*n_x + n_y*n_y + n_z*n_z)
+    local inverseMagnitude = 1.0/ad.sqrt(n_x*n_x + n_y*n_y + n_z*n_z + epsilon)
     return times(inverseMagnitude, {n_x, n_y, n_z})
     --return {inverseMagnitude,inverseMagnitude,inverseMagnitude}
 end
@@ -99,23 +101,30 @@ function B(offX, offY)
 end
 
 local squareStencilSum = 0
-for i=-2,2 do
-	for j=-2,2 do
+for i=-3,3 do
+	for j=-3,3 do
 		squareStencilSum = squareStencilSum + D_i(i,j)			
 	end
 end
 
 local squareStencilValid = ad.greater(squareStencilSum, 0.0)
+local squareStencilValid2 = ad.less(squareStencilSum, 10000.0)
+
 local crossStencilValid = ad.greater(D_i(0,0)+D_i(1,0)+D_i(0,1)+D_i(-1,0)+D_i(0,-1), 0.0)
 local pointValid = ad.greater(D_i(0,0), 0.0)
 
-local E_g_h = ad.select(squareStencilValid, B(0,0) - B(1,0) - (I(0,0) - I(1,0)), 0)
-local E_g_v = ad.select(squareStencilValid, B(0,0) - B(0,1) - (I(0,0) - I(0,1)), 0)
+local E_g_h_beforeSelect = B(0,0) - B(1,0) - (I(0,0) - I(1,0))
+local E_g_h = ad.select(squareStencilValid2, ad.select(inBounds, ad.select(squareStencilValid, E_g_h_beforeSelect, 0), 0), 0)
+
+local E_g_v_beforeSelect = B(0,0) - B(0,1) - (I(0,0) - I(0,1))
+local E_g_v = ad.select(squareStencilValid2, ad.select(inBounds, ad.select(squareStencilValid, E_g_v_beforeSelect, 0), 0), 0)
 
 local E_s_beforeSelect = sqMagnitude(plus(p(0,0), times(-0.25, plus(plus(p(-1,0), p(0,-1)),plus(p(1, 0), p(0,1))))))
 local E_s = ad.select(inBounds,ad.select(crossStencilValid, E_s_beforeSelect ,0),0)
 
 local E_p = ad.select(pointValid, D(0,0) - D_i(0,0)	,0)
+--local E_p = ad.select(squareStencilValid, D(0,0) - squareStencilSum/10000.0,0)
+--local E_p = ad.select(pointValid, D(0,0) - 0.9	, D(0,0) - 0.1)
 
 --local E_p = ad.select(squareStencilValid, D(0,0) 	,0)
 
@@ -124,5 +133,5 @@ local E_r_v = 0 --temporal constraint, unimplemented
 local E_r_d = 0 --temporal constraint, unimplemented
 
 local cost = ad.sumsquared(w_g*E_g_h, w_g*E_g_v, w_s*E_s, w_p*E_p, w_r*E_r_h, w_r*E_r_v, w_r*E_r_d)
---local cost = ad.sumsquared(w_p*E_p)
+--local cost = ad.sumsquared(E_p)
 return S:Cost(cost)

@@ -1,9 +1,12 @@
 
 local timeIndividualKernels = true
+local debugDumpInfo = true
 
 local S = require("std")
 
 local util = {}
+util.debugDumpInfo = debugDumpInfo
+
 util.C = terralib.includecstring [[
 #include <stdio.h>
 #include <string.h>
@@ -344,6 +347,16 @@ local wrapGPUKernel = function(nakedKernel, PlanData, params)
 end
 
 
+local cd = macro(function(cufunc)
+    return quote
+        var r = cufunc
+        if r ~= 0 then  
+            C.printf("cuda reported error %d",r)
+            return r
+        end
+    end
+end)
+
 --TODO FIX THE CUDA DEVICE SYNCS
 --TODO 
 local makeGPULauncher = function(compiledKernel, kernelName, header, footer, problemSpec, PlanData, params)
@@ -361,18 +374,20 @@ local makeGPULauncher = function(compiledKernel, kernelName, header, footer, pro
 		if ([timeIndividualKernels]) then
 			C.cudaEventCreate(&timingInfo.startEvent)
 			C.cudaEventCreate(&timingInfo.endEvent)
-	        C.cudaEventRecord(timingInfo.startEvent, stream);
+	        C.cudaEventRecord(timingInfo.startEvent, stream)
 			timingInfo.eventName = kernelName
 	    end
-
-		compiledKernel(&launch, @pd, params)
+	    compiledKernel(&launch, @pd, params)
+	    cd(C.cudaGetLastError())
+		
 		
 		if ([timeIndividualKernels]) then
-			C.cudaEventRecord(timingInfo.endEvent, stream);
+			cd(C.cudaEventRecord(timingInfo.endEvent, stream))
 			pd.timer.timingInfo:insert(timingInfo)
 		end
 
-		C.cudaDeviceSynchronize()
+		cd(C.cudaDeviceSynchronize())
+		cd(C.cudaGetLastError())
 		[footer(pd)]
 	end
 	
@@ -401,8 +416,6 @@ util.makeComputeCostGPU = function(data)
 	end
 	return { kernel = computeCost, header = header, footer = footer, params = {symbol(data.imageType)}, mapMemberName = "X" }
 end
-
-
 
 
 util.makeCPUFunctions = function(problemSpec, vars, PlanData)
@@ -462,7 +475,7 @@ util.makeGPUFunctions = function(problemSpec, vars, PlanData, kernels)
 		wrappedKernels[k] = wrapGPUKernel(v.kernel, PlanData, v.params)
 	end
 	
-	local compiledKernels = terralib.cudacompile(wrappedKernels)
+	local compiledKernels = terralib.cudacompile(wrappedKernels, false)
 	
 	for k, v in pairs(compiledKernels) do
 		gpu[k] = makeGPULauncher(compiledKernels[k], wrappedKernels[k].name, kernelTemplate[k].header, kernelTemplate[k].footer, problemSpec, PlanData, kernelTemplate[k].params)
