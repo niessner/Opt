@@ -20,7 +20,7 @@ end
 
 -- constants
 local verboseSolver = true
-local verboseAD = true
+local verboseAD = false
 
 local function newclass(name)
     local mt = { __name = name }
@@ -803,7 +803,7 @@ local function createjtj(Fs,unknown,P)
 			for _,u2 in ipairs(unknownpairs) do
 				allunknownpairs[getpair(k.x + u2.x, k.y + u2.y)] = true
 			end	
-			print(("df(%d,%d)/dx(0,0) = %s"):format(k.x,k.y,tostring(dfdx00[k])))
+			--print(("df(%d,%d)/dx(0,0) = %s"):format(k.x,k.y,tostring(dfdx00[k])))
 		end
 
 		for _,u in ipairs(allunknownpairs) do
@@ -819,9 +819,9 @@ local function createjtj(Fs,unknown,P)
 				local beta = shiftexp(F,r.x,r.y):d(X_shift)
 				sum = sum + alpha * beta
 				
-				print(("df(%d,%d)/dx(%d,%d) * df(%d,%d)/dx(%d,%d)"):format(r.x,r.y,0,0,r.x,r.y,u.x,u.y))
-				print("first: ",alpha)
-				print("second: ",beta)
+				--print(("df(%d,%d)/dx(%d,%d) * df(%d,%d)/dx(%d,%d)"):format(r.x,r.y,0,0,r.x,r.y,u.x,u.y))
+				--print("first: ",alpha)
+				--print("second: ",beta)
 			end
 			P_F = P_F + P(u.x,u.y) * sum  
 		end
@@ -858,7 +858,7 @@ function timeSinceLast(name)
     local currentTime = terralib.currenttimeinseconds()
     if (lastTime) then
         local deltaTime = currentTime-lastTime
-        print(name,": ", deltaTime,"s")
+        --print(name,": ", deltaTime,"s")
     end
     lastTime = currentTime
 end
@@ -886,7 +886,7 @@ function ProblemSpecAD:Cost(costexp_)
     for i,u in ipairs(unknownvars) do
         local a = u:key()
         local shif = shiftexp(gradient[i],-a.x,-a.y)
-        print(shif)
+        --print(shif)
         gradientgathered = gradientgathered + shif
         timeSinceLast("gradientgathered"..i)
     end
@@ -902,9 +902,9 @@ function ProblemSpecAD:Cost(costexp_)
     if SumOfSquares:is(costexp_) then
         local P = self:Image("P",unknown.W,unknown.H,-1)
         local jtjexp = 2.0*createjtj(costexp_.terms,unknown,P)
-		print("THE ENTIRE EXPRESSION ", jtjexp)
+		--print("THE ENTIRE EXPRESSION ", jtjexp)
 		local special = removesomeboundaries(jtjexp)
-		print("WITH SOME BOUNDS REMOVED ",special)
+		--print("WITH SOME BOUNDS REMOVED ",special)
 		--error("DONE")
         timeSinceLast("createjtj(costexp_.terms,unknown,P)")
         self.P:Stencil(stencilforexpression(jtjexp))

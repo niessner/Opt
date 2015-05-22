@@ -152,6 +152,11 @@ return function(problemSpec, vars)
 		end
 	end)
 	
+	local terra isBlockOnBoundary(gi : int, gj : int) : bool
+		--TODO CONTINUE HERE WITH BLOCK BOUNDARY CHECK
+		return true
+	end
+	
 	local kernels = {}
 	
 	kernels.computeCost = function(data)
@@ -283,7 +288,7 @@ return function(problemSpec, vars)
 				local shmem = cudalib.sharedmemory(problemSpec:UnknownType().metamethods.typ, shared_mem_size)		--pre-conditioner
 				emit quote
 					P = [blockedType] { data = [&uint8](shmem + offset) } 
-					[InitShared(blockedType)](P, 0.0f)	--TODO THIS IS HACK TO SET EVERYTHING TO ZERO NOT IDEAL!
+					[InitShared(blockedType)](P, 0.0f)
 				end
 			end
 			
