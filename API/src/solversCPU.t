@@ -16,7 +16,7 @@ solversCPU.gradientDescentCPU = function(problemSpec, vars)
 	local cpu = util.makeCPUFunctions(problemSpec, vars, PlanData)
 	
 	local terra impl(data_ : &opaque, images : &&opaque, edgeValues : &&opaque, params_ : &&opaque)
-
+		C.printf("Starting GD\n")
 		var pd = [&PlanData](data_)
 		var params = [&double](params_)
 		
@@ -36,10 +36,11 @@ solversCPU.gradientDescentCPU = function(problemSpec, vars)
 		var learningRate = initialLearningRate
 
 		for iter = 0, maxIters do
+			C.printf("Compute cost\n")
 			var startCost = cpu.computeCost(pd)
 			logSolver("iteration %d, cost=%f, learningRate=%f\n", iter, startCost, learningRate)
 			--C.getchar()
-
+			C.printf("Compute grad\n")
 			cpu.computeGradient(pd, pd.gradient, pd.parameters.X)
 			
 			--
@@ -53,7 +54,7 @@ solversCPU.gradientDescentCPU = function(problemSpec, vars)
 					maxDelta = util.max(C.fabsf(delta), maxDelta)
 				end
 			end
-
+			C.printf("Compute cost\n")
 			--
 			-- update the learningRate
 			--
@@ -105,7 +106,7 @@ solversCPU.conjugateGradientCPU = function(problemSpec, vars)
 	local cpu = util.makeCPUFunctions(problemSpec, vars, PlanData)
 	
 	local terra impl(data_ : &opaque, images : &&opaque, params_ : &opaque)
-
+		C.printf("Starting GD\n")
 		var pd = [&PlanData](data_)
 		var params = [&double](params_)
 
@@ -114,14 +115,14 @@ solversCPU.conjugateGradientCPU = function(problemSpec, vars)
 		var maxIters = 1000
 		
 		var prevBestAlpha = 0.0
-
+		C.printf("Before iters")
 		for iter = 0, maxIters do
 
 			var iterStartCost = cpu.computeCost(pd)
 			logSolver("iteration %d, cost=%f\n", iter, iterStartCost)
-
+			C.printf("Compute cost")
 			cpu.computeGradient(pd, pd.gradient, pd.parameters.X)
-			
+			C.printf("Compute grad")
 			--
 			-- compute the search direction
 			--

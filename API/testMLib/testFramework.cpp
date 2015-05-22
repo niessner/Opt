@@ -64,7 +64,7 @@ void TestFramework::runAllTests()
 
     //TestExample example = makeRandomQuadratic(5);
     //TestExample example = makeMeshSmoothing("smoothingExampleE.png", 0.1f);
-	TestExample example = makeImageSmoothing("smoothingExampleB.png", 0.1f);	
+	TestExample example = makeImageSmoothing("smoothingExampleF.png", 0.1f);	
 
     vector<TestMethod> methods;
 
@@ -76,9 +76,9 @@ void TestFramework::runAllTests()
     // 
     // GPU methods
     //
-    //methods.push_back(TestMethod("gradientDescentGPU", "no-params"));
+    methods.push_back(TestMethod("gradientDescentCPU", "no-params"));
 	//methods.push_back(TestMethod("gaussNewtonGPU", "no-params"));
-	methods.push_back(TestMethod("gaussNewtonBlockGPU", "no-params"));
+	//methods.push_back(TestMethod("gaussNewtonBlockGPU", "no-params"));
 
     for (auto &method : methods)
         runTest(method, example);
@@ -88,9 +88,9 @@ void TestFramework::runTest(const TestMethod &method, TestExample &example)
 {
     example.images[0].clear(0.0f);
 
-    cout << "Running test: " << example.exampleName << " using " << method.optimizerName << endl;
+    cerr << "Running test: " << example.exampleName << " using " << method.optimizerName << endl;
 
-    cout << "start cost: " << example.costFunction(example.images[0]) << endl;
+    cerr << "start cost: " << example.costFunction(example.images[0]) << endl;
 
     uint64_t dims[] = { example.variableDimX, example.variableDimY };
 
@@ -136,7 +136,7 @@ void TestFramework::runTest(const TestMethod &method, TestExample &example)
     
     if (!plan)
     {
-        cout << "Opt_ProblemPlan failed" << endl;
+        cerr << "Opt_ProblemPlan failed" << endl;
         #ifdef _WIN32
         cin.get();
         #endif
@@ -147,7 +147,7 @@ void TestFramework::runTest(const TestMethod &method, TestExample &example)
 
     int a = 0;
     void * list[] = { &a };
-
+    cerr << "Problem solve" << endl;
     if (isGPU)
     {
         Opt_ProblemSolve(optimizerState, plan, imagesGPU.data(), edgeValuesCPU.data(), list);
@@ -165,10 +165,10 @@ void TestFramework::runTest(const TestMethod &method, TestExample &example)
     //cout << "x(0, 1) = " << example.images[0](0, 5) << endl;
 
     // TODO: this is not always accurate, in cases where costFunction does not exactly match the cost function in the terra file.  This should just call terra's cost function.
-    cout << "optimized cost: " << example.costFunction(example.images[0]) << endl;
+    cerr << "optimized cost: " << example.costFunction(example.images[0]) << endl;
 
-    cout << "expected cost: " << example.minimumCost << endl;
+    cerr << "expected cost: " << example.minimumCost << endl;
 
-    cout << "max delta: " << OptImage::maxDelta(example.images[0], example.minimumValues) << endl;
-    cout << "avg delta: " << OptImage::avgDelta(example.images[0], example.minimumValues) << endl;
+    cerr << "max delta: " << OptImage::maxDelta(example.images[0], example.minimumValues) << endl;
+    cerr << "avg delta: " << OptImage::avgDelta(example.images[0], example.minimumValues) << endl;
 }

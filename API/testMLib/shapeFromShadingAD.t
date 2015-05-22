@@ -132,6 +132,6 @@ local E_r_h = 0 --temporal constraint, unimplemented
 local E_r_v = 0 --temporal constraint, unimplemented
 local E_r_d = 0 --temporal constraint, unimplemented
 
-local cost = ad.sumsquared(w_g*E_g_h, w_g*E_g_v, w_s*E_s, w_p*E_p, w_r*E_r_h, w_r*E_r_v, w_r*E_r_d)
---local cost = ad.sumsquared(E_p)
+--local cost = ad.sumsquared(w_g*E_g_h, w_g*E_g_v, w_s*E_s, w_p*E_p, w_r*E_r_h, w_r*E_r_v, w_r*E_r_d)
+local cost = ad.sumsquared(E_p)
 return S:Cost(cost)
