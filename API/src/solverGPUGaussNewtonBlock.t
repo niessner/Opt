@@ -152,9 +152,17 @@ return function(problemSpec, vars)
 		end
 	end)
 	
-	local terra isBlockOnBoundary(gi : int, gj : int) : bool
-		--TODO CONTINUE HERE WITH BLOCK BOUNDARY CHECK
-		return true
+	local terra isBlockOnBoundary(gi : int, gj : int, width : uint, height : uint) : bool
+		-- TODO meta program the bad based on the block size and stencil;
+		-- TODO assert padX > stencil
+		var padX : int = int(BLOCK_SIZE)
+		var padY : int = int(BLOCK_SIZE)
+		 
+		if gi - padX < 0 or gi + padX >= width or 
+		   gj - padY < 0 or gj + padY >= height then
+			return true
+		end
+		return false
 	end
 	
 	local kernels = {}
@@ -206,7 +214,11 @@ return function(problemSpec, vars)
 			var cost = 0.0f
 			var w : int, h : int
 			if positionForValidLane(pd, "X", &w, &h) then
-				cost = [float](data.problemSpec.functions.cost.boundary(tId_i, tId_j, gId_i, gId_j, blockParams))
+				if isBlockOnBoundary(gId_i, gId_j, W, H) then
+					cost = [float](data.problemSpec.functions.cost.boundary(tId_i, tId_j, gId_i, gId_j, blockParams))
+				else
+					cost = [float](data.problemSpec.functions.cost.interior(tId_i, tId_j, gId_i, gId_j, blockParams))
+				end
 				--cost = [float](data.problemSpec.functions.cost_global.boundary(gId_i, gId_j, gId_i, gId_j, pd.parameters))
 			end
 
@@ -300,36 +312,7 @@ return function(problemSpec, vars)
 			var AP : problemSpec:UnknownType().metamethods.typ
 
 			__syncthreads()	--after here, everything should be in shared memory
-			
-			--[[
-			if tId_i == 0 and tId_j == 0 
-			and blockCornerX == 16 and blockCornerY == 16
-			then
-				printf("(%d | %d)\t", blockCornerX, blockCornerY)
-				--printf("X: %f\n", blockParams.X(-1,-1))
-				--printf("A: %f\n", blockParams.A(-1,-1))
-				for i = 0, 16+2, 1 do
-					var localIdX : int = -2+i
-					var localIdY : int = 0
-					var globalIdX : int = blockCornerX + localIdX
-					var globalIdY : int = blockCornerY + localIdY
-					printf("(%d|%d) -- (%d|%d)\n", tId_i, tId_j, gId_i, gId_j)
-					printf("(%d|%d) -- (%d|%d)\t", localIdX, localIdY, globalIdX, globalIdY)
-					printf("Al: %f \t Ag: %f \n", blockParams.A(localIdX,localIdY), pd.parameters.A(globalIdX, globalIdY))
-				end
-			end
-			
-			--]]
-			--[[	
-			if isInsideImage(gId_i, gId_j, W, H) then
-				var g : float = pd.parameters.A(gId_i, gId_j)
-				var l : float = blockParams.A(tId_i, tId_j)
-				if g ~= l then
-					printf("ERROR: (%d|%d)\t%f %f\n", gId_i, gId_j, g, l)
-				end
-			end
-			--]]
-			
+				
 	
 			--//////////////////////////////////////////////////////////////////////////////////////////
 			--// Initialize linear patch systems
@@ -338,7 +321,12 @@ return function(problemSpec, vars)
 			var d : problemSpec:UnknownType().metamethods.typ = 0.0f
 			
 			if isInsideImage(gId_i, gId_j, W, H) then
-				R = -data.problemSpec.functions.gradient.boundary(tId_i, tId_j, gId_i, gId_j, blockParams)		-- residuum = J^T x -F - A x delta_0  => J^T x -F, since A x x_0 == 0
+				-- residuum = J^T x -F - A x delta_0  => J^T x -F, since A x x_0 == 0
+				if isBlockOnBoundary(gId_i, gId_j, W, H) then
+					R = -data.problemSpec.functions.gradient.boundary(tId_i, tId_j, gId_i, gId_j, blockParams)		
+				else 
+					R = -data.problemSpec.functions.gradient.interior(tId_i, tId_j, gId_i, gId_j, blockParams)		
+				end
 				--R = -data.problemSpec.functions.gradient_global.boundary(gId_i, gId_j, gId_i, gId_j, pd.parameters)	-- residuum = J^T x -F - A x delta_0  => J^T x -F, since A x x_0 == 0				
 				--pd.delta(gId_i, gId_j) = 0.01f * R
 	
@@ -373,8 +361,13 @@ return function(problemSpec, vars)
 				var currentP : problemSpec:UnknownType().metamethods.typ = P(tId_i, tId_j)				
 				var d : float = 0.0f
 					
-				if isInsideImage(gId_i, gId_j, W, H) then																	
-					AP = data.problemSpec.functions.applyJTJ.boundary(tId_i, tId_j, gId_i, gId_j, blockParams, P) -- A x p_k  => J^T x J x p_k 
+				if isInsideImage(gId_i, gId_j, W, H) then
+					-- A x p_k  => J^T x J x p_k 
+					if isBlockOnBoundary(gId_i, gId_j, W, H) then
+						AP = data.problemSpec.functions.applyJTJ.boundary(tId_i, tId_j, gId_i, gId_j, blockParams, P) 
+					else 
+						AP = data.problemSpec.functions.applyJTJ.interior(tId_i, tId_j, gId_i, gId_j, blockParams, P) 
+					end
 					d = currentP*AP
 					-- x-th term of denominator of alpha
 				end
