@@ -380,10 +380,6 @@ return function(problemSpec, vars)
 	
 				var dotProduct : float = patchBucket[0]
 				
-				if gId_i == 0 and gId_j == 0 then
-					--printf("dotProduct %f\n", dotProduct)
-				end
-		
 				var b : float = 0.0f		
 				if isInsideImage(gId_i, gId_j, W, H) then
 					var alpha : float = 0.0f
@@ -408,11 +404,7 @@ return function(problemSpec, vars)
 		
 				if isInsideImage(gId_i, gId_j, W, H) then
 					var rDotzNew : float = patchBucket[0]	-- get new nominator
-					
-					if gId_i == 0 and gId_j == 0 then
-						--printf("rDotzNew %f\n", rDotzNew)
-					end
-					
+								
 					var beta : float = 0.0f														 
 					if RDotZOld > FLOAT_EPSILON then
 						beta = rDotzNew/RDotZOld -- update step size beta
@@ -446,36 +438,13 @@ return function(problemSpec, vars)
 			var tId_i : int = threadIdx.x -- local col idx
 			var tId_j : int = threadIdx.y -- local row idx
 	
-	
 			var gId_i : int = blockIdx.x * blockDim.x + threadIdx.x - ox -- global col idx
 			var gId_j : int = blockIdx.y * blockDim.y + threadIdx.y - oy -- global row idx
-			
-		
+					
 			if isInsideImage(gId_i, gId_j, W, H) then 
 				pd.parameters.X(gId_i,gId_j) = pd.parameters.X(gId_i,gId_j) + pd.delta(gId_i,gId_j)
 			end
-			
-			--[[
-			if gId_i == 0 and gId_j == 0 then
-				printf("(%d | %d)\n", ox, oy)
-			end
-			--]]
-			--[[
-			if gId_i == 0 and gId_j == 0 then
-				printf("stride %d\n", pd.delta:stride())
-				for j = 0, 5, 1 do
-				for i = 0, 32, 1 do
-					printf("%f ", pd.delta(gId_i + i, gId_j + j))
-				end				
-				end
-			end
-			--]]
-			
-			--var w : int, h : int
-			--if positionForValidLane(pd, "X", &w, &h) then
-			--	printf("delta: %f\n", pd.delta(w,h))
-			--	pd.parameters.X(w,h) = pd.parameters.X(w,h) + pd.delta(w,h)
-			--end
+		
 		end
 		return { kernel = PCGLinearUpdateBlockGPU, header = noHeader, footer = noFooter, params = {symbol(int), symbol(int)}, mapMemberName = "X" }
 	end
