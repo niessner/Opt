@@ -485,33 +485,6 @@ util.makeAddImage = function(imageType)
 	return addImage
 end
 
-util.makeComputeCost = function(data)
-	local terra computeCost(pd : &data.PlanData)
-		var result = 0.0
-		C.printf("computeCost\n")
-		for h = 0, pd.parameters.X:H() do
-			for w = 0, pd.parameters.X:W() do
-				var v = data.problemSpec.functions.cost.boundary(w, h, w, h, pd.parameters)
-				result = result + v
-			end
-		end
-		return result
-	end
-	return computeCost
-end
-
-util.makeComputeGradient = function(data)
-	local terra computeGradient(pd : &data.PlanData, gradientOut : data.imageType, values : data.imageType)
-		var params = pd.parameters
-		params.X = values
-		for h = 0, gradientOut:H() do
-			for w = 0, gradientOut:W() do
-				gradientOut(w, h) = data.problemSpec.functions.gradient.boundary(w, h, w, h, params)
-			end
-		end
-	end
-	return computeGradient
-end
 
 util.makeComputeResiduals = function(data)
 	local terra computeResiduals(pd : &data.PlanData, values : data.imageType, residuals : data.imageType)
@@ -777,39 +750,6 @@ util.makeDumpBiLineSearch = function(data, cpu)
 	return dumpBiLineSearch
 end
 
-
-util.makeCPUFunctions = function(problemSpec, vars, PlanData)
-	local cpu = {}
-	
-	local data = {}
-	data.problemSpec = problemSpec
-	data.PlanData = PlanData
-	data.imageType = problemSpec:UnknownType(false)
-	
-	cpu.copyImage = util.makeCopyImage(data.imageType)
-	cpu.setImage = util.makeSetImage(data.imageType)
-	cpu.addImage = util.makeAddImage(data.imageType)
-	cpu.scaleImage = util.makeScaleImage(data.imageType)
-	cpu.clearImage = util.makeClearImage(data.imageType)
-	cpu.innerProduct = util.makeInnerProduct(data.imageType)
-	
-	cpu.computeCost = util.makeComputeCost(data)
-	cpu.computeGradient = util.makeComputeGradient(data)
-	cpu.deltaCost = util.makeComputeDeltaCost(data)
-	cpu.computeResiduals = util.makeComputeResiduals(data)
-	
-	cpu.computeSearchCost = util.makeComputeSearchCost(data, cpu)
-	cpu.computeBiSearchCost = util.makeComputeBiSearchCost(data, cpu)
-	cpu.computeSearchCostParallel = util.makeComputeSearchCostParallel(data, cpu)
-	cpu.dumpLineSearch = util.makeDumpLineSearch(data, cpu)
-	cpu.dumpBiLineSearch = util.makeDumpBiLineSearch(data, cpu)
-	cpu.lineSearchBruteForce = util.makeLineSearchBruteForce(data, cpu)
-	cpu.lineSearchQuadraticMinimum = util.makeLineSearchQuadraticMinimum(data, cpu)
-	cpu.lineSearchQuadraticFallback = util.makeLineSearchQuadraticFallback(data, cpu)
-	cpu.biLineSearch = util.makeBiLineSearch(data, cpu)
-	
-	return cpu
-end
 
 util.makeGPUFunctions = function(problemSpec, vars, PlanData, kernels)
 	local gpu = {}

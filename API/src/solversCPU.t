@@ -5,20 +5,64 @@ local C = util.C
 
 solversCPU = {}
 
+local kernels = {}
+
+local makeCPUFunctions = function(problemSpec, vars, PlanData, kernels)
+	local cpu = {}
+	
+	local data = {}
+	data.problemSpec = problemSpec
+	data.PlanData = PlanData
+	data.imageType = problemSpec:UnknownType(false)
+	
+	cpu.computeCost = kernels.makeComputeCost(data)
+	cpu.computeGradient = kernels.makeComputeGradient(data)
+	
+	return cpu
+end
+
+kernels.makeComputeCost = function(data)
+	local terra computeCost(pd : &data.PlanData)
+		var result = 0.0
+		C.printf("computeCost\n")
+		for h = 0, pd.parameters.X:H() do
+			for w = 0, pd.parameters.X:W() do
+				var v = data.problemSpec.functions.cost.boundary(w, h, w, h, pd.parameters)
+				result = result + v
+			end
+		end
+		return result
+	end
+	return computeCost
+end
+
+kernels.makeComputeGradient = function(data)
+	local terra computeGradient(pd : &data.PlanData, gradientOut : data.imageType, values : data.imageType)
+		var params = pd.parameters
+		params.X = values
+		for h = 0, gradientOut:H() do
+			for w = 0, gradientOut:W() do
+				gradientOut(w, h) = data.problemSpec.functions.gradient.boundary(w, h, w, h, params)
+			end
+		end
+	end
+	return computeGradient
+end
+
+
 solversCPU.gradientDescentCPU = function(problemSpec, vars)
 	local struct PlanData(S.Object) {
 		plan : opt.Plan
-		parameters : problemSpec:ParameterType()
+		parameters : problemSpec:ParameterType(false)	--get the non-blocked version
 		
 		gradient : problemSpec:UnknownType()
 	}
 
-	local cpu = util.makeCPUFunctions(problemSpec, vars, PlanData)
+	local cpu = makeCPUFunctions(problemSpec, vars, PlanData, kernels)
 	
 	local terra impl(data_ : &opaque, images : &&opaque, edgeValues : &&opaque, params_ : &&opaque)
 		C.printf("Starting GD\n")
 		var pd = [&PlanData](data_)
-		var params = [&double](params_)
 		
 		--unpackstruct(pd.images) = [util.getImages(PlanData, images)]
 		pd.parameters = [util.getParameters(problemSpec, images, edgeValues,params_)]
