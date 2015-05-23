@@ -23,7 +23,6 @@ local w_fit = 0.1
 local w_reg = 1.0
 
 
-
 local terra inLaplacianBounds(i : int64, j : int64, xImage : P:UnknownType())
 	return i > 0 and i < xImage:W() - 1 and j > 0 and j < xImage:H() - 1
 end
@@ -87,6 +86,7 @@ end
 -- eval 2*JTJ (note that we keep the '2' to make it consistent with the gradient
 local terra applyJTJ(i : int64, j : int64, gi : int64, gj : int64, self : P:ParameterType(), pImage : P:UnknownType())
  
+	--fit
 	var e_fit = 2.0f*pImage(i, j)
 	
 	--reg
@@ -96,7 +96,7 @@ local terra applyJTJ(i : int64, j : int64, gi : int64, gj : int64, self : P:Para
 		-laplacian(i - 1, j + 0, gi - 1, gj + 0, pImage)
 		-laplacian(i + 0, j + 1, gi + 0, gj + 1, pImage)
 		-laplacian(i + 0, j - 1, gi + 0, gj - 1, pImage)
-	e_reg = 2.0 * e_reg
+	e_reg = 2.0*e_reg
 	
 	return w_fit*e_fit + w_reg*e_reg
 end
