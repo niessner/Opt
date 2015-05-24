@@ -43,7 +43,7 @@ return function(problemSpec, vars)
 		local terra computeGradientGPU(pd : &data.PlanData,  gradientOut : data.imageType)
 			var w : int, h : int
 			if positionForValidLane(pd, "X", &w, &h) then
-				gradientOut(w, h) = data.problemSpec.functions.gradient.boundary(w, h, w, h, pd.parameters)
+				gradientOut(w, h) = data.problemSpec.functions.gradient.boundary(w, h, w, h, pd.parameters, nil)
 			end
 		end
 		return { kernel = computeGradientGPU, header = noHeader, footer = noFooter, params = {symbol(data.imageType)}, mapMemberName = "X" }
@@ -78,12 +78,12 @@ return function(problemSpec, vars)
 			var startCost = gpu.computeCost(pd, pd.parameters.X)
 			logSolver("iteration %d, cost=%f, learningRate=%f\n", iter, startCost, learningRate)
 
+
 			gpu.computeGradient(pd, pd.gradStore)
 			--
 			-- move along the gradient by learningRate
 			--
 			gpu.updatePosition(pd, learningRate)
-
 			
 			--
 			-- update the learningRate

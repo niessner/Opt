@@ -23,11 +23,11 @@ local w_fit = 0.1
 local w_reg = 1.0
 
 
-local terra inLaplacianBounds(i : int64, j : int64, xImage : P:UnknownType())
-	return i > 0 and i < xImage:W() - 1 and j > 0 and j < xImage:H() - 1
+local terra inLaplacianBounds(i : int64, j : int64, xImage : P:UnknownType()) : bool
+	return i > 0 and i < xImage:W()-1 and j > 0 and j < xImage:H()-1
 end
 
-local terra laplacian(i : int64, j : int64, gi : int64, gj : int64, xImage : P:UnknownType())
+local terra laplacian(i : int64, j : int64, gi : int64, gj : int64, xImage : P:UnknownType()) : float
 	if not inLaplacianBounds(gi, gj, xImage) then
 		return 0
 	end
@@ -38,9 +38,22 @@ local terra laplacian(i : int64, j : int64, gi : int64, gj : int64, xImage : P:U
     var n2 = xImage(i, j - 1)
     var n3 = xImage(i, j + 1)
 
-	var v = 4 * x - (n0 + n1 + n2 + n3)
-	--IO.printf("laplacian (%d,%d) = %f\n", i, j, v)
+	var v = 4*x - (n0 + n1 + n2 + n3)
+	
 	return v
+end
+
+-- diagonal of JtJ; i.e., (Jt)^2
+local terra laplacianPreconditioner(gi : int64, gj : int64, xImage : P:UnknownType()) : float
+
+	var p : float = 0.0
+	if inLaplacianBounds(gi+0, gj+0, xImage) then	p = p + 4*4			end
+	if inLaplacianBounds(gi+1, gj+0, xImage) then	p = p + (-1)*(-1)	end
+	if inLaplacianBounds(gi+0, gj+1, xImage) then	p = p + (-1)*(-1)	end
+	if inLaplacianBounds(gi-1, gj+0, xImage) then	p = p + (-1)*(-1)	end
+	if inLaplacianBounds(gi+0, gj-1, xImage) then	p = p + (-1)*(-1)	end
+	
+	return p
 end
 
 local terra cost(i : int64, j : int64, gi : int64, gj : int64, self : P:ParameterType())
@@ -48,42 +61,68 @@ local terra cost(i : int64, j : int64, gi : int64, gj : int64, self : P:Paramete
 	var x = self.X(i, j)
 	var a = self.A(i, j)
 
-	var v = laplacian(i, j, gi, gj, self.X)
-	var laplacianCost = v * v
-
 	var v2 = x - a
-	var reconstructionCost = v2 * v2
+	var e_fit = v2 * v2
+	
+	var v = laplacian(i, j, gi, gj, self.X)
+	var e_reg = v * v
 
-	var res = (float)(w_reg*laplacianCost + w_fit*reconstructionCost)
+	var res = (float)(w_fit*e_fit + w_reg*e_reg)
 	return res
 	
 end
 
-local terra gradient(i : int64, j : int64, gi : int64, gj : int64, self : P:ParameterType())
+-- eval 2*JtF == \nabla(F); eval diag(2*(Jt)^2) == pre-conditioner
+local terra gradient(i : int64, j : int64, gi : int64, gj : int64, self : P:ParameterType(), outPre : &float)
 	
 	var x = self.X(i, j)
 	var a = self.A(i, j)
 	
-	var reconstructionGradient = 2 * (x - a)
+	var e_fit = 2 * (x - a)
 
-	var laplacianGradient = 
+	var e_reg = 
 		4*laplacian(i, j, gi, gj, self.X)
 		-laplacian(i + 1, j, gi + 1, gj, self.X)
 		-laplacian(i - 1, j, gi - 1, gj, self.X)
 		-laplacian(i, j + 1, gi, gj + 1, self.X)
 		-laplacian(i, j - 1, gi, gj - 1, self.X)
-	laplacianGradient = 2.0*laplacianGradient
+	e_reg = 2.0*e_reg
 
-	return w_reg*laplacianGradient + w_fit*reconstructionGradient
-
-
+	
+	if outPre ~= nil then
+		--pre-conditioner
+		var p_fit : float = 2.0	
+		var p_reg : float = 2.0 * laplacianPreconditioner(gi, gj, self.X)
+		
+		var pre = w_fit*p_fit + w_reg*p_reg
+		if pre > 0.0001 then
+			pre = 1.0 / pre
+			if pre > 1 and gi < 10 and gj < 10 then
+				--printf("pre=%f (%d|%d)\t", pre, gi, gj)
+			end
+		else 
+			pre = 1.0
+		end
+		
+		var expected : float = 1.0f / (2.0f*w_fit + 2.0f*20.0f)
+		--if 	gi == 0 and gj == 0 or
+		--	gi == 0 and gj == self.X:H() or
+		--	gi == self.X:W() and gj == 0 or
+		--	gi == self.X:W() and gj == self.X:H()		then		
+		if gi <= 1 or gi >= self.X:W()-2 or gj <= 1 or gj >= self.X:H()-2 then
+			pre = expected
+			--printf("reg=%f; pre=%f\n; exp=%f\n",e_reg,pre,expected)
+		end		
+		@outPre = pre
+	end
+	
+	
+	
+	return w_fit*e_fit + w_reg*e_reg
+	
 end
 
-local terra gradientPreconditioner(i : int64, j : int64)
-	return w_reg*24.0f + w_fit*2.0f
-end
-
--- eval 2*JTJ (note that we keep the '2' to make it consistent with the gradient
+-- eval 2*JtJ (note that we keep the '2' to make it consistent with the gradient
 local terra applyJTJ(i : int64, j : int64, gi : int64, gj : int64, self : P:ParameterType(), pImage : P:UnknownType())
  
 	--fit
@@ -101,94 +140,9 @@ local terra applyJTJ(i : int64, j : int64, gi : int64, gj : int64, self : P:Para
 	return w_fit*e_fit + w_reg*e_reg
 end
 
----------------
----------------
----------------
-
-local terra inLaplacianBounds_global(i : int64, j : int64, xImage : P:UnknownType(false))
-	return i > 0 and i < xImage:W() - 1 and j > 0 and j < xImage:H() - 1
-end
-
-local terra laplacian_global(i : int64, j : int64, gi : int64, gj : int64, xImage : P:UnknownType(false))
-	if not inLaplacianBounds_global(gi, gj, xImage) then
-		return 0
-	end
-
-	var x = xImage(i, j)
-	var n0 = xImage(i - 1, j)
-    var n1 = xImage(i + 1, j)
-    var n2 = xImage(i, j - 1)
-    var n3 = xImage(i, j + 1)
-
-	var v = 4 * x - (n0 + n1 + n2 + n3)
-	--IO.printf("laplacian (%d,%d) = %f\n", i, j, v)
-	return v
-end
-
-local terra cost_global(i : int64, j : int64, gi : int64, gj : int64, self : P:ParameterType(false))
-	
-	var x = self.X(i, j)
-	var a = self.A(i, j)
-
-	var v = laplacian_global(i, j, gi, gj, self.X)
-	var laplacianCost = v * v
-
-	var v2 = x - a
-	var reconstructionCost = v2 * v2
-
-	var res = (float)(w_reg*laplacianCost + w_fit*reconstructionCost)
-	return res
-	
-end
-
-local terra gradient_global(i : int64, j : int64, gi : int64, gj : int64, self : P:ParameterType(false))
-	
-	var x = self.X(i, j)
-	var a = self.A(i, j)
-	
-	var reconstructionGradient = 2 * (x - a)
-
-	var laplacianGradient = 
-		4*laplacian_global(i, j, gi, gj, self.X)
-		-laplacian_global(i + 1, j, gi + 1, gj, self.X)
-		-laplacian_global(i - 1, j, gi - 1, gj, self.X)
-		-laplacian_global(i, j + 1, gi, gj + 1, self.X)
-		-laplacian_global(i, j - 1, gi, gj - 1, self.X)
-	laplacianGradient = 2.0*laplacianGradient
-
-	return w_reg*laplacianGradient + w_fit*reconstructionGradient
-
-
-end
-
-local terra gradientPreconditioner(i : int64, j : int64)
-	return w_reg*24.0f + w_fit*2.0f
-end
-
--- eval 2*JTJ (note that we keep the '2' to make it consistent with the gradient
-local terra applyJTJ_global(i : int64, j : int64, gi : int64, gj : int64, self : P:ParameterType(false), pImage : P:UnknownType(false))
- 
-	var e_fit = 2.0f*pImage(i, j)
-	
-	--reg
-	var e_reg = 
-		4*laplacian_global(i + 0, j + 0, gi + 0, gj + 0, pImage)
-		-laplacian_global(i + 1, j + 0, gi + 1, gj + 0, pImage)
-		-laplacian_global(i - 1, j + 0, gi - 1, gj + 0, pImage)
-		-laplacian_global(i + 0, j + 1, gi + 0, gj + 1, pImage)
-		-laplacian_global(i + 0, j - 1, gi + 0, gj - 1, pImage)
-	e_reg = 2.0 * e_reg
-	
-	return w_fit*e_fit + w_reg*e_reg
-end
-
-
 P:Function("cost", {W,H}, cost)
 P:Function("gradient", {W,H}, gradient)
 P:Function("applyJTJ", {W,H}, applyJTJ)
-P:Function("cost_global", {W,H}, cost_global)
-P:Function("gradient_global", {W,H}, gradient_global)
-P:Function("applyJTJ_global", {W,H}, applyJTJ_global)
-P.gradientPreconditioner = gradientPreconditioner
+
 
 return P

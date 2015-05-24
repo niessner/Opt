@@ -323,16 +323,13 @@ return function(problemSpec, vars)
 			if isInsideImage(gId_i, gId_j, W, H) then
 				-- residuum = J^T x -F - A x delta_0  => J^T x -F, since A x x_0 == 0
 				if isBlockOnBoundary(gId_i, gId_j, W, H) then
-					R = -data.problemSpec.functions.gradient.boundary(tId_i, tId_j, gId_i, gId_j, blockParams)		
+					R = -data.problemSpec.functions.gradient.boundary(tId_i, tId_j, gId_i, gId_j, blockParams, &Pre)		
 				else 
-					R = -data.problemSpec.functions.gradient.interior(tId_i, tId_j, gId_i, gId_j, blockParams)		
+					R = -data.problemSpec.functions.gradient.interior(tId_i, tId_j, gId_i, gId_j, blockParams, &Pre)		
 				end
-				--R = -data.problemSpec.functions.gradient_global.boundary(gId_i, gId_j, gId_i, gId_j, pd.parameters)	-- residuum = J^T x -F - A x delta_0  => J^T x -F, since A x x_0 == 0				
-				--pd.delta(gId_i, gId_j) = 0.01f * R
-	
-				Pre = 1.0f	--TODO fix this hack... the pre-conditioner needs to be the diagonal of JTJ
-				var preRes : float = Pre*R																  -- apply preconditioner M^-1 
-				P(tId_i, tId_j) = preRes											   	  -- save for later
+
+				var preRes : float = Pre*R		-- apply pre-conditioner M^-1 
+				P(tId_i, tId_j) = preRes		-- save for later
 				d = R*preRes
 			end
 						
