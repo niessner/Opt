@@ -1,6 +1,6 @@
 
 local timeIndividualKernels = true
-local debugDumpInfo = true
+local debugDumpInfo = false
 
 local S = require("std")
 

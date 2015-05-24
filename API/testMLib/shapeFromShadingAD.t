@@ -15,8 +15,9 @@ local w_p						= S:Param("w_p",float,0)-- Is initialized by the solver!
 
 local w_s		 				= S:Param("w_s",float,1)-- Regularization weight
 local w_r						= S:Param("w_r",float,2)-- Prior weight
-
+w_s = 1.0
 local w_g						= S:Param("w_g",float,3)-- Shading weight
+w_g = 1000.0
 local weightShadingStart		= S:Param("weightShadingStart",float,4)-- Starting value for incremental relaxation
 local weightShadingIncrement	= S:Param("weightShadingIncrement",float,5)-- Update factor
 
@@ -108,21 +109,21 @@ for i=-3,3 do
 end
 
 local squareStencilValid = ad.greater(squareStencilSum, 0.0)
-local squareStencilValid2 = ad.less(squareStencilSum, 10000.0)
 
 local crossStencilValid = ad.greater(D_i(0,0)+D_i(1,0)+D_i(0,1)+D_i(-1,0)+D_i(0,-1), 0.0)
 local pointValid = ad.greater(D_i(0,0), 0.0)
 
 local E_g_h_beforeSelect = B(0,0) - B(1,0) - (I(0,0) - I(1,0))
-local E_g_h = ad.select(squareStencilValid2, ad.select(inBounds, ad.select(squareStencilValid, E_g_h_beforeSelect, 0), 0), 0)
+local E_g_h = ad.select(inBounds, ad.select(squareStencilValid, E_g_h_beforeSelect, 0), 0)
 
 local E_g_v_beforeSelect = B(0,0) - B(0,1) - (I(0,0) - I(0,1))
-local E_g_v = ad.select(squareStencilValid2, ad.select(inBounds, ad.select(squareStencilValid, E_g_v_beforeSelect, 0), 0), 0)
+local E_g_v = ad.select(inBounds, ad.select(squareStencilValid, E_g_v_beforeSelect, 0), 0)
 
 local E_s_beforeSelect = sqMagnitude(plus(p(0,0), times(-0.25, plus(plus(p(-1,0), p(0,-1)),plus(p(1, 0), p(0,1))))))
 local E_s = ad.select(inBounds,ad.select(crossStencilValid, E_s_beforeSelect ,0),0)
 
-local E_p = ad.select(pointValid, D(0,0) - D_i(0,0)	,0)
+local E_p = ad.select(pointValid, D(0,0) - D_i(0,0),0)
+--local E_p = ad.select(pointValid, D(0,0) - D_i(0,0)	,0)
 --local E_p = ad.select(squareStencilValid, D(0,0) - squareStencilSum/10000.0,0)
 --local E_p = ad.select(pointValid, D(0,0) - 0.9	, D(0,0) - 0.1)
 
@@ -132,6 +133,6 @@ local E_r_h = 0 --temporal constraint, unimplemented
 local E_r_v = 0 --temporal constraint, unimplemented
 local E_r_d = 0 --temporal constraint, unimplemented
 
---local cost = ad.sumsquared(w_g*E_g_h, w_g*E_g_v, w_s*E_s, w_p*E_p, w_r*E_r_h, w_r*E_r_v, w_r*E_r_d)
-local cost = ad.sumsquared(E_p)
+local cost = ad.sumsquared(w_g*E_g_h, w_g*E_g_v, w_s*E_s, w_p*E_p, w_r*E_r_h, w_r*E_r_v, w_r*E_r_d)
+--local cost = ad.sumsquared(E_p)
 return S:Cost(cost)
