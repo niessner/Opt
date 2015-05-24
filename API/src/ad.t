@@ -334,6 +334,42 @@ end
 
 local function defaultgenerator(op) return op.generator end
 
+
+local function emitprintexpression(e, recursionLevel)
+    return quote
+        escape
+            if "Var" == e.kind then
+                emit `printf([tostring(e:key())])
+                emit `printf(", ")
+            elseif "Const" == e.kind then
+                emit `printf("%f, ", float(e.v))
+            elseif "Apply" == e.kind then
+                emit `printf([e.op.name])
+                emit `printf("(")
+                if recursionLevel > 0 then
+                    for i,newE in ipairs(e.args) do
+                        if "Var" == newE.kind then
+                            emit `printf([tostring(newE:key())])
+                            emit `printf(", ")
+                        elseif "Const" == newE.kind then
+                            emit `printf("%f, ", float(newE.v))
+                        elseif "Apply" == newE.kind then
+                            emit `printf([newE.op.name])
+                        end
+                        -- recursion doesn't work? :(
+                        --emit `[emitprintexpression(newE, recursionLevel-1)]
+
+                     --   local recursiveExpression = emitprintexpression(newE)
+                     --   emit `[recursiveExpression]
+                    end
+                end
+                emit `printf("), ")
+            end
+        end
+    end
+    
+end
+
 function ad.toterra(es,varmap_,generatormap_) 
     es = terralib.islist(es) and es or terralib.newlist(es)
      --varmap is a function or table mapping keys to what terra code should go there
@@ -354,13 +390,21 @@ function ad.toterra(es,varmap_,generatormap_)
             return `float(e.v)
         elseif "Apply" == e.kind then
             if emitted[e] then return emitted[e] end
-            local exp
             local generator = assert(generatormap(e.op) or defaultgenerator(e.op))
             local exp = generator(unpack(e.args:map(emit)))
             if manyuses[e] then
                 local v = symbol(float,"e")
                 emitted[e] = v
-                statements:insert(quote var [v] = exp end)
+                statements:insert(quote 
+                        var [v] = exp 
+                        --[[
+                        if not (exp == exp) then
+                            printf("Nan found: %f, \n", exp)
+                            [emitprintexpression(e,3)]
+                            printf("\n")
+                        end
+                        ]]
+                    end)
                 return v
             else
                 return exp
