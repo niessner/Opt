@@ -740,13 +740,6 @@ local function unknowns(exp)
     return unknownvars
 end
 
-local function getunknownpairs(exp)
-    local seenunknown = {}
-    local unknownvars = terralib.newlist()
-    local u = unknowns(exp)
-	return u:map(function(v) return getpair(v:key().x,v:key().y) end)
-end
-
 local function imagesusedinexpression(exp)
     local N = 0
     local idxtoimage = terralib.newlist{}
@@ -764,23 +757,18 @@ local function imagesusedinexpression(exp)
     return idxtoimage
 end
 
-local function shiftswithoverlappingstencil(residualpairs,unknownpairs)
-    local shifttooverlap = {}
-    local shifts = terralib.newlist()
-    for i,r in ipairs(residualpairs) do
-        for j,u in ipairs(unknownpairs) do         
-			
-			
-			
-			local s = getpair(b.x - a.x, b.y - a.y) -- at what shift from a to b does a's (a.x,a.y) overlap with b's (b.x,b.y)
-            if not shifttooverlap[s] then
-                shifttooverlap[s] = terralib.newlist()
-                shifts:insert(s)
-            end
-            shifttooverlap[s]:insert({left = i, right = j})
-        end
-    end
-    return shifts,shifttooverlap
+local function unknownpairs(exp)
+	return unknowns(exp):map(function(v) return getpair(v:key().x,v:key().y) end)
+end
+--given that the residual at (0,0) uses the variables in 'unknownsupport',
+--what is the set of residuals will use variable X(0,0).
+--this amounts to taking each variable in unknown support and asking which residual is it
+--that makes that variable X(0,0)
+local function residualsincludingX00(unknownsupport)
+    return unknownsupport:map(function(u) return getpair(-u.x,-u.y) end)
+end
+local function unknownsforresidual(r,unknownsupport)
+    return unknownsupport:map(function(u) return getpair(r.x+u.x,r.y+u.y) end)
 end
 
 local function createjtj(Fs,unknown,P)
@@ -788,70 +776,35 @@ local function createjtj(Fs,unknown,P)
 	local x = unknown(0,0)
     for _,F in ipairs(Fs) do
         local P_F = 0
-        local unknownpairs = getunknownpairs(F)
+        
+        local unknownsupport = unknownpairs(F)
+		local residuals = residualsincludingX00(unknownsupport)
 		
-		local allunknownpairs = {}
-		local allresidualpairs = {}
+		local columns = {}
+		local nonzerounknowns = terralib.newlist()
 		
-		local residualpairs = terralib.newlist()
-		
-		local dfdx00 = {} 
-		for _,u in ipairs(unknownpairs) do --Loop over the symmetries
-			local k = getpair(-u.x,-u.y)
-			residualpairs:insert(k)
-			dfdx00[k] = shiftexp(F,k.x,k.y):d(x)
-			for _,u2 in ipairs(unknownpairs) do
-				allunknownpairs[getpair(k.x + u2.x, k.y + u2.y)] = true
-			end	
-			--print(("df(%d,%d)/dx(0,0) = %s"):format(k.x,k.y,tostring(dfdx00[k])))
+		for _,r in ipairs(residuals) do
+		    local rexp = shiftexp(F,r.x,r.y)
+		    local drdx00 = rexp:d(x)
+		    local unknowns = unknownsforresidual(r,unknownsupport)
+		    for _,u in ipairs(unknowns) do
+		        local exp = drdx00*rexp:d(unknown(u.x,u.y))
+		        --print(("df(%d,%d)/dx(%d,%d) * df(%d,%d)/dx(%d,%d) = %s"):format(r.x,r.y,0,0,r.x,r.y,u.x,u.y,tostring(exp)))
+		        if not columns[u] then
+		            columns[u] = 0
+		            nonzerounknowns:insert(u)
+		        end
+		        columns[u] = columns[u] + exp
+		    end
 		end
-
-		for _,u in ipairs(allunknownpairs) do
-			allunknownpairs[getpair(k.x + u2.x, k.y + u2.y)] = true
+		for _,u in ipairs(nonzerounknowns) do
+		    P_F = P_F + P(u.x,u.y) * columns[u]
 		end
-		
-		for u,_ in pairs(allunknownpairs) do
-			local sum = 0
-		    for i,r in ipairs(residualpairs) do
-				local X_shift = unknown(u.x, u.y)		
-				
-				local alpha = dfdx00[r]
-				local beta = shiftexp(F,r.x,r.y):d(X_shift)
-				sum = sum + alpha * beta
-				
-				--print(("df(%d,%d)/dx(%d,%d) * df(%d,%d)/dx(%d,%d)"):format(r.x,r.y,0,0,r.x,r.y,u.x,u.y))
-				--print("first: ",alpha)
-				--print("second: ",beta)
-			end
-			P_F = P_F + P(u.x,u.y) * sum  
-		end
-		--[[
-		local c,shifttooverlap = shiftswithoverlappingstencil(residualpairs,unknownpairs)
-		
-        for _,shift in pairs(shifts) do
-            local overlaps = shifttooverlap[shift]
-            local sum = 0
-            local X_shift = unknown(shift.x,shift.y)
-			for i,o in ipairs(overlaps) do
-				
-				local rl = unknownvars[o.right]:key()
-				local ll = unknownvars[o.left]:key()
-				
-				local alpha = dfdx00[o.left]
-				local beta = shiftexp(F,ll.x,ll.y):d(X_shift)
-				print(("df(%d,%d)/dx(%d,%d) * df(%d,%d)/dx(%d,%d)"):format(ll.x,ll.y,0,0,ll.x,ll.y,shift.x,shift.y))
-				print("first: ",alpha)
-				print("second: ",beta)
-				sum = sum + alpha*beta
-            end
-			print(shift.x, shift.y, sum)
-            P_F = P_F + P(shift.x,shift.y) * sum  
-        end
-		--]]
         P_hat = P_hat + P_F
     end
     return P_hat
 end
+
 
 local lastTime = nil
 function timeSinceLast(name)
