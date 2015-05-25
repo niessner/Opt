@@ -43,13 +43,13 @@ public:
 		float weightFit = 0.1f;
 		float weightReg = 1.0f;
 
-        unsigned int nonLinearIter = 1;
-		unsigned int linearIter = 100;
-		//m_laplacianSolver->solveGN(d_image, d_result, nonLinearIter, linearIter, weightFit, weightReg);
+        unsigned int nonLinearIter = 10;
+		unsigned int linearIter = 10;
+		m_laplacianSolver->solveGN(d_image, d_result, nonLinearIter, linearIter, weightFit, weightReg);
 		//m_laplacianSolver->solveGD(d_image, d_result, nonLinearIter, weightFit, weightReg);
 		//m_cusparseLaplacianSolver->solvePCG(d_image, d_result, linearIter, weightFit, weightReg);
 		//m_cuspLaplacianSolver->solvePCG(d_image, d_result, linearIter, weightFit, weightReg);
-		m_cuspLaplacianSolverLinearOp->solvePCG(d_image, d_result, linearIter, weightFit, weightReg);
+		//m_cuspLaplacianSolverLinearOp->solvePCG(d_image, d_result, linearIter, weightFit, weightReg);
 		return copyResultToCPU();
 	}
 

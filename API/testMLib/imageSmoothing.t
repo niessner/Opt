@@ -53,6 +53,11 @@ local terra laplacianPreconditioner(gi : int64, gj : int64, xImage : P:UnknownTy
 	if inLaplacianBounds(gi-1, gj+0, xImage) then	p = p + (-1)*(-1)	end
 	if inLaplacianBounds(gi+0, gj-1, xImage) then	p = p + (-1)*(-1)	end
 	
+	if gi == 0 and gj == 0 then
+		printf("p=%f\n", p)
+	end
+	
+	
 	return p
 end
 
@@ -104,18 +109,19 @@ local terra gradient(i : int64, j : int64, gi : int64, gj : int64, self : P:Para
 			pre = 1.0
 		end
 		
-		var expected : float = 1.0f / (2.0f*w_fit + 2.0f*20.0f)
+		var expected : float = 1.0f / (2.0f*w_fit + 2.0f*20.0f*w_reg)
 		--if 	gi == 0 and gj == 0 or
-		--	gi == 0 and gj == self.X:H() or
-		--	gi == self.X:W() and gj == 0 or
-		--	gi == self.X:W() and gj == self.X:H()		then		
-		if gi <= 1 or gi >= self.X:W()-2 or gj <= 1 or gj >= self.X:H()-2 then
-			pre = expected
+		--	gi == 0 and gj == self.X:H()-1 or
+		--	gi == self.X:W()-1 and gj == 0 or
+		--	gi == self.X:W()-1 and gj == self.X:H()-1		then		
+		if gi == 0 or gi == self.X:W()-1 or gj == 0 or gj == self.X:H()-1 then
+			--pre = expected
 			--printf("reg=%f; pre=%f\n; exp=%f\n",e_reg,pre,expected)
 		end		
+		--pre = expected
+		--pre = 1.0f
 		@outPre = pre
 	end
-	
 	
 	
 	return w_fit*e_fit + w_reg*e_reg
