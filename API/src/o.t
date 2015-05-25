@@ -620,9 +620,9 @@ local function removesomeboundaries(exp)
     return exp:rename(nobounds)
 end
 
-local function createfunction(problemspec,exp,usebounds,W,H)
+local function createfunction(problemspec,name,exps,usebounds,W,H)
     if not usebounds then
-        exp = removeboundaries(exp)
+        exps = exps:map(removeboundaries)
     end
     
     local P = symbol(problemspec.P:ParameterType(),"P")
@@ -687,13 +687,14 @@ local function createfunction(problemspec,exp,usebounds,W,H)
             end
         end 
     end
-    local result = ad.toterra({exp},emitvar,generatormap)
+    local result = ad.toterra(exps,emitvar,generatormap)
     local terra generatedfn([i], [j], [gi], [gj], [P], [extraimages])
         [imageinits]
         [stmts]
         return result
     end
-    if verboseAD then
+    generatedfn:setname(name)
+    if verboseAD or true then
         generatedfn:printpretty(false, false)
     end
     return generatedfn,stencil
@@ -711,15 +712,18 @@ local function stencilforexpression(exp)
     end)
     return stencil
 end
-local function createfunctionset(problemspec,name,exp)
+local function createfunctionset(problemspec,name,exps)
+    if ad.toexp(exps) then
+        exps = terralib.newlist { exps }
+    end
     local ut = problemspec.P:UnknownType()
     local W,H = ut.metamethods.W,ut.metamethods.H
     
     dprint("function set for: ",name)
     dprint("bound")
-    local boundary = createfunction(problemspec,exp,true,W,H)
+    local boundary = createfunction(problemspec,name,exps,true,W,H)
     dprint("interior")
-    local interior = createfunction(problemspec,exp,false,W,H)
+    local interior = createfunction(problemspec,name,exps,false,W,H)
     
     problemspec.P:Function(name,{W,H},boundary,interior)
 end
@@ -844,62 +848,51 @@ function timeSinceLast(name)
     lastTime = currentTime
 end
 
-function ProblemSpecAD:Cost(costexp_)
-    timeSinceLast("Cost begin")
-    local costexp = assert(ad.toexp(costexp_))
-    timeSinceLast("costexp")
-    local images = imagesusedinexpression(costexp)
-    timeSinceLast("imagesusedinexpression")
-    local unknown = images[1]
-    
+local function creategradient(costexp)
     local unknownvars = unknowns(costexp)
-    timeSinceLast("unknowns")
     local gradient = costexp:gradient(unknownvars)
-    timeSinceLast("gradient")
-    
-    dprint("cost expression")
-    dprint(ad.tostrings({assert(costexp)}))
+
     dprint("grad expression")
     local names = table.concat(unknownvars:map(function(v) return tostring(v:key()) end),", ")
     dprint(names.." = "..ad.tostrings(gradient))
-    timeSinceLast("names")
+    
     local gradientgathered = 0
     for i,u in ipairs(unknownvars) do
         local a = u:key()
-        local shif = shiftexp(gradient[i],-a.x,-a.y)
-        --print(shif)
-        gradientgathered = gradientgathered + shif
-        timeSinceLast("gradientgathered"..i)
+        local shift = shiftexp(gradient[i],-a.x,-a.y)
+        gradientgathered = gradientgathered + shift
     end
-    timeSinceLast("gradientgathered")
     dprint("grad gather")
     dprint(ad.tostrings({gradientgathered}))
+    return gradientgathered
+end
+
+function ProblemSpecAD:Cost(costexp_)
+    local costexp = assert(ad.toexp(costexp_))
+    local images = imagesusedinexpression(costexp)
+    local unknown = images[1]
+    
+    dprint("cost expression")
+    dprint(ad.tostrings({assert(costexp)}))
+    
+    local gradient = creategradient(costexp)
     
     self.P:Stencil(stencilforexpression(costexp))
-    timeSinceLast("stencilforexpression(costexp)")
-    self.P:Stencil(stencilforexpression(gradientgathered))
-    timeSinceLast("stencilforexpression(gradientgathered)")
+    self.P:Stencil(stencilforexpression(gradient))
     
     if SumOfSquares:is(costexp_) then
         local P = self:Image("P",unknown.W,unknown.H,-1)
         local jtjexp = 2.0*createjtj(costexp_.terms,unknown,P)
-        timeSinceLast("createjtj(costexp_.terms,unknown,P)")
         self.P:Stencil(stencilforexpression(jtjexp))
-        timeSinceLast("stencilforexpression(jtjexp)")
         createfunctionset(self,"applyJTJ",jtjexp)
-        timeSinceLast("createfunctionset(self,'applyJTJ',jtjexp)")
-		
+        
 		--gradient with pre-conditioning
 		local gradient,preconditioner = createjtf(costexp_.terms,unknown,P)
-		print("gradient new",removeboundaries(2*gradient))
-		print("preconditioner",removeboundaries(2*preconditioner))
-		--createfunctionset(self,"evalJTF",jtfexp)
+		createfunctionset(self,"applyJTF",terralib.newlist { 2*gradient, 2*preconditioner })
     end
     
     createfunctionset(self,"cost",costexp)
-    timeSinceLast("createfunctionset(self,'cost',costexp)")
-    createfunctionset(self,"gradient",gradientgathered)
-    timeSinceLast("createfunctionset(self,'gradient',gradientgathered)")
+    createfunctionset(self,"gradient",gradient)
     
     if verboseAD then
         terralib.tree.printraw(self)
