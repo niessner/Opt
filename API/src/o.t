@@ -805,6 +805,34 @@ local function createjtj(Fs,unknown,P)
     return P_hat
 end
 
+local function createjtf(Fs,unknown,P)
+	local F_hat = 0	--gradient
+	local P_hat = 0 --pre-conditioner
+	
+	local x = unknown(0,0)
+    for _,F in ipairs(Fs) do
+        local F_F = 0
+		local P_F = 0
+        
+        local unknownsupport = unknownpairs(F)
+		local residuals = residualsincludingX00(unknownsupport)
+
+	
+		for _,f in ipairs(residuals) do
+		    local F_x = shiftexp(F,f.x,f.y)
+		    local dfdx00 = F_x:d(x)		-- entry of J^T
+			local dfdx00F = dfdx00*F_x	-- entry of \gradF == J^TF
+			F_F = F_F + dfdx00F			-- summing it up to get \gradF
+			
+			local dfdx00Sq = dfdx00*dfdx00	-- entry of Diag(J^TJ)
+			P_F = P_F + dfdx00Sq			-- summing the pre-conditioner up
+		end
+		
+        F_hat = F_hat + F_F
+		P_hat = P_hat + P_F
+    end
+    return F_hat, P_hat
+end
 
 local lastTime = nil
 function timeSinceLast(name)
@@ -855,16 +883,17 @@ function ProblemSpecAD:Cost(costexp_)
     if SumOfSquares:is(costexp_) then
         local P = self:Image("P",unknown.W,unknown.H,-1)
         local jtjexp = 2.0*createjtj(costexp_.terms,unknown,P)
-		--print("THE ENTIRE EXPRESSION ", jtjexp)
-		local special = removesomeboundaries(jtjexp)
-		--print("WITH SOME BOUNDS REMOVED ",special)
-		--error("DONE")
         timeSinceLast("createjtj(costexp_.terms,unknown,P)")
         self.P:Stencil(stencilforexpression(jtjexp))
         timeSinceLast("stencilforexpression(jtjexp)")
         createfunctionset(self,"applyJTJ",jtjexp)
-		createfunctionset(self,"special",special)
         timeSinceLast("createfunctionset(self,'applyJTJ',jtjexp)")
+		
+		--gradient with pre-conditioning
+		local gradient,preconditioner = createjtf(costexp_.terms,unknown,P)
+		print("gradient new",removeboundaries(2*gradient))
+		print("preconditioner",removeboundaries(2*preconditioner))
+		--createfunctionset(self,"evalJTF",jtfexp)
     end
     
     createfunctionset(self,"cost",costexp)
