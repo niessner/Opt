@@ -59,9 +59,10 @@ return function(problemSpec, vars)
 			return true
 		end
 		
-		return false
+		return true
 	end
 	
+
 	local kernels = {}
 	kernels.PCGInit1 = function(data)
 		local terra PCGInit1GPU(pd : &data.PlanData)
@@ -73,10 +74,11 @@ return function(problemSpec, vars)
 				var residuum : float = 0.0f
 				var pre : float = 0.0f				
 				if isBlockOnBoundary(w, h, pd.parameters.X:W(), pd.parameters.X:W()) then
-					residuum = -data.problemSpec.functions.gradient.boundary(w, h, w, h, pd.parameters, &pre)
+					residuum, pre = data.problemSpec.functions.evalJTF.boundary(w, h, w, h, pd.parameters)
 				else 
-					residuum = -data.problemSpec.functions.gradient.interior(w, h, w, h, pd.parameters, &pre)
+					residuum, pre = data.problemSpec.functions.evalJTF.interior(w, h, w, h, pd.parameters)
 				end
+				residuum = -residuum
 				
 				pd.r(w, h) = residuum
 				pd.preconditioner(w, h) = pre

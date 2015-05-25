@@ -196,7 +196,8 @@ function opt.ProblemSpec()
                              BlockedProblemParameters = BlockedProblemParameters,
 							 functions = {},
 							 maxStencil = 0,
-							 stage = "inputs"
+							 stage = "inputs",
+							 usepreconditioner = true,
                            }
 	function BlockedProblemParameters.metamethods.__getentries(self)
 		local entries = {}
@@ -212,6 +213,10 @@ function opt.ProblemSpec()
 	return problemSpec
 end
 
+function ProblemSpec:UsePreconditioner(v)
+	self:Stage "inputs"
+	self.usepreconditioner = v
+end
 function ProblemSpec:Stage(name)
     assert(PROBLEM_STAGES[self.stage] <= PROBLEM_STAGES[name], "all inputs must be specified before functions are added")
     self.stage = name
@@ -551,7 +556,9 @@ local ProblemSpecAD = newclass("ProblemSpecAD")
 function ad.ProblemSpec()
     return ProblemSpecAD:new { P = opt.ProblemSpec() }
 end
-
+function ProblemSpecAD:UsePreconditioner(v)
+	self.P:UsePreconditioner(v)
+end
 
 local Image = newclass("Image")
 -- Z: this will eventually be opt.Image, but that is currently used by our direct methods
@@ -694,7 +701,7 @@ local function createfunction(problemspec,name,exps,usebounds,W,H)
         return result
     end
     generatedfn:setname(name)
-    if verboseAD or true then
+    if verboseAD then
         generatedfn:printpretty(false, false)
     end
     return generatedfn,stencil
@@ -809,7 +816,7 @@ local function createjtj(Fs,unknown,P)
     return P_hat
 end
 
-local function createjtf(Fs,unknown,P)
+local function createjtf(problemSpec,Fs,unknown,P)
 	local F_hat = 0	--gradient
 	local P_hat = 0 --pre-conditioner
 	
@@ -835,6 +842,9 @@ local function createjtf(Fs,unknown,P)
         F_hat = F_hat + F_F
 		P_hat = P_hat + P_F
     end
+	if not problemSpec.P.usepreconditioner then
+		P_hat = ad.toexp(.5)
+	end
     return F_hat, P_hat
 end
 
@@ -880,6 +890,9 @@ function ProblemSpecAD:Cost(costexp_)
     self.P:Stencil(stencilforexpression(costexp))
     self.P:Stencil(stencilforexpression(gradient))
     
+	print("Oldgradient: ", removeboundaries(gradient))
+	print("\n\n\n")
+	
     if SumOfSquares:is(costexp_) then
         local P = self:Image("P",unknown.W,unknown.H,-1)
         local jtjexp = 2.0*createjtj(costexp_.terms,unknown,P)
@@ -887,10 +900,14 @@ function ProblemSpecAD:Cost(costexp_)
         createfunctionset(self,"applyJTJ",jtjexp)
         
 		--gradient with pre-conditioning
-		local gradient,preconditioner = createjtf(costexp_.terms,unknown,P)
-		createfunctionset(self,"applyJTF",terralib.newlist { 2*gradient, 2*preconditioner })
+		local gradient,preconditioner = createjtf(self,costexp_.terms,unknown,P)
+		createfunctionset(self,"evalJTF",terralib.newlist { 2*gradient, 2*preconditioner })
+		
+		print("gradient: ", removeboundaries(2*gradient))
     end
     
+	--error("bla")
+	
     createfunctionset(self,"cost",costexp)
     createfunctionset(self,"gradient",gradient)
     

@@ -14,7 +14,7 @@ A.functions.applyJTJ.boundary = terra(i : int64, j : int64, gi : int64, gj : int
 	var d : float = a - b
 	if d < 0.0f then d = -d end
 	if d > 0.1f then
-		printf("%d,%d: ad=%f b=%f\n",int(gi),int(gj),a,b)
+		--printf("%d,%d: ad=%f b=%f\n",int(gi),int(gj),a,b)
 	end
 	--[[
 	if gi == 0 and gj == 7 then
@@ -25,7 +25,36 @@ A.functions.applyJTJ.boundary = terra(i : int64, j : int64, gi : int64, gj : int
 		var e_fit : float = pImage(gi,gj)
 		printf("res=%f\n", 2.0f*e_fit*w_fit +  2.0f*e_reg*w_reg)
 	end
-	--]]
+	--]]	
+	return a
+end
+
+local oldJTF = A.functions.evalJTF.boundary
+A.functions.evalJTF.boundary = terra(i : int64, j : int64, gi : int64, gj : int64, self : A:ParameterType())
+	var a,pa = oldJTF(i, j, gi, gj, self)	--auto-diff
+	var b,pb = M.functions.evalJTF.boundary(i,j,gi,gj,@[&M:ParameterType()](&self))
+
+	var d : float = pa - pb
+	if d < 0.0f then d = -d end
+	if d > 0.1f then
+		if gi == 10 and gj == 10 then
+			printf("%d,%d: pa=%f pb=%f\n",int(gi),int(gj),pa,pb)
+		end
+	end
+	
+	return a,pb
+end
+
+local cost = A.functions.cost.boundary
+A.functions.cost.boundary = terra(i : int64, j : int64, gi : int64, gj : int64, self : A:ParameterType())
+	var a = cost(i, j, gi, gj, self)	--auto-diff
+	var b = M.functions.cost.boundary(i,j,gi,gj,@[&M:ParameterType()](&self))
+
+	var d : float = a - b
+	if d < 0.0f then d = -d end
+	if d > 0.1f then
+		--printf("%d,%d: ad=%f b=%f\n",int(gi),int(gj),a,b)
+	end
 	
 	return a
 end

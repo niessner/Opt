@@ -43,7 +43,8 @@ return function(problemSpec, vars)
 		local terra computeGradientGPU(pd : &data.PlanData,  gradientOut : data.imageType)
 			var w : int, h : int
 			if positionForValidLane(pd, "X", &w, &h) then
-				gradientOut(w, h) = data.problemSpec.functions.gradient.boundary(w, h, w, h, pd.parameters, nil)
+				--gradientOut(w, h) = data.problemSpec.functions.gradient.boundary(w, h, w, h, pd.parameters)
+				gradientOut(w, h) = data.problemSpec.functions.evalJTF.boundary(w, h, w, h, pd.parameters)._0
 			end
 		end
 		return { kernel = computeGradientGPU, header = noHeader, footer = noFooter, params = {symbol(data.imageType)}, mapMemberName = "X" }

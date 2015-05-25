@@ -53,11 +53,6 @@ local terra laplacianPreconditioner(gi : int64, gj : int64, xImage : P:UnknownTy
 	if inLaplacianBounds(gi-1, gj+0, xImage) then	p = p + (-1)*(-1)	end
 	if inLaplacianBounds(gi+0, gj-1, xImage) then	p = p + (-1)*(-1)	end
 	
-	if gi == 0 and gj == 0 then
-		printf("p=%f\n", p)
-	end
-	
-	
 	return p
 end
 
@@ -78,7 +73,7 @@ local terra cost(i : int64, j : int64, gi : int64, gj : int64, self : P:Paramete
 end
 
 -- eval 2*JtF == \nabla(F); eval diag(2*(Jt)^2) == pre-conditioner
-local terra gradient(i : int64, j : int64, gi : int64, gj : int64, self : P:ParameterType(), outPre : &float)
+local terra gradient(i : int64, j : int64, gi : int64, gj : int64, self : P:ParameterType())
 	
 	var x = self.X(i, j)
 	var a = self.A(i, j)
@@ -93,40 +88,29 @@ local terra gradient(i : int64, j : int64, gi : int64, gj : int64, self : P:Para
 		-laplacian(i, j - 1, gi, gj - 1, self.X)
 	e_reg = 2.0*e_reg
 
+	return w_fit*e_fit + w_reg*e_reg
+end
+
+-- eval 2*JtF == \nabla(F); eval diag(2*(Jt)^2) == pre-conditioner
+local terra evalJTF(i : int64, j : int64, gi : int64, gj : int64, self : P:ParameterType())
 	
-	if outPre ~= nil then
-		--pre-conditioner
+	var gradient = gradient(i, j, gi, gj, self)
+	
+	var pre : float = 1.0f
+	if P.usepreconditioner then		--pre-conditioner
 		var p_fit : float = 2.0	
 		var p_reg : float = 2.0 * laplacianPreconditioner(gi, gj, self.X)
-		
-		var pre = w_fit*p_fit + w_reg*p_reg
+			
+		pre = w_fit*p_fit + w_reg*p_reg
 		if pre > 0.0001 then
 			pre = 1.0 / pre
-			if pre > 1 and gi < 10 and gj < 10 then
-				--printf("pre=%f (%d|%d)\t", pre, gi, gj)
-			end
 		else 
 			pre = 1.0
 		end
-		
-		var expected : float = 1.0f / (2.0f*w_fit + 2.0f*20.0f*w_reg)
-		--if 	gi == 0 and gj == 0 or
-		--	gi == 0 and gj == self.X:H()-1 or
-		--	gi == self.X:W()-1 and gj == 0 or
-		--	gi == self.X:W()-1 and gj == self.X:H()-1		then		
-		if gi == 0 or gi == self.X:W()-1 or gj == 0 or gj == self.X:H()-1 then
-			--pre = expected
-			--printf("reg=%f; pre=%f\n; exp=%f\n",e_reg,pre,expected)
-		end		
-		--pre = expected
-		--pre = 1.0f
-		@outPre = pre
 	end
-	
-	
-	return w_fit*e_fit + w_reg*e_reg
-	
+	return gradient, pre
 end
+	
 
 -- eval 2*JtJ (note that we keep the '2' to make it consistent with the gradient
 local terra applyJTJ(i : int64, j : int64, gi : int64, gj : int64, self : P:ParameterType(), pImage : P:UnknownType())
@@ -148,6 +132,7 @@ end
 
 P:Function("cost", {W,H}, cost)
 P:Function("gradient", {W,H}, gradient)
+P:Function("evalJTF", {W,H}, evalJTF)
 P:Function("applyJTJ", {W,H}, applyJTJ)
 
 

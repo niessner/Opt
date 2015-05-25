@@ -323,10 +323,11 @@ return function(problemSpec, vars)
 			if isInsideImage(gId_i, gId_j, W, H) then
 				-- residuum = J^T x -F - A x delta_0  => J^T x -F, since A x x_0 == 0
 				if isBlockOnBoundary(gId_i, gId_j, W, H) then
-					R = -data.problemSpec.functions.gradient.boundary(tId_i, tId_j, gId_i, gId_j, blockParams, &Pre)		
+					R, Pre = data.problemSpec.functions.evalJTF.boundary(tId_i, tId_j, gId_i, gId_j, blockParams)		
 				else 
-					R = -data.problemSpec.functions.gradient.interior(tId_i, tId_j, gId_i, gId_j, blockParams, &Pre)		
+					R, Pre = data.problemSpec.functions.evalJTF.interior(tId_i, tId_j, gId_i, gId_j, blockParams)		
 				end
+				R = -R
 
 				var preRes : float = Pre*R		-- apply pre-conditioner M^-1 
 				P(tId_i, tId_j) = preRes		-- save for later
