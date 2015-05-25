@@ -16,38 +16,6 @@
 #define MINF __int_as_float(0xff800000)
 
 ///////////////////////////////////////////////////////////////////////////////
-// Helper ARAP
-///////////////////////////////////////////////////////////////////////////////
-
-// Rotation Matrix
-inline __device__ float2x2 evalR(float CosAlpha, float SinAlpha)
-{
-	float2x2 R;
-	R.m11 = CosAlpha; R.m12 = -SinAlpha;
-	R.m21 = SinAlpha; R.m22 =  CosAlpha;
-	return R;
-}
-
-inline __device__ float2x2 evalR(float& angle)
-{
-	return evalR(cos(angle), sin(angle));
-}
-
-// Rotation Matrix dAlpha
-inline __device__ float2x2 eval_dR(float CosAlpha, float SinAlpha)
-{
-	float2x2 R;
-	R.m11 = -SinAlpha; R.m12 = -CosAlpha;
-	R.m21 = CosAlpha;  R.m22 = -SinAlpha;
-	return R;
-}
-
-inline __device__ float2x2 evalR_dR(float& angle)
-{
-	return eval_dR(cos(angle), sin(angle));
-}
-
-///////////////////////////////////////////////////////////////////////////////
 // Helper
 ///////////////////////////////////////////////////////////////////////////////
 
