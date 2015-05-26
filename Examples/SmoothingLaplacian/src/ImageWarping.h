@@ -1,0 +1,121 @@
+#pragma once
+
+#include "mLibInclude.h"
+
+#include <cuda_runtime.h>
+#include <cudaUtil.h>
+
+#include "CUDAWarpingSolver.h"
+#include "CUDAPatchSolverWarping.h"
+#include "TerraSolverWarping.h"
+
+class ImageWarping {
+public:
+	ImageWarping(const ColorImageR32G32B32A32& image)
+	{
+		m_image = image;
+
+		cutilSafeCall(cudaMalloc(&d_image,	sizeof(float4)*m_image.getWidth()*m_image.getHeight()));
+		cutilSafeCall(cudaMalloc(&d_target, sizeof(float4)*m_image.getWidth()*m_image.getHeight()));
+
+		cutilSafeCall(cudaMalloc(&d_imageFloat, sizeof(float)*m_image.getWidth()*m_image.getHeight()));
+		cutilSafeCall(cudaMalloc(&d_targetFloat, sizeof(float)*m_image.getWidth()*m_image.getHeight()));
+
+		float4* h_image  = new float4[m_image.getWidth()*m_image.getHeight()];
+		float* h_imageFloat = new float[m_image.getWidth()*m_image.getHeight()];
+		
+		for (unsigned int i = 0; i < m_image.getHeight(); i++)
+		{
+			for (unsigned int j = 0; j < m_image.getWidth(); j++)
+			{
+				ml::vec4f v = m_image(j, i);
+				h_image[i*m_image.getWidth() + j] = make_float4(v.x, v.y, v.z, 255);
+
+				float avg = h_image[i*m_image.getWidth() + j].x + h_image[i*m_image.getWidth() + j].y + h_image[i*m_image.getWidth() + j].z;
+				h_imageFloat[i*m_image.getWidth() + j] = avg/3.0f;
+			}
+		}
+		
+		cutilSafeCall(cudaMemcpy(d_image, h_image, sizeof(float4)*m_image.getWidth()*m_image.getHeight(), cudaMemcpyHostToDevice));
+		cutilSafeCall(cudaMemcpy(d_target, h_image, sizeof(float4)*m_image.getWidth()*m_image.getHeight(), cudaMemcpyHostToDevice));
+
+		cutilSafeCall(cudaMemcpy(d_imageFloat, h_imageFloat, sizeof(float)*m_image.getWidth()*m_image.getHeight(), cudaMemcpyHostToDevice));
+		cutilSafeCall(cudaMemcpy(d_targetFloat, h_imageFloat, sizeof(float)*m_image.getWidth()*m_image.getHeight(), cudaMemcpyHostToDevice));
+
+		delete h_image;
+		delete h_imageFloat;
+
+		m_warpingSolver	= new CUDAWarpingSolver(m_image.getWidth(), m_image.getHeight());
+		m_patchSolver = new CUDAPatchSolverWarping(m_image.getWidth(), m_image.getHeight());
+		m_terraSolver = new TerraSolverWarping(m_image.getWidth(), m_image.getHeight());
+	}
+
+	~ImageWarping()
+	{
+		cutilSafeCall(cudaFree(d_image));
+		cutilSafeCall(cudaFree(d_target));
+
+		cutilSafeCall(cudaFree(d_imageFloat));
+		cutilSafeCall(cudaFree(d_targetFloat));
+
+		SAFE_DELETE(m_warpingSolver);
+		SAFE_DELETE(m_patchSolver);
+		SAFE_DELETE(m_terraSolver)
+	}
+
+	ColorImageR32G32B32A32* solve()
+	{
+		float weightFit = 10.0f;
+		float weightReg = 100.0f;
+		
+		unsigned int nonLinearIter = 10;
+		unsigned int linearIter = 10;
+		m_warpingSolver->solveGN(d_image, d_target, nonLinearIter, linearIter, weightFit, weightReg);
+			
+		//unsigned int nonLinearIter = 10;
+		//unsigned int patchIter = 16;
+		//m_warpingSolverPatch->solveGN(d_image, d_target, nonLinearIter, patchIter, weightFit, weightReg);
+		
+		copyResultToCPU();
+
+
+		//m_terraSolver->solve(d_imageFloat, d_targetFloat);
+		//copyResultToCPUFromFloat();
+
+		return &m_result;
+	}
+
+	void copyResultToCPU() {
+		m_result = ColorImageR32G32B32A32(m_image.getWidth(), m_image.getHeight());
+		cutilSafeCall(cudaMemcpy(m_result.getPointer(), d_image, sizeof(float4)*m_image.getWidth()*m_image.getHeight(), cudaMemcpyDeviceToHost));
+	}
+
+	void copyResultToCPUFromFloat() {
+		float* h_result = new float[m_image.getWidth()*m_image.getHeight()];
+		cutilSafeCall(cudaMemcpy(h_result, d_imageFloat, sizeof(float)*m_image.getWidth()*m_image.getHeight(), cudaMemcpyDeviceToHost));
+
+		m_result = ColorImageR32G32B32A32(m_image.getWidth(), m_image.getHeight());
+		for (unsigned int i = 0; i < m_image.getWidth()*m_image.getHeight(); i++) {
+			float v = h_result[i];
+			m_result.getPointer()[i] = vec4f(v,v,v, 1.0f);
+		}
+
+		delete h_result;
+	}
+
+private:
+
+	ColorImageR32G32B32A32 m_result;
+	ColorImageR32G32B32A32 m_image;
+	
+	float4*	d_image;
+	float4* d_target;
+	
+	CUDAWarpingSolver*	    m_warpingSolver;
+	CUDAPatchSolverWarping* m_patchSolver;
+	TerraSolverWarping*		m_terraSolver;
+
+
+	float* d_imageFloat;
+	float* d_targetFloat;
+};

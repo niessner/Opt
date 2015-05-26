@@ -7,7 +7,7 @@ set TARGET_DIR=%3
 
 
 cd %OPT_DIR%
-%TERRA% ..\src\createWrapper.t Opt ..\src\windowsErrorContextWrapper.t
+%TERRA% ..\..\API\src\createWrapper.t Opt ..\..\API\src\windowsErrorContextWrapper.t
 cd %TARGET_DIR%
 copy %OPT_DIR%\Opt.dll .
 copy %OPT_DIR%\Opt.lib .
