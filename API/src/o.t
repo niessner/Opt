@@ -813,7 +813,7 @@ local function createjtj(Fs,unknown,P)
 		end
         P_hat = P_hat + P_F
     end
-    return P_hat
+    return 2.0*P_hat
 end
 
 local function createjtf(problemSpec,Fs,unknown,P)
@@ -849,7 +849,7 @@ local function createjtf(problemSpec,Fs,unknown,P)
 		P_hat = 2.0*P_hat
 		P_hat = ad.select(ad.greater(P_hat,.0001), 1.0/P_hat, 1.0)
 	end
-    return 2*F_hat, P_hat
+    return 2.0*F_hat, P_hat
 end
 
 local lastTime = nil
@@ -894,20 +894,20 @@ function ProblemSpecAD:Cost(costexp_)
     self.P:Stencil(stencilforexpression(costexp))
     self.P:Stencil(stencilforexpression(gradient))
     
-	print("Oldgradient: ", removeboundaries(gradient))
-	print("\n\n\n")
+	--print("Oldgradient: ", removeboundaries(gradient))
+	--print("\n\n\n")
 	
     if SumOfSquares:is(costexp_) then
         local P = self:Image("P",unknown.W,unknown.H,-1)
-        local jtjexp = 2.0*createjtj(costexp_.terms,unknown,P)
+        local jtjexp = createjtj(costexp_.terms,unknown,P)	-- includes the 2.0
         self.P:Stencil(stencilforexpression(jtjexp))
         createfunctionset(self,"applyJTJ",jtjexp)
         
 		--gradient with pre-conditioning
-		local gradient,preconditioner = createjtf(self,costexp_.terms,unknown,P)
+		local gradient,preconditioner = createjtf(self,costexp_.terms,unknown,P)	--includes the 2.0
 		createfunctionset(self,"evalJTF",terralib.newlist { gradient, preconditioner })
 		
-		print("gradient: ", removeboundaries(gradient))
+		--print("gradient: ", removeboundaries(gradient))
     end
     
 	--error("bla")
