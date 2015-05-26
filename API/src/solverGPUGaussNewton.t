@@ -15,7 +15,8 @@ local function noFooter(pd)
 	return quote end
 end
 
-
+opt.BLOCK_SIZE = 16
+local BLOCK_SIZE 				=  opt.BLOCK_SIZE
 
 local FLOAT_EPSILON = `0.000001f
 -- GAUSS NEWTON (non-block version)
@@ -44,10 +45,12 @@ return function(problemSpec, vars)
 		-- TODO meta program the bad based on the block size and stencil;
 		-- TODO assert padX > stencil
 		
+		
 		var padX : int
 		var padY : int
 		escape
 			local blockSize = problemSpec:BlockSize()
+		
 			emit quote
 				padX = int(blockSize)
 				padY = int(blockSize)
@@ -59,7 +62,7 @@ return function(problemSpec, vars)
 			return true
 		end
 		
-		return true
+		return false
 	end
 	
 
@@ -73,7 +76,7 @@ return function(problemSpec, vars)
 				
 				var residuum : float = 0.0f
 				var pre : float = 0.0f				
-				if isBlockOnBoundary(w, h, pd.parameters.X:W(), pd.parameters.X:W()) then
+				if isBlockOnBoundary(w, h, pd.parameters.X:W(), pd.parameters.X:H()) then
 					residuum, pre = data.problemSpec.functions.evalJTF.boundary(w, h, w, h, pd.parameters)
 				else 
 					residuum, pre = data.problemSpec.functions.evalJTF.interior(w, h, w, h, pd.parameters)
@@ -113,7 +116,7 @@ return function(problemSpec, vars)
 			if positionForValidLane(pd, "X", &w, &h) then
 				var tmp : float = 0.0f
 				 -- A x p_k  => J^T x J x p_k 
-				if isBlockOnBoundary(w, h, pd.parameters.X:W(), pd.parameters.X:W()) then
+				if isBlockOnBoundary(w, h, pd.parameters.X:W(), pd.parameters.X:H()) then
 					tmp = data.problemSpec.functions.applyJTJ.boundary(w, h, w, h, pd.parameters, pd.p)
 				else 
 					tmp = data.problemSpec.functions.applyJTJ.interior(w, h, w, h, pd.parameters, pd.p)
