@@ -162,7 +162,7 @@ local estimate_normal_from_depth2(inPriorDepth : P:UnknownType(), gidx : int, gi
 	if(IsValidPoint(d0) && IsValidPoint(d1) && IsValidPoint(d2) ){
 		retval[0] = - d2*(d0-d1)/fy;
 		retval[1] = - d0*(d2-d1)/fx;
-		retval[2] = -ay*retval.y - ax*retval.x - d2*d0/fx/fy;			
+		retval[2] = -ay*retval[1] - ax*retval[0] - d2*d0/fx/fy;			
 		var an : float = sqrt( retval[0] * retval[0] + retval[1] * retval[1] + retval[2] * retval[2] );
 		if(an ~= 0)
 		{
@@ -197,8 +197,8 @@ local terra prior_normal_from_previous_depth(d : float, gidx : int64, gidy : int
 		return ;	
 	}
 
-	var posx = [int](fx*position_prev.x/position_prev.z + ux +0.5f)
-	var posy = [int](fy*position_prev.y/position_prev.z + uy +0.5f)
+	var posx = [int](fx*position_prev[0]/position_prev[2] + ux +0.5f)
+	var posy = [int](fy*position_prev[1]/position_prev[2] + uy +0.5f)
 
 	if(posx<2 || posx>(W-3) || posy<2 || posy>(H-3))
 	{
@@ -314,14 +314,14 @@ local terra calShading2depthGrad(i : int, j : int, posx : int, posy: int, self :
 
 
 
-		--///////////////////////////////////////////////////////
-		--//
-		--//               /|  2
-		--//             /  |
-		--//           /    |  
-		--//         0 -----|  1
-		--//
-		--///////////////////////////////////////////////////////
+		---- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- /
+		---- 
+		----                /|  2
+		----              /  |
+		----            /    |  
+		----          0 -----|  1
+		---- 
+		---- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- /
 
 		var grnds : float3
 
@@ -391,9 +391,9 @@ end
 
 
 
---////////////////////////////////////////
---// evalMinusJTF
---////////////////////////////////////////
+---- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- 
+----  evalMinusJTF
+---- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- 
 
 local terra evalMinusJTFDeviceLS_SFS_Shared_Mask_Prior(i : int, j : int, posy : int, posx : int, W : uint, H : int, self : P:ParameterType(),
 														normal0 : float3, normal1 : float3, normal2 : float3, outPre : &float)
@@ -428,18 +428,18 @@ local terra evalMinusJTFDeviceLS_SFS_Shared_Mask_Prior(i : int, j : int, posy : 
 			val1 = calShading2depthGrad(i + 1, j, posx + 1, posy, self)[0] --readValueFromCache2DLS_SFS(inGradx,tidy  ,tidx+1);
 			val2 = calShading2depthGrad(i, j + 1, posx, posy + 1, self)[2] --readValueFromCache2DLS_SFS(inGradz,tidy+1,tidx  );
 					
-			
+			var shadingDiff_0_m1 = calShading2depthGrad(i+0, j-1, posx+0, posy-1, self)[3]					
+			var shadingDiff_1_m1 = calShading2depthGrad(i+1, j-1, posx+1, posy-1, self)[3]
+			var shadingDiff_m1_0 = calShading2depthGrad(i-1, j-0, posx-1, posy-0, self)[3]
+			var shadingDiff_0_0	 = calShading2depthGrad(i  , j  , posx,   posy,   self)[3]
+			var shadingDiff_1_0	 = calShading2depthGrad(i+1, j  , posx+1, posy,   self)[3]
+			var shadingDiff_2_0	 = calShading2depthGrad(i+2, j  , posx+2, posy,   self)[3]
+			var shadingDiff_m1_1 = calShading2depthGrad(i-1, j+1, posx-1, posy+1, self)[3]
+			var shadingDiff_0_1	 = calShading2depthGrad(i  , j+1, posx,   posy+1, self)[3]
+			var shadingDiff_1_1	 = calShading2depthGrad(i+1, j+1, posx+1, posy+1, self)[3]
+			var shadingDiff_0_2	 = calShading2depthGrad(i  , j+2, posx,   posy+2, self)[3]
 			escape
-				var shadingDiff_0_m1 = calShading2depthGrad(i+0, j-1, posx+0, posy-1, self)[3]					
-				var shadingDiff_1_m1 = calShading2depthGrad(i+1, j-1, posx+1, posy-1, self)[3]
-				var shadingDiff_m1_0 = calShading2depthGrad(i-1, j-0, posx-1, posy-0, self)[3]
-				var shadingDiff_0_0	 = calShading2depthGrad(i  , j  , posx,   posy, self)[3]
-				var shadingDiff_1_0	 = calShading2depthGrad(i+1, j  , posx+1, posy, self)[3]
-				var shadingDiff_2_0	 = calShading2depthGrad(i+2, j  , posx+2, posy, self)[3]
-				var shadingDiff_m1_1 = calShading2depthGrad(i-1, j+1, posx-1, posy+1, self)[3]
-				var shadingDiff_0_1	 = calShading2depthGrad(i  , j+1, posx, posy+1, self)[3]
-				var shadingDiff_1_1	 = calShading2depthGrad(i+1, j+1, posx+1, posy+1, self)[3]
-				var shadingDiff_0_2	 = calShading2depthGrad(i  , j+2, posx, posy+2, self)[3]
+				
 				if USE_MASK_REFINE then
 					emit quote
 						--calculating residue error
@@ -528,9 +528,9 @@ local terra evalMinusJTFDeviceLS_SFS_Shared_Mask_Prior(i : int, j : int, posy : 
 					end
 				end					
 
-			--//////////////////////////////////////////////////////////////////
-			--//                   smoothness term
-			--/////////////////////////////////////////////////////////////////
+			---- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- 
+			----                    smoothness term
+			---- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- /
 			var d : float
 			var b_valid = true
 		
@@ -578,40 +578,40 @@ local terra evalMinusJTFDeviceLS_SFS_Shared_Mask_Prior(i : int, j : int, posy : 
 
 
 
-			--//////////////////////////////////////////////////////////////////
-			--//                   prior term
-			--/////////////////////////////////////////////////////////////////
-			--//first: calculate the normal for PriorDepth
+			---- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- 
+			----                    prior term
+			---- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- /
+			---- first: calculate the normal for PriorDepth
 
 			sum = 0.0f;
 			var ax = (posx-ux)/fx;
 			var ay = (posy-uy)/fy;		
 			
-			tmpval = normal0.x * ax + normal0.y * ay + normal0.z -- derative of prior energy wrt depth			
+			tmpval = normal0[0] * ax + normal0[1] * ay + normal0[2] -- derative of prior energy wrt depth			
 			p = p + tmpval * tmpval * 2  * self.w_r;
 
 			d = self.X(i-1,j)
 			if(IsValidPoint(d)) then
-				sum = sum - tmpval * ( tmpval * self.X(i,j) + ( -tmpval + normal0.x/fx) * d );
+				sum = sum - tmpval * ( tmpval * self.X(i,j) + ( -tmpval + normal0[0]/fx) * d );
 			end
 
 			d = self.X(i,j-1)
 			if(IsValidPoint(d)) then
-				sum = sum - tmpval * ( tmpval * self.X(i,j) + ( -tmpval + normal0.y/fy) * d );
+				sum = sum - tmpval * ( tmpval * self.X(i,j) + ( -tmpval + normal0[1]/fy) * d );
 			end
 
-			tmpval = normal1.x * ax + normal1.y * ay + normal1.z -- derative of prior energy wrt depth			
+			tmpval = normal1[0] * ax + normal1[1] * ay + normal1[2] -- derative of prior energy wrt depth			
 			p = p + tmpval * tmpval * self.w_r;
 			d = self.X(i+1,j)
 			if(IsValidPoint(d)) then
-				sum = sum + tmpval * ( ( tmpval + normal1.x/fx) * d - tmpval * self.X(i,j))
+				sum = sum + tmpval * ( ( tmpval + normal1[0]/fx) * d - tmpval * self.X(i,j))
 			end
 
-			tmpval = normal2.x * ax + normal2.y * ay + normal2.z -- derative of prior energy wrt depth
+			tmpval = normal2[0] * ax + normal2[1] * ay + normal2[2] -- derative of prior energy wrt depth
 			p = p + tmpval * tmpval * self.w_r;
 			d = self.X(i,j+1)
 			if(IsValidPoint(d)) then
-				sum = sum + tmpval * ( ( tmpval + normal2.y/fy) * d - tmpval * self.X(i,j))
+				sum = sum + tmpval * ( ( tmpval + normal2[1]/fy) * d - tmpval * self.X(i,j))
 			end
 
 			b = b + sum  * self.w_r;
@@ -643,9 +643,9 @@ local terra gradient(i : int64, j : int64, gId_i : int64, gId_j : int64, self : 
 	
 	__syncthreads()
 
-	--//////////////////////////////////////////////////////////////////////////////////////////
-	--// Initialize linear patch systems
-	--//////////////////////////////////////////////////////////////////////////////////////////
+	---- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- 
+	----  Initialize linear patch systems
+	---- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- 
 
 	-- Negative gradient
 	var negGradient : float = evalMinusJTFDeviceLS_SFS_Shared_Mask_Prior(i, j, gId_i, gId_j, W, H, normal0,normal1,normal2, self, &Pre); 
@@ -653,7 +653,29 @@ local terra gradient(i : int64, j : int64, gId_i : int64, gId_j : int64, self : 
 	return -2.0f*negGradient
 end
 
-local terra applyJTJDeviceLS_SFS_Shared_BSP_Mask_Prior(i : int, j : int, posy : int, posx : int, W : uint, H : int, self : P:ParameterType(),
+local terra add_mul_inp_grad_ls_bsp(self : P:ParameterType(), pImage : P:UnknownType(), i : int, j : int)
+	var gradient = calShading2depthGrad(i, j, posx, posy, self)
+	return pImage(i-1,j)	* gradient[0]
+		  + pImage(i, j)	* gradient[1]
+	   	  + pImage(i,-j)	* gradient[2]
+end
+
+local terra est_lap_3d_bsp_imp(pImage : P:UnknownType(), i :int, j : int, w0 : float, w1 : float, ufx : float, ufx : float)
+	var d  :float = P(i,   j)
+	var d0 :float = P(i-1, j)
+	var d1 :float = P(i+1, j)
+	var d2 :float = P(i,   j-1)
+	var d3 :float = P(i,   j+1)
+	
+	var x : float = ( d * 4 * w0 - d0 * (w0 - ufx) - d1 * (w0 + ufx)	- d2 * w0 - d3 * w0);
+	var y : float = ( d * 4 * w1 - d0 * w1 - d1 * w1 - d2 * (w1 - ufy) - d3 * (w1 + ufy));
+	var z : float = ( d * 4 - d0 - d1 - d2 - d3);
+	return vector(x,y,z);
+end
+
+
+
+local terra applyJTJDeviceLS_SFS_Shared_BSP_Mask_Prior(i : int, j : int, posy : int, posx : int, W : uint, H : int, self : P:ParameterType(), pImage : P:UnknownType(),
 														normal0 : float3, normal1 : float3, normal2 : float3)
 
 	var fx : float = self.fx
@@ -664,187 +686,205 @@ local terra applyJTJDeviceLS_SFS_Shared_BSP_Mask_Prior(i : int, j : int, posy : 
 	var ufy : float = 1.0f / fy
 
 	var b = 0.0f
-------------------------- TRANSLATE STARTING HERE!
-	const float targetDepth = input.d_targetDepth[posy*W+posx]; const bool validTarget = IsValidPoint(targetDepth);
-	const float PC = inP[getLinearShareMemLocate_SFS(tidy, tidx)];
+
+	var targetDepth : float = self.D_i(i, j) 
+	validTarget : bool = IsValidPoint(targetDepth);
+	var PC : float  		= pImage(i,j)
 		
-	if(validTarget)
-	{
-		if((posx>1) && (posx<(W-5)) && (posy>1) && (posy<(H-5)))
-		{				
+	if validTarget then
+		if (posx>1) and (posx<(W-5)) and (posy>1) and (posy<(H-5)) then
+			var sum : float = 0.0f;
+			var tmpval : float = 0.0f;			
 
-			float sum = 0.0f;
-			float tmpval = 0.0f;			
+			-- TODO: How do we break this out to amortize for AD
+			var val0 : float = calShading2depthGrad(i, j, posx, posy, self)[1] --readV
+			var val1 : float = calShading2depthGrad(i + 1, j, posx + 1, posy, self)[0]
+			var val2 : float = calShading2depthGrad(i, j + 1, posx, posy + 1, self)[2]
+
+			var grad_0_m1 = calShading2depthGrad(i+0, j-1, posx+0, posy-1, self)					
+			var grad_1_m1 = calShading2depthGrad(i+1, j-1, posx+1, posy-1, self)
+			var grad_m1_0 = calShading2depthGrad(i-1, j-0, posx-1, posy-0, self)
+			var grad_0_0  = calShading2depthGrad(i  , j  , posx,   posy,   self)
+			var grad_1_0  = calShading2depthGrad(i+1, j  , posx+1, posy,   self)
+			var grad_2_0  = calShading2depthGrad(i+2, j  , posx+2, posy,   self)
+			var grad_m1_1 = calShading2depthGrad(i-1, j+1, posx-1, posy+1, self)
+			var grad_0_1  = calShading2depthGrad(i  , j+1, posx, posy+1,   self)
+			var grad_1_1  = calShading2depthGrad(i+1, j+1, posx+1, posy+1, self)
+			var grad_0_2  = calShading2depthGrad(i  , j+2, posx, posy+2,   self)
+
+			escape
 				
-			float val0 = readValueFromCache2DLS_SFS(inGrady,tidy  ,tidx  );
-			float val1 = readValueFromCache2DLS_SFS(inGradx,tidy  ,tidx+1);
-			float val2 = readValueFromCache2DLS_SFS(inGradz,tidy+1,tidx  );		
+				if USE_MASK_REFINE then
+					emit quote
+						pImage(i  ,j)	* grad_0_0[0] ;
+
+						-- the following is the adding of the relative edge constraints to the sum
+						-- -val0, edge 0			
+						tmpval  = pImage(i-2,j  ) *  grad_m1_0[0];
+						tmpval = tmpval + pImage(i-1,j  ) * (grad_m1_0[1] - grad_0_0[0]);
+						tmpval = tmpval + pImage(i-1,j-1) *  grad_m1_0[2];
+						tmpval = tmpval - pImage(i  ,j  ) *  grad_0_0[1];
+						tmpval = tmpval - pImage(i  ,j-1) *  grad_0_0[2];			
+						sum = sum + (-val0) * tmpval  * self.edgeMaskR(i-1, j)
 						
-#ifdef USE_MASK_REFINE
-			readValueFromCache2D_SFS(inP,tidy  , tidx)	* readValueFromCache2DLS_SFS(inGradx, tidy, tidx) ;
+						-- -val0, edge 1
+						tmpval  = pImage(i-1,j-1) *  grad_0_m1[0];
+						tmpval = tmpval + pImage(i  ,j-1) * (grad_0_m1[1] - grad_0_0[2]);
+						tmpval = tmpval + pImage(i  ,j-2) *  grad_0_m1[2];
+						tmpval = tmpval - pImage(i-1,j  ) *  grad_0_0[0];
+						tmpval = tmpval - pImage(i  ,j  ) *  grad_0_0[1];		
+						sum = sum + (-val0) * tmpval  * self.edgeMaskC(i, j-1)
 
-			//the following is the adding of the relative edge constraints to the sum
-			//-val0, edge 0			
-			tmpval  = readValueFromCache2D_SFS(inP,tidy  , tidx-2) *  readValueFromCache2DLS_SFS(inGradx, tidy  , tidx-1);
-			tmpval += readValueFromCache2D_SFS(inP,tidy  , tidx-1) * (readValueFromCache2DLS_SFS(inGrady, tidy  , tidx-1) - readValueFromCache2DLS_SFS(inGradx, tidy  , tidx));
-			tmpval += readValueFromCache2D_SFS(inP,tidy-1, tidx-1) *  readValueFromCache2DLS_SFS(inGradz, tidy  , tidx-1);
-			tmpval -= readValueFromCache2D_SFS(inP,tidy  , tidx  ) *  readValueFromCache2DLS_SFS(inGrady, tidy  , tidx  );
-			tmpval -= readValueFromCache2D_SFS(inP,tidy-1, tidx  ) *  readValueFromCache2DLS_SFS(inGradz, tidy  , tidx  );			
-			sum += (-val0) * tmpval  * readValueFromCache2DLS_SFS_MASK(inMaskRow, tidy, tidx-1);
-			
-			//-val0, edge 1
-			tmpval  = readValueFromCache2D_SFS(inP,tidy-1, tidx-1) *  readValueFromCache2DLS_SFS(inGradx, tidy-1, tidx  );
-			tmpval += readValueFromCache2D_SFS(inP,tidy-1, tidx  ) * (readValueFromCache2DLS_SFS(inGrady, tidy-1, tidx  ) - readValueFromCache2DLS_SFS(inGradz, tidy  , tidx));
-			tmpval += readValueFromCache2D_SFS(inP,tidy-2, tidx  ) *  readValueFromCache2DLS_SFS(inGradz, tidy-1, tidx  );
-			tmpval -= readValueFromCache2D_SFS(inP,tidy  , tidx-1) *  readValueFromCache2DLS_SFS(inGradx, tidy  , tidx  );
-			tmpval -= readValueFromCache2D_SFS(inP,tidy  , tidx  ) *  readValueFromCache2DLS_SFS(inGrady, tidy  , tidx  );		
-			sum += (-val0) * tmpval  * readValueFromCache2DLS_SFS_MASK(inMaskCol, tidy-1, tidx);
+						-- val0-val1, edge 2
+						tmpval  = pImage(i-1,j  ) *  grad_0_0[0];
+						tmpval = tmpval + pImage(i  ,j  ) * (grad_0_0[1] - grad_1_0[0]);
+						tmpval = tmpval + pImage(i  ,j-1) *  grad_0_0[2];
+						tmpval = tmpval - pImage(i+1,j  ) *  grad_1_0[1];
+						tmpval = tmpval - pImage(i+1,j-1) *  grad_1_0[2];		
+						sum = sum + (val0-val1) * tmpval * self.edgeMaskR(i, j)
 
-			//val0-val1, edge 2
-			tmpval  = readValueFromCache2D_SFS(inP,tidy  , tidx-1) *  readValueFromCache2DLS_SFS(inGradx, tidy  , tidx  );
-			tmpval += readValueFromCache2D_SFS(inP,tidy  , tidx  ) * (readValueFromCache2DLS_SFS(inGrady, tidy  , tidx  ) - readValueFromCache2DLS_SFS(inGradx, tidy  , tidx+1));
-			tmpval += readValueFromCache2D_SFS(inP,tidy-1, tidx  ) *  readValueFromCache2DLS_SFS(inGradz, tidy  , tidx  );
-			tmpval -= readValueFromCache2D_SFS(inP,tidy  , tidx+1) *  readValueFromCache2DLS_SFS(inGrady, tidy  , tidx+1);
-			tmpval -= readValueFromCache2D_SFS(inP,tidy-1, tidx+1) *  readValueFromCache2DLS_SFS(inGradz, tidy  , tidx+1);		
-			sum += (val0-val1) * tmpval * readValueFromCache2DLS_SFS_MASK(inMaskRow, tidy, tidx);
+						-- -val1, edge 3			
+						tmpval  = pImage(i  ,j-1) *  grad_1_m1[0];
+						tmpval = tmpval + pImage(i+1,j-1) * (grad_1_m1[1] - grad_1_0[2]);
+						tmpval = tmpval + pImage(i+1,j-2) *  grad_1_m1[2];
+						tmpval = tmpval - pImage(i  ,j  ) *  grad_1_0[0];
+						tmpval = tmpval - pImage(i+1,j  ) *  grad_1_0[1];		
+						sum = sum + (-val1) * tmpval	* self.edgeMaskC(i+1, j-1)
 
-			//-val1, edge 3			
-			tmpval  = readValueFromCache2D_SFS(inP,tidy-1, tidx  ) *  readValueFromCache2DLS_SFS(inGradx, tidy-1, tidx+1);
-			tmpval += readValueFromCache2D_SFS(inP,tidy-1, tidx+1) * (readValueFromCache2DLS_SFS(inGrady, tidy-1, tidx+1) - readValueFromCache2DLS_SFS(inGradz, tidy  , tidx+1));
-			tmpval += readValueFromCache2D_SFS(inP,tidy-2, tidx+1) *  readValueFromCache2DLS_SFS(inGradz, tidy-1, tidx+1);
-			tmpval -= readValueFromCache2D_SFS(inP,tidy  , tidx  ) *  readValueFromCache2DLS_SFS(inGradx, tidy  , tidx+1);
-			tmpval -= readValueFromCache2D_SFS(inP,tidy  , tidx+1) *  readValueFromCache2DLS_SFS(inGrady, tidy  , tidx+1);		
-			sum += (-val1) * tmpval	* readValueFromCache2DLS_SFS_MASK(inMaskCol, tidy-1, tidx+1);
+						-- val1, edge 4
+						tmpval  = pImage(i  ,j  ) *  grad_1_0[0];
+						tmpval = tmpval + pImage(i+1,j  ) * (grad_1_0[1] - grad_2_0[0]);
+						tmpval = tmpval + pImage(i+1,j-1) *  grad_1_0[2];
+						tmpval = tmpval - pImage(i+2,j  ) *  grad_2_0[1];
+						tmpval = tmpval - pImage(i+2,j-1) *  grad_2_0[2];		
+						sum = sum + (val1) * tmpval * self.edgeMaskR(i+1, j)
 
-			//val1, edge 4
-			tmpval  = readValueFromCache2D_SFS(inP,tidy  , tidx  ) *  readValueFromCache2DLS_SFS(inGradx, tidy  , tidx+1);
-			tmpval += readValueFromCache2D_SFS(inP,tidy  , tidx+1) * (readValueFromCache2DLS_SFS(inGrady, tidy  , tidx+1) - readValueFromCache2DLS_SFS(inGradx, tidy  , tidx+2));
-			tmpval += readValueFromCache2D_SFS(inP,tidy-1, tidx+1) *  readValueFromCache2DLS_SFS(inGradz, tidy  , tidx+1);
-			tmpval -= readValueFromCache2D_SFS(inP,tidy  , tidx+2) *  readValueFromCache2DLS_SFS(inGrady, tidy  , tidx+2);
-			tmpval -= readValueFromCache2D_SFS(inP,tidy-1, tidx+2) *  readValueFromCache2DLS_SFS(inGradz, tidy  , tidx+2);		
-			sum += (val1) * tmpval * readValueFromCache2DLS_SFS_MASK(inMaskRow, tidy, tidx+1);
-
-			//-val2, edge 5			
-			tmpval  = readValueFromCache2D_SFS(inP,tidy+1, tidx-2) *  readValueFromCache2DLS_SFS(inGradx, tidy+1, tidx-1);
-			tmpval += readValueFromCache2D_SFS(inP,tidy+1, tidx-1) * (readValueFromCache2DLS_SFS(inGrady, tidy+1, tidx-1) - readValueFromCache2DLS_SFS(inGradx, tidy+1, tidx));
-			tmpval += readValueFromCache2D_SFS(inP,tidy  , tidx-1) *  readValueFromCache2DLS_SFS(inGradz, tidy+1, tidx-1);
-			tmpval -= readValueFromCache2D_SFS(inP,tidy+1, tidx  ) *  readValueFromCache2DLS_SFS(inGrady, tidy+1, tidx  );
-			tmpval -= readValueFromCache2D_SFS(inP,tidy  , tidx  ) *  readValueFromCache2DLS_SFS(inGradz, tidy+1, tidx  );		
-			sum += (-val2) * tmpval * readValueFromCache2DLS_SFS_MASK(inMaskRow, tidy+1, tidx-1);
-			
-			//val0-val2, edge 6
-			tmpval  = readValueFromCache2D_SFS(inP,tidy  , tidx-1) *  readValueFromCache2DLS_SFS(inGradx, tidy  , tidx  );
-			tmpval += readValueFromCache2D_SFS(inP,tidy  , tidx  ) * (readValueFromCache2DLS_SFS(inGrady, tidy  , tidx  ) - readValueFromCache2DLS_SFS(inGradz, tidy+1, tidx));
-			tmpval += readValueFromCache2D_SFS(inP,tidy-1, tidx  ) *  readValueFromCache2DLS_SFS(inGradz, tidy  , tidx  );
-			tmpval -= readValueFromCache2D_SFS(inP,tidy+1, tidx-1) *  readValueFromCache2DLS_SFS(inGradx, tidy+1, tidx  );
-			tmpval -= readValueFromCache2D_SFS(inP,tidy+1, tidx  ) *  readValueFromCache2DLS_SFS(inGrady, tidy+1, tidx  );		
-			sum += (val0-val2) * tmpval * readValueFromCache2DLS_SFS_MASK(inMaskCol, tidy, tidx);
-
-			//val2, edge 7
-			tmpval  = readValueFromCache2D_SFS(inP,tidy+1, tidx-1) *  readValueFromCache2DLS_SFS(inGradx, tidy+1, tidx  );
-			tmpval += readValueFromCache2D_SFS(inP,tidy+1, tidx  ) * (readValueFromCache2DLS_SFS(inGrady, tidy+1, tidx  ) - readValueFromCache2DLS_SFS(inGradx, tidy+1, tidx+1));
-			tmpval += readValueFromCache2D_SFS(inP,tidy  , tidx  ) *  readValueFromCache2DLS_SFS(inGradz, tidy+1, tidx  );
-			tmpval -= readValueFromCache2D_SFS(inP,tidy+1, tidx+1) *  readValueFromCache2DLS_SFS(inGrady, tidy+1, tidx+1);
-			tmpval -= readValueFromCache2D_SFS(inP,tidy  , tidx+1) *  readValueFromCache2DLS_SFS(inGradz, tidy+1, tidx+1);		
-			sum += val2 * tmpval * readValueFromCache2DLS_SFS_MASK(inMaskRow, tidy+1, tidx);
-
-			//val1, edge 8
-			tmpval  = readValueFromCache2D_SFS(inP,tidy  , tidx  ) *  readValueFromCache2DLS_SFS(inGradx, tidy  , tidx+1);
-			tmpval += readValueFromCache2D_SFS(inP,tidy  , tidx+1) * (readValueFromCache2DLS_SFS(inGrady, tidy  , tidx+1) - readValueFromCache2DLS_SFS(inGradz, tidy+1, tidx+1));
-			tmpval += readValueFromCache2D_SFS(inP,tidy-1, tidx+1) *  readValueFromCache2DLS_SFS(inGradz, tidy  , tidx+1);
-			tmpval -= readValueFromCache2D_SFS(inP,tidy+1, tidx  ) *  readValueFromCache2DLS_SFS(inGradx, tidy+1, tidx+1);
-			tmpval -= readValueFromCache2D_SFS(inP,tidy+1, tidx+1) *  readValueFromCache2DLS_SFS(inGrady, tidy+1, tidx+1);		
-			sum += val1 * tmpval * readValueFromCache2DLS_SFS_MASK(inMaskCol, tidy, tidx+1);
-
-			//val2, edge 9
-			tmpval  = readValueFromCache2D_SFS(inP,tidy+1, tidx-1) *  readValueFromCache2DLS_SFS(inGradx, tidy+1, tidx  );
-			tmpval += readValueFromCache2D_SFS(inP,tidy+1, tidx  ) * (readValueFromCache2DLS_SFS(inGrady, tidy+1, tidx  ) - readValueFromCache2DLS_SFS(inGradz, tidy+2, tidx));
-			tmpval += readValueFromCache2D_SFS(inP,tidy  , tidx  ) *  readValueFromCache2DLS_SFS(inGradz, tidy+1, tidx  );
-			tmpval -= readValueFromCache2D_SFS(inP,tidy+2, tidx-1) *  readValueFromCache2DLS_SFS(inGradx, tidy+2, tidx  );
-			tmpval -= readValueFromCache2D_SFS(inP,tidy+2, tidx  ) *  readValueFromCache2DLS_SFS(inGrady, tidy+2, tidx  );		
-			sum += val2 * tmpval * readValueFromCache2DLS_SFS_MASK(inMaskCol, tidy+1, tidx);
-
-			b += sum * parameters.weightShading;
-
-#else											
-			sum += (val1*4.0f-val0) * add_mul_inp_grad_ls_bsp(inP,inGradx,inGrady,inGradz,tidx+1,tidy);//mulitplication of grad with inP needs to consid			
-			sum += (val2*4.0f-val0) * add_mul_inp_grad_ls_bsp(inP,inGradx,inGrady,inGradz,tidx,tidy+1);							
-			sum += (val0*4.0f-val1-val2) * add_mul_inp_grad_ls_bsp(inP,inGradx,inGrady,inGradz,tidx,tidy);					
-			sum += (-val2-val1) * add_mul_inp_grad_ls_bsp(inP,inGradx,inGrady,inGradz,tidx+1,tidy+1);					
-			sum += (-val0) * add_mul_inp_grad_ls_bsp(inP,inGradx,inGrady,inGradz,tidx-1,tidy);								
-			sum += (-val1) * add_mul_inp_grad_ls_bsp(inP,inGradx,inGrady,inGradz,tidx+2,tidy);							
-			sum += (-val0) * add_mul_inp_grad_ls_bsp(inP,inGradx,inGrady,inGradz,tidx,tidy-1);			
-			sum += (-val1) *  add_mul_inp_grad_ls_bsp(inP,inGradx,inGrady,inGradz,tidx+1,tidy-1);				
-			sum += (-val2) *  add_mul_inp_grad_ls_bsp(inP,inGradx,inGrady,inGradz,tidx-1,tidy+1);				
-			sum += (-val2) *  add_mul_inp_grad_ls_bsp(inP,inGradx,inGrady,inGradz,tidx,tidy+2);	
-			b += sum * parameters.weightShading;
-#endif
-
+						-- -val2, edge 5			
+						tmpval  = pImage(i-2,j+1) *  grad_m1_1[0];
+						tmpval = tmpval + pImage(i-1,j+1) * (grad_m1_1[1] - grad_0_1[0]);
+						tmpval = tmpval + pImage(i-1,j  ) *  grad_m1_1[2];
+						tmpval = tmpval - pImage(i  ,j+1) *  grad_0_1[1];
+						tmpval = tmpval - pImage(i  ,j  ) *  grad_0_1[2];		
+						sum = sum + (-val2) * tmpval * self.edgeMaskR(i-1, j+1)
 						
-			//////////////////////////////////////////////////////////////////
-			//                  Smoothness Term
-			/////////////////////////////////////////////////////////////////
+						-- val0-val2, edge 6
+						tmpval  = pImage(i-1,j  ) *  grad_0_0[0];
+						tmpval = tmpval + pImage(i  ,j  ) * (grad_0_0[1] - grad_0_1[2]);
+						tmpval = tmpval + pImage(i  ,j-1) *  grad_0_0[2];
+						tmpval = tmpval - pImage(i-1,j+1) *  grad_0_1[0];
+						tmpval = tmpval - pImage(i  ,j+1) *  grad_0_1[1];		
+						sum = sum + (val0-val2) * tmpval * self.edgeMaskC(i, j)
+
+						-- val2, edge 7
+						tmpval  = pImage(i-1,j+1) *  grad_0_1[0];
+						tmpval = tmpval + pImage(i  ,j+1) * (grad_0_1[1] - grad_1_1[0]);
+						tmpval = tmpval + pImage(i  ,j  ) *  grad_0_1[2];
+						tmpval = tmpval - pImage(i+1,j+1) *  grad_1_1[1];
+						tmpval = tmpval - pImage(i+1,j  ) *  grad_1_1[2];		
+						sum = sum + val2 * tmpval * self.edgeMaskR(i, j+1)
+
+						-- val1, edge 8
+						tmpval  = pImage(i  ,j  ) *  grad_1_0[0];
+						tmpval = tmpval + pImage(i+1,j  ) * (grad_1_0[1] - grad_1_1[2]);
+						tmpval = tmpval + pImage(i+1,j-1) *  grad_1_0[2];
+						tmpval = tmpval - pImage(i  ,j+1) *  grad_1_1[0];
+						tmpval = tmpval - pImage(i+1,j+1) *  grad_1_1[1];		
+						sum = sum + val1 * tmpval * self.edgeMaskC(i+1, j)
+
+						-- val2, edge 9
+						tmpval  = pImage(i-1,j+1) *  grad_0_1[0];
+						tmpval = tmpval + pImage(i  ,j+1) * (grad_0_1[1] - grad_0_2[2]);
+						tmpval = tmpval + pImage(i  ,j  ) *  grad_0_1[2];
+						tmpval = tmpval - pImage(i-1,j+2) *  grad_0_2[0];
+						tmpval = tmpval - pImage(i  ,j+2) *  grad_0_2[1];		
+						sum = sum + val2 * tmpval * self.edgeMaskC(i, j+1)
+
+						b = b + sum * self.w_g
+					end
+
+				else
+					emit quote										
+						sum = sum + (val1*4.0f-val0) * 		add_mul_inp_grad_ls_bsp(self, pImage, i+1, j)-- mulitplication of grad with inP needs to consid			
+						sum = sum + (val2*4.0f-val0) * 		add_mul_inp_grad_ls_bsp(self, pImage, i,   j+1)							
+						sum = sum + (val0*4.0f-val1-val2) * add_mul_inp_grad_ls_bsp(self, pImage, i,   j)				
+						sum = sum + (-val2-val1) * 			add_mul_inp_grad_ls_bsp(self, pImage, i+1, j+1)					
+						sum = sum + (-val0) *  				add_mul_inp_grad_ls_bsp(self, pImage, i-1, j)							
+						sum = sum + (-val1) *  				add_mul_inp_grad_ls_bsp(self, pImage, i+2, j)						
+						sum = sum + (-val0) *  				add_mul_inp_grad_ls_bsp(self, pImage, i,   j-1)		
+						sum = sum + (-val1) *  				add_mul_inp_grad_ls_bsp(self, pImage, i+1, j-1)			
+						sum = sum + (-val2) *  				add_mul_inp_grad_ls_bsp(self, pImage, i-1, j+1)				
+						sum = sum + (-val2) *  				add_mul_inp_grad_ls_bsp(self, pImage, i,   j+2)
+						b = b + sum * self.w_g
+					end
+				end
+			end
+			
+						
+			-- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- 
+			--                   Smoothness Term
+			-- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- /
 				
-			sum = 0;	
-			val0 = (posx - ux)/fx;
-			val1 = (posy - uy)/fy;
+			sum = 0
+			val0 = (posx - ux)/fx
+			val1 = (posy - uy)/fy
 			
-			float3 lapval = est_lap_3d_bsp_imp(inP,tidx,tidy,val0,val1,ufx,ufy);			
-			sum += lapval.x*val0*(4.0f);
-			sum += lapval.y*val1*(4.0f);
-			sum += lapval.z*(4.0f);
+			var lapval : float3 = est_lap_3d_bsp_imp(pImage,i,j,val0,val1,ufx,ufy)			
+			sum = sum + lapval[0]*val0*(4.0f)
+			sum = sum + lapval[1]*val1*(4.0f)
+			sum = sum + lapval[2]*(4.0f)
 						
-			lapval = est_lap_3d_bsp_imp(inP,tidx-1,tidy,val0-ufx,val1,ufx,ufy);
-			sum -= lapval.x*val0;
-			sum -= lapval.y*val1;
-			sum -= lapval.z;
+			lapval = est_lap_3d_bsp_imp(pImage,i-1,j,val0-ufx,val1,ufx,ufy)
+			sum = sum - lapval[0]*val0
+			sum = sum - lapval[1]*val1
+			sum = sum - lapval[2]
 						
-			lapval = est_lap_3d_bsp_imp(inP,tidx+1,tidy,val0+ufx,val1,ufx,ufy);
-			sum -= lapval.x*val0;
-			sum -= lapval.y*val1;
-			sum -= lapval.z;
+			lapval = est_lap_3d_bsp_imp(pImage,i+1,j,val0+ufx,val1,ufx,ufy)
+			sum = sum - lapval[0]*val0
+			sum = sum - lapval[1]*val1
+			sum = sum - lapval[2]
 						
-			lapval = est_lap_3d_bsp_imp(inP,tidx,tidy-1,val0,val1-ufy,ufx,ufy);
-			sum -= lapval.x*val0;
-			sum -= lapval.y*val1;
-			sum -= lapval.z;
+			lapval = est_lap_3d_bsp_imp(pImage,i,j-1,val0,val1-ufy,ufx,ufy)
+			sum = sum - lapval[0]*val0
+			sum = sum - lapval[1]*val1
+			sum = sum - lapval[2]
 						
-			lapval = est_lap_3d_bsp_imp(inP,tidx,tidy+1,val0,val1+ufy,ufx,ufy);
-			sum -= lapval.x*val0;
-			sum -= lapval.y*val1;
-			sum -= lapval.z;
+			lapval = est_lap_3d_bsp_imp(pImage,i,j+1,val0,val1+ufy,ufx,ufy)
+			sum = sum - lapval[0]*val0
+			sum = sum - lapval[1]*val1
+			sum = sum - lapval[2]
 
-			b += sum*parameters.weightRegularizer;
+			b = b + sum*self.w_s
 			
 
-			//////////////////////////////////////////////////////////////////
-			//                  Position Term
-			/////////////////////////////////////////////////////////////////		
+			-- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- 
+			--                   Position Term
+			-- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- /		
 			
-			b += PC*parameters.weightFitting;
+			b = b +  PC*self.w_p
 
 
-			//////////////////////////////////////////////////////////////////
-			//                   piror term
-			/////////////////////////////////////////////////////////////////			
+			-- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- 
+			--                    prior term
+			-- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- /			
 
 			sum = 0.0f;
 			float ax = (posx-ux)/fx;
 			float ay = (posy-uy)/fy;			
-			tmpval = normal0.x * ax + normal0.y * ay + normal0.z ;// derative of prior energy wrt depth			
-			sum += tmpval * ( tmpval * readValueFromCache2D_SFS(inP, tidy, tidx) + ( -tmpval + normal0.x/fx) * readValueFromCache2D_SFS(inP, tidy, tidx-1) );
-			sum += tmpval * ( tmpval * readValueFromCache2D_SFS(inP, tidy, tidx) + ( -tmpval + normal0.y/fy) * readValueFromCache2D_SFS(inP, tidy-1, tidx) );
+			tmpval = normal0[0] * ax + normal0[1] * ay + normal0[2] ;--  derative of prior energy wrt depth			
+			sum = sum + tmpval * ( tmpval * readValueFromCache2D_SFS(inP, tidy, tidx) + ( -tmpval + normal0[0]/fx) * readValueFromCache2D_SFS(inP, tidy, tidx-1) );
+			sum = sum + tmpval * ( tmpval * readValueFromCache2D_SFS(inP, tidy, tidx) + ( -tmpval + normal0[1]/fy) * readValueFromCache2D_SFS(inP, tidy-1, tidx) );
 						
-			tmpval = normal1.x * ax + normal1.y * ay + normal1.z ;// derative of prior energy wrt depth			
-			sum += -tmpval * ( ( tmpval + normal1.x/fx) * readValueFromCache2D_SFS(inP, tidy, tidx+1) - tmpval * readValueFromCache2D_SFS(inP, tidy, tidx));
+			tmpval = normal1[0] * ax + normal1[1] * ay + normal1[2] ;--  derative of prior energy wrt depth			
+			sum = sum + -tmpval * ( ( tmpval + normal1[0]/fx) * readValueFromCache2D_SFS(inP, tidy, tidx+1) - tmpval * readValueFromCache2D_SFS(inP, tidy, tidx));
 						
-			tmpval = normal2.x * ax + normal2.y * ay + normal2.z ;// derative of prior energy wrt depth			
-			sum += -tmpval * ( ( tmpval + normal2.y/fy) * readValueFromCache2D_SFS(inP, tidy+1, tidx) - tmpval * readValueFromCache2D_SFS(inP, tidy, tidx));
+			tmpval = normal2[0] * ax + normal2[1] * ay + normal2[2] ;--  derative of prior energy wrt depth			
+			sum = sum + -tmpval * ( ( tmpval + normal2[1]/fy) * readValueFromCache2D_SFS(inP, tidy+1, tidx) - tmpval * readValueFromCache2D_SFS(inP, tidy, tidx));
 
-			b += sum  * parameters.weightPrior;				
+			b = b + sum * self.w_r;				
 		
-		}				
-	}
+		end
+	end		
+	
 		
 	
 	return b;
@@ -853,8 +893,19 @@ end
 
 -- eval 2*JtJ (note that we keep the '2' to make it consistent with the gradient
 local terra applyJTJ(i : int64, j : int64, gi : int64, gj : int64, self : P:ParameterType(), pImage : P:UnknownType())
- 
+	var W : int = self.X:W()
+	var H : int = self.X:H()
+
+	var normal0 : float3
+	var normal1 : float3
+	var normal2 : float3
+
+	prior_normal_from_previous_depth(self.X(i, j), gId_j, gId_i, normal0, normal1, normal2);
 	
+	__syncthreads()
+
+ 	var JTJ: float = applyJTJDeviceLS_SFS_Shared_BSP_Mask_Prior(i, j, gj, gi, W, H, self, pImage, normal0, normal1, normal2)
+	return 2.0*JTJ
 end
 
 P:Function("cost", {W,H}, cost)

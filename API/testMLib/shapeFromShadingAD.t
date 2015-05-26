@@ -12,12 +12,15 @@ local epsilon = 0.00001
 
 -- See TerraSolverParameters
 local w_p						= S:Param("w_p",float,0)-- Is initialized by the solver!
-
 local w_s		 				= S:Param("w_s",float,1)-- Regularization weight
 local w_r						= S:Param("w_r",float,2)-- Prior weight
-w_s = 1.0
 local w_g						= S:Param("w_g",float,3)-- Shading weight
-w_g = 1000.0
+
+w_p = ad.sqrt(w_p)
+w_s = ad.sqrt(w_s)
+w_r = ad.sqrt(w_r)
+w_g = ad.sqrt(w_g)
+w_g = w_g*20.0
 local weightShadingStart		= S:Param("weightShadingStart",float,4)-- Starting value for incremental relaxation
 local weightShadingIncrement	= S:Param("weightShadingIncrement",float,5)-- Update factor
 
@@ -85,7 +88,6 @@ function n(offX, offY)
     local n_z = (n_x * (u_x - i) / f_x) + (n_y * (u_y - j) / f_y) - (D(offX-1, offY)*D(offX, offY-1) / f_x*f_y)
     local inverseMagnitude = 1.0/ad.sqrt(n_x*n_x + n_y*n_y + n_z*n_z + epsilon)
     return times(inverseMagnitude, {n_x, n_y, n_z})
-    --return {inverseMagnitude,inverseMagnitude,inverseMagnitude}
 end
 
 function B(offX, offY)
