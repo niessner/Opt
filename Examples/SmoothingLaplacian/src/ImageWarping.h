@@ -68,19 +68,19 @@ public:
 		float weightFit = 10.0f;
 		float weightReg = 100.0f;
 		
-		unsigned int nonLinearIter = 10;
-		unsigned int linearIter = 10;
-		m_warpingSolver->solveGN(d_image, d_target, nonLinearIter, linearIter, weightFit, weightReg);
+		//unsigned int nonLinearIter = 10;
+		//unsigned int linearIter = 10;
+		//m_warpingSolver->solveGN(d_image, d_target, nonLinearIter, linearIter, weightFit, weightReg);
 			
 		//unsigned int nonLinearIter = 10;
 		//unsigned int patchIter = 16;
 		//m_warpingSolverPatch->solveGN(d_image, d_target, nonLinearIter, patchIter, weightFit, weightReg);
 		
-		copyResultToCPU();
+		//copyResultToCPU();
 
 
-		//m_terraSolver->solve(d_imageFloat, d_targetFloat);
-		//copyResultToCPUFromFloat();
+		m_terraSolver->solve(d_imageFloat, d_targetFloat);
+		copyResultToCPUFromFloat();
 
 		return &m_result;
 	}
