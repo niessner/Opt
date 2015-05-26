@@ -3,7 +3,7 @@
 
 const bool groundTruth = false;
 
-TestExample TestFramework::makeImageSmoothing(const string &imageFilename, float w)
+TestExample TestFramework::makeImageSmoothing(const string &imageFilename,const string &terraCodeFilename,  float w)
 {
     //
     // terms:
@@ -67,7 +67,7 @@ TestExample TestFramework::makeImageSmoothing(const string &imageFilename, float
 
     LodePNG::save(testImage, "smoothingOutputLinearSolve.png");
     
-    TestExample result("imageSmoothing", "imageSmoothingCombined.t", bmp.getWidth(), bmp.getHeight());
+    TestExample result("imageSmoothing", terraCodeFilename, bmp.getWidth(), bmp.getHeight());
 	//TestExample result("imageSmoothing", "imageSmoothingAD.t", bmp.getWidth(), bmp.getHeight());
 
     result.costFunction = [=](const OptImage &variables)

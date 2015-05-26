@@ -3,7 +3,7 @@
 
 const bool groundTruth = false;
 
-TestExample TestFramework::makeMeshSmoothing(const string &imageFilename, float w)
+TestExample TestFramework::makeMeshSmoothing(const string &imageFilename,const string &terraCodeFilename, float w)
 {
     const Bitmap bmp = LodePNG::load(imageFilename);
     const int dimX = bmp.getWidth();
@@ -78,7 +78,7 @@ TestExample TestFramework::makeMeshSmoothing(const string &imageFilename, float 
         x = solver.solve(A, b);
     }
 
-    TestExample result("meshSmoothing", "meshSmoothing.t", bmp.getWidth(), bmp.getHeight());
+    TestExample result("meshSmoothing", terraCodeFilename, bmp.getWidth(), bmp.getHeight());
 
     result.graphs.push_back(graph);
 

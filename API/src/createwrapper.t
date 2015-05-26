@@ -8,6 +8,7 @@ local headerformat = "%s.h"
 terralib.includepath = terralib.terrahome.."/include"
 
 local C,CN = terralib.includecstring[[ 
+    #define _GNU_SOURCE
     #include <stdio.h>
     #include <stdlib.h>
     #include <string.h>
@@ -40,7 +41,9 @@ if ffi.os == "Windows" then
         C.PathRemoveFileSpecA(buf);
     end  
 else
-    
+
+    local sigactionwrapper = ffi.os == "Linux" and "__sigaction_handler" or "__sigaction_u"
+    local sigactionstruct = ffi.os == "Linux" and "sa_sigaction" or "__sa_sigaction"
     local terratraceback = global(&opaque -> {})
     
     local terra sigsegv(sig : int, info : &C.siginfo_t, uap : &opaque)
@@ -55,9 +58,9 @@ else
         if tb == nil then return end
         terratraceback = @[&(&opaque -> {})](tb)
         var sa : CN.sigaction
-        sa.sa_flags = C.SA_RESETHAND or C.SA_SIGINFO
+        sa.sa_flags = [terralib.constant(uint32,C.SA_RESETHAND)] or C.SA_SIGINFO
         C.sigemptyset(&sa.sa_mask)
-        sa.__sigaction_u.__sa_sigaction = sigsegv
+        sa.[sigactionwrapper].[sigactionstruct] = sigsegv
         C.sigaction(C.SIGSEGV, &sa, nil)
         C.sigaction(C.SIGILL, &sa, nil)
         C.lua_settop(L,-3)

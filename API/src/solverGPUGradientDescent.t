@@ -25,6 +25,8 @@ return function(problemSpec, vars)
 		gradStore : problemSpec:UnknownType()
 
 		timer : Timer
+		learningRate : float
+		iter : int
 	}
 	
 	local kernels = {}
@@ -53,63 +55,61 @@ return function(problemSpec, vars)
 	
 	local gpu = util.makeGPUFunctions(problemSpec, vars, PlanData, kernels)
 	
-	local terra impl(data_ : &opaque, images : &&opaque, edgeValues : &&opaque, params_ : &&opaque)
+	local learningLoss, learningGain, minLearningRate = .8,1.1,1e-25
+
+    --TODO: parameterize these
+    local initialLearningRate, maxIters, tolerance = 0.01, 5000, 1e-10
+	
+	local terra init(data_ : &opaque, images : &&opaque, edgeValues : &&opaque, params_ : &&opaque, solverparams : &&opaque)
 		var pd = [&PlanData](data_)
 		pd.timer:init()
-
-		var params = [&double](params_)
-
-		--unpackstruct(pd.images) = [util.getImages(PlanData, images)]
 		pd.parameters = [util.getParameters(problemSpec, images, edgeValues,params_)]
-
-		-- TODO: parameterize these
-		var initialLearningRate = 0.01
-		var maxIters = 5000
-		var tolerance = 1e-10
-
-		-- Fixed constants (these do not need to be parameterized)
-		var learningLoss = 0.8
-		var learningGain = 1.1
-		var minLearningRate = 1e-25
-
-		var learningRate = initialLearningRate
-		
-		for iter = 0, maxIters do
-
-			var startCost = gpu.computeCost(pd, pd.parameters.X)
-			logSolver("iteration %d, cost=%f, learningRate=%f\n", iter, startCost, learningRate)
-
+        pd.learningRate = initialLearningRate
+        pd.iter = 0
+	end
+	
+	local terra step(data_ : &opaque, images : &&opaque, edgeValues : &&opaque, params_ : &&opaque, solverparams : &&opaque)
+	    var pd = [&PlanData](data_)
+	    pd.parameters = [util.getParameters(problemSpec, images, edgeValues,params_)]
+	    
+	    if pd.iter < maxIters then
+	        var startCost = gpu.computeCost(pd, pd.parameters.X)
+			logSolver("iteration %d, cost=%f, learningRate=%f\n", pd.iter, startCost, pd.learningRate)
+			
 
 			gpu.computeGradient(pd, pd.gradStore)
 			--
 			-- move along the gradient by learningRate
 			--
-			gpu.updatePosition(pd, learningRate)
-			
+			gpu.updatePosition(pd, pd.learningRate)
 			--
 			-- update the learningRate
 			--
 			var endCost = gpu.computeCost(pd, pd.parameters.X)
 			if endCost < startCost then
-				learningRate = learningRate * learningGain
+				pd.learningRate = pd.learningRate * learningGain
 			else
-				learningRate = learningRate * learningLoss
+				pd.learningRate = pd.learningRate * learningLoss
 
-				if learningRate < minLearningRate then
-					break
+				if pd.learningRate < minLearningRate then
+					goto exit
 				end
 			end
-			
+			pd.iter = pd.iter + 1
 			pd.timer:nextIteration()
-		end
-		pd.timer:evaluate()
+	        return 1
+	    end
+	    
+	    ::exit::
+	    pd.timer:evaluate()
 		pd.timer:cleanup()
+		return 0
 	end
 
 	local terra makePlan() : &opt.Plan
 		var pd = PlanData.alloc()
 		pd.plan.data = pd
-		pd.plan.impl = impl
+		pd.plan.init,pd.plan.step = init,step
 
 		pd.gradStore:initGPU()
 		var err = C.cudaMallocManaged([&&opaque](&(pd.scratchF)), sizeof(float), C.cudaMemAttachGlobal)

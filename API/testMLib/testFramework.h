@@ -44,8 +44,8 @@ private:
     void runTest(const TestMethod &method, TestExample &example);
 
     TestExample makeRandomQuadratic(int count);
-    TestExample makeImageSmoothing(const string &imageFilename, float w);
-    TestExample makeMeshSmoothing(const string &imageFilename, float w);
+    TestExample makeImageSmoothing(const string &imageFilename, const string & terraCodeFilename, float w);
+    TestExample makeMeshSmoothing(const string &imageFilename, const string & terraCodeFilename, float w);
 
     vector<TestMethod> methods;
     vector<TestExample> examples;

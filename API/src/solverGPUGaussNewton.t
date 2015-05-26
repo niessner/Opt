@@ -39,6 +39,7 @@ return function(problemSpec, vars)
 		scanBeta : &float					-- tmp variable for alpha scan
 		
 		timer : Timer
+		nIter : int
 	}
 	
 	local terra isBlockOnBoundary(gi : int, gj : int, width : uint, height : uint) : bool
@@ -191,19 +192,21 @@ return function(problemSpec, vars)
 
 	local gpu = util.makeGPUFunctions(problemSpec, vars, PlanData, kernels)
 	
-	local terra impl(data_ : &opaque, images : &&opaque, edgeValues : &&opaque, params_ : &&opaque)
+	local nIterations,lIterations = 10,10
+	
+	local terra init(data_ : &opaque, images : &&opaque, edgeValues : &&opaque, params_ : &&opaque, solverparams : &&opaque)
 		var pd = [&PlanData](data_)
 		pd.timer:init()
-	
+		pd.parameters = [util.getParameters(problemSpec, images, edgeValues,params_)]
+	    pd.nIter = 0
+	end
+	local terra step(data_ : &opaque, images : &&opaque, edgeValues : &&opaque, params_ : &&opaque, solverparams : &&opaque)
+		var pd = [&PlanData](data_)
 		pd.parameters = [util.getParameters(problemSpec, images, edgeValues,params_)]
 
-		var nIterations = 10	--non-linear iterations
-		var lIterations = 10	--linear iterations
-		
-		for nIter = 0, nIterations do
-			var startCost = gpu.computeCost(pd, pd.parameters.X)
-			logSolver("iteration %d, cost=%f\n", nIter, startCost)
-			
+		if pd.nIter < nIterations then
+		    var startCost = gpu.computeCost(pd, pd.parameters.X)
+			logSolver("iteration %d, cost=%f\n", pd.nIter, startCost)
 			pd.scanAlpha[0] = 0.0	--scan in PCGInit1 requires reset
 			gpu.PCGInit1(pd)
 			--var a = pd.scanAlpha[0]
@@ -220,16 +223,19 @@ return function(problemSpec, vars)
 			end
 			
 			gpu.PCGLinearUpdate(pd)
+		    pd.nIter = pd.nIter + 1
+		    return 1
+		else
+		    pd.timer:evaluate()
+		    pd.timer:cleanup()
+		    return 0
 		end
-
-		pd.timer:evaluate()
-		pd.timer:cleanup()
 	end
 
 	local terra makePlan() : &opt.Plan
 		var pd = PlanData.alloc()
 		pd.plan.data = pd
-		pd.plan.impl = impl
+		pd.plan.init,pd.plan.step = init,step
 
 		pd.delta:initGPU()
 		pd.r:initGPU()

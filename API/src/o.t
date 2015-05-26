@@ -163,7 +163,8 @@ struct opt.GradientDescentPlanParams {
 }
 
 struct opt.Plan(S.Object) {
-    impl : {&opaque,&&opaque,&&opaque,&&opaque} -> {}
+    init : {&opaque,&&opaque,&&opaque,&&opaque,&&opaque} -> {}
+    step : {&opaque,&&opaque,&&opaque,&&opaque,&&opaque} -> int
     data : &opaque
 } 
 
@@ -505,9 +506,17 @@ terra opt.PlanFree(plan : &opt.Plan)
     plan:delete()
 end
 
-terra opt.ProblemSolve(plan : &opt.Plan, images : &&opaque, edgevalues : &&opaque, params : &&opaque)
-	return plan.impl(plan.data, images, edgevalues, params)
+terra opt.ProblemInit(plan : &opt.Plan, images : &&opaque, edgevalues : &&opaque, params : &&opaque, solverparams : &&opaque) 
+    return plan.init(plan.data, images, edgevalues, params, solverparams)
 end
+terra opt.ProblemStep(plan : &opt.Plan, images : &&opaque, edgevalues : &&opaque, params : &&opaque, solverparams : &&opaque) : int
+    return plan.step(plan.data, images, edgevalues, params, solverparams)
+end
+terra opt.ProblemSolve(plan : &opt.Plan, images : &&opaque, edgevalues : &&opaque, params : &&opaque, solverparams : &&opaque)
+   opt.ProblemInit(plan, images, edgevalues, params, solverparams)
+   while opt.ProblemStep(plan, images, edgevalues, params, solverparams) ~= 0 do end
+end
+
 
 ad = require("ad")
 
@@ -902,12 +911,9 @@ function ProblemSpecAD:Cost(costexp_)
         local jtjexp = createjtj(costexp_.terms,unknown,P)	-- includes the 2.0
         self.P:Stencil(stencilforexpression(jtjexp))
         createfunctionset(self,"applyJTJ",jtjexp)
-        
 		--gradient with pre-conditioning
 		local gradient,preconditioner = createjtf(self,costexp_.terms,unknown,P)	--includes the 2.0
 		createfunctionset(self,"evalJTF",terralib.newlist { gradient, preconditioner })
-		
-		--print("gradient: ", removeboundaries(gradient))
     end
     
 	--error("bla")

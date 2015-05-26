@@ -96,6 +96,7 @@ return function(problemSpec, vars)
 		delta : problemSpec:UnknownType(false)	--current linear update to be computed -> num vars
 
 		timer : Timer
+		nIter : int
 	}
 	
 
@@ -449,22 +450,20 @@ return function(problemSpec, vars)
 	
 	local gpu = util.makeGPUFunctions(problemSpec, vars, PlanData, kernels)
 
-	
 
-	local terra impl(data_ : &opaque, images : &&opaque, edgeValues : &&opaque, params_ : &&opaque)
+    local nIterations, lIterations, bIterations = 5,8,10	
+
+	local terra init(data_ : &opaque, images : &&opaque, edgeValues : &&opaque, params_ : &&opaque, solverparams : &&opaque)
 		var pd = [&PlanData](data_)
 		pd.timer:init()
-
-		var params = [&double](params_)
-
 		pd.parameters = [util.getParameters(problemSpec, images, edgeValues,params_)]
-
-		var nIterations = 5		--non-linear iterations
-		var lIterations = 8		--linear iterations
-		var bIterations = 10		--block iterations
-		
-		for nIter = 0, nIterations do
-			
+	    pd.nIter = 0	
+	end
+	
+	local terra step(data_ : &opaque, images : &&opaque, edgeValues : &&opaque, params_ : &&opaque,  solverparams : &&opaque)
+		var pd = [&PlanData](data_)
+		pd.parameters = [util.getParameters(problemSpec, images, edgeValues,params_)]
+		if pd.nIter < nIterations then
 			var o : int = 0
 			for lIter = 0, lIterations do
 			    --var startCost = gpu.computeCost(pd)
@@ -478,18 +477,20 @@ return function(problemSpec, vars)
 				gpu.PCGLinearUpdateBlock(pd, oX, oY)
 				o = (o+1)%8
 				C.cudaDeviceSynchronize()				
-			end	
-
+			end
+			pd.nIter = pd.nIter + 1
+			return 1
+		else
+		    pd.timer:evaluate()
+		    pd.timer:cleanup()
+		    return 0
 		end
-
-		pd.timer:evaluate()
-		pd.timer:cleanup()
 	end
 
 	local terra makePlan() : &opt.Plan
 		var pd = PlanData.alloc()
 		pd.plan.data = pd
-		pd.plan.impl = impl
+		pd.plan.init,pd.plan.step = init,step
 
 		pd.delta:initGPU()
 		

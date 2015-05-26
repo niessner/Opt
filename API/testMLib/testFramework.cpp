@@ -64,7 +64,7 @@ void TestFramework::runAllTests()
 
     //TestExample example = makeRandomQuadratic(5);
     //TestExample example = makeMeshSmoothing("smoothingExampleE.png", 0.1f);
-	TestExample example = makeImageSmoothing("smoothingExampleB.png", 0.1f);	
+	TestExample example = makeImageSmoothing("smoothingExampleB.png", "imageSmoothingAD.t", 0.1f);	
 
     vector<TestMethod> methods;
 
@@ -77,8 +77,8 @@ void TestFramework::runAllTests()
     // GPU methods
     //
     //methods.push_back(TestMethod("gradientDescentGPU", "no-params"));
-	methods.push_back(TestMethod("gaussNewtonGPU", "no-params"));
-	//methods.push_back(TestMethod("gaussNewtonBlockGPU", "no-params"));
+	//methods.push_back(TestMethod("gaussNewtonGPU", "no-params"));
+	methods.push_back(TestMethod("gaussNewtonBlockGPU", "no-params"));
 
     for (auto &method : methods)
         runTest(method, example);
@@ -148,16 +148,10 @@ void TestFramework::runTest(const TestMethod &method, TestExample &example)
     int a = 0;
     void * list[] = { &a };
     cerr << "Problem solve" << endl;
-    if (isGPU)
-    {
-        Opt_ProblemSolve(optimizerState, plan, imagesGPU.data(), edgeValuesCPU.data(), list);
+    Opt_ProblemSolve(optimizerState, plan, isGPU ? imagesGPU.data() : imagesCPU.data(), edgeValuesCPU.data(), list, NULL);
+    if (isGPU) {
         for (const auto &image : example.images)
             image.syncGPUToCPU();
-    }
-    else
-    {
-
-        Opt_ProblemSolve(optimizerState, plan, imagesCPU.data(), edgeValuesCPU.data(),list);
     }
 
     //cout << "x(0, 0) = " << example.images[0](0, 0) << endl;
