@@ -195,6 +195,9 @@ return function(problemSpec, vars)
 	local nIterations,lIterations = 10,10
 	
 	local terra init(data_ : &opaque, images : &&opaque, edgeValues : &&opaque, params_ : &&opaque, solverparams : &&opaque)
+		nIterations = @[&int](solverparams[0])
+		
+		
 		var pd = [&PlanData](data_)
 		pd.timer:init()
 		pd.parameters = [util.getParameters(problemSpec, images, edgeValues,params_)]

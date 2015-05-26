@@ -49,7 +49,11 @@ public:
 
 		void* data[] = {d_unknown, d_target};
 		//last parameter is params
-		Opt_ProblemSolve(m_optimizerState, m_plan, data, NULL, list);
+		//Opt_ProblemSolve(m_optimizerState, m_plan, data, NULL, list, NULL);
+
+		unsigned int numIter[] = { 10 };
+		Opt_ProblemInit(m_optimizerState, m_plan, data, NULL, NULL, (void**)&numIter);
+		while (Opt_ProblemStep(m_optimizerState, m_plan, data, NULL, NULL, NULL));
 	}
 
 private:
