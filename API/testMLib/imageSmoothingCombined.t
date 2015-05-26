@@ -37,12 +37,12 @@ A.functions.evalJTF.boundary = terra(i : int64, j : int64, gi : int64, gj : int6
 	var d : float = pa - pb
 	if d < 0.0f then d = -d end
 	if d > 0.1f then
-		if gi == 10 and gj == 10 then
+		--if gi == 10 and gj == 10 then
 			printf("%d,%d: pa=%f pb=%f\n",int(gi),int(gj),pa,pb)
-		end
+		--end
 	end
 	
-	return a,pb
+	return a,pa
 end
 
 local cost = A.functions.cost.boundary

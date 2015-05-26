@@ -197,7 +197,7 @@ function opt.ProblemSpec()
 							 functions = {},
 							 maxStencil = 0,
 							 stage = "inputs",
-							 usepreconditioner = true,
+							 usepreconditioner = false,
                            }
 	function BlockedProblemParameters.metamethods.__getentries(self)
 		local entries = {}
@@ -842,10 +842,14 @@ local function createjtf(problemSpec,Fs,unknown,P)
         F_hat = F_hat + F_F
 		P_hat = P_hat + P_F
     end
+	
 	if not problemSpec.P.usepreconditioner then
-		P_hat = ad.toexp(.5)
+		P_hat = ad.toexp(1.0)
+	else
+		P_hat = 2.0*P_hat
+		P_hat = ad.select(ad.greater(P_hat,.0001), 1.0/P_hat, 1.0)
 	end
-    return F_hat, P_hat
+    return 2*F_hat, P_hat
 end
 
 local lastTime = nil
@@ -901,9 +905,9 @@ function ProblemSpecAD:Cost(costexp_)
         
 		--gradient with pre-conditioning
 		local gradient,preconditioner = createjtf(self,costexp_.terms,unknown,P)
-		createfunctionset(self,"evalJTF",terralib.newlist { 2*gradient, 2*preconditioner })
+		createfunctionset(self,"evalJTF",terralib.newlist { gradient, preconditioner })
 		
-		print("gradient: ", removeboundaries(2*gradient))
+		print("gradient: ", removeboundaries(gradient))
     end
     
 	--error("bla")
