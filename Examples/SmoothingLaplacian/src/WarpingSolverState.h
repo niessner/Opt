@@ -30,21 +30,21 @@ struct SolverInput
 struct SolverState
 {
 	// State of the GN Solver
-	float4*	 d_delta;					
-	float4*  d_x;						
-	float4*  d_target;					
+	float*	 d_delta;					
+	float*  d_x;						
+	float*  d_target;					
 		
-	float4*	d_r;						
-	float4*	d_z;						
-	float4*	d_p;						
+	float*	d_r;						
+	float*	d_z;						
+	float*	d_p;						
 	
-	float4*	d_Ap_X;						
+	float*	d_Ap_X;						
 	
 	float*	d_scanAlpha;				
 	float*	d_scanBeta;					
 	float*	d_rDotzOld;					
 	
-	float4*	d_precondioner;				
+	float*	d_precondioner;				
 
 	float*	d_sumResidual;				
 

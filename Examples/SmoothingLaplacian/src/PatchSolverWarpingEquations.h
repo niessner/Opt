@@ -14,16 +14,16 @@
 // evalMinusJTF
 ////////////////////////////////////////
 
-__inline__ __device__ float4 evalMinusJTFDevice(int tId_i, int tId_j, int gId_i, int gId_j, unsigned int W, unsigned int H, volatile float4* inTarget, volatile float4* inX, PatchSolverParameters& parameters, float4& outPre)
+__inline__ __device__ float evalMinusJTFDevice(int tId_i, int tId_j, int gId_i, int gId_j, unsigned int W, unsigned int H, volatile float* inTarget, volatile float* inX, PatchSolverParameters& parameters, float& outPre)
 {
-	float4 b   = make_float4(0.0f, 0.0f, 0.0f, 0.0f);
-	float4 pre = make_float4(0.0f, 0.0f, 0.0f, 0.0f);
+	float b   = 0.0f;
+	float pre = 0.0f;
 
-	float4 X_CC = readValueFromCache2D(inX, tId_i, tId_j);	     
-	float4 X_CM = readValueFromCache2D(inX, tId_i, tId_j - 1);
-	float4 X_CP = readValueFromCache2D(inX, tId_i, tId_j + 1);
-	float4 X_MC = readValueFromCache2D(inX, tId_i - 1, tId_j);
-	float4 X_PC = readValueFromCache2D(inX, tId_i + 1, tId_j);
+	float X_CC = readValueFromCache2D(inX, tId_i, tId_j);	     
+	float X_CM = readValueFromCache2D(inX, tId_i, tId_j - 1);
+	float X_CP = readValueFromCache2D(inX, tId_i, tId_j + 1);
+	float X_MC = readValueFromCache2D(inX, tId_i - 1, tId_j);
+	float X_PC = readValueFromCache2D(inX, tId_i + 1, tId_j);
 
 	const bool validN0 = isValid(X_CM);
 	const bool validN1 = isValid(X_CP);
@@ -31,22 +31,22 @@ __inline__ __device__ float4 evalMinusJTFDevice(int tId_i, int tId_j, int gId_i,
 	const bool validN3 = isValid(X_PC);
 
 	// fit/pos
-	float4 t = readValueFromCache2D(inTarget, tId_i, tId_j);
+	float t = readValueFromCache2D(inTarget, tId_i, tId_j);
 	b += -parameters.weightFitting*(X_CC - t);
 	pre += parameters.weightFitting;
 
 	// reg/pos
-	float4 p = X_CC;
-	float4 e_reg = make_float4(0.0f, 0.0f, 0.0f, 0.0f);
-	if (validN0){ float4 q = X_CM; e_reg += (p - q); pre += parameters.weightRegularizer*make_float4(1.0f, 1.0f, 1.0f, 1.0f); }
-	if (validN1){ float4 q = X_CP; e_reg += (p - q); pre += parameters.weightRegularizer*make_float4(1.0f, 1.0f, 1.0f, 1.0f); }
-	if (validN2){ float4 q = X_MC; e_reg += (p - q); pre += parameters.weightRegularizer*make_float4(1.0f, 1.0f, 1.0f, 1.0f); }
-	if (validN3){ float4 q = X_PC; e_reg += (p - q); pre += parameters.weightRegularizer*make_float4(1.0f, 1.0f, 1.0f, 1.0f); }
+	float p = X_CC;
+	float e_reg = 0.0f;
+	if (validN0){ float q = X_CM; e_reg += (p - q); pre += parameters.weightRegularizer*1.0f; }
+	if (validN1){ float q = X_CP; e_reg += (p - q); pre += parameters.weightRegularizer*1.0f; }
+	if (validN2){ float q = X_MC; e_reg += (p - q); pre += parameters.weightRegularizer*1.0f; }
+	if (validN3){ float q = X_PC; e_reg += (p - q); pre += parameters.weightRegularizer*1.0f; }
 	b += -parameters.weightRegularizer*e_reg;
 
 	// Preconditioner
-	if (pre.x > FLOAT_EPSILON) pre = 1.0f / pre;
-	else				       pre = make_float4(1.0f, 1.0f, 1.0f, 1.0f);
+	if (pre > FLOAT_EPSILON) pre = 1.0f / pre;
+	else				       pre = 1.0f;
 	outPre = pre;
 
 	return b;
@@ -56,15 +56,15 @@ __inline__ __device__ float4 evalMinusJTFDevice(int tId_i, int tId_j, int gId_i,
 // applyJTJ
 ////////////////////////////////////////
 
-__inline__ __device__ float4 applyJTJDevice(int tId_i, int tId_j, int gId_i, int gId_j, unsigned int W, unsigned int H, volatile float4* inTarget, volatile float4* inP, volatile float4* inX, PatchSolverParameters& parameters)
+__inline__ __device__ float applyJTJDevice(int tId_i, int tId_j, int gId_i, int gId_j, unsigned int W, unsigned int H, volatile float* inTarget, volatile float* inP, volatile float* inX, PatchSolverParameters& parameters)
 {
-	float4 b = make_float4(0.0f, 0.0f, 0.0f, 0.0f);
+	float b = 0.0f;
 
-	float4 X_CC = readValueFromCache2D(inX, tId_i, tId_j);	   float4 P_CC = readValueFromCache2D(inP, tId_i, tId_j);    
-	float4 X_CM = readValueFromCache2D(inX, tId_i, tId_j - 1); float4 P_CM = readValueFromCache2D(inP, tId_i, tId_j - 1);
-	float4 X_CP = readValueFromCache2D(inX, tId_i, tId_j + 1); float4 P_CP = readValueFromCache2D(inP, tId_i, tId_j + 1);
-	float4 X_MC = readValueFromCache2D(inX, tId_i - 1, tId_j); float4 P_MC = readValueFromCache2D(inP, tId_i - 1, tId_j);
-	float4 X_PC = readValueFromCache2D(inX, tId_i + 1, tId_j); float4 P_PC = readValueFromCache2D(inP, tId_i + 1, tId_j);
+	float X_CC = readValueFromCache2D(inX, tId_i, tId_j);		float P_CC = readValueFromCache2D(inP, tId_i, tId_j);    
+	float X_CM = readValueFromCache2D(inX, tId_i, tId_j - 1);	float P_CM = readValueFromCache2D(inP, tId_i, tId_j - 1);
+	float X_CP = readValueFromCache2D(inX, tId_i, tId_j + 1);	float P_CP = readValueFromCache2D(inP, tId_i, tId_j + 1);
+	float X_MC = readValueFromCache2D(inX, tId_i - 1, tId_j);	float P_MC = readValueFromCache2D(inP, tId_i - 1, tId_j);
+	float X_PC = readValueFromCache2D(inX, tId_i + 1, tId_j);	float P_PC = readValueFromCache2D(inP, tId_i + 1, tId_j);
 
 	const bool validN0 = isValid(X_CM);
 	const bool validN1 = isValid(X_CP);
@@ -75,7 +75,7 @@ __inline__ __device__ float4 applyJTJDevice(int tId_i, int tId_j, int gId_i, int
 	b += parameters.weightFitting*P_CC;
 
 	// pos/reg
-	float4 e_reg = make_float4(0.0f, 0.0f, 0.0f, 0.0f);
+	float e_reg = 0.0f;
 	if (validN0) e_reg += (P_CC - P_CM);
 	if (validN1) e_reg += (P_CC - P_CP);
 	if (validN2) e_reg += (P_CC - P_MC);

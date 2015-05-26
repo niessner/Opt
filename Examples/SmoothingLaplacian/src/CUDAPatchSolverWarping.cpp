@@ -13,7 +13,7 @@ CUDAPatchSolverWarping::~CUDAPatchSolverWarping()
 {
 }
 
-void CUDAPatchSolverWarping::solveGN(float4* d_image, float4* d_target, unsigned int nNonLinearIterations, unsigned int nPatchIterations, float weightFitting, float weightRegularizer)
+void CUDAPatchSolverWarping::solveGN(float* d_image, float* d_target, unsigned int nNonLinearIterations, unsigned int nPatchIterations, float weightFitting, float weightRegularizer)
 {
 	m_solverState.d_x = d_image;
 	m_solverState.d_target = d_target;

@@ -28,10 +28,10 @@ __global__ void PCGStepPatch_Kernel(PatchSolverInput input, PatchSolverState sta
 	// CACHE data to shared memory
 	//////////////////////////////////////////////////////////////////////////////////////////
 	
-	__shared__ float4 X[SHARED_MEM_SIZE_PATCH]; loadPatchToCache(X, state.d_x,	    tId_i, tId_j, gId_i, gId_j, W, H);
-	__shared__ float4 T[SHARED_MEM_SIZE_PATCH]; loadPatchToCache(T, state.d_target, tId_i, tId_j, gId_i, gId_j, W, H);
+	__shared__ float X[SHARED_MEM_SIZE_PATCH]; loadPatchToCache(X, state.d_x,	    tId_i, tId_j, gId_i, gId_j, W, H);
+	__shared__ float T[SHARED_MEM_SIZE_PATCH]; loadPatchToCache(T, state.d_target, tId_i, tId_j, gId_i, gId_j, W, H);
 
-	__shared__ float4 P [SHARED_MEM_SIZE_PATCH]; setPatchToZero(P,  tId_i, tId_j);
+	__shared__ float P [SHARED_MEM_SIZE_PATCH]; setPatchToZero(P,  tId_i, tId_j);
 
 	__shared__ float patchBucket[SHARED_MEM_SIZE_VARIABLES];
 
@@ -41,15 +41,15 @@ __global__ void PCGStepPatch_Kernel(PatchSolverInput input, PatchSolverState sta
 	// CACHE data to registers
 	//////////////////////////////////////////////////////////////////////////////////////////
 
-	register float4 X_CC  = readValueFromCache2D(X, tId_i, tId_j);
+	register float X_CC  = readValueFromCache2D(X, tId_i, tId_j);
 	register bool   isValidPixel = isValid(X_CC);
 
-	register float4 Delta  = make_float4(0.0f, 0.0f, 0.0f, 0.0f);
-	register float4 R;
-	register float4 Z;
-	register float4 Pre;
+	register float Delta  = 0.0f;
+	register float R;
+	register float Z;
+	register float Pre;
 	register float  RDotZOld;
-	register float4 AP;
+	register float AP;
 	
 	__syncthreads();
 	
@@ -61,10 +61,10 @@ __global__ void PCGStepPatch_Kernel(PatchSolverInput input, PatchSolverState sta
 	if (isValidPixel)
 	{
 		R = evalMinusJTFDevice(tId_i, tId_j, gId_i, gId_j, W, H, T, X, parameters, Pre); // residuum = J^T x -F - A x delta_0  => J^T x -F, since A x x_0 == 0 
-		float4 preRes  = Pre *R;															// apply preconditioner M^-1
+		float preRes  = Pre *R;															// apply preconditioner M^-1
 		P [getLinearThreadIdCache(tId_i, tId_j)] = preRes;									// save for later
 	
-		d = dot(R, preRes);
+		d = R * preRes;
 	}
 	
 	patchBucket[getLinearThreadId(tId_i, tId_j)] = d;										 // x-th term of nomimator for computing alpha and denominator for computing beta
@@ -83,13 +83,13 @@ __global__ void PCGStepPatch_Kernel(PatchSolverInput input, PatchSolverState sta
 	
 	for(unsigned int patchIter = 0; patchIter < parameters.nPatchIterations; patchIter++)
 	{
-		const float4 currentP  = P [getLinearThreadIdCache(tId_i, tId_j)];
+		const float currentP  = P [getLinearThreadIdCache(tId_i, tId_j)];
 	
 		float d = 0.0f;
 		if (isValidPixel)
 		{
 			AP = applyJTJDevice(tId_i, tId_j, gId_i, gId_j, W, H, T, P, X, parameters);	// A x p_k  => J^T x J x p_k 
-			d = dot(currentP, AP);															// x-th term of denominator of alpha
+			d = currentP * AP;															// x-th term of denominator of alpha
 		}
 	
 		patchBucket[getLinearThreadId(tId_i, tId_j)] = d;
@@ -108,7 +108,7 @@ __global__ void PCGStepPatch_Kernel(PatchSolverInput input, PatchSolverState sta
 			Delta  = Delta  + alpha*currentP;								// do a decent step		
 			R  = R  - alpha*AP;												// update residuum	
 			Z  = Pre *R;													// apply preconditioner M^-1
-			b = dot(Z,R);													// compute x-th term of the nominator of beta
+			b = Z*R;														// compute x-th term of the nominator of beta
 		}
 	
 		__syncthreads();													// Only write if every thread in the block has has read bucket[0]

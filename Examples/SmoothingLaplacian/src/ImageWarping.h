@@ -15,8 +15,8 @@ public:
 	{
 		m_image = image;
 
-		cutilSafeCall(cudaMalloc(&d_image,	sizeof(float4)*m_image.getWidth()*m_image.getHeight()));
-		cutilSafeCall(cudaMalloc(&d_target, sizeof(float4)*m_image.getWidth()*m_image.getHeight()));
+		cutilSafeCall(cudaMalloc(&d_imageFloat4,	sizeof(float4)*m_image.getWidth()*m_image.getHeight()));
+		cutilSafeCall(cudaMalloc(&d_targetFloat4, sizeof(float4)*m_image.getWidth()*m_image.getHeight()));
 
 		cutilSafeCall(cudaMalloc(&d_imageFloat, sizeof(float)*m_image.getWidth()*m_image.getHeight()));
 		cutilSafeCall(cudaMalloc(&d_targetFloat, sizeof(float)*m_image.getWidth()*m_image.getHeight()));
@@ -36,8 +36,8 @@ public:
 			}
 		}
 		
-		cutilSafeCall(cudaMemcpy(d_image, h_image, sizeof(float4)*m_image.getWidth()*m_image.getHeight(), cudaMemcpyHostToDevice));
-		cutilSafeCall(cudaMemcpy(d_target, h_image, sizeof(float4)*m_image.getWidth()*m_image.getHeight(), cudaMemcpyHostToDevice));
+		cutilSafeCall(cudaMemcpy(d_imageFloat4, h_image, sizeof(float4)*m_image.getWidth()*m_image.getHeight(), cudaMemcpyHostToDevice));
+		cutilSafeCall(cudaMemcpy(d_targetFloat4, h_image, sizeof(float4)*m_image.getWidth()*m_image.getHeight(), cudaMemcpyHostToDevice));
 
 		cutilSafeCall(cudaMemcpy(d_imageFloat, h_imageFloat, sizeof(float)*m_image.getWidth()*m_image.getHeight(), cudaMemcpyHostToDevice));
 		cutilSafeCall(cudaMemcpy(d_targetFloat, h_imageFloat, sizeof(float)*m_image.getWidth()*m_image.getHeight(), cudaMemcpyHostToDevice));
@@ -52,8 +52,8 @@ public:
 
 	~ImageWarping()
 	{
-		cutilSafeCall(cudaFree(d_image));
-		cutilSafeCall(cudaFree(d_target));
+		cutilSafeCall(cudaFree(d_imageFloat4));
+		cutilSafeCall(cudaFree(d_targetFloat4));
 
 		cutilSafeCall(cudaFree(d_imageFloat));
 		cutilSafeCall(cudaFree(d_targetFloat));
@@ -79,7 +79,12 @@ public:
 		//copyResultToCPU();
 
 
-		m_terraSolver->solve(d_imageFloat, d_targetFloat);
+
+		unsigned int nonLinearIter = 10;
+		unsigned int linearIter = 10;
+		m_warpingSolver->solveGN(d_imageFloat, d_targetFloat, nonLinearIter, linearIter, weightFit, weightReg);
+
+		//m_terraSolver->solve(d_imageFloat, d_targetFloat);
 		copyResultToCPUFromFloat();
 
 		return &m_result;
@@ -87,7 +92,7 @@ public:
 
 	void copyResultToCPU() {
 		m_result = ColorImageR32G32B32A32(m_image.getWidth(), m_image.getHeight());
-		cutilSafeCall(cudaMemcpy(m_result.getPointer(), d_image, sizeof(float4)*m_image.getWidth()*m_image.getHeight(), cudaMemcpyDeviceToHost));
+		cutilSafeCall(cudaMemcpy(m_result.getPointer(), d_imageFloat4, sizeof(float4)*m_image.getWidth()*m_image.getHeight(), cudaMemcpyDeviceToHost));
 	}
 
 	void copyResultToCPUFromFloat() {
@@ -108,8 +113,8 @@ private:
 	ColorImageR32G32B32A32 m_result;
 	ColorImageR32G32B32A32 m_image;
 	
-	float4*	d_image;
-	float4* d_target;
+	float4*	d_imageFloat4;
+	float4* d_targetFloat4;
 	
 	CUDAWarpingSolver*	    m_warpingSolver;
 	CUDAPatchSolverWarping* m_patchSolver;

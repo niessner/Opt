@@ -17,8 +17,8 @@ struct PatchSolverInput
 struct PatchSolverState
 {
 	// State of the GN Solver
-	float4*  d_x;
-	float4*  d_target;
+	float*  d_x;
+	float*  d_target;
 	float*	 d_mask;
 };
 

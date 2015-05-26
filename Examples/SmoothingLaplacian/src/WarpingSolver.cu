@@ -34,17 +34,18 @@ __global__ void PCGInit_Kernel1(SolverInput input, SolverState state, SolverPara
 	float d = 0.0f;
 	if (x < N)
 	{
-		const float4 residuum = evalMinusJTFDevice(x, input, state, parameters); // residuum = J^T x -F - A x delta_0  => J^T x -F, since A x x_0 == 0 
+		const float residuum = evalMinusJTFDevice(x, input, state, parameters); // residuum = J^T x -F - A x delta_0  => J^T x -F, since A x x_0 == 0 
 		state.d_r[x]  = residuum;												 // store for next iteration
 
-		const float4 p  = state.d_precondioner[x]  * residuum;					 // apply preconditioner M^-1
+		const float p  = state.d_precondioner[x]  * residuum;					 // apply preconditioner M^-1
 		state.d_p[x] = p;
 
-		d = dot(residuum, p);								 // x-th term of nomimator for computing alpha and denominator for computing beta
+		d = residuum*p;
+		//d = dot(residuum, p);								 // x-th term of nomimator for computing alpha and denominator for computing beta
 	}
 	else
 	{
-		state.d_p[x] = make_float4(0.0f, 0.0f, 0.0f, 0.0f);
+		state.d_p[x] = 0.0f;
 	}
 
 	bucket[threadIdx.x] = d;
@@ -103,11 +104,11 @@ __global__ void PCGStep_Kernel1(SolverInput input, SolverState state, SolverPara
 	float d = 0.0f;
 	if (x < N)
 	{
-		const float4 tmp = applyJTJDevice(x, input, state, parameters);		// A x p_k  => J^T x J x p_k 
+		const float tmp = applyJTJDevice(x, input, state, parameters);		// A x p_k  => J^T x J x p_k 
 
 		state.d_Ap_X[x]  = tmp;														// store for next kernel call
 
-		d = dot(state.d_p[x], tmp);													// x-th term of denominator of alpha
+		d = state.d_p[x] * tmp;													// x-th term of denominator of alpha
 	}
 
 	bucket[threadIdx.x] = d;
@@ -131,13 +132,13 @@ __global__ void PCGStep_Kernel2(SolverInput input, SolverState state)
 
 		state.d_delta[x]  = state.d_delta[x]  + alpha*state.d_p[x];				// do a decent step
 
-		float4 r = state.d_r[x] - alpha*state.d_Ap_X[x];					// update residuum
+		float r = state.d_r[x] - alpha*state.d_Ap_X[x];					// update residuum
 		state.d_r[x] = r;													// store for next kernel call
 
-		float4 z = state.d_precondioner[x] * r;								// apply preconditioner M^-1
+		float z = state.d_precondioner[x] * r;								// apply preconditioner M^-1
 		state.d_z[x] = z;													// save for next kernel call
 
-		b = dot(z, r);														// compute x-th term of the nominator of beta
+		b = z*r;														// compute x-th term of the nominator of beta
 	}
 
 	__syncthreads();														// Only write if every thread in the block has has read bucket[0]

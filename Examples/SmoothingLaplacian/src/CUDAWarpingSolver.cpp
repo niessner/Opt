@@ -11,15 +11,15 @@ CUDAWarpingSolver::CUDAWarpingSolver(unsigned int imageWidth, unsigned int image
 	const unsigned int numberOfVariables = N;
 
 	// State
-	cutilSafeCall(cudaMalloc(&m_solverState.d_delta,		sizeof(float4)*numberOfVariables));
-	cutilSafeCall(cudaMalloc(&m_solverState.d_r,			sizeof(float4)*numberOfVariables));
-	cutilSafeCall(cudaMalloc(&m_solverState.d_z,			sizeof(float4)*numberOfVariables));
-	cutilSafeCall(cudaMalloc(&m_solverState.d_p,			sizeof(float4)*numberOfVariables));
-	cutilSafeCall(cudaMalloc(&m_solverState.d_Ap_X,			sizeof(float4)*numberOfVariables));
+	cutilSafeCall(cudaMalloc(&m_solverState.d_delta,		sizeof(float)*numberOfVariables));
+	cutilSafeCall(cudaMalloc(&m_solverState.d_r,			sizeof(float)*numberOfVariables));
+	cutilSafeCall(cudaMalloc(&m_solverState.d_z,			sizeof(float)*numberOfVariables));
+	cutilSafeCall(cudaMalloc(&m_solverState.d_p,			sizeof(float)*numberOfVariables));
+	cutilSafeCall(cudaMalloc(&m_solverState.d_Ap_X,			sizeof(float)*numberOfVariables));
 	cutilSafeCall(cudaMalloc(&m_solverState.d_scanAlpha,	sizeof(float)*tmpBufferSize));
 	cutilSafeCall(cudaMalloc(&m_solverState.d_scanBeta,		sizeof(float)*tmpBufferSize));
 	cutilSafeCall(cudaMalloc(&m_solverState.d_rDotzOld,		sizeof(float)*numberOfVariables));
-	cutilSafeCall(cudaMalloc(&m_solverState.d_precondioner, sizeof(float4)*numberOfVariables));
+	cutilSafeCall(cudaMalloc(&m_solverState.d_precondioner, sizeof(float)*numberOfVariables));
 	cutilSafeCall(cudaMalloc(&m_solverState.d_sumResidual,	sizeof(float)));
 }
 
@@ -38,7 +38,7 @@ CUDAWarpingSolver::~CUDAWarpingSolver()
 	cutilSafeCall(cudaFree(m_solverState.d_sumResidual));
 }
 
-void CUDAWarpingSolver::solveGN(float4* d_image, float4* d_target, unsigned int nNonLinearIterations, unsigned int nLinearIterations, float weightFitting, float weightRegularizer)
+void CUDAWarpingSolver::solveGN(float* d_image, float* d_target, unsigned int nNonLinearIterations, unsigned int nLinearIterations, float weightFitting, float weightRegularizer)
 {
 	m_solverState.d_target = d_target;
 	m_solverState.d_x = d_image;
