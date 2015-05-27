@@ -11,6 +11,41 @@
 #include "PatchSolverWarpingParameters.h"
 
 ////////////////////////////////////////
+// evalF
+////////////////////////////////////////
+
+__inline__ __device__ float2 evalFDevice(unsigned int variableIdx, PatchSolverInput& input, PatchSolverState& state, PatchSolverParameters& parameters)
+{
+	float2 e = make_float2(0.0F, 0.0f);
+
+	int i; int j; get2DIdx(variableIdx, input.width, input.height, i, j);
+	const int n0_i = i;		const int n0_j = j - 1;  bool validN0 = isInsideImage(n0_i, n0_j, input.width, input.height); if(validN0) { validN0 = (state.d_mask[get1DIdx(n0_i, n0_j, input.width, input.height)] == 0); };
+	const int n1_i = i;		const int n1_j = j + 1;  bool validN1 = isInsideImage(n1_i, n1_j, input.width, input.height); if(validN1) { validN1 = (state.d_mask[get1DIdx(n1_i, n1_j, input.width, input.height)] == 0); };
+	const int n2_i = i - 1; const int n2_j = j;		 bool validN2 = isInsideImage(n2_i, n2_j, input.width, input.height); if(validN2) { validN2 = (state.d_mask[get1DIdx(n2_i, n2_j, input.width, input.height)] == 0); };
+	const int n3_i = i + 1; const int n3_j = j;		 bool validN3 = isInsideImage(n3_i, n3_j, input.width, input.height); if(validN3) { validN3 = (state.d_mask[get1DIdx(n3_i, n3_j, input.width, input.height)] == 0); };
+
+	float2 X_CC = state.d_x[get1DIdx(i, j, input.width, input.height)];	float M_CC = state.d_mask[get1DIdx(i, j, input.width, input.height)]; float2 U_CC = state.d_urshape[get1DIdx(i, j, input.width, input.height)]; float A_CC = state.d_A[get1DIdx(i, j, input.width, input.height)];
+
+	// E_fit
+	float2 constraintUV = input.d_constraints[variableIdx];	
+	bool validConstraint = (constraintUV.x >= 0 && constraintUV.y >= 0) && M_CC == 0;
+	if (validConstraint) { e += parameters.weightFitting*(X_CC - constraintUV)*(X_CC - constraintUV); }
+
+	// E_reg
+	float2x2 R = evalR(A_CC);
+	float2   p = X_CC;
+	float2   pHat = U_CC;
+	float2	 e_reg = make_float2(0.0f, 0.0f);
+	if (validN0) { float2 X_CM = state.d_x[get1DIdx(n0_i, n0_j, input.width, input.height)]; float2 U_CM = state.d_urshape[get1DIdx(n0_i, n0_j, input.width, input.height)]; float2 q = X_CM; float2 qHat = U_CM; float2 v = mat2x1((p - q) - R*(pHat - qHat)); e_reg += v*v;}
+	if (validN1) { float2 X_CP = state.d_x[get1DIdx(n1_i, n1_j, input.width, input.height)]; float2 U_CP = state.d_urshape[get1DIdx(n1_i, n1_j, input.width, input.height)]; float2 q = X_CP; float2 qHat = U_CP; float2 v = mat2x1((p - q) - R*(pHat - qHat)); e_reg += v*v;}
+	if (validN2) { float2 X_MC = state.d_x[get1DIdx(n2_i, n2_j, input.width, input.height)]; float2 U_MC = state.d_urshape[get1DIdx(n2_i, n2_j, input.width, input.height)]; float2 q = X_MC; float2 qHat = U_MC; float2 v = mat2x1((p - q) - R*(pHat - qHat)); e_reg += v*v;}
+	if (validN3) { float2 X_PC = state.d_x[get1DIdx(n3_i, n3_j, input.width, input.height)]; float2 U_PC = state.d_urshape[get1DIdx(n3_i, n3_j, input.width, input.height)]; float2 q = X_PC; float2 qHat = U_PC; float2 v = mat2x1((p - q) - R*(pHat - qHat)); e_reg += v*v;}
+	e += parameters.weightRegularizer*e_reg;
+
+	return e;
+}
+
+////////////////////////////////////////
 // evalMinusJTF
 ////////////////////////////////////////
 

@@ -253,7 +253,6 @@ void ApplyLinearUpdate(SolverInput& input, SolverState& state, SolverParameters&
 __global__ void ResetResidualDevice(SolverInput input, SolverState state, SolverParameters parameters)
 {
 	const unsigned int x = blockIdx.x * blockDim.x + threadIdx.x;
-
 	if (x == 0) state.d_sumResidual[0] = 0.0f;
 }
 
@@ -314,7 +313,6 @@ extern "C" void ImageWarpiungSolveGNStub(SolverInput& input, SolverState& state,
 		}
 
 		ApplyLinearUpdate(input, state, parameters, timer);	//this should be also done in the last PCGIteration
-
         printf("residual=%f\n", EvalResidual(input, state, parameters, timer));
 
         timer.nextIteration();

@@ -7,10 +7,13 @@ CUDAPatchSolverWarping::CUDAPatchSolverWarping(unsigned int imageWidth, unsigned
 {
 	const unsigned int N = m_imageWidth*m_imageHeight;
 	const unsigned int numberOfVariables = N;
+
+	cutilSafeCall(cudaMalloc(&m_solverState.d_sumResidual, sizeof(float)));
 }
 
 CUDAPatchSolverWarping::~CUDAPatchSolverWarping()
 {
+	cutilSafeCall(cudaFree(m_solverState.d_sumResidual));
 }
 
 void CUDAPatchSolverWarping::solveGN(float2* d_urshape, float2* d_warpField, float* d_warpAngles, float2* d_constraints, float* d_mask, unsigned int nNonLinearIterations, unsigned int nPatchIterations,  float weightFitting, float weightRegularizer)

@@ -25,6 +25,14 @@ struct PatchSolverState
 
 	float2* d_urshape;				// Current state urshape pos
 	float*	d_mask;
+
+	float*	d_sumResidual;
+
+	__host__ float getSumResidual() const {
+		float residual;
+		cudaMemcpy(&residual, d_sumResidual, sizeof(float), cudaMemcpyDeviceToHost);
+		return residual;
+	}
 };
 
 #endif
