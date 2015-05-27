@@ -22,7 +22,7 @@ return function(problemSpec, vars)
 		parameters : problemSpec:ParameterType(false)	--get the non-blocked version
 		scratchF : &float
 		
-		gradStore : problemSpec:UnknownType()
+		gradStore : problemSpec:UnknownArrayType(false)
 
 		timer : Timer
 		learningRate : float
@@ -42,7 +42,7 @@ return function(problemSpec, vars)
 	end
 	
 	kernels.computeGradient = function(data)
-		local terra computeGradientGPU(pd : data.PlanData,  gradientOut : data.imageType)
+		local terra computeGradientGPU(pd : data.PlanData,  gradientOut : problemSpec:UnknownArrayType(false))
 			var w : int, h : int
 			if positionForValidLane(pd, "X", &w, &h) then
 				--gradientOut(w, h) = data.problemSpec.functions.gradient.boundary(w, h, w, h, pd.parameters)

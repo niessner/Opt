@@ -281,6 +281,13 @@ function ProblemSpec:UnknownType(blocked)
     self:Stage "functions"
 	return self:TypeOf("X",blocked) 
 end
+function ProblemSpec:UnknownArrayType(blocked)
+	local ut = self:UnknownType(blocked)
+	local mm = ut.metamethods
+	local typ = mm.typ:isarray() and mm.typ or mm.typ[1]
+	return newImage(typ, mm.W, mm.H, mm.elemsize, mm.stride)
+end
+
 function ProblemSpec:TypeOf(name,blocked)
     self:Stage "functions"
 	if blocked == nil then
