@@ -96,7 +96,7 @@ public:
 			//unsigned int linearIter = 50;
 			//m_warpingSolver->solveGN(d_urshape, d_warpField, d_warpAngles, d_constraints, d_mask, nonLinearIter, linearIter, weightFit, weightReg);
 			
-			unsigned int nonLinearIter = 100;
+			unsigned int nonLinearIter = 10;
 			unsigned int patchIter = 32;
 			m_warpingSolverPatch->solveGN(d_urshape, d_warpField, d_warpAngles, d_constraints, d_mask, nonLinearIter, patchIter, weightFit, weightReg);
 		}

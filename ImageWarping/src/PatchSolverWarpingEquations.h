@@ -27,8 +27,7 @@ __inline__ __device__ float2 evalFDevice(unsigned int variableIdx, PatchSolverIn
 	float2 X_CC = state.d_x[get1DIdx(i, j, input.width, input.height)];	float M_CC = state.d_mask[get1DIdx(i, j, input.width, input.height)]; float2 U_CC = state.d_urshape[get1DIdx(i, j, input.width, input.height)]; float A_CC = state.d_A[get1DIdx(i, j, input.width, input.height)];
 
 	// E_fit
-	float2 constraintUV = input.d_constraints[variableIdx];	
-	bool validConstraint = (constraintUV.x >= 0 && constraintUV.y >= 0) && M_CC == 0;
+	float2 constraintUV = input.d_constraints[variableIdx];	bool validConstraint = (constraintUV.x >= 0 && constraintUV.y >= 0) && M_CC == 0;
 	if (validConstraint) { e += parameters.weightFitting*(X_CC - constraintUV)*(X_CC - constraintUV); }
 
 	// E_reg

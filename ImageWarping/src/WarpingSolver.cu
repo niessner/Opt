@@ -26,6 +26,59 @@
 // http://en.wikipedia.org/wiki/Conjugate_gradient_method
 // This code is an implementation of their PCG pseudo code
 
+/////////////////////////////////////////////////////////////////////////
+// Eval Cost
+/////////////////////////////////////////////////////////////////////////
+
+__global__ void ResetResidualDevice(SolverInput input, SolverState state, SolverParameters parameters)
+{
+	const unsigned int x = blockIdx.x * blockDim.x + threadIdx.x;
+	if (x == 0) state.d_sumResidual[0] = 0.0f;
+}
+
+__global__ void EvalResidualDevice(SolverInput input, SolverState state, SolverParameters parameters)
+{
+	const unsigned int N = input.N; // Number of block variables
+	const unsigned int x = blockIdx.x * blockDim.x + threadIdx.x;
+
+	if (x < N) {
+		float2 residual = evalFDevice(x, input, state, parameters);
+		float out = warpReduce(residual.x + residual.y);
+		unsigned int laneid;
+		//This command gets the lane ID within the current warp
+		asm("mov.u32 %0, %%laneid;" : "=r"(laneid));
+		if (laneid == 0) {
+			atomicAdd(&state.d_sumResidual[0], out);
+		}
+	}
+}
+
+float EvalResidual(SolverInput& input, SolverState& state, SolverParameters& parameters, CUDATimer& timer)
+{
+	float residual = 0.0f;
+
+	const unsigned int N = input.N; // Number of block variables
+	ResetResidualDevice << < 1, 1, 1 >> >(input, state, parameters);
+	cutilSafeCall(cudaDeviceSynchronize());
+	timer.startEvent("EvalResidual");
+	EvalResidualDevice << <(N + THREADS_PER_BLOCK - 1) / THREADS_PER_BLOCK, THREADS_PER_BLOCK >> >(input, state, parameters);
+	timer.endEvent();
+	cutilSafeCall(cudaDeviceSynchronize());
+
+	residual = state.getSumResidual();
+
+#ifdef _DEBUG
+	cutilSafeCall(cudaDeviceSynchronize());
+	cutilCheckMsg(__FUNCTION__);
+#endif
+
+	return residual;
+}
+
+/////////////////////////////////////////////////////////////////////////
+// PCG
+/////////////////////////////////////////////////////////////////////////
+
 __global__ void PCGInit_Kernel1(SolverInput input, SolverState state, SolverParameters parameters)
 {
 	const unsigned int N = input.N;
@@ -244,55 +297,6 @@ void ApplyLinearUpdate(SolverInput& input, SolverState& state, SolverParameters&
 		cutilSafeCall(cudaDeviceSynchronize());
 		cutilCheckMsg(__FUNCTION__);
 	#endif
-}
-
-/////////////////////////////////////////////////////////////////////////
-// Eval Cost
-/////////////////////////////////////////////////////////////////////////
-
-__global__ void ResetResidualDevice(SolverInput input, SolverState state, SolverParameters parameters)
-{
-	const unsigned int x = blockIdx.x * blockDim.x + threadIdx.x;
-	if (x == 0) state.d_sumResidual[0] = 0.0f;
-}
-
-__global__ void EvalResidualDevice(SolverInput input, SolverState state, SolverParameters parameters)
-{
-	const unsigned int N = input.N; // Number of block variables
-	const unsigned int x = blockIdx.x * blockDim.x + threadIdx.x;
-
-	if (x < N) {
-		float2 residual = evalFDevice(x, input, state, parameters);
-		float out = warpReduce(residual.x + residual.y);
-        unsigned int laneid;
-        //This command gets the lane ID within the current warp
-        asm("mov.u32 %0, %%laneid;" : "=r"(laneid));
-        if (laneid == 0) {
-			atomicAdd(&state.d_sumResidual[0], out);
-        }
-	}
-}
-
-float EvalResidual(SolverInput& input, SolverState& state, SolverParameters& parameters, CUDATimer& timer)
-{
-	float residual = 0.0f;
-
-	const unsigned int N = input.N; // Number of block variables
-	ResetResidualDevice << < 1, 1, 1 >> >(input, state, parameters);
-	cutilSafeCall(cudaDeviceSynchronize());
-    timer.startEvent("EvalResidual");
-	EvalResidualDevice << <(N + THREADS_PER_BLOCK - 1) / THREADS_PER_BLOCK, THREADS_PER_BLOCK >> >(input, state, parameters);
-    timer.endEvent();
-	cutilSafeCall(cudaDeviceSynchronize());
-
-	residual = state.getSumResidual();
-
-	#ifdef _DEBUG
-		cutilSafeCall(cudaDeviceSynchronize());
-		cutilCheckMsg(__FUNCTION__);
-	#endif
-
-	return residual;
 }
 
 ////////////////////////////////////////////////////////////////////
