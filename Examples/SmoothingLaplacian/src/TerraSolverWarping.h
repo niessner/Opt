@@ -42,23 +42,24 @@ public:
 
 	}
 
-	void solve(float* d_unknown, float* d_target)
+	void solve(float* d_unknown, float* d_target, unsigned int nNonLinearIterations, unsigned int nLinearIterations, float weightFit, float weightReg)
 	{
-		int a = 0;
-		void * list[] = { &a };	//TODO fix the bug that we need some 'parameter list'
 
 		void* data[] = {d_unknown, d_target};
 		//last parameter is params
 		//Opt_ProblemSolve(m_optimizerState, m_plan, data, NULL, list, NULL);
 
-		unsigned int numIter[] = { 10 };
-		Opt_ProblemInit(m_optimizerState, m_plan, data, NULL, NULL, (void**)&numIter);
-		while (Opt_ProblemStep(m_optimizerState, m_plan, data, NULL, NULL, NULL));
+		unsigned int numIter[] = { nNonLinearIterations, nLinearIterations };
+
+		void* problemParams[] = { &weightFit, &weightReg };
+
+
+		Opt_ProblemInit(m_optimizerState, m_plan, data, NULL, problemParams, (void**)&numIter);
+		while (Opt_ProblemStep(m_optimizerState, m_plan, data, NULL, problemParams, NULL));
+		//Opt_ProblemSolve(m_optimizerState, m_plan, data, NULL, NULL, NULL);
 	}
 
 private:
-
-
 	OptState*	m_optimizerState;
 	Problem*	m_problem;
 	Plan*		m_plan;

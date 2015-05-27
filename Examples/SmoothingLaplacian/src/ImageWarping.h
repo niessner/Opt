@@ -88,13 +88,13 @@ public:
 
 		unsigned int nonLinearIter = 10;
 		unsigned int linearIter = 10;
+		std::cout << "CUDA" << std::endl;
 		m_warpingSolver->solveGN(d_imageFloat, d_targetFloat, nonLinearIter, linearIter, weightFit, weightReg);
-		
+		copyResultToCPUFromFloat();
+
 		std::cout << "\n\nTERRA" << std::endl;
-
-		//resetGPUMemory();
-		//m_terraSolver->solve(d_imageFloat, d_targetFloat);
-
+		resetGPUMemory();
+		m_terraSolver->solve(d_imageFloat, d_targetFloat, nonLinearIter, linearIter, weightFit, weightReg);
 		copyResultToCPUFromFloat();
 
 		return &m_result;

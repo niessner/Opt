@@ -38,7 +38,7 @@ __inline__ __device__ float evalFDevice(unsigned int variableIdx, SolverInput& i
 	if (validN2){ float q = state.d_x[get1DIdx(n2_i, n2_j, input.width, input.height)]; e_reg += (p - q)*(p - q); }
 	if (validN3){ float q = state.d_x[get1DIdx(n3_i, n3_j, input.width, input.height)]; e_reg += (p - q)*(p - q); }
 
-	e += parameters.weightRegularizer*e_reg;
+	e += parameters.weightRegularizer * e_reg;
 
 	return e;
 }
@@ -50,6 +50,9 @@ __inline__ __device__ float evalFDevice(unsigned int variableIdx, SolverInput& i
 
 __inline__ __device__ float evalMinusJTFDevice(unsigned int variableIdx, SolverInput& input, SolverState& state, SolverParameters& parameters)
 {
+	float weightFitting = parameters.weightFitting;
+	float weightRegularizer = parameters.weightRegularizer;
+
 	state.d_delta[variableIdx] = 0.0f;
 
 	float b   = 0.0f;
@@ -62,23 +65,23 @@ __inline__ __device__ float evalMinusJTFDevice(unsigned int variableIdx, SolverI
 	const int n3_i = i + 1; const int n3_j = j;		const bool validN3 = isInsideImage(n3_i, n3_j, input.width, input.height);
 
 	// fit/pos
-	b += -2.0f*parameters.weightFitting*(state.d_x[variableIdx] - state.d_target[variableIdx]);
-	pre += 2.0f*parameters.weightFitting;
+	b += -2.0f*weightFitting*(state.d_x[variableIdx] - state.d_target[variableIdx]);
+	pre += 2.0f*weightFitting;
 
 	// reg/pos
 	float p = state.d_x[get1DIdx(i, j, input.width, input.height)];
 	float e_reg = 0.0f;
-	if (validN0){ float q = state.d_x[get1DIdx(n0_i, n0_j, input.width, input.height)]; e_reg += (p - q); pre += parameters.weightRegularizer*2.0f; }
-	if (validN1){ float q = state.d_x[get1DIdx(n1_i, n1_j, input.width, input.height)]; e_reg += (p - q); pre += parameters.weightRegularizer*2.0f; }
-	if (validN2){ float q = state.d_x[get1DIdx(n2_i, n2_j, input.width, input.height)]; e_reg += (p - q); pre += parameters.weightRegularizer*2.0f; }
-	if (validN3){ float q = state.d_x[get1DIdx(n3_i, n3_j, input.width, input.height)]; e_reg += (p - q); pre += parameters.weightRegularizer*2.0f; }
-	b += -2.0f*parameters.weightRegularizer*e_reg;
+	if (validN0){ float q = state.d_x[get1DIdx(n0_i, n0_j, input.width, input.height)];		e_reg += 2.0f*(p - q);		pre += 2.0f*weightRegularizer*2.0f; }
+	if (validN1){ float q = state.d_x[get1DIdx(n1_i, n1_j, input.width, input.height)];		e_reg += 2.0f*(p - q);		pre += 2.0f*weightRegularizer*2.0f; }
+	if (validN2){ float q = state.d_x[get1DIdx(n2_i, n2_j, input.width, input.height)];		e_reg += 2.0f*(p - q);		pre += 2.0f*weightRegularizer*2.0f; }
+	if (validN3){ float q = state.d_x[get1DIdx(n3_i, n3_j, input.width, input.height)];		e_reg += 2.0f*(p - q);		pre += 2.0f*weightRegularizer*2.0f; }
+	b += -2.0f*weightRegularizer*e_reg;
 
 	// Preconditioner
 	if (pre > FLOAT_EPSILON)	pre = 1.0f / pre;
 	else						pre = 1.0f;
 	state.d_precondioner[variableIdx] = pre;
-	
+
 	return b;
 }
 
@@ -88,6 +91,9 @@ __inline__ __device__ float evalMinusJTFDevice(unsigned int variableIdx, SolverI
 
 __inline__ __device__ float applyJTJDevice(unsigned int variableIdx, SolverInput& input, SolverState& state, SolverParameters& parameters)
 {
+	float weightFitting = parameters.weightFitting;
+	float weightRegularizer = parameters.weightRegularizer;
+
 	float b = 0.0f;
 
 	int i; int j; get2DIdx(variableIdx, input.width, input.height, i, j);
@@ -99,15 +105,15 @@ __inline__ __device__ float applyJTJDevice(unsigned int variableIdx, SolverInput
 	float p = state.d_p[get1DIdx(i, j, input.width, input.height)];
 
 	// fit/pos
-	b += 2.0f*parameters.weightFitting*state.d_p[variableIdx];
+	b += 2.0f*weightFitting*state.d_p[variableIdx];
 
 	// pos/reg
 	float e_reg = 0.0f;
-	if (validN0) e_reg += (p - state.d_p[get1DIdx(n0_i, n0_j, input.width, input.height)]);
-	if (validN1) e_reg += (p - state.d_p[get1DIdx(n1_i, n1_j, input.width, input.height)]);
-	if (validN2) e_reg += (p - state.d_p[get1DIdx(n2_i, n2_j, input.width, input.height)]);
-	if (validN3) e_reg += (p - state.d_p[get1DIdx(n3_i, n3_j, input.width, input.height)]);
-	b += 2.0f*parameters.weightRegularizer*e_reg;
+	if (validN0) e_reg += 2.0f*(p - state.d_p[get1DIdx(n0_i, n0_j, input.width, input.height)]);
+	if (validN1) e_reg += 2.0f*(p - state.d_p[get1DIdx(n1_i, n1_j, input.width, input.height)]);
+	if (validN2) e_reg += 2.0f*(p - state.d_p[get1DIdx(n2_i, n2_j, input.width, input.height)]);
+	if (validN3) e_reg += 2.0f*(p - state.d_p[get1DIdx(n3_i, n3_j, input.width, input.height)]);
+	b += 2.0f*weightRegularizer*e_reg;
 
 	return b;
 }

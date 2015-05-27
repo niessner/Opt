@@ -904,8 +904,8 @@ function ProblemSpecAD:Cost(costexp_)
     self.P:Stencil(stencilforexpression(costexp))
     self.P:Stencil(stencilforexpression(gradient))
     
-	--print("Oldgradient: ", removeboundaries(gradient))
-	--print("\n\n\n")
+	print("Oldgradient: ", removeboundaries(gradient))
+	print("\n\n\n")
 	
     if SumOfSquares:is(costexp_) then
         local P = self:Image("P",unknown.W,unknown.H,-1)
@@ -913,8 +913,11 @@ function ProblemSpecAD:Cost(costexp_)
         self.P:Stencil(stencilforexpression(jtjexp))
         createfunctionset(self,"applyJTJ",jtjexp)
 		--gradient with pre-conditioning
+		
 		local gradient,preconditioner = createjtf(self,costexp_.terms,unknown,P)	--includes the 2.0
 		createfunctionset(self,"evalJTF",terralib.newlist { gradient, preconditioner })
+		
+		print("Preconditioner: ", removeboundaries(preconditioner))
     end
     
 	--error("bla")
