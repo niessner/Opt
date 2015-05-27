@@ -88,7 +88,7 @@ TestExample TestFramework::makeMeshSmoothing(const string &imageFilename,const s
 
     LodePNG::save(testImage, "smoothingOutputLinearSolve.png");
 
-    result.costFunction = [=](const OptImage &variables)
+    result.costFunction = [=](const OptImagef &variables)
     {
         float sum = 0.0;
 

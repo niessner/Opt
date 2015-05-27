@@ -70,7 +70,7 @@ TestExample TestFramework::makeImageSmoothing(const string &imageFilename,const 
     TestExample result("imageSmoothing", terraCodeFilename, bmp.getWidth(), bmp.getHeight());
 	//TestExample result("imageSmoothing", "imageSmoothingAD.t", bmp.getWidth(), bmp.getHeight());
 
-    result.costFunction = [=](const OptImage &variables)
+    result.costFunction = [=](const OptImagef &variables)
     {
         //(4 * x_i - (neighbors) ) ^2 ) + sum_i( w * (x_i - target_i)^2
         float sum = 0.0;

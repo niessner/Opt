@@ -1,12 +1,17 @@
+#pragma  once
+
 #ifndef OptImage_h
 #define OptImage_h
+
 #include "cuda_runtime.h"
 #include <algorithm>
+
+template<class T>
 struct OptImage
 {
     OptImage()
     {
-        dataGPU = nullptr;
+        m_dataGPU = nullptr;
     }
     OptImage(int _dimX, int _dimY)
     {
@@ -17,32 +22,32 @@ struct OptImage
     {
         dimX = _dimX;
         dimY = _dimY;
-        dataCPU.resize(dimX * dimY);
-        cudaMalloc(&dataGPU, sizeof(float) * dimX * dimY);
+        m_dataCPU.resize(dimX * dimY);
+        cudaMalloc(&m_dataGPU, sizeof(T) * dimX * dimY);
     }
     void syncCPUToGPU() const
     {
-        cudaMemcpy(dataGPU, (void *)dataCPU.data(), sizeof(float) * dimX * dimY, cudaMemcpyHostToDevice);
+        cudaMemcpy(m_dataGPU, (void *)m_dataCPU.data(), sizeof(T) * dimX * dimY, cudaMemcpyHostToDevice);
     }
     void syncGPUToCPU() const
     {
-        cudaMemcpy((void *)dataCPU.data(), dataGPU, sizeof(float) * dimX * dimY, cudaMemcpyDeviceToHost);
+        cudaMemcpy((void *)m_dataCPU.data(), m_dataGPU, sizeof(T) * dimX * dimY, cudaMemcpyDeviceToHost);
     }
     float& operator()(int x, int y)
     {
-        return dataCPU[y * dimX + x];
+        return m_dataCPU[y * dimX + x];
     }
     float operator()(int x, int y) const
     {
-        return dataCPU[y * dimX + x];
+        return m_dataCPU[y * dimX + x];
     }
     float& operator()(size_t x, size_t y)
     {
-        return dataCPU[y * dimX + x];
+        return m_dataCPU[y * dimX + x];
     }
     float operator()(size_t x, size_t y) const
     {
-        return dataCPU[y * dimX + x];
+        return m_dataCPU[y * dimX + x];
     }
     void clear(float clearValue)
     {
@@ -66,11 +71,17 @@ struct OptImage
                 delta += fabs((double)a(x, y) - (double)b(x, y));
         return delta / (double)(a.dimX * a.dimY);
     }
-    const void * DataCPU() const { return dataCPU.data(); }
-    const void * DataGPU() const { return dataGPU; }
+    const void * getDataCPU() const { return m_dataCPU.data(); }
+    const void * getDataGPU() const { return m_dataGPU; }
 
-    std::vector<float> dataCPU;
-    void *dataGPU;
+    std::vector<T> m_dataCPU;
+    T *m_dataGPU;
     int dimX, dimY;
 };
+
+typedef OptImage<float>		OptImagef;
+typedef OptImage<float2>	OptImage2f;
+typedef OptImage<float3>	OptImage3f;
+typedef OptImage<float4>	OptImage4f;
+
 #endif

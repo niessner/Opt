@@ -23,7 +23,7 @@ TestExample TestFramework::makeRandomQuadratic(int count)
     // residual_i = ( (ax^2 + bx + c)^2 = 0)
     //
 
-    result.costFunction = [=](const OptImage &variables)
+    result.costFunction = [=](const OptImagef &variables)
     {
         float sum = 0.0;
         for (int i = 0; i < count; i++)
@@ -113,8 +113,8 @@ void TestFramework::runTest(const TestMethod &method, TestExample &example)
     for (const auto &image : example.images)
     {
         image.syncCPUToGPU();
-        imagesCPU.push_back((void*)image.DataCPU());
-        imagesGPU.push_back((void*)image.DataGPU());
+        imagesCPU.push_back((void*)image.getDataCPU());
+        imagesGPU.push_back((void*)image.getDataGPU());
         stride.push_back(image.dimX * sizeof(float));
         elemsize.push_back(sizeof(float));
     }
@@ -163,6 +163,6 @@ void TestFramework::runTest(const TestMethod &method, TestExample &example)
 
     cerr << "expected cost: " << example.minimumCost << endl;
 
-    cerr << "max delta: " << OptImage::maxDelta(example.images[0], example.minimumValues) << endl;
-    cerr << "avg delta: " << OptImage::avgDelta(example.images[0], example.minimumValues) << endl;
+    cerr << "max delta: " << OptImagef::maxDelta(example.images[0], example.minimumValues) << endl;
+    cerr << "avg delta: " << OptImagef::avgDelta(example.images[0], example.minimumValues) << endl;
 }

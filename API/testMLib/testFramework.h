@@ -26,13 +26,13 @@ struct TestExample
     string exampleName;
     string terraCodeFilename;
 
-    vector<OptImage> images;
+    vector<OptImagef> images;
     vector<OptGraphf> graphs;
 
     float minimumCost;
-    OptImage minimumValues;
+    OptImagef minimumValues;
 
-    function<float(const OptImage &x)> costFunction;
+    function<float(const OptImagef &x)> costFunction;
 };
 
 class TestFramework
