@@ -370,6 +370,57 @@ local function emitprintexpression(e, recursionLevel)
     
 end
 
+local Vectors = {}
+function ad.isvectortype(t) return Vectors[t] end
+ad.Vector = terralib.memoize(function(typ,N)
+    N = assert(tonumber(N),"expected a number")
+    local ops = { "__sub","__add","__mul","__div" }
+    local struct VecType { 
+        data : typ[N]
+    }
+    Vectors[VecType] = true
+    VecType.metamethods.type, VecType.metamethods.N = typ,N
+    VecType.metamethods.__typename = function(self) return ("%s_%d"):format(tostring(self.metamethods.type),self.metamethods.N) end
+    for i, op in ipairs(ops) do
+        local i = symbol("i")
+        local function template(ae,be)
+            return quote
+                var c : VecType
+                for [i] = 0,N do
+                    c.data[i] = operator(op,ae,be)
+                end
+                return c
+            end
+        end
+        local terra doop(a : VecType, b : VecType) [template(`a.data[i],`b.data[i])]  end
+        terra doop(a : typ, b : VecType) [template(`a,`b.data[i])]  end
+        terra doop(a : VecType, b : typ) [template(`a.data[i],`b)]  end
+       VecType.metamethods[op] = doop
+    end
+    terra VecType.metamethods.__unm(self : VecType)
+        var c : VecType
+        for i = 0,N do
+            c.data[i] = -self.data[i]
+        end
+        return c
+    end
+    terra VecType.methods.FromConstant(x : typ)
+        var c : VecType
+        for i = 0,N do
+            c.data[i] = x
+        end
+        return c
+    end
+    VecType.metamethods.__apply = macro(function(self,idx) return `self.data[idx] end)
+    VecType.metamethods.__cast = function(from,to,exp)
+        if from:isarithmetic() and to == VecType then
+            return `VecType.FromConstant(exp)
+        end
+        error(("unknown vector conversion %s to %s"):format(tostring(from),tostring(to)))
+    end
+    return VecType
+end)
+
 function ad.toterra(es,varmap_,generatormap_) 
     es = terralib.islist(es) and es or terralib.newlist(es)
      --varmap is a function or table mapping keys to what terra code should go there
@@ -413,7 +464,7 @@ function ad.toterra(es,varmap_,generatormap_)
     end
     local tes = es:map(function(e) 
         if terralib.islist(e) then
-            return `array([e:map(emit)])
+            return `[ad.Vector(float,#e)]{ array([e:map(emit)]) }
         else
             return emit(e)
         end

@@ -327,19 +327,6 @@ terra opt.InBoundsCalc(x : int64, y : int64, W : int64, H : int64, sx : int64, s
     var minx,maxx,miny,maxy = x - sx,x + sx,y - sy,y + sy
     return int(minx >= 0) and int(maxx < W) and int(miny >= 0) and int(maxy < H)
 end 
-
-
-local function zerofortype(typ)
-    if typ:isarithmetic() then return `typ(0)
-    elseif typ:isarray() then
-        local exps = terralib.newlist()
-        for i = 1,typ.N do
-            exps:insert(zerofortype(typ.type))
-        end
-        return `array(exps)
-    end
-    error("unsupported type "..tostring(typ))
-end
 	
 newImage = terralib.memoize(function(typ, W, H, elemsize, stride)
 	local struct Image {
@@ -355,7 +342,7 @@ newImage = terralib.memoize(function(typ, W, H, elemsize, stride)
 	    return x >= 0 and y >= 0 and x < W.size and y < H.size
 	end
 	terra Image:get(x : int64, y : int64, gx : int64, gy : int64) : typ
-	    var v : typ = [ zerofortype(typ) ]
+	    var v : typ = 0.f
 	    if opt.InBoundsCalc(gx,gy,W.size,H.size,0,0) ~= 0 then
 	        v = self(x,y)
 	    end
@@ -391,11 +378,11 @@ end
 
 local function tovalidimagetype(typ)
     if not terralib.types.istype(typ) then return nil end
-    if not typ:isarithmetic() and 
-       not (typ:isarray() and typ.type:isarithmetic()) then
-        return nil
+    if ad.isvectortype(typ) then
+        return typ, typ.metamethods.N
+    elseif typ:isarithmetic() then
+        return typ, 1
     end
-    return typ, (typ:isarray() and typ.N or 1)
 end
 
 function ProblemSpec:Image(name,typ,W,H,idx)
@@ -667,11 +654,6 @@ local function removeboundaries(exp)
     return exp:rename(nobounds)
 end
 
-local function toadtype(typ)
-    if typ:isarray() then return float[typ.N]
-    else return float end
-end
-
 local function createfunction(problemspec,name,exps,usebounds,W,H)
     if not usebounds then
         exps = removeboundaries(exps)
@@ -708,8 +690,8 @@ local function createfunction(problemspec,name,exps,usebounds,W,H)
                 r = symbol(float,tostring(a))
                 -- note: implicit cast to float happens here for non-float images.
                 local loadexp = usebounds and (`im:get(i+[a.x],j+[a.y],gi+[a.x],gj+[a.y])) or (`im(i+[a.x],j+[a.y]))
-                if a.image.type:isarray() then
-                    loadexp = `loadexp[a.channel]
+                if not a.image.type:isarithmetic() then
+                    loadexp = `loadexp(a.channel)
                 end
                 stmts:insert quote
                     var [r] = loadexp
@@ -826,7 +808,8 @@ local function unknownsforresidual(r,unknownsupport)
 end
 
 local function conformtounknown(exps,unknown)
-    return exps
+    if ad.isvectortype(unknown.type) then return exps
+    else return exps[1] end
 end
 
 
@@ -950,7 +933,7 @@ function ProblemSpecAD:Cost(costexp_)
     self.P:Stencil(stencilforexpression(gradient))
     
     if SumOfSquares:is(costexp_) then
-        local P = self:Image("P",toadtype(unknown.type),unknown.W,unknown.H,-1)
+        local P = self:Image("P",unknown.type,unknown.W,unknown.H,-1)
         local jtjexp = createjtj(costexp_.terms,unknown,P)	-- includes the 2.0
         self.P:Stencil(stencilforexpression(jtjexp))
         createfunctionset(self,"applyJTJ",jtjexp)
@@ -971,5 +954,8 @@ function ProblemSpecAD:Cost(costexp_)
     end
     return self.P
 end
-
+opt.Vector = ad.Vector
+for i = 2,4 do
+    opt["float"..tostring(i)] = ad.Vector(float,i)
+end
 return opt
