@@ -9,12 +9,7 @@ extern "C" {
 class TerraSolverWarping {
 
 public:
-	TerraSolverWarping(
-		unsigned int width,
-		unsigned int height,
-		const std::string& terraFile, 
-		const std::string& optName) 
-			: m_optimizerState(nullptr), m_problem(nullptr), m_plan(nullptr)
+	TerraSolverWarping(unsigned int width, unsigned int height, const std::string& terraFile, const std::string& optName) : m_optimizerState(nullptr), m_problem(nullptr), m_plan(nullptr)
 	{
 		m_optimizerState = Opt_NewState();
 		m_problem = Opt_ProblemDefine(m_optimizerState, terraFile.c_str(), optName.c_str(), NULL);
