@@ -11,6 +11,33 @@
 #include "WarpingSolverParameters.h"
 
 ////////////////////////////////////////
+// evalF
+////////////////////////////////////////
+__inline__ __device__ float4 evalFDevice(unsigned int variableIdx, SolverInput& input, SolverState& state, SolverParameters& parameters)
+{
+	float4 e = make_float4(0.0f, 0.0f, 0.0F, 0.0f);
+
+	// E_reg
+	int i; int j; get2DIdx(variableIdx, input.width, input.height, i, j);
+	const int n0_i = i;		const int n0_j = j - 1; const bool validN0 = isInsideImage(n0_i, n0_j, input.width, input.height);
+	const int n1_i = i;		const int n1_j = j + 1; const bool validN1 = isInsideImage(n1_i, n1_j, input.width, input.height);
+	const int n2_i = i - 1; const int n2_j = j;		const bool validN2 = isInsideImage(n2_i, n2_j, input.width, input.height);
+	const int n3_i = i + 1; const int n3_j = j;		const bool validN3 = isInsideImage(n3_i, n3_j, input.width, input.height);
+
+	// reg/pos
+	float4 p = state.d_x[get1DIdx(i, j, input.width, input.height)];
+	float4 t = state.d_target[get1DIdx(i, j, input.width, input.height)];
+	float4 e_reg = make_float4(0.0f, 0.0f, 0.0f, 0.0f);
+	if (validN0){ float4 q = state.d_x[get1DIdx(n0_i, n0_j, input.width, input.height)]; float4 tq = state.d_target[get1DIdx(n0_i, n0_j, input.width, input.height)]; float4 v = (p - q) - (t - tq); e_reg += v*v;}
+	if (validN1){ float4 q = state.d_x[get1DIdx(n1_i, n1_j, input.width, input.height)]; float4 tq = state.d_target[get1DIdx(n1_i, n1_j, input.width, input.height)]; float4 v = (p - q) - (t - tq); e_reg += v*v;}
+	if (validN2){ float4 q = state.d_x[get1DIdx(n2_i, n2_j, input.width, input.height)]; float4 tq = state.d_target[get1DIdx(n2_i, n2_j, input.width, input.height)]; float4 v = (p - q) - (t - tq); e_reg += v*v;}
+	if (validN3){ float4 q = state.d_x[get1DIdx(n3_i, n3_j, input.width, input.height)]; float4 tq = state.d_target[get1DIdx(n3_i, n3_j, input.width, input.height)]; float4 v = (p - q) - (t - tq); e_reg += v*v;}
+	e += e_reg;
+
+	return e;
+}
+
+////////////////////////////////////////
 // applyJT : this function is called per variable and evaluates each residual influencing that variable (i.e., each energy term per variable)
 ////////////////////////////////////////
 

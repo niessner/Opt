@@ -5,6 +5,8 @@
 
 #include "SolverUtil.h"
 
+#define THREADS_PER_BLOCK 1024 // keep consistent with the CPU
+
 #define PATCH_SIZE				  (16)
 #define SHARED_MEM_SIZE_PATCH	  ((PATCH_SIZE+2)*(PATCH_SIZE+2))
 #define SHARED_MEM_SIZE_VARIABLES ((PATCH_SIZE)*(PATCH_SIZE))
@@ -98,6 +100,15 @@ __inline__ __device__ void loadPatchToCache(volatile float* cache, float* data, 
 	if (tId_i == PATCH_SIZE - 1 && tId_j == 0)			    loadVariableToCache(cache, data, tId_i + 1, tId_j - 1, gId_i + 1, gId_j - 1, W, H);
 	if (tId_i == 0 && tId_j == PATCH_SIZE - 1)				loadVariableToCache(cache, data, tId_i - 1, tId_j + 1, gId_i - 1, gId_j + 1, W, H);
 	if (tId_i == PATCH_SIZE - 1 && tId_j == PATCH_SIZE - 1) loadVariableToCache(cache, data, tId_i + 1, tId_j + 1, gId_i + 1, gId_j + 1, W, H);
+}
+
+__inline__ __device__ float warpReduce(float val) {
+	int offset = 32 >> 1;
+	while (offset > 0) {
+		val = val + __shfl_down(val, offset, 32);
+		offset = offset >> 1;
+	}
+	return val;
 }
 
 #endif
