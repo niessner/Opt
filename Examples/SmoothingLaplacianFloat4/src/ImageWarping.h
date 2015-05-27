@@ -30,7 +30,10 @@ public:
 		//m_terraSolver = new TerraSolverWarping(m_image.getWidth(), m_image.getHeight(), "smoothingLaplacianAD.t", "gradientDescentGPU");
 		//m_terraBlockSolver = new TerraSolverWarping(m_image.getWidth(), m_image.getHeight(), "smoothingLaplacianAD.t", "gaussNewtonBlockGPU");
 		//m_terraSolverFloat4 = new TerraSolverWarpingFloat4(m_image.getWidth(), m_image.getHeight(), "smoothingLaplacian4AD.t", "gaussNewtonGPU");
-		m_terraSolver = m_terraBlockSolver = m_terraSolverFloat4 = nullptr;
+		
+		m_terraSolver = nullptr;
+		m_terraBlockSolver = nullptr;
+		m_terraSolverFloat4 = nullptr;
 	}
 
 	void resetGPUMemory()
@@ -81,21 +84,21 @@ public:
 		float weightFit = 0.1f;
 		float weightReg = 1.0f;
 		
-		//unsigned int nonLinearIter = 10;
-		//unsigned int linearIter = 10;
-		//m_warpingSolver->solveGN(d_image, d_target, nonLinearIter, linearIter, weightFit, weightReg);
-			
-		//unsigned int nonLinearIter = 10;
-		//unsigned int patchIter = 16;
-		//m_warpingSolverPatch->solveGN(d_image, d_target, nonLinearIter, patchIter, weightFit, weightReg);
-		
-		//copyResultToCPU();
-
-
-
 		unsigned int nonLinearIter = 10;
 		unsigned int linearIter = 10;
 		unsigned int patchIter = 16;
+		m_warpingSolver->solveGN(d_imageFloat4, d_targetFloat4, nonLinearIter, linearIter, weightFit, weightReg);
+		
+		resetGPUMemory();
+
+		m_patchSolver->solveGN(d_imageFloat4, d_targetFloat4, nonLinearIter, patchIter, weightFit, weightReg);
+		
+		copyResultToCPUFromFloat4();
+		
+
+		//unsigned int nonLinearIter = 10;
+		//unsigned int linearIter = 10;
+		//unsigned int patchIter = 16;
 
 		
 		//std::cout << "CUDA" << std::endl;
@@ -115,12 +118,7 @@ public:
 		//std::cout << "\n\nTERRA_BLOCK" << std::endl;
 		//resetGPUMemory();
 		//m_terraBlockSolver->solve(d_imageFloat, d_targetFloat, nonLinearIter, linearIter, weightFit, weightReg);
-		//copyResultToCPUFromFloat();
-		
-
-		//resetGPUMemory();
-		//m_terraSolverFloat4->solve(d_imageFloat4, d_targetFloat4, nonLinearIter, linearIter, weightFit, weightReg);
-		//copyResultToCPUFromFloat4();
+		//copyResultToCPUFromFloat();		
 
 		return &m_result;
 	}

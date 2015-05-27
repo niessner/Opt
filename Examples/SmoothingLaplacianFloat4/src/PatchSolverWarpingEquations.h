@@ -63,17 +63,17 @@ __inline__ __device__ float4 evalMinusJTFDevice(int tId_i, int tId_j, int gId_i,
 
 	// fit/pos
 	float4 t = readValueFromCache2D(inTarget, tId_i, tId_j);
-	b += -parameters.weightFitting*(X_CC - t);
-	pre += parameters.weightFitting;
+	b += -2.0f*parameters.weightFitting*(X_CC - t);
+	pre += 2.0f*parameters.weightFitting;
 
 	// reg/pos
 	float4 p = X_CC;
 	float4 e_reg = make_float4(0.0f, 0.0f, 0.0f, 0.0f);
-	if (validN0){ float4 q = X_CM; e_reg += (p - q); pre += parameters.weightRegularizer*make_float4(1.0f, 1.0f, 1.0f, 1.0f); }
-	if (validN1){ float4 q = X_CP; e_reg += (p - q); pre += parameters.weightRegularizer*make_float4(1.0f, 1.0f, 1.0f, 1.0f); }
-	if (validN2){ float4 q = X_MC; e_reg += (p - q); pre += parameters.weightRegularizer*make_float4(1.0f, 1.0f, 1.0f, 1.0f); }
-	if (validN3){ float4 q = X_PC; e_reg += (p - q); pre += parameters.weightRegularizer*make_float4(1.0f, 1.0f, 1.0f, 1.0f); }
-	b += -parameters.weightRegularizer*e_reg;
+	if (validN0){ float4 q = X_CM; e_reg += 2.0f*(p - q); pre += 4.0f*parameters.weightRegularizer*make_float4(1.0f, 1.0f, 1.0f, 1.0f); }
+	if (validN1){ float4 q = X_CP; e_reg += 2.0f*(p - q); pre += 4.0f*parameters.weightRegularizer*make_float4(1.0f, 1.0f, 1.0f, 1.0f); }
+	if (validN2){ float4 q = X_MC; e_reg += 2.0f*(p - q); pre += 4.0f*parameters.weightRegularizer*make_float4(1.0f, 1.0f, 1.0f, 1.0f); }
+	if (validN3){ float4 q = X_PC; e_reg += 2.0f*(p - q); pre += 4.0f*parameters.weightRegularizer*make_float4(1.0f, 1.0f, 1.0f, 1.0f); }
+	b += -2.0f*parameters.weightRegularizer*e_reg;
 
 	// Preconditioner
 	if (pre.x > FLOAT_EPSILON) pre = 1.0f / pre;
@@ -103,15 +103,15 @@ __inline__ __device__ float4 applyJTJDevice(int tId_i, int tId_j, int gId_i, int
 	const bool validN3 = isValid(X_PC);
 
 	// fit/pos
-	b += parameters.weightFitting*P_CC;
+	b += 2.0f*parameters.weightFitting*P_CC;
 
 	// pos/reg
 	float4 e_reg = make_float4(0.0f, 0.0f, 0.0f, 0.0f);
-	if (validN0) e_reg += (P_CC - P_CM);
-	if (validN1) e_reg += (P_CC - P_CP);
-	if (validN2) e_reg += (P_CC - P_MC);
-	if (validN3) e_reg += (P_CC - P_PC);
-	b += parameters.weightRegularizer*e_reg;
+	if (validN0) e_reg += 2.0f*(P_CC - P_CM);
+	if (validN1) e_reg += 2.0f*(P_CC - P_CP);
+	if (validN2) e_reg += 2.0f*(P_CC - P_MC);
+	if (validN3) e_reg += 2.0f*(P_CC - P_PC);
+	b += 2.0f*parameters.weightRegularizer*e_reg;
 
 	return b;
 }

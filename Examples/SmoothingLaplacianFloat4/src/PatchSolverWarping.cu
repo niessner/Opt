@@ -194,11 +194,16 @@ __global__ void PCGStepPatch_Kernel(PatchSolverInput input, PatchSolverState sta
 	}
 }
 
-void PCGIterationPatch(PatchSolverInput& input, PatchSolverState& state, PatchSolverParameters& parameters, int ox, int oy)
+void PCGIterationPatch(PatchSolverInput& input, PatchSolverState& state, PatchSolverParameters& parameters, int ox, int oy, CUDATimer& timer)
 {
 	dim3 blockSize(PATCH_SIZE, PATCH_SIZE);
 	dim3 gridSize((input.width + blockSize.x - 1) / blockSize.x + 1, (input.height + blockSize.y - 1) / blockSize.y + 1); // one more for block shift!
+
+	cutilSafeCall(cudaDeviceSynchronize());
+	timer.startEvent("PCGIterationPatch");
 	PCGStepPatch_Kernel<<<gridSize, blockSize>>>(input, state, parameters, ox, oy);
+	timer.endEvent();
+
 	#ifdef _DEBUG
 		cutilSafeCall(cudaDeviceSynchronize());
 		cutilCheckMsg(__FUNCTION__);
@@ -220,11 +225,14 @@ extern "C" void patchSolveStereoStub(PatchSolverInput& input, PatchSolverState& 
 	int o = 0;
 	for(unsigned int nIter = 0; nIter < parameters.nNonLinearIterations; nIter++)
 	{	
-		PCGIterationPatch(input, state, parameters, offsetX[o], offsetY[o]);
+		PCGIterationPatch(input, state, parameters, offsetX[o], offsetY[o], timer);
 		o = (o+1)%8;
 
 		printf("residual=%f\n", EvalResidual(input, state, parameters, timer));
 		timer.nextIteration();
 	}
 	timer.evaluate();
+	
+	float residual = EvalResidual(input, state, parameters, timer);
+	printf("final cost: %f\n", residual);
 }
