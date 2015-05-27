@@ -31,10 +31,10 @@ __inline__ __device__ float4 evalFDevice(unsigned int variableIdx, SolverInput& 
 
 	float4 p = state.d_x[get1DIdx(i, j, input.width, input.height)];
 	float4 e_reg = make_float4(0.0f, 0.0f, 0.0f, 0.0f);
-	if (validN0){ float4 q = state.d_x[get1DIdx(n0_i, n0_j, input.width, input.height)]; e_reg += (p - q)*(p - q); }
-	if (validN1){ float4 q = state.d_x[get1DIdx(n1_i, n1_j, input.width, input.height)]; e_reg += (p - q)*(p - q); }
-	if (validN2){ float4 q = state.d_x[get1DIdx(n2_i, n2_j, input.width, input.height)]; e_reg += (p - q)*(p - q); }
-	if (validN3){ float4 q = state.d_x[get1DIdx(n3_i, n3_j, input.width, input.height)]; e_reg += (p - q)*(p - q); }
+	if (validN0){ float4 q = state.d_x[get1DIdx(n0_i, n0_j, input.width, input.height)]; float4 v = (p - q); e_reg += v*v; }
+	if (validN1){ float4 q = state.d_x[get1DIdx(n1_i, n1_j, input.width, input.height)]; float4 v = (p - q); e_reg += v*v; }
+	if (validN2){ float4 q = state.d_x[get1DIdx(n2_i, n2_j, input.width, input.height)]; float4 v = (p - q); e_reg += v*v; }
+	if (validN3){ float4 q = state.d_x[get1DIdx(n3_i, n3_j, input.width, input.height)]; float4 v = (p - q); e_reg += v*v; }
 	e += parameters.weightRegularizer*e_reg;
 
 	return e;
