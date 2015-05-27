@@ -958,4 +958,13 @@ opt.Vector = ad.Vector
 for i = 2,4 do
     opt["float"..tostring(i)] = ad.Vector(float,i)
 end
+
+util.Dot = macro(function(a,b) 
+    local at,bt = a:gettype(),b:gettype()
+    if ad.isvectortype(at) then
+        return `a:dot(b)
+    else
+        return `a*b
+    end
+end)
 return opt
