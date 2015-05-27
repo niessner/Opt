@@ -20,7 +20,7 @@ end
 
 -- constants
 local verboseSolver = true
-local verboseAD = true
+local verboseAD = false
 
 local function newclass(name)
     local mt = { __name = name }
@@ -744,7 +744,7 @@ local function createfunction(problemspec,name,exps,usebounds,W,H)
     end
     generatedfn:setname(name)
     if verboseAD then
-        generatedfn:printpretty(true, false)
+        generatedfn:printpretty(false, false)
     end
     return generatedfn,stencil
 end
