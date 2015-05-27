@@ -21,9 +21,19 @@ public:
 		cutilSafeCall(cudaMalloc(&d_imageFloat, sizeof(float)*m_image.getWidth()*m_image.getHeight()));
 		cutilSafeCall(cudaMalloc(&d_targetFloat, sizeof(float)*m_image.getWidth()*m_image.getHeight()));
 
-		float4* h_image  = new float4[m_image.getWidth()*m_image.getHeight()];
+		resetGPUMemory();
+
+
+		m_warpingSolver	= new CUDAWarpingSolver(m_image.getWidth(), m_image.getHeight());
+		m_patchSolver = new CUDAPatchSolverWarping(m_image.getWidth(), m_image.getHeight());
+		m_terraSolver = new TerraSolverWarping(m_image.getWidth(), m_image.getHeight());
+	}
+
+	void resetGPUMemory()
+	{
+		float4* h_image = new float4[m_image.getWidth()*m_image.getHeight()];
 		float* h_imageFloat = new float[m_image.getWidth()*m_image.getHeight()];
-		
+
 		for (unsigned int i = 0; i < m_image.getHeight(); i++)
 		{
 			for (unsigned int j = 0; j < m_image.getWidth(); j++)
@@ -32,10 +42,10 @@ public:
 				h_image[i*m_image.getWidth() + j] = make_float4(v.x, v.y, v.z, 255);
 
 				float avg = h_image[i*m_image.getWidth() + j].x + h_image[i*m_image.getWidth() + j].y + h_image[i*m_image.getWidth() + j].z;
-				h_imageFloat[i*m_image.getWidth() + j] = avg/3.0f;
+				h_imageFloat[i*m_image.getWidth() + j] = avg / 3.0f;
 			}
 		}
-		
+
 		cutilSafeCall(cudaMemcpy(d_imageFloat4, h_image, sizeof(float4)*m_image.getWidth()*m_image.getHeight(), cudaMemcpyHostToDevice));
 		cutilSafeCall(cudaMemcpy(d_targetFloat4, h_image, sizeof(float4)*m_image.getWidth()*m_image.getHeight(), cudaMemcpyHostToDevice));
 
@@ -44,10 +54,6 @@ public:
 
 		delete h_image;
 		delete h_imageFloat;
-
-		m_warpingSolver	= new CUDAWarpingSolver(m_image.getWidth(), m_image.getHeight());
-		m_patchSolver = new CUDAPatchSolverWarping(m_image.getWidth(), m_image.getHeight());
-		m_terraSolver = new TerraSolverWarping(m_image.getWidth(), m_image.getHeight());
 	}
 
 	~ImageWarping()
@@ -65,8 +71,8 @@ public:
 
 	ColorImageR32G32B32A32* solve()
 	{
-		float weightFit = 10.0f;
-		float weightReg = 100.0f;
+		float weightFit = 0.1f;
+		float weightReg = 1.0f;
 		
 		//unsigned int nonLinearIter = 10;
 		//unsigned int linearIter = 10;
@@ -83,12 +89,18 @@ public:
 		unsigned int nonLinearIter = 10;
 		unsigned int linearIter = 10;
 		m_warpingSolver->solveGN(d_imageFloat, d_targetFloat, nonLinearIter, linearIter, weightFit, weightReg);
+		
+		std::cout << "\n\nTERRA" << std::endl;
 
+		//resetGPUMemory();
 		//m_terraSolver->solve(d_imageFloat, d_targetFloat);
+
 		copyResultToCPUFromFloat();
 
 		return &m_result;
 	}
+
+	
 
 	void copyResultToCPU() {
 		m_result = ColorImageR32G32B32A32(m_image.getWidth(), m_image.getHeight());

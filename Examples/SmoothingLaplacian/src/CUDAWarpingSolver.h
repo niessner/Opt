@@ -15,7 +15,6 @@ class CUDAWarpingSolver
 		~CUDAWarpingSolver();
 
 		void solveGN(float* d_image, float* d_target, unsigned int nNonLinearIterations, unsigned int nLinearIterations, float weightFitting, float weightRegularizer);
-		
 	private:
 
 		SolverState	m_solverState;

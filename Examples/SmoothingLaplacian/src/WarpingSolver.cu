@@ -235,6 +235,92 @@ void ApplyLinearUpdate(SolverInput& input, SolverState& state, SolverParameters&
 	#endif
 }
 
+
+
+
+
+/////////////////////////////////////////////////////////////////////////
+// Eval Cost
+/////////////////////////////////////////////////////////////////////////
+
+__global__ void ResetResidualDevice(SolverInput input, SolverState state, SolverParameters parameters)
+{
+	//const unsigned int N = input.N; // Number of block variables
+	const unsigned int x = blockIdx.x * blockDim.x + threadIdx.x;
+
+	if (x == 0) state.d_sumResidual[0] = 0.0f;
+}
+
+__global__ void EvalResidualDevice(SolverInput input, SolverState state, SolverParameters parameters)
+{
+	const unsigned int N = input.N; // Number of block variables
+	const unsigned int x = blockIdx.x * blockDim.x + threadIdx.x;
+
+	if (x < N) {
+		float residual = evalFDevice(x, input, state, parameters);
+		residual = warpReduce(residual);
+		unsigned int laneid;
+		//This command gets the lane ID within the current warp
+		asm("mov.u32 %0, %%laneid;" : "=r"(laneid));
+		if (laneid == 0) {
+			atomicAdd(&state.d_sumResidual[0], residual);
+		}
+	}
+}
+
+__global__ void EvalAllResidualsDevice(SolverInput input, SolverState state, SolverParameters parameters)
+{
+	const unsigned int N = input.N; // Number of block variables
+	const unsigned int x = blockIdx.x * blockDim.x + threadIdx.x;
+
+	if (x < N) {
+		float residual = evalFDevice(x, input, state, parameters);
+		state.d_r[x] = residual;
+	}
+}
+
+float EvalResidual(SolverInput& input, SolverState& state, SolverParameters& parameters, CUDATimer& timer)
+{
+	float residual = 0.0f;
+
+	bool useGPU = true;
+	if (useGPU) {
+		const unsigned int N = input.N; // Number of block variables
+		ResetResidualDevice << < 1, 1, 1 >> >(input, state, parameters);
+		cutilSafeCall(cudaDeviceSynchronize());
+		timer.startEvent("EvalResidual");
+		EvalResidualDevice << <(N + THREADS_PER_BLOCK - 1) / THREADS_PER_BLOCK, THREADS_PER_BLOCK >> >(input, state, parameters);
+		timer.endEvent();
+		cutilSafeCall(cudaDeviceSynchronize());
+
+		residual = state.getSumResidual();
+	}
+	else {
+		const unsigned int N = input.N; // Number of block variables
+		EvalAllResidualsDevice << <(N + THREADS_PER_BLOCK - 1) / THREADS_PER_BLOCK, THREADS_PER_BLOCK >> >(input, state, parameters);
+		cutilSafeCall(cudaDeviceSynchronize());
+
+		float* h_residuals = new float[input.width*input.height];
+		cutilSafeCall(cudaMemcpy(h_residuals, state.d_r, sizeof(float)*input.width*input.height, cudaMemcpyDeviceToHost));
+
+		float res = 0.0f;
+		for (unsigned int i = 0; i < input.width*input.height; i++) {
+			res += h_residuals[i];
+		}
+		delete[] h_residuals;
+		residual = res;
+	}
+
+
+#ifdef _DEBUG
+	cutilSafeCall(cudaDeviceSynchronize());
+	cutilCheckMsg(__FUNCTION__);
+#endif
+
+	return residual;
+}
+
+
 ////////////////////////////////////////////////////////////////////
 // Main GN Solver Loop
 ////////////////////////////////////////////////////////////////////
@@ -245,6 +331,9 @@ extern "C" void ImageWarpiungSolveGNStub(SolverInput& input, SolverState& state,
 
 	for (unsigned int nIter = 0; nIter < parameters.nNonLinearIterations; nIter++)
 	{
+		float residual = EvalResidual(input, state, parameters, timer);
+		printf("%i: cost: %f\n", nIter, residual);
+
 		Initialization(input, state, parameters, timer);
 
 		for (unsigned int linIter = 0; linIter < parameters.nLinIterations; linIter++) {
@@ -256,4 +345,8 @@ extern "C" void ImageWarpiungSolveGNStub(SolverInput& input, SolverState& state,
         timer.nextIteration();
 	}
     timer.evaluate();
+	
+	float residual = EvalResidual(input, state, parameters, timer);
+	printf("final cost: %f\n", residual);
+
 }
