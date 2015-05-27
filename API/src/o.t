@@ -951,7 +951,8 @@ function ProblemSpecAD:Cost(costexp_)
 		local gradient,preconditioner = createjtf(self,costexp_.terms,unknown,P)	--includes the 2.0
 		createfunctionset(self,"evalJTF",gradient,preconditioner)
 		
-		print("Preconditioner: ", removeboundaries(preconditioner))
+		--print("Gradient: ", removeboundaries(gradient))
+		--print("Preconditioner: ", removeboundaries(preconditioner))
     end
     
     createfunctionset(self,"cost",costexp)
