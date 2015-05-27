@@ -30,7 +30,7 @@ __global__ void EvalResidualDevice(PatchSolverInput input, PatchSolverState stat
 	if (x < N)
 	{
 		float4 residual = evalFDevice(x, input, state, parameters);
-		float r = warpReduce(residual.x*residual.x + residual.y*residual.y + residual.z*residual.z + residual.w*residual.w);
+		float r = warpReduce(residual.x + residual.y + residual.z + residual.w);
 		unsigned int laneid;
 		//This command gets the lane ID within the current warp
 		asm("mov.u32 %0, %%laneid;" : "=r"(laneid));

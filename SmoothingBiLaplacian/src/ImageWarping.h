@@ -53,7 +53,7 @@ public:
 		//unsigned int nonLinearIter = 10;
 		//unsigned int linearIter = 10;
 		//m_warpingSolver->solveGN(d_image, d_target, nonLinearIter, linearIter, weightFit, weightReg);
-			
+
 		unsigned int nonLinearIter = 50;
 		unsigned int patchIter = 32;
 		m_warpingSolverPatch->solveGN(d_image, d_target, nonLinearIter, patchIter, weightFit, weightReg);
