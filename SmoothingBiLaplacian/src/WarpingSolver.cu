@@ -21,6 +21,55 @@
 #define EXPORT
 #endif
 
+/////////////////////////////////////////////////////////////////////////
+// Eval Residual
+/////////////////////////////////////////////////////////////////////////
+
+__global__ void ResetResidualDevice(SolverInput input, SolverState state, SolverParameters parameters)
+{
+	const unsigned int x = blockIdx.x * blockDim.x + threadIdx.x;
+	if (x == 0) state.d_sumResidual[0] = 0.0f;
+}
+
+__global__ void EvalResidualDevice(SolverInput input, SolverState state, SolverParameters parameters)
+{
+	const unsigned int N = input.N; // Number of block variables
+	const unsigned int x = blockIdx.x * blockDim.x + threadIdx.x;
+
+	if (x < N)
+	{
+		float4 residual = evalFDevice(x, input, state, parameters);
+		float r = warpReduce(residual.x*residual.x + residual.y*residual.y + residual.z*residual.z + residual.w*residual.w);
+		unsigned int laneid;
+		//This command gets the lane ID within the current warp
+		asm("mov.u32 %0, %%laneid;" : "=r"(laneid));
+		if (laneid == 0) {
+			atomicAdd(&state.d_sumResidual[0], r);
+		}
+	}
+}
+
+float EvalResidual(SolverInput& input, SolverState& state, SolverParameters& parameters, CUDATimer& timer)
+{
+	float residual = 0.0f;
+
+	const unsigned int N = input.N; // Number of block variables
+	ResetResidualDevice << < 1, 1, 1 >> >(input, state, parameters);
+	cutilSafeCall(cudaDeviceSynchronize());
+	timer.startEvent("EvalResidual");
+	EvalResidualDevice << <(N + THREADS_PER_BLOCK - 1) / THREADS_PER_BLOCK, THREADS_PER_BLOCK >> >(input, state, parameters);
+	timer.endEvent();
+	cutilSafeCall(cudaDeviceSynchronize());
+
+	residual = state.getSumResidual();
+
+	#ifdef _DEBUG
+		cutilSafeCall(cudaDeviceSynchronize());
+		cutilCheckMsg(__FUNCTION__);
+	#endif
+
+	return residual;
+}
 
 // For the naming scheme of the variables see:
 // http://en.wikipedia.org/wiki/Conjugate_gradient_method
@@ -241,6 +290,7 @@ void ApplyLinearUpdate(SolverInput& input, SolverState& state, SolverParameters&
 extern "C" void ImageWarpiungSolveGNStub(SolverInput& input, SolverState& state, SolverParameters& parameters)
 {
     CUDATimer timer;
+	printf("residual=%f\n", EvalResidual(input, state, parameters, timer));
 
 	for (unsigned int nIter = 0; nIter < parameters.nNonLinearIterations; nIter++)
 	{
@@ -251,6 +301,7 @@ extern "C" void ImageWarpiungSolveGNStub(SolverInput& input, SolverState& state,
 		}
 
 		ApplyLinearUpdate(input, state, parameters, timer);	//this should be also done in the last PCGIteration
+		printf("residual=%f\n", EvalResidual(input, state, parameters, timer));
 
         timer.nextIteration();
 	}

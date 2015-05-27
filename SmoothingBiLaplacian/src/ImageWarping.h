@@ -47,11 +47,11 @@ public:
 
 	ColorImageR32G32B32A32* solve()
 	{
-		float weightFit = 1.0f;
-		float weightReg = 10000.0f;
+		float weightFit = 0.1f;
+		float weightReg = 1.0f;
 		
-		//unsigned int nonLinearIter = 1;
-		//unsigned int linearIter = 100;
+		//unsigned int nonLinearIter = 10;
+		//unsigned int linearIter = 10;
 		//m_warpingSolver->solveGN(d_image, d_target, nonLinearIter, linearIter, weightFit, weightReg);
 			
 		unsigned int nonLinearIter = 50;

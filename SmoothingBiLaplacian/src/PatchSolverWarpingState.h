@@ -20,6 +20,14 @@ struct PatchSolverState
 	float4*  d_x;
 	float4*  d_target;
 	float*	 d_mask;
+
+	float*	d_sumResidual;
+
+	__host__ float getSumResidual() const {
+		float residual;
+		cudaMemcpy(&residual, d_sumResidual, sizeof(float), cudaMemcpyDeviceToHost);
+		return residual;
+	}
 };
 
 #endif

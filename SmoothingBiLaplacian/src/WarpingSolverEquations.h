@@ -63,6 +63,27 @@ __inline__ __device__ float getNumNeighbors(int i, int j, SolverInput& input)
 }
 
 ////////////////////////////////////////
+// evalF
+////////////////////////////////////////
+__inline__ __device__ float4 evalFDevice(unsigned int variableIdx, SolverInput& input, SolverState& state, SolverParameters& parameters)
+{
+	float4 e = make_float4(0.0f, 0.0f, 0.0F, 0.0f);
+
+	// E_fit
+	float4 targetDepth = state.d_target[variableIdx];
+	float4 e_fit = (state.d_x[variableIdx] - targetDepth);
+	e += parameters.weightFitting * e_fit * e_fit;
+	
+	// E_reg
+	int i; int j; get2DIdx(variableIdx, input.width, input.height, i, j);
+	float4 e_reg = evalLaplacian(i, j, input, state, parameters);
+	e += parameters.weightRegularizer * e_reg * e_reg;
+
+	return e;
+}
+
+
+////////////////////////////////////////
 // applyJT : this function is called per variable and evaluates each residual influencing that variable (i.e., each energy term per variable)
 ////////////////////////////////////////
 

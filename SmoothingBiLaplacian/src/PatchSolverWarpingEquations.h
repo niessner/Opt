@@ -87,6 +87,45 @@ __inline__ __device__ float getNumNeighbors(int tId_i, int tId_j, volatile float
 }
 
 ////////////////////////////////////////
+// evalF
+////////////////////////////////////////
+
+__inline__ __device__ float4 evalLaplacian(unsigned int i, unsigned int j, PatchSolverInput& input, PatchSolverState& state, PatchSolverParameters& parameters)
+{
+	if (!isInsideImage(i, j, input.width, input.height)) return make_float4(0.0f, 0.0f, 0.0f, 0.0f);
+
+	const int n0_i = i;		const int n0_j = j - 1; const bool validN0 = isInsideImage(n0_i, n0_j, input.width, input.height);
+	const int n1_i = i;		const int n1_j = j + 1; const bool validN1 = isInsideImage(n1_i, n1_j, input.width, input.height);
+	const int n2_i = i - 1; const int n2_j = j;		const bool validN2 = isInsideImage(n2_i, n2_j, input.width, input.height);
+	const int n3_i = i + 1; const int n3_j = j;		const bool validN3 = isInsideImage(n3_i, n3_j, input.width, input.height);
+
+	float4 e_reg = make_float4(0.0f, 0.0f, 0.0f, 0.0f);
+	if (validN0) e_reg += state.d_x[get1DIdx(i, j, input.width, input.height)] - state.d_x[get1DIdx(n0_i, n0_j, input.width, input.height)];
+	if (validN1) e_reg += state.d_x[get1DIdx(i, j, input.width, input.height)] - state.d_x[get1DIdx(n1_i, n1_j, input.width, input.height)];
+	if (validN2) e_reg += state.d_x[get1DIdx(i, j, input.width, input.height)] - state.d_x[get1DIdx(n2_i, n2_j, input.width, input.height)];
+	if (validN3) e_reg += state.d_x[get1DIdx(i, j, input.width, input.height)] - state.d_x[get1DIdx(n3_i, n3_j, input.width, input.height)];
+
+	return e_reg;
+}
+
+__inline__ __device__ float4 evalFDevice(unsigned int variableIdx, PatchSolverInput& input, PatchSolverState& state, PatchSolverParameters& parameters)
+{
+	float4 e = make_float4(0.0f, 0.0f, 0.0F, 0.0f);
+
+	// E_fit
+	float4 targetDepth = state.d_target[variableIdx];
+	float4 e_fit = (state.d_x[variableIdx] - targetDepth);
+	e += parameters.weightFitting * e_fit * e_fit;
+
+	// E_reg
+	int i; int j; get2DIdx(variableIdx, input.width, input.height, i, j);
+	float4 e_reg = evalLaplacian(i, j, input, state, parameters);
+	e += parameters.weightRegularizer * e_reg * e_reg;
+
+	return e;
+}
+
+////////////////////////////////////////
 // evalMinusJTF
 ////////////////////////////////////////
 
