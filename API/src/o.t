@@ -596,8 +596,9 @@ function Image:__call(x,y)
     x,y = assert(tonumber(x)),assert(tonumber(y))
     return ad.v[ImageAccess:get(self,"v",x,y)]
 end
-function opt.InBounds(sx,sy)
-    return ad.v[BoundsAccess:get(0,0,sx,sy)]
+function opt.InBounds(x,y,sx,sy)
+	assert(x and y and sx and sy, "InBounds Requires 4 values (x,y,stencil_x,stencil_y)")
+    return ad.v[BoundsAccess:get(x,y,sx,sy)]
 end
 function BoundsAccess:shift(x,y)
     return BoundsAccess:get(self.x+x,self.y+y,self.sx,self.sy)
