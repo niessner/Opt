@@ -1,0 +1,29 @@
+\section{Gauss-Newton Optimization}
+\label{sec:optimization}
+$n$ variables\\
+$k$ residuals\\
+$\mathbf{x}$ unknown\\
+Traditional Gauss-Newton definition
+$$E (\mathbf{x}) = || \mathbf{F}(\mathbf{x}) ||_2^2,\qquad \mathbf{F}(\mathbf{x})  =[f_1(\mathbf{x}), \hdots, f_k(\mathbf{x})]^T$$
+
+
+
+The optimal parameters $\mathbf{x}^{*}$ are obtained by solving the minimization problem
+$$ \mathbf{x}^{*} = \displaystyle \argmin_\mathbf{x} \Vert \mathbf{F} (\mathbf{x}) \Vert_2^2.$$
+%
+We linearize the vector field $\mathbf{F}(\mathbf{x})$ using the first-order Taylor expansion,
+and obtain a linearized solution $\mathbf{x}_{k+1}$ for a given $\mathbf{x}_k$:
+%and obtain an iterative update $\mathbf{x}_k \rightarrow \mathbf{x}_{k+1}$:
+$$ \mathbf{F}(\mathbf{x}_{k+1}) \approx \mathbf{F}(\mathbf{x}_{k})+\mathbf{J}(\mathbf{x}_{k})\delta_k,\qquad \delta_k = \mathbf{x}_{k+1}-\mathbf{x}_{k},$$
+where $\mathbf{J}(\mathbf{x}_k)$ is the Jacobian matrix of $\mathbf{F}$ evaluated at $\mathbf{x}_k$.
+This approximation transforms the original non-linear optimization problem into a linear minimization problem:
+$$
+\mathbf{\delta}_{k}^{*}=\argmin_{\mathbf{\delta}_{k}}{||\mathbf{F}(\mathbf{x}_{k})+\mathbf{J}(\mathbf{x}_{k})\mathbf{\delta}_{k}||^2}.
+$$
+%where $\mathbf{\delta}_k^{*}$ is the optimal solution.
+This is a highly over-constrained linear system for which we obtain the optimal least-squares solution $\mathbf{\delta}_k^{*}$ by solving the corresponding normal equations:
+$$
+2 \mathbf{J}(\mathbf{x}_{k})^T\mathbf{J}(\mathbf{x}_{k})\mathbf{\delta}_{k}^{*} = - 2\mathbf{J}(\mathbf{x}_{k})^T\mathbf{F}(\mathbf{x}_{k}).
+$$
+To solve the original non-linear minimization problem, we thus need to solve a sequence of linearized problems;
+i.e., we initialize $\mathbf{x}_0$, and successively compute the update $\mathbf{\delta}_k^{*}$ from $\mathbf{x}_k$ to $\mathbf{x}_{k+1}$.
