@@ -1,7 +1,7 @@
 local W,H = opt.Dim("W",0), opt.Dim("H",1)
 local S = ad.ProblemSpec()
-local X = S:Image("X",float[2],W,H,0)
-local A = S:Image("A",float[2],W,H,1)
+local X = S:Image("X",opt.float2,W,H,0)
+local A = S:Image("A",opt.float2,W,H,1)
 
 local zero = S:Param("zero",float,0)
 
