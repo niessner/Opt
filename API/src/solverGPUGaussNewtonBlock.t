@@ -466,8 +466,8 @@ return function(problemSpec, vars)
 		if pd.nIter < nIterations then
 			var o : int = 0
 			for lIter = 0, lIterations do
-			    --var startCost = gpu.computeCost(pd)
-				--logSolver("iteration %d, cost=%f\n", lIter, startCost)	
+			    var startCost = gpu.computeCost(pd)
+				logSolver("iteration %d, cost=%f\n", lIter, startCost)	
 			
 				var oX : int = offsetX[o]
 				var oY : int = offsetY[o]				
