@@ -20,7 +20,7 @@ end
 
 -- constants
 local verboseSolver = true
-local verboseAD = false
+local verboseAD = true
 
 local function newclass(name)
     local mt = { __name = name }
@@ -369,9 +369,18 @@ local function todim(d)
     return Dim:is(d) and d or d == 1 and unity
 end
 
+local function tovalidimagetype(typ)
+    if not terralib.types.istype(typ) then return nil end
+    if not typ:isarithmetic() and 
+       not (typ:isarray() and typ.type:isarithmetic()) then
+        return nil
+    end
+    return typ, (typ:isarray() and typ.N or 1)
+end
+
 function ProblemSpec:Image(name,typ,W,H,idx)
     self:Stage "inputs"
-    assert(terralib.types.istype(typ))
+    typ = assert(tovalidimagetype(typ,"expected a number or an array of numbers"))
     local elemsize = assert(tonumber(opt.elemsizes[idx]))
     local stride = assert(tonumber(opt.strides[idx]))
     local r = newImage(typ, assert(todim(W)), assert(todim(H)), elemsize, stride)
@@ -527,15 +536,14 @@ local IndexValue = VarDef:Variant("IndexValue") -- query of the numeric index
 local ParamValue = VarDef:Variant("ParamValue") -- get one of the global parameter values
 
 function ImageAccess:__tostring()
-    local xn,yn = tostring(self.x):gsub("-","m"),tostring(self.y):gsub("-","m")
-    return ("%s_%s_%s_%s"):format(self.image.name,self.field,xn,yn)
+    return ("%s_%s_%s_%s"):format(self.image.name,self.x,self.y,self.channel)
 end
 function BoundsAccess:__tostring() return ("bounds_%d_%d_%d_%d"):format(self.x,self.y,self.sx,self.sy) end
 function IndexValue:__tostring() return ({[0] = "i","j","k"})[self.dim._index] end
 function ParamValue:__tostring() return "param_"..self.name end
 
-ImageAccess.get = terralib.memoize(function(self,im,field,x,y)
-    return ImageAccess:new { image = im, field = field, x = x, y = y}
+ImageAccess.get = terralib.memoize(function(self,im,x,y,channel)
+    return ImageAccess:new { image = im, x = x, y = y, channel = channel }
 end)
 
 BoundsAccess.get = terralib.memoize(function(self,x,y,sx,sy)
@@ -563,7 +571,7 @@ end
 local ProblemSpecAD = newclass("ProblemSpecAD")
 
 function ad.ProblemSpec()
-    return ProblemSpecAD:new { P = opt.ProblemSpec() }
+    return ProblemSpecAD:new { P = opt.ProblemSpec(), nametoimage = {} }
 end
 function ProblemSpecAD:UsePreconditioner(v)
 	self.P:UsePreconditioner(v)
@@ -578,23 +586,34 @@ function ProblemSpecAD:Image(name,typ,W,H,idx)
     if not terralib.types.istype(typ) then
         typ,W,H,idx = float,typ,W,H --shift arguments left
     end
-    assert(typ:isarithmetic())
     assert(W == 1 or Dim:is(W))
     assert(H == 1 or Dim:is(H))
     idx = assert(tonumber(idx))
     if idx >= 0 then
         self.P:Image(name,typ,W,H,idx)
     end
-    return Image:new { name = tostring(name), W = W, H = H, idx = idx }
+    local typ,N = tovalidimagetype(typ)
+    local r = Image:new { name = tostring(name), W = W, H = H, idx = idx, N = N, type = typ }
+    self.nametoimage[name] = r
+    return r
 end
 
 function ProblemSpecAD:Param(name,typ,idx)
     self.P:Param(name,float,idx)
     return ad.v[ParamValue:new { name = name, type = typ }]
 end
-function Image:__call(x,y)
-    x,y = assert(tonumber(x)),assert(tonumber(y))
-    return ad.v[ImageAccess:get(self,"v",x,y)]
+function Image:__call(x,y,c)
+    x,y,c = assert(tonumber(x)),assert(tonumber(y)),tonumber(c)
+    assert(not c or c < self.N, "channel outside of range")
+    if self.N == 1 or c then
+        return ad.v[ImageAccess:get(self,x,y,c or 0)]
+    else
+        local r = {}
+        for i = 0,self.N-1 do
+            r[i] = ad.v[ImageAccess:get(self,x,y,i)]
+        end
+        return r
+    end
 end
 function opt.InBounds(x,y,sx,sy)
 	assert(x and y and sx and sy, "InBounds Requires 4 values (x,y,stencil_x,stencil_y)")
@@ -604,7 +623,7 @@ function BoundsAccess:shift(x,y)
     return BoundsAccess:get(self.x+x,self.y+y,self.sx,self.sy)
 end
 function ImageAccess:shift(x,y)
-    return ImageAccess:get(self.image,self.field,self.x + x, self.y + y)
+    return ImageAccess:get(self.image,self.x + x, self.y + y,self.channel)
 end
 function IndexValue:shift(x,y)
     local v = {[0] = x,y}
@@ -620,6 +639,7 @@ local function shiftexp(exp,x,y)
 end 
 
 local function removeboundaries(exp)
+    if terralib.islist(exp) then return exp:map(removeboundaries) end
     local function nobounds(a)
         if BoundsAccess:is(a) then return ad.toexp(1)
         else return ad.v[a] end
@@ -627,19 +647,14 @@ local function removeboundaries(exp)
     return exp:rename(nobounds)
 end
 
-local function removesomeboundaries(exp)
-    local function nobounds(a)
-        if BoundsAccess:is(a) then 
-			if a.x >= 1 then return ad.toexp(1) end
-			return ad.toexp(0)
-        else return ad.v[a] end
-    end
-    return exp:rename(nobounds)
+local function toadtype(typ)
+    if typ:isarray() then return float[typ.N]
+    else return float end
 end
 
 local function createfunction(problemspec,name,exps,usebounds,W,H)
     if not usebounds then
-        exps = exps:map(removeboundaries)
+        exps = removeboundaries(exps)
     end
     
     local P = symbol(problemspec.P:ParameterType(),"P")
@@ -664,7 +679,7 @@ local function createfunction(problemspec,name,exps,usebounds,W,H)
                         im = symbol(problemspec.P:TypeOf(a.image.name),a.image.name)
                         imageinits:insert(quote var [im] = P.[a.image.name] end)
                     else
-                        local imtype = problemspec.P:InternalImage(float,a.image.W,a.image.H)
+                        local imtype = problemspec.P:InternalImage(a.image.type,a.image.W,a.image.H)
                         im = symbol(imtype,a.image.name)
                         extraimages[-a.image.idx] = im
                     end
@@ -672,8 +687,12 @@ local function createfunction(problemspec,name,exps,usebounds,W,H)
                 end
                 r = symbol(float,tostring(a))
                 -- note: implicit cast to float happens here for non-float images.
+                local loadexp = usebounds and (`im:get(i+[a.x],j+[a.y],gi+[a.x],gj+[a.y])) or (`im(i+[a.x],j+[a.y]))
+                if a.image.type:isarray() then
+                    loadexp = `loadexp[a.channel]
+                end
                 stmts:insert quote
-                    var [r] = [ usebounds and (`im:get(i+[a.x],j+[a.y],gi+[a.x],gj+[a.y])) or (`im(i+[a.x],j+[a.y])) ]
+                    var [r] = loadexp
                 end
                 stencil[1] = math.max(stencil[1],math.abs(a.x))
                 stencil[2] = math.max(stencil[2],math.abs(a.y))
@@ -729,10 +748,8 @@ local function stencilforexpression(exp)
     end)
     return stencil
 end
-local function createfunctionset(problemspec,name,exps)
-    if ad.toexp(exps) then
-        exps = terralib.newlist { exps }
-    end
+local function createfunctionset(problemspec,name,...)
+    local exps = terralib.newlist {...}
     local ut = problemspec.P:UnknownType()
     local W,H = ut.metamethods.W,ut.metamethods.H
     
@@ -752,7 +769,7 @@ local function unknowns(exp)
     local unknownvars = terralib.newlist()
     exp:rename(function(a)
         local v = ad.v[a]
-        if ImageAccess:is(a) and a.image.idx == 0 and a.field == "v" and not seenunknown[a] then -- assume image 0 is unknown
+        if ImageAccess:is(a) and a.image.name == "X" and not seenunknown[a] then -- assume image X is unknown
             unknownvars:insert(v)
             seenunknown[a] = true
         end
@@ -761,105 +778,106 @@ local function unknowns(exp)
     return unknownvars
 end
 
-local function imagesusedinexpression(exp)
-    local N = 0
-    local idxtoimage = terralib.newlist{}
-    exp:rename(function(a)
-        if ImageAccess:is(a) then
-            N = math.max(N,a.image.idx+1)
-            assert(idxtoimage[a.image.idx+1] == nil or idxtoimage[a.image.idx+1] == a.image, "image for index " ..tostring(a.image.idx).. " defined twice?")
-            idxtoimage[a.image.idx+1] = a.image
-        end
-        return ad.v[a]
-    end)
-    for i = 1,N do
-        assert(idxtoimage[i],"undefined image at index "..tostring(i-1))
-    end
-    return idxtoimage
-end
-
-local function unknownpairs(exp)
-	return unknowns(exp):map(function(v) return getpair(v:key().x,v:key().y) end)
+local function unknownaccesses(exp)
+	return unknowns(exp):map("key")
 end
 --given that the residual at (0,0) uses the variables in 'unknownsupport',
 --what is the set of residuals will use variable X(0,0).
 --this amounts to taking each variable in unknown support and asking which residual is it
 --that makes that variable X(0,0)
-local function residualsincludingX00(unknownsupport)
-    return unknownsupport:map(function(u) return getpair(-u.x,-u.y) end)
+local function residualsincludingX00(unknownsupport,channel)
+    assert(channel)
+    local r = terralib.newlist()
+    for i,u in ipairs(unknownsupport) do
+        if u.channel == channel then
+            r:insert(getpair(-u.x,-u.y))
+        end
+    end
+    return r
 end
 local function unknownsforresidual(r,unknownsupport)
-    return unknownsupport:map(function(u) return getpair(r.x+u.x,r.y+u.y) end)
+    return unknownsupport:map("shift",r.x,r.y)
+end
+local function conformtounknown(exps,unknown)
+    if unknown.type:isarray() then return exps
+    else return exps[1] end
 end
 
-local function createjtj(Fs,unknown,P)
-    local P_hat = 0
-	local x = unknown(0,0)
-    for _,F in ipairs(Fs) do
-        local P_F = 0
-        
-        local unknownsupport = unknownpairs(F)
-		local residuals = residualsincludingX00(unknownsupport)
-		
-		local columns = {}
-		local nonzerounknowns = terralib.newlist()
-		
-		for _,r in ipairs(residuals) do
-		    local rexp = shiftexp(F,r.x,r.y)
-		    local drdx00 = rexp:d(x)
-		    local unknowns = unknownsforresidual(r,unknownsupport)
-		    for _,u in ipairs(unknowns) do
-		        local exp = drdx00*rexp:d(unknown(u.x,u.y))
-		        --print(("df(%d,%d)/dx(%d,%d) * df(%d,%d)/dx(%d,%d) = %s"):format(r.x,r.y,0,0,r.x,r.y,u.x,u.y,tostring(exp)))
-		        if not columns[u] then
-		            columns[u] = 0
-		            nonzerounknowns:insert(u)
-		        end
-		        columns[u] = columns[u] + exp
-		    end
-		end
-		for _,u in ipairs(nonzerounknowns) do
-		    P_F = P_F + P(u.x,u.y) * columns[u]
-		end
-        P_hat = P_hat + P_F
+local function createzerolist(N)
+    local r = terralib.newlist()
+    for i = 1,N do
+        r[i] = ad.toexp(0)
     end
-    return 2.0*P_hat
+    return r
+end
+    
+local function createjtj(Fs,unknown,P)
+    local P_hat = createzerolist(unknown.N)
+	
+    for _,F in ipairs(Fs) do
+        local unknownsupport = unknownaccesses(F)
+        for channel = 0, unknown.N-1 do
+            local x = unknown(0,0,channel)
+            local residuals = residualsincludingX00(unknownsupport,channel)
+            local columns = {}
+            local nonzerounknowns = terralib.newlist()
+        
+            for _,r in ipairs(residuals) do
+                local rexp = shiftexp(F,r.x,r.y)
+                local drdx00 = rexp:d(x)
+                local unknowns = unknownsforresidual(r,unknownsupport)
+                for _,u in ipairs(unknowns) do
+                    local exp = drdx00*rexp:d(unknown(u.x,u.y,u.channel))
+                    --print(("df(%d,%d)/dx(%d,%d) * df(%d,%d)/dx(%d,%d) = %s"):format(r.x,r.y,0,0,r.x,r.y,u.x,u.y,tostring(exp)))
+                    if not columns[u] then
+                        columns[u] = 0
+                        nonzerounknowns:insert(u)
+                    end
+                    columns[u] = columns[u] + exp
+                end
+            end
+            for _,u in ipairs(nonzerounknowns) do
+                P_hat[channel+1] = P_hat[channel+1] + P(u.x,u.y,u.channel) * columns[u]
+            end
+        end
+    end
+    for i,p in ipairs(P_hat) do
+        P_hat[i] = 2.0 * p
+    end
+    return conformtounknown(P_hat,unknown)
 end
 
 local function createjtf(problemSpec,Fs,unknown,P)
-	local F_hat = 0	--gradient
-	local P_hat = 0 --pre-conditioner
+	local F_hat = createzerolist(unknown.N) --preconditioner
+	local P_hat = createzerolist(unknown.N) --gradient
 	
-	local x = unknown(0,0)
-    for _,F in ipairs(Fs) do
-        local F_F = 0
-		local P_F = 0
-        
-        local unknownsupport = unknownpairs(F)
-		local residuals = residualsincludingX00(unknownsupport)
+	for _,F in ipairs(Fs) do
+        local unknownsupport = unknownaccesses(F)
+        for channel = 0, unknown.N-1 do
+            local x = unknown(0,0,channel)
+            local residuals = residualsincludingX00(unknownsupport,channel)
 
-	
-		for _,f in ipairs(residuals) do
-		    local F_x = shiftexp(F,f.x,f.y)
-		    local dfdx00 = F_x:d(x)		-- entry of J^T
-			local dfdx00F = dfdx00*F_x	-- entry of \gradF == J^TF
-			F_F = F_F + dfdx00F			-- summing it up to get \gradF
-			
-			local dfdx00Sq = dfdx00*dfdx00	-- entry of Diag(J^TJ)
-			P_F = P_F + dfdx00Sq			-- summing the pre-conditioner up
-		end
-		
-        F_hat = F_hat + F_F
-		P_hat = P_hat + P_F
+            for _,f in ipairs(residuals) do
+                local F_x = shiftexp(F,f.x,f.y)
+                local dfdx00 = F_x:d(x)		-- entry of J^T
+                local dfdx00F = dfdx00*F_x	-- entry of \gradF == J^TF
+                F_hat[channel+1] = F_hat[channel+1] + dfdx00F			-- summing it up to get \gradF
+    
+                local dfdx00Sq = dfdx00*dfdx00	-- entry of Diag(J^TJ)
+                P_hat[channel+1] = P_hat[channel+1] + dfdx00Sq			-- summing the pre-conditioner up
+            end
+        end
     end
-	
-	if not problemSpec.P.usepreconditioner then
-		P_hat = ad.toexp(1.0)
-	else
-		P_hat = 2.0*P_hat
-		P_hat = ad.select(ad.greater(P_hat,.0001), 1.0/P_hat, 1.0)
+	for i = 1,unknown.N do
+	    if not problemSpec.P.usepreconditioner then
+		    P_hat[i] = ad.toexp(1.0)
+	    else
+		    P_hat[i] = 2.0*P_hat[i]
+		    P_hat[i] = ad.select(ad.greater(P_hat[i],.0001), 1.0/P_hat[i], 1.0)
+	    end
+	    F_hat[i] = 2.0*F_hat[i]
 	end
-    return 2.0*F_hat, P_hat
+    return conformtounknown(F_hat,unknown), conformtounknown(P_hat,unknown)
 end
 
 local lastTime = nil
@@ -872,7 +890,7 @@ function timeSinceLast(name)
     lastTime = currentTime
 end
 
-local function creategradient(costexp)
+local function creategradient(unknown,costexp)
     local unknownvars = unknowns(costexp)
     local gradient = costexp:gradient(unknownvars)
 
@@ -880,48 +898,43 @@ local function creategradient(costexp)
     local names = table.concat(unknownvars:map(function(v) return tostring(v:key()) end),", ")
     dprint(names.." = "..ad.tostrings(gradient))
     
-    local gradientgathered = 0
+    local gradientsgathered = createzerolist(unknown.N)
     for i,u in ipairs(unknownvars) do
         local a = u:key()
         local shift = shiftexp(gradient[i],-a.x,-a.y)
-        gradientgathered = gradientgathered + shift
+        gradientsgathered[a.channel+1] = gradientsgathered[a.channel+1] + shift
     end
     dprint("grad gather")
-    dprint(ad.tostrings({gradientgathered}))
-    return gradientgathered
+    dprint(ad.tostrings(gradientsgathered))
+    return conformtounknown(gradientsgathered,unknown)
 end
 
 function ProblemSpecAD:Cost(costexp_)
     local costexp = assert(ad.toexp(costexp_))
-    local images = imagesusedinexpression(costexp)
-    local unknown = images[1]
+    local unknown = assert(self.nametoimage.X, "unknown image X is not defined")
+    
     
     dprint("cost expression")
     dprint(ad.tostrings({assert(costexp)}))
     
-    local gradient = creategradient(costexp)
+    local gradient = creategradient(unknown,costexp)
     
     self.P:Stencil(stencilforexpression(costexp))
     self.P:Stencil(stencilforexpression(gradient))
     
-	print("Oldgradient: ", removeboundaries(gradient))
-	print("\n\n\n")
-	
     if SumOfSquares:is(costexp_) then
-        local P = self:Image("P",unknown.W,unknown.H,-1)
+        local P = self:Image("P",toadtype(unknown.type),unknown.W,unknown.H,-1)
         local jtjexp = createjtj(costexp_.terms,unknown,P)	-- includes the 2.0
         self.P:Stencil(stencilforexpression(jtjexp))
         createfunctionset(self,"applyJTJ",jtjexp)
 		--gradient with pre-conditioning
 		
 		local gradient,preconditioner = createjtf(self,costexp_.terms,unknown,P)	--includes the 2.0
-		createfunctionset(self,"evalJTF",terralib.newlist { gradient, preconditioner })
+		createfunctionset(self,"evalJTF",gradient,preconditioner)
 		
 		print("Preconditioner: ", removeboundaries(preconditioner))
     end
     
-	--error("bla")
-	
     createfunctionset(self,"cost",costexp)
     createfunctionset(self,"gradient",gradient)
     

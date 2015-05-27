@@ -411,7 +411,13 @@ function ad.toterra(es,varmap_,generatormap_)
             end
         end
     end
-    local tes = es:map(emit)
+    local tes = es:map(function(e) 
+        if terralib.islist(e) then
+            return `array([e:map(emit)])
+        else
+            return emit(e)
+        end
+    end)
     return #statements == 0 and (`tes) or quote [statements] in [tes] end
 end
 
