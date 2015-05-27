@@ -321,6 +321,19 @@ terra opt.InBoundsCalc(x : int64, y : int64, W : int64, H : int64, sx : int64, s
     return int(minx >= 0) and int(maxx < W) and int(miny >= 0) and int(maxy < H)
 end 
 
+
+local function zerofortype(typ)
+    if typ:isarithmetic() then return `typ(0)
+    elseif typ:isarray() then
+        local exps = terralib.newlist()
+        for i = 1,typ.N do
+            exps:insert(zerofortype(typ.type))
+        end
+        return `array(exps)
+    end
+    error("unsupported type "..tostring(typ))
+end
+	
 newImage = terralib.memoize(function(typ, W, H, elemsize, stride)
 	local struct Image {
 		data : &uint8
@@ -335,7 +348,7 @@ newImage = terralib.memoize(function(typ, W, H, elemsize, stride)
 	    return x >= 0 and y >= 0 and x < W.size and y < H.size
 	end
 	terra Image:get(x : int64, y : int64, gx : int64, gy : int64) : typ
-	    var v : typ = 0.f --TODO:only works for single precision things
+	    var v : typ = [ zerofortype(typ) ]
 	    if opt.InBoundsCalc(gx,gy,W.size,H.size,0,0) ~= 0 then
 	        v = self(x,y)
 	    end
@@ -731,13 +744,19 @@ local function createfunction(problemspec,name,exps,usebounds,W,H)
     end
     generatedfn:setname(name)
     if verboseAD then
-        generatedfn:printpretty(false, false)
+        generatedfn:printpretty(true, false)
     end
     return generatedfn,stencil
 end
 
 local function stencilforexpression(exp)
     local stencil = 0
+    if terralib.islist(exp) then 
+        for i,e in ipairs(exp) do
+            stencil = math.max(stencil,stencilforexpression(e))
+        end
+        return stencil
+    end
     exp:rename(function(a)
         if "ImageAccess" == a.kind then
             stencil = math.max(stencil,math.max(math.abs(a.x),math.abs(a.y))) 
