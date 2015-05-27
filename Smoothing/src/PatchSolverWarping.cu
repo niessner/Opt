@@ -5,9 +5,61 @@
 #include "PatchSolverWarpingUtil.h"
 #include "PatchSolverWarpingEquations.h"
 
+#include "CUDATimer.h"
+
 // For the naming scheme of the variables see:
 // http://en.wikipedia.org/wiki/Conjugate_gradient_method
 // This code is an implementation of their PCG pseudo code
+
+/////////////////////////////////////////////////////////////////////////
+// Eval Residual
+/////////////////////////////////////////////////////////////////////////
+
+__global__ void ResetResidualDevice(PatchSolverInput input, PatchSolverState state, PatchSolverParameters parameters)
+{
+	const unsigned int x = blockIdx.x * blockDim.x + threadIdx.x;
+	if (x == 0) state.d_sumResidual[0] = 0.0f;
+}
+
+__global__ void EvalResidualDevice(PatchSolverInput input, PatchSolverState state, PatchSolverParameters parameters)
+{
+	const unsigned int N = input.N; // Number of block variables
+	const unsigned int x = blockIdx.x * blockDim.x + threadIdx.x;
+
+	if (x < N)
+	{
+		float4 residual = evalFDevice(x, input, state, parameters);
+		float r = warpReduce(residual.x*residual.x + residual.y*residual.y + residual.z*residual.z + residual.w*residual.w);
+		unsigned int laneid;
+		//This command gets the lane ID within the current warp
+		asm("mov.u32 %0, %%laneid;" : "=r"(laneid));
+		if (laneid == 0) {
+			atomicAdd(&state.d_sumResidual[0], r);
+		}
+	}
+}
+
+float EvalResidual(PatchSolverInput& input, PatchSolverState& state, PatchSolverParameters& parameters, CUDATimer& timer)
+{
+	float residual = 0.0f;
+
+	const unsigned int N = input.N; // Number of block variables
+	ResetResidualDevice << < 1, 1, 1 >> >(input, state, parameters);
+	cutilSafeCall(cudaDeviceSynchronize());
+	timer.startEvent("EvalResidual");
+	EvalResidualDevice << <(N + THREADS_PER_BLOCK - 1) / THREADS_PER_BLOCK, THREADS_PER_BLOCK >> >(input, state, parameters);
+	timer.endEvent();
+	cutilSafeCall(cudaDeviceSynchronize());
+
+	residual = state.getSumResidual();
+
+#ifdef _DEBUG
+	cutilSafeCall(cudaDeviceSynchronize());
+	cutilCheckMsg(__FUNCTION__);
+#endif
+
+	return residual;
+}
 
 /////////////////////////////////////////////////////////////////////////
 // PCG Patch Iteration
@@ -162,10 +214,17 @@ int offsetY[8] = {(int)(0.0f*PATCH_SIZE), (int)((1.0f/3.0f)*PATCH_SIZE), (int)((
 
 extern "C" void patchSolveStereoStub(PatchSolverInput& input, PatchSolverState& state, PatchSolverParameters& parameters)
 {
+	CUDATimer timer;
+	printf("residual=%f\n", EvalResidual(input, state, parameters, timer));
+
 	int o = 0;
 	for(unsigned int nIter = 0; nIter < parameters.nNonLinearIterations; nIter++)
 	{	
 		PCGIterationPatch(input, state, parameters, offsetX[o], offsetY[o]);
 		o = (o+1)%8;
+
+		printf("residual=%f\n", EvalResidual(input, state, parameters, timer));
+		timer.nextIteration();
 	}
+	timer.evaluate();
 }

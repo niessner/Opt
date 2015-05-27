@@ -11,6 +11,37 @@
 #include "PatchSolverWarpingParameters.h"
 
 ////////////////////////////////////////
+// evalF
+////////////////////////////////////////
+
+__inline__ __device__ float4 evalFDevice(unsigned int variableIdx, PatchSolverInput& input, PatchSolverState& state, PatchSolverParameters& parameters)
+{
+	float4 e = make_float4(0.0f, 0.0f, 0.0F, 0.0f);
+
+	// E_fit
+	float4 targetDepth = state.d_target[variableIdx];
+	float4 e_fit = (state.d_x[variableIdx] - targetDepth);
+	e += parameters.weightFitting * e_fit * e_fit;
+
+	// E_reg
+	int i; int j; get2DIdx(variableIdx, input.width, input.height, i, j);
+	const int n0_i = i;		const int n0_j = j - 1; const bool validN0 = isInsideImage(n0_i, n0_j, input.width, input.height);
+	const int n1_i = i;		const int n1_j = j + 1; const bool validN1 = isInsideImage(n1_i, n1_j, input.width, input.height);
+	const int n2_i = i - 1; const int n2_j = j;		const bool validN2 = isInsideImage(n2_i, n2_j, input.width, input.height);
+	const int n3_i = i + 1; const int n3_j = j;		const bool validN3 = isInsideImage(n3_i, n3_j, input.width, input.height);
+
+	float4 p = state.d_x[get1DIdx(i, j, input.width, input.height)];
+	float4 e_reg = make_float4(0.0f, 0.0f, 0.0f, 0.0f);
+	if (validN0){ float4 q = state.d_x[get1DIdx(n0_i, n0_j, input.width, input.height)]; e_reg += (p - q)*(p - q); }
+	if (validN1){ float4 q = state.d_x[get1DIdx(n1_i, n1_j, input.width, input.height)]; e_reg += (p - q)*(p - q); }
+	if (validN2){ float4 q = state.d_x[get1DIdx(n2_i, n2_j, input.width, input.height)]; e_reg += (p - q)*(p - q); }
+	if (validN3){ float4 q = state.d_x[get1DIdx(n3_i, n3_j, input.width, input.height)]; e_reg += (p - q)*(p - q); }
+	e += parameters.weightRegularizer*e_reg;
+
+	return e;
+}
+
+////////////////////////////////////////
 // evalMinusJTF
 ////////////////////////////////////////
 
