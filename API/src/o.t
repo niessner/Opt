@@ -818,6 +818,11 @@ local function unknownsforresidual(r,unknownsupport)
     return unknownsupport:map("shift",r.x,r.y)
 end
 
+local function conformtounknown(exps,unknown)
+    return exps
+end
+
+
 local function createzerolist(N)
     local r = terralib.newlist()
     for i = 1,N do
@@ -859,7 +864,7 @@ local function createjtj(Fs,unknown,P)
     for i,p in ipairs(P_hat) do
         P_hat[i] = 2.0 * p
     end
-    return P_hat
+    return conformtounknown(P_hat,unknown)
 end
 
 local function createjtf(problemSpec,Fs,unknown,P)
@@ -892,7 +897,7 @@ local function createjtf(problemSpec,Fs,unknown,P)
 	    end
 	    F_hat[i] = 2.0*F_hat[i]
 	end
-    return F_hat, P_hat
+    return conformtounknown(F_hat,unknown), conformtounknown(P_hat,unknown)
 end
 
 local lastTime = nil
@@ -921,7 +926,7 @@ local function creategradient(unknown,costexp)
     end
     dprint("grad gather")
     dprint(ad.tostrings(gradientsgathered))
-    return gradientsgathered
+    return conformtounknown(gradientsgathered,unknown)
 end
 
 function ProblemSpecAD:Cost(costexp_)

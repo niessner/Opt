@@ -31,25 +31,25 @@ return function(problemSpec, vars)
 	
 	local kernels = {}
 	kernels.updatePosition = function(data)
-		local terra updatePositionGPU(pd : &data.PlanData, learningRate : float)
+		local terra updatePositionGPU(pd : data.PlanData, learningRate : float)
 			var w : int, h : int
 			if positionForValidLane(pd, "X", &w, &h) then
 				var delta = -learningRate * pd.gradStore(w, h)
 				pd.parameters.X(w, h) = pd.parameters.X(w, h) + delta
 			end
 		end
-		return { kernel = updatePositionGPU, header = noHeader, footer = noFooter, params = {symbol(float)}, mapMemberName = "X" }
+		return { kernel = updatePositionGPU, header = noHeader, footer = noFooter, mapMemberName = "X" }
 	end
 	
 	kernels.computeGradient = function(data)
-		local terra computeGradientGPU(pd : &data.PlanData,  gradientOut : data.imageType)
+		local terra computeGradientGPU(pd : data.PlanData,  gradientOut : data.imageType)
 			var w : int, h : int
 			if positionForValidLane(pd, "X", &w, &h) then
 				--gradientOut(w, h) = data.problemSpec.functions.gradient.boundary(w, h, w, h, pd.parameters)
 				gradientOut(w, h) = data.problemSpec.functions.evalJTF.boundary(w, h, w, h, pd.parameters)._0
 			end
 		end
-		return { kernel = computeGradientGPU, header = noHeader, footer = noFooter, params = {symbol(data.imageType)}, mapMemberName = "X" }
+		return { kernel = computeGradientGPU, header = noHeader, footer = noFooter, mapMemberName = "X" }
 	end
 	
 	

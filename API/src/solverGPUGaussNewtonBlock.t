@@ -169,7 +169,7 @@ return function(problemSpec, vars)
 	local kernels = {}
 	
 	kernels.computeCost = function(data)
-		local terra computeCostGPU(pd : &data.PlanData)
+		local terra computeCostGPU(pd : data.PlanData)
 		
 			var W = pd.parameters.X:W()
 			var H = pd.parameters.X:H()
@@ -237,7 +237,7 @@ return function(problemSpec, vars)
 			return quote return @pd.scratchF end
 		end
 		
-		return { kernel = computeCostGPU, header = header, footer = footer, params = {}, mapMemberName = "X" }
+		return { kernel = computeCostGPU, header = header, footer = footer, mapMemberName = "X" }
 	end
 
 	kernels.PCGStepBlock = function(data)
@@ -245,7 +245,7 @@ return function(problemSpec, vars)
 		--local patchBucket = cudalib.sharedmemory(float, SHARED_MEM_SIZE_VARIABLES)
 	
 	
-		local terra PCGStepBlockGPU(pd : &data.PlanData, ox : int, oy : int, nBlockIterations : uint)
+		local terra PCGStepBlockGPU(pd : data.PlanData, ox : int, oy : int, nBlockIterations : uint)
 			
 			var W = pd.parameters.X:W()
 			var H = pd.parameters.X:H()
@@ -425,11 +425,11 @@ return function(problemSpec, vars)
 			end
 			
 		end
-		return { kernel = PCGStepBlockGPU, header = noHeader, footer = noFooter, params = {symbol(int), symbol(int), symbol(uint)}, mapMemberName = "X" }
+		return { kernel = PCGStepBlockGPU, header = noHeader, footer = noFooter, mapMemberName = "X" }
 	end
 	
 	kernels.PCGLinearUpdateBlock = function(data)
-		local terra PCGLinearUpdateBlockGPU(pd : &data.PlanData, ox : int, oy : int)
+		local terra PCGLinearUpdateBlockGPU(pd : data.PlanData, ox : int, oy : int)
 		
 			var W = pd.parameters.X:W()
 			var H = pd.parameters.X:H()
@@ -445,7 +445,7 @@ return function(problemSpec, vars)
 			end
 		
 		end
-		return { kernel = PCGLinearUpdateBlockGPU, header = noHeader, footer = noFooter, params = {symbol(int), symbol(int)}, mapMemberName = "X" }
+		return { kernel = PCGLinearUpdateBlockGPU, header = noHeader, footer = noFooter,  mapMemberName = "X" }
 	end
 	
 	local gpu = util.makeGPUFunctions(problemSpec, vars, PlanData, kernels)

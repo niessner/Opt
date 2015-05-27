@@ -69,7 +69,7 @@ return function(problemSpec, vars)
 
 	local kernels = {}
 	kernels.PCGInit1 = function(data)
-		local terra PCGInit1GPU(pd : &data.PlanData)
+		local terra PCGInit1GPU(pd : data.PlanData)
 			var d = 0.0f -- init for out of bounds lanes
 			var w : int, h : int
 			if positionForValidLane(pd, "X", &w, &h) then
@@ -96,22 +96,22 @@ return function(problemSpec, vars)
 				util.atomicAdd(pd.scanAlpha, d)
 			end
 		end
-		return { kernel = PCGInit1GPU, header = noHeader, footer = noFooter, params = {}, mapMemberName = "X" }
+		return { kernel = PCGInit1GPU, header = noHeader, footer = noFooter, mapMemberName = "X" }
 	end
 	
 	kernels.PCGInit2 = function(data)
-		local terra PCGInit2GPU(pd : &data.PlanData)
+		local terra PCGInit2GPU(pd : data.PlanData)
 			var w : int, h : int
 			if positionForValidLane(pd, "X", &w, &h) then
 				pd.rDotzOld(w,h) = pd.scanAlpha[0]
 				pd.delta(w,h) = 0.0f
 			end
 		end
-		return { kernel = PCGInit2GPU, header = noHeader, footer = noFooter, params = {}, mapMemberName = "X" }
+		return { kernel = PCGInit2GPU, header = noHeader, footer = noFooter, mapMemberName = "X" }
 	end
 	
 	kernels.PCGStep1 = function(data)
-		local terra PCGStep1GPU(pd : &data.PlanData)
+		local terra PCGStep1GPU(pd : data.PlanData)
 			var d = 0.0f
 			var w : int, h : int
 			if positionForValidLane(pd, "X", &w, &h) then
@@ -130,11 +130,11 @@ return function(problemSpec, vars)
 				util.atomicAdd(pd.scanAlpha, d)
 			end
 		end
-		return { kernel = PCGStep1GPU, header = noHeader, footer = noFooter, params = {}, mapMemberName = "X" }
+		return { kernel = PCGStep1GPU, header = noHeader, footer = noFooter, mapMemberName = "X" }
 	end
 	
 	kernels.PCGStep2 = function(data)
-		local terra PCGStep2GPU(pd : &data.PlanData)
+		local terra PCGStep2GPU(pd : data.PlanData)
 			var b = 0.0f 
 			var w : int, h : int
 			if positionForValidLane(pd, "X", &w, &h) then
@@ -160,11 +160,11 @@ return function(problemSpec, vars)
 				util.atomicAdd(pd.scanBeta, b)
 			end
 		end
-		return { kernel = PCGStep2GPU, header = noHeader, footer = noFooter, params = {}, mapMemberName = "X" }
+		return { kernel = PCGStep2GPU, header = noHeader, footer = noFooter, mapMemberName = "X" }
 	end
 	
 	kernels.PCGStep3 = function(data)
-		local terra PCGStep3GPU(pd : &data.PlanData)			
+		local terra PCGStep3GPU(pd : data.PlanData)			
 			var w : int, h : int
 			if positionForValidLane(pd, "X", &w, &h) then
 				var rDotzNew =  pd.scanBeta[0]									-- get new nominator
@@ -177,17 +177,17 @@ return function(problemSpec, vars)
 				pd.p(w,h) = pd.z(w,h)+beta*pd.p(w,h)							-- update decent direction
 			end
 		end
-		return { kernel = PCGStep3GPU, header = noHeader, footer = noFooter, params = {}, mapMemberName = "X" }
+		return { kernel = PCGStep3GPU, header = noHeader, footer = noFooter, mapMemberName = "X" }
 	end
 	
 	kernels.PCGLinearUpdate = function(data)
-		local terra PCGLinearUpdateGPU(pd : &data.PlanData)
+		local terra PCGLinearUpdateGPU(pd : data.PlanData)
 			var w : int, h : int
 			if positionForValidLane(pd, "X", &w, &h) then
 				pd.parameters.X(w,h) = pd.parameters.X(w,h) + pd.delta(w,h)
 			end
 		end
-		return { kernel = PCGLinearUpdateGPU, header = noHeader, footer = noFooter, params = {}, mapMemberName = "X" }
+		return { kernel = PCGLinearUpdateGPU, header = noHeader, footer = noFooter, mapMemberName = "X" }
 	end
 
 	local gpu = util.makeGPUFunctions(problemSpec, vars, PlanData, kernels)

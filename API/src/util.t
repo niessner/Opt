@@ -336,17 +336,6 @@ util.positionForValidLane = macro(function(pd,mapMemberName,pw,ph)
 end)
 local positionForValidLane = util.positionForValidLane
 
-local wrapGPUKernel = function(nakedKernel, PlanData, params)
-	local terra wrappedKernel(pd : PlanData, [params])
-		nakedKernel(&pd, params)
-	end
-	
-	wrappedKernel:setname(nakedKernel.name)
-		
-	return wrappedKernel
-end
-
-
 local cd = macro(function(cufunc)
     return quote
         var r = cufunc
@@ -359,9 +348,14 @@ end)
 
 --TODO FIX THE CUDA DEVICE SYNCS
 --TODO 
-local makeGPULauncher = function(compiledKernel, kernelName, header, footer, problemSpec, PlanData, params)
+local makeGPULauncher = function(compiledKernel, kernelName, header, footer, problemSpec, PlanData)
 	assert(problemSpec)
 	assert(problemSpec:BlockSize())
+	local kernelparams = compiledKernel:gettype().parameters
+	local params = terralib.newlist {}
+	for i = 3,#kernelparams do --skip GPU launcher and PlanData
+	    params:insert(symbol(kernelparams[i]))
+	end
 	local terra GPULauncher(pd : &PlanData, [params])
 		var BLOCK_SIZE : int = [problemSpec:BlockSize()]
 		var launch = terralib.CUDAParams { (pd.parameters.X:W() - 1) / BLOCK_SIZE + 1, (pd.parameters.X:H() - 1) / BLOCK_SIZE + 1, 1, BLOCK_SIZE, BLOCK_SIZE, 1, 0, nil }
@@ -395,7 +389,7 @@ local makeGPULauncher = function(compiledKernel, kernelName, header, footer, pro
 end
 
 util.makeComputeCostGPU = function(data)
-	local terra computeCost(pd : &data.PlanData,  currentValues : data.imageType)
+	local terra computeCost(pd : data.PlanData,  currentValues : data.imageType)
 		var cost = 0.0f
 		var w : int, h : int
 		if positionForValidLane(pd, "X", &w, &h) then
@@ -414,7 +408,7 @@ util.makeComputeCostGPU = function(data)
 	local function footer(pd)
 		return quote return @pd.scratchF end
 	end
-	return { kernel = computeCost, header = header, footer = footer, params = {symbol(data.imageType)}, mapMemberName = "X" }
+	return { kernel = computeCost, header = header, footer = footer, mapMemberName = "X" }
 end
 
 
@@ -436,16 +430,15 @@ util.makeGPUFunctions = function(problemSpec, vars, PlanData, kernels)
 	for k, v in pairs(kernels) do
 		kernelTemplate[k] = v(data)
 	end
-	
-	-- clothe naked kernels
-	for k, v in pairs(kernelTemplate) do
-		wrappedKernels[k] = wrapGPUKernel(v.kernel, PlanData, v.params)
+	local kernelFunctions = {}
+	for k,v in pairs(kernelTemplate) do
+	    kernelFunctions[k] = v.kernel
 	end
 	
-	local compiledKernels = terralib.cudacompile(wrappedKernels, false)
+	local compiledKernels = terralib.cudacompile(kernelFunctions, false)
 	
 	for k, v in pairs(compiledKernels) do
-		gpu[k] = makeGPULauncher(compiledKernels[k], wrappedKernels[k].name, kernelTemplate[k].header, kernelTemplate[k].footer, problemSpec, PlanData, kernelTemplate[k].params)
+		gpu[k] = makeGPULauncher(compiledKernels[k], kernelFunctions[k].name, kernelTemplate[k].header, kernelTemplate[k].footer, problemSpec, PlanData)
 	end
 	
 	
