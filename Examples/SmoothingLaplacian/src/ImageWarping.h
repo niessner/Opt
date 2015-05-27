@@ -26,7 +26,8 @@ public:
 
 		m_warpingSolver	= new CUDAWarpingSolver(m_image.getWidth(), m_image.getHeight());
 		m_patchSolver = new CUDAPatchSolverWarping(m_image.getWidth(), m_image.getHeight());
-		m_terraSolver = new TerraSolverWarping(m_image.getWidth(), m_image.getHeight());
+		m_terraSolver = new TerraSolverWarping(m_image.getWidth(), m_image.getHeight(), "smoothingLaplacianAD.t", "gaussNewtonGPU");
+		m_terraBlockSolver = new TerraSolverWarping(m_image.getWidth(), m_image.getHeight(), "smoothingLaplacianAD.t", "gaussNewtonBlockGPU");
 	}
 
 	void resetGPUMemory()
@@ -66,7 +67,8 @@ public:
 
 		SAFE_DELETE(m_warpingSolver);
 		SAFE_DELETE(m_patchSolver);
-		SAFE_DELETE(m_terraSolver)
+		SAFE_DELETE(m_terraSolver);
+		SAFE_DELETE(m_terraBlockSolver);
 	}
 
 	ColorImageR32G32B32A32* solve()
@@ -88,13 +90,25 @@ public:
 
 		unsigned int nonLinearIter = 10;
 		unsigned int linearIter = 10;
+		unsigned int patchIter = 16;
+
 		std::cout << "CUDA" << std::endl;
 		m_warpingSolver->solveGN(d_imageFloat, d_targetFloat, nonLinearIter, linearIter, weightFit, weightReg);
+		copyResultToCPUFromFloat();
+
+		std::cout << "CUDA_PATCH" << std::endl;
+		resetGPUMemory();
+		m_patchSolver->solveGN(d_imageFloat, d_targetFloat, nonLinearIter, linearIter, patchIter, weightFit, weightReg);
 		copyResultToCPUFromFloat();
 
 		std::cout << "\n\nTERRA" << std::endl;
 		resetGPUMemory();
 		m_terraSolver->solve(d_imageFloat, d_targetFloat, nonLinearIter, linearIter, weightFit, weightReg);
+		copyResultToCPUFromFloat();
+
+		std::cout << "\n\nTERRA_BLOCK" << std::endl;
+		resetGPUMemory();
+		m_terraBlockSolver->solve(d_imageFloat, d_targetFloat, nonLinearIter, linearIter, weightFit, weightReg);
 		copyResultToCPUFromFloat();
 
 		return &m_result;
@@ -130,7 +144,8 @@ private:
 	
 	CUDAWarpingSolver*	    m_warpingSolver;
 	CUDAPatchSolverWarping* m_patchSolver;
-	TerraSolverWarping*		m_terraSolver;
+	TerraSolverWarping*		m_terraSolver; 
+	TerraSolverWarping*		m_terraBlockSolver;
 
 
 	float* d_imageFloat;

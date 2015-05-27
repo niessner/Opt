@@ -12,8 +12,8 @@ public:
 	TerraSolverWarping(
 		unsigned int width,
 		unsigned int height,
-		const std::string& terraFile = "smoothingLaplacianAD.t", 
-		const std::string& optName = "gaussNewtonGPU") 
+		const std::string& terraFile, 
+		const std::string& optName) 
 			: m_optimizerState(nullptr), m_problem(nullptr), m_plan(nullptr)
 	{
 		m_optimizerState = Opt_NewState();
