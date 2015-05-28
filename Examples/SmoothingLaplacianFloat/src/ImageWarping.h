@@ -100,9 +100,9 @@ public:
 		unsigned int patchIter = 16;
 
 		
-		std::cout << "CUDA" << std::endl;
-		m_warpingSolver->solveGN(d_imageFloat, d_targetFloat, nonLinearIter, linearIter, weightFit, weightReg);
-		copyResultToCPUFromFloat();
+		//std::cout << "CUDA" << std::endl;
+		//m_warpingSolver->solveGN(d_imageFloat, d_targetFloat, nonLinearIter, linearIter, weightFit, weightReg);
+		//copyResultToCPUFromFloat();
 
 		//std::cout << "CUDA_PATCH" << std::endl;
 		//resetGPUMemory();
