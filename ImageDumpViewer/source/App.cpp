@@ -66,7 +66,7 @@ void App::loadImageDump(const String& filename) {
     m_dumpTextures.append(newTexture);
 
 
-    if (G3D::endsWith(newTexture->name(), "residuum_0_-1.imagedump")){
+    /*if (G3D::endsWith(newTexture->name(), "JTF_cuda.imagedump") || G3D::endsWith(newTexture->name(), "JTJ_cuda.imagedump") || G3D::endsWith(newTexture->name(), "Pre_cuda.imagedump")){
         static shared_ptr<TextureBrowserWindow> w = TextureBrowserWindow::create(developerWindow->theme());
         Array<String> textureNames;
         w->getTextureList(textureNames);
@@ -85,7 +85,7 @@ void App::loadImageDump(const String& filename) {
         addWidget(w);
 
         w->setVisible(true);
-    }
+    }*/
 
 }
 
@@ -114,6 +114,15 @@ void App::onInit() {
         loadImageDump("E:/Projects/DSL/Optimization/API/RealtimeSFS/" + f);
     }
     
+    static shared_ptr<Texture> jtfDiff = Texture::singleChannelDifference(RenderDevice::current, 
+            Texture::getTextureByName("E:/Projects/DSL/Optimization/API/RealtimeSFS/JTF_cuda.imagedump"), 
+            Texture::getTextureByName("E:/Projects/DSL/Optimization/API/RealtimeSFS/JTF_optNoAD.imagedump"));
+    static shared_ptr<Texture> preDiff = Texture::singleChannelDifference(RenderDevice::current,
+        Texture::getTextureByName("E:/Projects/DSL/Optimization/API/RealtimeSFS/Pre_cuda.imagedump"),
+        Texture::getTextureByName("E:/Projects/DSL/Optimization/API/RealtimeSFS/Pre_optNoAD.imagedump"));
+    static shared_ptr<Texture> jtjDiff = Texture::singleChannelDifference(RenderDevice::current,
+        Texture::getTextureByName("E:/Projects/DSL/Optimization/API/RealtimeSFS/JTJ_cuda.imagedump"),
+        Texture::getTextureByName("E:/Projects/DSL/Optimization/API/RealtimeSFS/JTJ_optNoAD.imagedump"));
     
 
     dynamic_pointer_cast<DefaultRenderer>(m_renderer)->setOrderIndependentTransparency(false);
@@ -165,7 +174,7 @@ void App::onGraphics3D(RenderDevice* rd, Array<shared_ptr<Surface> >& allSurface
         // Call to make the App show the output of debugDraw(...)
         drawDebugShapes();
         const shared_ptr<Entity>& selectedEntity = (notNull(developerWindow) && notNull(developerWindow->sceneEditorWindow)) ? developerWindow->sceneEditorWindow->selectedEntity() : shared_ptr<Entity>();
-        scene()->visualize(rd, selectedEntity, sceneVisualizationSettings());
+        //scene()->visualize(rd, selectedEntity, sceneVisualizationSettings());
 
         // Post-process special effects
         m_depthOfField->apply(rd, m_framebuffer->texture(0), m_framebuffer->texture(Framebuffer::DEPTH), activeCamera(), m_settings.depthGuardBandThickness - m_settings.colorGuardBandThickness);

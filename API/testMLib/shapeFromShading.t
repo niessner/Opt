@@ -4,6 +4,8 @@ local USE_REGULARIZATION 		= true
 local USE_SHADING_CONSTRAINT 	= false
 local USE_DEPTH_CONSTRAINT 		= true
 local USE_TEMPORAL_CONSTRAINT 	= false
+local USE_PRECONDITIONER 		= false
+
 
 local FLOAT_EPSILON = 0.000001
 local DEPTH_DISCONTINUITY_THRE = 0.01
@@ -489,7 +491,7 @@ end
 ----  evalMinusJTF
 ---- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- 
 
-local terra evalMinusJTFDeviceLS_SFS_Shared_Mask_Prior(i : int, j : int, posy : int, posx : int, W : uint, H : int, self : P:ParameterType(),
+local terra evalMinusJTFDeviceLS_SFS_Shared_Mask_Prior(i : int, j : int, posx : int, posy : int, W : uint, H : int, self : P:ParameterType(),
 														normal0 : float3, normal1 : float3, normal2 : float3, outPre : &float)
 	var f_x : float = self.f_x
 	var f_y : float = self.f_y
@@ -671,7 +673,7 @@ local terra evalMinusJTFDeviceLS_SFS_Shared_Mask_Prior(i : int, j : int, posy : 
 			if [USE_DEPTH_CONSTRAINT]	then
 				--position term 			
 				p = p + self.w_r --position constraint			
-				b = b -(XC - targetDepth) * self.w_r;
+				b = b - ((XC - targetDepth) * self.w_r);
 			end
 
 
@@ -737,7 +739,7 @@ local terra evalJTF(i : int64, j : int64, gId_i : int64, gId_j : int64, self : P
 	var normal1 : float3
 	var normal2 : float3
 
-	prior_normal_from_previous_depth(self.X(i, j), gId_j, gId_i, self, &normal0, &normal1, &normal2);
+	prior_normal_from_previous_depth(self.X(i, j), gId_i, gId_j, self, &normal0, &normal1, &normal2);
 	
 	__syncthreads()
 
@@ -747,6 +749,10 @@ local terra evalJTF(i : int64, j : int64, gId_i : int64, gId_j : int64, self : P
 
 	-- Negative gradient
 	var negGradient : float = evalMinusJTFDeviceLS_SFS_Shared_Mask_Prior(i, j, gId_i, gId_j, self.X:W(), self.X:H(), self, normal0,normal1,normal2, &Pre); 
+	if not [USE_PRECONDITIONER] then
+		Pre = 1.0f
+	end
+
 	return -2.0f*negGradient, Pre
 end
 
@@ -775,7 +781,7 @@ local terra gradient(i : int64, j : int64, gId_i : int64, gId_j : int64, self : 
 	return evalJTF(i,j,gId_i, gId_j, self)._0
 end
 
-local terra applyJTJDeviceLS_SFS_Shared_BSP_Mask_Prior(i : int, j : int, posy : int, posx : int, W : uint, H : int, self : P:ParameterType(), pImage : P:UnknownType(),
+local terra applyJTJDeviceLS_SFS_Shared_BSP_Mask_Prior(i : int, j : int, posx : int, posy : int, W : uint, H : int, self : P:ParameterType(), pImage : P:UnknownType(),
 														normal0 : float3, normal1 : float3, normal2 : float3)
 
 	var f_x : float = self.f_x
@@ -978,14 +984,14 @@ local terra applyJTJDeviceLS_SFS_Shared_BSP_Mask_Prior(i : int, j : int, posy : 
 				var ax : float = (posx-u_x)/f_x
 				var ay : float = (posy-u_y)/f_y;		
 				tmpval = normal0[0] * ax + normal0[1] * ay + normal0[2] --  derative of prior energy wrt depth			
-				sum = sum + tmpval * ( tmpval * pImage(i,j) + ( -tmpval + normal0[0]/f_x) * pImage(i,j-1) )
-				sum = sum + tmpval * ( tmpval * pImage(i,j) + ( -tmpval + normal0[1]/f_y) * pImage(i-1,j) )
+				sum = sum + tmpval * ( tmpval * pImage(i,j) + ( -tmpval + normal0[0]/f_x) * pImage(i-1,j) )
+				sum = sum + tmpval * ( tmpval * pImage(i,j) + ( -tmpval + normal0[1]/f_y) * pImage(i,j-1) )
 							
 				tmpval = normal1[0] * ax + normal1[1] * ay + normal1[2] ;--  derative of prior energy wrt depth			
-				sum = sum + -tmpval * ( ( tmpval + normal1[0]/f_x) * pImage(i,j+1) - tmpval * pImage(i,j))
+				sum = sum + -tmpval * ( ( tmpval + normal1[0]/f_x) * pImage(i+1,j) - tmpval * pImage(i,j))
 							
 				tmpval = normal2[0] * ax + normal2[1] * ay + normal2[2] ;--  derative of prior energy wrt depth			
-				sum = sum + -tmpval * ( ( tmpval + normal2[1]/f_y) * pImage(i+1,j) - tmpval * pImage(i,j))
+				sum = sum + -tmpval * ( ( tmpval + normal2[1]/f_y) * pImage(i,j+1) - tmpval * pImage(i,j))
 
 				b = b + sum * self.w_r
 			end
@@ -1008,11 +1014,11 @@ local terra applyJTJ(i : int64, j : int64, gi : int64, gj : int64, self : P:Para
 	var normal1 : float3
 	var normal2 : float3
 
-	prior_normal_from_previous_depth(self.X(i, j), gj, gi, self, &normal0, &normal1, &normal2)
+	prior_normal_from_previous_depth(self.X(i, j), gi, gj, self, &normal0, &normal1, &normal2)
 	
 	__syncthreads()
 
- 	var JTJ: float = applyJTJDeviceLS_SFS_Shared_BSP_Mask_Prior(i, j, gj, gi, W, H, self, pImage, normal0, normal1, normal2)
+ 	var JTJ: float = applyJTJDeviceLS_SFS_Shared_BSP_Mask_Prior(i, j, gi, gj, W, H, self, pImage, normal0, normal1, normal2)
 	return 2.0*JTJ
 end
 

@@ -1,6 +1,7 @@
 
 local S = require("std")
 local util = require("util")
+
 local C = util.C
 local Timer = util.Timer
 local positionForValidLane = util.positionForValidLane
@@ -29,6 +30,10 @@ return function(problemSpec, vars)
 		plan : opt.Plan
 		parameters : problemSpec:ParameterType(false)	--get the non-blocked version
 		scratchF : &float
+		debugJTFImage : &float --
+		debugJTJImage : &float --
+		debugPreImage : &float --
+		debugDumpImage : &float --
 		
 		delta : problemSpec:UnknownType()	--current linear update to be computed -> num vars
 		r : problemSpec:UnknownType()		--residuals -> num vars	--TODO this needs to be a 'residual type'
@@ -203,22 +208,188 @@ return function(problemSpec, vars)
 		return { kernel = PCGLinearUpdateGPU, header = noHeader, footer = noFooter, mapMemberName = "X" }
 	end
 
+
+	-- Debugging kernel
+	kernels.computeCostImage = function(data)
+		local terra computeCostImageGPU(pd : &data.PlanData)
+			var cost = 0.0f
+			var w : int, h : int
+			if util.positionForValidLane(pd, "X", &w, &h) then
+				var params = pd.parameters
+				cost = [float](data.problemSpec.functions.cost.boundary(w, h, w, h, params))
+				pd.debugDumpImage[h*pd.parameters.X:W() + w] = cost
+			end
+		end
+		return { kernel = computeCostImageGPU, header = noHeader, footer = noFooter, mapMemberName = "X" }
+	end
+
+	-- Needed temporarily for SFS
+	kernels.finitify = function(data)
+		local terra finitifyGPU(pd : &data.PlanData)
+			
+			var w : int, h : int
+			if util.positionForValidLane(pd, "X", &w, &h) then
+				var result = ([&float](pd.parameters.D_i.data))[h*pd.parameters.X:W() + w]
+				if result < 0 then 
+					result = -10000.0
+				end
+				([&float](pd.parameters.D_i.data))[h*pd.parameters.X:W() + w] = result
+
+				result = ([&float](pd.parameters.D_p.data))[h*pd.parameters.X:W() + w]
+				if result < 0 then 
+					result = -10000.0
+				end
+				([&float](pd.parameters.D_p.data))[h*pd.parameters.X:W() + w] = result
+			end
+		end
+		return { kernel = finitifyGPU, header = noHeader, footer = noFooter, mapMemberName = "X" }
+	end
+
+	kernels.dumpJTFAndPre = function(data)
+		local terra dumpJTFAndPreGPU(pd : data.PlanData)
+			var d = 0.0f -- init for out of bounds lanes
+			var w : int, h : int
+			if positionForValidLane(pd, "X", &w, &h) then
+				-- residuum = J^T x -F - A x delta_0  => J^T x -F, since A x x_0 == 0
+				
+				var residuum : float = 0.0f
+				var pre : float = 0.0f				
+				if isBlockOnBoundary(w, h, pd.parameters.X:W(), pd.parameters.X:H()) then
+					residuum, pre = data.problemSpec.functions.evalJTF.boundary(w, h, w, h, pd.parameters)
+				else 
+					residuum, pre = data.problemSpec.functions.evalJTF.interior(w, h, w, h, pd.parameters)
+				end
+				pd.debugJTFImage[h*pd.parameters.X:W()+w] = residuum
+				pd.debugPreImage[h*pd.parameters.X:W()+w] = pre
+			end 
+		end
+		return { kernel = dumpJTFAndPreGPU, header = noHeader, footer = noFooter, mapMemberName = "X" }
+	end
+
+	kernels.dumpJTJ = function(data)
+		local terra dumpJTJGPU(pd : data.PlanData)
+			var d = 0.0f
+			var w : int, h : int
+			if positionForValidLane(pd, "X", &w, &h) then
+				var tmp : float = 0.0f
+				 -- A x p_k  => J^T x J x p_k 
+				if isBlockOnBoundary(w, h, pd.parameters.X:W(), pd.parameters.X:H()) then
+					tmp = data.problemSpec.functions.applyJTJ.boundary(w, h, w, h, pd.parameters, pd.p)
+				else 
+					tmp = data.problemSpec.functions.applyJTJ.interior(w, h, w, h, pd.parameters, pd.p)
+				end
+				pd.debugJTJImage[h*pd.parameters.X:W()+w] = tmp
+			end
+		end
+		return { kernel = dumpJTJGPU, header = noHeader, footer = noFooter, mapMemberName = "X" }
+	end
+
+
 	local gpu = util.makeGPUFunctions(problemSpec, vars, PlanData, kernels)
-	
+
+
+	---------------------------------------DEBUGGING FUNCTIONS------------------------------------------
+	local terra initDebugImage(pd : &PlanData, imPtr : &&float, numChannels : int)
+		var width, height = pd.parameters.X:W(), pd.parameters.X:H() 
+		var numBytes : int = sizeof(float)*width*height*numChannels
+		C.printf("Num bytes: %d\n", numBytes)
+		var err = C.cudaMalloc([&&opaque](imPtr), numBytes)
+		if err ~= 0 then C.printf("cudaMalloc error: %d", err) end
+	end
+
+	local terra initDebugDumpImage(pd : &PlanData)
+		initDebugImage(pd, pd.debugDumpImage, 1)
+	end
+
+	local terra initAllDebugImages(pd : &PlanData)
+		C.printf("initAllDebugImages\n")
+		initDebugImage(pd, &pd.debugDumpImage, 1)
+		initDebugImage(pd, &pd.debugJTJImage, 1)
+		initDebugImage(pd, &pd.debugJTFImage, 1)
+		initDebugImage(pd, &pd.debugPreImage, 1)
+	end
+
+	local terra debugImageWrite(pd : &PlanData, imPtr : &float, channelCount : int, filename : rawstring)
+		var width : int = [int](pd.parameters.X:W())
+		var height : int = [int](pd.parameters.X:H())
+		var datatype : int = 0 -- floating point
+		var fileHandle = C.fopen(filename, 'wb') -- b for binary
+		C.fwrite(&width, sizeof(int), 1, fileHandle)
+		C.fwrite(&height, sizeof(int), 1, fileHandle)
+		C.fwrite(&channelCount, sizeof(int), 1, fileHandle)
+		C.fwrite(&datatype, sizeof(int), 1, fileHandle)
+  
+		var size = sizeof(float) * [uint64](width*height)
+		var ptr = C.malloc(size)
+		C.cudaMemcpy(ptr, imPtr, size, C.cudaMemcpyDeviceToHost)
+		C.fwrite(ptr, sizeof(float), [uint64](width*height), fileHandle)
+	    C.fclose(fileHandle)
+	    
+	    C.free(ptr)
+
+	end
+
+	local terra dumpCostImage(pd : &PlanData, name : rawstring, nIter : int)
+		if ([util.debugDumpInfo]) then
+			gpu.computeCostImage(pd)
+			var buffer : int8[64]
+			C.sprintf(buffer, "%s%d.imagedump", name, nIter)
+			debugImageWrite(pd, pd.debugDumpImage, 1, buffer)
+		end
+	end
+
+	local terra dumpImage(pd : &PlanData, ptr: &float, name : rawstring, nIter : int, lIter : int)
+		if ([util.debugDumpInfo]) then
+			var buffer : int8[64]
+			C.sprintf(buffer, "%s_%d_%d.imagedump", name, nIter, lIter)
+			debugImageWrite(pd, ptr, 1, buffer)
+		end
+	end
+
+	---------------------------------------END DEBUGGING FUNCTIONS------------------------------------------
+
+
+	local terra hackShapeFromShadingInit(pd : &PlanData)
+		gpu.finitify(pd) -- hack for SFS
+		var width, height = pd.parameters.X:W(), pd.parameters.X:H() 
+		C.cudaMemcpy(pd.parameters.X.data, pd.parameters.D_i.data, sizeof(float)*width*height, C.cudaMemcpyDeviceToDevice)
+		C.cudaDeviceSynchronize()
+	end
+
 	local nIterations,lIterations = 10,10
 	
 	local terra init(data_ : &opaque, images : &&opaque, edgeValues : &&opaque, params_ : &&opaque, solverparams : &&opaque)
 		--nIterations = @[&int](solverparams[0])
-		
-		
 		var pd = [&PlanData](data_)
 		pd.timer:init()
 		pd.parameters = [util.getParameters(problemSpec, images, edgeValues,params_)]
 	    pd.nIter = 0
+
+	    escape 
+	    	if util.debugDumpInfo then
+	    		emit `initAllDebugImages(pd)
+	    	end
+		end
+
 	end
 	local terra step(data_ : &opaque, images : &&opaque, edgeValues : &&opaque, params_ : &&opaque, solverparams : &&opaque)
 		var pd = [&PlanData](data_)
 		pd.parameters = [util.getParameters(problemSpec, images, edgeValues,params_)]
+
+		escape 
+	    	if util.debugDumpInfo then
+	    		emit quote
+	    			if pd.nIter == 0 then
+		    			C.printf("dumpingJTFAndPre\n")
+		    			gpu.dumpJTFAndPre(pd)
+		    			C.printf("saving\n")
+		    			debugImageWrite(pd, pd.debugJTFImage, 1, "JTF_optNoAD.imagedump")
+		    			debugImageWrite(pd, pd.debugPreImage, 1, "Pre_optNoAD.imagedump")
+		    		end
+	    		end
+	    	end
+		end
+	
 
 		if pd.nIter < nIterations then
 		    var startCost = gpu.computeCost(pd, pd.parameters.X)
@@ -230,6 +401,19 @@ return function(problemSpec, vars)
 			--break
 			gpu.PCGInit2(pd)
 			
+			escape 
+				if util.debugDumpInfo then
+		    		emit quote
+		    			if pd.nIter == 0 then
+			    			C.printf("dumpingJTJ\n")
+			    			gpu.dumpJTJ(pd)
+			    			C.printf("saving\n")
+			    			debugImageWrite(pd, pd.debugJTJImage, 1, "JTJ_optNoAD.imagedump")
+			    		end
+		    		end
+		    	end
+		    end
+
 			for lIter = 0, lIterations do
 				pd.scanAlpha[0] = 0.0	--scan in PCGStep1 requires reset
 				gpu.PCGStep1(pd)
