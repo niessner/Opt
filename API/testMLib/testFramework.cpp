@@ -64,7 +64,7 @@ void TestFramework::runAllTests()
 
     //TestExample example = makeRandomQuadratic(5);
     //TestExample example = makeMeshSmoothing("smoothingExampleE.png", 0.1f);
-	TestExample example = makeImageSmoothing("smoothingExampleB.png", "imageSmoothing2AD.t", 0.1f);	
+	TestExample example = makeImageSmoothing("smoothingExampleB.png", "imageSmoothingAD.t", 0.1f);	
 
     vector<TestMethod> methods;
 
