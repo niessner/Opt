@@ -88,6 +88,8 @@ end
 
 return function(problemSpec, vars)
 
+	local unknownElement = problemSpec:UnknownType().metamethods.typ
+	
 	local struct PlanData(S.Object) {
 		plan : opt.Plan
 		parameters : problemSpec:ParameterType(false)	--get non-blocked version
@@ -309,7 +311,7 @@ return function(problemSpec, vars)
 			var R : problemSpec:UnknownType().metamethods.typ
 			var Z : problemSpec:UnknownType().metamethods.typ
 			var Pre : problemSpec:UnknownType().metamethods.typ
-			var RDotZOld : problemSpec:UnknownType().metamethods.typ
+			var RDotZOld : float
 			var AP : problemSpec:UnknownType().metamethods.typ
 
 			__syncthreads()	--after here, everything should be in shared memory
@@ -319,7 +321,7 @@ return function(problemSpec, vars)
 			--// Initialize linear patch systems
 			--//////////////////////////////////////////////////////////////////////////////////////////
 			
-			var d : problemSpec:UnknownType().metamethods.typ = 0.0f
+			var d : float = 0.0f
 			
 			if isInsideImage(gId_i, gId_j, W, H) then
 				-- residuum = J^T x -F - A x delta_0  => J^T x -F, since A x x_0 == 0
@@ -330,9 +332,10 @@ return function(problemSpec, vars)
 				end
 				R = -R
 
-				var preRes : float = Pre*R		-- apply pre-conditioner M^-1 
+				var preRes : unknownElement = Pre*R		-- apply pre-conditioner M^-1 
 				P(tId_i, tId_j) = preRes		-- save for later
-				d = R*preRes
+				--d = R*preRes
+				d = util.Dot(R, preRes)
 			end
 						
 			
@@ -367,7 +370,8 @@ return function(problemSpec, vars)
 					else 
 						AP = data.problemSpec.functions.applyJTJ.interior(tId_i, tId_j, gId_i, gId_j, blockParams, P) 
 					end
-					d = currentP*AP
+					--d = currentP*AP
+					d = util.Dot(currentP, AP)
 					-- x-th term of denominator of alpha
 				end
 			
@@ -389,7 +393,8 @@ return function(problemSpec, vars)
 					Delta = Delta+alpha*currentP	-- do a decent step		
 					R = R-alpha*AP					-- update residuum						
 					Z = Pre*R						-- apply pre-conditioner M^-1
-					b = Z*R							-- compute x-th term of the nominator of beta
+					--b = Z*R							-- compute x-th term of the nominator of beta
+					b = util.Dot(Z,R)
 				end
 			
 				__syncthreads() -- Only write if every thread in the block has has read bucket[0]
