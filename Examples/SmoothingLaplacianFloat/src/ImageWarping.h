@@ -99,24 +99,24 @@ public:
 		unsigned int patchIter = 16;
 
 		
-		//std::cout << "CUDA" << std::endl;
-		//m_warpingSolver->solveGN(d_imageFloat, d_targetFloat, nonLinearIter, linearIter, weightFit, weightReg);
-		//copyResultToCPUFromFloat();
+		std::cout << "CUDA" << std::endl;
+		m_warpingSolver->solveGN(d_imageFloat, d_targetFloat, nonLinearIter, linearIter, weightFit, weightReg);
+		copyResultToCPUFromFloat();
 
-		//std::cout << "CUDA_PATCH" << std::endl;
-		//resetGPUMemory();
-		//m_patchSolver->solveGN(d_imageFloat, d_targetFloat, nonLinearIter, linearIter, patchIter, weightFit, weightReg);
-		//copyResultToCPUFromFloat();
+		std::cout << "CUDA_PATCH" << std::endl;
+		resetGPUMemory();
+		m_patchSolver->solveGN(d_imageFloat, d_targetFloat, nonLinearIter, linearIter, patchIter, weightFit, weightReg);
+		copyResultToCPUFromFloat();
 
 		std::cout << "\n\nTERRA" << std::endl;
 		resetGPUMemory();
 		m_terraSolver->solve(d_imageFloat, d_targetFloat, nonLinearIter, linearIter, weightFit, weightReg);
 		copyResultToCPUFromFloat();
 
-		//std::cout << "\n\nTERRA_BLOCK" << std::endl;
-		//resetGPUMemory();
-		//m_terraBlockSolver->solve(d_imageFloat, d_targetFloat, nonLinearIter, linearIter, weightFit, weightReg);
-		//copyResultToCPUFromFloat();
+		std::cout << "\n\nTERRA_BLOCK" << std::endl;
+		resetGPUMemory();
+		m_terraBlockSolver->solve(d_imageFloat, d_targetFloat, nonLinearIter, linearIter, weightFit, weightReg);
+		copyResultToCPUFromFloat();
 
 		//std::cout << "CUSP" << std::endl;
 		//m_cuspSolverFloat->solvePCG(d_imageFloat, d_targetFloat, nonLinearIter, linearIter, weightFit, weightReg);
