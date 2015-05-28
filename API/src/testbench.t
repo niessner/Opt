@@ -9,4 +9,4 @@ opt.problemkind = ""
 
 opt.math = require("util").cpuMath
 package.terrapath = package.terrapath..";../testMLib/?.t;"
-require("imageSmoothingAD")
+require("imageSmoothing2AD")

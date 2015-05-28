@@ -41,6 +41,8 @@ local Exp = newclass("Exp") -- an expression involving primitives
 local Var = Exp:Variant("Var") -- a variable
 local Apply = Exp:Variant("Apply") -- an application
 local Const = Exp:Variant("Const") -- a constant, C
+local ExpVector = newclass("ExpVector")
+
 
 local empty = terralib.newlist {}
 function Exp:children() return empty end
@@ -165,13 +167,41 @@ local getapply = terralib.memoize(function(op,...)
     return simplify(op,args)
 end)
 
+function ExpVector:size() return #self.data end
+function ExpVector:__tostring() return "{"..self.data:map(tostring):concat(",").."}" end
+function ExpVector:__index(key)
+    if type(key) == "number" then
+        assert(key >= 0 and key < #self.data, "index out of bounds")
+        return self.data[key+1]
+    else return ExpVector[key] end
+end
+local function toexpvectorentry(v)
+    return ExpVector:is(v) and v or toexp(v)
+end
+function ExpVector:__newindex(key,v)
+    assert(type(key) == "number", "unknown field in ExpVector: "..tostring(key))
+    assert(key >= 0 and key < #self.data, "index out of bounds")
+    self.data[key+1] = assert(toexpvectorentry(v), "expected a ExpVector or a valid expression")
+end
+function ExpVector:map(fn)
+    return ad.Vector(unpack(self.data:map(fn)))
+end
+function ExpVector:expressions() return self.data end
 
 local function toexps(...)
+    local N
     local es = terralib.newlist {}
     for i = 1, select('#',...) do
-        es[i] = assert(toexp(select(i,...)),"attempting use a value that is not an expression")
+        local e = select(i,...)
+        if ExpVector:is(e) then
+            assert(not N or N == e:size(), "non-conforming vector sizes")
+            N = e:size()
+            es[i] = e
+        else
+            es[i] = assert(toexp(e),"attempting use a value that is not an expression")
+        end
     end
-    return es
+    return es,N
 end
     
 
@@ -189,6 +219,16 @@ ad.v = v
 ad.toexp = toexp
 ad.newclass = newclass
 
+function ad.Vector(...)
+    local data = terralib.newlist()
+    for i = 1,select("#",...) do
+        local e = select(i,...)
+        data[i] = assert(toexpvectorentry(e),"expected a ExpVector or valid expression")
+    end
+    return ExpVector:new { data = data }
+end
+ad.ExpVector = ExpVector
+
 setmetatable(ad, { __index = function(self,idx) -- for just this file, auto-generate an op 
     local name = assert(type(idx) == "string" and idx)
     local op = Op:new { name = name }
@@ -197,13 +237,24 @@ setmetatable(ad, { __index = function(self,idx) -- for just this file, auto-gene
 end })
 
 function Op:__call(...)
-    local args = toexps(...)
-    return getapply(self,unpack(args))
+    local args,N = toexps(...)
+    if not N then return getapply(self,unpack(args)) end
+    local exps = terralib.newlist()
+    for i = 0,N-1 do
+        local newargs = terralib.newlist()
+        for _,a in ipairs(args) do
+            newargs:insert(ExpVector:is(a) and a[i] or a)
+        end
+        exps:insert(self(unpack(newargs)))
+    end
+    return ExpVector:new { data = exps }
 end
 function Op:define(fn,...)
     self.nparams = debug.getinfo(fn,"u").nparams
     self.generator = fn
-    self.derivs = toexps(...)
+    local N
+    self.derivs,N = toexps(...)
+    assert(not N, "derivative definitons cannot include ExpVectors")
     return self
 end
 function Op:getimpl()
@@ -223,9 +274,11 @@ function Op:__tostring() return self.name end
 
 local mo = {"add","sub","mul","div"}
 for i,o in ipairs(mo) do
-    Exp["__"..o] = function(a,b) return (ad[o])(a,b) end
+    local function impl(a,b) return (ad[o])(a,b) end
+    Exp["__"..o], ExpVector["__"..o] = impl,impl
 end
 Exp.__unm = function(a) return ad.unm(a) end
+ExpVector.__unm = function(a) return ad.unm(a) end
 
 function Exp:rename(vars)
     local varsf = type(vars) == "function" and vars or function(k) return vars[k] end
@@ -371,8 +424,8 @@ local function emitprintexpression(e, recursionLevel)
 end
 
 local Vectors = {}
-function ad.isvectortype(t) return Vectors[t] end
-ad.Vector = terralib.memoize(function(typ,N)
+function ad.isterravectortype(t) return Vectors[t] end
+ad.TerraVector = terralib.memoize(function(typ,N)
     N = assert(tonumber(N),"expected a number")
     local ops = { "__sub","__add","__mul","__div" }
     local struct VecType { 
@@ -445,6 +498,7 @@ function ad.toterra(es,varmap_,generatormap_)
     local statements = terralib.newlist()
     local emitted = {}
     local function emit(e)
+        e = assert(toexp(e),"expected an expression but found ")
         if "Var" == e.kind then
             return assert(varmap(e:key()),"no mapping for variable key "..tostring(e:key()))
         elseif "Const" == e.kind then
@@ -473,8 +527,9 @@ function ad.toterra(es,varmap_,generatormap_)
         end
     end
     local tes = es:map(function(e) 
-        if terralib.islist(e) then
-            return `[ad.Vector(float,#e)]{ array([e:map(emit)]) }
+        if ExpVector:is(e) then
+            local exps = e.data:map(emit)
+            return `[ad.TerraVector(float,#exps)]{ array(exps) }
         else
             return emit(e)
         end

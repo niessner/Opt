@@ -20,7 +20,7 @@ end
 
 -- constants
 local verboseSolver = true
-local verboseAD = false
+local verboseAD = true
 
 local function newclass(name)
     local mt = { __name = name }
@@ -378,7 +378,7 @@ end
 
 local function tovalidimagetype(typ)
     if not terralib.types.istype(typ) then return nil end
-    if ad.isvectortype(typ) then
+    if ad.isterravectortype(typ) then
         return typ, typ.metamethods.N
     elseif typ:isarithmetic() then
         return typ, 1
@@ -616,10 +616,10 @@ function Image:__call(x,y,c)
         return ad.v[ImageAccess:get(self,x,y,c or 0)]
     else
         local r = {}
-        for i = 0,self.N-1 do
-            r[i] = ad.v[ImageAccess:get(self,x,y,i)]
+        for i = 1,self.N do
+            r[i] = ad.v[ImageAccess:get(self,x,y,i-1)]
         end
-        return r
+        return ad.Vector(unpack(r))
     end
 end
 function opt.InBounds(x,y,sx,sy)
@@ -646,7 +646,7 @@ local function shiftexp(exp,x,y)
 end 
 
 local function removeboundaries(exp)
-    if terralib.islist(exp) then return exp:map(removeboundaries) end
+    if ad.ExpVector:is(exp) or terralib.islist(exp) then return exp:map(removeboundaries) end
     local function nobounds(a)
         if BoundsAccess:is(a) then return ad.toexp(1)
         else return ad.v[a] end
@@ -664,8 +664,6 @@ local function createfunction(problemspec,name,exps,usebounds,W,H)
     local imagetosym = {} 
     local imageinits = terralib.newlist()
     local stmts = terralib.newlist()
-    
-    local stencil = {0,0}
     
     local i,j,gi,gj = symbol(int64,"i"), symbol(int64,"j"),symbol(int64,"gi"), symbol(int64,"gj")
     local indexes = {[0] = i,j }
@@ -696,16 +694,12 @@ local function createfunction(problemspec,name,exps,usebounds,W,H)
                 stmts:insert quote
                     var [r] = loadexp
                 end
-                stencil[1] = math.max(stencil[1],math.abs(a.x))
-                stencil[2] = math.max(stencil[2],math.abs(a.y))
             elseif "BoundsAccess" == a.kind then--bounds calculation
                 assert(usebounds) -- if we removed them, we shouldn't see any boundary accesses
                 r = symbol(int,tostring(a))
                 stmts:insert quote
                     var [r] = opt.InBoundsCalc(gi+a.x,gj+a.y,W.size,H.size,a.sx,a.sy)
                 end
-                stencil[1] = math.max(stencil[1],math.abs(a.x)+a.sx)
-                stencil[2] = math.max(stencil[2],math.abs(a.y)+a.sy)
             elseif "IndexValue" == a.kind then
                 r = `[ assert(indexes[a.dim._index]) ] + a._shift 
             else assert("ParamValue" == a.kind)
@@ -735,13 +729,13 @@ local function createfunction(problemspec,name,exps,usebounds,W,H)
     if verboseAD then
         generatedfn:printpretty(false, false)
     end
-    return generatedfn,stencil
+    return generatedfn
 end
 
 local function stencilforexpression(exp)
     local stencil = 0
-    if terralib.islist(exp) then 
-        for i,e in ipairs(exp) do
+    if ad.ExpVector:is(exp) then 
+        for i,e in ipairs(exp:expressions()) do
             stencil = math.max(stencil,stencilforexpression(e))
         end
         return stencil
@@ -808,7 +802,7 @@ local function unknownsforresidual(r,unknownsupport)
 end
 
 local function conformtounknown(exps,unknown)
-    if ad.isvectortype(unknown.type) then return exps
+    if ad.isterravectortype(unknown.type) then return ad.Vector(unpack(exps))
     else return exps[1] end
 end
 
@@ -954,14 +948,14 @@ function ProblemSpecAD:Cost(costexp_)
     end
     return self.P
 end
-opt.Vector = ad.Vector
+opt.Vector = ad.TerraVector
 for i = 2,4 do
-    opt["float"..tostring(i)] = ad.Vector(float,i)
+    opt["float"..tostring(i)] = ad.TerraVector(float,i)
 end
 
 util.Dot = macro(function(a,b) 
     local at,bt = a:gettype(),b:gettype()
-    if ad.isvectortype(at) then
+    if ad.isterravectortype(at) then
         return `a:dot(b)
     else
         return `a*b
