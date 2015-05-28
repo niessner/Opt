@@ -8,7 +8,6 @@
 #include "CUDAWarpingSolver.h"
 #include "CUDAPatchSolverWarping.h"
 #include "TerraSolverWarping.h"
-//#include "TerraSolverWarpingFloat4.h"
 #include "CuspSparseLaplacianSolverLinearOp.h"
 
 class ImageWarping {
@@ -26,11 +25,13 @@ public:
 		resetGPUMemory();
 
 
+
 		m_warpingSolver	= new CUDAWarpingSolver(m_image.getWidth(), m_image.getHeight());
 		m_patchSolver = new CUDAPatchSolverWarping(m_image.getWidth(), m_image.getHeight());
-		m_terraSolver = new TerraSolverWarping(m_image.getWidth(), m_image.getHeight(), "smoothingLaplacianAD.t", "gradientDescentGPU");
+		m_terraSolver = new TerraSolverWarping(m_image.getWidth(), m_image.getHeight(), "smoothingLaplacianAD.t", "gaussNewtonGPU");
 		m_terraBlockSolver = new TerraSolverWarping(m_image.getWidth(), m_image.getHeight(), "smoothingLaplacianAD.t", "gaussNewtonBlockGPU");
-		//m_terraSolverFloat4 = new TerraSolverWarpingFloat4(m_image.getWidth(), m_image.getHeight(), "smoothingLaplacian4AD.t", "gaussNewtonGPU");
+
+
 		m_cuspSolverFloat = new CuspSparseLaplacianSolverLinearOp(m_image.getWidth(), m_image.getHeight());
 	}
 
@@ -74,8 +75,6 @@ public:
 		SAFE_DELETE(m_terraSolver);
 		SAFE_DELETE(m_terraBlockSolver);
 
-//		SAFE_DELETE(m_terraSolverFloat4);
-
 		SAFE_DELETE(m_cuspSolverFloat);
 	}
 
@@ -109,23 +108,20 @@ public:
 		//m_patchSolver->solveGN(d_imageFloat, d_targetFloat, nonLinearIter, linearIter, patchIter, weightFit, weightReg);
 		//copyResultToCPUFromFloat();
 
-		//std::cout << "\n\nTERRA" << std::endl;
-		//resetGPUMemory();
-		//m_terraSolver->solve(d_imageFloat, d_targetFloat, nonLinearIter, linearIter, weightFit, weightReg);
-		//copyResultToCPUFromFloat();
+		std::cout << "\n\nTERRA" << std::endl;
+		resetGPUMemory();
+		m_terraSolver->solve(d_imageFloat, d_targetFloat, nonLinearIter, linearIter, weightFit, weightReg);
+		copyResultToCPUFromFloat();
 
 		//std::cout << "\n\nTERRA_BLOCK" << std::endl;
 		//resetGPUMemory();
 		//m_terraBlockSolver->solve(d_imageFloat, d_targetFloat, nonLinearIter, linearIter, weightFit, weightReg);
 		//copyResultToCPUFromFloat();
-		
-		std::cout << "CUSP" << std::endl;
-		m_cuspSolverFloat->solvePCG(d_imageFloat, d_targetFloat, nonLinearIter, linearIter, weightFit, weightReg);
-		copyResultToCPUFromFloat();
 
-		//resetGPUMemory();
-		//m_terraSolverFloat4->solve(d_imageFloat4, d_targetFloat4, nonLinearIter, linearIter, weightFit, weightReg);
-		//copyResultToCPUFromFloat4();
+		//std::cout << "CUSP" << std::endl;
+		//m_cuspSolverFloat->solvePCG(d_imageFloat, d_targetFloat, nonLinearIter, linearIter, weightFit, weightReg);
+		//copyResultToCPUFromFloat();
+
 
 		return &m_result;
 	}
