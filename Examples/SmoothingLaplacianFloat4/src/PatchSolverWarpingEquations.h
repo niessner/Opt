@@ -14,7 +14,7 @@
 // evalF
 ////////////////////////////////////////
 
-__inline__ __device__ float4 evalFDevice(unsigned int variableIdx, PatchSolverInput& input, PatchSolverState& state, PatchSolverParameters& parameters)
+__inline__ __device__ float evalFDevice(unsigned int variableIdx, PatchSolverInput& input, PatchSolverState& state, PatchSolverParameters& parameters)
 {
 	float4 e = make_float4(0.0f, 0.0f, 0.0F, 0.0f);
 
@@ -38,7 +38,8 @@ __inline__ __device__ float4 evalFDevice(unsigned int variableIdx, PatchSolverIn
 	if (validN3){ float4 q = state.d_x[get1DIdx(n3_i, n3_j, input.width, input.height)]; float4 v = (p - q); e_reg += v*v; }
 	e += parameters.weightRegularizer*e_reg;
 
-	return e;
+	float res = e.x + e.y + e.z + e.w;
+	return res;
 }
 
 ////////////////////////////////////////

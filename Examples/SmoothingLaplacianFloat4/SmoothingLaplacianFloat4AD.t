@@ -8,7 +8,8 @@ local w_fit = S:Param("w_fit", float, 0)
 local w_reg = S:Param("w_reg", float, 1)
 
 local terms = terralib.newlist()
-for i = 0,1 do
+
+for i = 0,3 do
 	local laplacianCost0 = X(0,0,i) - X(1,0,i)
 	local laplacianCost1 = X(0,0,i) - X(-1,0,i)
 	local laplacianCost2 = X(0,0,i) - X(0,1,i)

@@ -52,6 +52,31 @@ return function(problemSpec, vars)
 		return { kernel = computeGradientGPU, header = noHeader, footer = noFooter, mapMemberName = "X" }
 	end
 	
+	kernels.computeCost = function(data)
+		local terra computeCostGPU(pd : data.PlanData)
+			
+			var cost : float = 0.0f
+			var w : int, h : int
+			if util.positionForValidLane(pd, "X", &w, &h) then
+				var params = pd.parameters				
+				cost = cost + [float](data.problemSpec.functions.cost.boundary(w, h, w, h, params))
+			end
+
+			cost = util.warpReduce(cost)
+			if (util.laneid() == 0) then
+			util.atomicAdd(pd.scratchF, cost)
+			end
+		end
+		local function header(pd)
+			return quote @pd.scratchF = 0.0f end
+		end
+		local function footer(pd)
+			return quote return @pd.scratchF end
+		end
+		
+		return { kernel = computeCostGPU, header = header, footer = footer, mapMemberName = "X" }
+	end
+	
 	
 	local gpu = util.makeGPUFunctions(problemSpec, vars, PlanData, kernels)
 	
@@ -73,7 +98,7 @@ return function(problemSpec, vars)
 	    pd.parameters = [util.getParameters(problemSpec, images, edgeValues,params_)]
 	    
 	    if pd.iter < maxIters then
-	        var startCost = gpu.computeCost(pd, pd.parameters.X)
+	        var startCost = gpu.computeCost(pd)
 			logSolver("iteration %d, cost=%f, learningRate=%f\n", pd.iter, startCost, pd.learningRate)
 			
 
@@ -85,7 +110,7 @@ return function(problemSpec, vars)
 			--
 			-- update the learningRate
 			--
-			var endCost = gpu.computeCost(pd, pd.parameters.X)
+			var endCost = gpu.computeCost(pd)
 			if endCost < startCost then
 				pd.learningRate = pd.learningRate * learningGain
 			else

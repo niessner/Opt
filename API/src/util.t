@@ -395,29 +395,6 @@ local makeGPULauncher = function(compiledKernel, kernelName, header, footer, pro
 	return GPULauncher
 end
 
-util.makeComputeCostGPU = function(data)
-	local terra computeCost(pd : data.PlanData,  currentValues : data.imageType)
-		var cost = 0.0f
-		var w : int, h : int
-		if positionForValidLane(pd, "X", &w, &h) then
-			var params = pd.parameters
-			cost = [float](data.problemSpec.functions.cost.boundary(w, h, w, h, params))
-		end
-
-		cost = warpReduce(cost)
-		if (laneid() == 0) then
-			atomicAdd(pd.scratchF, cost)
-		end
-	end
-	local function header(pd)
-		return quote @pd.scratchF = 0.0f end
-	end
-	local function footer(pd)
-		return quote return @pd.scratchF end
-	end
-	return { kernel = computeCost, header = header, footer = footer, mapMemberName = "X" }
-end
-
 
 util.makeGPUFunctions = function(problemSpec, vars, PlanData, kernels)
 	local gpu = {}
@@ -429,11 +406,6 @@ util.makeGPUFunctions = function(problemSpec, vars, PlanData, kernels)
 	data.PlanData = PlanData
 	data.imageType = problemSpec:UnknownType(false) -- get non-blocked version
 	
-	---- accumulate all naked kernels
-	if not problemSpec.shouldblock then
-		kernelTemplate.computeCost = util.makeComputeCostGPU(data)
-	end
-
 	for k, v in pairs(kernels) do
 		kernelTemplate[k] = v(data)
 	end

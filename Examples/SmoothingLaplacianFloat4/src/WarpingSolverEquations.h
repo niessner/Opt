@@ -13,7 +13,7 @@
 ////////////////////////////////////////
 // evalF
 ////////////////////////////////////////
-__inline__ __device__ float4 evalFDevice(unsigned int variableIdx, SolverInput& input, SolverState& state, SolverParameters& parameters)
+__inline__ __device__ float evalFDevice(unsigned int variableIdx, SolverInput& input, SolverState& state, SolverParameters& parameters)
 {
 	float4 e = make_float4(0.0f, 0.0f, 0.0F, 0.0f);
 
@@ -31,13 +31,15 @@ __inline__ __device__ float4 evalFDevice(unsigned int variableIdx, SolverInput& 
 
 	float4 p = state.d_x[get1DIdx(i, j, input.width, input.height)];
 	float4 e_reg = make_float4(0.0f, 0.0f, 0.0f, 0.0f);
-	if (validN0){ float4 q = state.d_x[get1DIdx(n0_i, n0_j, input.width, input.height)]; float4 v = (p - q); e_reg += v*v; }
-	if (validN1){ float4 q = state.d_x[get1DIdx(n1_i, n1_j, input.width, input.height)]; float4 v = (p - q); e_reg += v*v; }
-	if (validN2){ float4 q = state.d_x[get1DIdx(n2_i, n2_j, input.width, input.height)]; float4 v = (p - q); e_reg += v*v; }
-	if (validN3){ float4 q = state.d_x[get1DIdx(n3_i, n3_j, input.width, input.height)]; float4 v = (p - q); e_reg += v*v; }
+	if (validN0){ float4 q = state.d_x[get1DIdx(n0_i, n0_j, input.width, input.height)]; float4 v = (p - q); e_reg += make_float4(v.x*v.x, v.y*v.y, v.z*v.z, v.w*v.w); }
+	if (validN1){ float4 q = state.d_x[get1DIdx(n1_i, n1_j, input.width, input.height)]; float4 v = (p - q); e_reg += make_float4(v.x*v.x, v.y*v.y, v.z*v.z, v.w*v.w); }
+	if (validN2){ float4 q = state.d_x[get1DIdx(n2_i, n2_j, input.width, input.height)]; float4 v = (p - q); e_reg += make_float4(v.x*v.x, v.y*v.y, v.z*v.z, v.w*v.w); }
+	if (validN3){ float4 q = state.d_x[get1DIdx(n3_i, n3_j, input.width, input.height)]; float4 v = (p - q); e_reg += make_float4(v.x*v.x, v.y*v.y, v.z*v.z, v.w*v.w); }
 	e += parameters.weightRegularizer*e_reg;
 
-	return e;
+	float res = e.x + e.y + e.z + e.w;
+
+	return res;
 }
 
 ////////////////////////////////////////
@@ -68,12 +70,15 @@ __inline__ __device__ float4 evalMinusJTFDevice(unsigned int variableIdx, Solver
 	if (validN1){ float4 q = state.d_x[get1DIdx(n1_i, n1_j, input.width, input.height)]; e_reg += 2.0f*(p - q); pre += 4.0f*parameters.weightRegularizer*make_float4(1.0f, 1.0f, 1.0f, 1.0f); }
 	if (validN2){ float4 q = state.d_x[get1DIdx(n2_i, n2_j, input.width, input.height)]; e_reg += 2.0f*(p - q); pre += 4.0f*parameters.weightRegularizer*make_float4(1.0f, 1.0f, 1.0f, 1.0f); }
 	if (validN3){ float4 q = state.d_x[get1DIdx(n3_i, n3_j, input.width, input.height)]; e_reg += 2.0f*(p - q); pre += 4.0f*parameters.weightRegularizer*make_float4(1.0f, 1.0f, 1.0f, 1.0f); }
-	b += -parameters.weightRegularizer*e_reg;
+	b += -2.0f*parameters.weightRegularizer*e_reg;
+
+	pre = make_float4(1.0f, 1.0f, 1.0f, 1.0f);	//TODO check preconditioner
 
 	// Preconditioner
 	if (pre.x > FLOAT_EPSILON) pre = 1.0f / pre;
 	else					   pre = make_float4(1.0f, 1.0f, 1.0f, 1.0f);
 	state.d_precondioner[variableIdx] = pre;
+	
 	
 	return b;
 }

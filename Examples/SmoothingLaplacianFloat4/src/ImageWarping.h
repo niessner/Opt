@@ -27,17 +27,15 @@ public:
 
 		m_warpingSolver	= new CUDAWarpingSolver(m_image.getWidth(), m_image.getHeight());
 		m_patchSolver = new CUDAPatchSolverWarping(m_image.getWidth(), m_image.getHeight());
-		//m_terraSolver = new TerraSolverWarping(m_image.getWidth(), m_image.getHeight(), "smoothingLaplacianAD.t", "gradientDescentGPU");
-		//m_terraBlockSolver = new TerraSolverWarping(m_image.getWidth(), m_image.getHeight(), "smoothingLaplacianAD.t", "gaussNewtonBlockGPU");
+
 		m_terraSolverFloat4 = new TerraSolverWarpingFloat4(m_image.getWidth(), m_image.getHeight(), "smoothingLaplacianFloat4AD.t", "gaussNewtonGPU");
+		m_terraBlockSolverFloat4 = new TerraSolverWarpingFloat4(m_image.getWidth(), m_image.getHeight(), "smoothingLaplacianFloat4AD.t", "gaussNewtonBlockGPU");
 		
-		m_terraSolver = nullptr;
-		m_terraBlockSolver = nullptr;
 	}
 
 	void resetGPUMemory()
 	{
-		float4* h_image = new float4[m_image.getWidth()*m_image.getHeight()];
+		float4* h_imageFloat4 = new float4[m_image.getWidth()*m_image.getHeight()];
 		float* h_imageFloat = new float[m_image.getWidth()*m_image.getHeight()];
 
 		for (unsigned int i = 0; i < m_image.getHeight(); i++)
@@ -45,20 +43,20 @@ public:
 			for (unsigned int j = 0; j < m_image.getWidth(); j++)
 			{
 				ml::vec4f v = m_image(j, i);
-				h_image[i*m_image.getWidth() + j] = make_float4(v.x, v.y, v.z, 255);
+				h_imageFloat4[i*m_image.getWidth() + j] = make_float4(v.x, v.y, v.z, 255);
 
-				float avg = h_image[i*m_image.getWidth() + j].x + h_image[i*m_image.getWidth() + j].y + h_image[i*m_image.getWidth() + j].z;
+				float avg = h_imageFloat4[i*m_image.getWidth() + j].x + h_imageFloat4[i*m_image.getWidth() + j].y + h_imageFloat4[i*m_image.getWidth() + j].z;
 				h_imageFloat[i*m_image.getWidth() + j] = avg / 3.0f;
 			}
 		}
 
-		cutilSafeCall(cudaMemcpy(d_imageFloat4, h_image, sizeof(float4)*m_image.getWidth()*m_image.getHeight(), cudaMemcpyHostToDevice));
-		cutilSafeCall(cudaMemcpy(d_targetFloat4, h_image, sizeof(float4)*m_image.getWidth()*m_image.getHeight(), cudaMemcpyHostToDevice));
+		cutilSafeCall(cudaMemcpy(d_imageFloat4, h_imageFloat4, sizeof(float4)*m_image.getWidth()*m_image.getHeight(), cudaMemcpyHostToDevice));
+		cutilSafeCall(cudaMemcpy(d_targetFloat4, h_imageFloat4, sizeof(float4)*m_image.getWidth()*m_image.getHeight(), cudaMemcpyHostToDevice));
 
 		cutilSafeCall(cudaMemcpy(d_imageFloat, h_imageFloat, sizeof(float)*m_image.getWidth()*m_image.getHeight(), cudaMemcpyHostToDevice));
 		cutilSafeCall(cudaMemcpy(d_targetFloat, h_imageFloat, sizeof(float)*m_image.getWidth()*m_image.getHeight(), cudaMemcpyHostToDevice));
 
-		delete h_image;
+		delete h_imageFloat4;
 		delete h_imageFloat;
 	}
 
@@ -72,10 +70,8 @@ public:
 
 		SAFE_DELETE(m_warpingSolver);
 		SAFE_DELETE(m_patchSolver);
-		SAFE_DELETE(m_terraSolver);
-		SAFE_DELETE(m_terraBlockSolver);
-
 		SAFE_DELETE(m_terraSolverFloat4);
+		SAFE_DELETE(m_terraBlockSolverFloat4);
 	}
 
 	ColorImageR32G32B32A32* solve()
@@ -86,42 +82,26 @@ public:
 		unsigned int nonLinearIter = 10;
 		unsigned int linearIter = 10;
 		unsigned int patchIter = 16;
-		m_warpingSolver->solveGN(d_imageFloat4, d_targetFloat4, nonLinearIter, linearIter, weightFit, weightReg);
-		
-		resetGPUMemory();
 
-		m_patchSolver->solveGN(d_imageFloat4, d_targetFloat4, nonLinearIter, patchIter, weightFit, weightReg);
-		
+		std::cout << "CUDA" << std::endl;
+		resetGPUMemory();
+		m_warpingSolver->solveGN(d_imageFloat4, d_targetFloat4, nonLinearIter, linearIter, weightFit, weightReg);
 		copyResultToCPUFromFloat4();
 		
+		std::cout << "\n\nCUDA_PATCH" << std::endl;
+		resetGPUMemory();
+		m_patchSolver->solveGN(d_imageFloat4, d_targetFloat4, nonLinearIter, patchIter, weightFit, weightReg);
+		copyResultToCPUFromFloat4();
+
 		std::cout << "\n\nTERRA_FLOAT4" << std::endl;
 		resetGPUMemory();
 		m_terraSolverFloat4->solve(d_imageFloat4, d_targetFloat4, nonLinearIter, linearIter, weightFit, weightReg);
 		copyResultToCPUFromFloat4();
 
-		//unsigned int nonLinearIter = 10;
-		//unsigned int linearIter = 10;
-		//unsigned int patchIter = 16;
-
-		
-		//std::cout << "CUDA" << std::endl;
-		//m_warpingSolver->solveGN(d_imageFloat, d_targetFloat, nonLinearIter, linearIter, weightFit, weightReg);
-		//copyResultToCPUFromFloat();
-
-		//std::cout << "CUDA_PATCH" << std::endl;
-		//resetGPUMemory();
-		//m_patchSolver->solveGN(d_imageFloat, d_targetFloat, nonLinearIter, linearIter, patchIter, weightFit, weightReg);
-		//copyResultToCPUFromFloat();
-
-		//std::cout << "\n\nTERRA" << std::endl;
-		//resetGPUMemory();
-		//m_terraSolver->solve(d_imageFloat, d_targetFloat, nonLinearIter, linearIter, weightFit, weightReg);
-		//copyResultToCPUFromFloat();
-
-		//std::cout << "\n\nTERRA_BLOCK" << std::endl;
-		//resetGPUMemory();
-		//m_terraBlockSolver->solve(d_imageFloat, d_targetFloat, nonLinearIter, linearIter, weightFit, weightReg);
-		//copyResultToCPUFromFloat();		
+		std::cout << "\n\nTERRA_BLOCK" << std::endl;
+		resetGPUMemory();
+		m_terraBlockSolverFloat4->solve(d_imageFloat4, d_targetFloat4, nonLinearIter, linearIter, weightFit, weightReg);
+		copyResultToCPUFromFloat();		
 
 		return &m_result;
 	}
@@ -156,9 +136,8 @@ private:
 	
 	CUDAWarpingSolver*			m_warpingSolver;
 	CUDAPatchSolverWarping*		m_patchSolver;
-	TerraSolverWarping*			m_terraSolver; 
-	TerraSolverWarping*			m_terraBlockSolver;
 	TerraSolverWarpingFloat4*	m_terraSolverFloat4; 
+	TerraSolverWarpingFloat4*	m_terraBlockSolverFloat4;
 
 
 	float* d_imageFloat;
