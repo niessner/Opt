@@ -411,6 +411,9 @@ ad.Vector = terralib.memoize(function(typ,N)
         end
         return c
     end
+	terra VecType:size()
+        return N
+    end
     terra VecType.methods.FromConstant(x : typ)
         var c : VecType
         for i = 0,N do

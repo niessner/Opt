@@ -29,11 +29,10 @@ public:
 		m_patchSolver = new CUDAPatchSolverWarping(m_image.getWidth(), m_image.getHeight());
 		//m_terraSolver = new TerraSolverWarping(m_image.getWidth(), m_image.getHeight(), "smoothingLaplacianAD.t", "gradientDescentGPU");
 		//m_terraBlockSolver = new TerraSolverWarping(m_image.getWidth(), m_image.getHeight(), "smoothingLaplacianAD.t", "gaussNewtonBlockGPU");
-		//m_terraSolverFloat4 = new TerraSolverWarpingFloat4(m_image.getWidth(), m_image.getHeight(), "smoothingLaplacian4AD.t", "gaussNewtonGPU");
+		m_terraSolverFloat4 = new TerraSolverWarpingFloat4(m_image.getWidth(), m_image.getHeight(), "smoothingLaplacianFloat4AD.t", "gaussNewtonGPU");
 		
 		m_terraSolver = nullptr;
 		m_terraBlockSolver = nullptr;
-		m_terraSolverFloat4 = nullptr;
 	}
 
 	void resetGPUMemory()
@@ -95,6 +94,10 @@ public:
 		
 		copyResultToCPUFromFloat4();
 		
+		std::cout << "\n\nTERRA_FLOAT4" << std::endl;
+		resetGPUMemory();
+		m_terraSolverFloat4->solve(d_imageFloat4, d_targetFloat4, nonLinearIter, linearIter, weightFit, weightReg);
+		copyResultToCPUFromFloat4();
 
 		//unsigned int nonLinearIter = 10;
 		//unsigned int linearIter = 10;

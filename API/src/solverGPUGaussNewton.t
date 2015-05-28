@@ -22,6 +22,9 @@ local FLOAT_EPSILON = `0.000001f
 -- GAUSS NEWTON (non-block version)
 return function(problemSpec, vars)
 
+	local unknownElement = problemSpec:UnknownType().metamethods.typ
+	local unknownType = problemSpec:UnknownType()
+	
 	local struct PlanData(S.Object) {
 		plan : opt.Plan
 		parameters : problemSpec:ParameterType(false)	--get the non-blocked version
@@ -33,14 +36,17 @@ return function(problemSpec, vars)
 		p : problemSpec:UnknownType()		--decent direction -> num vars
 		Ap_X : problemSpec:UnknownType()	--cache values for next kernel call after A = J^T x J x p -> num vars
 		preconditioner : problemSpec:UnknownType() --pre-conditioner for linear system -> num vars
-		rDotzOld : problemSpec:UnknownType()	--Old nominator (denominator) of alpha (beta) -> num vars	
-
+		--rDotzOld : problemSpec:UnknownType()	--Old nominator (denominator) of alpha (beta) -> num vars	
+		rDotzOld : problemSpec:InternalImage(float, unknownType.metamethods.W, unknownType.metamethods.H, false)	--Old nominator (denominator) of alpha (beta) -> num vars	
+		
 		scanAlpha : &float					-- tmp variable for alpha scan
 		scanBeta : &float					-- tmp variable for alpha scan
 		
 		timer : Timer
 		nIter : int
 	}
+	
+	
 	
 	local terra isBlockOnBoundary(gi : int, gj : int, width : uint, height : uint) : bool
 		-- TODO meta program the bad based on the block size and stencil;
@@ -75,8 +81,8 @@ return function(problemSpec, vars)
 			if positionForValidLane(pd, "X", &w, &h) then
 				-- residuum = J^T x -F - A x delta_0  => J^T x -F, since A x x_0 == 0
 				
-				var residuum : float = 0.0f
-				var pre : float = 0.0f				
+				var residuum : unknownElement = 0.0f
+				var pre : unknownElement = 0.0f				
 				if isBlockOnBoundary(w, h, pd.parameters.X:W(), pd.parameters.X:H()) then
 					residuum, pre = data.problemSpec.functions.evalJTF.boundary(w, h, w, h, pd.parameters)
 				else 
@@ -89,7 +95,8 @@ return function(problemSpec, vars)
 				var p = pre*residuum	-- apply pre-conditioner M^-1			   
 				pd.p(w, h) = p
 			
-				d = residuum*p			-- x-th term of nominator for computing alpha and denominator for computing beta
+				--d = residuum*p			-- x-th term of nominator for computing alpha and denominator for computing beta
+				d = util.Dot(residuum,p) 
 			end 
 			d = util.warpReduce(d)	
 			if (util.laneid() == 0) then
@@ -115,7 +122,7 @@ return function(problemSpec, vars)
 			var d = 0.0f
 			var w : int, h : int
 			if positionForValidLane(pd, "X", &w, &h) then
-				var tmp : float = 0.0f
+				var tmp : unknownElement = 0.0f
 				 -- A x p_k  => J^T x J x p_k 
 				if isBlockOnBoundary(w, h, pd.parameters.X:W(), pd.parameters.X:H()) then
 					tmp = data.problemSpec.functions.applyJTJ.boundary(w, h, w, h, pd.parameters, pd.p)
@@ -123,7 +130,8 @@ return function(problemSpec, vars)
 					tmp = data.problemSpec.functions.applyJTJ.interior(w, h, w, h, pd.parameters, pd.p)
 				end
 				pd.Ap_X(w, h) = tmp								  -- store for next kernel call
-				d = pd.p(w, h)*tmp					              -- x-th term of denominator of alpha
+				--d = pd.p(w, h)*tmp					              -- x-th term of denominator of alpha
+				d = util.Dot(pd.p(w,h),tmp)
 			end
 			d = util.warpReduce(d)
 			if (util.laneid() == 0) then
@@ -139,7 +147,7 @@ return function(problemSpec, vars)
 			var w : int, h : int
 			if positionForValidLane(pd, "X", &w, &h) then
 				-- sum over block results to compute denominator of alpha
-				var dotProduct = pd.scanAlpha[0]
+				var dotProduct : float = pd.scanAlpha[0]
 				var alpha = 0.0f
 				
 				-- update step size alpha
@@ -153,7 +161,8 @@ return function(problemSpec, vars)
 				var z = pd.preconditioner(w,h)*r						-- apply pre-conditioner M^-1
 				pd.z(w,h) = z;										-- save for next kernel call
 				
-				b = z*r;											-- compute x-th term of the nominator of beta
+				--b = z*r;											-- compute x-th term of the nominator of beta
+				b = util.Dot(z,r)
 			end
 			b = util.warpReduce(b)
 			if (util.laneid() == 0) then
@@ -167,11 +176,15 @@ return function(problemSpec, vars)
 		local terra PCGStep3GPU(pd : data.PlanData)			
 			var w : int, h : int
 			if positionForValidLane(pd, "X", &w, &h) then
-				var rDotzNew =  pd.scanBeta[0]									-- get new nominator
-				var rDotzOld = pd.rDotzOld(w,h)									-- get old denominator
+				var rDotzNew : float =  pd.scanBeta[0]						-- get new nominator
+				var rDotzOld : float = pd.rDotzOld(w,h)						-- get old denominator
 
-				var beta = 0.0f														 
+				var beta : float = 0.0f			
+						
 				if rDotzOld > FLOAT_EPSILON then beta = rDotzNew/rDotzOld end	-- update step size beta
+				--for i=0, beta:size() do
+				--	if rDotzOld(i) > FLOAT_EPSILON then beta(i) = rDotzNew/rDotzOld(i) end
+				--end
 			
 				pd.rDotzOld(w,h) = rDotzNew										-- save new rDotz for next iteration
 				pd.p(w,h) = pd.z(w,h)+beta*pd.p(w,h)							-- update decent direction

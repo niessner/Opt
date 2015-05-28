@@ -81,7 +81,7 @@ public:
 	ColorImageR32G32B32A32* solve()
 	{
 		float weightFit = 0.1f;
-		float weightReg = 100.0f;
+		float weightReg = 1.0f;
 		
 		//unsigned int nonLinearIter = 10;
 		//unsigned int linearIter = 10;
