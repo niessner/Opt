@@ -1,6 +1,39 @@
 \section{Results}
 \label{sec:results}
 
+\subsection{Applications}
+\label{sec:apps}
+Application case studies.
+
+\subsubsection{Laplacian Smoothing} 
+$$E_{\mathit{fit}}(i,j) = [I(i,j) - \hat{I}(i,j) ]^2$$
+
+$$E_{\mathit{reg}}(i,j) = \sum_{(l,m) \in \mathcal{N}(i,j)} [I(i,j) - I(l,m) ]^2,$$
+$$\textnormal{where}\ \mathcal{N}(i,j) = \{(i+1,j), (i-1,j), (i,j+1), (i,j-1)\}$$
+
+$$E_{\Delta} = \sum_{(i,j) \in \mathcal{I}} w_{\mathit{fit}} E_{\mathit{fit}}(i,j) + w_{\mathit{reg}} E_{\mathit{reg}}(i,j)$$
+
+\subsubsection{Bi-Laplacian Smoothing}
+
+$$E_{\mathit{fit}}(i,j) = [I(i,j) - \hat{I}(i,j) ]^2$$
+
+$$E_{\mathit{reg}}(i,j) = [4 I(i,j) - I(i+1,j) - I(i-1,j) - I(i,j+1) - I(i,j-1)]^2$$
+
+$$E_{\Delta^2} = \sum_{(i,j) \in \mathcal{I}} w_{\mathit{fit}} E_{\mathit{fit}}(i,j) + w_{\mathit{reg}} E_{\mathit{reg}}(i,j)$$
+
+\subsubsection{Poisson Image Editing}
+
+\cite{perez2003poisson}
+
+\subsubsection{Shape from Shading (Image)}
+
+\cite{wu2014sfs}
+
+\subsubsection{Shape from Shading (Volume)}
+
+% \subsection{Non-rigid Surface Tracking (Graph)}
+% \cite{zollhoefer2014deformable}
+
 \subsection{Comparison with CUSparse PCG Solver Reference Implementation}
 
 CUSparse can not:
@@ -13,3 +46,7 @@ CUSparse can not:
 \item It is even worse if the non zero structure (layout of the CRS changes), this is normally the case for articulated/non-rigid ICP variants.
 \item No batched/block reads, for example for mesh vertices, this results in 3 float reads instead of one float3/4 read
 \end{itemize}
+
+\subsection{quantify hypotheses?}
+Measure advantage of metaprogramming vs. library composition for JTJ/GPU.
+Measure overhead of autodiff.

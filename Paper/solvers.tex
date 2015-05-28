@@ -1,5 +1,23 @@
-\section{Gauss-Newton Optimization}
-\label{sec:optimization}
+\section{Solver Implementations}
+\label{sub:solver_implementations}
+
+\subsection{basic}
+gradient descent, CG
+
+\subsection{advanced CPU}
+LBFGS
+
+\subsection{GPU: JTJ blocked Gauss-Newton}
+Build up in stages?
+Key points:
+
+\begin{itemize}
+  \item Very valuable to have AD, not just to make the user's life a little easier, but to allow for flexible solvers which might need \emph{different kinds} of derivatives.
+  \item Codegen is critical for performance of modular/generic implementation. \emph{(Can we point to exactly where the overhead is removed, how it differs from how you might have done it before?)}
+\end{itemize}
+
+\subsubsection{Gauss-Newton Optimization} % (fold)
+\label{sec:jtj}
 $n$ variables\\
 $k$ residuals\\
 $\mathbf{x}$ unknown\\
@@ -27,3 +45,4 @@ $$
 $$
 To solve the original non-linear minimization problem, we thus need to solve a sequence of linearized problems;
 i.e., we initialize $\mathbf{x}_0$, and successively compute the update $\mathbf{\delta}_k^{*}$ from $\mathbf{x}_k$ to $\mathbf{x}_{k+1}$.
+% (end)
