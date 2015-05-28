@@ -118,9 +118,9 @@ public:
 		m_terraBlockSolver->solve(d_imageFloat, d_targetFloat, nonLinearIter, linearIter, weightFit, weightReg);
 		copyResultToCPUFromFloat();
 
-		//std::cout << "CUSP" << std::endl;
-		//m_cuspSolverFloat->solvePCG(d_imageFloat, d_targetFloat, nonLinearIter, linearIter, weightFit, weightReg);
-		//copyResultToCPUFromFloat();
+		std::cout << "CUSP" << std::endl;
+		m_cuspSolverFloat->solvePCG(d_imageFloat, d_targetFloat, nonLinearIter, linearIter, weightFit, weightReg);
+		copyResultToCPUFromFloat();
 
 
 		return &m_result;

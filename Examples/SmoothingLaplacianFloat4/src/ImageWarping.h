@@ -101,7 +101,7 @@ public:
 		std::cout << "\n\nTERRA_BLOCK" << std::endl;
 		resetGPUMemory();
 		m_terraBlockSolverFloat4->solve(d_imageFloat4, d_targetFloat4, nonLinearIter, linearIter, weightFit, weightReg);
-		copyResultToCPUFromFloat();		
+		copyResultToCPUFromFloat4();		
 
 		return &m_result;
 	}
