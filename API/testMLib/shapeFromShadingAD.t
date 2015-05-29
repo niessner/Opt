@@ -1,10 +1,10 @@
 local W,H 	= opt.Dim("W",0), opt.Dim("H",1)
 local S 	= ad.ProblemSpec()
 local D 	= S:Image("X",float, W,H,0) -- Refined Depth
-local D_i 	= S:Image("Y",float, W,H,1) -- Depth input
+local D_i 	= S:Image("D_i",float, W,H,1) -- Depth input
 local I 	= S:Image("I",float, W,H,2) -- Target Intensity
-local D_p 	= S:Image("Z",float, W,H,3) -- Previous Depth
---local edgeMask 	= S:Image("edgeMask",W,H,3) -- Edge mask. Currently unused
+local D_p 	= S:Image("D_p",float, W,H,3) -- Previous Depth
+local edgeMask 	= S:Image("edgeMask",W,H,3) -- Edge mask. Currently unused
 
 local inBounds = opt.InBounds(3,3)
 
@@ -34,13 +34,13 @@ local u_y 						= S:Param("u_y",float,10)
 local offset = 10;
 local deltaTransform = {}
 for i=1,16 do
-	deltaTransform[i] = S:Param("deltaTransform" .. i .. "",float,offset+i)
+	deltaTransform[i] = S:Param("deltaTransform_" .. i .. "",float,offset+i)
 end
 offset = offset + 16
 
 local L = {}
 for i=1,9 do
-	L[i] = S:Param("L" .. i .. "",float,offset+i)
+	L[i] = S:Param("L_" .. i .. "",float,offset+i)
 end
 offset = offset + 9
 local nNonLinearIterations 	= S:Param("nNonLinearIterations",uint,offset+1) -- Steps of the non-linear solver	

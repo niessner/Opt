@@ -1,8 +1,8 @@
 local USE_MASK_REFINE 			= false
 
+local USE_DEPTH_CONSTRAINT 		= true
 local USE_REGULARIZATION 		= true
 local USE_SHADING_CONSTRAINT 	= false
-local USE_DEPTH_CONSTRAINT 		= true
 local USE_TEMPORAL_CONSTRAINT 	= false
 local USE_PRECONDITIONER 		= false
 
@@ -116,7 +116,7 @@ local terra IsValidPoint(d : float)
 end
 
 local terra isInsideImage(i : int, j : int, width : int, height : int)
-	return (i >= 0 and i < height and j >= 0 and j < width)
+	return (i >= 0 and i < width and j >= 0 and j < height)
 end
 
 -- equation 8
@@ -245,9 +245,9 @@ local terra calShading2depthGrad(i : int, j : int, posx : int, posy: int, self :
 	var u_x : float = self.u_x
 	var u_y : float = self.u_y
 
-	var d0 : float = self.X(i, j-1);
+	var d0 : float = self.X(i-1, j);
 	var d1 : float = self.X(i, j);
-	var d2 : float = self.X(i-1, j);
+	var d2 : float = self.X(i, j-1);
 	
 	if (IsValidPoint(d0)) and (IsValidPoint(d1)) and (IsValidPoint(d2)) then
 		-- TODO: Do we do this in the AD version?
@@ -429,6 +429,9 @@ local terra cost(i : int64, j : int64, gi : int64, gj : int64, self : P:Paramete
 	var leftAndCenterValid = pointValid and isInsideImage(gi-1,gj, W, H) and IsValidPoint(self.X(i-1,j))
 	var upAndCenterValid   = pointValid and isInsideImage(gi,gj-1, W, H) and IsValidPoint(self.X(i,j-1))
 	var leftUpAndCenterValid = pointValid and isInsideImage(gi-1,gj-1, W, H) and IsValidPoint(self.X(i-1,j-1))
+	var rightUpValid = isInsideImage(gi+1,gj-1, W, H) and IsValidPoint(self.X(i+1,j-1))
+	var leftDownValid = isInsideImage(gi-1,gj+1, W, H) and IsValidPoint(self.X(i-1,j+1))
+
 	var horizontalLineValid = leftAndCenterValid and isInsideImage(gi+1,gj, W, H) and IsValidPoint(self.X(i+1,j))
 	var verticalLineValid = upAndCenterValid and isInsideImage(gi,gj+1, W, H) and IsValidPoint(self.X(i,j+1))
 	var crossValid = horizontalLineValid and verticalLineValid
@@ -438,27 +441,28 @@ local terra cost(i : int64, j : int64, gi : int64, gj : int64, self : P:Paramete
 	end 
 
 	
-	if [USE_SHADING_CONSTRAINT] and verticalLineValid then
+	if [USE_SHADING_CONSTRAINT] and horizontalLineValid and rightUpValid and upAndCenterValid then
 		if (not [USE_MASK_REFINE]) or self.edgeMaskR(i,j) > 0.0f then
 			E_g_h = B(i,j,gi,gj,self) - B(i+1,j,gi+1,gj,self) - (self.I(i,j) - self.I(i+1,j))
 		end
 	end
 
 	
-	if [USE_SHADING_CONSTRAINT] and horizontalLineValid then
+	if [USE_SHADING_CONSTRAINT] and verticalLineValid and leftAndCenterValid and leftDownValid then
 		if (not [USE_MASK_REFINE]) or self.edgeMaskC(i,j) > 0.0f then
 			E_g_v = B(i,j,gi,gj,self) - B(i,j+1,gi,gj+1,self) - (self.I(i,j) - self.I(i,j+1))
 		end
 	end
 
-	
+	var regularizationTermActivated = 0.0f
 	if [USE_REGULARIZATION] and crossValid then
 		var d = self.X(i,j)
 		if 	opt.math.abs(d - self.X(i+1,j)) < [float](DEPTH_DISCONTINUITY_THRE) and 
 			opt.math.abs(d - self.X(i-1,j)) < [float](DEPTH_DISCONTINUITY_THRE) and 
 			opt.math.abs(d - self.X(i,j+1)) < [float](DEPTH_DISCONTINUITY_THRE) and 
 			opt.math.abs(d - self.X(i,j-1)) < [float](DEPTH_DISCONTINUITY_THRE) then
-				E_s = sqMagnitude(p(i,j,gi,gj,self) - 0.25 * (p(i-1,j,gi-1,gj, self) + p(i,j-1,gi,gj-1, self) + p(i+1, j,gi+1,gj, self) + p(i,j+1,gi,gj+1, self)))
+			regularizationTermActivated = 1.0f
+				E_s = sqMagnitude(4.0f*p(i,j,gi,gj,self) - (p(i-1,j,gi-1,gj, self) + p(i,j-1,gi,gj-1, self) + p(i+1, j,gi+1,gj, self) + p(i,j+1,gi,gj+1, self)))
 		end
 	end
 
@@ -466,7 +470,7 @@ local terra cost(i : int64, j : int64, gi : int64, gj : int64, self : P:Paramete
 	if [USE_TEMPORAL_CONSTRAINT] then
 		var temp1 : float3
 		var temp2 : float3
-		prior_normal_from_previous_depth(self.X(i, j), gj, gi, self, &n_p, &temp1, &temp2)
+		prior_normal_from_previous_depth(self.X(i, j), gi, gj, self, &n_p, &temp1, &temp2)
 	end
 
 	
@@ -606,6 +610,11 @@ local terra evalMinusJTFDeviceLS_SFS_Shared_Mask_Prior(i : int, j : int, posx : 
 							tmpval = tmpval + val1 * val1 * 3.0f
 							tmpval = tmpval + val2 * val2 * 3.0f
 							p = p + tmpval * self.w_g -- shading constraint
+
+							-- val0, val1, val2 all within a few hundreths of each other between cuda and this version.
+							-- their values are also in the range of 100s, so thats 5ish decimal places of precision.
+							-- this quickly deteriorates when they are combined into p... to being off by 30,000ish when
+							-- values are ~4million
 
 
 							sum = 0.0f
@@ -760,7 +769,7 @@ local terra add_mul_inp_grad_ls_bsp(self : P:ParameterType(), pImage : P:Unknown
 	var gradient = calShading2depthGrad(i, j, posx, posy, self)
 	return pImage(i-1,j)	* gradient[0]
 		  + pImage(i, j)	* gradient[1]
-	   	  + pImage(i,-j)	* gradient[2]
+	   	  + pImage(i,j-1)	* gradient[2]
 end
 
 local terra est_lap_3d_bsp_imp(pImage : P:UnknownType(), i :int, j : int, w0 : float, w1 : float, uf_x : float, uf_y : float)
@@ -794,7 +803,7 @@ local terra applyJTJDeviceLS_SFS_Shared_BSP_Mask_Prior(i : int, j : int, posx : 
 	var b = 0.0f
 
 	var targetDepth : float = self.D_i(i, j) 
-	var validTarget : bool = IsValidPoint(targetDepth);
+	var validTarget : bool 	= IsValidPoint(targetDepth);
 	var PC : float  		= pImage(i,j)
 		
 	if validTarget then
@@ -935,7 +944,7 @@ local terra applyJTJDeviceLS_SFS_Shared_BSP_Mask_Prior(i : int, j : int, posx : 
 			-- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- /
 				
 			if [USE_REGULARIZATION] then
-				sum = 0
+				sum = 0.0f
 				val0 = (posx - u_x)/f_x
 				val1 = (posy - u_y)/f_y
 				
@@ -971,7 +980,7 @@ local terra applyJTJDeviceLS_SFS_Shared_BSP_Mask_Prior(i : int, j : int, posx : 
 			--                   Position Term
 			-- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- /		
 			if [USE_DEPTH_CONSTRAINT] then
-				b = b +  PC*self.w_p
+				b = b + PC * self.w_p
 			end
 
 
@@ -995,7 +1004,6 @@ local terra applyJTJDeviceLS_SFS_Shared_BSP_Mask_Prior(i : int, j : int, posx : 
 
 				b = b + sum * self.w_r
 			end
-		
 		end
 	end		
 	
