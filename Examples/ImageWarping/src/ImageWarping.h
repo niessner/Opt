@@ -97,15 +97,16 @@ public:
 		{
 			setConstraintImage((float)i/(float)20);
 		
-			//unsigned int nonLinearIter = 10;
-			//unsigned int linearIter = 50;
+			unsigned int nonLinearIter = 10;
+			unsigned int linearIter = 50;
+			unsigned int patchIter = 32;
+
 			//m_warpingSolver->solveGN(d_urshape, d_warpField, d_warpAngles, d_constraints, d_mask, nonLinearIter, linearIter, weightFit, weightReg);
 			
-			unsigned int nonLinearIter = 10;
-			unsigned int patchIter = 32;
-			m_warpingSolverPatch->solveGN(d_urshape, d_warpField, d_warpAngles, d_constraints, d_mask, nonLinearIter, patchIter, weightFit, weightReg);
+	
+			//m_warpingSolverPatch->solveGN(d_urshape, d_warpField, d_warpAngles, d_constraints, d_mask, nonLinearIter, patchIter, weightFit, weightReg);
 
-			m_warpingSolverTerra->solve();
+			m_warpingSolverTerra->solve(d_warpField, d_warpAngles, d_urshape, d_constraints, d_mask, nonLinearIter, linearIter, weightFit, weightReg);
 		}
 
 		copyResultToCPU();

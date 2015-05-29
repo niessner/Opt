@@ -9,6 +9,9 @@ extern "C" {
 #include <cuda_runtime.h>
 #include <cudaUtil.h>
 
+extern "C" void reshuffleToFloat3CUDA(float2* d_x, float* d_a, float3* d_unknown, unsigned int width, unsigned int height);
+extern "C" void reshuffleFromFloat3CUDA(float2* d_x, float* d_a, float3* d_unknown, unsigned int width, unsigned int height);
+
 class TerraSolverWarping {
 
 public:
@@ -34,6 +37,8 @@ public:
 
 		m_plan = Opt_ProblemPlan(m_optimizerState, m_problem, dims, elemsizes, strides, nullptr, nullptr, nullptr);
 
+		m_width = width;
+		m_height = height;
 
 		CUDA_SAFE_CALL(cudaMalloc(&d_unknown, sizeof(float3)*width*height));
 
@@ -86,11 +91,11 @@ public:
 private:
 
 	void reshuffleUnknowsToLocal(float2* d_x, float* d_a) {
-
+		reshuffleToFloat3CUDA(d_x, d_a, d_unknown, m_width, m_height);
 	}
 
 	void reshuffleUnknownsFromLocal(float2* d_x, float* d_a) {
-
+		reshuffleFromFloat3CUDA(d_x, d_a, d_unknown, m_width, m_height);
 	}
 
 
@@ -99,4 +104,5 @@ private:
 	Plan*		m_plan;
 
 	float3*	d_unknown;
+	unsigned int m_width, m_height;
 };

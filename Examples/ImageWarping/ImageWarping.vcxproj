@@ -153,6 +153,7 @@
   </ItemGroup>
   <ItemGroup>
     <CudaCompile Include="src\PatchSolverWarping.cu" />
+    <CudaCompile Include="src\TerraSolverWarping.cu" />
     <CudaCompile Include="src\WarpingSolver.cu" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
