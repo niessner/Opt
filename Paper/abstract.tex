@@ -1,8 +1,8 @@
 \begin{abstract}
-Many graphics and vision problems are naturally phrased as optimizations with nonlinear least squares objective functions over visual data types like images.
-The mathematical descriptions of these functions is extremely concise, but their implementation in real code is anything but---especially when optimized for real-time performance, either for interactive applications or streaming live capture.
-We propose a new language in which a user simply writes energy functions over pixel and voxel-structured unknowns, and a compiler automatically generates state-of-the-art real-time optimization kernels, using any of multiple solver methods, on both CPUs and GPUs.
-The end result is a system in which real-world energy functions in graphics and vision applications are expressible in tens of lines of code, but compile directly into highly optimized CPU and GPU solver implementations with performance competitive with the best published hand-tuned GPU solver implementations.
+Many graphics and vision problems are naturally phrased as optimizations with (either linear or) nonlinear least squares objective functions over visual data, like images.
+The mathematical descriptions of these functions is extremely concise, but their implementation in real code is anything but, especially when optimized for real-time performance, either for interactive applications or streaming live capture.
+We propose a new language in which a user simply writes energy functions over pixel-structured unknowns, and a compiler automatically generates state-of-the-art GPU optimization kernels.
+The end result is a system in which real-world energy functions in graphics and vision applications are expressible in tens of lines of code, but compile directly into highly optimized GPU solver implementations with performance competitive with the best published hand-tuned, application-specific GPU solvers.
 \end{abstract}
 
 % the time from energy function concept to optimized GPU implementation, with the potential for real-time performance, is shortened from hours or days to minutes
