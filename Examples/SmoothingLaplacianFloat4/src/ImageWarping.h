@@ -81,7 +81,7 @@ public:
 		
 		unsigned int nonLinearIter = 10;
 		unsigned int linearIter = 10;
-		unsigned int patchIter = 16;
+		unsigned int patchIter = 10;
 
 		std::cout << "CUDA" << std::endl;
 		resetGPUMemory();

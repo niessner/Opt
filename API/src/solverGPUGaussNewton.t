@@ -158,7 +158,7 @@ return function(problemSpec, vars)
 				var r = pd.r(w,h)-alpha*pd.Ap_X(w,h)				-- update residuum
 				pd.r(w,h) = r										-- store for next kernel call
 			
-				var z = pd.preconditioner(w,h)*r						-- apply pre-conditioner M^-1
+				var z = pd.preconditioner(w,h)*r					-- apply pre-conditioner M^-1
 				pd.z(w,h) = z;										-- save for next kernel call
 				
 				--b = z*r;											-- compute x-th term of the nominator of beta
