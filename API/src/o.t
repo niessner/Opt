@@ -20,7 +20,7 @@ end
 
 -- constants
 local verboseSolver = true
-local verboseAD = false
+local verboseAD = true
 
 local function newclass(name)
     local mt = { __name = name }
@@ -663,6 +663,8 @@ local function createfunction(problemspec,name,exps,usebounds,W,H)
     local extraimages = terralib.newlist()
     local imagetosym = {} 
     local imageinits = terralib.newlist()
+    local imageloads = terralib.newlist()
+    local imageloadmap = {}
     local stmts = terralib.newlist()
     
     local i,j,gi,gj = symbol(int64,"i"), symbol(int64,"j"),symbol(int64,"gi"), symbol(int64,"gj")
@@ -689,7 +691,14 @@ local function createfunction(problemspec,name,exps,usebounds,W,H)
                 -- note: implicit cast to float happens here for non-float images.
                 local loadexp = usebounds and (`im:get(i+[a.x],j+[a.y],gi+[a.x],gj+[a.y])) or (`im(i+[a.x],j+[a.y]))
                 if not a.image.type:isarithmetic() then
-                    loadexp = `loadexp(a.channel)
+                    local pattern = ImageAccess:get(a.image,a.x,a.y,0)
+                    local blockload = imageloadmap[pattern]
+                    if not blockload then
+                        local s = symbol(("%s_%s_%s"):format(a.image.name,a.x,a.y))
+                        imageloads:insert(quote var [s] = loadexp end)
+                        blockload,imageloadmap[pattern] = s,s
+                    end
+                    loadexp = `blockload(a.channel)
                 end
                 stmts:insert quote
                     var [r] = loadexp
@@ -722,12 +731,13 @@ local function createfunction(problemspec,name,exps,usebounds,W,H)
     local result = ad.toterra(exps,emitvar,generatormap)
     local terra generatedfn([i], [j], [gi], [gj], [P], [extraimages])
         [imageinits]
+        [imageloads]
         [stmts]
         return result
     end
     generatedfn:setname(name)
     if verboseAD then
-        generatedfn:printpretty(false, false)
+        generatedfn:printpretty(true, false)
     end
     return generatedfn
 end
