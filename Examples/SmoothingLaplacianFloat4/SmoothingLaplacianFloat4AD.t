@@ -4,8 +4,8 @@ local X = S:Image("X", opt.float4,W,H,0)
 local A = S:Image("A", opt.float4,W,H,1)
 
 
-local w_fit = S:Param("w_fit", float, 0)
-local w_reg = S:Param("w_reg", float, 1)
+local w_fitSqrt = S:Param("w_fitSqrt", float, 0)
+local w_regSqrt = S:Param("w_regSqrt", float, 1)
 
 local terms = terralib.newlist()
 
@@ -22,11 +22,11 @@ for i = 0,3 do
 	
 	local fittingCost = X(0,0,i) - A(0,0,i)
 	
-	terms:insert(ad.sqrt(w_reg)*laplacianCost0F)
-	terms:insert(ad.sqrt(w_reg)*laplacianCost1F)
-	terms:insert(ad.sqrt(w_reg)*laplacianCost2F)
-	terms:insert(ad.sqrt(w_reg)*laplacianCost3F)
-	terms:insert(ad.sqrt(w_fit)*fittingCost)
+	terms:insert(ad.sqrt(w_regSqrt)*laplacianCost0F)
+	terms:insert(ad.sqrt(w_regSqrt)*laplacianCost1F)
+	terms:insert(ad.sqrt(w_regSqrt)*laplacianCost2F)
+	terms:insert(ad.sqrt(w_regSqrt)*laplacianCost3F)
+	terms:insert(ad.sqrt(w_fitSqrt)*fittingCost)
 end
 
 local cost = ad.sumsquared(unpack(terms))

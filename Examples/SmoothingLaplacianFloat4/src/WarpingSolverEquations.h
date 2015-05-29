@@ -37,6 +37,10 @@ __inline__ __device__ float evalFDevice(unsigned int variableIdx, SolverInput& i
 	if (validN3){ float4 q = state.d_x[get1DIdx(n3_i, n3_j, input.width, input.height)]; float4 v = (p - q); e_reg += make_float4(v.x*v.x, v.y*v.y, v.z*v.z, v.w*v.w); }
 	e += parameters.weightRegularizer*e_reg;
 
+	//if (i == 0 && j == 0 || i == 10 && j == 10) {
+	//	printf("cost=%f (%d|%d); x=%f\n", e.x, i, j, p.x);
+	//}
+
 	float res = e.x + e.y + e.z + e.w;
 
 	return res;

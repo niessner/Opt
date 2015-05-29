@@ -48,7 +48,9 @@ public:
 
 		unsigned int numIter[] = { nNonLinearIterations, nLinearIterations };
 
-		void* problemParams[] = { &weightFit, &weightReg };
+		float weightFitSqrt = sqrt(weightFit);
+		float weightRegSqrt = sqrt(weightReg);
+		void* problemParams[] = { &weightFitSqrt, &weightRegSqrt };
 
 
 		Opt_ProblemInit(m_optimizerState, m_plan, data, NULL, problemParams, (void**)&numIter);
