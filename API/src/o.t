@@ -336,7 +336,7 @@ newImage = terralib.memoize(function(typ, W, H, elemsize, stride)
 	  return string.format("Image(%s,%s,%s,%d,%d)",tostring(typ),W.name, H.name,elemsize,stride)
 	end
 
-	if ad.isterravectortype(typ) and typ.metamethods.type == float and typ.metamethods.N == 4 and (typ.metamethods.N == 4 or typ.metamethods.N == 2) then
+	if ad.isterravectortype(typ) and typ.metamethods.type == float and typ.metamethods.N <= 4 then
 	    -- emit code that will produce special CUDA vector load instructions
 	    local loadtype = vector(float,typ.metamethods.N)
 	    terra Image.metamethods.__apply(self : &Image, x : int64, y : int64)
