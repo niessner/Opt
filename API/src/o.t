@@ -335,9 +335,25 @@ newImage = terralib.memoize(function(typ, W, H, elemsize, stride)
 	function Image.metamethods.__typename()
 	  return string.format("Image(%s,%s,%s,%d,%d)",tostring(typ),W.name, H.name,elemsize,stride)
 	end
-	Image.metamethods.__apply = macro(function(self, x, y)
-	 return `@[&typ](self.data + y*stride + x*elemsize)
-	end)
+
+	if ad.isterravectortype(typ) and typ.metamethods.type == float and typ.metamethods.N == 4 and (typ.metamethods.N == 4 or typ.metamethods.N == 2) then
+	    -- emit code that will produce special CUDA vector load instructions
+	    local loadtype = vector(float,typ.metamethods.N)
+	    terra Image.metamethods.__apply(self : &Image, x : int64, y : int64)
+            var a = @[&loadtype](self.data + y*stride + x*elemsize)
+            return @[&typ](&a)
+        end
+        terra Image.metamethods.__update(self : &Image, x : int64, y : int64, v : typ)
+            @[&loadtype](self.data + y*stride + x*elemsize) = @[&loadtype](&v)
+        end
+	else	
+        terra Image.metamethods.__apply(self : &Image, x : int64, y : int64)
+            return @[&typ](self.data + y*stride + x*elemsize)
+        end
+        terra Image.metamethods.__update(self : &Image, x : int64, y : int64, v : typ)
+            @[&typ](self.data + y*stride + x*elemsize) = v
+        end
+    end
 	terra Image:inbounds(x : int64, y : int64)
 	    return x >= 0 and y >= 0 and x < W.size and y < H.size
 	end
@@ -667,8 +683,6 @@ local function createfunction(problemspec,name,exps,usebounds,W,H)
     local P = symbol(problemspec.P:ParameterType(),"P")
     local extraimages = terralib.newlist()
     local imagetosym = {} 
-    local imageinits = terralib.newlist()
-    local imageloads = terralib.newlist()
     local imageloadmap = {}
     local stmts = terralib.newlist()
     
@@ -684,7 +698,7 @@ local function createfunction(problemspec,name,exps,usebounds,W,H)
                 if not im then
                     if a.image.idx >= 0 then
                         im = symbol(problemspec.P:TypeOf(a.image.name),a.image.name)
-                        imageinits:insert(quote var [im] = P.[a.image.name] end)
+                        stmts:insert(quote var [im] = P.[a.image.name] end)
                     else
                         local imtype = problemspec.P:InternalImage(a.image.type,a.image.W,a.image.H)
                         im = symbol(imtype,a.image.name)
@@ -698,32 +712,23 @@ local function createfunction(problemspec,name,exps,usebounds,W,H)
                 if not a.image.type:isarithmetic() then
                     local pattern = ImageAccess:get(a.image,a.x,a.y,0)
                     local blockload = imageloadmap[pattern]
-                    local usevector = false
-					if not blockload then
-                        local VectorType = ad.TerraVector(float,a.image.N)
-						if usevector then
-							VectorType = vector(float,multipleof(a.image.N,4))
-						end
-						local s = symbol(VectorType,("%s_%s_%s"):format(a.image.name,a.x,a.y))
-                       if usebounds then
-                            imageloads:insert quote
-                                var [s] : VectorType = 0.f
+                    if not blockload then
+                        local s = symbol(("%s_%s_%s"):format(a.image.name,a.x,a.y))
+                        if usebounds then
+                            stmts:insert quote
+                                var [s] : a.image.type = 0.f
                                 if opt.InBoundsCalc(gi+[a.x],gj+[a.y],[W.size],[H.size],0,0) ~= 0 then
-                                    [s] = @[&VectorType](&im(i+[a.x],j+[a.y]))
+                                    [s] = im(i+[a.x],j+[a.y])
                                 end
                             end
                         else
-                            imageloads:insert quote
-                                var [s] : VectorType = @[&VectorType](&im(i+[a.x],j+[a.y]))
+                            stmts:insert quote
+                                var [s] : a.image.type = im(i+[a.x],j+[a.y])
                             end
                         end
 						blockload,imageloadmap[pattern] = s,s
                     end
-                    if usevector then
-						loadexp = `blockload[a.channel]
-					else
-						loadexp = `blockload(a.channel)
-					end
+					loadexp = `blockload(a.channel)
                 end
                 stmts:insert quote
                     var [r] = loadexp
@@ -755,8 +760,6 @@ local function createfunction(problemspec,name,exps,usebounds,W,H)
     end
     local result = ad.toterra(exps,emitvar,generatormap)
     local terra generatedfn([i], [j], [gi], [gj], [P], [extraimages])
-        [imageinits]
-        [imageloads]
         [stmts]
         return result
     end
