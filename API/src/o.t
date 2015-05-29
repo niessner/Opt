@@ -929,6 +929,8 @@ function ProblemSpecAD:Cost(costexp_)
     if SumOfSquares:is(costexp_) then
         local P = self:Image("P",unknown.type,unknown.W,unknown.H,-1)
         local jtjexp = createjtj(costexp_.terms,unknown,P)	-- includes the 2.0
+        dprint("jtjexp")
+        dprint(jtjexp)
         self.P:Stencil(stencilforexpression(jtjexp))
         createfunctionset(self,"applyJTJ",jtjexp)
 		--gradient with pre-conditioning

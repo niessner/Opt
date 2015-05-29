@@ -168,7 +168,7 @@ local getapply = terralib.memoize(function(op,...)
 end)
 
 function ExpVector:size() return #self.data end
-function ExpVector:__tostring() return "{"..self.data:map(tostring):concat(",").."}" end
+function ExpVector:__tostring() return "{"..ad.tostrings(self.data).."}" end
 function ExpVector:__index(key)
     if type(key) == "number" then
         assert(key >= 0 and key < #self.data, "index out of bounds")
@@ -313,7 +313,15 @@ local function countuses(es)
             for i,a in ipairs(e.args) do count(a) end
         end
     end
-    for i,a in ipairs(es) do count(a) end
+    for i,a in ipairs(es) do 
+        if ExpVector:is(a) then
+            for i,e in ipairs(a:expressions()) do
+                count(e)
+            end
+        else
+            count(a)
+        end 
+    end
     for k,v in pairs(uses) do
        uses[k] = v > 1 or nil
     end

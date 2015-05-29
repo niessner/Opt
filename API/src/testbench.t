@@ -8,5 +8,6 @@ opt.strides = bigt
 opt.problemkind = ""
 
 opt.math = require("util").cpuMath
-package.terrapath = package.terrapath..";../testMLib/?.t;"
-require("imageSmoothing2AD")
+package.terrapath = package.terrapath..";../../Examples/SmoothingLaplacianFloat4/?.t;../testMLib/?.t;"
+require("SmoothingLaplacianFloat4AD")
+
