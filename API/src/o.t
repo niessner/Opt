@@ -698,10 +698,14 @@ local function createfunction(problemspec,name,exps,usebounds,W,H)
                 if not a.image.type:isarithmetic() then
                     local pattern = ImageAccess:get(a.image,a.x,a.y,0)
                     local blockload = imageloadmap[pattern]
-                    if not blockload then
-                        local VectorType = ad.TerraVector(float,a.image.N) --vector(float,multipleof(a.image.N,4))
+                    local usevector = false
+					if not blockload then
+                        local VectorType = ad.TerraVector(float,a.image.N)
+						if usevector then
+							VectorType = vector(float,multipleof(a.image.N,4))
+						end
 						local s = symbol(VectorType,("%s_%s_%s"):format(a.image.name,a.x,a.y))
-                        if usebounds then
+                       if usebounds then
                             imageloads:insert quote
                                 var [s] : VectorType = 0.f
                                 if opt.InBoundsCalc(gi+[a.x],gj+[a.y],[W.size],[H.size],0,0) ~= 0 then
@@ -715,7 +719,11 @@ local function createfunction(problemspec,name,exps,usebounds,W,H)
                         end
 						blockload,imageloadmap[pattern] = s,s
                     end
-                    loadexp = `blockload(a.channel)
+                    if usevector then
+						loadexp = `blockload[a.channel]
+					else
+						loadexp = `blockload(a.channel)
+					end
                 end
                 stmts:insert quote
                     var [r] = loadexp
