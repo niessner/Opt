@@ -66,7 +66,9 @@ public:
 
 	void solve(float2* d_x, float* d_a, float2* d_urshape, float2* d_constraints, float* d_mask, unsigned int nNonLinearIterations, unsigned int nLinearIterations, float weightFit, float weightReg)
 	{
+		reshuffleUnknowsToLocal(d_x, d_a);
 		solve(d_unknown, d_urshape, d_constraints, d_mask, nNonLinearIterations, nLinearIterations, weightFit, weightReg);
+		reshuffleUnknownsFromLocal(d_x, d_a);
 	}
 
 	void solve(float3* d_unknown, float2* d_urshape, float2* d_constraints, float* d_mask, unsigned int nNonLinearIterations, unsigned int nLinearIterations, float weightFit, float weightReg)
