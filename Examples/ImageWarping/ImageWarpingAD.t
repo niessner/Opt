@@ -1,5 +1,6 @@
 local W,H = opt.Dim("W",0), opt.Dim("H",1)
 local S = ad.ProblemSpec()
+
 local X = S:Image("X", opt.float3,W,H,0)						--uv, a <- unknown
 local Urshape = S:Image("Urshape", opt.float2,W,H,1)			--urshape
 local Constraints = S:Image("Constraints", opt.float2,W,H,2)	--constraints
@@ -9,24 +10,37 @@ local w_fitSqrt = S:Param("w_fitSqrt", float, 0)
 local w_regSqrt = S:Param("w_regSqrt", float, 1)
 
 
+local eval_dR(CosAlpha : float, SinAlpha : float) : Matrix
+	local R : Matrix
+	R(0,0) = -SinAlpha
+	R(0,1) = -CosAlpha
+	R(1,0) = CosAlpha
+	R(1,1) = -SinAlpha;
+	return R
+end
+
+local evalR(angle : float) : Matrix
+	return evalR(ad.cos(angle), ad.sin(angle))
+end
+
+
 local terms = terralib.newlist()
 
-local m : float = Mask(0,0)
-local x : float2 = float2(X(0,0,0), X(0,0,1))	-- uv unknown
+local m = Mask(0,0)	-- float2
+local x = Vector(X(0,0,0), X(0,0,1))	-- uv-unknown : float2
 
 --fitting
-local constraintUV : float2 = Constraints(0,0)
-local e_fit : float2 = 0.0f
-if constraintUV(0) ~= 0.0f and constraintUV(1) ~= 0.0f and m == 0 then
-	e_fit = constraintUV - x
-end
+local constraintUV = Constraints(0,0)	-- float2
+local e_fit = Vector(0.0f, 0.0f)
+--if constraintUV(0) ~= 0.0f and constraintUV(1) ~= 0.0f and m == 0 then
+ad.select(m == 0, e_fit = constraintUV - x, e_fit = Vector(0.0f, 0.0f)
 
 terms:insert(w_fitSqrt*e_fit)
 
 --regularization
-local a : float = X(0,0,2)			-- rotation
-local R : float2x2 = evalR(a)		-- 2x2 rotation matrix
-local xHat : float2 = Urshape(0,0)	-- uv-urshape
+local a = X(0,0,2)			-- rotation : float
+local R = evalR(a)			-- rotation : float2x2
+local xHat = Urshape(0,0)	-- uv-urshape : float2
 
 
 local ARAPCost0 = (x - X(1,0,i))	-	R*(xHat - UrShape(1,0))
