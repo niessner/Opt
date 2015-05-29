@@ -22,11 +22,11 @@ for i = 0,3 do
 	
 	local fittingCost = X(0,0,i) - A(0,0,i)
 	
-	terms:insert(ad.sqrt(w_regSqrt)*laplacianCost0F)
-	terms:insert(ad.sqrt(w_regSqrt)*laplacianCost1F)
-	terms:insert(ad.sqrt(w_regSqrt)*laplacianCost2F)
-	terms:insert(ad.sqrt(w_regSqrt)*laplacianCost3F)
-	terms:insert(ad.sqrt(w_fitSqrt)*fittingCost)
+	terms:insert(w_regSqrt*laplacianCost0F)
+	terms:insert(w_regSqrt*laplacianCost1F)
+	terms:insert(w_regSqrt*laplacianCost2F)
+	terms:insert(w_regSqrt*laplacianCost3F)
+	terms:insert(w_fitSqrt*fittingCost)
 end
 
 local cost = ad.sumsquared(unpack(terms))
