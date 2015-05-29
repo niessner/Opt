@@ -654,6 +654,11 @@ local function removeboundaries(exp)
     return exp:rename(nobounds)
 end
 
+local function multipleof(x,m)
+    if x % m == 0 then return x end
+    return x + (m - x % m)
+end
+
 local function createfunction(problemspec,name,exps,usebounds,W,H)
     if not usebounds then
         exps = removeboundaries(exps)
@@ -695,10 +700,22 @@ local function createfunction(problemspec,name,exps,usebounds,W,H)
                     local blockload = imageloadmap[pattern]
                     if not blockload then
                         local s = symbol(("%s_%s_%s"):format(a.image.name,a.x,a.y))
-                        imageloads:insert(quote var [s] = loadexp end)
+                        local VectorType = vector(float,multipleof(a.image.N,4))
+                        if usebounds then
+                            imageloads:insert quote
+                                var [s] : VectorType
+                                if opt.InBoundsCalc(a.x,a.y,W.size,H.size,0,0) ~= 0 then
+                                    [s] = @[&VectorType](&im(i+[a.x],j+[a.y]))
+                                end
+                            end
+                        else
+                            imageloads:insert quote
+                                var [s] = @[&VectorType](&im(i+[a.x],j+[a.y]))
+                            end
+                        end
                         blockload,imageloadmap[pattern] = s,s
                     end
-                    loadexp = `blockload(a.channel)
+                    loadexp = `blockload[a.channel]
                 end
                 stmts:insert quote
                     var [r] = loadexp
