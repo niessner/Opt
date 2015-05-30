@@ -90,6 +90,7 @@ return function(problemSpec, vars)
 				end
 				residuum = -residuum
 				
+			
 				pd.r(w, h) = residuum
 				pd.preconditioner(w, h) = pre
 				var p = pre*residuum	-- apply pre-conditioner M^-1			   

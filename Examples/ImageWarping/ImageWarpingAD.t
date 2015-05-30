@@ -11,12 +11,12 @@ local Mask = 		S:Image("Mask", float, W,H,3)				--validity mask for constraints
 local w_fitSqrt = S:Param("w_fitSqrt", float, 0)
 local w_regSqrt = S:Param("w_regSqrt", float, 1)
 
-function eval_dR (CosAlpha, SinAlpha)
-	return ad.Vector(-SinAlpha, -CosAlpha, CosAlpha, -SinAlpha)
+function evalRot(CosAlpha, SinAlpha)
+	return ad.Vector(CosAlpha, -SinAlpha, SinAlpha, CosAlpha)
 end
 
 function evalR (angle)
-	return eval_dR(ad.cos(angle), ad.sin(angle))
+	return evalRot(ad.cos(angle), ad.sin(angle))
 end
 
 function mul(matrix, v)
@@ -49,10 +49,10 @@ local n1 = ad.Vector(X(-1,0,0), X(-1,0,1))
 local n2 = ad.Vector(X( 0,1,0), X( 0,1,1))
 local n3 = ad.Vector(X(0,-1,0), X(0,-1,1))
 
-local ARAPCost0 = (x - n0)	-	mul(R,(xHat - UrShape(1,0)))
-local ARAPCost1 = (x - n1)	-	mul(R,(xHat - UrShape(-1,0)))
-local ARAPCost2 = (x - n2)	-	mul(R,(xHat - UrShape(0,1)))
-local ARAPCost3 = (x - n3)	-	mul(R,(xHat - UrShape(0,-1)))
+local ARAPCost0 = (x - n0)	-	mul(R, (xHat - UrShape( 1,0)))
+local ARAPCost1 = (x - n1)	-	mul(R, (xHat - UrShape(-1,0)))
+local ARAPCost2 = (x - n2)	-	mul(R, (xHat - UrShape( 0,1)))
+local ARAPCost3 = (x - n3)	-	mul(R, (xHat - UrShape(0,-1)))
 
 
 local ARAPCost0F = ad.select(opt.InBounds(0,0,0,0),	ad.select(opt.InBounds( 1,0,0,0), ARAPCost0, ad.Vector(0.0, 0.0)), ad.Vector(0.0, 0.0))
