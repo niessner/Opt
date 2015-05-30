@@ -238,7 +238,7 @@ return function(problemSpec, vars)
 		return { kernel = computeCostGPU, header = header, footer = footer, mapMemberName = "X" }
 	end
 
-
+	if util.debugDumpInfo then
 	kernels.dumpCostJTFAndPre = function(data)
 		local terra dumpJTFAndPreGPU(pd : data.PlanData)
 			var d = 0.0f -- init for out of bounds lanes
@@ -282,7 +282,7 @@ return function(problemSpec, vars)
 		end
 		return { kernel = dumpJTJGPU, header = noHeader, footer = noFooter, mapMemberName = "X" }
 	end
-
+	end
 
 	local gpu = util.makeGPUFunctions(problemSpec, vars, PlanData, kernels)
 
@@ -354,7 +354,7 @@ return function(problemSpec, vars)
 		var pd = [&PlanData](data_)
 		pd.timer:init()
 		pd.parameters = [util.getParameters(problemSpec, images, edgeValues,params_)]
-		initAllDebugImages(pd)
+
 	    pd.nIter = 0
 		
 		pd.nIterations = @[&int](solverparams[0])
@@ -362,6 +362,7 @@ return function(problemSpec, vars)
 	    escape
 			if util.debugDumpInfo then
 	    		emit quote
+					initAllDebugImages(pd)
 					debugImageWrite(pd, [&float](pd.parameters.D_i.data), 1, "initial_depth.imagedump")
 				end
 			end
