@@ -67,7 +67,7 @@ __global__ void reshuffleFromFloat3Kernel(float2* d_x, float* d_a, float3* d_unk
 extern "C" void reshuffleFromFloat3CUDA(float2* d_x, float* d_a, float3* d_unknown, unsigned int width, unsigned int height)
 {
 	const unsigned int N = width * height; // Number of block variables
-	reshuffleToFloat3Kernel << <(N + THREADS_PER_BLOCK - 1) / THREADS_PER_BLOCK, THREADS_PER_BLOCK >> >(d_x, d_a, d_unknown, width, height);
+	reshuffleFromFloat3Kernel << <(N + THREADS_PER_BLOCK - 1) / THREADS_PER_BLOCK, THREADS_PER_BLOCK >> >(d_x, d_a, d_unknown, width, height);
 
 #ifdef _DEBUG
 	cutilSafeCall(cudaDeviceSynchronize());

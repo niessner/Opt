@@ -30,9 +30,11 @@ local x = ad.Vector(X(0,0,0), X(0,0,1))	-- uv-unknown : float2
 
 --fitting
 local constraintUV = Constraints(0,0)	-- float2
---if constraintUV(0) ~= 0.0f and constraintUV(1) ~= 0.0f and m == 0 then
-local e_fit = ad.select(ad.eq(m,0.0), constraintUV - x, ad.Vector(0.0, 0.0))
-e_fit = ad.Vector(0.0, 0.0)
+
+local e_fit = ad.select(ad.eq(m,0.0), x - constraintUV, ad.Vector(0.0, 0.0))
+e_fit = ad.select(ad.greatereq(constraintUV(0), 0.0), e_fit, ad.Vector(0.0, 0.0))
+e_fit = ad.select(ad.greatereq(constraintUV(1), 0.0), e_fit, ad.Vector(0.0, 0.0))
+
 terms:insert(w_fitSqrt*e_fit(0))
 terms:insert(w_fitSqrt*e_fit(1))
 
@@ -57,6 +59,16 @@ local ARAPCost0F = ad.select(opt.InBounds(0,0,0,0),	ad.select(opt.InBounds( 1,0,
 local ARAPCost1F = ad.select(opt.InBounds(0,0,0,0),	ad.select(opt.InBounds(-1,0,0,0), ARAPCost1, ad.Vector(0.0, 0.0)), ad.Vector(0.0, 0.0))
 local ARAPCost2F = ad.select(opt.InBounds(0,0,0,0),	ad.select(opt.InBounds( 0,1,0,0), ARAPCost2, ad.Vector(0.0, 0.0)), ad.Vector(0.0, 0.0))	
 local ARAPCost3F = ad.select(opt.InBounds(0,0,0,0),	ad.select(opt.InBounds(0,-1,0,0), ARAPCost3, ad.Vector(0.0, 0.0)), ad.Vector(0.0, 0.0))
+
+local m0 = Mask( 1,0)
+local m1 = Mask(-1,0)
+local m2 = Mask( 0,1)
+local m3 = Mask(0,-1)
+
+ARAPCost0F = ad.select(ad.eq(m0, 0.0), ARAPCost0F, ad.Vector(0.0, 0.0))
+ARAPCost1F = ad.select(ad.eq(m1, 0.0), ARAPCost1F, ad.Vector(0.0, 0.0))
+ARAPCost2F = ad.select(ad.eq(m2, 0.0), ARAPCost2F, ad.Vector(0.0, 0.0))
+ARAPCost3F = ad.select(ad.eq(m3, 0.0), ARAPCost3F, ad.Vector(0.0, 0.0))
 
 for i = 0,1 do
 	terms:insert(w_regSqrt*ARAPCost0F(i))
