@@ -116,23 +116,39 @@ void App::onInit() {
     
     RenderDevice* rd = RenderDevice::current;
     
-    shared_ptr<Texture> jtfCuda = Texture::getTextureByName("E:/Projects/DSL/Optimization/API/RealtimeSFS/JTF_cuda.imagedump");
+    shared_ptr<Texture> jtfCuda = Texture::getTextureByName("E:/Projects/DSL/Optimization/API/RealtimeSFS/JTF_AD.imagedump");
     shared_ptr<Texture> jtfOptNoAD = Texture::getTextureByName("E:/Projects/DSL/Optimization/API/RealtimeSFS/JTF_optNoAD.imagedump");
-    static shared_ptr<Texture> jtfDiff = Texture::singleChannelDifference(rd, jtfCuda, jtfOptNoAD);
+    
 
-    shared_ptr<Texture> costCuda = Texture::getTextureByName("E:/Projects/DSL/Optimization/API/RealtimeSFS/cost_cuda.imagedump");
+    shared_ptr<Texture> costCuda = Texture::getTextureByName("E:/Projects/DSL/Optimization/API/RealtimeSFS/cost_AD.imagedump");
     shared_ptr<Texture> costOptNoAD = Texture::getTextureByName("E:/Projects/DSL/Optimization/API/RealtimeSFS/cost_optNoAD.imagedump");
-    static shared_ptr<Texture> costDiff = Texture::singleChannelDifference(rd, costCuda, costOptNoAD);
+    
 
     static shared_ptr<Texture> preDiff = Texture::singleChannelDifference(rd,
         Texture::getTextureByName("E:/Projects/DSL/Optimization/API/RealtimeSFS/Pre_cuda.imagedump"),
         Texture::getTextureByName("E:/Projects/DSL/Optimization/API/RealtimeSFS/Pre_optNoAD.imagedump"));
 
-    shared_ptr<Texture> jtjCuda = Texture::getTextureByName("E:/Projects/DSL/Optimization/API/RealtimeSFS/JTJ_cuda.imagedump");
+    shared_ptr<Texture> jtjCuda = Texture::getTextureByName("E:/Projects/DSL/Optimization/API/RealtimeSFS/JTJ_AD.imagedump");
     shared_ptr<Texture> jtjOptNoAD = Texture::getTextureByName("E:/Projects/DSL/Optimization/API/RealtimeSFS/JTJ_optNoAD.imagedump");
 
-    static shared_ptr<Texture> jtjDiff = Texture::singleChannelDifference(rd, jtjCuda, jtjOptNoAD);
     
+
+    shared_ptr<Texture> resultOpt = Texture::getTextureByName("E:/Projects/DSL/Optimization/API/RealtimeSFS/result_AD.imagedump");
+    shared_ptr<Texture> resultOptNoAD = Texture::getTextureByName("E:/Projects/DSL/Optimization/API/RealtimeSFS/result_optNoAD.imagedump");
+
+    static shared_ptr<Texture> jtfDiff = Texture::singleChannelDifference(rd, jtfCuda, jtfOptNoAD);
+    static shared_ptr<Texture> costDiff = Texture::singleChannelDifference(rd, costCuda, costOptNoAD);
+    static shared_ptr<Texture> jtjDiff = Texture::singleChannelDifference(rd, jtjCuda, jtjOptNoAD);
+    static shared_ptr<Texture> resultDiff = Texture::singleChannelDifference(rd, resultOpt, resultOptNoAD);
+    static shared_ptr<Texture> initDiff = Texture::singleChannelDifference(rd, Texture::getTextureByName("E:/Projects/DSL/Optimization/API/RealtimeSFS/initial_depth.imagedump"), resultOpt);
+    static shared_ptr<Texture> initDiff2 = Texture::singleChannelDifference(rd, Texture::getTextureByName("E:/Projects/DSL/Optimization/API/RealtimeSFS/initial_depth.imagedump"), resultOptNoAD);
+    jtfDiff->visualization.documentGamma = 2.2f;
+    costDiff->visualization.documentGamma = 2.2f;
+    jtjDiff->visualization.documentGamma = 2.2f;
+    resultDiff->visualization.documentGamma = 2.2f;
+    initDiff->visualization.documentGamma = 2.2f;
+    initDiff2->visualization.documentGamma = 2.2f;
+
 
     static shared_ptr<Framebuffer> fb = Framebuffer::create(Texture::createEmpty("JTJ Quotient", jtjCuda->width(), jtjCuda->height(), ImageFormat::R32F()));
     fb->texture(0)->visualization.channels = Texture::Visualization::RasL;

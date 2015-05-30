@@ -1,8 +1,8 @@
 local USE_MASK_REFINE 			= false
 
-local USE_DEPTH_CONSTRAINT 		= true
+local USE_DEPTH_CONSTRAINT 		= false
 local USE_REGULARIZATION 		= true
-local USE_SHADING_CONSTRAINT 	= true
+local USE_SHADING_CONSTRAINT 	= false
 local USE_TEMPORAL_CONSTRAINT 	= false
 local USE_PRECONDITIONER 		= false
 
@@ -19,19 +19,17 @@ local D_p 	= P:Image("D_p",float, W,H,3) -- Previous Depth
 local edgeMaskR = P:Image("edgeMaskR",uint8, W,H,4) -- Edge mask. 
 local edgeMaskC = P:Image("edgeMaskC",uint8, W,H,5) -- Edge mask. 
 
-local inBounds = opt.InBounds(0,0,1,1)
-
 -- See TerraSolverParameters
 local w_p						= P:Param("w_p",float,0)-- Is initialized by the solver!
 local w_s		 				= P:Param("w_s",float,1)-- Regularization weight
 local w_r						= P:Param("w_r",float,2)-- Prior weight
 local w_g						= P:Param("w_g",float,3)-- Shading weight
---[[
+
 w_p = ad.sqrt(w_p)
 w_s = ad.sqrt(w_s)
 w_r = ad.sqrt(w_r)
 w_g = ad.sqrt(w_g)
-]]
+
 
 local weightShadingStart		= P:Param("weightShadingStart",float,4)-- Starting value for incremental relaxation
 local weightShadingIncrement	= P:Param("weightShadingIncrement",float,5)-- Update factor
@@ -123,7 +121,6 @@ local E_r_v = 0.0
 local E_r_d = 0.0 
 local E_g_v = 0.0
 local E_g_h = 0.0
-print(D_i)
 local pointValid = ad.greater(D_i(0,0), 0)
 
 if USE_DEPTH_CONSTRAINT then

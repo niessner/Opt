@@ -1,8 +1,8 @@
-local USE_MASK_REFINE 			= true
+local USE_MASK_REFINE 			= false
 
-local USE_DEPTH_CONSTRAINT 		= true
+local USE_DEPTH_CONSTRAINT 		= false
 local USE_REGULARIZATION 		= true
-local USE_SHADING_CONSTRAINT 	= true
+local USE_SHADING_CONSTRAINT 	= false
 local USE_TEMPORAL_CONSTRAINT 	= false
 local USE_PRECONDITIONER 		= false
 
@@ -63,6 +63,9 @@ local float3 = vector(float, 3)
 local float4 = vector(float, 4)
 local mat4   = vector(float, 16)
 
+local terra make_float2(x : float, y : float)
+	return vector(x,y)
+end
 
 local terra make_float3(x : float, y : float, z : float)
 	return vector(x, y, z)
@@ -119,7 +122,7 @@ local terra isInsideImage(i : int, j : int, width : int, height : int)
 end
 
 local terra I(self : P:ParameterType(), i : int64, j : int64)
-	return self.I(i,j)*0.5f + 0.25f*(self.I(i-1,j)+self.I(i,j-1))
+	return self.I(i,j)--*0.5f + 0.25f*(self.I(i-1,j)+self.I(i,j-1))
 end
 
 -- equation 8
