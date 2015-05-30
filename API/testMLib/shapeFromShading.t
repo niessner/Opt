@@ -1,15 +1,14 @@
-local USE_MASK_REFINE 			= false
+local USE_MASK_REFINE 			= true
 
 local USE_DEPTH_CONSTRAINT 		= true
 local USE_REGULARIZATION 		= true
-local USE_SHADING_CONSTRAINT 	= false
+local USE_SHADING_CONSTRAINT 	= true
 local USE_TEMPORAL_CONSTRAINT 	= false
 local USE_PRECONDITIONER 		= false
 
 
 local FLOAT_EPSILON = 0.000001
 local DEPTH_DISCONTINUITY_THRE = 0.01
-local epsilon = 0.00001
 
 local IO = terralib.includec("stdio.h")
 
@@ -119,6 +118,10 @@ local terra isInsideImage(i : int, j : int, width : int, height : int)
 	return (i >= 0 and i < width and j >= 0 and j < height)
 end
 
+local terra I(self : P:ParameterType(), i : int64, j : int64)
+	return self.I(i,j)*0.5f + 0.25f*(self.I(i-1,j)+self.I(i,j-1))
+end
+
 -- equation 8
 local terra p(offX : int64, offY : int64, gi : int64, gj : int64, self : P:ParameterType()) 
     var d : float= self.X(offX,offY)
@@ -129,18 +132,25 @@ end
 local terra n(offX : int64, offY : int64, gi : int64, gj : int64, self : P:ParameterType())
     --f_x good, f_y good
 
-    var n_x = self.X(offX, offY - 1) * (self.X(offX, offY) - self.X(offX - 1, offY)) / self.f_y
-    var n_y = self.X(offX - 1, offY) * (self.X(offX, offY) - self.X(offX, offY - 1)) / self.f_x
-    var n_z = (n_x * (self.u_x - [float](gi)) / self.f_x) + (n_y * (self.u_y - [float](gj)) / self.f_y) - (self.X(offX-1, offY)*self.X(offX, offY-1) / self.f_x*self.f_y)
-    var inverseMagnitude = 1.0/opt.math.sqrt(n_x*n_x + n_y*n_y + n_z*n_z + [float]([epsilon]))
-    return make_float3(n_x, n_y, n_z) * inverseMagnitude
+    var n_x = (self.X(offX, offY - 1) * (self.X(offX, offY) - self.X(offX - 1, offY))) / self.f_y
+    var n_y = (self.X(offX - 1, offY) * (self.X(offX, offY) - self.X(offX, offY - 1))) / self.f_x
+    var n_z = 	((n_x * (self.u_x - [float](gi))) / self.f_x) + 
+    			((n_y * (self.u_y - [float](gj))) / self.f_y) - 
+    			( (self.X(offX-1, offY)*self.X(offX, offY-1)) / (self.f_x*self.f_y))
+	var lengthSquared = n_x*n_x + n_y*n_y + n_z*n_z
+   
+    var normal = make_float3(n_x, n_y, n_z)
+    if lengthSquared > 0 then
+    	normal = normal / opt.math.sqrt(lengthSquared)
+    end
+    return normal
 end
 
 local terra B(offX : int64, offY : int64, gi : int64, gj : int64, self : P:ParameterType())
 	var normal = n(offX, offY, gi, gj, self)
-	var n_x : float = normal[1]
-	var n_y : float = normal[2]
-	var n_z : float = normal[3]
+	var n_x : float = normal[0]
+	var n_y : float = normal[1]
+	var n_z : float = normal[2]
 
 	var lighting = self.L_0 +
 					 self.L_1*n_y + self.L_2*n_z + self.L_3*n_x  +
@@ -425,43 +435,40 @@ local terra cost(i : int64, j : int64, gi : int64, gj : int64, self : P:Paramete
 
 	
 
-	var pointValid = isInsideImage(gi,gj, W, H) and IsValidPoint(self.X(i,j))
-	var leftAndCenterValid = pointValid and isInsideImage(gi-1,gj, W, H) and IsValidPoint(self.X(i-1,j))
-	var upAndCenterValid   = pointValid and isInsideImage(gi,gj-1, W, H) and IsValidPoint(self.X(i,j-1))
-	var leftUpAndCenterValid = pointValid and isInsideImage(gi-1,gj-1, W, H) and IsValidPoint(self.X(i-1,j-1))
-	var rightUpValid = isInsideImage(gi+1,gj-1, W, H) and IsValidPoint(self.X(i+1,j-1))
-	var leftDownValid = isInsideImage(gi-1,gj+1, W, H) and IsValidPoint(self.X(i-1,j+1))
+	var pointValid 				= isInsideImage(gi,gj, W, H) and IsValidPoint(self.X(i,j))
+	var leftAndCenterValid 		= pointValid and isInsideImage(gi-1,gj, W, H) and IsValidPoint(self.X(i-1,j))
+	var upAndCenterValid   		= pointValid and isInsideImage(gi,gj-1, W, H) and IsValidPoint(self.X(i,j-1))
+	var leftUpAndCenterValid 	= pointValid and isInsideImage(gi-1,gj-1, W, H) and IsValidPoint(self.X(i-1,j-1))
+	var rightUpValid 			= isInsideImage(gi+1,gj-1, W, H) and IsValidPoint(self.X(i+1,j-1))
+	var leftDownValid 			= isInsideImage(gi-1,gj+1, W, H) and IsValidPoint(self.X(i-1,j+1))
 
-	var horizontalLineValid = leftAndCenterValid and isInsideImage(gi+1,gj, W, H) and IsValidPoint(self.X(i+1,j))
-	var verticalLineValid = upAndCenterValid and isInsideImage(gi,gj+1, W, H) and IsValidPoint(self.X(i,j+1))
-	var crossValid = horizontalLineValid and verticalLineValid
+	var horizontalLineValid 	= leftAndCenterValid and isInsideImage(gi+1,gj, W, H) and IsValidPoint(self.X(i+1,j))
+	var verticalLineValid 		= upAndCenterValid and isInsideImage(gi,gj+1, W, H) and IsValidPoint(self.X(i,j+1))
+	var crossValid 				= horizontalLineValid and verticalLineValid
 
 	if [USE_DEPTH_CONSTRAINT] and pointValid then 
 		E_p = self.X(i,j) - self.D_i(i,j)
 	end 
 
-	
+	var shadingDifference = 0.0f
 	if [USE_SHADING_CONSTRAINT] and horizontalLineValid and rightUpValid and upAndCenterValid then
 		if (not [USE_MASK_REFINE]) or self.edgeMaskR(i,j) > 0.0f then
-			E_g_h = B(i,j,gi,gj,self) - B(i+1,j,gi+1,gj,self) - (self.I(i,j) - self.I(i+1,j))
+			E_g_h = B(i,j,gi,gj,self) - B(i+1,j,gi+1,gj,self) - (I(self, i,j) - I(self, i+1,j))
 		end
 	end
-
 	
 	if [USE_SHADING_CONSTRAINT] and verticalLineValid and leftAndCenterValid and leftDownValid then
 		if (not [USE_MASK_REFINE]) or self.edgeMaskC(i,j) > 0.0f then
-			E_g_v = B(i,j,gi,gj,self) - B(i,j+1,gi,gj+1,self) - (self.I(i,j) - self.I(i,j+1))
+			E_g_v = B(i,j,gi,gj,self) - B(i,j+1,gi,gj+1,self) - (I(self, i,j) - I(self, i,j+1))
 		end
 	end
 
-	var regularizationTermActivated = 0.0f
 	if [USE_REGULARIZATION] and crossValid then
 		var d = self.X(i,j)
 		if 	opt.math.abs(d - self.X(i+1,j)) < [float](DEPTH_DISCONTINUITY_THRE) and 
 			opt.math.abs(d - self.X(i-1,j)) < [float](DEPTH_DISCONTINUITY_THRE) and 
 			opt.math.abs(d - self.X(i,j+1)) < [float](DEPTH_DISCONTINUITY_THRE) and 
 			opt.math.abs(d - self.X(i,j-1)) < [float](DEPTH_DISCONTINUITY_THRE) then
-			regularizationTermActivated = 1.0f
 				E_s = sqMagnitude(4.0f*p(i,j,gi,gj,self) - (p(i-1,j,gi-1,gj, self) + p(i,j-1,gi,gj-1, self) + p(i+1, j,gi+1,gj, self) + p(i,j+1,gi,gj+1, self)))
 		end
 	end

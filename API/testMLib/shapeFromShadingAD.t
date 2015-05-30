@@ -1,51 +1,62 @@
+local USE_MASK_REFINE 			= false
+
+local USE_DEPTH_CONSTRAINT 		= true
+local USE_REGULARIZATION 		= true
+local USE_SHADING_CONSTRAINT 	= false
+local USE_TEMPORAL_CONSTRAINT 	= false
+local USE_PRECONDITIONER 		= false
+
+local DEPTH_DISCONTINUITY_THRE = 0.01
+
+
 local W,H 	= opt.Dim("W",0), opt.Dim("H",1)
-local S 	= ad.ProblemSpec()
-local D 	= S:Image("X",float, W,H,0) -- Refined Depth
-local D_i 	= S:Image("D_i",float, W,H,1) -- Depth input
-local I 	= S:Image("I",float, W,H,2) -- Target Intensity
-local D_p 	= S:Image("D_p",float, W,H,3) -- Previous Depth
-local edgeMask 	= S:Image("edgeMask",W,H,3) -- Edge mask. Currently unused
+local P 	= opt.ProblemSpec()
+local X 	= P:Image("X",float, W,H,0) -- Refined Depth
+local D_i 	= P:Image("D_i",float, W,H,1) -- Depth input
+local I 	= P:Image("I",float, W,H,2) -- Target Intensity
+local D_p 	= P:Image("D_p",float, W,H,3) -- Previous Depth
+local edgeMaskR = P:Image("edgeMaskR",uint8, W,H,4) -- Edge mask. 
+local edgeMaskC = P:Image("edgeMaskC",uint8, W,H,5) -- Edge mask. 
 
-local inBounds = opt.InBounds(3,3)
-
-local epsilon = 0.00001
+local inBounds = opt.InBounds(0,0,1,1)
 
 -- See TerraSolverParameters
-local w_p						= S:Param("w_p",float,0)-- Is initialized by the solver!
-local w_s		 				= S:Param("w_s",float,1)-- Regularization weight
-local w_r						= S:Param("w_r",float,2)-- Prior weight
-local w_g						= S:Param("w_g",float,3)-- Shading weight
-
+local w_p						= P:Param("w_p",float,0)-- Is initialized by the solver!
+local w_s		 				= P:Param("w_s",float,1)-- Regularization weight
+local w_r						= P:Param("w_r",float,2)-- Prior weight
+local w_g						= P:Param("w_g",float,3)-- Shading weight
+--[[
 w_p = ad.sqrt(w_p)
 w_s = ad.sqrt(w_s)
 w_r = ad.sqrt(w_r)
 w_g = ad.sqrt(w_g)
-w_g = w_g
-local weightShadingStart		= S:Param("weightShadingStart",float,4)-- Starting value for incremental relaxation
-local weightShadingIncrement	= S:Param("weightShadingIncrement",float,5)-- Update factor
+]]
 
-local weightBoundary			= S:Param("weightBoundary",float,6)-- Boundary weight
+local weightShadingStart		= P:Param("weightShadingStart",float,4)-- Starting value for incremental relaxation
+local weightShadingIncrement	= P:Param("weightShadingIncrement",float,5)-- Update factor
 
-local f_x						= S:Param("f_x",float,7)
-local f_y						= S:Param("f_y",float,8)
-local u_x 						= S:Param("u_x",float,9)
-local u_y 						= S:Param("u_y",float,10)
+local weightBoundary			= P:Param("weightBoundary",float,6)-- Boundary weight
+
+local f_x						= P:Param("f_x",float,7)
+local f_y						= P:Param("f_y",float,8)
+local u_x 						= P:Param("u_x",float,9)
+local u_y 						= P:Param("u_y",float,10)
     
 local offset = 10;
 local deltaTransform = {}
 for i=1,16 do
-	deltaTransform[i] = S:Param("deltaTransform_" .. i .. "",float,offset+i)
+	deltaTransform[i] = P:Param("deltaTransform_" .. i .. "",float,offset+i)
 end
 offset = offset + 16
 
 local L = {}
 for i=1,9 do
-	L[i] = S:Param("L_" .. i .. "",float,offset+i)
+	L[i] = P:Param("L_" .. i .. "",float,offset+i)
 end
 offset = offset + 9
-local nNonLinearIterations 	= S:Param("nNonLinearIterations",uint,offset+1) -- Steps of the non-linear solver	
-local nLinIterations 		= S:Param("nLinIterations",uint,offset+2) -- Steps of the linear solver
-local nPatchIterations 		= S:Param("nPatchIterations",uint,offset+3) -- Steps on linear step on block level
+local nNonLinearIterations 	= P:Param("nNonLinearIterations",uint,offset+1) -- Steps of the non-linear solver	
+local nLinIterations 		= P:Param("nLinIterations",uint,offset+2) -- Steps of the linear solver
+local nPatchIterations 		= P:Param("nPatchIterations",uint,offset+3) -- Steps on linear step on block level
 
 
 local util = require("util")
@@ -70,7 +81,7 @@ end
 
 -- equation 8
 function p(offX,offY) 
-    local d = D(offX,offY)
+    local d = X(offX,offY)
     local i = offX + posX
     local j = offY + posY
     local point = {((i-u_x)/f_x)*d, ((i-u_y)/f_y)*d, d}
@@ -83,11 +94,11 @@ function n(offX, offY)
     local j = offY + posY -- good
     --f_x good, f_y good
 
-    local n_x = D(offX, offY - 1) * (D(offX, offY) - D(offX - 1, offY)) / f_y
-    local n_y = D(offX - 1, offY) * (D(offX, offY) - D(offX, offY - 1)) / f_x
-    local n_z = (n_x * (u_x - i) / f_x) + (n_y * (u_y - j) / f_y) - (D(offX-1, offY)*D(offX, offY-1) / f_x*f_y)
-    local inverseMagnitude = 1.0/ad.sqrt(n_x*n_x + n_y*n_y + n_z*n_z + epsilon)
-    return times(inverseMagnitude, {n_x, n_y, n_z})
+    local n_x = X(offX, offY - 1) * (X(offX, offY) - X(offX - 1, offY)) / f_y
+    local n_y = X(offX - 1, offY) * (X(offX, offY) - X(offX, offY - 1)) / f_x
+    local n_z = (n_x * (u_x - i) / f_x) + (n_y * (u_y - j) / f_y) - (X(offX-1, offY)*X(offX, offY-1) / (f_x*f_y))
+    local sqLength = n_x*n_x + n_y*n_y + n_z*n_z
+    return ad.select(ad.greater(sqLength, 0.0),  {n_x, n_y, n_z}, {n_x, n_y, n_z})--times(1.0/ad.sqrt(sqLength), {n_x, n_y, n_z}), {n_x, n_y, n_z})
 end
 
 function B(offX, offY)
@@ -103,38 +114,66 @@ function B(offX, offY)
 	return 1.0*lighting -- replace 1.0 with estimated albedo in slower version
 end
 
-local squareStencilSum = 0
-for i=-3,3 do
-	for j=-3,3 do
-		squareStencilSum = squareStencilSum + D_i(i,j)			
+local E_s = 0.0
+local E_p = 0.0
+local E_r_h = 0.0 
+local E_r_v = 0.0 
+local E_r_d = 0.0 
+local E_g_v = 0.0
+local E_g_h = 0.0
+local pointValid = ad.greater(D_i(0,0), 0)
+
+if USE_DEPTH_CONSTRAINT then
+	local E_p_noCheck = X(0,0) - D_i(0,0)
+	E_p = ad.select(opt.InBounds(0,0,0,0), ad.select(pointValid, E_p_noCheck, 0.0), 0.0)
+end 
+
+if USE_SHADING_CONSTRAINT then
+	local shading_h_valid = ad.greater(D_i(-1,0) + D_i(0,0) + D_i(1,0) + D_i(0,-1) + D_i(1,-1), 0)
+	
+	local E_g_h_noCheck = B(0,0) - B(1,0) - (I(0,0) - I(1,0))
+	if USE_MASK_REFINE then
+		E_g_h_noCheck = E_g_h_noCheck * edgeMaskR(0,0)
 	end
+	E_g_h = ad.select(opt.InBounds(0,0,1,1), ad.select(shading_h_valid, E_g_h_noCheck, 0.0), 0.0) 
+end
+	
+if USE_SHADING_CONSTRAINT then
+	local shading_v_valid = ad.greater(D_i(0,-1) + D_i(0,0) + D_i(0,1) + D_i(-1,0) + D_i(-1,1), 0)
+	
+	local E_g_v_noCheck = B(0,0) - B(0,1) - (I(0,0) - I(0,1))
+	if USE_MASK_REFINE then
+		E_g_v_noCheck = E_g_v_noCheck * edgeMaskC(0,0)
+	end
+	E_g_v = ad.select(opt.InBounds(0,0,1,1), ad.select(shading_v_valid, E_g_v_noCheck, 0.0), 0.0) 
 end
 
-local squareStencilValid = ad.greater(squareStencilSum, 0.0)
 
-local crossStencilValid = ad.greater(D_i(0,0)+D_i(1,0)+D_i(0,1)+D_i(-1,0)+D_i(0,-1), 0.0)
-local pointValid = ad.greater(D_i(0,0), 0.0)
+if USE_REGULARIZATION then
+	local cross_valid = ad.greater(D_i(0,0) + D_i(0,-1) + D_i(0,1) + D_i(-1,0) + D_i(1,0), 0)
 
-local E_g_h_beforeSelect = B(0,0) - B(1,0) - (I(0,0) - I(1,0))
-local E_g_h = ad.select(inBounds, ad.select(squareStencilValid, E_g_h_beforeSelect, 0), 0)
+	local E_s_noCheck = sqMagnitude(plus(times(4.0,p(0,0)), times(-1.0, plus(p(-1,0), plus(p(0,-1), plus(p(1,0), p(0,1)))))))
+	local d = X(0,0)
+	E_s = 
+		ad.select(opt.InBounds(0,0,1,1),
+			ad.select(cross_valid,
+				ad.select(ad.less(ad.abs(d - self.X(1,0)), DEPTH_DISCONTINUITY_THRE),
+					ad.select(ad.less(ad.abs(d - self.X(-1,0)), DEPTH_DISCONTINUITY_THRE),
+						ad.select(ad.less(ad.abs(d - self.X(0,1)), DEPTH_DISCONTINUITY_THRE),
+							ad.select(ad.less(ad.abs(d - self.X(0,-1)), DEPTH_DISCONTINUITY_THRE),
+								E_s_noCheck,
+							0),
+						0),
+					0),
+				0),
+			0),
+		0)
+end
 
-local E_g_v_beforeSelect = B(0,0) - B(0,1) - (I(0,0) - I(0,1))
-local E_g_v = ad.select(inBounds, ad.select(squareStencilValid, E_g_v_beforeSelect, 0), 0)
-
-local E_s_beforeSelect = sqMagnitude(plus(p(0,0), times(-0.25, plus(plus(p(-1,0), p(0,-1)),plus(p(1, 0), p(0,1))))))
-local E_s = ad.select(inBounds,ad.select(crossStencilValid, E_s_beforeSelect ,0),0)
-
-local E_p = ad.select(pointValid, D(0,0) - D_i(0,0),0)
---local E_p = ad.select(pointValid, D(0,0) - D_i(0,0)	,0)
---local E_p = ad.select(squareStencilValid, D(0,0) - squareStencilSum/10000.0,0)
---local E_p = ad.select(pointValid, D(0,0) - 0.9	, D(0,0) - 0.1)
-
---local E_p = ad.select(squareStencilValid, D(0,0) 	,0)
-
-local E_r_h = 0 --temporal constraint, unimplemented
-local E_r_v = 0 --temporal constraint, unimplemented
-local E_r_d = 0 --temporal constraint, unimplemented
+if USE_TEMPORAL_CONSTRAINT then
+	--TODO: Implement
+end
 
 local cost = ad.sumsquared(w_g*E_g_h, w_g*E_g_v, w_s*E_s, w_p*E_p, w_r*E_r_h, w_r*E_r_v, w_r*E_r_d)
 --local cost = ad.sumsquared(E_p)
-return S:Cost(cost)
+return P:Cost(cost)

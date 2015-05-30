@@ -17,6 +17,9 @@
     <None Include="data-files\test.Scene.Any">
       <Filter>Scene Files</Filter>
     </None>
+    <None Include="data-files\imageQuotient.pix">
+      <Filter>Shader Files</Filter>
+    </None>
   </ItemGroup>
   <ItemGroup>
     <Filter Include="Source Files">
