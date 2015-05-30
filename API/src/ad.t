@@ -98,6 +98,8 @@ local function factors(e)
     return e,one
 end
 local function simplify(op,args)
+
+
     local x,y,z = unpack(args)
     --print(x,y)
     if allconst(args) and op:getimpl() then

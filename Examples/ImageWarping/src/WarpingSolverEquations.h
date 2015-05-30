@@ -22,7 +22,12 @@ __inline__ __device__ float evalFDevice(unsigned int variableIdx, SolverInput& i
 
 	// E_fit
 	float2 constraintUV = input.d_constraints[variableIdx];	bool validConstraint = (constraintUV.x >= 0 && constraintUV.y >= 0) && state.d_mask[get1DIdx(i, j, input.width, input.height)] == 0;
-	if (validConstraint) { float2 e_fit = (state.d_x[variableIdx] - constraintUV); e += parameters.weightFitting*e_fit*e_fit; }
+	if (validConstraint) { 
+		float2 e_fit = (state.d_x[variableIdx] - constraintUV); 
+		e += parameters.weightFitting*e_fit*e_fit; 
+		//printf("e=%f | %f (%d|%d)\n", e.x, e.y, i, j);
+		//printf("x=%f | %f\n", state.d_x[variableIdx].x, state.d_x[variableIdx].y);
+	}
 
 	// E_reg
 	float2x2 R = evalR(state.d_A[get1DIdx(i, j, input.width, input.height)]);
@@ -93,6 +98,7 @@ __inline__ __device__ float2 evalMinusJTFDevice(unsigned int variableIdx, Solver
 	// Preconditioner
 	if (preA > FLOAT_EPSILON) preA = 1.0f / preA;
 	else					  preA = 1.0f;
+	preA = 1.0f;
 	state.d_precondionerA[variableIdx] = preA;
 	
 	return b;

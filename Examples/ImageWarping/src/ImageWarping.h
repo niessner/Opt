@@ -114,7 +114,7 @@ public:
 			//m_warpingSolverTerra->solve(d_warpField, d_warpAngles, d_urshape, d_constraints, d_mask, nonLinearIter, linearIter, weightFit, weightReg);
 		}
 
-		copyResultToCPU();
+		//copyResultToCPU();
 		resetGPU();
 		 
 		for (unsigned int i = 0; i < numIter; i++)	{
