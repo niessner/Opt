@@ -10,7 +10,7 @@
 #include "WarpingSolverState.h"
 #include "WarpingSolverParameters.h"
 
-__inline__ __device__ float2 evalFDevice(unsigned int variableIdx, SolverInput& input, SolverState& state, SolverParameters& parameters)
+__inline__ __device__ float evalFDevice(unsigned int variableIdx, SolverInput& input, SolverState& state, SolverParameters& parameters)
 {
 	float2 e = make_float2(0.0f, 0.0f);
 
@@ -35,7 +35,8 @@ __inline__ __device__ float2 evalFDevice(unsigned int variableIdx, SolverInput& 
 	if (validN3) { float2 q = state.d_x[get1DIdx(n3_i, n3_j, input.width, input.height)]; float2 qHat = state.d_urshape[get1DIdx(n3_i, n3_j, input.width, input.height)]; float2 d = (p - q) - R*(pHat - qHat); e_reg += d*d; }
 	e += parameters.weightRegularizer*e_reg;
 
-	return e;
+	float res = e.x + e.y;
+	return res;
 }
 
 ////////////////////////////////////////

@@ -42,8 +42,8 @@ __global__ void EvalResidualDevice(SolverInput input, SolverState state, SolverP
 	const unsigned int x = blockIdx.x * blockDim.x + threadIdx.x;
 
 	if (x < N) {
-		float2 residual = evalFDevice(x, input, state, parameters);
-		float out = warpReduce(residual.x + residual.y);
+		float residual = evalFDevice(x, input, state, parameters);
+		float out = warpReduce(residual);
 		unsigned int laneid;
 		//This command gets the lane ID within the current warp
 		asm("mov.u32 %0, %%laneid;" : "=r"(laneid));
