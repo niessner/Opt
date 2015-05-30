@@ -9,5 +9,6 @@ opt.problemkind = ""
 
 opt.math = require("util").cpuMath
 package.terrapath = package.terrapath..";../../Examples/SmoothingLaplacianFloat4/?.t;../testMLib/?.t;"
-require("SmoothingLaplacianFloat4AD")
+print(arg[1])
+assert(terralib.loadfile(arg[1]))()
 

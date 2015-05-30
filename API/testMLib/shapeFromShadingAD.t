@@ -2,7 +2,7 @@ local USE_MASK_REFINE 			= false
 
 local USE_DEPTH_CONSTRAINT 		= true
 local USE_REGULARIZATION 		= true
-local USE_SHADING_CONSTRAINT 	= false
+local USE_SHADING_CONSTRAINT 	= true
 local USE_TEMPORAL_CONSTRAINT 	= false
 local USE_PRECONDITIONER 		= false
 
@@ -10,9 +10,10 @@ local DEPTH_DISCONTINUITY_THRE = 0.01
 
 
 local W,H 	= opt.Dim("W",0), opt.Dim("H",1)
-local P 	= opt.ProblemSpec()
+local P 	= ad.ProblemSpec()
 local X 	= P:Image("X",float, W,H,0) -- Refined Depth
 local D_i 	= P:Image("D_i",float, W,H,1) -- Depth input
+
 local I 	= P:Image("I",float, W,H,2) -- Target Intensity
 local D_p 	= P:Image("D_p",float, W,H,3) -- Previous Depth
 local edgeMaskR = P:Image("edgeMaskR",uint8, W,H,4) -- Edge mask. 
@@ -89,7 +90,7 @@ function p(offX,offY)
 end
 
 -- equation 10
-function n(offX, offY)
+function normalAt(offX, offY)
 	local i = offX + posX -- good
     local j = offY + posY -- good
     --f_x good, f_y good
@@ -98,11 +99,12 @@ function n(offX, offY)
     local n_y = X(offX - 1, offY) * (X(offX, offY) - X(offX, offY - 1)) / f_x
     local n_z = (n_x * (u_x - i) / f_x) + (n_y * (u_y - j) / f_y) - (X(offX-1, offY)*X(offX, offY-1) / (f_x*f_y))
     local sqLength = n_x*n_x + n_y*n_y + n_z*n_z
-    return ad.select(ad.greater(sqLength, 0.0),  {n_x, n_y, n_z}, {n_x, n_y, n_z})--times(1.0/ad.sqrt(sqLength), {n_x, n_y, n_z}), {n_x, n_y, n_z})
+    local inverseMagnitude = ad.select(ad.greater(sqLength, 0.0), 1.0/ad.sqrt(sqLength), 1.0)
+    return times(inverseMagnitude, {n_x, n_y, n_z})
 end
 
 function B(offX, offY)
-	local normal = n(offX, offY)
+	local normal = normalAt(offX, offY)
 	local n_x = normal[1]
 	local n_y = normal[2]
 	local n_z = normal[3]
@@ -121,6 +123,7 @@ local E_r_v = 0.0
 local E_r_d = 0.0 
 local E_g_v = 0.0
 local E_g_h = 0.0
+print(D_i)
 local pointValid = ad.greater(D_i(0,0), 0)
 
 if USE_DEPTH_CONSTRAINT then
@@ -157,10 +160,10 @@ if USE_REGULARIZATION then
 	E_s = 
 		ad.select(opt.InBounds(0,0,1,1),
 			ad.select(cross_valid,
-				ad.select(ad.less(ad.abs(d - self.X(1,0)), DEPTH_DISCONTINUITY_THRE),
-					ad.select(ad.less(ad.abs(d - self.X(-1,0)), DEPTH_DISCONTINUITY_THRE),
-						ad.select(ad.less(ad.abs(d - self.X(0,1)), DEPTH_DISCONTINUITY_THRE),
-							ad.select(ad.less(ad.abs(d - self.X(0,-1)), DEPTH_DISCONTINUITY_THRE),
+				ad.select(ad.less(ad.abs(d - X(1,0)), DEPTH_DISCONTINUITY_THRE),
+					ad.select(ad.less(ad.abs(d - X(-1,0)), DEPTH_DISCONTINUITY_THRE),
+						ad.select(ad.less(ad.abs(d - X(0,1)), DEPTH_DISCONTINUITY_THRE),
+							ad.select(ad.less(ad.abs(d - X(0,-1)), DEPTH_DISCONTINUITY_THRE),
 								E_s_noCheck,
 							0),
 						0),
