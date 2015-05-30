@@ -27,7 +27,7 @@ public:
 		m_warpingSolver		 = new CUDAWarpingSolver(m_image.getWidth(), m_image.getHeight());
 		m_warpingSolverPatch = new CUDAPatchSolverWarping(m_image.getWidth(), m_image.getHeight());
 
-		m_warpingSolverTerra = new TerraSolverWarping(m_image.getWidth(), m_image.getHeight(), "ImageWarpingAD.t", "gaussNewtonGPU");
+		m_warpingSolverTerra = new TerraSolverWarping(m_image.getWidth(), m_image.getHeight(), "ImageWarping.t", "gaussNewtonGPU");
 		
 	}
 
@@ -97,12 +97,12 @@ public:
 
 	ColorImageR32* solve() {
 		float weightFit = 100.0f;
-		float weightReg = 10.01f;
+		float weightReg = 0.01f;
 
 		unsigned int numIter = 2;
 
 		unsigned int nonLinearIter = 5;
-		unsigned int linearIter = 1;
+		unsigned int linearIter = 10;
 		unsigned int patchIter = 32;
 
 		for (unsigned int i = 0; i < numIter; i++)	{

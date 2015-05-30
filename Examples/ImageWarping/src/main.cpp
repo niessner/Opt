@@ -4,21 +4,21 @@
 int main(int argc, const char * argv[]) {
 
 	// DOG
-	//const std::string inputImage = "smoothingExampleD.png";
-	//const std::string inputImageMask = "smoothingExampleDMask.png";
-	//std::vector<std::vector<int>> constraints; constraints.resize(4);
-	//constraints[0].push_back(95);  constraints[0].push_back(118); constraints[0].push_back(80);  constraints[0].push_back(118);
-	//constraints[1].push_back(120); constraints[1].push_back(118); constraints[1].push_back(130); constraints[1].push_back(118);
-	//constraints[2].push_back(163); constraints[2].push_back(111); constraints[2].push_back(153); constraints[2].push_back(111);
-	//constraints[3].push_back(183); constraints[3].push_back(111); constraints[3].push_back(193); constraints[3].push_back(111);
+	const std::string inputImage = "smoothingExampleD.png";
+	const std::string inputImageMask = "smoothingExampleDMask.png";
+	std::vector<std::vector<int>> constraints; constraints.resize(4);
+	constraints[0].push_back(95);  constraints[0].push_back(118); constraints[0].push_back(80);  constraints[0].push_back(118);
+	constraints[1].push_back(120); constraints[1].push_back(118); constraints[1].push_back(130); constraints[1].push_back(118);
+	constraints[2].push_back(163); constraints[2].push_back(111); constraints[2].push_back(153); constraints[2].push_back(111);
+	constraints[3].push_back(183); constraints[3].push_back(111); constraints[3].push_back(193); constraints[3].push_back(111);
 
-	// COLUMN
-	const std::string inputImage = "bend2.png";
-	const std::string inputImageMask = "bendMask.png";
-	std::vector<std::vector<int>> constraints; constraints.resize(3);
-	constraints[0].push_back(48); constraints[0].push_back(61); constraints[0].push_back(144); constraints[0].push_back(69);
-	constraints[1].push_back(64); constraints[1].push_back(61); constraints[1].push_back(154); constraints[1].push_back(82);
-	constraints[2].push_back(80); constraints[2].push_back(61); constraints[2].push_back(165); constraints[2].push_back(92);
+	//// PILLAR
+	//const std::string inputImage = "bend2.png";
+	//const std::string inputImageMask = "bendMask.png";
+	//std::vector<std::vector<int>> constraints; constraints.resize(3);
+	//constraints[0].push_back(48); constraints[0].push_back(61); constraints[0].push_back(144); constraints[0].push_back(69);
+	//constraints[1].push_back(64); constraints[1].push_back(61); constraints[1].push_back(154); constraints[1].push_back(82);
+	//constraints[2].push_back(80); constraints[2].push_back(61); constraints[2].push_back(165); constraints[2].push_back(92);
 
 
 

@@ -58,7 +58,7 @@ local terra mul(matrix : float2x2, v : float_2) : float_2
 end
 
 
-local terra cost(i : int64, j : int64, gi : int64, gj : int64, self : P:ParameterType())
+local terra cost(i : int64, j : int64, gi : int64, gj : int64, self : P:ParameterType()) : float
 	
 	var e : float_2  = make_float2(0.0f, 0.0f)
 
@@ -66,13 +66,19 @@ local terra cost(i : int64, j : int64, gi : int64, gj : int64, self : P:Paramete
 	var xHat : float_2 = self.UrShape(i,j)
 	var a = self.X(i, j)(2)
 	var m = self.Mask(i,j)
+	var c = self.Constraints(i, j)
 	
 	--e_fit
-	if self.Constraints(i, j)(0) >= 0 and self.Constraints(i, j)(1) >= 0 and m == 0 then
-		var e_fit : float_2 = x - self.Constraints(i,j)
-		e = e + self.w_fitSqrt*self.w_fitSqrt*e_fit*e_fit
+	if c(0) >= 0 and c(1) >= 0 and m == 0 then
+		var e_fit : float_2 = make_float2(x(0) - self.Constraints(i,j)(0), x(1) - self.Constraints(i,j)(1))
+		
+		e = make_float2(e(0) + self.w_fitSqrt*self.w_fitSqrt * e_fit(0)*e_fit(0), e(1) + self.w_fitSqrt*self.w_fitSqrt * e_fit(1)*e_fit(1))
+		
+		--e = e + self.w_fitSqrt*self.w_fitSqrt*e_fit*e_fit
 		--printf("e=%f | %f (%d|%d)\n", e(0), e(1), i, j)
-		--printf("x=%f | %f\n", x(0), x(1));
+		--if e(1) > 300 then
+		--	printf("w_sqrt=%f\ne=%f | %f;   x=%f | %f;   c=%f | %f\n", self.w_fitSqrt, e(0), e(1), x(0), x(1), c(0), c(1))
+		--end
 	end
 	
 	var R : float2x2 = evalR(a)
@@ -100,7 +106,7 @@ local terra cost(i : int64, j : int64, gi : int64, gj : int64, self : P:Paramete
 		e_reg = e_reg + d*d
 	end
 	
-	e = e + self.w_regSqrt*self.w_regSqrt*e_reg
+	--e = e + self.w_regSqrt*self.w_regSqrt*e_reg
 	
 
 	var res : float = e(0) + e(1)
