@@ -43,7 +43,9 @@ return function(problemSpec, vars)
 		scanBeta : &float					-- tmp variable for alpha scan
 		
 		timer : Timer
-		nIter : int
+		nIter : int				--current non-linear iter counter
+		nIterations : int		--non-linear iterations
+		lIterations : int		--linear iterations
 	}
 	
 	
@@ -233,32 +235,31 @@ return function(problemSpec, vars)
 
 	local gpu = util.makeGPUFunctions(problemSpec, vars, PlanData, kernels)
 	
-	local nIterations,lIterations = 10,50
+	--local nIterations,lIterations = 10,50
 	
 	local terra init(data_ : &opaque, images : &&opaque, edgeValues : &&opaque, params_ : &&opaque, solverparams : &&opaque)
-		--nIterations = @[&int](solverparams[0])
-		
 		
 		var pd = [&PlanData](data_)
 		pd.timer:init()
 		pd.parameters = [util.getParameters(problemSpec, images, edgeValues,params_)]
-	    pd.nIter = 0
+		pd.nIter = 0
+		
+		pd.nIterations = @[&int](solverparams[0])
+		pd.lIterations = @[&int](solverparams[1])
 	end
 	local terra step(data_ : &opaque, images : &&opaque, edgeValues : &&opaque, params_ : &&opaque, solverparams : &&opaque)
 		var pd = [&PlanData](data_)
 		pd.parameters = [util.getParameters(problemSpec, images, edgeValues,params_)]
 
-		if pd.nIter < nIterations then
+		if pd.nIter < pd.nIterations then
 		    var startCost = gpu.computeCost(pd)
 			logSolver("iteration %d, cost=%f\n", pd.nIter, startCost)
+			
 			pd.scanAlpha[0] = 0.0	--scan in PCGInit1 requires reset
 			gpu.PCGInit1(pd)
-			--var a = pd.scanAlpha[0]
-			--C.printf("Alpha %15.15f\n", a)
-			--break
 			gpu.PCGInit2(pd)
 			
-			for lIter = 0, lIterations do
+			for lIter = 0, pd.lIterations do
 				pd.scanAlpha[0] = 0.0	--scan in PCGStep1 requires reset
 				gpu.PCGStep1(pd)
 				pd.scanBeta[0] = 0.0	--scan in PCGStep2 requires reset

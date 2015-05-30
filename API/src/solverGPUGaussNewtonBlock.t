@@ -99,6 +99,10 @@ return function(problemSpec, vars)
 
 		timer : Timer
 		nIter : int
+		currOffset : int
+		nIterations : int
+		lIterations : int
+		bIterations : int
 	}
 	
 
@@ -456,31 +460,38 @@ return function(problemSpec, vars)
 	local gpu = util.makeGPUFunctions(problemSpec, vars, PlanData, kernels)
 
 
-    local nIterations, lIterations, bIterations = 5,8,10	
-
 	local terra init(data_ : &opaque, images : &&opaque, edgeValues : &&opaque, params_ : &&opaque, solverparams : &&opaque)
 		var pd = [&PlanData](data_)
 		pd.timer:init()
 		pd.parameters = [util.getParameters(problemSpec, images, edgeValues,params_)]
-	    pd.nIter = 0	
+	    
+		pd.nIter = 0
+		pd.currOffset = 0
+		
+		pd.nIterations = @[&int](solverparams[0])
+		pd.lIterations = @[&int](solverparams[1])
+		pd.bIterations = @[&int](solverparams[2])
 	end
 	
 	local terra step(data_ : &opaque, images : &&opaque, edgeValues : &&opaque, params_ : &&opaque,  solverparams : &&opaque)
 		var pd = [&PlanData](data_)
 		pd.parameters = [util.getParameters(problemSpec, images, edgeValues,params_)]
-		if pd.nIter < nIterations then
-			var o : int = 0
-			for lIter = 0, lIterations do
-			    var startCost = gpu.computeCost(pd)
-				logSolver("iteration %d, cost=%f\n", lIter, startCost)	
+		if pd.nIter < pd.nIterations then
+		
+			var startCost = gpu.computeCost(pd)
+			logSolver("iteration %d, cost=%f\n", pd.nIter, startCost)	
+				
+			for lIter = 0, pd.lIterations do
+			    --var startCost = gpu.computeCost(pd)
+				--logSolver("iteration %d, cost=%f\n", lIter, startCost)	
 			
-				var oX : int = offsetX[o]
-				var oY : int = offsetY[o]				
+				var oX : int = offsetX[pd.currOffset]
+				var oY : int = offsetY[pd.currOffset]				
 			
 				--C.printf("offset: (%d | %d)\n", oX, oY)
-				gpu.PCGStepBlock(pd, oX, oY, bIterations)
+				gpu.PCGStepBlock(pd, oX, oY, pd.bIterations)
 				gpu.PCGLinearUpdateBlock(pd, oX, oY)
-				o = (o+1)%8
+				pd.currOffset = (pd.currOffset+1)%8
 				C.cudaDeviceSynchronize()				
 			end
 			pd.nIter = pd.nIter + 1

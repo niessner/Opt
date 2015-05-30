@@ -110,14 +110,15 @@ public:
 
 		std::cout << "\n\nTERRA" << std::endl;
 		resetGPUMemory();
-		m_terraSolver->solve(d_imageFloat, d_targetFloat, nonLinearIter, linearIter, weightFit, weightReg);
+		m_terraSolver->solve(d_imageFloat, d_targetFloat, nonLinearIter, linearIter, patchIter, weightFit, weightReg);
 		copyResultToCPUFromFloat();
 
 		std::cout << "\n\nTERRA_BLOCK" << std::endl;
 		resetGPUMemory();
-		m_terraBlockSolver->solve(d_imageFloat, d_targetFloat, nonLinearIter, linearIter, weightFit, weightReg);
+		m_terraBlockSolver->solve(d_imageFloat, d_targetFloat, nonLinearIter, linearIter, patchIter, weightFit, weightReg);
 		copyResultToCPUFromFloat();
 
+		//TODO fix parameters here
 		std::cout << "CUSP" << std::endl;
 		m_cuspSolverFloat->solvePCG(d_imageFloat, d_targetFloat, nonLinearIter, linearIter, weightFit, weightReg);
 		copyResultToCPUFromFloat();

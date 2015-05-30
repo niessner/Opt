@@ -67,7 +67,7 @@ __inline__ __device__ float2 evalMinusJTFDevice(unsigned int variableIdx, Solver
 
 	// fit/pos
 	float2 constraintUV = input.d_constraints[variableIdx];	bool validConstraint = (constraintUV.x >= 0 && constraintUV.y >= 0) && state.d_mask[get1DIdx(i, j, input.width, input.height)] == 0;
-	if (validConstraint) { b += -parameters.weightFitting*(state.d_x[variableIdx] - constraintUV); pre += parameters.weightFitting*make_float2(1.0f, 1.0f); }
+	if (validConstraint) { b += -2.0f*parameters.weightFitting*(state.d_x[variableIdx] - constraintUV); pre += 2.0f*parameters.weightFitting*make_float2(1.0f, 1.0f); }
 
 	// reg/pos
 	float2	 p = state.d_x[get1DIdx(i, j, input.width, input.height)];
@@ -78,7 +78,7 @@ __inline__ __device__ float2 evalMinusJTFDevice(unsigned int variableIdx, Solver
 	if (validN1){ float2 q = state.d_x[get1DIdx(n1_i, n1_j, input.width, input.height)]; float2 qHat = state.d_urshape[get1DIdx(n1_i, n1_j, input.width, input.height)]; float2x2 R_j = evalR(state.d_A[get1DIdx(n1_i, n1_j, input.width, input.height)]); e_reg += 2 * (p - q) - float2(mat2x2(R_i + R_j)*mat2x1(pHat - qHat)); pre += 2.0f*parameters.weightRegularizer; }
 	if (validN2){ float2 q = state.d_x[get1DIdx(n2_i, n2_j, input.width, input.height)]; float2 qHat = state.d_urshape[get1DIdx(n2_i, n2_j, input.width, input.height)]; float2x2 R_j = evalR(state.d_A[get1DIdx(n2_i, n2_j, input.width, input.height)]); e_reg += 2 * (p - q) - float2(mat2x2(R_i + R_j)*mat2x1(pHat - qHat)); pre += 2.0f*parameters.weightRegularizer; }
 	if (validN3){ float2 q = state.d_x[get1DIdx(n3_i, n3_j, input.width, input.height)]; float2 qHat = state.d_urshape[get1DIdx(n3_i, n3_j, input.width, input.height)]; float2x2 R_j = evalR(state.d_A[get1DIdx(n3_i, n3_j, input.width, input.height)]); e_reg += 2 * (p - q) - float2(mat2x2(R_i + R_j)*mat2x1(pHat - qHat)); pre += 2.0f*parameters.weightRegularizer; }
-	b += -parameters.weightRegularizer*e_reg;
+	b += -2.0f*parameters.weightRegularizer*e_reg;
 
 	// reg/angle
 	float2x2 R = evalR(state.d_A[get1DIdx(i, j, input.width, input.height)]);
@@ -88,7 +88,11 @@ __inline__ __device__ float2 evalMinusJTFDevice(unsigned int variableIdx, Solver
 	if (validN1) { float2 q = state.d_x[get1DIdx(n1_i, n1_j, input.width, input.height)]; float2 qHat = state.d_urshape[get1DIdx(n1_i, n1_j, input.width, input.height)]; mat2x1 D = -mat2x1(dR*(pHat - qHat)); e_reg_angle += D.getTranspose()*mat2x1((p - q) - R*(pHat - qHat)); preA += D.getTranspose()*D*parameters.weightRegularizer; }
 	if (validN2) { float2 q = state.d_x[get1DIdx(n2_i, n2_j, input.width, input.height)]; float2 qHat = state.d_urshape[get1DIdx(n2_i, n2_j, input.width, input.height)]; mat2x1 D = -mat2x1(dR*(pHat - qHat)); e_reg_angle += D.getTranspose()*mat2x1((p - q) - R*(pHat - qHat)); preA += D.getTranspose()*D*parameters.weightRegularizer; }
 	if (validN3) { float2 q = state.d_x[get1DIdx(n3_i, n3_j, input.width, input.height)]; float2 qHat = state.d_urshape[get1DIdx(n3_i, n3_j, input.width, input.height)]; mat2x1 D = -mat2x1(dR*(pHat - qHat)); e_reg_angle += D.getTranspose()*mat2x1((p - q) - R*(pHat - qHat)); preA += D.getTranspose()*D*parameters.weightRegularizer; }
-	bA += -parameters.weightRegularizer*e_reg_angle;
+	bA += -4.0f*parameters.weightRegularizer*e_reg_angle;
+
+	//TODO ENABLE OUR PRE-CONDITIONER AGAIN
+	pre = make_float2(1.0f, 1.0f);
+	preA = 1.0f;
 
 	// Preconditioner
 	if (pre.x > FLOAT_EPSILON) pre = 1.0f / pre;
@@ -98,7 +102,6 @@ __inline__ __device__ float2 evalMinusJTFDevice(unsigned int variableIdx, Solver
 	// Preconditioner
 	if (preA > FLOAT_EPSILON) preA = 1.0f / preA;
 	else					  preA = 1.0f;
-	preA = 1.0f;
 	state.d_precondionerA[variableIdx] = preA;
 	
 	return b;
@@ -121,7 +124,7 @@ __inline__ __device__ float2 applyJTJDevice(unsigned int variableIdx, SolverInpu
 
 	// pos/constraint
 	float2 constraintUV = input.d_constraints[variableIdx];	bool validConstraint = (constraintUV.x >= 0 && constraintUV.y >= 0) && state.d_mask[get1DIdx(i, j, input.width, input.height)] == 0;
-	if (validConstraint) { b += parameters.weightFitting*state.d_p[variableIdx]; }
+	if (validConstraint) { b += 2.0f*parameters.weightFitting*state.d_p[variableIdx]; }
 
 	// pos/reg
 	float2 e_reg = make_float2(0.0f, 0.0f);
@@ -129,7 +132,7 @@ __inline__ __device__ float2 applyJTJDevice(unsigned int variableIdx, SolverInpu
 	if (validN1) e_reg += 2.0f*(state.d_p[variableIdx] - state.d_p[get1DIdx(n1_i, n1_j, input.width, input.height)]);
 	if (validN2) e_reg += 2.0f*(state.d_p[variableIdx] - state.d_p[get1DIdx(n2_i, n2_j, input.width, input.height)]);
 	if (validN3) e_reg += 2.0f*(state.d_p[variableIdx] - state.d_p[get1DIdx(n3_i, n3_j, input.width, input.height)]);
-	b += parameters.weightRegularizer*e_reg;
+	b += 2.0f*parameters.weightRegularizer*e_reg;
 
 	// angle/reg
 	float	 e_reg_angle = 0.0f;
@@ -140,7 +143,7 @@ __inline__ __device__ float2 applyJTJDevice(unsigned int variableIdx, SolverInpu
 	if (validN1) { float2 qHat = state.d_urshape[get1DIdx(n1_i, n1_j, input.width, input.height)]; mat2x1 D = mat2x1(dR*(pHat - qHat)); e_reg_angle += D.getTranspose()*D*angleP; }
 	if (validN2) { float2 qHat = state.d_urshape[get1DIdx(n2_i, n2_j, input.width, input.height)]; mat2x1 D = mat2x1(dR*(pHat - qHat)); e_reg_angle += D.getTranspose()*D*angleP; }
 	if (validN3) { float2 qHat = state.d_urshape[get1DIdx(n3_i, n3_j, input.width, input.height)]; mat2x1 D = mat2x1(dR*(pHat - qHat)); e_reg_angle += D.getTranspose()*D*angleP; }
-	bA += parameters.weightRegularizer*e_reg_angle;
+	bA += 4.0f*parameters.weightRegularizer*e_reg_angle;
 
 	return b;
 }

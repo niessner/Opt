@@ -87,7 +87,7 @@ public:
 
 		Opt_ProblemInit(m_optimizerState, m_plan, data, NULL, problemParams, (void**)&numIter);
 		while (Opt_ProblemStep(m_optimizerState, m_plan, data, NULL, problemParams, NULL));
-		//Opt_ProblemSolve(m_optimizerState, m_plan, data, NULL, NULL, NULL);
+		//Opt_ProblemSolve(m_optimizerState, m_plan, data, NULL, problemParams, NULL);
 	}
 
 private:

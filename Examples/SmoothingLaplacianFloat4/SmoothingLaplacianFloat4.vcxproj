@@ -136,7 +136,6 @@
     <ClInclude Include="src\PatchSolverWarpingEquations.h" />
     <ClInclude Include="src\PatchSolverWarpingState.h" />
     <ClInclude Include="src\PatchSolverWarpingUtil.h" />
-    <ClInclude Include="src\TerraSolverWarping.h" />
     <ClInclude Include="src\TerraSolverWarpingFloat4.h" />
     <ClInclude Include="src\WarpingSolverEquations.h" />
     <ClInclude Include="src\WarpingSolverParameters.h" />

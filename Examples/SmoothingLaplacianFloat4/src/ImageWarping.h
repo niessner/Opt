@@ -7,7 +7,6 @@
 
 #include "CUDAWarpingSolver.h"
 #include "CUDAPatchSolverWarping.h"
-#include "TerraSolverWarping.h"
 #include "TerraSolverWarpingFloat4.h"
 
 class ImageWarping {
@@ -90,17 +89,17 @@ public:
 		
 		std::cout << "\n\nCUDA_PATCH" << std::endl;
 		resetGPUMemory();
-		m_patchSolver->solveGN(d_imageFloat4, d_targetFloat4, nonLinearIter, patchIter, weightFit, weightReg);
+		m_patchSolver->solveGN(d_imageFloat4, d_targetFloat4, nonLinearIter, linearIter, patchIter, weightFit, weightReg);
 		copyResultToCPUFromFloat4();
 
 		std::cout << "\n\nTERRA_FLOAT4" << std::endl;
 		resetGPUMemory();
-		m_terraSolverFloat4->solve(d_imageFloat4, d_targetFloat4, nonLinearIter, linearIter, weightFit, weightReg);
+		m_terraSolverFloat4->solve(d_imageFloat4, d_targetFloat4, nonLinearIter, linearIter, patchIter, weightFit, weightReg);
 		copyResultToCPUFromFloat4();
 
 		std::cout << "\n\nTERRA_BLOCK" << std::endl;
 		resetGPUMemory();
-		m_terraBlockSolverFloat4->solve(d_imageFloat4, d_targetFloat4, nonLinearIter, linearIter, weightFit, weightReg);
+		m_terraBlockSolverFloat4->solve(d_imageFloat4, d_targetFloat4, nonLinearIter, linearIter, patchIter, weightFit, weightReg);
 		copyResultToCPUFromFloat4();		
 
 		return &m_result;

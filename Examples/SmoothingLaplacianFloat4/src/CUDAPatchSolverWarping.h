@@ -13,7 +13,7 @@ class CUDAPatchSolverWarping
 		CUDAPatchSolverWarping(unsigned int imageWidth, unsigned int imageHeight);
 		~CUDAPatchSolverWarping();
 
-		void solveGN(float4* d_image, float4* d_target, unsigned int nNonLinearIterations, unsigned int nPatchIterations, float weightFitting, float weightRegularizer);
+		void solveGN(float4* d_image, float4* d_target, unsigned int nNonLinearIterations, unsigned int nLinearIterations, unsigned int nPatchIterations, float weightFitting, float weightRegularizer);
 			
 	private:
 
