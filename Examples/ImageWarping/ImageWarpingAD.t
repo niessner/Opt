@@ -1,4 +1,5 @@
 
+
 local W,H = opt.Dim("W",0), opt.Dim("H",1)
 local S = ad.ProblemSpec()
 
@@ -67,6 +68,4 @@ end
 local cost = ad.sumsquared(unpack(terms))
 return S:Cost(cost)
 
-
-return tmp
 

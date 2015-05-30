@@ -101,12 +101,14 @@ public:
 			unsigned int linearIter = 50;
 			unsigned int patchIter = 32;
 
-			//m_warpingSolver->solveGN(d_urshape, d_warpField, d_warpAngles, d_constraints, d_mask, nonLinearIter, linearIter, weightFit, weightReg);
+			m_warpingSolver->solveGN(d_urshape, d_warpField, d_warpAngles, d_constraints, d_mask, nonLinearIter, linearIter, weightFit, weightReg);
 			
 	
 			//m_warpingSolverPatch->solveGN(d_urshape, d_warpField, d_warpAngles, d_constraints, d_mask, nonLinearIter, patchIter, weightFit, weightReg);
-			std::cout << " bla: " << cudaGetErrorString((cudaError_t)74) << std::endl;
+
 			m_warpingSolverTerra->solve(d_warpField, d_warpAngles, d_urshape, d_constraints, d_mask, nonLinearIter, linearIter, weightFit, weightReg);
+
+			break;
 		}
 
 		copyResultToCPU();
