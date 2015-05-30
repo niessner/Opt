@@ -45,7 +45,7 @@ public:
 		m_warpingSolver		 = new CUDAWarpingSolver(m_image.getWidth(), m_image.getHeight());
 		m_warpingSolverPatch = new CUDAPatchSolverWarping(m_image.getWidth(), m_image.getHeight());
 
-		m_warpingSolverTerra = new TerraSolverWarping(m_image.getWidth(), m_image.getHeight(), "ImageWarpingAD.t", "GaussNewtonGPU");
+		m_warpingSolverTerra = new TerraSolverWarping(m_image.getWidth(), m_image.getHeight(), "ImageWarpingAD.t", "gaussNewtonGPU");
 		
 	}
 
@@ -105,7 +105,7 @@ public:
 			
 	
 			//m_warpingSolverPatch->solveGN(d_urshape, d_warpField, d_warpAngles, d_constraints, d_mask, nonLinearIter, patchIter, weightFit, weightReg);
-
+			std::cout << " bla: " << cudaGetErrorString((cudaError_t)74) << std::endl;
 			m_warpingSolverTerra->solve(d_warpField, d_warpAngles, d_urshape, d_constraints, d_mask, nonLinearIter, linearIter, weightFit, weightReg);
 		}
 

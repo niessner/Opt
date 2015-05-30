@@ -19,7 +19,8 @@
 
 #define THREADS_PER_BLOCK (16*16)
 
-
+#include <cutil_inline.h>
+#include <cutil_math.h>
 
 /////////////////
 /// TO FLOAT3 ///
