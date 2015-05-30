@@ -97,12 +97,12 @@ public:
 
 	ColorImageR32* solve() {
 		float weightFit = 100.0f;
-		float weightReg = 0.01f;
+		float weightReg = 10.01f;
 
 		unsigned int numIter = 2;
 
-		unsigned int nonLinearIter = 2;
-		unsigned int linearIter = 5;
+		unsigned int nonLinearIter = 5;
+		unsigned int linearIter = 1;
 		unsigned int patchIter = 32;
 
 		for (unsigned int i = 0; i < numIter; i++)	{
@@ -112,10 +112,13 @@ public:
 			m_warpingSolver->solveGN(d_urshape, d_warpField, d_warpAngles, d_constraints, d_mask, nonLinearIter, linearIter, weightFit, weightReg);
 			//m_warpingSolverPatch->solveGN(d_urshape, d_warpField, d_warpAngles, d_constraints, d_mask, nonLinearIter, patchIter, weightFit, weightReg);
 			//m_warpingSolverTerra->solve(d_warpField, d_warpAngles, d_urshape, d_constraints, d_mask, nonLinearIter, linearIter, weightFit, weightReg);
+			std::cout << std::endl;
 		}
 
-		//copyResultToCPU();
+		copyResultToCPU();
 		resetGPU();
+
+		std::cout << std::endl << std::endl;
 		 
 		for (unsigned int i = 0; i < numIter; i++)	{
 			std::cout << "//////////// ITERATION" << i << "  (TERRA) ///////////////" << std::endl;
@@ -124,9 +127,10 @@ public:
 			//m_warpingSolver->solveGN(d_urshape, d_warpField, d_warpAngles, d_constraints, d_mask, nonLinearIter, linearIter, weightFit, weightReg);
 			//m_warpingSolverPatch->solveGN(d_urshape, d_warpField, d_warpAngles, d_constraints, d_mask, nonLinearIter, patchIter, weightFit, weightReg);
 			m_warpingSolverTerra->solve(d_warpField, d_warpAngles, d_urshape, d_constraints, d_mask, nonLinearIter, linearIter, patchIter, weightFit, weightReg);
+			std::cout << std::endl;
 		}
 
-		copyResultToCPU();
+		//copyResultToCPU();
 
 		return &m_result;
 	}
