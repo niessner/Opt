@@ -1,12 +1,19 @@
 \section{compiler}
 \label{sec:compiler}
 
-\subsection{Compiling Energy Functions to Residuals} % (fold)
+\JRK{Compiler \emph{in terms of what the solver needs (JTJ)}}
+
+\subsection{Compiling Energy Functions to Residual Terms} % (fold)
 \label{sub:autodiff}
 
 Expression language → automatic differentiation (simplified $D\star$)
 
 Understands data structures, stencils
+
+% Cost is sum of squares, we keep each of those squared terms (residual r_i) separate and do the following for each i:
+%% Making JTJp - we want it separately, for each unknown point - gather form per image pixel
+% 1. Given cost, find the residuals that include x(0,0) - the non-zero entries in J^T
+% 2. Unknowns for residual r(x,y) - the non-zero columns in J - just the stencil, shifted by x,y
 
 % subsection autodiff (end)
 

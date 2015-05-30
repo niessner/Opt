@@ -16,9 +16,34 @@ Division of responsibility: compiler handles autodiff.
 \subsection{Energy Function Expression Language} % (fold)
 \label{sub:expression_language}
 
+% Params (uniforms)
+% Dimensions
+% Images
+%   Have type (float, float4, etc.) and dimension
+
+There's an escape hatch: provide required derivative explicitly, skip autodiff.
+
 % subsection expression_language (end)
 
 \subsection{Runtime API} % (fold)
 \label{sub:runtime_api}
+
+  % optimizerState = Opt_NewState();
+
+  % 1. Define: loads program and chooses method - (does type checking, etc.)
+  % Problem * prob = Opt_ProblemDefine(optimizerState,
+  %                                    example.terraCodeFilename.c_str(),
+  %                                    method.optimizerName.c_str());
+
+  % 2. Plan: defines variable sizes (and later: graph connectivity)
+  % Plan *plan = Opt_ProblemPlan(optimizerState, prob,
+  %                              dims, 
+  %                              elemsize.data() /* strides[0] */,
+  %                              stride.data() /* strides[1] */);
+
+  % 3. Solve: pass concrete input, output buffers & run an iteration (or full solve?)
+  % Opt_ProblemSolve(optimizerState, plan,
+  %                  isGPU ? imagesGPU.data() : imagesCPU.data(),
+  %                  problemParams /* uniforms */, solverParams);
 
 % subsection runtime_api (end)
