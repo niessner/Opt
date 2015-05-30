@@ -306,10 +306,12 @@ void ApplyLinearUpdate(SolverInput& input, SolverState& state, SolverParameters&
 extern "C" void ImageWarpiungSolveGNStub(SolverInput& input, SolverState& state, SolverParameters& parameters)
 {
     CUDATimer timer;
-	printf("residual=%f\n", EvalResidual(input, state, parameters, timer));
 
 	for (unsigned int nIter = 0; nIter < parameters.nNonLinearIterations; nIter++)
 	{
+		float residual = EvalResidual(input, state, parameters, timer);
+		printf("%i: cost: %f\n", nIter, residual);
+
 		Initialization(input, state, parameters, timer);
 
 		for (unsigned int linIter = 0; linIter < parameters.nLinIterations; linIter++) {
@@ -317,9 +319,11 @@ extern "C" void ImageWarpiungSolveGNStub(SolverInput& input, SolverState& state,
 		}
 
 		ApplyLinearUpdate(input, state, parameters, timer);	//this should be also done in the last PCGIteration
-        printf("residual=%f\n", EvalResidual(input, state, parameters, timer));
 
         timer.nextIteration();
 	}
     timer.evaluate();
+
+	float residual = EvalResidual(input, state, parameters, timer);
+	printf("final cost: %f\n", residual);
 }

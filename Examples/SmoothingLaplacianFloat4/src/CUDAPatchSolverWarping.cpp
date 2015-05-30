@@ -16,7 +16,7 @@ CUDAPatchSolverWarping::~CUDAPatchSolverWarping()
 	cutilSafeCall(cudaFree(m_solverState.d_sumResidual));
 }
 
-void CUDAPatchSolverWarping::solveGN(float4* d_image, float4* d_target, unsigned int nNonLinearIterations, unsigned int nLinearIterations, unsigned int nPatchIterations, float weightFitting, float weightRegularizer)
+void CUDAPatchSolverWarping::solveGN(float4* d_image, float4* d_target, unsigned int nNonLinearIterations, unsigned int nLinearIterations, unsigned int nBlockIterations, float weightFitting, float weightRegularizer)
 {
 	m_solverState.d_x = d_image;
 	m_solverState.d_target = d_target;
@@ -26,7 +26,7 @@ void CUDAPatchSolverWarping::solveGN(float4* d_image, float4* d_target, unsigned
 	parameters.weightRegularizer = weightRegularizer;
 	parameters.nNonLinearIterations = nNonLinearIterations;
 	parameters.nLinearIterations = nLinearIterations;
-	parameters.nPatchIterations = nPatchIterations;
+	parameters.nPatchIterations = nBlockIterations;
 
 	PatchSolverInput solverInput;
 	solverInput.N = m_imageWidth*m_imageHeight;

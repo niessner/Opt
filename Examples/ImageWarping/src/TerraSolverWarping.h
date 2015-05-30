@@ -64,30 +64,28 @@ public:
 	}
 
 
-	void solve(float2* d_x, float* d_a, float2* d_urshape, float2* d_constraints, float* d_mask, unsigned int nNonLinearIterations, unsigned int nLinearIterations, float weightFit, float weightReg)
+	void solve(float2* d_x, float* d_a, float2* d_urshape, float2* d_constraints, float* d_mask, unsigned int nNonLinearIterations, unsigned int nLinearIterations, unsigned int nBlockIterations, float weightFit, float weightReg)
 	{
 		reshuffleUnknowsToLocal(d_x, d_a);
-		solve(d_unknown, d_urshape, d_constraints, d_mask, nNonLinearIterations, nLinearIterations, weightFit, weightReg);
+		solve(d_unknown, d_urshape, d_constraints, d_mask, nNonLinearIterations, nLinearIterations, nBlockIterations, weightFit, weightReg);
 		reshuffleUnknownsFromLocal(d_x, d_a);
 	}
 
-	void solve(float3* d_unknown, float2* d_urshape, float2* d_constraints, float* d_mask, unsigned int nNonLinearIterations, unsigned int nLinearIterations, float weightFit, float weightReg)
+	void solve(float3* d_unknown, float2* d_urshape, float2* d_constraints, float* d_mask, unsigned int nNonLinearIterations, unsigned int nLinearIterations, unsigned int nBlockIterations, float weightFit, float weightReg)
 	{
-
-		void* data[] = {d_unknown, d_urshape, d_constraints, d_mask};
-		//last parameter is params
-		//Opt_ProblemSolve(m_optimizerState, m_plan, data, NULL, list, NULL);
-
-		unsigned int numIter[] = { nNonLinearIterations, nLinearIterations };
 
 		float weightFitSqrt = sqrt(weightFit);
 		float weightRegSqrt = sqrt(weightReg);
+
 		void* problemParams[] = { &weightFitSqrt, &weightRegSqrt };
+		void* solverParams[] = { &nNonLinearIterations, &nLinearIterations, &nBlockIterations };
+		void* data[] = { d_unknown, d_urshape, d_constraints, d_mask };
+		
 
 
-		Opt_ProblemInit(m_optimizerState, m_plan, data, NULL, problemParams, (void**)&numIter);
-		while (Opt_ProblemStep(m_optimizerState, m_plan, data, NULL, problemParams, NULL));
-		//Opt_ProblemSolve(m_optimizerState, m_plan, data, NULL, problemParams, NULL);
+		//Opt_ProblemInit(m_optimizerState, m_plan, data, NULL, problemParams, (void**)&numIter);
+		//while (Opt_ProblemStep(m_optimizerState, m_plan, data, NULL, problemParams, NULL));
+		Opt_ProblemSolve(m_optimizerState, m_plan, data, NULL, problemParams, solverParams);
 	}
 
 private:

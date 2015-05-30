@@ -237,16 +237,22 @@ int offsetY[8] = {(int)(0.0f*PATCH_SIZE), (int)((1.0f/3.0f)*PATCH_SIZE), (int)((
 extern "C" void patchSolveStereoStub(PatchSolverInput& input, PatchSolverState& state, PatchSolverParameters& parameters)
 {
 	CUDATimer timer;
-	printf("residual=%f\n", EvalResidual(input, state, parameters, timer));
 
 	int o = 0;
-	for(unsigned int nIter = 0; nIter < parameters.nNonLinearIterations; nIter++)
+	for (unsigned int nIter = 0; nIter < parameters.nNonLinearIterations; nIter++)
 	{	
-		PCGIterationPatch(input, state, parameters, offsetX[o], offsetY[o]);
-		o = (o+1)%8;
+		float residual = EvalResidual(input, state, parameters, timer);
+		printf("%i: cost: %f\n", nIter, residual);
 
-		printf("residual=%f\n", EvalResidual(input, state, parameters, timer));
+		for (unsigned int lIter = 0; lIter < parameters.nLinearIterations; lIter++) {
+			PCGIterationPatch(input, state, parameters, offsetX[o], offsetY[o]);
+			o = (o + 1) % 8;
+		}
+
 		timer.nextIteration();
 	}
 	timer.evaluate();
+
+	float residual = EvalResidual(input, state, parameters, timer);
+	printf("final cost: %f\n", residual);
 }

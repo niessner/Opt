@@ -9,6 +9,7 @@ struct PatchSolverParameters
 	float weightRegularizer;				// Regularization weight
 
 	unsigned int nNonLinearIterations;		// Steps of the non-linear solver	
+	unsigned int nLinearIterations;			// Steps of liner solver
 	unsigned int nPatchIterations;			// Steps on linear step on block level
 };
 

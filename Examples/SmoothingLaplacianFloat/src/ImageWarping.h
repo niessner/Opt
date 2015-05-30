@@ -103,7 +103,7 @@ public:
 		m_warpingSolver->solveGN(d_imageFloat, d_targetFloat, nonLinearIter, linearIter, weightFit, weightReg);
 		copyResultToCPUFromFloat();
 
-		std::cout << "CUDA_PATCH" << std::endl;
+		std::cout << "\n\nCUDA_PATCH" << std::endl;
 		resetGPUMemory();
 		m_patchSolver->solveGN(d_imageFloat, d_targetFloat, nonLinearIter, linearIter, patchIter, weightFit, weightReg);
 		copyResultToCPUFromFloat();
@@ -119,7 +119,7 @@ public:
 		copyResultToCPUFromFloat();
 
 		//TODO fix parameters here
-		std::cout << "CUSP" << std::endl;
+		std::cout << "\n\nCUSP" << std::endl;
 		m_cuspSolverFloat->solvePCG(d_imageFloat, d_targetFloat, nonLinearIter, linearIter, weightFit, weightReg);
 		copyResultToCPUFromFloat();
 
