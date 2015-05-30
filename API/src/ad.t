@@ -629,6 +629,7 @@ ad.tanh:define(function(x) return `C.tanh(x) end, 1.0/(ad.cosh(x)*ad.cosh(x)))
 ad.select:define(function(x,y,z) return `terralib.select(bool(x),y,z) end,0,ad.select(x,1,0),ad.select(x,0,1))
 ad.eq:define(function(x,y) return `terralib.select(x == y,1.f,0.f) end, 0,0)
 
+ad.equal:define(function(x,y) return `float(x == y) end, 0,0)
 ad.less:define(function(x,y) return `float(x < y) end, 0,0)
 ad.greater:define(function(x,y) return `float(x > y) end, 0,0)
 ad.lesseq:define(function(x,y) return `float(x <= y) end,0,0)

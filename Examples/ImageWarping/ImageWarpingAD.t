@@ -10,11 +10,6 @@ local w_fitSqrt = S:Param("w_fitSqrt", float, 0)
 local w_regSqrt = S:Param("w_regSqrt", float, 1)
 
 function eval_dR (CosAlpha, SinAlpha)
-	--local R : Vector
-	--R(0,0) = -SinAlpha
-	--R(0,1) = -CosAlpha
-	--R(1,0) = CosAlpha
-	--R(1,1) = -SinAlpha
 	return Vector(-SinAlpha, -CosAlpha, CosAlpha, -SinAlpha)
 end
 
@@ -23,24 +18,18 @@ function evalR (angle)
 end
 
 function mul(m, v)
-	local res = Vector(0,0)
-	for i = 0,1 do
-		for j = 0,1 do 
-			res(i) = res(i) + m(i*2+j) * v(j)
-		end
-	end
-	return v
+	return Vector(m(0)*v(0)+m(1)*v(1), m(2)*v(0)+m(3)*v(1))
 end
 
 local terms = terralib.newlist()
 
-local m = Mask(0,0)	-- float2
+local m = Mask(0,0)	-- float
 local x = Vector(X(0,0,0), X(0,0,1))	-- uv-unknown : float2
 
 --fitting
 local constraintUV = Constraints(0,0)	-- float2
 --if constraintUV(0) ~= 0.0f and constraintUV(1) ~= 0.0f and m == 0 then
-local e_fit = ad.select(m == 0, constraintUV - x, Vector(0.0, 0.0))
+local e_fit = ad.select(ad.equal(m,0), constraintUV - x, Vector(0.0, 0.0))
 
 terms:insert(w_fitSqrt*e_fit)
 
