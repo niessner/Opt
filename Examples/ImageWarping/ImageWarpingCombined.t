@@ -6,14 +6,15 @@ local oldJTJ = A.functions.applyJTJ.boundary
 A.functions.applyJTJ.boundary = terra(i : int64, j : int64, gi : int64, gj : int64, self : A:ParameterType(), pImage : A:UnknownType())
 	var a = oldJTJ(i,j,gi,gj,self,pImage)
 	var b = M.functions.applyJTJ.boundary(i,j,gi,gj,@[&M:ParameterType()](&self),@[&M:UnknownType()](&pImage))
-	--if gi > 64 and gj > 64 and gi < 32 and gj < 32 then
-	--if a ~= 0.0f then
+
 	var diff = a - b
 	var d : float = diff:dot(diff)
 	if d < 0.0f then d = -d end
 	if d > 0.1f then
-		printf("%d,%d: ad=%f b=%f\n",int(gi),int(gj),a,b)
+		printf("%d,%d: ad=%f b=%f\n",int(gi),int(gj),a(0),b(0))
 	end
+	
+
 	--[[
 	if gi == 0 and gj == 7 then
 	    var special = A.functions.special.boundary(i,j,gi,gj,self,pImage)
@@ -41,6 +42,12 @@ A.functions.evalJTF.boundary = terra(i : int64, j : int64, gi : int64, gj : int6
 		--end
 	end
 	
+	var diffPre = pa - pb
+	var diffPreF : float = diffPre:dot(diffPre)
+	if diffPreF < 0.0f then diffPreF = -diffPreF end
+	if diffPreF > 0.1f then
+		printf("(%d|%d): precond: pad=%f %f %f pb=%f %f % f\n",int(gi),int(gj),pa(0),pa(1),pa(2),pb(0),pb(1),pb(2))
+	end	
 	return a,pa
 end
 

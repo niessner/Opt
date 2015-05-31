@@ -13,6 +13,7 @@ local w_fitSqrt = P:Param("w_fitSqrt", float, 0)
 local w_regSqrt = P:Param("w_regSqrt", float, 1)
 
 P:Stencil(2)
+P:UsePreconditioner(true)
 
 local unknownElement = P:UnknownType().metamethods.typ
 
@@ -242,8 +243,29 @@ local terra evalJTF(i : int64, j : int64, gi : int64, gj : int64, self : P:Param
 	bA = bA + (2.0f*self.w_regSqrt*self.w_regSqrt)*e_reg_angle
 
 	-- disable preconditioner
-	pre = make_float2(1.0f, 1.0f)
-	preA = 1.0f
+	--pre = make_float2(1.0f, 1.0f)
+	--preA = 1.0f
+	
+	if P.usepreconditioner then		--pre-conditioner
+		
+		if pre(0) > 0.0001 and pre(1) > 0.0001 then
+			pre = 1.0 / pre
+		else 
+			pre = 1.0
+		end
+		
+		if preA > 0.0001 then
+			preA = 1.0 / preA
+		else 
+			preA = 1.0
+		end
+		
+	else
+		pre = make_float2(1.0f, 1.0f)
+		preA = 1.0f
+	end
+	
+	
 	-- we actually just computed negative gradient, so negate to return positive gradient
 	-- Should we multiply by 2?
 	return (make_float3(b(0), b(1), bA)), make_float3(pre(0), pre(1), preA)

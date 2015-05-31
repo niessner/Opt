@@ -107,7 +107,7 @@ public:
 
 		unsigned int numIter = 2;
 
-		unsigned int nonLinearIter = 1;
+		unsigned int nonLinearIter = 2;
 		unsigned int linearIter = 1;
 		unsigned int patchIter = 32;
 
@@ -140,7 +140,7 @@ public:
             //m_warpingSolverBlockTerraAD->solve(d_warpField, d_warpAngles, d_urshape, d_constraints, d_mask, nonLinearIter, linearIter, patchIter, weightFit, weightReg);
 			//m_warpingSolverTerra->solve(d_warpField, d_warpAngles, d_urshape, d_constraints, d_mask, nonLinearIter, linearIter, patchIter, weightFit, weightReg);
 			//m_warpingSolverBlockTerra->solve(d_warpField, d_warpAngles, d_urshape, d_constraints, d_mask, nonLinearIter, linearIter, patchIter, weightFit, weightReg);
-			//std::cout << std::endl;
+			std::cout << std::endl;
 		}
 
 		copyResultToCPU();
