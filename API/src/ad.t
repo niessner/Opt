@@ -522,7 +522,7 @@ function ad.toterra(es,varmap_,generatormap_)
             if emitted[e] then return emitted[e] end
             local generator = assert(generatormap(e.op) or defaultgenerator(e.op))
             local exp = generator(unpack(e.args:map(emit)))
-            if manyuses[e] then
+            if true or manyuses[e] then -- we're turning this off now
                 local v = symbol(float,"e")
                 emitted[e] = v
                 statements:insert(quote 
@@ -634,8 +634,8 @@ ad.sqrt:define(function(x) return `C.sqrt(x) end, 1.0/(2.0*ad.sqrt(x)))
 ad.tan:define(function(x) return `C.tan(x) end, 1.0 + ad.tan(x)*ad.tan(x))
 ad.tanh:define(function(x) return `C.tanh(x) end, 1.0/(ad.cosh(x)*ad.cosh(x)))
 
---ad.select:define(function(x,y,z) return `terralib.select(bool(x),y,z) end,0,ad.select(x,1,0),ad.select(x,0,1))
-ad.select:define(function(x,y,z) 
+ad.select:define(function(x,y,z) return `terralib.select(bool(x),y,z) end,0,ad.select(x,1,0),ad.select(x,0,1))
+--[[ad.select:define(function(x,y,z) 
     return quote
         var r : float
         if bool(x) then
@@ -644,7 +644,7 @@ ad.select:define(function(x,y,z)
             r = z
         end
     in r end
-end,0,ad.select(x,1,0),ad.select(x,0,1))
+end,0,ad.select(x,1,0),ad.select(x,0,1))]]
 
 ad.eq:define(function(x,y) return `int(x == y) end, 0,0)
 ad.abs:define(function(x) return `terralib.select(x >= 0,x,-x) end, ad.select(ad.greatereq(x, 0),1,-1))
