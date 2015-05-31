@@ -5,9 +5,15 @@ local W,H = opt.Dim("W",0), opt.Dim("H",1)
 P:Image("X", opt.float4,W,H,0)
 P:Image("T", opt.float4,W,H,1)
 P:Image("M", float, W,H,2)
+P:Stencil(1)
+
+local C = terralib.includecstring [[
+#include <math.h>
+]]
 
 
 local unknownElement = P:UnknownType().metamethods.typ
+
 
 local terra inBounds(i : int64, j : int64, xImage : P:UnknownType()) : bool
 	return i >= 0 and i < xImage:W() and j >= 0 and j < xImage:H()
@@ -35,8 +41,9 @@ local terra laplacianCostP(x : unknownElement, ni : int64, nj : int64, ngi : int
 	return res	
 end
 
+
 local terra cost(i : int64, j : int64, gi : int64, gj : int64, self : P:ParameterType()) : float
-		
+	
 	var m = self.M(i, j)
 	var x = self.X(i, j)
 	var t = self.T(i, j)	
@@ -62,7 +69,7 @@ end
 
 -- eval 2*JtF == \nabla(F); eval diag(2*(Jt)^2) == pre-conditioner
 local terra gradient(i : int64, j : int64, gi : int64, gj : int64, self : P:ParameterType()) : unknownElement
-	
+
 	var m = self.M(i, j)
 	var x = self.X(i, j)
 	var t = self.T(i, j)
@@ -98,7 +105,7 @@ end
 	
 -- eval 2*JtJ (note that we keep the '2' to make it consistent with the gradient
 local terra applyJTJ(i : int64, j : int64, gi : int64, gj : int64, self : P:ParameterType(), pImage : P:UnknownType()) : unknownElement
- 
+	
 	var m = self.M(i, j)
 	var p = pImage(i, j)
 	
@@ -117,8 +124,9 @@ local terra applyJTJ(i : int64, j : int64, gi : int64, gj : int64, self : P:Para
 end
 
 
-
 P:Function("cost", {W,H}, cost)
 P:Function("gradient", {W,H}, gradient)
 P:Function("evalJTF", {W,H}, evalJTF)
 P:Function("applyJTJ", {W,H}, applyJTJ)
+
+return P
