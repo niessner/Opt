@@ -17,5 +17,5 @@ local lc = math.sqrt(w_reg)*laplacianCostF
 local rc = math.sqrt(w_fit)*reconstructionCost
 
 local cost = ad.sumsquared(lc[0],lc[1],rc[0],rc[1])
-
+--S:Exclude( ad.eq(X(0,0,0),0) )
 return S:Cost(cost)

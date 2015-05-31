@@ -20,7 +20,7 @@ end
 
 -- constants
 local verboseSolver = true
-local verboseAD = false
+local verboseAD = true
 
 local function newclass(name)
     local mt = { __name = name }
@@ -675,9 +675,10 @@ local function multipleof(x,m)
     return x + (m - x % m)
 end
 
-local function createfunction(problemspec,name,exps,usebounds,W,H)
+local function createfunction(problemspec,name,exps,usebounds,W,H,excludeexp)
     if not usebounds then
         exps = removeboundaries(exps)
+        excludeexp = excludeexp and removeboundaries(excludeexp)
     end
     
     local P = symbol(problemspec.P:ParameterType(),"P")
@@ -689,7 +690,7 @@ local function createfunction(problemspec,name,exps,usebounds,W,H)
     local i,j,gi,gj = symbol(int64,"i"), symbol(int64,"j"),symbol(int64,"gi"), symbol(int64,"gj")
     local indexes = {[0] = i,j }
     local accesssyms = {}
-    local vartosym = {}
+    
     local function emitvar(a)
         if not accesssyms[a] then
             local r 
@@ -758,8 +759,29 @@ local function createfunction(problemspec,name,exps,usebounds,W,H)
             end
         end 
     end
+    local excludeblock = quote end
+        
+    if excludeexp then
+        local code = ad.toterra({excludeexp}, emitvar, generatormap)
+        local zeros = terralib.newlist()
+        for i,e in ipairs(exps) do
+            if ad.ExpVector:is(e) then
+                local VT = ad.TerraVector(float,e:size())
+                zeros:insert(`VT.FromConstant(0.f))
+            else zeros:insert(`0.f) end
+        end
+        excludeblock = quote
+            [stmts]
+            var c = [code]
+            if bool(c) then
+                return zeros
+            end
+        end
+        stmts = terralib.newlist() 
+    end
     local result = ad.toterra(exps,emitvar,generatormap)
     local terra generatedfn([i], [j], [gi], [gj], [P], [extraimages])
+        [excludeblock]
         [stmts]
         return result
     end
@@ -788,16 +810,16 @@ local function stencilforexpression(exp)
     end)
     return stencil
 end
-local function createfunctionset(problemspec,name,...)
+local function createfunctionset(problemspec,name,excludeexp,...)
     local exps = terralib.newlist {...}
     local ut = problemspec.P:UnknownType()
     local W,H = ut.metamethods.W,ut.metamethods.H
     
     dprint("function set for: ",name)
     dprint("bound")
-    local boundary = createfunction(problemspec,name,exps,true,W,H)
+    local boundary = createfunction(problemspec,name,exps,true,W,H,excludeexp)
     dprint("interior")
-    local interior = createfunction(problemspec,name,exps,false,W,H)
+    local interior = createfunction(problemspec,name,exps,false,W,H,excludeexp)
     
     problemspec.P:Function(name,{W,H},boundary,interior)
 end
@@ -968,6 +990,7 @@ function ProblemSpecAD:Cost(costexp_)
     
     self.P:Stencil(stencilforexpression(costexp))
     self.P:Stencil(stencilforexpression(gradient))
+    local excludeexp = self.excludeexp
     
     if SumOfSquares:is(costexp_) then
         local P = self:Image("P",unknown.type,unknown.W,unknown.H,-1)
@@ -975,24 +998,28 @@ function ProblemSpecAD:Cost(costexp_)
         dprint("jtjexp")
         dprint(jtjexp)
         self.P:Stencil(stencilforexpression(jtjexp))
-        createfunctionset(self,"applyJTJ",jtjexp)
+        createfunctionset(self,"applyJTJ",excludeexp,jtjexp)
 		--gradient with pre-conditioning
 		
 		local gradient,preconditioner = createjtf(self,costexp_.terms,unknown,P)	--includes the 2.0
-		createfunctionset(self,"evalJTF",gradient,preconditioner)
+		createfunctionset(self,"evalJTF",excludeexp,gradient,preconditioner)
 		
 		--print("Gradient: ", removeboundaries(gradient))
 		--print("Preconditioner: ", removeboundaries(preconditioner))
     end
     
-    createfunctionset(self,"cost",costexp)
-    createfunctionset(self,"gradient",gradient)
+    createfunctionset(self,"cost",nil,costexp)
+    createfunctionset(self,"gradient",excludeexp,gradient)
     
     if verboseAD then
-        terralib.tree.printraw(self)
+        --terralib.tree.printraw(self)
     end
     return self.P
 end
+function ProblemSpecAD:Exclude(exp)
+    self.excludeexp = assert(ad.toexp(exp), "expected a AD expression")
+end
+
 opt.Vector = ad.TerraVector
 for i = 2,4 do
     opt["float"..tostring(i)] = ad.TerraVector(float,i)

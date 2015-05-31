@@ -11,5 +11,7 @@ local laplacianCost = (4*X(0,0) - (X(-1,0) + X(0,1) + X(1,0) + X(0,-1)))
 local laplacianCostF = ad.select(opt.InBounds(0,0,1,1),laplacianCost,0)
 local reconstructionCost = X(0,0) - A(0,0) + zero
 
+--S:Exclude( ad.eq(X(0,0),0) )
+
 local cost = ad.sumsquared(math.sqrt(w_reg)*laplacianCostF,math.sqrt(w_fit)*reconstructionCost)
 return S:Cost(cost)
