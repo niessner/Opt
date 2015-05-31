@@ -121,7 +121,7 @@ end
 -- Neighbors and booleans saying if they are in the image and not masked away
 local n_i = {0, 0, -1, 1} 
 local n_j = {-1, 1, 0, 0} 
-local valid = {`valid0, `valid1, `valid2, `valid3} 
+
 
 -- eval 2*JtF == \nabla(F); eval diag(2*(Jt)^2) == pre-conditioner
 local terra evalJTF(i : int64, j : int64, gi : int64, gj : int64, self : P:ParameterType())
@@ -134,7 +134,7 @@ local terra evalJTF(i : int64, j : int64, gi : int64, gj : int64, self : P:Param
 	
 	-- fit/pos
 	var constraintUV = self.Constraints(i,j)	
-	var validConstraint = (constraintUV(0) >= 0 && constraintUV(1) >= 0) and self.Mask(i,j) == 0.0f
+	var validConstraint = (constraintUV(0) >= 0 and constraintUV(1) >= 0) and self.Mask(i,j) == 0.0f
 	if validConstraint then
 	 	b 	= b - 2.0f*self.w_fitSqrt*self.w_fitSqrt*(getXFloat2(i,j,self) - constraintUV)
 	 	pre = pre + 2.0f*self.w_fitSqrt*self.w_fitSqrt*make_float2(1.0f, 1.0f) 
@@ -145,41 +145,44 @@ local terra evalJTF(i : int64, j : int64, gi : int64, gj : int64, self : P:Param
 	var	 p : float_2    = getXFloat2(i,j,self)
 	var	 pHat : float_2 = self.UrShape(i,j)
 	var R_i : float2x2  = evalR(a)
-	var e_reg : float2 	= make_float2(0.0f, 0.0f);
+	var e_reg : float_2 	= make_float2(0.0f, 0.0f);
 
+	var valid0 : bool, valid1 : bool, valid2 : bool, valid3 : bool
 	escape
+		local valid = {`valid0, `valid1, `valid2, `valid3} 
 		for a=1,4 do
 			local offx = n_i[a]
 			local offy = n_j[a]
 			emit quote
 				var [valid[a]] = inBounds(gi+[offx], gj+[offy], self.X) and self.Mask(i+[offx], j+[offy])
 				if [valid[a]] then
-					var q : float2 		= getXFloat2(i+[offx], j+[offy], self)
-					var qHat : float2 	= self.UrShape(i+[offx], j+[offy])
+					var q : float_2 	= getXFloat2(i+[offx], j+[offy], self)
+					var qHat : float_2 	= self.UrShape(i+[offx], j+[offy])
 					var R_j : float2x2 	= evalR(self.X(i+[offx], j+[offy])(2)) 
-					e_reg = e_reg + 2 * (p - q) - float2( mat2x2(R_i + R_j) * mat2x1(pHat - qHat))
-					pre = pre + 2.0f*self.w_regSqrt*self.w_regSqrt
+					e_reg 				= e_reg + 2 * (p - q) - mul(R_i + R_j, pHat - qHat)
+					pre 				= pre + 2.0f*self.w_regSqrt*self.w_regSqrt
 				end
 			end
 		end
-	end
-	b = b - 2.0f * self.w_regSqrt*self.w_regSqrt * e_reg;
+	
+		emit quote
+			b = b - 2.0f * self.w_regSqrt*self.w_regSqrt * e_reg;
 
-	-- reg/angle
-	var R : float2x2 = evalR(a)
-	var dR : float2x2 = evalR_dR(a)
-	var e_reg_angle = 0.0f;
+			-- reg/angle
+			var R : float2x2 = evalR(a)
+			var dR : float2x2 = evalR_dR(a)
+			var e_reg_angle = 0.0f;
+		end
 
-	escape
 		for a=1,4 do
 			local offx = n_i[a]
 			local offy = n_j[a]
 			emit quote
 				if [valid[a]] then
-					var q : float2 		= getXFloat2(i+[offx], j+[offy], self)
-					var qHat : float2 	= self.UrShape(i+[offx], j+[offy])
-					var D : float2 		= -dR*(pHat - qHat)
-					e_reg_angle 		= e_reg_angle 	+ D:dot((p - q) - R*(pHat - qHat))
+					var q : float_2 	= getXFloat2(i+[offx], j+[offy], self)
+					var qHat : float_2 	= self.UrShape(i+[offx], j+[offy])
+					var D : float_2 	= -dR*(pHat - qHat)
+					e_reg_angle 		= e_reg_angle 	+ D:dot((p - q) - mul(R,(pHat - qHat)))
 					preA 				= preA 			+ D:dot(D) * self.w_regSqrt*self.w_regSqrt
 				end
 			end
@@ -214,7 +217,7 @@ local terra applyJTJ(i : int64, j : int64, gi : int64, gj : int64, self : P:Para
 
 	-- fit/pos
 	var constraintUV = self.Constraints(i,j)	
-	var validConstraint = (constraintUV(0) >= 0 && constraintUV(1) >= 0) and self.Mask(i,j) == 0.0f
+	var validConstraint = (constraintUV(0) >= 0 and constraintUV(1) >= 0) and self.Mask(i,j) == 0.0f
 	if validConstraint then
 	 	b 	= b + 2.0f*self.w_fitSqrt*self.w_fitSqrt*pImage(i,j)
 	end
@@ -222,7 +225,10 @@ local terra applyJTJ(i : int64, j : int64, gi : int64, gj : int64, self : P:Para
 	-- pos/reg
 	float2 e_reg = make_float2(0.0f, 0.0f);
 	var p00 = getP(pImage, i, j)
+
+	var valid0 : bool, valid1 : bool, valid2 : bool, valid3 : bool
 	escape
+		local valid = {`valid0, `valid1, `valid2, `valid3} 
 		for a=1,4 do
 			local offx = n_i[a]
 			local offy = n_j[a]
@@ -233,16 +239,18 @@ local terra applyJTJ(i : int64, j : int64, gi : int64, gj : int64, self : P:Para
 				end
 			end
 		end
-	end
-	b = b + 2.0f*self.w_regSqrt*self.w_regSqrt*e_reg;
+		
+		emit quote
+			b = b + 2.0f*self.w_regSqrt*self.w_regSqrt*e_reg;
 
-	-- angle/reg
-	var e_reg_angle = 0.0f;
-	var dR : float2x2 = evalR_dR(self.X(i,j)(2))
-	var angleP = pImage(i,j)(2)
-	var pHat :float_2 = self.UrShape(i,j)
+			-- angle/reg
+			var e_reg_angle = 0.0f;
+			var dR : float2x2 = evalR_dR(self.X(i,j)(2))
+			var angleP = pImage(i,j)(2)
+			var pHat :float_2 = self.UrShape(i,j)
+		end
 
-	escape
+	
 		for a=1,4 do
 			local offx = n_i[a]
 			local offy = n_j[a]
@@ -258,7 +266,7 @@ local terra applyJTJ(i : int64, j : int64, gi : int64, gj : int64, self : P:Para
 	bA = bA + 2.0f*self.w_regSqrt*self.w_regSqrt*e_reg_angle;
 
 	-- Should we multiply by 2?
-	return return make_float3(b(0), b(1), bA)
+	return make_float3(b(0), b(1), bA)
 end
 
 P:Function("cost", {W,H}, cost)
