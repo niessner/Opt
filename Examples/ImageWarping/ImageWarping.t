@@ -85,6 +85,8 @@ local terra cost(i : int64, j : int64, gi : int64, gj : int64, self : P:Paramete
 		
 		var tmp = make_float2(e(0) + (self.w_fitSqrt*self.w_fitSqrt) * (e_fit(0)*e_fit(0)), e(1) + (self.w_fitSqrt*self.w_fitSqrt) * (e_fit(1)*e_fit(1)))
 		e = tmp
+		
+		printf("Here: x: %f %f\n", x(0), x(1))
 	end
 	
 	var R : float2x2 = evalR(a)
