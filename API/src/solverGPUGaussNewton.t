@@ -88,18 +88,20 @@ return function(problemSpec, vars)
 			var w : int, h : int
 			if positionForValidLane(pd, "X", &w, &h) then
 				-- residuum = J^T x -F - A x delta_0  => J^T x -F, since A x x_0 == 0
-				
+								
 				var residuum : unknownElement = 0.0f
-				var pre : unknownElement = 0.0f				
-				if isBlockOnBoundary(w, h, pd.parameters.X:W(), pd.parameters.X:H()) then
-					residuum, pre = data.problemSpec.functions.evalJTF.boundary(w, h, w, h, pd.parameters)
-				else 
-					residuum, pre = data.problemSpec.functions.evalJTF.interior(w, h, w, h, pd.parameters)
+				var pre : unknownElement = 0.0f	
+				if (not [problemSpec:EvalExclude(w,h,w,h,`pd.parameters)]) then
+								
+					if isBlockOnBoundary(w, h, pd.parameters.X:W(), pd.parameters.X:H()) then
+						residuum, pre = data.problemSpec.functions.evalJTF.boundary(w, h, w, h, pd.parameters)
+					else 
+						residuum, pre = data.problemSpec.functions.evalJTF.interior(w, h, w, h, pd.parameters)
+					end
+					residuum = -residuum
+					pd.r(w, h) = residuum
 				end
-				residuum = -residuum
 				
-			
-				pd.r(w, h) = residuum
 				pd.preconditioner(w, h) = pre
 				var p = pre*residuum	-- apply pre-conditioner M^-1			   
 				pd.p(w, h) = p
@@ -118,9 +120,9 @@ return function(problemSpec, vars)
 	kernels.PCGInit2 = function(data)
 		local terra PCGInit2GPU(pd : data.PlanData)
 			var w : int, h : int
-			if positionForValidLane(pd, "X", &w, &h) then
+			if positionForValidLane(pd, "X", &w, &h) and (not [problemSpec:EvalExclude(w,h,w,h,`pd.parameters)]) then
 				pd.rDotzOld(w,h) = pd.scanAlpha[0]
-				pd.delta(w,h) = 0.0f
+				pd.delta(w,h) = 0.0f	--TODO check if we need that
 			end
 		end
 		return { kernel = PCGInit2GPU, header = noHeader, footer = noFooter, mapMemberName = "X" }
@@ -130,7 +132,7 @@ return function(problemSpec, vars)
 		local terra PCGStep1GPU(pd : data.PlanData)
 			var d = 0.0f
 			var w : int, h : int
-			if positionForValidLane(pd, "X", &w, &h) then
+			if positionForValidLane(pd, "X", &w, &h) and (not [problemSpec:EvalExclude(w,h,w,h,`pd.parameters)]) then
 				var tmp : unknownElement = 0.0f
 				 -- A x p_k  => J^T x J x p_k 
 				if isBlockOnBoundary(w, h, pd.parameters.X:W(), pd.parameters.X:H()) then
@@ -154,7 +156,7 @@ return function(problemSpec, vars)
 		local terra PCGStep2GPU(pd : data.PlanData)
 			var b = 0.0f 
 			var w : int, h : int
-			if positionForValidLane(pd, "X", &w, &h) then
+			if positionForValidLane(pd, "X", &w, &h)  and (not [problemSpec:EvalExclude(w,h,w,h,`pd.parameters)]) then
 				-- sum over block results to compute denominator of alpha
 				var dotProduct : float = pd.scanAlpha[0]
 				var alpha = 0.0f
@@ -184,7 +186,7 @@ return function(problemSpec, vars)
 	kernels.PCGStep3 = function(data)
 		local terra PCGStep3GPU(pd : data.PlanData)			
 			var w : int, h : int
-			if positionForValidLane(pd, "X", &w, &h) then
+			if positionForValidLane(pd, "X", &w, &h) and (not [problemSpec:EvalExclude(w,h,w,h,`pd.parameters)]) then
 				var rDotzNew : float =  pd.scanBeta[0]						-- get new nominator
 				var rDotzOld : float = pd.rDotzOld(w,h)						-- get old denominator
 
@@ -202,7 +204,7 @@ return function(problemSpec, vars)
 	kernels.PCGLinearUpdate = function(data)
 		local terra PCGLinearUpdateGPU(pd : data.PlanData)
 			var w : int, h : int
-			if positionForValidLane(pd, "X", &w, &h) then
+			if positionForValidLane(pd, "X", &w, &h) and (not [problemSpec:EvalExclude(w,h,w,h,`pd.parameters)]) then
 				pd.parameters.X(w,h) = pd.parameters.X(w,h) + pd.delta(w,h)
 			end
 		end
@@ -215,7 +217,7 @@ return function(problemSpec, vars)
 			
 			var cost : float = 0.0f
 			var w : int, h : int
-			if util.positionForValidLane(pd, "X", &w, &h) then
+			if util.positionForValidLane(pd, "X", &w, &h)  and (not [problemSpec:EvalExclude(w,h,w,h,`pd.parameters)]) then
 				var params = pd.parameters				
 				cost = cost + [float](data.problemSpec.functions.cost.boundary(w, h, w, h, params))
 			end
