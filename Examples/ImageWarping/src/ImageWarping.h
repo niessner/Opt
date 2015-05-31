@@ -105,9 +105,9 @@ public:
 		float weightFit = 100.0f;
 		float weightReg = 0.01f;
 
-		unsigned int numIter = 2;
+		unsigned int numIter = 1;
 
-		unsigned int nonLinearIter = 2;
+		unsigned int nonLinearIter = 1;
 		unsigned int linearIter = 1;
 		unsigned int patchIter = 32;
 

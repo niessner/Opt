@@ -175,31 +175,30 @@ local terra evalJTF(i : int64, j : int64, gi : int64, gj : int64, self : P:Param
 		var qHat : float_2 	= self.UrShape(	i+0, j-1)
 		var R_j : float2x2 	= evalR(self.X(	i+0, j-1)(2)) 
 		e_reg 				= e_reg + 2 * (p - q) - mul(R_i + R_j, pHat - qHat)
-		pre 				= pre + 2.0f*self.w_regSqrt*self.w_regSqrt
+		pre 				= pre + (2.0f*self.w_regSqrt*self.w_regSqrt)*make_float2(1.0f, 1.0f) 
 	end
 	if valid1 then
 		var q : float_2 	= getXFloat2(	i+0, j+1, self)
 		var qHat : float_2 	= self.UrShape(	i+0, j+1)
 		var R_j : float2x2 	= evalR(self.X(	i+0, j+1)(2)) 
 		e_reg 				= e_reg + 2 * (p - q) - mul(R_i + R_j, pHat - qHat)
-		pre 				= pre + 2.0f*self.w_regSqrt*self.w_regSqrt
+		pre 				= pre + (2.0f*self.w_regSqrt*self.w_regSqrt)*make_float2(1.0f, 1.0f) 
 	end
 	if valid2 then
 		var q : float_2 	= getXFloat2(	i-1, j+0, self)
 		var qHat : float_2 	= self.UrShape(	i-1, j+0)
 		var R_j : float2x2 	= evalR(self.X(	i-1, j+0)(2)) 
 		e_reg 				= e_reg + 2 * (p - q) - mul(R_i + R_j, pHat - qHat)
-		pre 				= pre + 2.0f*self.w_regSqrt*self.w_regSqrt
+		pre 				= pre + (2.0f*self.w_regSqrt*self.w_regSqrt)*make_float2(1.0f, 1.0f) 
 	end
 	if valid3 then
 		var q : float_2 	= getXFloat2(	i+1, j+0, self)
 		var qHat : float_2 	= self.UrShape(	i+1, j+0)
 		var R_j : float2x2 	= evalR(self.X(	i+1, j+0)(2)) 
 		e_reg 				= e_reg + 2 * (p - q) - mul(R_i + R_j, pHat - qHat)
-		pre 				= pre + 2.0f*self.w_regSqrt*self.w_regSqrt
+		pre 				= pre + (2.0f*self.w_regSqrt*self.w_regSqrt)*make_float2(1.0f, 1.0f) 
 	end
-			
-		
+	
 	b = b + (2.0f * self.w_regSqrt*self.w_regSqrt) * e_reg
 	
 	-- reg/angle
@@ -238,7 +237,7 @@ local terra evalJTF(i : int64, j : int64, gi : int64, gj : int64, self : P:Param
 		e_reg_angle 		= e_reg_angle 	+ D:dot((p - q) - mul(R,(pHat - qHat)))
 		preA 				= preA 			+ D:dot(D) * self.w_regSqrt*self.w_regSqrt
 	end
-			
+	preA = 2.0f* preA
 
 	bA = bA + (2.0f*self.w_regSqrt*self.w_regSqrt)*e_reg_angle
 
@@ -248,10 +247,10 @@ local terra evalJTF(i : int64, j : int64, gi : int64, gj : int64, self : P:Param
 	
 	if P.usepreconditioner then		--pre-conditioner
 		
-		if pre(0) > 0.0001 and pre(1) > 0.0001 then
-			pre = 1.0 / pre
+		if pre(0) > 0.0001 then -- and pre(1) > 0.0001 then
+			pre = make_float2(1.0f / pre(0), 1.0f / pre(1))
 		else 
-			pre = 1.0
+			pre = make_float2(1.0f, 1.0f)
 		end
 		
 		if preA > 0.0001 then
@@ -267,7 +266,6 @@ local terra evalJTF(i : int64, j : int64, gi : int64, gj : int64, self : P:Param
 	
 	
 	-- we actually just computed negative gradient, so negate to return positive gradient
-	-- Should we multiply by 2?
 	return (make_float3(b(0), b(1), bA)), make_float3(pre(0), pre(1), preA)
 
 end
