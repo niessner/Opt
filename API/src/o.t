@@ -308,6 +308,15 @@ function ProblemSpec:Param(name,typ,idx)
     self:newparameter(name,"param",idx,typ)
 end
 
+function ProblemSpec:EvalExclude(...)
+    local args = {...}
+    if self.functions.exclude then
+        return `self.functions.exclude.boundary(args)
+    else
+        return `true
+    end
+end
+
 local newDim = terralib.memoize(function(name,size,idx)
 	return Dim:new { name = name, size = size, _index = idx }
 end)
@@ -675,10 +684,9 @@ local function multipleof(x,m)
     return x + (m - x % m)
 end
 
-local function createfunction(problemspec,name,exps,usebounds,W,H,excludeexp)
+local function createfunction(problemspec,name,exps,usebounds,W,H)
     if not usebounds then
         exps = removeboundaries(exps)
-        excludeexp = excludeexp and removeboundaries(excludeexp)
     end
     
     local P = symbol(problemspec.P:ParameterType(),"P")
@@ -759,29 +767,8 @@ local function createfunction(problemspec,name,exps,usebounds,W,H,excludeexp)
             end
         end 
     end
-    local excludeblock = quote end
-        
-    if excludeexp then
-        local code = ad.toterra({excludeexp}, emitvar, generatormap)
-        local zeros = terralib.newlist()
-        for i,e in ipairs(exps) do
-            if ad.ExpVector:is(e) then
-                local VT = ad.TerraVector(float,e:size())
-                zeros:insert(`VT.FromConstant(0.f))
-            else zeros:insert(`0.f) end
-        end
-        excludeblock = quote
-            [stmts]
-            var c = [code]
-            if bool(c) then
-                return zeros
-            end
-        end
-        stmts = terralib.newlist() 
-    end
     local result = ad.toterra(exps,emitvar,generatormap)
     local terra generatedfn([i], [j], [gi], [gj], [P], [extraimages])
-        [excludeblock]
         [stmts]
         return result
     end
@@ -810,16 +797,16 @@ local function stencilforexpression(exp)
     end)
     return stencil
 end
-local function createfunctionset(problemspec,name,excludeexp,...)
+local function createfunctionset(problemspec,name,...)
     local exps = terralib.newlist {...}
     local ut = problemspec.P:UnknownType()
     local W,H = ut.metamethods.W,ut.metamethods.H
     
     dprint("function set for: ",name)
     dprint("bound")
-    local boundary = createfunction(problemspec,name,exps,true,W,H,excludeexp)
+    local boundary = createfunction(problemspec,name,exps,true,W,H)
     dprint("interior")
-    local interior = createfunction(problemspec,name,exps,false,W,H,excludeexp)
+    local interior = createfunction(problemspec,name,exps,false,W,H)
     
     problemspec.P:Function(name,{W,H},boundary,interior)
 end
@@ -990,7 +977,6 @@ function ProblemSpecAD:Cost(costexp_)
     
     self.P:Stencil(stencilforexpression(costexp))
     self.P:Stencil(stencilforexpression(gradient))
-    local excludeexp = self.excludeexp
     
     if SumOfSquares:is(costexp_) then
         local P = self:Image("P",unknown.type,unknown.W,unknown.H,-1)
@@ -998,21 +984,25 @@ function ProblemSpecAD:Cost(costexp_)
         dprint("jtjexp")
         dprint(jtjexp)
         self.P:Stencil(stencilforexpression(jtjexp))
-        createfunctionset(self,"applyJTJ",excludeexp,jtjexp)
+        createfunctionset(self,"applyJTJ",jtjexp)
 		--gradient with pre-conditioning
 		
 		local gradient,preconditioner = createjtf(self,costexp_.terms,unknown,P)	--includes the 2.0
-		createfunctionset(self,"evalJTF",excludeexp,gradient,preconditioner)
+		createfunctionset(self,"evalJTF",gradient,preconditioner)
 		
 		--print("Gradient: ", removeboundaries(gradient))
 		--print("Preconditioner: ", removeboundaries(preconditioner))
     end
     
-    createfunctionset(self,"cost",excludeexp,costexp)
-    createfunctionset(self,"gradient",excludeexp,gradient)
+    createfunctionset(self,"cost",costexp)
+    createfunctionset(self,"gradient",gradient)
+    if self.excludeexp then
+        createfunctionset(self,"exclude",self.excludeexp)
+    end
     
     if verboseAD then
-        --terralib.tree.printraw(self)
+        self.excludeexp = nil
+        terralib.tree.printraw(self)
     end
     return self.P
 end
