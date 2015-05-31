@@ -21,10 +21,23 @@ public:
 		cutilSafeCall(cudaMalloc(&d_target, sizeof(float4)*m_image.getWidth()*m_image.getHeight()));
 		cutilSafeCall(cudaMalloc(&d_mask,	sizeof(float) *m_image.getWidth()*m_image.getHeight()));
 
-		float4* h_image  = new float4[m_image.getWidth()*m_image.getHeight()];
+		resetGPU();
+
+
+		m_warpingSolver		 = new CUDAWarpingSolver(m_image.getWidth(), m_image.getHeight());
+		m_warpingSolverPatch = new CUDAPatchSolverWarping(m_image.getWidth(), m_image.getHeight());
+
+
+		m_terraSolver = new TerraSolverPoissonImageEditing(m_image.getWidth(), m_image.getHeight(), "smoothingLaplacianFloat4AD.t", "gaussNewtonGPU");
+		m_terraBlockSolver = new TerraSolverPoissonImageEditing(m_image.getWidth(), m_image.getHeight(), "smoothingLaplacianFloat4AD.t", "gaussNewtonBlockGPU");
+	}
+
+	void resetGPU()
+	{
+		float4* h_image = new float4[m_image.getWidth()*m_image.getHeight()];
 		float4* h_target = new float4[m_image.getWidth()*m_image.getHeight()];
-		float*  h_mask   = new float[m_image.getWidth()*m_image.getHeight()];
-		
+		float*  h_mask = new float[m_image.getWidth()*m_image.getHeight()];
+
 		for (unsigned int i = 0; i < m_image1.getHeight(); i++)
 		{
 			for (unsigned int j = 0; j < m_image1.getWidth(); j++)
@@ -39,16 +52,13 @@ public:
 				else						  h_mask[i*m_image.getWidth() + j] = 255;
 			}
 		}
-		
+
 		cutilSafeCall(cudaMemcpy(d_image, h_image, sizeof(float4)*m_image.getWidth()*m_image.getHeight(), cudaMemcpyHostToDevice));
 		cutilSafeCall(cudaMemcpy(d_target, h_target, sizeof(float4)*m_image.getWidth()*m_image.getHeight(), cudaMemcpyHostToDevice));
 		cutilSafeCall(cudaMemcpy(d_mask, h_mask, sizeof(float)*m_image.getWidth()*m_image.getHeight(), cudaMemcpyHostToDevice));
 		delete h_mask;
 		delete h_image;
 		delete h_target;
-
-		m_warpingSolver		 = new CUDAWarpingSolver(m_image.getWidth(), m_image.getHeight());
-		m_warpingSolverPatch = new CUDAPatchSolverWarping(m_image.getWidth(), m_image.getHeight());
 	}
 
 	~ImageWarping()
@@ -59,6 +69,9 @@ public:
 
 		SAFE_DELETE(m_warpingSolver);
 		SAFE_DELETE(m_warpingSolverPatch);
+
+		SAFE_DELETE(m_terraSolver);
+		SAFE_DELETE(m_terraBlockSolver);
 	}
 
 	ColorImageR32G32B32A32* solve()
@@ -66,14 +79,21 @@ public:
 		float weightFit = 0.0f; // not used
 		float weightReg = 0.0f; // not used
 		
-		//unsigned int nonLinearIter = 10;
-		//unsigned int linearIter = 10;
-		//m_warpingSolver->solveGN(d_image, d_target, d_mask, nonLinearIter, linearIter, weightFit, weightReg);
-			
 		unsigned int nonLinearIter = 10;
 		unsigned int patchIter = 16;
-		m_warpingSolverPatch->solveGN(d_image, d_target, d_mask, nonLinearIter, patchIter, weightFit, weightReg);
+		unsigned int linearIter = 10;
 		
+		m_warpingSolver->solveGN(d_image, d_target, d_mask, nonLinearIter, linearIter, weightFit, weightReg);		
+		copyResultToCPU();
+
+		resetGPU();
+
+		//m_warpingSolverPatch->solveGN(d_image, d_target, d_mask, nonLinearIter, patchIter, weightFit, weightReg);
+		//copyResultToCPU();
+		//resetGPU();
+
+		m_terraBlockSolver->solve(d_image, d_target, d_mask, nonLinearIter, linearIter,  patchIter, weightFit, weightReg );
+
 		copyResultToCPU();
 
 		return &m_result;

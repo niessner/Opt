@@ -17,8 +17,8 @@ public:
 		m_problem = Opt_ProblemDefine(m_optimizerState, terraFile.c_str(), optName.c_str(), NULL);
 
 
-		uint64_t strides[] = { width * sizeof(float4), width * sizeof(float4) };
-		uint64_t elemsizes[] = { sizeof(float4), sizeof(float4) };
+		uint64_t strides[] = { width * sizeof(float4), width * sizeof(float4), width * sizeof(float) };
+		uint64_t elemsizes[] = { sizeof(float4), sizeof(float4), sizeof(float) };
 		uint64_t dims[] = { width, height };
 		m_plan = Opt_ProblemPlan(m_optimizerState, m_problem, dims, elemsizes, strides, nullptr, nullptr, nullptr);
 
@@ -39,10 +39,10 @@ public:
 
 	}
 
-	void solve(float4* d_unknown, float4* d_target, unsigned int nNonLinearIterations, unsigned int nLinearIterations, unsigned int nBlockIterations, float weightFit, float weightReg)
+	void solve(float4* d_unknown, float4* d_target, float* d_mask, unsigned int nNonLinearIterations, unsigned int nLinearIterations, unsigned int nBlockIterations, float weightFit, float weightReg)
 	{
 
-		void* data[] = {d_unknown, d_target};
+		void* data[] = {d_unknown, d_target, d_mask};
 		void* solverParams[] = { &nNonLinearIterations, &nLinearIterations, &nBlockIterations };
 
 		float weightFitSqrt = sqrt(weightFit);

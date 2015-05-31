@@ -497,6 +497,8 @@ return function(problemSpec, vars)
 			pd.nIter = pd.nIter + 1
 			return 1
 		else
+			var finalCost = gpu.computeCost(pd)
+			logSolver("final cost=%f\n", finalCost)
 		    pd.timer:evaluate()
 		    pd.timer:cleanup()
 		    return 0
