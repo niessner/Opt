@@ -57,7 +57,6 @@ local terra mul(matrix : float2x2, v : float_2) : float_2
 	return float_2(matrix[0]*v(0)+matrix[1]*v(1), matrix[2]*v(0)+matrix[3]*v(1))
 end
 
-
 local terra getXFloat2(i : int64, j : int64, self : P:ParameterType())
 	return make_float2(self.X(i,j)(0), self.X(i,j)(1))
 end
@@ -179,9 +178,9 @@ local terra evalJTF(i : int64, j : int64, gi : int64, gj : int64, self : P:Param
 				if [valid[a]] then
 					var q : float2 		= getXFloat2(i+[offx], j+[offy], self)
 					var qHat : float2 	= self.UrShape(i+[offx], j+[offy])
-					var D : mat2x1 		= -mat2x1(dR*(pHat - qHat))
-					e_reg_angle 		= e_reg_angle 	+ D.getTranspose() * mat2x1((p - q) - R*(pHat - qHat))
-					preA 				= preA 			+ D.getTranspose() * D * self.w_regSqrt*self.w_regSqrt
+					var D : float2 		= -dR*(pHat - qHat)
+					e_reg_angle 		= e_reg_angle 	+ D:dot((p - q) - R*(pHat - qHat))
+					preA 				= preA 			+ D:dot(D) * self.w_regSqrt*self.w_regSqrt
 				end
 			end
 		end
@@ -193,7 +192,8 @@ local terra evalJTF(i : int64, j : int64, gi : int64, gj : int64, self : P:Param
 	pre = make_float2(1.0f, 1.0f)
 	preA = 1.0f
 
-	return make_float3(b(0), b(1), bA), make_float3(pre(0), pre(1), preA)
+	-- we actually just computed negative gradient, so negate to return positive gradient
+	return (-make_float3(b(0), b(1), bA)), make_float3(pre(0), pre(1), preA)
 end
 
 -- eval 2*JtF == \nabla(F); eval diag(2*(Jt)^2) == pre-conditioner
