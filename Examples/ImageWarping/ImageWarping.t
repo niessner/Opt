@@ -83,7 +83,8 @@ local terra cost(i : int64, j : int64, gi : int64, gj : int64, self : P:Paramete
 	if c(0) >= 0 and c(1) >= 0 and m == 0 then
 		var e_fit : float_2 = make_float2(x(0) - self.Constraints(i,j)(0), x(1) - self.Constraints(i,j)(1))
 		
-		e = make_float2(e(0) + self.w_fitSqrt*self.w_fitSqrt * e_fit(0)*e_fit(0), e(1) + self.w_fitSqrt*self.w_fitSqrt * e_fit(1)*e_fit(1))
+		var tmp = make_float2(e(0) + self.w_fitSqrt*self.w_fitSqrt * e_fit(0)*e_fit(0), e(1) + self.w_fitSqrt*self.w_fitSqrt * e_fit(1)*e_fit(1))
+		e = tmp
 		
 	end
 	
@@ -112,7 +113,7 @@ local terra cost(i : int64, j : int64, gi : int64, gj : int64, self : P:Paramete
 		e_reg = e_reg + d*d
 	end
 	
-	e = e + self.w_regSqrt*self.w_regSqrt*e_reg
+	e = e + (self.w_regSqrt*self.w_regSqrt)*e_reg
 	
 
 	var res : float = e(0) + e(1)
@@ -135,8 +136,8 @@ local terra evalJTF(i : int64, j : int64, gi : int64, gj : int64, self : P:Param
 	var constraintUV = self.Constraints(i,j)	
 	var validConstraint = (constraintUV(0) >= 0 and constraintUV(1) >= 0) and self.Mask(i,j) == 0.0f
 	if validConstraint then
-	 	b 	= b - 2.0f*self.w_fitSqrt*self.w_fitSqrt*(getXFloat2(i,j,self) - constraintUV)
-	 	pre = pre + 2.0f*self.w_fitSqrt*self.w_fitSqrt*make_float2(1.0f, 1.0f) 
+	 	b 	= b + (2.0f*self.w_fitSqrt*self.w_fitSqrt)*(getXFloat2(i,j,self) - constraintUV)
+	 	pre = pre + (2.0f*self.w_fitSqrt*self.w_fitSqrt)*make_float2(1.0f, 1.0f) 
 	end
 
 	var a = self.X(i,j)(2)
@@ -180,9 +181,9 @@ local terra evalJTF(i : int64, j : int64, gi : int64, gj : int64, self : P:Param
 		pre 				= pre + 2.0f*self.w_regSqrt*self.w_regSqrt
 	end
 			
-	
 		
-	b = b - 2.0f * self.w_regSqrt*self.w_regSqrt * e_reg;
+	b = b + (2.0f * self.w_regSqrt*self.w_regSqrt) * e_reg
+	
 	-- reg/angle
 	var R : float2x2 = evalR(a)
 	var dR : float2x2 = evalR_dR(a)
@@ -221,14 +222,14 @@ local terra evalJTF(i : int64, j : int64, gi : int64, gj : int64, self : P:Param
 	end
 			
 
-	bA = bA - 2.0f*self.w_regSqrt*self.w_regSqrt*e_reg_angle;
+	bA = bA + (2.0f*self.w_regSqrt*self.w_regSqrt)*e_reg_angle
 
 	-- disable preconditioner
 	pre = make_float2(1.0f, 1.0f)
 	preA = 1.0f
 	-- we actually just computed negative gradient, so negate to return positive gradient
 	-- Should we multiply by 2?
-	return (-make_float3(b(0), b(1), bA)), make_float3(pre(0), pre(1), preA)
+	return (make_float3(b(0), b(1), bA)), make_float3(pre(0), pre(1), preA)
 
 end
 
@@ -251,7 +252,7 @@ local terra applyJTJ(i : int64, j : int64, gi : int64, gj : int64, self : P:Para
 	var constraintUV = self.Constraints(i,j)	
 	var validConstraint = (constraintUV(0) >= 0 and constraintUV(1) >= 0) and self.Mask(i,j) == 0.0f
 	if validConstraint then
-	 	b 	= b + 2.0f*self.w_fitSqrt*self.w_fitSqrt*getP(pImage,i,j)
+	 	b 	= b + (2.0f*self.w_fitSqrt*self.w_fitSqrt)*getP(pImage,i,j)
 	end
 
 	-- pos/reg
@@ -276,7 +277,7 @@ local terra applyJTJ(i : int64, j : int64, gi : int64, gj : int64, self : P:Para
 		e_reg = e_reg + 2 * (p00 - getP(pImage,i+1, j+0))
 	end
 	
-	b = b + 2.0f*self.w_regSqrt*self.w_regSqrt*e_reg;
+	b = b + (2.0f*self.w_regSqrt*self.w_regSqrt)*e_reg;
 
 	-- angle/reg
 	var e_reg_angle = 0.0f;
@@ -305,9 +306,8 @@ local terra applyJTJ(i : int64, j : int64, gi : int64, gj : int64, self : P:Para
 		e_reg_angle = e_reg_angle + D:dot(D)*angleP 
 	end
 			
-	bA = bA + 2.0f*self.w_regSqrt*self.w_regSqrt*e_reg_angle;
+	bA = bA + (2.0f*self.w_regSqrt*self.w_regSqrt)*e_reg_angle;
 
-	-- Should we multiply by 2?
 	return make_float3(b(0), b(1), bA)
 end
 

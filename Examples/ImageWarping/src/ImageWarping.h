@@ -107,8 +107,8 @@ public:
 
 		unsigned int numIter = 2;
 
-		unsigned int nonLinearIter = 5;
-		unsigned int linearIter = 5;
+		unsigned int nonLinearIter = 2;
+		unsigned int linearIter = 1;
 		unsigned int patchIter = 32;
 
 		for (unsigned int i = 0; i < numIter; i++)	{
