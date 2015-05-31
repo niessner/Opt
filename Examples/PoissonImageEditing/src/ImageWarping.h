@@ -7,6 +7,7 @@
 
 #include "CUDAWarpingSolver.h"
 #include "CUDAPatchSolverWarping.h"
+#include "TerraSolverPoissonImageEditing.h"
 
 class ImageWarping {
 public:
@@ -97,4 +98,6 @@ private:
 	
 	CUDAWarpingSolver*	    m_warpingSolver;
 	CUDAPatchSolverWarping* m_warpingSolverPatch;
+	TerraSolverPoissonImageEditing* m_terraSolver;
+	TerraSolverPoissonImageEditing* m_terraBlockSolver;
 };
