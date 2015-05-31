@@ -313,7 +313,7 @@ function ProblemSpec:EvalExclude(...)
     if self.functions.exclude then
         return `bool(self.functions.exclude.boundary(args))
     else
-        return `true
+        return `false
     end
 end
 
@@ -696,8 +696,8 @@ local function createfunction(problemspec,name,exps,usebounds,W,H)
     local i,j,gi,gj = symbol(int64,"i"), symbol(int64,"j"),symbol(int64,"gi"), symbol(int64,"gj")
     local indexes = {[0] = i,j }
     local accesssyms = {}
-    
-    local function emitvar(stmts,a)
+    local stmts = terralib.newlist()
+    local function emitvar(stmts_,a)
         if not accesssyms[a] then
             local r 
             if "ImageAccess" == a.kind then
@@ -767,6 +767,7 @@ local function createfunction(problemspec,name,exps,usebounds,W,H)
     end
     local result = ad.toterra(exps,emitvar,generatormap)
     local terra generatedfn([i], [j], [gi], [gj], [P], [extraimages])
+        [stmts]
         return result
     end
     generatedfn:setname(name)
