@@ -295,10 +295,6 @@ return function(problemSpec, vars)
 		if err ~= 0 then C.printf("cudaMalloc error: %d", err) end
 	end
 
-	local terra initDebugDumpImage(pd : &PlanData)
-		initDebugImage(pd, pd.debugDumpImage, 1)
-	end
-
 	local terra initAllDebugImages(pd : &PlanData)
 		C.printf("initAllDebugImages\n")
 		initDebugImage(pd, &pd.debugDumpImage, 1)
@@ -330,8 +326,8 @@ return function(problemSpec, vars)
 
 	local terra debugImageWritePrefix(pd : &PlanData, imPtr : &float, channelCount : int, prefix : rawstring)
 		var buffer : int8[128]
-		var suffix = "AD"
-		--var suffix = "optNoAD"
+		--var suffix = "AD"
+		var suffix = "optNoAD"
 		C.sprintf(buffer, "%s_%s.imagedump", prefix, suffix)
 		debugImageWrite(pd, imPtr, channelCount, buffer)
 	end

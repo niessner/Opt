@@ -633,6 +633,8 @@ ad.select:define(function(x,y,z) return `terralib.select(bool(x),y,z) end,0,ad.s
 ad.eq:define(function(x,y) return `terralib.select(x == y,1.f,0.f) end, 0,0)
 ad.abs:define(function(x) return `terralib.select(x >= 0,x,-x) end, ad.select(ad.greatereq(x, 0),1,-1))
 
+ad.and6:define(function(x0, x1, x2, x3, x4, x5) return `terralib.select(x0 ~= 0.f and x1 ~= 0.f and x2 ~= 0.f and x3 ~= 0.f and x4 ~= 0.f and x5 ~= 0.f,1.f,0.f) end, 0,0,0,0,0,0)
+ad.and_:define(function(x,y) return `terralib.select(x ~= 0.f and y ~= 0.f,1.f,0.f) end, 0, 0)
 ad.less:define(function(x,y) return `float(x < y) end, 0,0)
 ad.greater:define(function(x,y) return `float(x > y) end, 0,0)
 ad.lesseq:define(function(x,y) return `float(x <= y) end,0,0)

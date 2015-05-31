@@ -1,8 +1,8 @@
-local USE_MASK_REFINE 			= false
+local USE_MASK_REFINE 			= true
 
-local USE_DEPTH_CONSTRAINT 		= false
+local USE_DEPTH_CONSTRAINT 		= true
 local USE_REGULARIZATION 		= true
-local USE_SHADING_CONSTRAINT 	= false
+local USE_SHADING_CONSTRAINT 	= true
 local USE_TEMPORAL_CONSTRAINT 	= false
 local USE_PRECONDITIONER 		= false
 
@@ -154,6 +154,14 @@ if USE_REGULARIZATION then
 
 	local E_s_noCheck = sqMagnitude(plus(times(4.0,p(0,0)), times(-1.0, plus(p(-1,0), plus(p(0,-1), plus(p(1,0), p(0,1)))))))
 	local d = X(0,0)
+
+	local E_s_guard = ad.and6(opt.InBounds(0,0,1,1), cross_valid, 
+						ad.less(ad.abs(d - X(1,0)), DEPTH_DISCONTINUITY_THRE),
+						ad.less(ad.abs(d - X(-1,0)), DEPTH_DISCONTINUITY_THRE),
+						ad.less(ad.abs(d - X(0,1)), DEPTH_DISCONTINUITY_THRE),
+						ad.less(ad.abs(d - X(0,-1)), DEPTH_DISCONTINUITY_THRE))
+	E_s = ad.select(E_s_guard, E_s_noCheck, 0)
+--[[
 	E_s = 
 		ad.select(opt.InBounds(0,0,1,1),
 			ad.select(cross_valid,
@@ -167,7 +175,9 @@ if USE_REGULARIZATION then
 					0),
 				0),
 			0),
-		0)
+		0)]]
+
+
 end
 
 if USE_TEMPORAL_CONSTRAINT then
@@ -175,5 +185,4 @@ if USE_TEMPORAL_CONSTRAINT then
 end
 
 local cost = ad.sumsquared(w_g*E_g_h, w_g*E_g_v, w_s*E_s, w_p*E_p, w_r*E_r_h, w_r*E_r_v, w_r*E_r_d)
---local cost = ad.sumsquared(E_p)
 return P:Cost(cost)
