@@ -148,7 +148,7 @@ void TestFramework::runTest(const TestMethod &method, TestExample &example)
     int a = 0;
     void * list[] = { &a };
 	unsigned int nNonLinearIterations = 10;
-	unsigned int nLinearIterations = 20;
+	unsigned int nLinearIterations = 10;
 	unsigned int nBlockIterations = 10;
 	void* solverParams[] = { &nNonLinearIterations, &nLinearIterations, &nBlockIterations };
 

@@ -20,7 +20,7 @@ end
 
 -- constants
 local verboseSolver = true
-local verboseAD = true
+local verboseAD = false
 
 local function newclass(name)
     local mt = { __name = name }
@@ -1008,7 +1008,7 @@ function ProblemSpecAD:Cost(costexp_)
 		--print("Preconditioner: ", removeboundaries(preconditioner))
     end
     
-    createfunctionset(self,"cost",nil,costexp)
+    createfunctionset(self,"cost",excludeexp,costexp)
     createfunctionset(self,"gradient",excludeexp,gradient)
     
     if verboseAD then

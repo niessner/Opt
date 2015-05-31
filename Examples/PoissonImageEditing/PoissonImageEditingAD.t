@@ -6,13 +6,11 @@ local M = S:Image("M", float, W,H,2)
 S:UsePreconditioner(false)
 
 
-local w_fitSqrt = S:Param("w_fitSqrt", float, 0)
-local w_regSqrt = S:Param("w_regSqrt", float, 1)
 
 local terms = terralib.newlist()
 
 
-ad.excludeUnknown(X(0,0), ad.eq(M(0,0),0))
+S:Exclude(ad.not_(ad.eq(M(0,0),0)))
 
 -- mask
 local m = M(0,0)
@@ -41,14 +39,17 @@ local laplacianCost1 = ((p - q1) - (t - t1))
 local laplacianCost2 = ((p - q2) - (t - t2))
 local laplacianCost3 = ((p - q3) - (t - t3))
 
-local fitting = ad.select(ad.not_(ad.eq(m, 0)), ad.Vector(0.0, 0.0, 0.0, 0.0)
 
 for i = 0,3 do	
-
-	local laplacianCost0F =  laplacianCost0(i)
-	local laplacianCost1F =  laplacianCost1(i)
-	local laplacianCost2F =  laplacianCost2(i)
-	local laplacianCost3F =  laplacianCost3(i)
+	--local laplacianCost0F =  laplacianCost0(i)
+	--local laplacianCost1F =  laplacianCost1(i)
+	--local laplacianCost2F =  laplacianCost2(i)
+	--local laplacianCost3F =  laplacianCost3(i)
+	
+	local laplacianCost0F = ad.select(opt.InBounds(0,0,0,0),ad.select(opt.InBounds(1,0,0,0),laplacianCost0(i),0),0)
+	local laplacianCost1F = ad.select(opt.InBounds(0,0,0,0),ad.select(opt.InBounds(-1,0,0,0),laplacianCost1(i),0),0)
+	local laplacianCost2F = ad.select(opt.InBounds(0,0,0,0),ad.select(opt.InBounds(0,1,0,0),laplacianCost2(i),0),0)
+	local laplacianCost3F = ad.select(opt.InBounds(0,0,0,0),ad.select(opt.InBounds(0,-1,0,0),laplacianCost3(i),0),0)
 	
 	terms:insert(laplacianCost0F)
 	terms:insert(laplacianCost1F)
