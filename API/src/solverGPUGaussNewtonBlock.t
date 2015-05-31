@@ -221,10 +221,10 @@ return function(problemSpec, vars)
 			var cost = 0.0f
 			var w : int, h : int
 			if positionForValidLane(pd, "X", &w, &h) then
-				if isBlockOnBoundary(gId_i, gId_j, W, H) then
+				if true or isBlockOnBoundary(gId_i, gId_j, W, H) then
 					cost = [float](data.problemSpec.functions.cost.boundary(tId_i, tId_j, gId_i, gId_j, blockParams))
 				else
-					cost = [float](data.problemSpec.functions.cost.interior(tId_i, tId_j, gId_i, gId_j, blockParams))
+					--cost = [float](data.problemSpec.functions.cost.interior(tId_i, tId_j, gId_i, gId_j, blockParams))
 				end
 				--cost = [float](data.problemSpec.functions.cost_global.boundary(gId_i, gId_j, gId_i, gId_j, pd.parameters))
 			end
@@ -329,10 +329,10 @@ return function(problemSpec, vars)
 			
 			if isInsideImage(gId_i, gId_j, W, H) then
 				-- residuum = J^T x -F - A x delta_0  => J^T x -F, since A x x_0 == 0
-				if isBlockOnBoundary(gId_i, gId_j, W, H) then
+				if true or isBlockOnBoundary(gId_i, gId_j, W, H) then
 					R, Pre = data.problemSpec.functions.evalJTF.boundary(tId_i, tId_j, gId_i, gId_j, blockParams)		
 				else 
-					R, Pre = data.problemSpec.functions.evalJTF.interior(tId_i, tId_j, gId_i, gId_j, blockParams)		
+					--R, Pre = data.problemSpec.functions.evalJTF.interior(tId_i, tId_j, gId_i, gId_j, blockParams)		
 				end
 				R = -R
 
@@ -369,10 +369,10 @@ return function(problemSpec, vars)
 					
 				if isInsideImage(gId_i, gId_j, W, H) then
 					-- A x p_k  => J^T x J x p_k 
-					if isBlockOnBoundary(gId_i, gId_j, W, H) then
+					if true or isBlockOnBoundary(gId_i, gId_j, W, H) then
 						AP = data.problemSpec.functions.applyJTJ.boundary(tId_i, tId_j, gId_i, gId_j, blockParams, P) 
 					else 
-						AP = data.problemSpec.functions.applyJTJ.interior(tId_i, tId_j, gId_i, gId_j, blockParams, P) 
+						--AP = data.problemSpec.functions.applyJTJ.interior(tId_i, tId_j, gId_i, gId_j, blockParams, P) 
 					end
 					--d = currentP*AP
 					d = util.Dot(currentP, AP)

@@ -193,6 +193,7 @@ local terra evalJTF(i : int64, j : int64, gi : int64, gj : int64, self : P:Param
 	preA = 1.0f
 
 	-- we actually just computed negative gradient, so negate to return positive gradient
+	-- Should we multiply by 2?
 	return (-make_float3(b(0), b(1), bA)), make_float3(pre(0), pre(1), preA)
 end
 
@@ -201,11 +202,63 @@ local terra gradient(i : int64, j : int64, gi : int64, gj : int64, self : P:Para
 	return evalJTF(i, j, gi, gj, self)._0
 end
 	
+local terra getP(pImage : P:UnknownType(), i : int64, j : int64) 
+	var p = pImage(i,j)
+	return make_float2(p(0), p(1))
+end
 
 -- eval 2*JtJ (note that we keep the '2' to make it consistent with the gradient
 local terra applyJTJ(i : int64, j : int64, gi : int64, gj : int64, self : P:ParameterType(), pImage : P:UnknownType())
- 
-	return make_float3(0.0f, 0.0f, 0.0f) 
+ 	var b = make_float2(0.0f, 0.0f)
+	var bA = 0.0f
+
+	-- fit/pos
+	var constraintUV = self.Constraints(i,j)	
+	var validConstraint = (constraintUV(0) >= 0 && constraintUV(1) >= 0) and self.Mask(i,j) == 0.0f
+	if validConstraint then
+	 	b 	= b + 2.0f*self.w_fitSqrt*self.w_fitSqrt*pImage(i,j)
+	end
+
+	-- pos/reg
+	float2 e_reg = make_float2(0.0f, 0.0f);
+	var p00 = getP(pImage, i, j)
+	escape
+		for a=1,4 do
+			local offx = n_i[a]
+			local offy = n_j[a]
+			emit quote
+				var [valid[a]] = inBounds(gi+[offx], gj+[offy], self.X) and self.Mask(i+[offx], j+[offy])
+				if [valid[a]] then
+					e_reg = e_reg + 2 * (p00 - getP(pImage,i+[offx], j+[offy]))
+				end
+			end
+		end
+	end
+	b = b + 2.0f*self.w_regSqrt*self.w_regSqrt*e_reg;
+
+	-- angle/reg
+	var e_reg_angle = 0.0f;
+	var dR : float2x2 = evalR_dR(self.X(i,j)(2))
+	var angleP = pImage(i,j)(2)
+	var pHat :float_2 = self.UrShape(i,j)
+
+	escape
+		for a=1,4 do
+			local offx = n_i[a]
+			local offy = n_j[a]
+			emit quote
+				if [valid[a]] then
+					float_2 qHat = self.UrShape(i+[offx], j+[offy])
+					float_2 D = dR*(pHat - qHat)
+					e_reg_angle = e_reg_angle + D:dot(D)*angleP 
+				end
+			end
+		end
+	end
+	bA = bA + 2.0f*self.w_regSqrt*self.w_regSqrt*e_reg_angle;
+
+	-- Should we multiply by 2?
+	return return make_float3(b(0), b(1), bA)
 end
 
 P:Function("cost", {W,H}, cost)
