@@ -40,7 +40,7 @@ A.functions.evalJTF.boundary = terra(i : int64, j : int64, gi : int64, gj : int6
 	if d < 0.0f then d = -d end
 	if d > 0.1f then
 		--if gi == 10 and gj == 10 then
-		--	printf("%d,%d: pa=%f pb=%f\n",int(gi),int(gj),pa,pb)
+			printf("%d,%d: pa=%f pb=%f\n",int(gi),int(gj),pa,pb)
 		--end
 	end
 	
@@ -69,7 +69,7 @@ A.functions.cost.boundary = terra(i : int64, j : int64, gi : int64, gj : int64, 
 		printf("x: %f %f %f;  c: %f %f;   e: %f\n", self.X(i,j)(0), self.X(i,j)(1), self.X(i,j)(2), self.Constraints(i,j)(0), self.Constraints(i,j)(1), expected)
 	end
 	
-	return b
+	return a
 end
 
 return A

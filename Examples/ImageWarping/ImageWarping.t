@@ -28,7 +28,8 @@ local float_2 = opt.float2
 local float_3 = opt.float3
 local float_4 = opt.float4
 
-local float2x2 = vector(float, 4)
+--local float2x2 = vector(float, 4)
+local float2x2 = float_4
 
 local terra make_float2(x : float, y : float)
 	var v : float_2
@@ -53,8 +54,8 @@ local terra make_float4(x : float, y : float, z : float, w : float)
 	v(1) = y
 	v(2) = z
 	v(3) = w
-	--return v
-	return float_4(x, y, z, w)
+	return v
+	--return float_4(x, y, z, w)
 end
 
 local terra inBounds(i : int64, j : int64, xImage : P:UnknownType()) : bool
@@ -62,7 +63,8 @@ local terra inBounds(i : int64, j : int64, xImage : P:UnknownType()) : bool
 end
 
 local terra evalRot(CosAlpha : float, SinAlpha: float)
-	return vector(CosAlpha, -SinAlpha, SinAlpha, CosAlpha) -- is this transposed?
+	--return vector(CosAlpha, -SinAlpha, SinAlpha, CosAlpha)
+	return make_float4(CosAlpha, -SinAlpha, SinAlpha, CosAlpha)	
 end
 
 local terra evalR (angle : float)
@@ -70,7 +72,7 @@ local terra evalR (angle : float)
 end
 
 local terra mul(matrix : float2x2, v : float_2) : float_2
-	return float_2(matrix[0]*v(0)+matrix[1]*v(1), matrix[2]*v(0)+matrix[3]*v(1))
+	return float_2(matrix(0)*v(0)+matrix(1)*v(1), matrix(2)*v(0)+matrix(3)*v(1))
 end
 
 local terra getXFloat2(i : int64, j : int64, self : P:ParameterType())
@@ -78,7 +80,7 @@ local terra getXFloat2(i : int64, j : int64, self : P:ParameterType())
 end
 
 local terra eval_dR(cosAlpha : float, sinAlpha : float) 
-	return float2x2(-sinAlpha, -cosAlpha,
+	return make_float4(-sinAlpha, -cosAlpha,
 					 cosAlpha,  -sinAlpha)
 end
 
