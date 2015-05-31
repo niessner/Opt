@@ -102,17 +102,18 @@ public:
 
 		unsigned int numIter = 2;
 
-		unsigned int nonLinearIter = 10;
-		unsigned int linearIter = 50;
+		unsigned int nonLinearIter = 5;
+		unsigned int linearIter = 5;
 		unsigned int patchIter = 32;
 
 		for (unsigned int i = 0; i < numIter; i++)	{
 			std::cout << "//////////// ITERATION"  << i << "  (CUDA) ///////////////" << std::endl;
 			setConstraintImage((float)i/(float)20);
 
-			//m_warpingSolver->solveGN(d_urshape, d_warpField, d_warpAngles, d_constraints, d_mask, nonLinearIter, linearIter, weightFit, weightReg);
-			m_warpingSolverPatch->solveGN(d_urshape, d_warpField, d_warpAngles, d_constraints, d_mask, nonLinearIter, linearIter, patchIter, weightFit, weightReg);
-			//m_warpingSolverTerra->solve(d_warpField, d_warpAngles, d_urshape, d_constraints, d_mask, nonLinearIter, linearIter, weightFit, weightReg);
+			m_warpingSolver->solveGN(d_urshape, d_warpField, d_warpAngles, d_constraints, d_mask, nonLinearIter, linearIter, weightFit, weightReg);
+			//m_warpingSolverPatch->solveGN(d_urshape, d_warpField, d_warpAngles, d_constraints, d_mask, nonLinearIter, linearIter, patchIter, weightFit, weightReg);
+			//m_warpingSolverTerra->solve(d_warpField, d_warpAngles, d_urshape, d_constraints, d_mask, nonLinearIter, linearIter, patchIter, weightFit, weightReg);
+			//m_warpingSolverBlockTerra->solve(d_warpField, d_warpAngles, d_urshape, d_constraints, d_mask, nonLinearIter, linearIter, patchIter, weightFit, weightReg);
 			std::cout << std::endl;
 		}
 
@@ -122,14 +123,14 @@ public:
 		std::cout << std::endl << std::endl;
 		 
 		for (unsigned int i = 0; i < numIter; i++)	{
-			std::cout << "//////////// ITERATION" << i << "  (TERRA) ///////////////" << std::endl;
+			//std::cout << "//////////// ITERATION" << i << "  (TERRA) ///////////////" << std::endl;
 			setConstraintImage((float)i / (float)20);
 
 			//m_warpingSolver->solveGN(d_urshape, d_warpField, d_warpAngles, d_constraints, d_mask, nonLinearIter, linearIter, weightFit, weightReg);
 			//m_warpingSolverPatch->solveGN(d_urshape, d_warpField, d_warpAngles, d_constraints, d_mask, nonLinearIter, linearIter, patchIter, weightFit, weightReg);
-			//m_warpingSolverTerra->solve(d_warpField, d_warpAngles, d_urshape, d_constraints, d_mask, nonLinearIter, linearIter, patchIter, weightFit, weightReg);
-			m_warpingSolverBlockTerra->solve(d_warpField, d_warpAngles, d_urshape, d_constraints, d_mask, nonLinearIter, linearIter, patchIter, weightFit, weightReg);
-			std::cout << std::endl;
+			m_warpingSolverTerra->solve(d_warpField, d_warpAngles, d_urshape, d_constraints, d_mask, nonLinearIter, linearIter, patchIter, weightFit, weightReg);
+			//m_warpingSolverBlockTerra->solve(d_warpField, d_warpAngles, d_urshape, d_constraints, d_mask, nonLinearIter, linearIter, patchIter, weightFit, weightReg);
+			//std::cout << std::endl;
 		}
 
 		//copyResultToCPU();

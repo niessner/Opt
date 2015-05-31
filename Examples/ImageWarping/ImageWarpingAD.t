@@ -2,7 +2,7 @@
 
 local W,H = opt.Dim("W",0), opt.Dim("H",1)
 local S = ad.ProblemSpec()
-S:UsePreconditioner(false)
+S:UsePreconditioner(true)
 
 local X = 			S:Image("X", opt.float3,W,H,0)				--uv, a <- unknown
 local UrShape = 	S:Image("UrShape", opt.float2,W,H,1)		--urshape

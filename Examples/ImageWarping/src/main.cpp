@@ -3,7 +3,7 @@
 
 int main(int argc, const char * argv[]) {
 
-	// DOG
+	//// DOG
 	//const std::string inputImage = "smoothingExampleD.png";
 	//const std::string inputImageMask = "smoothingExampleDMask.png";
 	//std::vector<std::vector<int>> constraints; constraints.resize(4);
@@ -12,7 +12,7 @@ int main(int argc, const char * argv[]) {
 	//constraints[2].push_back(163); constraints[2].push_back(111); constraints[2].push_back(153); constraints[2].push_back(111);
 	//constraints[3].push_back(183); constraints[3].push_back(111); constraints[3].push_back(193); constraints[3].push_back(111);
 
-	// COLUMN
+	// PILLAR
 	const std::string inputImage = "bend2.png";
 	const std::string inputImageMask = "bendMask.png";
 	std::vector<std::vector<int>> constraints; constraints.resize(3);
