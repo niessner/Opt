@@ -113,7 +113,7 @@
       <Include>$(SolutionDir)\src\cutil\inc;$(SolutionDir)</Include>
       <CodeGeneration>compute_35,sm_35</CodeGeneration>
       <MaxRegCount>62</MaxRegCount>
-      <FastMath>true</FastMath>
+      <FastMath>false</FastMath>
       <Optimization>O3</Optimization>
     </CudaCompile>
     <PreBuildEvent>

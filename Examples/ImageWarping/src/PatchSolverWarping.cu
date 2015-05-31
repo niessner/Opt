@@ -28,8 +28,8 @@ __global__ void EvalResidualDevice(PatchSolverInput input, PatchSolverState stat
 
 	if (x < N)
 	{
-		float2 residual = evalFDevice(x, input, state, parameters);
-		float r = warpReduce(residual.x + residual.y);
+		float residual = evalFDevice(x, input, state, parameters);
+		float r = warpReduce(residual);
 		unsigned int laneid;
 		//This command gets the lane ID within the current warp
 		asm("mov.u32 %0, %%laneid;" : "=r"(laneid));
@@ -216,11 +216,13 @@ __global__ void PCGStepPatch_Kernel(PatchSolverInput input, PatchSolverState sta
 	}
 }
 
-void PCGIterationPatch(PatchSolverInput& input, PatchSolverState& state, PatchSolverParameters& parameters, int ox, int oy)
+void PCGIterationPatch(PatchSolverInput& input, PatchSolverState& state, PatchSolverParameters& parameters, int ox, int oy, CUDATimer& timer)
 {
 	dim3 blockSize(PATCH_SIZE, PATCH_SIZE);
 	dim3 gridSize((input.width + blockSize.x - 1) / blockSize.x + 1, (input.height + blockSize.y - 1) / blockSize.y + 1); // one more for block shift!
+	timer.startEvent("PCGIterationPatch");
 	PCGStepPatch_Kernel<<<gridSize, blockSize>>>(input, state, parameters, ox, oy);
+	timer.endEvent();
 	#ifdef _DEBUG
 		cutilSafeCall(cudaDeviceSynchronize());
 		cutilCheckMsg(__FUNCTION__);
@@ -245,7 +247,7 @@ extern "C" void patchSolveStereoStub(PatchSolverInput& input, PatchSolverState& 
 		printf("%i: cost: %f\n", nIter, residual);
 
 		for (unsigned int lIter = 0; lIter < parameters.nLinearIterations; lIter++) {
-			PCGIterationPatch(input, state, parameters, offsetX[o], offsetY[o]);
+			PCGIterationPatch(input, state, parameters, offsetX[o], offsetY[o], timer);
 			o = (o + 1) % 8;
 		}
 

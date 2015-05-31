@@ -14,9 +14,9 @@
 // evalF
 ////////////////////////////////////////
 
-__inline__ __device__ float2 evalFDevice(unsigned int variableIdx, PatchSolverInput& input, PatchSolverState& state, PatchSolverParameters& parameters)
+__inline__ __device__ float evalFDevice(unsigned int variableIdx, PatchSolverInput& input, PatchSolverState& state, PatchSolverParameters& parameters)
 {
-	float2 e = make_float2(0.0F, 0.0f);
+	float2 e = make_float2(0.0f, 0.0f);
 
 	int i; int j; get2DIdx(variableIdx, input.width, input.height, i, j);
 	const int n0_i = i;		const int n0_j = j - 1;  bool validN0 = isInsideImage(n0_i, n0_j, input.width, input.height); if(validN0) { validN0 = (state.d_mask[get1DIdx(n0_i, n0_j, input.width, input.height)] == 0); };
@@ -41,7 +41,8 @@ __inline__ __device__ float2 evalFDevice(unsigned int variableIdx, PatchSolverIn
 	if (validN3) { float2 X_PC = state.d_x[get1DIdx(n3_i, n3_j, input.width, input.height)]; float2 U_PC = state.d_urshape[get1DIdx(n3_i, n3_j, input.width, input.height)]; float2 q = X_PC; float2 qHat = U_PC; float2 v = mat2x1((p - q) - R*(pHat - qHat)); e_reg += v*v;}
 	e += parameters.weightRegularizer*e_reg;
 
-	return e;
+	float res = e.x + e.y;
+	return res;
 }
 
 ////////////////////////////////////////
@@ -69,7 +70,7 @@ __inline__ __device__ float2 evalMinusJTFDevice(int tId_i, int tId_j, int gId_i,
 
 	// fit/pos
 	bool validConstraint = (constraintUV.x >= 0 && constraintUV.y >= 0) && M_CC == 0;
-	if (validConstraint) { b += -parameters.weightFitting*(X_CC - constraintUV); pre += parameters.weightFitting*make_float2(1.0f, 1.0f); }
+	if (validConstraint) { b += -2.0f*parameters.weightFitting*(X_CC - constraintUV); pre += 2.0f*parameters.weightFitting*make_float2(1.0f, 1.0f); }
 
 	// reg/pos
 	float2	 p = X_CC;
@@ -80,7 +81,7 @@ __inline__ __device__ float2 evalMinusJTFDevice(int tId_i, int tId_j, int gId_i,
 	if (validN1){ float2 q = X_CP; float2 qHat = U_CP; float2x2 R_j = evalR(A_CP); e_reg += 2 * (p - q) - float2(mat2x2(R_i + R_j)*mat2x1(pHat - qHat)); pre += 2.0f*parameters.weightRegularizer; }
 	if (validN2){ float2 q = X_MC; float2 qHat = U_MC; float2x2 R_j = evalR(A_MC); e_reg += 2 * (p - q) - float2(mat2x2(R_i + R_j)*mat2x1(pHat - qHat)); pre += 2.0f*parameters.weightRegularizer; }
 	if (validN3){ float2 q = X_PC; float2 qHat = U_PC; float2x2 R_j = evalR(A_PC); e_reg += 2 * (p - q) - float2(mat2x2(R_i + R_j)*mat2x1(pHat - qHat)); pre += 2.0f*parameters.weightRegularizer; }
-	b += -parameters.weightRegularizer*e_reg;
+	b += -2.0f*parameters.weightRegularizer*e_reg;
 
 	// reg/angle
 	float2x2 R = evalR(A_CC);
@@ -90,7 +91,11 @@ __inline__ __device__ float2 evalMinusJTFDevice(int tId_i, int tId_j, int gId_i,
 	if (validN1) { float2 q = X_CP; float2 qHat = U_CP; mat2x1 D = -mat2x1(dR*(pHat - qHat)); e_reg_angle += D.getTranspose()*mat2x1((p - q) - R*(pHat - qHat)); preA += D.getTranspose()*D*parameters.weightRegularizer; }
 	if (validN2) { float2 q = X_MC; float2 qHat = U_MC; mat2x1 D = -mat2x1(dR*(pHat - qHat)); e_reg_angle += D.getTranspose()*mat2x1((p - q) - R*(pHat - qHat)); preA += D.getTranspose()*D*parameters.weightRegularizer; }
 	if (validN3) { float2 q = X_PC; float2 qHat = U_PC; mat2x1 D = -mat2x1(dR*(pHat - qHat)); e_reg_angle += D.getTranspose()*mat2x1((p - q) - R*(pHat - qHat)); preA += D.getTranspose()*D*parameters.weightRegularizer; }
-	bA += -parameters.weightRegularizer*e_reg_angle;
+	bA += -2.0f*parameters.weightRegularizer*e_reg_angle;
+
+	//TODO ENABLE OUR PRE-CONDITIONER AGAIN
+	pre = make_float2(1.0f, 1.0f);
+	preA = 1.0f;
 
 	// Preconditioner
 	if (pre.x > FLOAT_EPSILON) pre = 1.0f / pre;
@@ -127,7 +132,7 @@ __inline__ __device__ float2 applyJTJDevice(int tId_i, int tId_j, int gId_i, int
 
 	// pos/constraint
 	bool validConstraint = (constraintUV.x >= 0 && constraintUV.y >= 0) && M_CC == 0;
-	if (validConstraint) { b += parameters.weightFitting*P_CC; }
+	if (validConstraint) { b += 2.0f*parameters.weightFitting*P_CC; }
 
 	// pos/reg
 	float2 e_reg = make_float2(0.0f, 0.0f);
@@ -135,7 +140,7 @@ __inline__ __device__ float2 applyJTJDevice(int tId_i, int tId_j, int gId_i, int
 	if (validN1) e_reg += 2.0f*(P_CC - P_CP);
 	if (validN2) e_reg += 2.0f*(P_CC - P_MC);
 	if (validN3) e_reg += 2.0f*(P_CC - P_PC);
-	b += parameters.weightRegularizer*e_reg;
+	b += 2.0f*parameters.weightRegularizer*e_reg;
 
 	// angle/reg
 	float	 e_reg_angle = 0.0f;
@@ -146,7 +151,7 @@ __inline__ __device__ float2 applyJTJDevice(int tId_i, int tId_j, int gId_i, int
 	if (validN1) { float2 qHat = U_CP; mat2x1 D = mat2x1(dR*(pHat - qHat)); e_reg_angle += D.getTranspose()*D*angleP; }
 	if (validN2) { float2 qHat = U_MC; mat2x1 D = mat2x1(dR*(pHat - qHat)); e_reg_angle += D.getTranspose()*D*angleP; }
 	if (validN3) { float2 qHat = U_PC; mat2x1 D = mat2x1(dR*(pHat - qHat)); e_reg_angle += D.getTranspose()*D*angleP; }
-	bA += parameters.weightRegularizer*e_reg_angle;
+	bA += 2.0f*parameters.weightRegularizer*e_reg_angle;
 
 	return b;
 }

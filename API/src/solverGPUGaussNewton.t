@@ -414,6 +414,9 @@ return function(problemSpec, vars)
 				pd.scanBeta[0] = 0.0	--scan in PCGStep2 requires reset
 				gpu.PCGStep2(pd)
 				gpu.PCGStep3(pd)
+				
+				--var currCost = gpu.computeCost(pd)
+				--logSolver("after linear iteration %d, cost=%f\n", lIter, currCost)
 			end
 			
 			gpu.PCGLinearUpdate(pd)

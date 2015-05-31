@@ -26,8 +26,8 @@ void CUDAPatchSolverWarping::solveGN(float2* d_urshape, float2* d_warpField, flo
 	PatchSolverParameters parameters;
 	parameters.weightFitting = weightFitting;
 	parameters.weightRegularizer = weightRegularizer;
-	parameters.nLinearIterations = nLinearIterations;
 	parameters.nNonLinearIterations = nNonLinearIterations;
+	parameters.nLinearIterations = nLinearIterations;
 	parameters.nPatchIterations = nPatchIterations;
 
 	PatchSolverInput solverInput;
