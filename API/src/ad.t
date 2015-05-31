@@ -1,3 +1,4 @@
+local ad = {}
 local C = terralib.includec("math.h")
 
 local function newclass(name)
@@ -108,6 +109,9 @@ local function simplify(op,args)
     if #args == 2 and Apply:is(x) and Apply:is(y) and x.op.name == "select" and y.op.name == "select" and x.args[1] == y.args[1] then
         return ad.select(x.args[1],op(x.args[2],y.args[2]),op(x.args[3],y.args[3]))
     end
+    if op.name == "select" and Apply:is(y) and y.op.name == "select" and y.args[3] == args[3] then
+        return ad.select(ad.and_(x,y.args[1]),y.args[2],args[3]) 
+    end
     if assoc[op.name] and Apply:is(x) and x.op.name == op.name
            and Const:is(x.args[2]) then -- (e + c) + ? -> e + (? + c)
         --print("assoc1")
@@ -217,7 +221,7 @@ end})
 
 local x,y,z = v[1],v[2],v[3]
 
-local ad = {}
+
 ad.v = v
 ad.toexp = toexp
 ad.newclass = newclass
@@ -387,7 +391,7 @@ local function expstostring(es)
         end
     end
     local r = es:map(emit)
-    r = r:concat(",")
+    r = r:concat(",\n\n  ")
     if #tbl == 0 then return r end
     return ("let\n%sin\n  %s\nend\n"):format(tbl:concat(),r)
 end
@@ -629,17 +633,29 @@ ad.sinh:define(function(x) return `C.sinh(a) end, ad.cosh(x))
 ad.sqrt:define(function(x) return `C.sqrt(x) end, 1.0/(2.0*ad.sqrt(x)))
 ad.tan:define(function(x) return `C.tan(x) end, 1.0 + ad.tan(x)*ad.tan(x))
 ad.tanh:define(function(x) return `C.tanh(x) end, 1.0/(ad.cosh(x)*ad.cosh(x)))
-ad.select:define(function(x,y,z) return `terralib.select(bool(x),y,z) end,0,ad.select(x,1,0),ad.select(x,0,1))
-ad.eq:define(function(x,y) return `terralib.select(x == y,1.f,0.f) end, 0,0)
+
+--ad.select:define(function(x,y,z) return `terralib.select(bool(x),y,z) end,0,ad.select(x,1,0),ad.select(x,0,1))
+ad.select:define(function(x,y,z) 
+    return quote
+        var r : float
+        if bool(x) then
+            r = y
+        else    
+            r = z
+        end
+    in r end
+end,0,ad.select(x,1,0),ad.select(x,0,1))
+
+ad.eq:define(function(x,y) return `int(x == y) end, 0,0)
 ad.abs:define(function(x) return `terralib.select(x >= 0,x,-x) end, ad.select(ad.greatereq(x, 0),1,-1))
 
-ad.and6:define(function(x0, x1, x2, x3, x4, x5) return `terralib.select(x0 ~= 0.f and x1 ~= 0.f and x2 ~= 0.f and x3 ~= 0.f and x4 ~= 0.f and x5 ~= 0.f,1.f,0.f) end, 0,0,0,0,0,0)
-ad.and_:define(function(x,y) return `terralib.select(x ~= 0.f and y ~= 0.f,1.f,0.f) end, 0, 0)
-ad.less:define(function(x,y) return `float(x < y) end, 0,0)
-ad.greater:define(function(x,y) return `float(x > y) end, 0,0)
-ad.lesseq:define(function(x,y) return `float(x <= y) end,0,0)
-ad.greatereq:define(function(x,y) return `float(x >= y) end,0,0)
-ad.not_:define(function(x) return `terralib.select(x == 0.f,1.f,0.f) end, 0)
+ad.and6:define(function(x0, x1, x2, x3, x4, x5) return `int(x0) and int(x1) and int(x2) and int(x3) and int(x4) and int(x5) end,0,0,0,0,0,0)
+ad.and_:define(function(x,y) return `int(x) and int(y) end, 0, 0)
+ad.less:define(function(x,y) return `int(x < y) end, 0,0)
+ad.greater:define(function(x,y) return `int(x > y) end, 0,0)
+ad.lesseq:define(function(x,y) return `int(x <= y) end,0,0)
+ad.greatereq:define(function(x,y) return `int(x >= y) end,0,0)
+ad.not_:define(function(x) return `int(not bool(x)) end, 0)
 
 setmetatable(ad,nil) -- remove special metatable that generates new blank ops
 ad.Var,ad.Apply,ad.Const,ad.Exp = Var, Apply, Const, Exp
@@ -674,4 +690,5 @@ print(expstostring(g))
 local t = ad.toterra(g,{x = symbol("x"), y = symbol("y"), z = symbol("z")})
 t:printpretty()
 ]]
+--print(ad.select(ad.v.x,ad.select(ad.v.y,ad.v.z,0),0))
 return ad

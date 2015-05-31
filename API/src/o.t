@@ -855,8 +855,8 @@ end
     
 local function createjtj(Fs,unknown,P)
     local P_hat = createzerolist(unknown.N)
-	
-    for _,F in ipairs(Fs) do
+	local toprint = terralib.newlist()
+    for rn,F in ipairs(Fs) do
         local unknownsupport = unknownaccesses(F)
         for channel = 0, unknown.N-1 do
             local x = unknown(0,0,channel)
@@ -869,8 +869,11 @@ local function createjtj(Fs,unknown,P)
                 local drdx00 = rexp:d(x)
                 local unknowns = unknownsforresidual(r,unknownsupport)
                 for _,u in ipairs(unknowns) do
-                    local exp = drdx00*rexp:d(unknown(u.x,u.y,u.channel))
+                    local drdx_u = rexp:d(unknown(u.x,u.y,u.channel))
+                    local exp = drdx00*drdx_u
                     --print(("df(%d,%d)/dx(%d,%d) * df(%d,%d)/dx(%d,%d) = %s"):format(r.x,r.y,0,0,r.x,r.y,u.x,u.y,tostring(exp)))
+                    --print(("df_%d(%d,%d)/dx_%d(%d,%d)"):format(rn,r.x,r.y,u.channel,u.x,u.y))
+                    toprint:insert(drdx_u)
                     if not columns[u] then
                         columns[u] = 0
                         nonzerounknowns:insert(u)
@@ -886,6 +889,8 @@ local function createjtj(Fs,unknown,P)
     for i,p in ipairs(P_hat) do
         P_hat[i] = 2.0 * p
     end
+    --print(ad.tostrings(toprint))
+    --error("DONE")
     return conformtounknown(P_hat,unknown)
 end
 
