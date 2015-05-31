@@ -18,28 +18,31 @@ __inline__ __device__ float4 evalFDevice(unsigned int variableIdx, PatchSolverIn
 {
 	float4 e = make_float4(0.0f, 0.0f, 0.0F, 0.0f);
 
-	// E_reg
-	int i; int j; get2DIdx(variableIdx, input.width, input.height, i, j);
-	const int n0_i = i;		const int n0_j = j - 1;
-	const int n1_i = i;		const int n1_j = j + 1;
-	const int n2_i = i - 1; const int n2_j = j;		
-	const int n3_i = i + 1; const int n3_j = j;
+	if (state.d_mask[variableIdx] == 0) {
 
-	const bool validN0 = isInsideImage(n0_i, n0_j, input.width, input.height);
-	const bool validN1 = isInsideImage(n1_i, n1_j, input.width, input.height);
-	const bool validN2 = isInsideImage(n2_i, n2_j, input.width, input.height);
-	const bool validN3 = isInsideImage(n3_i, n3_j, input.width, input.height);
+		// E_reg
+		int i; int j; get2DIdx(variableIdx, input.width, input.height, i, j);
+		const int n0_i = i;		const int n0_j = j - 1;
+		const int n1_i = i;		const int n1_j = j + 1;
+		const int n2_i = i - 1; const int n2_j = j;
+		const int n3_i = i + 1; const int n3_j = j;
 
-	float4 e_reg = make_float4(0.0f, 0.0f, 0.0f, 0.0f);
+		const bool validN0 = isInsideImage(n0_i, n0_j, input.width, input.height);
+		const bool validN1 = isInsideImage(n1_i, n1_j, input.width, input.height);
+		const bool validN2 = isInsideImage(n2_i, n2_j, input.width, input.height);
+		const bool validN3 = isInsideImage(n3_i, n3_j, input.width, input.height);
 
-	float4 p = state.d_x[get1DIdx(i, j, input.width, input.height)];
-	float4 t = state.d_target[get1DIdx(i, j, input.width, input.height)];
-	if (validN0){ float4 X_CM = state.d_x[get1DIdx(n0_i, n0_j, input.width, input.height)]; float4 T_CM = state.d_target[get1DIdx(n0_i, n0_j, input.width, input.height)]; float4 q = X_CM; float4 tq = T_CM; float4 v = (p - q) - (t - tq); e_reg += v*v; }
-	if (validN1){ float4 X_CP = state.d_x[get1DIdx(n1_i, n1_j, input.width, input.height)]; float4 T_CP = state.d_target[get1DIdx(n1_i, n1_j, input.width, input.height)]; float4 q = X_CP; float4 tq = T_CP; float4 v = (p - q) - (t - tq); e_reg += v*v; }
-	if (validN2){ float4 X_MC = state.d_x[get1DIdx(n2_i, n2_j, input.width, input.height)]; float4 T_MC = state.d_target[get1DIdx(n2_i, n2_j, input.width, input.height)]; float4 q = X_MC; float4 tq = T_MC; float4 v = (p - q) - (t - tq); e_reg += v*v; }
-	if (validN3){ float4 X_PC = state.d_x[get1DIdx(n3_i, n3_j, input.width, input.height)]; float4 T_PC = state.d_target[get1DIdx(n3_i, n3_j, input.width, input.height)]; float4 q = X_PC; float4 tq = T_PC; float4 v = (p - q) - (t - tq); e_reg += v*v; }
-	e += e_reg;
+		float4 e_reg = make_float4(0.0f, 0.0f, 0.0f, 0.0f);
 
+		float4 p = state.d_x[get1DIdx(i, j, input.width, input.height)];
+		float4 t = state.d_target[get1DIdx(i, j, input.width, input.height)];
+		if (validN0){ float4 X_CM = state.d_x[get1DIdx(n0_i, n0_j, input.width, input.height)]; float4 T_CM = state.d_target[get1DIdx(n0_i, n0_j, input.width, input.height)]; float4 q = X_CM; float4 tq = T_CM; float4 v = (p - q) - (t - tq); e_reg += v*v; }
+		if (validN1){ float4 X_CP = state.d_x[get1DIdx(n1_i, n1_j, input.width, input.height)]; float4 T_CP = state.d_target[get1DIdx(n1_i, n1_j, input.width, input.height)]; float4 q = X_CP; float4 tq = T_CP; float4 v = (p - q) - (t - tq); e_reg += v*v; }
+		if (validN2){ float4 X_MC = state.d_x[get1DIdx(n2_i, n2_j, input.width, input.height)]; float4 T_MC = state.d_target[get1DIdx(n2_i, n2_j, input.width, input.height)]; float4 q = X_MC; float4 tq = T_MC; float4 v = (p - q) - (t - tq); e_reg += v*v; }
+		if (validN3){ float4 X_PC = state.d_x[get1DIdx(n3_i, n3_j, input.width, input.height)]; float4 T_PC = state.d_target[get1DIdx(n3_i, n3_j, input.width, input.height)]; float4 q = X_PC; float4 tq = T_PC; float4 v = (p - q) - (t - tq); e_reg += v*v; }
+		e += e_reg;
+
+	}
 	return e;
 }
 

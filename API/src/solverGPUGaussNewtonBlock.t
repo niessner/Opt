@@ -220,7 +220,8 @@ return function(problemSpec, vars)
 			
 			var cost = 0.0f
 			var w : int, h : int
-			if positionForValidLane(pd, "X", &w, &h) then
+			if positionForValidLane(pd, "X", &w, &h) and (not [problemSpec:EvalExclude(tId_i, tId_j, gId_i, gId_j,`blockParams)]) then
+			--if positionForValidLane(pd, "X", &w, &h) then
 				if true or isBlockOnBoundary(gId_i, gId_j, W, H) then
 					cost = [float](data.problemSpec.functions.cost.boundary(tId_i, tId_j, gId_i, gId_j, blockParams))
 				else
@@ -320,14 +321,14 @@ return function(problemSpec, vars)
 
 			__syncthreads()	--after here, everything should be in shared memory
 				
-	
+			var isValidPixel : bool = isInsideImage(gId_i, gId_j, W, H) and (not [problemSpec:EvalExclude(tId_i, tId_j, gId_i, gId_j,`blockParams)])
 			--//////////////////////////////////////////////////////////////////////////////////////////
 			--// Initialize linear patch systems
 			--//////////////////////////////////////////////////////////////////////////////////////////
 			
 			var d : float = 0.0f
 			
-			if isInsideImage(gId_i, gId_j, W, H) then
+			if isValidPixel then
 				-- residuum = J^T x -F - A x delta_0  => J^T x -F, since A x x_0 == 0
 				if true or isBlockOnBoundary(gId_i, gId_j, W, H) then
 					R, Pre = data.problemSpec.functions.evalJTF.boundary(tId_i, tId_j, gId_i, gId_j, blockParams)		
@@ -349,15 +350,12 @@ return function(problemSpec, vars)
 			blockReduce(patchBucket, getLinearThreadId(tId_i, tId_j), SHARED_MEM_SIZE_VARIABLES)
 			__syncthreads()	-- TODO I'm not quire sure if we need this one
 
-			if isInsideImage(gId_i, gId_j, W, H) then 
+			if isValidPixel then 
 				RDotZOld = patchBucket[0]							   -- read result for later on
 			end
 	
 			__syncthreads()	
 			
-			if tId_i == 0 and tId_j == 0 then
-				--printf("Here: RDotZOld %f\n", RDotZOld)
-			end
 			
 			--///////////////////////
 			--Do patch PCG iterations
@@ -367,7 +365,7 @@ return function(problemSpec, vars)
 				var currentP : problemSpec:UnknownType().metamethods.typ = P(tId_i, tId_j)				
 				var d : float = 0.0f
 					
-				if isInsideImage(gId_i, gId_j, W, H) then
+				if isValidPixel then
 					-- A x p_k  => J^T x J x p_k 
 					if true or isBlockOnBoundary(gId_i, gId_j, W, H) then
 						AP = data.problemSpec.functions.applyJTJ.boundary(tId_i, tId_j, gId_i, gId_j, blockParams, P) 
@@ -388,7 +386,7 @@ return function(problemSpec, vars)
 				var dotProduct : float = patchBucket[0]
 				
 				var b : float = 0.0f		
-				if isInsideImage(gId_i, gId_j, W, H) then
+				if isValidPixel then
 					var alpha : float = 0.0f
 					
 					if dotProduct > FLOAT_EPSILON then	-- update step size alpha
@@ -410,7 +408,7 @@ return function(problemSpec, vars)
 				__syncthreads()
 				
 		
-				if isInsideImage(gId_i, gId_j, W, H) then
+				if isValidPixel then
 					var rDotzNew : float = patchBucket[0]	-- get new nominator
 								
 					var beta : float = 0.0f														 
@@ -433,7 +431,7 @@ return function(problemSpec, vars)
 			--	pd.delta(gId_i, gId_j) = Delta
 			--end
 			
-			if isInsideImage(gId_i, gId_j, W, H) then 
+			if isValidPixel then 
 				pd.parameters.X(gId_i,gId_j) = pd.parameters.X(gId_i,gId_j) + Delta
 			end
 			

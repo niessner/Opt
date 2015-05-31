@@ -76,25 +76,36 @@ public:
 
 	ColorImageR32G32B32A32* solve()
 	{
+		//std::cout << cudaGetErrorString((cudaError_t)77) << std::endl;
+		//getchar();
+		
 		float weightFit = 0.0f; // not used
 		float weightReg = 0.0f; // not used
 		
 		unsigned int nonLinearIter = 10;
+		unsigned int linearIter = 10;
 		unsigned int patchIter = 16;
-		unsigned int linearIter = 100;
+		
 		
 		std::cout << "CUDA" << std::endl;
 		resetGPUMemory();
 		m_warpingSolver->solveGN(d_image, d_target, d_mask, nonLinearIter, linearIter, weightFit, weightReg);		
 		copyResultToCPU();
 
-		//m_warpingSolverPatch->solveGN(d_image, d_target, d_mask, nonLinearIter, patchIter, weightFit, weightReg);
-		//copyResultToCPU();
-		//resetGPU();
+		std::cout << "CUDA_BLOCK" << std::endl;
+		m_warpingSolverPatch->solveGN(d_image, d_target, d_mask, nonLinearIter, linearIter, patchIter, weightFit, weightReg);
+		copyResultToCPU();
+		copyResultToCPU();
 
 		std::cout << "\n\nTERRA" << std::endl;
 		resetGPUMemory();
-		m_terraSolver->solve(d_image, d_target, d_mask, nonLinearIter, linearIter,  patchIter, weightFit, weightReg );
+		m_terraSolver->solve(d_image, d_target, d_mask, nonLinearIter, linearIter, patchIter, weightFit, weightReg);
+		copyResultToCPU();
+
+
+		std::cout << "\n\nTERRA_BLOCK" << std::endl;
+		resetGPUMemory();
+		m_terraBlockSolver->solve(d_image, d_target, d_mask, nonLinearIter, linearIter,  patchIter, weightFit, weightReg );
 		copyResultToCPU();
 
 		return &m_result;
