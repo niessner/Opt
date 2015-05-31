@@ -93,10 +93,6 @@ __inline__ __device__ float2 evalMinusJTFDevice(int tId_i, int tId_j, int gId_i,
 	if (validN3) { float2 q = X_PC; float2 qHat = U_PC; mat2x1 D = -mat2x1(dR*(pHat - qHat)); e_reg_angle += D.getTranspose()*mat2x1((p - q) - R*(pHat - qHat)); preA += D.getTranspose()*D*parameters.weightRegularizer; }
 	bA += -2.0f*parameters.weightRegularizer*e_reg_angle;
 
-	//TODO ENABLE OUR PRE-CONDITIONER AGAIN
-	pre = make_float2(1.0f, 1.0f);
-	preA = 1.0f;
-
 	// Preconditioner
 	if (pre.x > FLOAT_EPSILON) pre = 1.0f / pre;
 	else				       pre = make_float2(1.0f, 1.0f);
