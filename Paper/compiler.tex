@@ -3,24 +3,43 @@
 
 \JRK{Compiler \emph{in terms of what the solver needs (JTJ)}}
 
+The \OPT compiler takes energy functions defined in our expression language and generates efficient, in-place Gauss-Newton solvers, in either blocked or non-blocked form, following the model described in the previous section.
+\JRK{This proceeds in three steps: JTJp residual generation, code template expansion, and code generation???}
+
+Our compiler, including the energy function expression language, is built using the metaprogramming and code-generation facilities of the Lua/Terra language environment \cite{terra}.
+
+\subsection{Meta-solver templates} % (fold)
+\label{sub:solver_templates}
+In \OPT, solver methods are defined as metaprograms consisting of:
+
+\begin{itemize}
+  \item \emph{templates}, which define the core, application-independent logic to initialize and iterate the method, and
+  \item \emph{generation logic}, which uses the compiler infrastructure to derive required and splice them into the template to produce an application-specific in-place solver.
+\end{itemize}
+
+\JRK{Solver templates implement XYZ metaprogramming interface/API}
+% subsection solver_templates (end)
+
 \subsection{Compiling Energy Functions to Residual Terms} % (fold)
-\label{sub:autodiff}
+\label{sec:jtj_generation}
 
-Expression language → automatic differentiation (simplified $D\star$)
-
-Understands data structures, stencils
+The most complex logic in the compiler is responsible for generating code to compute the specific derivative terms required by a given method, in the form required, from the original user-provided energy function.
+In our parallel Gauss-Newton solvers, this is the set of partial derivatives corresponding to $J^TJp$ at a given unknown pixel $X(0,0)$. (Because of the stencil-only restriction on energy functions, these expressions are the same for every pixel, modulo boundary effects.)
+In this section, we present the algorithm to derive this expression from an arbitrary energy function in the \OPT expression language.
 
 % Cost is sum of squares, we keep each of those squared terms (residual r_i) separate and do the following for each i:
 %% Making JTJp - we want it separately, for each unknown point - gather form per image pixel
 % 1. Given cost, find the residuals that include x(0,0) - the non-zero entries in J^T
 % 2. Unknowns for residual r(x,y) - the non-zero columns in J - just the stencil, shifted by x,y
 
-% subsection autodiff (end)
+\JRK{Understands data structures, stencils}
 
-\subsection{Solver Templates} % (fold)
-\label{sub:solver_templates}
-Metaprogramming interface/API
-% subsection solver_templates (end)
+
+\subsubsection{Automatic Differentiation}
+\label{sec:autodiff}
+Our compiler includes the ability to compute partial derivatives of , using a simplified variant of the \DSTAR symbolic differentiation algorithm \cite{dstar}. \JRK{Zach, what is actually worth saying about this? We treat everything as independent variables, no knowledge of stencils, etc.?}
+
+% subsection jtj_generation (end)
 
 \subsection{Code Generation} % (fold)
 \label{sub:codegen}
