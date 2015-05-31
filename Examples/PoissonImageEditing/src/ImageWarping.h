@@ -93,8 +93,8 @@ public:
 		copyResultToCPU();
 
 		std::cout << "CUDA_BLOCK" << std::endl;
+		resetGPUMemory();
 		m_warpingSolverPatch->solveGN(d_image, d_target, d_mask, nonLinearIter, linearIter, patchIter, weightFit, weightReg);
-		copyResultToCPU();
 		copyResultToCPU();
 
 		std::cout << "\n\nTERRA" << std::endl;
