@@ -2,4 +2,6 @@
 *.bbl
 *.blg
 *.log
-dsl.pdf
+*.fls
+*.fdb_latexmk
+opt.pdf
