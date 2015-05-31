@@ -693,13 +693,11 @@ local function createfunction(problemspec,name,exps,usebounds,W,H)
     local extraimages = terralib.newlist()
     local imagetosym = {} 
     local imageloadmap = {}
-    local stmts = terralib.newlist()
-    
     local i,j,gi,gj = symbol(int64,"i"), symbol(int64,"j"),symbol(int64,"gi"), symbol(int64,"gj")
     local indexes = {[0] = i,j }
     local accesssyms = {}
     
-    local function emitvar(a)
+    local function emitvar(stmts,a)
         if not accesssyms[a] then
             local r 
             if "ImageAccess" == a.kind then
@@ -769,11 +767,13 @@ local function createfunction(problemspec,name,exps,usebounds,W,H)
     end
     local result = ad.toterra(exps,emitvar,generatormap)
     local terra generatedfn([i], [j], [gi], [gj], [P], [extraimages])
-        [stmts]
         return result
     end
     generatedfn:setname(name)
     if verboseAD then
+        generatedfn:printpretty(true, false)
+    end
+    if name == "evalJTF" and not usebounds then
         generatedfn:printpretty(true, false)
     end
     return generatedfn
