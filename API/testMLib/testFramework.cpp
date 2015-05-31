@@ -147,8 +147,15 @@ void TestFramework::runTest(const TestMethod &method, TestExample &example)
 
     int a = 0;
     void * list[] = { &a };
+	unsigned int nNonLinearIterations = 10;
+	unsigned int nLinearIterations = 10;
+	unsigned int nBlockIterations = 10;
+	void* solverParams[] = { &nNonLinearIterations, &nLinearIterations, &nBlockIterations };
+
+
     cerr << "Problem solve" << endl;
-    Opt_ProblemSolve(optimizerState, plan, isGPU ? imagesGPU.data() : imagesCPU.data(), edgeValuesCPU.data(), list, NULL);
+
+    Opt_ProblemSolve(optimizerState, plan, isGPU ? imagesGPU.data() : imagesCPU.data(), edgeValuesCPU.data(), list, solverParams);
     if (isGPU) {
         for (const auto &image : example.images)
             image.syncGPUToCPU();

@@ -95,7 +95,7 @@ return function(problemSpec, vars)
 		parameters : problemSpec:ParameterType(false)	--get non-blocked version
 		scratchF : &float
 		
-		delta : problemSpec:UnknownType(false)	--current linear update to be computed -> num vars
+		--delta : problemSpec:UnknownType(false)	--current linear update to be computed -> num vars
 
 		timer : Timer
 		nIter : int
@@ -429,33 +429,37 @@ return function(problemSpec, vars)
 			--	//////////////////////////////////////////////////////////////////////////////////////////
 			
 			
+			--if isInsideImage(gId_i, gId_j, W, H) then 
+			--	pd.delta(gId_i, gId_j) = Delta
+			--end
+			
 			if isInsideImage(gId_i, gId_j, W, H) then 
-				pd.delta(gId_i, gId_j) = Delta
+				pd.parameters.X(gId_i,gId_j) = pd.parameters.X(gId_i,gId_j) + Delta
 			end
 			
 		end
 		return { kernel = PCGStepBlockGPU, header = noHeader, footer = noFooter, mapMemberName = "X" }
 	end
 	
-	kernels.PCGLinearUpdateBlock = function(data)
-		local terra PCGLinearUpdateBlockGPU(pd : data.PlanData, ox : int, oy : int)
+	-- kernels.PCGLinearUpdateBlock = function(data)
+		-- local terra PCGLinearUpdateBlockGPU(pd : data.PlanData, ox : int, oy : int)
 		
-			var W = pd.parameters.X:W()
-			var H = pd.parameters.X:H()
+			-- var W = pd.parameters.X:W()
+			-- var H = pd.parameters.X:H()
 	
-			var tId_i : int = threadIdx.x -- local col idx
-			var tId_j : int = threadIdx.y -- local row idx
+			-- var tId_i : int = threadIdx.x -- local col idx
+			-- var tId_j : int = threadIdx.y -- local row idx
 	
-			var gId_i : int = blockIdx.x * blockDim.x + threadIdx.x - ox -- global col idx
-			var gId_j : int = blockIdx.y * blockDim.y + threadIdx.y - oy -- global row idx
+			-- var gId_i : int = blockIdx.x * blockDim.x + threadIdx.x - ox -- global col idx
+			-- var gId_j : int = blockIdx.y * blockDim.y + threadIdx.y - oy -- global row idx
 					
-			if isInsideImage(gId_i, gId_j, W, H) then 
-				pd.parameters.X(gId_i,gId_j) = pd.parameters.X(gId_i,gId_j) + pd.delta(gId_i,gId_j)
-			end
+			-- if isInsideImage(gId_i, gId_j, W, H) then 
+				-- pd.parameters.X(gId_i,gId_j) = pd.parameters.X(gId_i,gId_j) + pd.delta(gId_i,gId_j)
+			-- end
 		
-		end
-		return { kernel = PCGLinearUpdateBlockGPU, header = noHeader, footer = noFooter,  mapMemberName = "X" }
-	end
+		-- end
+		-- return { kernel = PCGLinearUpdateBlockGPU, header = noHeader, footer = noFooter,  mapMemberName = "X" }
+	-- end
 	
 	local gpu = util.makeGPUFunctions(problemSpec, vars, PlanData, kernels)
 
@@ -490,7 +494,7 @@ return function(problemSpec, vars)
 			
 				--C.printf("offset: (%d | %d)\n", oX, oY)
 				gpu.PCGStepBlock(pd, oX, oY, pd.bIterations)
-				gpu.PCGLinearUpdateBlock(pd, oX, oY)
+				--gpu.PCGLinearUpdateBlock(pd, oX, oY)
 				pd.currOffset = (pd.currOffset+1)%8
 				C.cudaDeviceSynchronize()				
 			end
@@ -510,7 +514,7 @@ return function(problemSpec, vars)
 		pd.plan.data = pd
 		pd.plan.init,pd.plan.step = init,step
 
-		pd.delta:initGPU()
+		--pd.delta:initGPU()
 		
 		C.cudaMallocManaged([&&opaque](&(pd.scratchF)), sizeof(float), C.cudaMemAttachGlobal)
 		--var err = C.cudaMallocManaged([&&opaque](&(pd.scratchF)), sizeof(float), C.cudaMemAttachGlobal)
