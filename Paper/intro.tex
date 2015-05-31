@@ -33,6 +33,8 @@ Finally, we use metaprogramming and code generation to combine the skeleton of o
 % Punchline
 This system gives both far better performance and even easier expression than traditional general-purpose solver libraries: performance is competitive with state-of-the-art, application-specific, in-place GPU solvers, and it requires the programmer to provide only the energy to be minimized as a simple function of pixel index, not the fully-formed derivative matrices of the system to be solved.
 
+\FigAppSummary
+
 % Scope
 This power comes from exploiting constraints in the problems we address.
 Specifically, \TODO{problems of the form...linalg limits?}, where unkowns and data vectors correspond to 2-dimensional images, and where energies \TODO{take the form...sum of square of ...} with energy terms expressed for each pixel in terms of real-valued expressions applied to a stencil of unknown and data values around the index of the current pixel.
