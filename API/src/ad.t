@@ -651,6 +651,7 @@ ad.abs:define(function(x) return `terralib.select(x >= 0,x,-x) end, ad.select(ad
 
 ad.and6:define(function(x0, x1, x2, x3, x4, x5) return `int(x0) and int(x1) and int(x2) and int(x3) and int(x4) and int(x5) end,0,0,0,0,0,0)
 ad.and_:define(function(x,y) return `int(x) and int(y) end, 0, 0)
+ad.or_:define(function(x,y) return `int(x) or int(y) end, 0, 0)
 ad.less:define(function(x,y) return `int(x < y) end, 0,0)
 ad.greater:define(function(x,y) return `int(x > y) end, 0,0)
 ad.lesseq:define(function(x,y) return `int(x <= y) end,0,0)
