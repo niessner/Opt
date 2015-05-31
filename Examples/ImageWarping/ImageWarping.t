@@ -29,15 +29,31 @@ local float_3 = opt.float3
 local float_4 = opt.float4
 
 local float2x2 = vector(float, 4)
+
 local terra make_float2(x : float, y : float)
-	return float_2(x, y)
+	var v : float_2
+	v(0) = x
+	v(1) = y
+	return v
+	--return float_2(x, y)
 end
 
 local terra make_float3(x : float, y : float, z : float)
-	return float_3(x, y, z)
+	var v : float_3
+	v(0) = x
+	v(1) = y
+	v(2) = z
+	return v
+	--return float_3(x, y, z)
 end
 
 local terra make_float4(x : float, y : float, z : float, w : float)
+	var v : float_4
+	v(0) = x
+	v(1) = y
+	v(2) = z
+	v(3) = w
+	--return v
 	return float_4(x, y, z, w)
 end
 
@@ -85,8 +101,6 @@ local terra cost(i : int64, j : int64, gi : int64, gj : int64, self : P:Paramete
 		
 		var tmp = make_float2(e(0) + (self.w_fitSqrt*self.w_fitSqrt) * (e_fit(0)*e_fit(0)), e(1) + (self.w_fitSqrt*self.w_fitSqrt) * (e_fit(1)*e_fit(1)))
 		e = tmp
-		
-		printf("Here: x: %f %f\n", x(0), x(1))
 	end
 	
 	var R : float2x2 = evalR(a)
@@ -114,7 +128,7 @@ local terra cost(i : int64, j : int64, gi : int64, gj : int64, self : P:Paramete
 		e_reg = e_reg + d*d
 	end
 	
-	--e = e + (self.w_regSqrt*self.w_regSqrt)*e_reg
+	e = e + (self.w_regSqrt*self.w_regSqrt)*e_reg
 	
 
 	var res : float = e(0) + e(1)
