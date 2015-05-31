@@ -58,6 +58,10 @@ local terra mul(matrix : float2x2, v : float_2) : float_2
 end
 
 
+local terra getXFloat2(i : int64, j : int64, self : P:ParameterType())
+	return make_float2(self.X(i,j)(0), self.X(i,j)(1))
+end
+
 local terra cost(i : int64, j : int64, gi : int64, gj : int64, self : P:ParameterType()) : float
 	
 	var e : float_2  = make_float2(0.0f, 0.0f)
@@ -106,7 +110,7 @@ local terra cost(i : int64, j : int64, gi : int64, gj : int64, self : P:Paramete
 		e_reg = e_reg + d*d
 	end
 	
-	--e = e + self.w_regSqrt*self.w_regSqrt*e_reg
+	e = e + self.w_regSqrt*self.w_regSqrt*e_reg
 	
 
 	var res : float = e(0) + e(1)
@@ -114,65 +118,87 @@ local terra cost(i : int64, j : int64, gi : int64, gj : int64, self : P:Paramete
 	
 end
 
--- eval 2*JtF == \nabla(F); eval diag(2*(Jt)^2) == pre-conditioner
-local terra gradient(i : int64, j : int64, gi : int64, gj : int64, self : P:ParameterType())
 
-	var b = make_float2(0.0f, 0.0f);
-	var bA = 0.0f;
-
-	escape
-
-	end
-
-	const int n0_i = i;		
-	const int n0_j = j - 1; 
-	const bool validN0 = isInsideImage(n0_i, n0_j, input.width, input.height) && state.d_mask[get1DIdx(n0_i, n0_j, input.width, input.height)] == 0;
-	const int n1_i = i;		const int n1_j = j + 1; const bool validN1 = isInsideImage(n1_i, n1_j, input.width, input.height) && state.d_mask[get1DIdx(n1_i, n1_j, input.width, input.height)] == 0;
-	const int n2_i = i - 1; const int n2_j = j;		const bool validN2 = isInsideImage(n2_i, n2_j, input.width, input.height) && state.d_mask[get1DIdx(n2_i, n2_j, input.width, input.height)] == 0;
-	const int n3_i = i + 1; const int n3_j = j;		const bool validN3 = isInsideImage(n3_i, n3_j, input.width, input.height) && state.d_mask[get1DIdx(n3_i, n3_j, input.width, input.height)] == 0;
-
-
-	const int n0_i = i;		const int n0_j = j - 1; const bool validN0 = isInsideImage(n0_i, n0_j, input.width, input.height) && state.d_mask[get1DIdx(n0_i, n0_j, input.width, input.height)] == 0;
-	const int n1_i = i;		const int n1_j = j + 1; const bool validN1 = isInsideImage(n1_i, n1_j, input.width, input.height) && state.d_mask[get1DIdx(n1_i, n1_j, input.width, input.height)] == 0;
-	const int n2_i = i - 1; const int n2_j = j;		const bool validN2 = isInsideImage(n2_i, n2_j, input.width, input.height) && state.d_mask[get1DIdx(n2_i, n2_j, input.width, input.height)] == 0;
-	const int n3_i = i + 1; const int n3_j = j;		const bool validN3 = isInsideImage(n3_i, n3_j, input.width, input.height) && state.d_mask[get1DIdx(n3_i, n3_j, input.width, input.height)] == 0;
-
-	-- fit/pos
-	var constraintUV = self.Constraints(i,j)	
-	var validConstraint = (constraintUV(0) >= 0 && constraintUV(1) >= 0) and self.Mask(i,j) == 0;
-	if (validConstraint) { b += -2.0f*parameters.weightFitting*(state.d_x[variableIdx] - constraintUV); pre += 2.0f*parameters.weightFitting*make_float2(1.0f, 1.0f); }
-
-	// reg/pos
-	float2	 p = state.d_x[get1DIdx(i, j, input.width, input.height)];
-	float2	 pHat = state.d_urshape[get1DIdx(i, j, input.width, input.height)];
-	float2x2 R_i = evalR(state.d_A[get1DIdx(i, j, input.width, input.height)]);
-	float2 e_reg = make_float2(0.0f, 0.0f);
-	if (validN0){ float2 q = state.d_x[get1DIdx(n0_i, n0_j, input.width, input.height)]; float2 qHat = state.d_urshape[get1DIdx(n0_i, n0_j, input.width, input.height)]; float2x2 R_j = evalR(state.d_A[get1DIdx(n0_i, n0_j, input.width, input.height)]); e_reg += 2 * (p - q) - float2(mat2x2(R_i + R_j)*mat2x1(pHat - qHat)); pre += 2.0f*parameters.weightRegularizer; }
-	if (validN1){ float2 q = state.d_x[get1DIdx(n1_i, n1_j, input.width, input.height)]; float2 qHat = state.d_urshape[get1DIdx(n1_i, n1_j, input.width, input.height)]; float2x2 R_j = evalR(state.d_A[get1DIdx(n1_i, n1_j, input.width, input.height)]); e_reg += 2 * (p - q) - float2(mat2x2(R_i + R_j)*mat2x1(pHat - qHat)); pre += 2.0f*parameters.weightRegularizer; }
-	if (validN2){ float2 q = state.d_x[get1DIdx(n2_i, n2_j, input.width, input.height)]; float2 qHat = state.d_urshape[get1DIdx(n2_i, n2_j, input.width, input.height)]; float2x2 R_j = evalR(state.d_A[get1DIdx(n2_i, n2_j, input.width, input.height)]); e_reg += 2 * (p - q) - float2(mat2x2(R_i + R_j)*mat2x1(pHat - qHat)); pre += 2.0f*parameters.weightRegularizer; }
-	if (validN3){ float2 q = state.d_x[get1DIdx(n3_i, n3_j, input.width, input.height)]; float2 qHat = state.d_urshape[get1DIdx(n3_i, n3_j, input.width, input.height)]; float2x2 R_j = evalR(state.d_A[get1DIdx(n3_i, n3_j, input.width, input.height)]); e_reg += 2 * (p - q) - float2(mat2x2(R_i + R_j)*mat2x1(pHat - qHat)); pre += 2.0f*parameters.weightRegularizer; }
-	b += -2.0f*parameters.weightRegularizer*e_reg;
-
-	// reg/angle
-	float2x2 R = evalR(state.d_A[get1DIdx(i, j, input.width, input.height)]);
-	float2x2 dR = evalR_dR(state.d_A[get1DIdx(i, j, input.width, input.height)]);
-	float e_reg_angle = 0.0f;
-	if (validN0) { float2 q = state.d_x[get1DIdx(n0_i, n0_j, input.width, input.height)]; float2 qHat = state.d_urshape[get1DIdx(n0_i, n0_j, input.width, input.height)]; mat2x1 D = -mat2x1(dR*(pHat - qHat)); e_reg_angle += D.getTranspose()*mat2x1((p - q) - R*(pHat - qHat)); preA += D.getTranspose()*D*parameters.weightRegularizer; }
-	if (validN1) { float2 q = state.d_x[get1DIdx(n1_i, n1_j, input.width, input.height)]; float2 qHat = state.d_urshape[get1DIdx(n1_i, n1_j, input.width, input.height)]; mat2x1 D = -mat2x1(dR*(pHat - qHat)); e_reg_angle += D.getTranspose()*mat2x1((p - q) - R*(pHat - qHat)); preA += D.getTranspose()*D*parameters.weightRegularizer; }
-	if (validN2) { float2 q = state.d_x[get1DIdx(n2_i, n2_j, input.width, input.height)]; float2 qHat = state.d_urshape[get1DIdx(n2_i, n2_j, input.width, input.height)]; mat2x1 D = -mat2x1(dR*(pHat - qHat)); e_reg_angle += D.getTranspose()*mat2x1((p - q) - R*(pHat - qHat)); preA += D.getTranspose()*D*parameters.weightRegularizer; }
-	if (validN3) { float2 q = state.d_x[get1DIdx(n3_i, n3_j, input.width, input.height)]; float2 qHat = state.d_urshape[get1DIdx(n3_i, n3_j, input.width, input.height)]; mat2x1 D = -mat2x1(dR*(pHat - qHat)); e_reg_angle += D.getTranspose()*mat2x1((p - q) - R*(pHat - qHat)); preA += D.getTranspose()*D*parameters.weightRegularizer; }
-	bA += -2.0f*parameters.weightRegularizer*e_reg_angle;
-
-	return make_float3(0.0f, 0.0f, 0.0f)
-end
+-- Neighbors and booleans saying if they are in the image and not masked away
+local n_i = {0, 0, -1, 1} 
+local n_j = {-1, 1, 0, 0} 
+local valid = {`valid0, `valid1, `valid2, `valid3} 
 
 -- eval 2*JtF == \nabla(F); eval diag(2*(Jt)^2) == pre-conditioner
 local terra evalJTF(i : int64, j : int64, gi : int64, gj : int64, self : P:ParameterType())
 	
-	var gradient = gradient(i, j, gi, gj, self)
 	
-	var pre : float = 1.0f
-	return gradient, pre
+	var b = make_float2(0.0f, 0.0f)
+	var bA = 0.0f
+	var pre = make_float2(0.0f, 0.0f)
+	var preA = 0.0f
+	
+	-- fit/pos
+	var constraintUV = self.Constraints(i,j)	
+	var validConstraint = (constraintUV(0) >= 0 && constraintUV(1) >= 0) and self.Mask(i,j) == 0.0f
+	if validConstraint then
+	 	b 	= b - 2.0f*self.w_fitSqrt*self.w_fitSqrt*(getXFloat2(i,j,self) - constraintUV)
+	 	pre = pre + 2.0f*self.w_fitSqrt*self.w_fitSqrt*make_float2(1.0f, 1.0f) 
+	end
+
+	var a = self.X(i,j)(2)
+	-- reg/pos
+	var	 p : float_2    = getXFloat2(i,j,self)
+	var	 pHat : float_2 = self.UrShape(i,j)
+	var R_i : float2x2  = evalR(a)
+	var e_reg : float2 	= make_float2(0.0f, 0.0f);
+
+	escape
+		for a=1,4 do
+			local offx = n_i[a]
+			local offy = n_j[a]
+			emit quote
+				var [valid[a]] = inBounds(gi+[offx], gj+[offy], self.X) and self.Mask(i+[offx], j+[offy])
+				if [valid[a]] then
+					var q : float2 		= getXFloat2(i+[offx], j+[offy], self)
+					var qHat : float2 	= self.UrShape(i+[offx], j+[offy])
+					var R_j : float2x2 	= evalR(self.X(i+[offx], j+[offy])(2)) 
+					e_reg = e_reg + 2 * (p - q) - float2( mat2x2(R_i + R_j) * mat2x1(pHat - qHat))
+					pre = pre + 2.0f*self.w_regSqrt*self.w_regSqrt
+				end
+			end
+		end
+	end
+	b = b - 2.0f * self.w_regSqrt*self.w_regSqrt * e_reg;
+
+	-- reg/angle
+	var R : float2x2 = evalR(a)
+	var dR : float2x2 = evalR_dR(a)
+	var e_reg_angle = 0.0f;
+
+	escape
+		for a=1,4 do
+			local offx = n_i[a]
+			local offy = n_j[a]
+			emit quote
+				if [valid[a]] then
+					var q : float2 		= getXFloat2(i+[offx], j+[offy], self)
+					var qHat : float2 	= self.UrShape(i+[offx], j+[offy])
+					var D : mat2x1 		= -mat2x1(dR*(pHat - qHat))
+					e_reg_angle 		= e_reg_angle 	+ D.getTranspose() * mat2x1((p - q) - R*(pHat - qHat))
+					preA 				= preA 			+ D.getTranspose() * D * self.w_regSqrt*self.w_regSqrt
+				end
+			end
+		end
+	end
+
+	bA = bA - 2.0f*self.w_regSqrt*self.w_regSqrt*e_reg_angle;
+
+	-- disable preconditioner
+	pre = make_float2(1.0f, 1.0f)
+	preA = 1.0f
+
+	return make_float3(b(0), b(1), bA), make_float3(pre(0), pre(1), preA)
+end
+
+-- eval 2*JtF == \nabla(F); eval diag(2*(Jt)^2) == pre-conditioner
+local terra gradient(i : int64, j : int64, gi : int64, gj : int64, self : P:ParameterType())
+	return evalJTF(i, j, gi, gj, self)._0
 end
 	
 
