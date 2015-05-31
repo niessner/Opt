@@ -21,18 +21,18 @@ public:
 		cutilSafeCall(cudaMalloc(&d_target, sizeof(float4)*m_image.getWidth()*m_image.getHeight()));
 		cutilSafeCall(cudaMalloc(&d_mask,	sizeof(float) *m_image.getWidth()*m_image.getHeight()));
 
-		resetGPU();
+		resetGPUMemory();
 
 
 		m_warpingSolver		 = new CUDAWarpingSolver(m_image.getWidth(), m_image.getHeight());
 		m_warpingSolverPatch = new CUDAPatchSolverWarping(m_image.getWidth(), m_image.getHeight());
 
 
-		m_terraSolver = new TerraSolverPoissonImageEditing(m_image.getWidth(), m_image.getHeight(), "smoothingLaplacianFloat4AD.t", "gaussNewtonGPU");
-		m_terraBlockSolver = new TerraSolverPoissonImageEditing(m_image.getWidth(), m_image.getHeight(), "smoothingLaplacianFloat4AD.t", "gaussNewtonBlockGPU");
+		m_terraSolver = new TerraSolverPoissonImageEditing(m_image.getWidth(), m_image.getHeight(), "PoissonImageEditingAD.t", "gaussNewtonGPU");
+		m_terraBlockSolver = new TerraSolverPoissonImageEditing(m_image.getWidth(), m_image.getHeight(), "PoissonImageEditingAD.t", "gaussNewtonBlockGPU");
 	}
 
-	void resetGPU()
+	void resetGPUMemory()
 	{
 		float4* h_image = new float4[m_image.getWidth()*m_image.getHeight()];
 		float4* h_target = new float4[m_image.getWidth()*m_image.getHeight()];
@@ -81,19 +81,20 @@ public:
 		
 		unsigned int nonLinearIter = 10;
 		unsigned int patchIter = 16;
-		unsigned int linearIter = 10;
+		unsigned int linearIter = 100;
 		
+		std::cout << "CUDA" << std::endl;
+		resetGPUMemory();
 		m_warpingSolver->solveGN(d_image, d_target, d_mask, nonLinearIter, linearIter, weightFit, weightReg);		
 		copyResultToCPU();
-
-		resetGPU();
 
 		//m_warpingSolverPatch->solveGN(d_image, d_target, d_mask, nonLinearIter, patchIter, weightFit, weightReg);
 		//copyResultToCPU();
 		//resetGPU();
 
-		m_terraBlockSolver->solve(d_image, d_target, d_mask, nonLinearIter, linearIter,  patchIter, weightFit, weightReg );
-
+		std::cout << "\n\nTERRA" << std::endl;
+		resetGPUMemory();
+		m_terraSolver->solve(d_image, d_target, d_mask, nonLinearIter, linearIter,  patchIter, weightFit, weightReg );
 		copyResultToCPU();
 
 		return &m_result;

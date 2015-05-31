@@ -49,7 +49,6 @@ public:
 		float weightRegSqrt = sqrt(weightReg);
 		void* problemParams[] = { &weightFitSqrt, &weightRegSqrt };
 
-
 		//Opt_ProblemInit(m_optimizerState, m_plan, data, NULL, problemParams, (void**)&solverParams);
 		//while (Opt_ProblemStep(m_optimizerState, m_plan, data, NULL, problemParams, NULL));
 		Opt_ProblemSolve(m_optimizerState, m_plan, data, NULL, problemParams, solverParams);
