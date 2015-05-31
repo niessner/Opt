@@ -46,7 +46,7 @@ local terra inBounds(i : int64, j : int64, xImage : P:UnknownType()) : bool
 end
 
 local terra evalRot(CosAlpha : float, SinAlpha: float)
-	return vector(CosAlpha, -SinAlpha, SinAlpha, CosAlpha)
+	return vector(CosAlpha, -SinAlpha, SinAlpha, CosAlpha) -- is this transposed?
 end
 
 local terra evalR (angle : float)
@@ -59,6 +59,15 @@ end
 
 local terra getXFloat2(i : int64, j : int64, self : P:ParameterType())
 	return make_float2(self.X(i,j)(0), self.X(i,j)(1))
+end
+
+local terra eval_dR(cosAlpha : float, sinAlpha : float) 
+	return float2x2(-sinAlpha, -cosAlpha,
+					 cosAlpha,  -sinAlpha)
+end
+
+local terra evalR_dR(angle : float) 
+	return eval_dR(opt.math.cos(angle), opt.math.sin(angle))
 end
 
 local terra cost(i : int64, j : int64, gi : int64, gj : int64, self : P:ParameterType()) : float
@@ -118,10 +127,11 @@ local terra cost(i : int64, j : int64, gi : int64, gj : int64, self : P:Paramete
 end
 
 
--- Neighbors and booleans saying if they are in the image and not masked away
+
+
+-- Neighbor indices
 local n_i = {0, 0, -1, 1} 
 local n_j = {-1, 1, 0, 0} 
-
 
 -- eval 2*JtF == \nabla(F); eval diag(2*(Jt)^2) == pre-conditioner
 local terra evalJTF(i : int64, j : int64, gi : int64, gj : int64, self : P:ParameterType())
@@ -149,7 +159,7 @@ local terra evalJTF(i : int64, j : int64, gi : int64, gj : int64, self : P:Param
 
 	var valid0 : bool, valid1 : bool, valid2 : bool, valid3 : bool
 	escape
-		local valid = {`valid0, `valid1, `valid2, `valid3} 
+		local valid = {valid0, valid1, valid2, valid3} 
 		for a=1,4 do
 			local offx = n_i[a]
 			local offy = n_j[a]
@@ -228,7 +238,7 @@ local terra applyJTJ(i : int64, j : int64, gi : int64, gj : int64, self : P:Para
 
 	var valid0 : bool, valid1 : bool, valid2 : bool, valid3 : bool
 	escape
-		local valid = {`valid0, `valid1, `valid2, `valid3} 
+		local valid = {valid0, valid1, valid2, valid3} 
 		for a=1,4 do
 			local offx = n_i[a]
 			local offy = n_j[a]
