@@ -191,9 +191,6 @@ return function(problemSpec, vars)
 				var beta : float = 0.0f			
 						
 				if rDotzOld > FLOAT_EPSILON then beta = rDotzNew/rDotzOld end	-- update step size beta
-				--for i=0, beta:size() do
-				--	if rDotzOld(i) > FLOAT_EPSILON then beta(i) = rDotzNew/rDotzOld(i) end
-				--end
 			
 				pd.rDotzOld(w,h) = rDotzNew										-- save new rDotz for next iteration
 				pd.p(w,h) = pd.z(w,h)+beta*pd.p(w,h)							-- update decent direction
