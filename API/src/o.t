@@ -775,7 +775,7 @@ local function createfunction(problemspec,name,exps,usebounds,W,H)
         generatedfn:printpretty(true, false)
     end
     if name == "evalJTF" and not usebounds then
-        generatedfn:printpretty(true, false)
+        --generatedfn:printpretty(true, false)
     end
     return generatedfn
 end

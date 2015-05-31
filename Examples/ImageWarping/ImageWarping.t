@@ -83,9 +83,8 @@ local terra cost(i : int64, j : int64, gi : int64, gj : int64, self : P:Paramete
 	if c(0) >= 0 and c(1) >= 0 and m == 0 then
 		var e_fit : float_2 = make_float2(x(0) - self.Constraints(i,j)(0), x(1) - self.Constraints(i,j)(1))
 		
-		var tmp = make_float2(e(0) + self.w_fitSqrt*self.w_fitSqrt * e_fit(0)*e_fit(0), e(1) + self.w_fitSqrt*self.w_fitSqrt * e_fit(1)*e_fit(1))
+		var tmp = make_float2(e(0) + (self.w_fitSqrt*self.w_fitSqrt) * (e_fit(0)*e_fit(0)), e(1) + (self.w_fitSqrt*self.w_fitSqrt) * (e_fit(1)*e_fit(1)))
 		e = tmp
-		
 	end
 	
 	var R : float2x2 = evalR(a)
@@ -113,7 +112,7 @@ local terra cost(i : int64, j : int64, gi : int64, gj : int64, self : P:Paramete
 		e_reg = e_reg + d*d
 	end
 	
-	e = e + (self.w_regSqrt*self.w_regSqrt)*e_reg
+	--e = e + (self.w_regSqrt*self.w_regSqrt)*e_reg
 	
 
 	var res : float = e(0) + e(1)

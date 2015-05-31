@@ -72,10 +72,10 @@ ARAPCost2F = ad.select(ad.eq(m2, 0.0), ARAPCost2F, ad.Vector(0.0, 0.0))
 ARAPCost3F = ad.select(ad.eq(m3, 0.0), ARAPCost3F, ad.Vector(0.0, 0.0))
 
 for i = 0,1 do
-	terms:insert(w_regSqrt*ARAPCost0F(i))
-	terms:insert(w_regSqrt*ARAPCost1F(i))
-	terms:insert(w_regSqrt*ARAPCost2F(i))
-	terms:insert(w_regSqrt*ARAPCost3F(i))
+	--terms:insert(w_regSqrt*ARAPCost0F(i))
+	--terms:insert(w_regSqrt*ARAPCost1F(i))
+	--terms:insert(w_regSqrt*ARAPCost2F(i))
+	--terms:insert(w_regSqrt*ARAPCost3F(i))
 end
 
 local cost = ad.sumsquared(unpack(terms))
