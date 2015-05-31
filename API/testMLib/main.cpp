@@ -1,11 +1,11 @@
 
 #include "main.h"
 
-int main()
+int main(int argc, char ** argv)
 {
   //printf("Hello\n");
     TestFramework test;
-    test.runAllTests();
+    test.runAllTests(argc, argv);
     cout << "done" << endl;
     #ifdef _WIN32
     cin.get();

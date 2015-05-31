@@ -38,7 +38,7 @@ struct TestExample
 class TestFramework
 {
 public:
-    void runAllTests();
+    void runAllTests(int argc, char ** argv);
 
 private:
     void runTest(const TestMethod &method, TestExample &example);

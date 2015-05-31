@@ -53,7 +53,7 @@ TestExample TestFramework::makeRandomQuadratic(int count)
     return result;
 }
 
-void TestFramework::runAllTests()
+void TestFramework::runAllTests(int argc, char ** argv)
 {
     optimizerState = Opt_NewState();
     if (optimizerState == nullptr)
@@ -64,7 +64,7 @@ void TestFramework::runAllTests()
 
     //TestExample example = makeRandomQuadratic(5);
     //TestExample example = makeMeshSmoothing("smoothingExampleE.png", 0.1f);
-	TestExample example = makeImageSmoothing("smoothingExampleB.png", "imageSmoothingAD.t", 0.1f);	
+	TestExample example = makeImageSmoothing("smoothingExampleB.png", (argc > 1) ? argv[1] : "imageSmoothingAD.t", 0.1f);	
 
     vector<TestMethod> methods;
 
@@ -77,7 +77,7 @@ void TestFramework::runAllTests()
     // GPU methods
     //
     //methods.push_back(TestMethod("gradientDescentGPU", "no-params"));
-	methods.push_back(TestMethod("gaussNewtonGPU", "no-params"));
+	methods.push_back(TestMethod((argc > 2) ? argv[2] : "gaussNewtonGPU", "no-params"));
 	//methods.push_back(TestMethod("gaussNewtonBlockGPU", "no-params"));
 
     for (auto &method : methods)
