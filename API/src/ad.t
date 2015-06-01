@@ -166,6 +166,8 @@ local function simplify(op,args)
         return  x.v ~= 0 and y or z
     elseif op.name == "unm" and Apply:is(x) and x.op.name == "select" then
         return ad.select(x.args[1],-x.args[2],-x.args[3])
+    elseif (op.name == "and_" or op.name == "or_") and x == y then
+        return x
     end
     
     return newapply(op,args)
@@ -342,9 +344,6 @@ local function countuses(es)
             count(a)
         end 
     end
-    for k,v in pairs(uses) do
-       uses[k] = v > 1 or nil
-    end
     return uses
 end    
 
@@ -365,9 +364,9 @@ local function expstostring(es)
     es = (terralib.islist(es) and es) or terralib.newlist(es)
     local n = 0
     local tbl = terralib.newlist()
-    local manyuses = countuses(es)
+    local uses = countuses(es)
     local emitted = {}
-    local function prec(e) return (manyuses[e] and 3) or e:prec() end
+    local function prec(e) return (uses[e] > 1 and 3) or e:prec() end
     local emit
     local function emitprec(e,p)
         return (prec(e) < p and "(%s)" or "%s"):format(emit(e))
@@ -393,7 +392,7 @@ local function expstostring(es)
         elseif "Apply" == e.kind or "Shift" == e.kind then
             if emitted[e] then return emitted[e] end
             local exp = emitapporshift(e)
-            if manyuses[e] then
+            if uses[e] > 1 then
                 local r = ("r%d"):format(n)
                 n = n + 1
                 emitted[e] = r
@@ -478,50 +477,66 @@ ad.TerraVector = terralib.memoize(function(typ,N)
     return VecType
 end)
 
-function ad.toterra(es,varmap_,generatormap_,shiftfn) 
+local flattentostatements = true
+
+function ad.toterra(es,varmap,generatormap_,shiftgenerator,lastuse) 
     es = terralib.islist(es) and es or terralib.newlist(es)
-     --varmap is a function or table mapping keys to what terra code should go there
-    local varmap = type(varmap_) == "table" and function(v) return varmap_[v] end or varmap_
-    assert(varmap)
+     --varmap is a function or mapping keys to what terra code should go there
+    assert(type(varmap) == "function")
     local generatormap = generatormap_ == "table" and function(op) return generatormap_[op] end
                        or generatormap_ or defaultgenerator
-    local manyuses = countuses(es)
+    local uses = countuses(es)
+    local seenuses = {}
     local nvars = 0
     local results = terralib.newlist {}
     
     local statements = terralib.newlist()
     local emitted = {}
+    local function release(e)
+        seenuses[e] = (seenuses[e] or 0) + 1
+        if seenuses[e] == uses[e] then
+            lastuse(statements,e,seenuses[e])
+        end
+    end
     local function emit(e)
         e = assert(toexp(e),"expected an expression but found ")
+        local r 
         if "Var" == e.kind then
-            return assert(varmap(statements,e:key()),"no mapping for variable key "..tostring(e:key()))
+            r = assert(varmap(statements,e:key()),"no mapping for variable key "..tostring(e:key()))
         elseif "Const" == e.kind then
-            return `float(e.v)
+            r = `float(e.v)
         elseif "Shift" == e.kind then
             local l = emit(e.exp)
-            return shiftfn(l,e:key())
+            r = shiftgenerator(statements,e.exp,l,e:key())
+            release(e.exp)
         elseif "Apply" == e.kind then
-            if emitted[e] then return emitted[e] end
-            local generator = assert(generatormap(e.op) or defaultgenerator(e.op))
-            local exp = generator(unpack(e.args:map(emit)))
-            if e.op.name == "select" or manyuses[e] then -- we're turning this off now
-                local v = symbol(float,"e")
-                emitted[e] = v
-                statements:insert(quote 
-                        var [v] = exp 
-                        --[[
-                        if not (exp == exp) then
-                            printf("Nan found: %f, \n", exp)
-                            [emitprintexpression(e,3)]
-                            printf("\n")
-                        end
-                        ]]
-                    end)
-                return v
+            if emitted[e] then 
+                r = emitted[e]
             else
-                return exp
+                local generator = assert(generatormap(e.op) or defaultgenerator(e.op))
+                local exp = generator(unpack(e.args:map(emit)))
+                if flattentostatements or e.op.name == "select" or uses[e] > 1 then -- we're turning this off now
+                    local v = symbol(float,"e")
+                    emitted[e] = v
+                    statements:insert(quote 
+                            var [v] = exp 
+                            --[[
+                            if not (exp == exp) then
+                                printf("Nan found: %f, \n", exp)
+                                [emitprintexpression(e,3)]
+                                printf("\n")
+                            end
+                            ]]
+                        end)
+                    r = v
+                else
+                    r = exp
+                end
+                for i,c in ipairs(e.args) do release(c) end
             end
         end
+        assert(r,"emit failed to produce expression")
+        return r
     end
     local tes = es:map(function(e) 
         if ExpVector:is(e) then
