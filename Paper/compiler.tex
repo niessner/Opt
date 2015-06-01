@@ -23,9 +23,9 @@ In \OPT, solver methods are defined as metaprograms consisting of:
 \subsection{Compiling Energy Functions to Residual Terms} % (fold)
 \label{sec:jtj_generation}
 
-The most complex logic in the compiler is responsible for generating code to compute the specific derivative terms required by a given method, in the form required, from the original user-provided energy function.
+The most complex logic in the compiler is responsible for generating code to compute the specific derivative terms in the form required by a given method from the original user-provided energy function.
 In our parallel Gauss-Newton solvers, this is the set of partial derivatives corresponding to $J^TJp$ at a given unknown pixel $X(0,0)$. (Because of the stencil-only restriction on energy functions, these expressions are the same for every pixel, modulo boundary effects.)
-In this section, we present the algorithm to derive this expression from an arbitrary energy function in the \OPT expression language.
+In this section, we present the algorithm to derive this expression from an arbitrary energy function in the \OPT expression language, and show how it works when applied to a Laplacian smoothing energy on a 2D image.
 
 % Cost is sum of squares, we keep each of those squared terms (residual r_i) separate and do the following for each i:
 %% Making JTJp - we want it separately, for each unknown point - gather form per image pixel
@@ -33,11 +33,14 @@ In this section, we present the algorithm to derive this expression from an arbi
 % 2. Unknowns for residual r(x,y) - the non-zero columns in J - just the stencil, shifted by x,y
 
 \JRK{Understands data structures, stencils}
+\JRK{How do shared block reads/writes affect this, if at al?}
 
 
 \subsubsection{Automatic Differentiation}
 \label{sec:autodiff}
 Our compiler includes the ability to compute partial derivatives of , using a simplified variant of the \DSTAR symbolic differentiation algorithm \cite{dstar}. \JRK{Zach, what is actually worth saying about this? We treat everything as independent variables, no knowledge of stencils, etc.?}
+
+\JRK{What we're doing: mixed numeric-symbolic differentiation. Applying autodiff transform to a symbolic representation at each unknown, but then compute and combine them for the whole system numerically.}
 
 % subsection jtj_generation (end)
 
