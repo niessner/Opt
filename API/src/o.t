@@ -710,7 +710,7 @@ local function createfunction(problemspec,name,exps,usebounds,W,H)
     local i,j,gi,gj = symbol(int32,"i"), symbol(int32,"j"),symbol(int32,"gi"), symbol(int32,"gj")
     
     ---------- infrastructure for handling shared memory for shifting --------------------
-    local sharedwidth = 2
+    local sharedwidth = problemspec.P:BlockSize()
     local sharedimages = terralib.newlist()
     local sharedfreelist = terralib.newlist()
     local function allocatesharedimage()
