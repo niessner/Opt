@@ -711,25 +711,22 @@ local function createfunction(problemspec,name,exps,usebounds,W,H)
     local i,j,gi,gj = symbol(int32,"i"), symbol(int32,"j"),symbol(int32,"gi"), symbol(int32,"gj")
     
     ---------- infrastructure for handling shared memory for shifting --------------------
-    local maxstencil = 2
+    local emittedsharedmemoryimageload = {}
+    local sharedmemoryforexpressiontable = {}
+    local function sharedmemoryforexpression(exp)
+        local m = macro(function()
+            return assert(sharedmemoryforexpressiontable[exp], "no assignment")
+        end)
+        return `m()
+    end
+    
+    local maxstencil = problemspec.P:MaxStencil()
     local sharedwidth = problemspec.P:BlockSize()+2*maxstencil    
-    local sharedimages = terralib.newlist()
-    local sharedfreelist = terralib.newlist()
-    local function allocatesharedimage()
-        if #sharedfreelist > 0 then
-            local im = sharedfreelist:remove()
-            return im
-        end
-        sharedimages:insert(cudalib.sharedmemory(float,sharedwidth*sharedwidth))
-        return #sharedimages
-    end
-    local function releasesharedimage(im)
-        sharedfreelist:insert(im)
-    end
-    local function sharedimageaccess(im,x,y,lvalue)
-        --assert( math.abs(x) <= 1 )
-        --assert( math.abs(y) <= 1 )
-        local mem = assert(sharedimages[im], "shared image is nil")
+    
+    local sharedimageops = terralib.newlist()
+    local function sharedimageaccess(exp,x,y,lvalue)
+        local mem = sharedmemoryforexpression(exp)
+        sharedimageops:insert { kind = lvalue and "def" or "use", exp = assert(exp) }
         return `mem[(threadIdx.y+(y+maxstencil))*sharedwidth + (threadIdx.x+(x+maxstencil))]
     end
     -------------------
@@ -813,46 +810,69 @@ local function createfunction(problemspec,name,exps,usebounds,W,H)
             end
         end 
     end
-    local exptoshiftimage = {}
     local function shiftgenerator(stmts,exp,v,key)
-        if not exptoshiftimage[exp] then 
-            local im = allocatesharedimage()
-            print("here",im)
-            local access = sharedimageaccess(im,0,0,true)
+        if not emittedsharedmemoryimageload[exp] then 
+            local access = sharedimageaccess(exp,0,0,true)
             stmts:insert quote
                 [access] = v
                 __syncthreads()
             end
-            exptoshiftimage[exp] = im 
+            emittedsharedmemoryimageload[exp] = true 
         end
-        print("here2",exptoshiftimage[exp])
-        return sharedimageaccess(exptoshiftimage[exp],key.x,key.y)
+        return sharedimageaccess(exp,key.x,key.y,false)
     end
     local function lastuse(stmts, exp)
-        --[[if exp.kind == "Var" then
-            local msg = ("last use of %s"):format(tostring(exp))
-            stmts:insert quote C.printf(msg) end
-        end]]
-        local im = exptoshiftimage[exp]
-        if im then
-            assert(im ~= "freed", "use after free of shiftedimage!")
-            releasesharedimage(im)
-            --stmts:insert quote "freeing " end
-            --exptoshiftimage[exp] = "freed"
-        end
     end
     
     local result = ad.toterra(exps,emitvar,generatormap,shiftgenerator, lastuse)
     local terra generatedfn([i], [j], [gi], [gj], [P], [extraimages])
         return result
     end
+    -------------------------
+    
+    local sharedfreelist = terralib.newlist()
+    local function allocatesharedimage()
+        if #sharedfreelist > 0 then
+            return sharedfreelist:remove()
+        end
+        return cudalib.sharedmemory(float,sharedwidth*sharedwidth)
+    end
+    local function releasesharedimage(im)
+        sharedfreelist:insert(im)
+    end
+    local debug = (name == "applyJTJ" or name == "evalJTF") and usebounds 
+    if debug then print(name,exps[1]) end
+        
+    local numimages,maximages = 0,0
+    for i = #sharedimageops,1,-1 do
+        local op = sharedimageops[i]
+        if debug then print(op.kind,op.exp) end
+        if op.kind == "use" then
+            if not sharedmemoryforexpressiontable[op.exp] then
+                if debug then print("alloc") end
+                numimages = numimages + 1
+                maximages = math.max(numimages,maximages)
+                sharedmemoryforexpressiontable[op.exp] = allocatesharedimage()
+            end
+        elseif op.kind == "def" then
+            local im = sharedmemoryforexpressiontable[op.exp]
+            if im then -- maybe dead
+                if debug then print("free") end
+                releasesharedimage(im)
+                numimages = numimages - 1
+            end
+        end
+    end
+    if debug then print(maximages, " used by kernel.") end
+    
+    -------------------------
+    
     generatedfn:setname(name)
     if verboseAD then
         generatedfn:printpretty(true, false)
     end
-    if (name == "evalJTF" or name == "applyJTJ") and usebounds then
-        print(name,exps[1])
-        generatedfn:printpretty(true, false)
+    if debug then
+        --generatedfn:printpretty(true, false)
     end
     return generatedfn
 end
