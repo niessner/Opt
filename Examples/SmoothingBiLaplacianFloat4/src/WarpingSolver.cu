@@ -21,6 +21,7 @@
 #define EXPORT
 #endif
 
+
 /////////////////////////////////////////////////////////////////////////
 // Eval Residual
 /////////////////////////////////////////////////////////////////////////
@@ -38,14 +39,13 @@ __global__ void EvalResidualDevice(SolverInput input, SolverState state, SolverP
 
 	if (x < N)
 	{
-		float residual = evalFDevice(x, input, state, parameters);
-		residual = warpReduce(residual);
-
+		float4 residual = evalFDevice(x, input, state, parameters);
+		float r = warpReduce(residual.x + residual.y + residual.z + residual.w);
 		unsigned int laneid;
 		//This command gets the lane ID within the current warp
 		asm("mov.u32 %0, %%laneid;" : "=r"(laneid));
 		if (laneid == 0) {
-			atomicAdd(&state.d_sumResidual[0], residual);
+			atomicAdd(&state.d_sumResidual[0], r);
 		}
 	}
 }
@@ -85,9 +85,9 @@ __global__ void PCGInit_Kernel1(SolverInput input, SolverState state, SolverPara
 	if (x < N)
 	{
 		const float4 residuum = evalMinusJTFDevice(x, input, state, parameters); // residuum = J^T x -F - A x delta_0  => J^T x -F, since A x x_0 == 0 
-		state.d_r[x]  = residuum;												 // store for next iteration
+		state.d_r[x] = residuum;												 // store for next iteration
 
-		const float4 p  = state.d_precondioner[x]  * residuum;					 // apply preconditioner M^-1
+		const float4 p = state.d_precondioner[x] * residuum;					 // apply preconditioner M^-1
 		state.d_p[x] = p;
 
 		d = dot(residuum, p);								 // x-th term of nomimator for computing alpha and denominator for computing beta
@@ -124,21 +124,21 @@ void Initialization(SolverInput& input, SolverState& state, SolverParameters& pa
 		while (1);
 	}
 
-    timer.startEvent("PCGInit_Kernel1");
+	timer.startEvent("PCGInit_Kernel1");
 	PCGInit_Kernel1 << <blocksPerGrid, THREADS_PER_BLOCK, shmem_size >> >(input, state, parameters);
-    timer.endEvent();
-	#ifdef _DEBUG
-		cutilSafeCall(cudaDeviceSynchronize());
-		cutilCheckMsg(__FUNCTION__);
-	#endif
+	timer.endEvent();
+#ifdef _DEBUG
+	cutilSafeCall(cudaDeviceSynchronize());
+	cutilCheckMsg(__FUNCTION__);
+#endif
 
 	timer.startEvent("PCGInit_Kernel2");
 	PCGInit_Kernel2 << <blocksPerGrid, THREADS_PER_BLOCK, shmem_size >> >(N, state);
 	timer.endEvent();
-	#ifdef _DEBUG
-		cutilSafeCall(cudaDeviceSynchronize());
-		cutilCheckMsg(__FUNCTION__);
-	#endif
+#ifdef _DEBUG
+	cutilSafeCall(cudaDeviceSynchronize());
+	cutilCheckMsg(__FUNCTION__);
+#endif
 }
 
 /////////////////////////////////////////////////////////////////////////
@@ -155,7 +155,7 @@ __global__ void PCGStep_Kernel1(SolverInput input, SolverState state, SolverPara
 	{
 		const float4 tmp = applyJTJDevice(x, input, state, parameters);		// A x p_k  => J^T x J x p_k 
 
-		state.d_Ap_X[x]  = tmp;														// store for next kernel call
+		state.d_Ap_X[x] = tmp;														// store for next kernel call
 
 		d = dot(state.d_p[x], tmp);													// x-th term of denominator of alpha
 	}
@@ -179,7 +179,7 @@ __global__ void PCGStep_Kernel2(SolverInput input, SolverState state)
 		float alpha = 0.0f;
 		if (dotProduct > FLOAT_EPSILON) alpha = state.d_rDotzOld[x] / dotProduct;  // update step size alpha
 
-		state.d_delta[x]  = state.d_delta[x]  + alpha*state.d_p[x];				// do a decent step
+		state.d_delta[x] = state.d_delta[x] + alpha*state.d_p[x];				// do a decent step
 
 		float4 r = state.d_r[x] - alpha*state.d_Ap_X[x];					// update residuum
 		state.d_r[x] = r;													// store for next kernel call
@@ -213,7 +213,7 @@ __global__ void PCGStep_Kernel3(SolverInput input, SolverState state)
 		if (rDotzOld > FLOAT_EPSILON) beta = rDotzNew / rDotzOld;					// update step size beta
 
 		state.d_rDotzOld[x] = rDotzNew;												// save new rDotz for next iteration
-		state.d_p[x]  = state.d_z[x]  + beta*state.d_p[x];							// update decent direction
+		state.d_p[x] = state.d_z[x] + beta*state.d_p[x];							// update decent direction
 	}
 }
 
@@ -231,29 +231,29 @@ void PCGIteration(SolverInput& input, SolverState& state, SolverParameters& para
 		while (1);
 	}
 
-    timer.startEvent("PCGStep_Kernel1");
-    PCGStep_Kernel1 << <blocksPerGrid, THREADS_PER_BLOCK, shmem_size >> >(input, state, parameters);
-    timer.endEvent();
-	#ifdef _DEBUG
-		cutilSafeCall(cudaDeviceSynchronize());
-		cutilCheckMsg(__FUNCTION__);
-	#endif
+	timer.startEvent("PCGStep_Kernel1");
+	PCGStep_Kernel1 << <blocksPerGrid, THREADS_PER_BLOCK, shmem_size >> >(input, state, parameters);
+	timer.endEvent();
+#ifdef _DEBUG
+	cutilSafeCall(cudaDeviceSynchronize());
+	cutilCheckMsg(__FUNCTION__);
+#endif
 
 	timer.startEvent("PCGStep_Kernel2");
 	PCGStep_Kernel2 << <blocksPerGrid, THREADS_PER_BLOCK, shmem_size >> >(input, state);
 	timer.endEvent();
-	#ifdef _DEBUG
-		cutilSafeCall(cudaDeviceSynchronize());
-		cutilCheckMsg(__FUNCTION__);
-	#endif
+#ifdef _DEBUG
+	cutilSafeCall(cudaDeviceSynchronize());
+	cutilCheckMsg(__FUNCTION__);
+#endif
 
 	timer.startEvent("PCGStep_Kernel3");
 	PCGStep_Kernel3 << <blocksPerGrid, THREADS_PER_BLOCK, shmem_size >> >(input, state);
 	timer.endEvent();
-	#ifdef _DEBUG
-		cutilSafeCall(cudaDeviceSynchronize());
-		cutilCheckMsg(__FUNCTION__);
-	#endif
+#ifdef _DEBUG
+	cutilSafeCall(cudaDeviceSynchronize());
+	cutilCheckMsg(__FUNCTION__);
+#endif
 }
 
 /////////////////////////////////////////////////////////////////////////
@@ -273,15 +273,15 @@ __global__ void ApplyLinearUpdateDevice(SolverInput input, SolverState state, So
 void ApplyLinearUpdate(SolverInput& input, SolverState& state, SolverParameters& parameters, CUDATimer& timer)
 {
 	const unsigned int N = input.N; // Number of block variables
-    timer.startEvent("ApplyLinearUpdateDevice");
+	timer.startEvent("ApplyLinearUpdateDevice");
 	ApplyLinearUpdateDevice << <(N + THREADS_PER_BLOCK - 1) / THREADS_PER_BLOCK, THREADS_PER_BLOCK >> >(input, state, parameters);
-    timer.endEvent();
+	timer.endEvent();
 	cutilSafeCall(cudaDeviceSynchronize()); // Hm
 
-	#ifdef _DEBUG
-		cutilSafeCall(cudaDeviceSynchronize());
-		cutilCheckMsg(__FUNCTION__);
-	#endif
+#ifdef _DEBUG
+	cutilSafeCall(cudaDeviceSynchronize());
+	cutilCheckMsg(__FUNCTION__);
+#endif
 }
 
 ////////////////////////////////////////////////////////////////////

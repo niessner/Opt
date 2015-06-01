@@ -9,23 +9,14 @@ local w_regSqrt = S:Param("w_regSqrt", float, 1)
 
 local terms = terralib.newlist()
 
-for i = 0,3 do
-	local laplacianCost0 = X(0,0,i) - X(1,0,i)
-	local laplacianCost1 = X(0,0,i) - X(-1,0,i)
-	local laplacianCost2 = X(0,0,i) - X(0,1,i)
-	local laplacianCost3 = X(0,0,i) - X(0,-1,i)
-	
-	local laplacianCost0F = ad.select(opt.InBounds(0,0,0,0),ad.select(opt.InBounds(1,0,0,0),laplacianCost0,0),0)
-	local laplacianCost1F = ad.select(opt.InBounds(0,0,0,0),ad.select(opt.InBounds(-1,0,0,0),laplacianCost1,0),0)
-	local laplacianCost2F = ad.select(opt.InBounds(0,0,0,0),ad.select(opt.InBounds(0,1,0,0),laplacianCost2,0),0)
-	local laplacianCost3F = ad.select(opt.InBounds(0,0,0,0),ad.select(opt.InBounds(0,-1,0,0),laplacianCost3,0),0)
+local laplacianCost = (4*X(0,0) - (X(-1,0) + X(0,1) + X(1,0) + X(0,-1)))
+local laplacianCostF = ad.select(opt.InBounds(0,0,1,1),laplacianCost,0)
+
+
+for i = 0,3 do	
+	terms:insert(w_regSqrt*laplacianCostF(i))
 	
 	local fittingCost = X(0,0,i) - A(0,0,i)
-	
-	terms:insert(w_regSqrt*laplacianCost0F)
-	terms:insert(w_regSqrt*laplacianCost1F)
-	terms:insert(w_regSqrt*laplacianCost2F)
-	terms:insert(w_regSqrt*laplacianCost3F)
 	terms:insert(w_fitSqrt*fittingCost)
 end
 
