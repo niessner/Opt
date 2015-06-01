@@ -21,7 +21,8 @@ end
 -- constants
 local verboseSolver = true
 local verboseAD = false
-local cseenabled = true
+local cseenabled        = util.shiftOptimizations
+local actuallyuseshifts = util.shiftOptimizations
 
 local function newclass(name)
     local mt = { __name = name }
@@ -239,7 +240,7 @@ function ProblemSpec:MaxStencil()
 end
 
 function ProblemSpec:MaxOvercompute()
-    return 1
+    return 2
 end
 
 function ProblemSpec:Stencil(stencil) 
@@ -697,7 +698,7 @@ local function multipleof(x,m)
     return x + (m - x % m)
 end
 
-local actuallyuseshifts = true
+
 
 local function createfunction(problemspec,name,exps,usebounds,W,H)
     if not usebounds then
@@ -710,7 +711,8 @@ local function createfunction(problemspec,name,exps,usebounds,W,H)
     local i,j,gi,gj = symbol(int32,"i"), symbol(int32,"j"),symbol(int32,"gi"), symbol(int32,"gj")
     
     ---------- infrastructure for handling shared memory for shifting --------------------
-    local sharedwidth = problemspec.P:BlockSize()
+    local maxstencil = 2
+    local sharedwidth = problemspec.P:BlockSize()+2*maxstencil    
     local sharedimages = terralib.newlist()
     local sharedfreelist = terralib.newlist()
     local function allocatesharedimage()
@@ -724,9 +726,11 @@ local function createfunction(problemspec,name,exps,usebounds,W,H)
     local function releasesharedimage(im)
         sharedfreelist:insert(im)
     end
-    local function sharedimageaccess(im,x,y)
-        local mem = sharedimages[im]
-        return `mem[(j+y)*sharedwidth + (i+x)]
+    local function sharedimageaccess(im,x,y,lvalue)
+        --assert( math.abs(x) <= 1 )
+        --assert( math.abs(y) <= 1 )
+        local mem = assert(sharedimages[im], "shared image is nil")
+        return `mem[(threadIdx.y+(y+maxstencil))*sharedwidth + (threadIdx.x+(x+maxstencil))]
     end
     -------------------
     
@@ -813,13 +817,15 @@ local function createfunction(problemspec,name,exps,usebounds,W,H)
     local function shiftgenerator(stmts,exp,v,key)
         if not exptoshiftimage[exp] then 
             local im = allocatesharedimage()
-            local access = sharedimageaccess(im,0,0)
+            print("here",im)
+            local access = sharedimageaccess(im,0,0,true)
             stmts:insert quote
                 [access] = v
                 __syncthreads()
             end
             exptoshiftimage[exp] = im 
         end
+        print("here2",exptoshiftimage[exp])
         return sharedimageaccess(exptoshiftimage[exp],key.x,key.y)
     end
     local function lastuse(stmts, exp)
@@ -832,7 +838,7 @@ local function createfunction(problemspec,name,exps,usebounds,W,H)
             assert(im ~= "freed", "use after free of shiftedimage!")
             releasesharedimage(im)
             --stmts:insert quote "freeing " end
-            exptoshiftimage[exp] = "freed"
+            --exptoshiftimage[exp] = "freed"
         end
     end
     

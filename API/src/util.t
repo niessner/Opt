@@ -1,11 +1,13 @@
 
 local timeIndividualKernels = true
 local debugDumpInfo = false
+local shiftOptimizations = true
 
 local S = require("std")
 
 local util = {}
 util.debugDumpInfo = debugDumpInfo
+util.shiftOptimizations = shiftOptimizations
 
 util.C = terralib.includecstring [[
 #include <stdio.h>
@@ -328,16 +330,38 @@ util.getParameters = function(ProblemSpec, images, edgeValues, paramValues)
 	return `[ProblemSpec:ParameterType(false)]{ inits }	--don't use the blocked version
 end
 
-
-
-util.positionForValidLane = macro(function(pd,mapMemberName,pw,ph)
-	mapMemberName = mapMemberName:asvalue()
-	return quote
-		@pw,@ph = blockDim.x * blockIdx.x + threadIdx.x, blockDim.y * blockIdx.y + threadIdx.y
-	in
-		 @pw < pd.parameters.[mapMemberName]:W() and @ph < pd.parameters.[mapMemberName]:H() 
+util.deadThread = function(problemSpec)
+	local overcomputeSize = problemSpec:MaxOvercompute()
+	if util.shiftOptimizations then
+		return quote
+			in
+			threadIdx.x < overcomputeSize or 
+			threadIdx.x >= blockDim.x-overcomputeSize or 
+			threadIdx.y < overcomputeSize or 
+			threadIdx.y >= blockDim.y-overcomputeSize 
+		end
+	else
+		return `false
 	end
-end)
+end
+local deadThread = util.deadThread
+
+util.positionForValidLane = function(pd,mapMemberName,pw,ph, problemSpec)
+	local overcomputeSize = problemSpec:MaxOvercompute()
+	if util.shiftOptimizations then
+		return quote
+			@pw,@ph = (blockDim.x - 2*overcomputeSize) * blockIdx.x + threadIdx.x - overcomputeSize, (blockDim.y - 2*overcomputeSize) * blockIdx.y + threadIdx.y - overcomputeSize
+		in
+			@pw < pd.parameters.[mapMemberName]:W() and @ph < pd.parameters.[mapMemberName]:H() 
+		end
+	else
+		return quote
+			@pw,@ph = blockDim.x * blockIdx.x + threadIdx.x, blockDim.y * blockIdx.y + threadIdx.y
+		in
+			@pw < pd.parameters.[mapMemberName]:W() and @ph < pd.parameters.[mapMemberName]:H() 
+		end
+	end
+end
 local positionForValidLane = util.positionForValidLane
 
 local cd = macro(function(cufunc)
@@ -360,9 +384,16 @@ local makeGPULauncher = function(compiledKernel, kernelName, header, footer, pro
 	for i = 3,#kernelparams do --skip GPU launcher and PlanData
 	    params:insert(symbol(kernelparams[i]))
 	end
+	local overcomputeSize = problemSpec:MaxOvercompute()
 	local terra GPULauncher(pd : &PlanData, [params])
 		var BLOCK_SIZE : int = [problemSpec:BlockSize()]
-		var launch = terralib.CUDAParams { (pd.parameters.X:W() - 1) / BLOCK_SIZE + 1, (pd.parameters.X:H() - 1) / BLOCK_SIZE + 1, 1, BLOCK_SIZE, BLOCK_SIZE, 1, 0, nil }
+		var effectiveBlockSize = BLOCK_SIZE
+		if [shiftOptimizations] then
+			effectiveBlockSize = BLOCK_SIZE - 2 * overcomputeSize
+		end
+		-- set effectiveBlockSize in params
+
+		var launch = terralib.CUDAParams { (pd.parameters.X:W() - 1) / effectiveBlockSize + 1, (pd.parameters.X:H() - 1) / effectiveBlockSize + 1, 1, BLOCK_SIZE, BLOCK_SIZE, 1, 0, nil }
 		--var launch = terralib.CUDAParams { (pd.parameters.X:W() - 1) / 32 + 1, (pd.parameters.X:H() - 1) / 32 + 1, 1, 32, 32, 1, 0, nil }
 		C.cudaDeviceSynchronize()
 		[header(pd)]

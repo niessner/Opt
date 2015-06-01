@@ -1,12 +1,13 @@
-local USE_MASK_REFINE 			= true
+local USE_MASK_REFINE 			= false
 
-local USE_DEPTH_CONSTRAINT 		= true
+local USE_DEPTH_CONSTRAINT 		= false
 local USE_REGULARIZATION 		= true
-local USE_SHADING_CONSTRAINT 	= true
+local USE_SHADING_CONSTRAINT 	= false
 local USE_TEMPORAL_CONSTRAINT 	= false
 local USE_PRECONDITIONER 		= false
 
 local DEPTH_DISCONTINUITY_THRE = 0.01
+
 
 
 local W,H 	= opt.Dim("W",0), opt.Dim("H",1)
@@ -18,6 +19,8 @@ local I 	= P:Image("I",float, W,H,2) -- Target Intensity
 local D_p 	= P:Image("D_p",float, W,H,3) -- Previous Depth
 local edgeMaskR = P:Image("edgeMaskR",uint8, W,H,4) -- Edge mask. 
 local edgeMaskC = P:Image("edgeMaskC",uint8, W,H,5) -- Edge mask. 
+
+P:Exclude(ad.less(X(0,0),0))
 
 -- See TerraSolverParameters
 local w_p						= P:Param("w_p",float,0)-- Is initialized by the solver!
@@ -101,7 +104,7 @@ function normalAt(offX, offY)
     return times(inverseMagnitude, {n_x, n_y, n_z})
 end
 
-function B(offX, offY)
+function BminI(offX, offY)
 	local normal = normalAt(offX, offY)
 	local n_x = normal[1]
 	local n_y = normal[2]
@@ -111,7 +114,7 @@ function B(offX, offY)
 					 L[2]*n_y + L[3]*n_z + L[4]*n_x  +
 					 L[5]*n_x*n_y + L[6]*n_y*n_z + L[7]*(-n_x*n_x - n_y*n_y + 2*n_z*n_z) + L[8]*n_z*n_x + L[9]*(n_x*n_x-n_y*n_y)
 
-	return 1.0*lighting -- replace 1.0 with estimated albedo in slower version
+	return lighting - I(offX, offY)
 end
 
 local E_s = 0.0
@@ -131,7 +134,7 @@ end
 if USE_SHADING_CONSTRAINT then
 	local shading_h_valid = ad.greater(D_i(-1,0) + D_i(0,0) + D_i(1,0) + D_i(0,-1) + D_i(1,-1), 0)
 	
-	local E_g_h_noCheck = B(0,0) - B(1,0) - (I(0,0) - I(1,0))
+	local E_g_h_noCheck = BminI(0,0) - BminI(1,0)
 	if USE_MASK_REFINE then
 		E_g_h_noCheck = E_g_h_noCheck * edgeMaskR(0,0)
 	end
@@ -141,7 +144,7 @@ end
 if USE_SHADING_CONSTRAINT then
 	local shading_v_valid = ad.greater(D_i(0,-1) + D_i(0,0) + D_i(0,1) + D_i(-1,0) + D_i(-1,1), 0)
 	
-	local E_g_v_noCheck = B(0,0) - B(0,1) - (I(0,0) - I(0,1))
+	local E_g_v_noCheck = BminI(0,0) - BminI(0,1)
 	if USE_MASK_REFINE then
 		E_g_v_noCheck = E_g_v_noCheck * edgeMaskC(0,0)
 	end
@@ -150,16 +153,16 @@ end
 
 
 if USE_REGULARIZATION then
-	local cross_valid = ad.greater(D_i(0,0) + D_i(0,-1) + D_i(0,1) + D_i(-1,0) + D_i(1,0), 0)
+	local cross_valid = 0 -- ad.greater(D_i(0,0) + D_i(0,-1) + D_i(0,1) + D_i(-1,0) + D_i(1,0), 0)
 
 	local E_s_noCheck = sqMagnitude(plus(times(4.0,p(0,0)), times(-1.0, plus(p(-1,0), plus(p(0,-1), plus(p(1,0), p(0,1)))))))
 	local d = X(0,0)
 
-	local E_s_guard = ad.and6(opt.InBounds(0,0,1,1), cross_valid, 
+	local E_s_guard = 1--[[ad.and6(opt.InBounds(0,0,1,1), cross_valid, 
 						ad.less(ad.abs(d - X(1,0)), DEPTH_DISCONTINUITY_THRE),
 						ad.less(ad.abs(d - X(-1,0)), DEPTH_DISCONTINUITY_THRE),
 						ad.less(ad.abs(d - X(0,1)), DEPTH_DISCONTINUITY_THRE),
-						ad.less(ad.abs(d - X(0,-1)), DEPTH_DISCONTINUITY_THRE))
+						ad.less(ad.abs(d - X(0,-1)), DEPTH_DISCONTINUITY_THRE))]]
 	E_s = ad.select(E_s_guard, E_s_noCheck, 0)
 --[[
 	E_s = 
