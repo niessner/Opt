@@ -92,7 +92,7 @@ void TestFramework::runTest(const TestMethod &method, TestExample &example)
 
     cerr << "start cost: " << example.costFunction(example.images[0]) << endl;
 
-    uint64_t dims[] = { example.variableDimX, example.variableDimY };
+    uint32_t dims[] = { example.variableDimX, example.variableDimY };
 
     Problem * prob = Opt_ProblemDefine(optimizerState, example.terraCodeFilename.c_str(), method.optimizerName.c_str(), NULL);
 
@@ -107,8 +107,8 @@ void TestFramework::runTest(const TestMethod &method, TestExample &example)
     
     vector<void*> imagesCPU;
     vector<void*> imagesGPU;
-    vector<uint64_t> stride;
-    vector<uint64_t> elemsize;
+    vector<uint32_t> stride;
+    vector<uint32_t> elemsize;
 
     for (const auto &image : example.images)
     {
@@ -119,17 +119,17 @@ void TestFramework::runTest(const TestMethod &method, TestExample &example)
         elemsize.push_back(sizeof(float));
     }
 
-    vector<int64_t*> adjacencyOffsetsCPU;
-    vector<int64_t*> adjacencyListsXCPU;
-    vector<int64_t*> adjacencyListsYCPU;
+    vector<int32_t*> adjacencyOffsetsCPU;
+    vector<int32_t*> adjacencyListsXCPU;
+    vector<int32_t*> adjacencyListsYCPU;
     vector<void*> edgeValuesCPU;
 
     for (auto &graph : example.graphs)
     {
         graph.finalize();
-        adjacencyOffsetsCPU.push_back((int64_t *)graph.adjacencyOffsetsCPU.data());
-        adjacencyListsXCPU.push_back((int64_t *)graph.adjacencyListsXCPU.data());
-        adjacencyListsYCPU.push_back((int64_t *)graph.adjacencyListsYCPU.data());
+        adjacencyOffsetsCPU.push_back((int32_t *)graph.adjacencyOffsetsCPU.data());
+        adjacencyListsXCPU.push_back((int32_t *)graph.adjacencyListsXCPU.data());
+        adjacencyListsYCPU.push_back((int32_t *)graph.adjacencyListsYCPU.data());
         edgeValuesCPU.push_back((void*)graph.edgeValuesCPU.data());
     }
     Plan * plan = Opt_ProblemPlan(optimizerState, prob, dims, elemsize.data(), stride.data(), adjacencyOffsetsCPU.data(), adjacencyListsXCPU.data(), adjacencyListsYCPU.data());

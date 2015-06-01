@@ -14,7 +14,7 @@ struct TestMethod
 
 struct TestExample
 {
-    TestExample(const string &_exampleName, const string &_terraCodeFilename, size_t _variableDimX, size_t _variableDimY)
+	TestExample(const string &_exampleName, const string &_terraCodeFilename, uint32_t _variableDimX, uint32_t _variableDimY)
     {
         exampleName = _exampleName;
         terraCodeFilename = _terraCodeFilename;
@@ -22,7 +22,7 @@ struct TestExample
         variableDimY = _variableDimY;
     }
 
-    size_t variableDimX, variableDimY;
+    uint32_t variableDimX, variableDimY;
     string exampleName;
     string terraCodeFilename;
 

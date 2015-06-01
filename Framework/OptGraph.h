@@ -58,14 +58,14 @@ struct OptGraph
 
         for (const Node &n : nodes)
         {
-            adjacencyOffsetsCPU.push_back(adjacencyListsXCPU.size());
+            adjacencyOffsetsCPU.push_back((unsigned int)adjacencyListsXCPU.size());
             for (const Edge &e : n.edges)
             {
                 adjacencyListsXCPU.push_back(e.end);
                 edgeValuesCPU.push_back(e.value);
             }
         }
-        adjacencyOffsetsCPU.push_back(adjacencyListsXCPU.size());
+        adjacencyOffsetsCPU.push_back((unsigned int)adjacencyListsXCPU.size());
 
         adjacencyListsYCPU = adjacencyListsXCPU;
         for (auto &x : adjacencyListsYCPU)
@@ -86,9 +86,9 @@ struct OptGraph
 
     std::vector<Node> nodes;
 
-    std::vector<uint64_t> adjacencyOffsetsCPU;
-    std::vector<uint64_t> adjacencyListsXCPU;
-    std::vector<uint64_t> adjacencyListsYCPU;
+    std::vector<uint32_t> adjacencyOffsetsCPU;
+    std::vector<uint32_t> adjacencyListsXCPU;
+    std::vector<uint32_t> adjacencyListsYCPU;
     std::vector<EdgeValueType> edgeValuesCPU;
 };
 
