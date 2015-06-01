@@ -332,10 +332,9 @@ function opt.InternalDim(name, size)
     return Dim:new { name = name, size = size }
 end
 
-terra opt.InBoundsCalc(x : int64, y : int64, W : int64, H : int64, sx : int64, sy : int64) : int
-    var minx,maxx,miny,maxy = x - sx,x + sx,y - sy,y + sy
-    return int(minx >= 0) and int(maxx < W) and int(miny >= 0) and int(maxy < H)
-end 
+opt.InBoundsCalc = macro(function(x,y,W,H,sx,sy)
+    return `x >= sx and x < W - sx and y >= sy and y < H - sy
+end)
 	
 newImage = terralib.memoize(function(typ, W, H, elemsize, stride)
 	local struct Image {
@@ -366,14 +365,18 @@ newImage = terralib.memoize(function(typ, W, H, elemsize, stride)
 	terra Image:inbounds(x : int64, y : int64)
 	    return x >= 0 and y >= 0 and x < W.size and y < H.size
 	end
-	terra Image:get(x : int64, y : int64, gx : int64, gy : int64) : typ
-	    var v : typ = 0.f
-	    if opt.InBoundsCalc(gx,gy,W.size,H.size,0,0) ~= 0 then
-	        v = self(x,y)
-	    end
-	    return v
-	end
-	terra Image:get(x : int64, y : int64) : typ return self:get(x,y,x,y) end
+	Image.methods.get = macro(function(self,x,y,gx,gy)
+		if not gx then
+		    gx,gy = x,y
+		end
+		return quote
+            var v : typ = 0.f
+            if opt.InBoundsCalc(gx,gy,W.size,H.size,0,0) then
+                v = self(x,y)
+            end
+        in v end
+	end)
+	--terra Image:get(x : int64, y : int64) : typ return self:get(x,y,x,y) end
 	terra Image:H() return H.size end
 	terra Image:W() return W.size end
 	terra Image:elemsize() return elemsize end
@@ -696,8 +699,7 @@ local function createfunction(problemspec,name,exps,usebounds,W,H)
     local i,j,gi,gj = symbol(int64,"i"), symbol(int64,"j"),symbol(int64,"gi"), symbol(int64,"gj")
     local indexes = {[0] = i,j }
     local accesssyms = {}
-    local stmts = terralib.newlist()
-    local function emitvar(stmts_,a)
+    local function emitvar(stmts,a)
         if not accesssyms[a] then
             local r 
             if "ImageAccess" == a.kind then
@@ -713,9 +715,10 @@ local function createfunction(problemspec,name,exps,usebounds,W,H)
                     end
                     imagetosym[a.image] = im
                 end
-                r = symbol(float,tostring(a))
+                r = symbol(tostring(a))
                 -- note: implicit cast to float happens here for non-float images.
                 local loadexp = usebounds and (`im:get(i+[a.x],j+[a.y],gi+[a.x],gj+[a.y])) or (`im(i+[a.x],j+[a.y]))
+                --local loadexp = (`im(i+[a.x],j+[a.y]))
                 if not a.image.type:isarithmetic() then
                     local pattern = ImageAccess:get(a.image,a.x,a.y,0)
                     local blockload = imageloadmap[pattern]
@@ -724,7 +727,7 @@ local function createfunction(problemspec,name,exps,usebounds,W,H)
                         if usebounds then
                             stmts:insert quote
                                 var [s] : a.image.type = 0.f
-                                if opt.InBoundsCalc(gi+[a.x],gj+[a.y],[W.size],[H.size],0,0) ~= 0 then
+                                if opt.InBoundsCalc(gi+[a.x],gj+[a.y],[W.size],[H.size],0,0) then
                                     [s] = im(i+[a.x],j+[a.y])
                                 end
                             end
@@ -737,15 +740,18 @@ local function createfunction(problemspec,name,exps,usebounds,W,H)
                     end
 					loadexp = `blockload(a.channel)
                 end
-                stmts:insert quote
+                --[[stmts:insert quote
                     var [r] = loadexp
-                end
+                end]]
+                r = loadexp
             elseif "BoundsAccess" == a.kind then--bounds calculation
-                assert(usebounds) -- if we removed them, we shouldn't see any boundary accesses
+                --assert(usebounds) -- if we removed them, we shouldn't see any boundary accesses
                 r = symbol(int,tostring(a))
-                stmts:insert quote
+                --[[stmts:insert quote
                     var [r] = opt.InBoundsCalc(gi+a.x,gj+a.y,W.size,H.size,a.sx,a.sy)
-                end
+                end]]
+                r = `opt.InBoundsCalc(gi+a.x,gj+a.y,W.size,H.size,a.sx,a.sy)
+                
             elseif "IndexValue" == a.kind then
                 r = `[ assert(indexes[a.dim._index]) ] + a._shift 
             else assert("ParamValue" == a.kind)
@@ -767,14 +773,14 @@ local function createfunction(problemspec,name,exps,usebounds,W,H)
     end
     local result = ad.toterra(exps,emitvar,generatormap)
     local terra generatedfn([i], [j], [gi], [gj], [P], [extraimages])
-        [stmts]
         return result
     end
     generatedfn:setname(name)
     if verboseAD then
         generatedfn:printpretty(true, false)
     end
-    if name == "evalJTF" and not usebounds then
+    if name == "evalJTF" and usebounds then
+        print(exps[1])
         --generatedfn:printpretty(true, false)
     end
     return generatedfn

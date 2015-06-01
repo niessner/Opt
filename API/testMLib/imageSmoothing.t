@@ -24,24 +24,23 @@ local w_reg = 1.0
 
 
 local terra inLaplacianBounds(i : int64, j : int64, xImage : P:UnknownType()) : bool
-	return i > 0 and i < xImage:W()-1 and j > 0 and j < xImage:H()-1
+	return opt.InBoundsCalc(i,j,xImage:W(),xImage:H(),1,1)
+	--return i > 0 and i < xImage:W()-1 and j > 0 and j < xImage:H()-1
 end
 
-local terra laplacian(i : int64, j : int64, gi : int64, gj : int64, xImage : P:UnknownType()) : float
-	if not inLaplacianBounds(gi, gj, xImage) then
-		return 0
-	end
 
-	var x = xImage(i, j)
-	var n0 = xImage(i - 1, j)
-    var n1 = xImage(i + 1, j)
-    var n2 = xImage(i, j - 1)
-    var n3 = xImage(i, j + 1)
 
-	var v = 4*x - (n0 + n1 + n2 + n3)
-	
-	return v
-end
+--local terra laplacian(i : int64, j : int64, gi : int64, gj : int64, xImage : P:UnknownType()) : float
+local laplacian = macro(function(i, j , gi, gj, xImage)
+    return quote
+        var r : float
+	    if inLaplacianBounds(gi, gj, xImage) then
+		    r = xImage(i, j)*4 - (xImage(i - 1, j) + xImage(i, j + 1) + xImage(i + 1, j) + xImage(i, j - 1))
+        else
+		    r = 0
+	    end
+	in r end
+end)
 
 -- diagonal of JtJ; i.e., (Jt)^2
 local terra laplacianPreconditioner(gi : int64, gj : int64, xImage : P:UnknownType()) : float
@@ -78,18 +77,27 @@ local terra gradient(i : int64, j : int64, gi : int64, gj : int64, self : P:Para
 	var x = self.X(i, j)
 	var a = self.A(i, j)
 	
-	var e_fit = 2 * (x - a)
+	var e_fit = (x - a)
+
+    var x0 = laplacian(i, j, gi, gj, self.X)*4
+    var x1 = laplacian(i + 1, j, gi + 1, gj, self.X)
+    var x2 = laplacian(i - 1, j, gi - 1, gj, self.X)
+    var x3 = laplacian(i, j + 1, gi, gj + 1, self.X)
+    var x4 = laplacian(i, j - 1, gi, gj - 1, self.X)
 
 	var e_reg = 
-		4*laplacian(i, j, gi, gj, self.X)
-		-laplacian(i + 1, j, gi + 1, gj, self.X)
-		-laplacian(i - 1, j, gi - 1, gj, self.X)
-		-laplacian(i, j + 1, gi, gj + 1, self.X)
-		-laplacian(i, j - 1, gi, gj - 1, self.X)
-	e_reg = 2.0*e_reg
+		x0
+		- x1
+		- x2
+		- x3
+		- x4
+	e_reg = e_reg
 
-	return w_fit*e_fit + w_reg*e_reg
+	return 2*(w_fit*e_fit + w_reg*e_reg)
 end
+
+
+gradient:printpretty(true,false)
 
 -- eval 2*JtF == \nabla(F); eval diag(2*(Jt)^2) == pre-conditioner
 local terra evalJTF(i : int64, j : int64, gi : int64, gj : int64, self : P:ParameterType())

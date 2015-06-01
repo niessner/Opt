@@ -96,7 +96,7 @@ return function(problemSpec, vars)
 					if isBlockOnBoundary(w, h, pd.parameters.X:W(), pd.parameters.X:H()) then
 						residuum, pre = data.problemSpec.functions.evalJTF.boundary(w, h, w, h, pd.parameters)
 					else 
-						residuum, pre = data.problemSpec.functions.evalJTF.interior(w, h, w, h, pd.parameters)
+						--residuum, pre = data.problemSpec.functions.evalJTF.interior(w, h, w, h, pd.parameters)
 					end
 					residuum = -residuum
 					pd.r(w, h) = residuum
