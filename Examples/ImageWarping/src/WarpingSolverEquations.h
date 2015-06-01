@@ -84,11 +84,64 @@ __inline__ __device__ float2 evalMinusJTFDevice(unsigned int variableIdx, Solver
 	float2x2 R = evalR(state.d_A[get1DIdx(i, j, input.width, input.height)]);
 	float2x2 dR = evalR_dR(state.d_A[get1DIdx(i, j, input.width, input.height)]);
 	float e_reg_angle = 0.0f;
-	if (validN0) { float2 q = state.d_x[get1DIdx(n0_i, n0_j, input.width, input.height)]; float2 qHat = state.d_urshape[get1DIdx(n0_i, n0_j, input.width, input.height)]; mat2x1 D = -mat2x1(dR*(pHat - qHat)); e_reg_angle += D.getTranspose()*mat2x1((p - q) - R*(pHat - qHat)); preA += D.getTranspose()*D*parameters.weightRegularizer; }
-	if (validN1) { float2 q = state.d_x[get1DIdx(n1_i, n1_j, input.width, input.height)]; float2 qHat = state.d_urshape[get1DIdx(n1_i, n1_j, input.width, input.height)]; mat2x1 D = -mat2x1(dR*(pHat - qHat)); e_reg_angle += D.getTranspose()*mat2x1((p - q) - R*(pHat - qHat)); preA += D.getTranspose()*D*parameters.weightRegularizer; }
-	if (validN2) { float2 q = state.d_x[get1DIdx(n2_i, n2_j, input.width, input.height)]; float2 qHat = state.d_urshape[get1DIdx(n2_i, n2_j, input.width, input.height)]; mat2x1 D = -mat2x1(dR*(pHat - qHat)); e_reg_angle += D.getTranspose()*mat2x1((p - q) - R*(pHat - qHat)); preA += D.getTranspose()*D*parameters.weightRegularizer; }
-	if (validN3) { float2 q = state.d_x[get1DIdx(n3_i, n3_j, input.width, input.height)]; float2 qHat = state.d_urshape[get1DIdx(n3_i, n3_j, input.width, input.height)]; mat2x1 D = -mat2x1(dR*(pHat - qHat)); e_reg_angle += D.getTranspose()*mat2x1((p - q) - R*(pHat - qHat)); preA += D.getTranspose()*D*parameters.weightRegularizer; }
+
+	if (validN0) { 
+		float2 q = state.d_x[get1DIdx(n0_i, n0_j, input.width, input.height)]; 
+		float2 qHat = state.d_urshape[get1DIdx(n0_i, n0_j, input.width, input.height)];
+		mat2x1 D = -mat2x1(dR*(pHat - qHat)); 
+		if (i == 80 && j == 240) {
+			//printf("v0=%f %f; p=%f %f; q=%f %f\n", D(0,0), D(1,0), pHat.x, pHat.y, qHat.x, qHat.y);
+		}
+		e_reg_angle += D.getTranspose()*mat2x1((p - q) - R*(pHat - qHat)); 
+		preA += D.getTranspose()*D*parameters.weightRegularizer; 
+	}
+
+	if (validN1) { 
+		float2 q = state.d_x[get1DIdx(n1_i, n1_j, input.width, input.height)]; 
+		float2 qHat = state.d_urshape[get1DIdx(n1_i, n1_j, input.width, input.height)]; 
+		mat2x1 D = -mat2x1(dR*(pHat - qHat)); 
+		if (i == 80 && j == 240) {
+			//printf("v1=%f %f; p=%f %f; q=%f %f\n", D(0, 0), D(1, 0), pHat.x, pHat.y, qHat.x, qHat.y);
+		}
+		e_reg_angle += D.getTranspose()*mat2x1((p - q) - R*(pHat - qHat)); 
+		preA += D.getTranspose()*D*parameters.weightRegularizer; 
+	}
+	
+	if (validN2) { 
+		float2 q = state.d_x[get1DIdx(n2_i, n2_j, input.width, input.height)]; 
+		float2 qHat = state.d_urshape[get1DIdx(n2_i, n2_j, input.width, input.height)]; 
+		mat2x1 D = -mat2x1(dR*(pHat - qHat)); 
+		if (i == 80 && j == 240) {
+			//printf("v2=%f %f; p=%f %f; q=%f %f\n", D(0, 0), D(1, 0), pHat.x, pHat.y, qHat.x, qHat.y);
+		}
+		e_reg_angle += D.getTranspose()*mat2x1((p - q) - R*(pHat - qHat)); 
+		preA += D.getTranspose()*D*parameters.weightRegularizer; 
+	}
+	
+	if (validN3) { 
+		float2 q = state.d_x[get1DIdx(n3_i, n3_j, input.width, input.height)]; 
+		float2 qHat = state.d_urshape[get1DIdx(n3_i, n3_j, input.width, input.height)]; 
+		mat2x1 D = -mat2x1(dR*(pHat - qHat)); 
+		if (i == 80 && j == 240) {
+			//printf("v3=%f %f; p=%f %f; q=%f %f\n", D(0, 0), D(1, 0), pHat.x, pHat.y, qHat.x, qHat.y);
+		}
+		e_reg_angle += D.getTranspose()*mat2x1((p - q) - R*(pHat - qHat)); 
+		preA += D.getTranspose()*D*parameters.weightRegularizer; 
+	}
 	bA += -2.0f*parameters.weightRegularizer*e_reg_angle;
+
+	
+	if (i == 80 && j == 240) {
+		//float m0 = state.d_mask[get1DIdx(n0_i, n0_j, input.width, input.height)];
+		//float m1 = state.d_mask[get1DIdx(n1_i, n1_j, input.width, input.height)];
+		//float m2 = state.d_mask[get1DIdx(n2_i, n2_j, input.width, input.height)];
+		//float m3 = state.d_mask[get1DIdx(n3_i, n3_j, input.width, input.height)];
+
+		//unsigned int numValid = validN0 + validN1 + validN2 + validN3;
+		//printf("R=%f %f %f %f\n", R(0,0), R(0,1), R(1,0), R(1,1));
+		//printf("dR=%f %f %f %f\n", dR(0, 0), dR(0, 1), dR(1, 0), dR(1, 1));
+		//printf("a=%f; numValid=%d;  %f %f %f %f\n", bA, numValid, m0, m1, m2, m3);
+	}
 
 	//TODO ENABLE OUR PRE-CONDITIONER AGAIN
 	//pre = make_float2(1.0f, 1.0f);

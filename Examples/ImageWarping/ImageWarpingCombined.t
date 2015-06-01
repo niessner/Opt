@@ -11,7 +11,7 @@ A.functions.applyJTJ.boundary = terra(i : int64, j : int64, gi : int64, gj : int
 	var d : float = diff:dot(diff)
 	if d < 0.0f then d = -d end
 	if d > 0.1f then
-		printf("%d,%d: ad=%f b=%f\n",int(gi),int(gj),a(0),b(0))
+		--printf("%d,%d: ad=%f b=%f\n",int(gi),int(gj),a(0),b(0))
 	end
 	
 
@@ -33,14 +33,23 @@ A.functions.evalJTF.boundary = terra(i : int64, j : int64, gi : int64, gj : int6
 	var a,pa = oldJTF(i, j, gi, gj, self)	--auto-diff
 	var b,pb = M.functions.evalJTF.boundary(i,j,gi,gj,@[&M:ParameterType()](&self))
 
-	var diff = a - a
+	var diff = a - b
 	var d : float = diff:dot(diff)
 	if d < 0.0f then d = -d end
-	if d > 0.1f then
-		--if gi == 10 and gj == 10 then
-			printf("(%d|%d): pa=%f pb=%f\n",int(gi),int(gj),a(0),b(0))
-		--end
+	if d > 0.001f then
+	--if gi == 240 and gj == 80 then
+		printf("JTF (%d|%d): pa=%f %f %f pb=%f %f %f\n",int(gi),int(gj),a(0),a(1),a(2),b(0),b(1),b(2))
 	end
+	
+	if a(0) ~= 0.0f or a(1) ~= 0.0f or a(2) ~= 0.0f then
+		--printf("(%d|%d): pa=%f pb=%f\n",int(gi),int(gj),a(0),b(0))
+	end
+	if b(0) ~= 0.0f or b(1) ~= 0.0f or b(2) ~= 0.0f then
+		--printf("JTF (%d|%d): pa=%f %f %f pb=%f %f %f\n",int(gi),int(gj),a(0),a(1),a(2),b(0),b(1),b(2))
+	end
+	
+	--pa(2) = -1.0f
+	--pb(2) = -1.0f
 	
 	var diffPre = pa - pb
 	var diffPreF : float = diffPre:dot(diffPre)
@@ -69,7 +78,7 @@ A.functions.cost.boundary = terra(i : int64, j : int64, gi : int64, gj : int64, 
 		expected1 = weightFit*expected1*expected1
 		var expected : float = expected0 + expected1
 		
-		printf("(%d|%d): ad=%f b=%f\n",int(gi),int(gj),a,b)
+		printf("cost (%d|%d): ad=%f b=%f\n",int(gi),int(gj),a,b)
 		printf("x: %f %f %f;  c: %f %f;   e: %f\n", self.X(i,j)(0), self.X(i,j)(1), self.X(i,j)(2), self.Constraints(i,j)(0), self.Constraints(i,j)(1), expected)
 	end
 	
