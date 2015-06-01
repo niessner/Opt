@@ -20,6 +20,9 @@
     <None Include="data-files\imageQuotient.pix">
       <Filter>Shader Files</Filter>
     </None>
+    <None Include="data-files\imageDifference.pix">
+      <Filter>Shader Files</Filter>
+    </None>
   </ItemGroup>
   <ItemGroup>
     <Filter Include="Source Files">

@@ -240,24 +240,20 @@ return function(problemSpec, vars)
 	if util.debugDumpInfo then
 	kernels.dumpCostJTFAndPre = function(data)
 		local terra dumpJTFAndPreGPU(pd : data.PlanData)
-			var d = 0.0f -- init for out of bounds lanes
 			var w : int, h : int
 			if positionForValidLane(pd, "X", &w, &h) then
 				-- residuum = J^T x -F - A x delta_0  => J^T x -F, since A x x_0 == 0
 				
-				var residuum : float = 0.0f
-				var pre : float = 0.0f
+				var residuum : unknownElement = 0.0f
+				var pre : unknownElement = 0.0f
 				var cost : float = 0.0f
-				if isBlockOnBoundary(w, h, pd.parameters.X:W(), pd.parameters.X:H()) then
-					cost = data.problemSpec.functions.cost.boundary(w, h, w, h, pd.parameters)
-					residuum, pre = data.problemSpec.functions.evalJTF.boundary(w, h, w, h, pd.parameters)
-				else 
-					cost = data.problemSpec.functions.cost.interior(w, h, w, h, pd.parameters)
-					residuum, pre = data.problemSpec.functions.evalJTF.interior(w, h, w, h, pd.parameters)
-				end
+
+				cost = data.problemSpec.functions.cost.boundary(w, h, w, h, pd.parameters)
+				residuum, pre = data.problemSpec.functions.evalJTF.boundary(w, h, w, h, pd.parameters)
+
 				pd.debugCostImage[h*pd.parameters.X:W()+w] = cost
-				pd.debugJTFImage[h*pd.parameters.X:W()+w]  = residuum
-				pd.debugPreImage[h*pd.parameters.X:W()+w]  = pre
+				[&unknownElement](pd.debugJTFImage)[h*pd.parameters.X:W()+w]  = residuum
+				[&unknownElement](pd.debugPreImage)[h*pd.parameters.X:W()+w]  = pre
 			end 
 		end
 
@@ -269,14 +265,10 @@ return function(problemSpec, vars)
 			var d = 0.0f
 			var w : int, h : int
 			if positionForValidLane(pd, "X", &w, &h) then
-				var tmp : float = 0.0f
+				var tmp : unknownElement = 0.0f
 				 -- A x p_k  => J^T x J x p_k 
-				if isBlockOnBoundary(w, h, pd.parameters.X:W(), pd.parameters.X:H()) then
-					tmp = data.problemSpec.functions.applyJTJ.boundary(w, h, w, h, pd.parameters, pd.p)
-				else 
-					tmp = data.problemSpec.functions.applyJTJ.interior(w, h, w, h, pd.parameters, pd.p)
-				end
-				pd.debugJTJImage[h*pd.parameters.X:W()+w] = tmp
+				tmp = data.problemSpec.functions.applyJTJ.boundary(w, h, w, h, pd.parameters, pd.p)
+				[&unknownElement](pd.debugJTJImage)[h*pd.parameters.X:W()+w] = tmp
 			end
 		end
 		return { kernel = dumpJTJGPU, header = noHeader, footer = noFooter, mapMemberName = "X" }
@@ -298,9 +290,9 @@ return function(problemSpec, vars)
 		C.printf("initAllDebugImages\n")
 		initDebugImage(pd, &pd.debugDumpImage, 1)
 		initDebugImage(pd, &pd.debugCostImage, 1)
-		initDebugImage(pd, &pd.debugJTJImage, 1)
-		initDebugImage(pd, &pd.debugJTFImage, 1)
-		initDebugImage(pd, &pd.debugPreImage, 1)
+		initDebugImage(pd, &pd.debugJTJImage, sizeof([unknownElement]) / 4)
+		initDebugImage(pd, &pd.debugJTFImage, sizeof([unknownElement]) / 4)
+		initDebugImage(pd, &pd.debugPreImage, sizeof([unknownElement]) / 4)
 	end
 
 	local terra debugImageWrite(pd : &PlanData, imPtr : &float, channelCount : int, filename : rawstring)
@@ -313,10 +305,10 @@ return function(problemSpec, vars)
 		C.fwrite(&channelCount, sizeof(int), 1, fileHandle)
 		C.fwrite(&datatype, sizeof(int), 1, fileHandle)
   
-		var size = sizeof(float) * [uint64](width*height)
+		var size = sizeof(float) * [uint64](width*height*channelCount)
 		var ptr = C.malloc(size)
 		C.cudaMemcpy(ptr, imPtr, size, C.cudaMemcpyDeviceToHost)
-		C.fwrite(ptr, sizeof(float), [uint64](width*height), fileHandle)
+		C.fwrite(ptr, sizeof(float), [uint64](width*height*channelCount), fileHandle)
 	    C.fclose(fileHandle)
 	    
 	    C.free(ptr)
@@ -345,23 +337,23 @@ return function(problemSpec, vars)
 
 	
 	local terra init(data_ : &opaque, images : &&opaque, edgeValues : &&opaque, params_ : &&opaque, solverparams : &&opaque)
-		
 		var pd = [&PlanData](data_)
 		pd.timer:init()
 		pd.parameters = [util.getParameters(problemSpec, images, edgeValues,params_)]
 
 	    pd.nIter = 0
 		
+		escape 
+	    	if util.debugDumpInfo then
+	    		emit quote
+		    		C.printf("initDebugImages\n")
+		    		initAllDebugImages(pd)
+	    		end
+	    	end
+		end
+
 		pd.nIterations = @[&int](solverparams[0])
 		pd.lIterations = @[&int](solverparams[1])
-	    escape
-			if util.debugDumpInfo then
-	    		emit quote
-					initAllDebugImages(pd)
-					debugImageWrite(pd, [&float](pd.parameters.D_i.data), 1, "initial_depth.imagedump")
-				end
-			end
-		end
 	end
 	local terra step(data_ : &opaque, images : &&opaque, edgeValues : &&opaque, params_ : &&opaque, solverparams : &&opaque)
 		var pd = [&PlanData](data_)
@@ -375,8 +367,8 @@ return function(problemSpec, vars)
 		    			gpu.dumpCostJTFAndPre(pd)
 		    			C.printf("saving\n")
 		    			debugImageWritePrefix(pd, pd.debugCostImage, 1, "cost")
-		    			debugImageWritePrefix(pd, pd.debugJTFImage, 1, "JTF")
-		    			debugImageWritePrefix(pd, pd.debugPreImage, 1, "Pre")
+		    			debugImageWritePrefix(pd, pd.debugJTFImage, sizeof([unknownElement]) / 4, "JTF")
+		    			debugImageWritePrefix(pd, pd.debugPreImage, sizeof([unknownElement]) / 4, "Pre")
 		    		end
 	    		end
 	    	end
@@ -397,7 +389,7 @@ return function(problemSpec, vars)
 			    			C.printf("dumpingJTJ\n")
 			    			gpu.dumpJTJ(pd)
 			    			C.printf("saving\n")
-			    			debugImageWritePrefix(pd, pd.debugJTJImage, 1, "JTJ")
+			    			debugImageWritePrefix(pd, pd.debugJTJImage, sizeof([unknownElement]) / 4, "JTJ")
 			    		end
 		    		end
 		    	end
@@ -421,7 +413,7 @@ return function(problemSpec, vars)
 			escape
 				if util.debugDumpInfo then
 		    		emit quote
-						debugImageWritePrefix(pd, [&float](pd.parameters.X.data), 1, "result")
+						debugImageWritePrefix(pd, [&float](pd.parameters.X.data), sizeof([unknownElement]) / 4, "result")
 					end
 				end
 			end

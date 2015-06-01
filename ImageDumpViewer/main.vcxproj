@@ -92,6 +92,7 @@
     <ClCompile Include="source\App.cpp" />
   </ItemGroup>
   <ItemGroup>
+    <None Include="data-files\imageDifference.pix" />
     <None Include="data-files\imageQuotient.pix" />
     <None Include="data-files\test.Scene.Any" />
     <None Include="Doxyfile" />
