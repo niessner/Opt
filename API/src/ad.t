@@ -495,7 +495,7 @@ function ad.toterra(es,varmap,generatormap_,shiftgenerator,lastuse)
     local function release(e)
         seenuses[e] = (seenuses[e] or 0) + 1
         if seenuses[e] == uses[e] then
-            lastuse(statements,e,seenuses[e])
+            lastuse(statements,e)
         end
     end
     local function emit(e)
@@ -506,8 +506,14 @@ function ad.toterra(es,varmap,generatormap_,shiftgenerator,lastuse)
         elseif "Const" == e.kind then
             r = `float(e.v)
         elseif "Shift" == e.kind then
-            local l = emit(e.exp)
-            r = shiftgenerator(statements,e.exp,l,e:key())
+            r = emitted[e]
+            if not r then
+                local imexp = emit(e.exp)
+                local rhs = shiftgenerator(statements,e.exp,imexp,e:key())
+                r = symbol(float,"shiftv")
+                statements:insert quote var [r] = rhs end
+                emitted[e] = r
+            end
             release(e.exp)
         elseif "Apply" == e.kind then
             if emitted[e] then 
@@ -518,16 +524,10 @@ function ad.toterra(es,varmap,generatormap_,shiftgenerator,lastuse)
                 if flattentostatements or e.op.name == "select" or uses[e] > 1 then -- we're turning this off now
                     local v = symbol(float,"e")
                     emitted[e] = v
-                    statements:insert(quote 
-                            var [v] = exp 
-                            --[[
-                            if not (exp == exp) then
-                                printf("Nan found: %f, \n", exp)
-                                [emitprintexpression(e,3)]
-                                printf("\n")
-                            end
-                            ]]
-                        end)
+                    local assign = quote 
+                        var [v] = exp 
+                    end
+                    statements:insert(assign)
                     r = v
                 else
                     r = exp

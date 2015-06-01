@@ -829,8 +829,10 @@ local function createfunction(problemspec,name,exps,usebounds,W,H)
         end]]
         local im = exptoshiftimage[exp]
         if im then
-            --releasesharedimage(im)
-            --stmts:insert quote C.printf("freeing %d",im) end
+            assert(im ~= "freed", "use after free of shiftedimage!")
+            releasesharedimage(im)
+            --stmts:insert quote "freeing " end
+            exptoshiftimage[exp] = "freed"
         end
     end
     
