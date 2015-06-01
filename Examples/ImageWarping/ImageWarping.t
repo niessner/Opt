@@ -59,7 +59,7 @@ local terra make_float4(x : float, y : float, z : float, w : float)
 	--return float_4(x, y, z, w)
 end
 
-local terra inBounds(i : int64, j : int64, xImage : P:UnknownType()) : bool
+local terra inBounds(i : int32, j : int32, xImage : P:UnknownType()) : bool
 	return i >= 0 and i < xImage:W() and j >= 0 and j < xImage:H()
 end
 
@@ -76,7 +76,7 @@ local terra mul(matrix : float2x2, v : float_2) : float_2
 	return make_float2(matrix(0)*v(0)+matrix(1)*v(1), matrix(2)*v(0)+matrix(3)*v(1))
 end
 
-local terra getXFloat2(i : int64, j : int64, self : P:ParameterType())
+local terra getXFloat2(i : int32, j : int32, self : P:ParameterType())
 	return make_float2(self.X(i,j)(0), self.X(i,j)(1))
 end
 
@@ -89,7 +89,7 @@ local terra evalR_dR(angle : float)
 	return eval_dR(opt.math.cos(angle), opt.math.sin(angle))
 end
 
-local terra cost(i : int64, j : int64, gi : int64, gj : int64, self : P:ParameterType()) : float
+local terra cost(i : int32, j : int32, gi : int32, gj : int32, self : P:ParameterType()) : float
 	var e : float_2  = make_float2(0.0f, 0.0f)
 
 	var x = make_float2(self.X(i, j)(0), self.X(i, j)(1))
@@ -144,7 +144,7 @@ end
 
 
 -- eval 2*JtF == \nabla(F); eval diag(2*(Jt)^2) == pre-conditioner
-local terra evalJTF(i : int64, j : int64, gi : int64, gj : int64, self : P:ParameterType())
+local terra evalJTF(i : int32, j : int32, gi : int32, gj : int32, self : P:ParameterType())
 	var b = make_float2(0.0f, 0.0f)
 	var bA = 0.0f
 	var pre = make_float2(0.0f, 0.0f)
@@ -296,17 +296,17 @@ local terra evalJTF(i : int64, j : int64, gi : int64, gj : int64, self : P:Param
 end
 
 -- eval 2*JtF == \nabla(F); eval diag(2*(Jt)^2) == pre-conditioner
-local terra gradient(i : int64, j : int64, gi : int64, gj : int64, self : P:ParameterType())
+local terra gradient(i : int32, j : int32, gi : int32, gj : int32, self : P:ParameterType())
 	return evalJTF(i, j, gi, gj, self)._0
 end
 	
-local terra getP(pImage : P:UnknownType(), i : int64, j : int64) 
+local terra getP(pImage : P:UnknownType(), i : int32, j : int32) 
 	var p = pImage(i,j)
 	return make_float2(p(0), p(1))
 end
 
 -- eval 2*JtJ (note that we keep the '2' to make it consistent with the gradient
-local terra applyJTJ(i : int64, j : int64, gi : int64, gj : int64, self : P:ParameterType(), pImage : P:UnknownType())
+local terra applyJTJ(i : int32, j : int32, gi : int32, gj : int32, self : P:ParameterType(), pImage : P:UnknownType())
  	var b = make_float2(0.0f, 0.0f)
 	var bA = 0.0f
 

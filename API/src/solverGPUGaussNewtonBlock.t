@@ -112,7 +112,7 @@ return function(problemSpec, vars)
 		local offset = stencil*problemSpec:BlockStride() + stencil
 		local blockStride = problemSpec:BlockStride()
 		
-		return terra(blockCornerX : int64, blockCornerY : int64, image : Image, imageBlock : ImageBlock)			
+		return terra(blockCornerX : int32, blockCornerY : int32, image : Image, imageBlock : ImageBlock)			
 			
 			var numBlockThreads : int = blockDim.x * blockDim.y			
 			var numVariables : int = blockStride*blockStride

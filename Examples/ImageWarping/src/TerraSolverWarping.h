@@ -21,19 +21,19 @@ public:
 		m_problem = Opt_ProblemDefine(m_optimizerState, terraFile.c_str(), optName.c_str(), NULL);
 
 
-		uint64_t strides[] = { 
+		uint32_t strides[] = { 
 			width * sizeof(float3), //X (includes uv, a)
 			width * sizeof(float2),	//UrShape
 			width * sizeof(float2),	//Constraints
 			width * sizeof(float)
 		};
-		uint64_t elemsizes[] = { 
+		uint32_t elemsizes[] = { 
 			sizeof(float3), //X (includes uv, a)
 			sizeof(float2),	//UrShape
 			sizeof(float2),	//Constraints
 			sizeof(float)
 		};
-		uint64_t dims[] = { width, height };
+		uint32_t dims[] = { width, height };
 
 		m_plan = Opt_ProblemPlan(m_optimizerState, m_problem, dims, elemsizes, strides, nullptr, nullptr, nullptr);
 

@@ -15,11 +15,11 @@ local C = terralib.includecstring [[
 local unknownElement = P:UnknownType().metamethods.typ
 
 
-local terra inBounds(i : int64, j : int64, xImage : P:UnknownType()) : bool
+local terra inBounds(i : int32, j : int32, xImage : P:UnknownType()) : bool
 	return i >= 0 and i < xImage:W() and j >= 0 and j < xImage:H()
 end
 
-local terra laplacianCost(x : unknownElement, t : unknownElement, ni : int64, nj : int64, ngi : int64, ngj : int64, xImage : P:UnknownType(), tImage : P:UnknownType()) : unknownElement
+local terra laplacianCost(x : unknownElement, t : unknownElement, ni : int32, nj : int32, ngi : int32, ngj : int32, xImage : P:UnknownType(), tImage : P:UnknownType()) : unknownElement
 	
 	var res : unknownElement = 0.0f
 	
@@ -30,7 +30,7 @@ local terra laplacianCost(x : unknownElement, t : unknownElement, ni : int64, nj
 	return res	
 end
 
-local terra laplacianCostP(x : unknownElement, ni : int64, nj : int64, ngi : int64, ngj : int64, xImage : P:UnknownType()) : unknownElement
+local terra laplacianCostP(x : unknownElement, ni : int32, nj : int32, ngi : int32, ngj : int32, xImage : P:UnknownType()) : unknownElement
 	
 	var res : unknownElement = 0.0f
 	
@@ -42,7 +42,7 @@ local terra laplacianCostP(x : unknownElement, ni : int64, nj : int64, ngi : int
 end
 
 
-local terra cost(i : int64, j : int64, gi : int64, gj : int64, self : P:ParameterType()) : float
+local terra cost(i : int32, j : int32, gi : int32, gj : int32, self : P:ParameterType()) : float
 	
 	var m = self.M(i, j)
 	var x = self.X(i, j)
@@ -68,7 +68,7 @@ local terra cost(i : int64, j : int64, gi : int64, gj : int64, self : P:Paramete
 end
 
 -- eval 2*JtF == \nabla(F); eval diag(2*(Jt)^2) == pre-conditioner
-local terra gradient(i : int64, j : int64, gi : int64, gj : int64, self : P:ParameterType()) : unknownElement
+local terra gradient(i : int32, j : int32, gi : int32, gj : int32, self : P:ParameterType()) : unknownElement
 
 	var m = self.M(i, j)
 	var x = self.X(i, j)
@@ -95,7 +95,7 @@ local terra gradient(i : int64, j : int64, gi : int64, gj : int64, self : P:Para
 end
 
 -- eval 2*JtF == \nabla(F); eval diag(2*(Jt)^2) == pre-conditioner
-local terra evalJTF(i : int64, j : int64, gi : int64, gj : int64, self : P:ParameterType())
+local terra evalJTF(i : int32, j : int32, gi : int32, gj : int32, self : P:ParameterType())
 	
 	var gradient : unknownElement = gradient(i, j, gi, gj, self)
 	
@@ -104,7 +104,7 @@ local terra evalJTF(i : int64, j : int64, gi : int64, gj : int64, self : P:Param
 end
 	
 -- eval 2*JtJ (note that we keep the '2' to make it consistent with the gradient
-local terra applyJTJ(i : int64, j : int64, gi : int64, gj : int64, self : P:ParameterType(), pImage : P:UnknownType()) : unknownElement
+local terra applyJTJ(i : int32, j : int32, gi : int32, gj : int32, self : P:ParameterType(), pImage : P:UnknownType()) : unknownElement
 	
 	var m = self.M(i, j)
 	var p = pImage(i, j)

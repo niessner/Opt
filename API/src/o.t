@@ -159,7 +159,7 @@ local function compilePlan(problemSpec, kind, params)
 end
 
 struct opt.GradientDescentPlanParams {
-    nIterations : uint64
+    nIterations : uint32
 }
 
 struct opt.Plan(S.Object) {
@@ -347,22 +347,22 @@ newImage = terralib.memoize(function(typ, W, H, elemsize, stride)
 	if ad.isterravectortype(typ) and typ.metamethods.type == float and (typ.metamethods.N == 4 or typ.metamethods.N == 2) then
 	    -- emit code that will produce special CUDA vector load instructions
 	    local storetype = vector(float,typ.metamethods.N)
-	    terra Image.metamethods.__apply(self : &Image, x : int64, y : int64)
+	    terra Image.metamethods.__apply(self : &Image, x : int32, y : int32)
             var a = @[&storetype](self.data + y*stride + x*elemsize)
             return @[&typ](&a)
         end
-        terra Image.metamethods.__update(self : &Image, x : int64, y : int64, v : typ)
+        terra Image.metamethods.__update(self : &Image, x : int32, y : int32, v : typ)
             @[&storetype](self.data + y*stride + x*elemsize) = @[&storetype](&v)
         end
 	else	
-        terra Image.metamethods.__apply(self : &Image, x : int64, y : int64)
+        terra Image.metamethods.__apply(self : &Image, x : int32, y : int32)
             return @[&typ](self.data + y*stride + x*elemsize)
         end
-        terra Image.metamethods.__update(self : &Image, x : int64, y : int64, v : typ)
+        terra Image.metamethods.__update(self : &Image, x : int32, y : int32, v : typ)
             @[&typ](self.data + y*stride + x*elemsize) = v
         end
     end
-	terra Image:inbounds(x : int64, y : int64)
+	terra Image:inbounds(x : int32, y : int32)
 	    return x >= 0 and y >= 0 and x < W.size and y < H.size
 	end
 	Image.methods.get = macro(function(self,x,y,gx,gy)
@@ -376,7 +376,7 @@ newImage = terralib.memoize(function(typ, W, H, elemsize, stride)
             end
         in v end
 	end)
-	--terra Image:get(x : int64, y : int64) : typ return self:get(x,y,x,y) end
+	--terra Image:get(x : int32, y : int32) : typ return self:get(x,y,x,y) end
 	terra Image:H() return H.size end
 	terra Image:W() return W.size end
 	terra Image:elemsize() return elemsize end
@@ -441,19 +441,19 @@ end
 
 local newAdjacency = terralib.memoize(function(w0,h0,w1,h1)
     local struct Adj {
-        rowpointer : &int64 --size: w0*h0+1
-        x : &int64 --size is number of total edges in graph
-        y : &int64
+        rowpointer : &int32 --size: w0*h0+1
+        x : &int32 --size is number of total edges in graph
+        y : &int32
     }
     local struct AdjEntry {
-        x : int64
-        y : int64
+        x : int32
+        y : int32
     }
     function Adj.metamethods.__typename()
 	  return string.format("Adj( {%s,%s}, {%s,%s} )",w0.name, h0.name,w1.name,h1.name)
 	end
     local mm = Adj.metamethods
-    terra Adj:count(i : int64, j : int64)
+    terra Adj:count(i : int32, j : int32)
         var idx = j*w0.size + i
         return self.rowpointer[idx+1] - self.rowpointer[idx]
     end
@@ -463,9 +463,9 @@ local newAdjacency = terralib.memoize(function(w0,h0,w1,h1)
     terra Adj:H1() return h1.size end
     local struct AdjIter {
         adj : &Adj
-        idx : int64
+        idx : int32
     }
-    terra Adj:neighbors(i : int64, j : int64)
+    terra Adj:neighbors(i : int32, j : int32)
         return AdjIter { self, j*self:W0() + i }
     end
     AdjIter.metamethods.__for = function(syms,iter,body)
@@ -539,7 +539,7 @@ local function problemPlan(id, dimensions, elemsizes, strides, rowindexes, xs, y
     end,function(err) errorPrint(debug.traceback(err,2)) end)
 end
 
-terra opt.ProblemPlan(problem : &opt.Problem, dimensions : &uint64, elemsizes : &uint64, strides : &uint64, rowindexes : &&int64, xs : &&int64, ys : &&int64) : &opt.Plan
+terra opt.ProblemPlan(problem : &opt.Problem, dimensions : &uint32, elemsizes : &uint32, strides : &uint32, rowindexes : &&int32, xs : &&int32, ys : &&int32) : &opt.Plan
 	var p : &opt.Plan = nil 
 	problemPlan(int(int64(problem)),dimensions,elemsizes,strides,rowindexes,xs,ys,&p)
 	return p
@@ -696,7 +696,7 @@ local function createfunction(problemspec,name,exps,usebounds,W,H)
     local extraimages = terralib.newlist()
     local imagetosym = {} 
     local imageloadmap = {}
-    local i,j,gi,gj = symbol(int64,"i"), symbol(int64,"j"),symbol(int64,"gi"), symbol(int64,"gj")
+    local i,j,gi,gj = symbol(int32,"i"), symbol(int32,"j"),symbol(int32,"gi"), symbol(int32,"gj")
     local indexes = {[0] = i,j }
     local accesssyms = {}
     local function emitvar(stmts,a)

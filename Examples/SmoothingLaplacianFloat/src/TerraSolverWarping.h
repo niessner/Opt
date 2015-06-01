@@ -15,9 +15,9 @@ public:
 		m_problem = Opt_ProblemDefine(m_optimizerState, terraFile.c_str(), optName.c_str(), NULL);
 
 
-		uint64_t strides[] = { width * sizeof(float), width * sizeof(float) };
-		uint64_t elemsizes[] = { sizeof(float), sizeof(float) };
-		uint64_t dims[] = { width, height };
+		uint strides[] = { width * sizeof(float), width * sizeof(float) };
+		uint elemsizes[] = { sizeof(float), sizeof(float) };
+		uint dims[] = { width, height };
 		m_plan = Opt_ProblemPlan(m_optimizerState, m_problem, dims, elemsizes, strides, nullptr, nullptr, nullptr);
 
 		assert(m_optimizerState);

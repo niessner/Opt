@@ -18,7 +18,7 @@ local C = terralib.includecstring [[
 local w_fit = 0.1
 local w_reg = 1.0
 
-local terra laplacian(i : uint64, j : uint64, X : P:TypeOf("X"), iAdj : P:TypeOf("iAdj"), w : P:TypeOf("w"))
+local terra laplacian(i : uint32, j : uint32, X : P:TypeOf("X"), iAdj : P:TypeOf("iAdj"), w : P:TypeOf("w"))
 
 	var x = X(i, j)
 
@@ -35,7 +35,7 @@ local terra laplacian(i : uint64, j : uint64, X : P:TypeOf("X"), iAdj : P:TypeOf
 	return v
 end
 
-local terra cost(i : uint64, j : uint64, self : P:ParameterType())
+local terra cost(i : uint32, j : uint32, self : P:ParameterType())
 	var x = self.X(i, j)
 	var a = self.A(i, j)
 
@@ -48,7 +48,7 @@ local terra cost(i : uint64, j : uint64, self : P:ParameterType())
 	return (float)(w_reg*laplacianCost + w_fit*reconstructionCost)
 end
 
-local terra gradient(i : uint64, j : uint64, self : P:ParameterType())
+local terra gradient(i : uint32, j : uint32, self : P:ParameterType())
 	var x = self.X(i, j)
 	var a = self.A(i, j)
 

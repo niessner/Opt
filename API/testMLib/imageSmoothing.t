@@ -23,14 +23,14 @@ local w_fit = 0.1
 local w_reg = 1.0
 
 
-local terra inLaplacianBounds(i : int64, j : int64, xImage : P:UnknownType()) : bool
+local terra inLaplacianBounds(i : int32, j : int32, xImage : P:UnknownType()) : bool
 	return opt.InBoundsCalc(i,j,xImage:W(),xImage:H(),1,1)
 	--return i > 0 and i < xImage:W()-1 and j > 0 and j < xImage:H()-1
 end
 
 
 
---local terra laplacian(i : int64, j : int64, gi : int64, gj : int64, xImage : P:UnknownType()) : float
+--local terra laplacian(i : int32, j : int32, gi : int32, gj : int32, xImage : P:UnknownType()) : float
 local laplacian = macro(function(i, j , gi, gj, xImage)
     return quote
         var r : float
@@ -43,7 +43,7 @@ local laplacian = macro(function(i, j , gi, gj, xImage)
 end)
 
 -- diagonal of JtJ; i.e., (Jt)^2
-local terra laplacianPreconditioner(gi : int64, gj : int64, xImage : P:UnknownType()) : float
+local terra laplacianPreconditioner(gi : int32, gj : int32, xImage : P:UnknownType()) : float
 
 	var p : float = 0.0
 	if inLaplacianBounds(gi+0, gj+0, xImage) then	p = p + 4*4			end
@@ -55,7 +55,7 @@ local terra laplacianPreconditioner(gi : int64, gj : int64, xImage : P:UnknownTy
 	return p
 end
 
-local terra cost(i : int64, j : int64, gi : int64, gj : int64, self : P:ParameterType())
+local terra cost(i : int32, j : int32, gi : int32, gj : int32, self : P:ParameterType())
 	
 	var x = self.X(i, j)
 	var a = self.A(i, j)
@@ -72,7 +72,7 @@ local terra cost(i : int64, j : int64, gi : int64, gj : int64, self : P:Paramete
 end
 
 -- eval 2*JtF == \nabla(F); eval diag(2*(Jt)^2) == pre-conditioner
-local terra gradient(i : int64, j : int64, gi : int64, gj : int64, self : P:ParameterType())
+local terra gradient(i : int32, j : int32, gi : int32, gj : int32, self : P:ParameterType())
 	
 	var x = self.X(i, j)
 	var a = self.A(i, j)
@@ -100,7 +100,7 @@ end
 gradient:printpretty(true,false)
 
 -- eval 2*JtF == \nabla(F); eval diag(2*(Jt)^2) == pre-conditioner
-local terra evalJTF(i : int64, j : int64, gi : int64, gj : int64, self : P:ParameterType())
+local terra evalJTF(i : int32, j : int32, gi : int32, gj : int32, self : P:ParameterType())
 	
 	var gradient = gradient(i, j, gi, gj, self)
 	
@@ -121,7 +121,7 @@ end
 	
 
 -- eval 2*JtJ (note that we keep the '2' to make it consistent with the gradient
-local terra applyJTJ(i : int64, j : int64, gi : int64, gj : int64, self : P:ParameterType(), pImage : P:UnknownType())
+local terra applyJTJ(i : int32, j : int32, gi : int32, gj : int32, self : P:ParameterType(), pImage : P:UnknownType())
  
 	--fit
 	var e_fit = 2.0f*pImage(i, j)

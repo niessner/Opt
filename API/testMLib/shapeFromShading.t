@@ -121,18 +121,18 @@ local terra isInsideImage(i : int, j : int, width : int, height : int)
 	return (i >= 0 and i < width and j >= 0 and j < height)
 end
 
-local terra I(self : P:ParameterType(), i : int64, j : int64)
+local terra I(self : P:ParameterType(), i : int32, j : int32)
 	return self.I(i,j)--*0.5f + 0.25f*(self.I(i-1,j)+self.I(i,j-1))
 end
 
 -- equation 8
-local terra p(offX : int64, offY : int64, gi : int64, gj : int64, self : P:ParameterType()) 
+local terra p(offX : int32, offY : int32, gi : int32, gj : int32, self : P:ParameterType()) 
     var d : float= self.X(offX,offY)
     return make_float3((([float](gi)-self.u_x)/self.f_x)*d, (([float](gj)-self.u_y)/self.f_y)*d, d)
 end
 
 -- equation 10
-local terra n(offX : int64, offY : int64, gi : int64, gj : int64, self : P:ParameterType())
+local terra n(offX : int32, offY : int32, gi : int32, gj : int32, self : P:ParameterType())
     --f_x good, f_y good
 
     var n_x = (self.X(offX, offY - 1) * (self.X(offX, offY) - self.X(offX - 1, offY))) / self.f_y
@@ -149,7 +149,7 @@ local terra n(offX : int64, offY : int64, gi : int64, gj : int64, self : P:Param
     return normal
 end
 
-local terra B(offX : int64, offY : int64, gi : int64, gj : int64, self : P:ParameterType())
+local terra B(offX : int32, offY : int32, gi : int32, gj : int32, self : P:ParameterType())
 	var normal = n(offX, offY, gi, gj, self)
 	var n_x : float = normal[0]
 	var n_y : float = normal[1]
@@ -206,7 +206,7 @@ local function create_vector(self,name, count)
 	return `vector(names)
 end
 
-local terra prior_normal_from_previous_depth(d : float, gidx : int64, gidy : int64, self : P:ParameterType(), normal0 : &float3, normal1 : &float3, normal2 : &float3)
+local terra prior_normal_from_previous_depth(d : float, gidx : int32, gidy : int32, self : P:ParameterType(), normal0 : &float3, normal1 : &float3, normal2 : &float3)
 
 	var f_x : float = self.f_x
 	var f_y : float = self.f_y
@@ -424,7 +424,7 @@ local terra est_lap_init_3d_imp(i : int,  j : int, self : P:ParameterType(), w0 
 end
 
 
-local terra cost(i : int64, j : int64, gi : int64, gj : int64, self : P:ParameterType())
+local terra cost(i : int32, j : int32, gi : int32, gj : int32, self : P:ParameterType())
 	var W = self.X:W()
 	var H = self.X:H()
 
@@ -751,7 +751,7 @@ local terra evalMinusJTFDeviceLS_SFS_Shared_Mask_Prior(i : int, j : int, posx : 
 end
 
 
-local terra evalJTF(i : int64, j : int64, gId_i : int64, gId_j : int64, self : P:ParameterType())
+local terra evalJTF(i : int32, j : int32, gId_i : int32, gId_j : int32, self : P:ParameterType())
 		
 	var Pre     : float
 	var normal0 : float3
@@ -796,7 +796,7 @@ local terra est_lap_3d_bsp_imp(pImage : P:UnknownType(), i :int, j : int, w0 : f
 end
 
 -- eval 2*JtF == \nabla(F); eval diag(2*(Jt)^2) == pre-conditioner
-local terra gradient(i : int64, j : int64, gId_i : int64, gId_j : int64, self : P:ParameterType())
+local terra gradient(i : int32, j : int32, gId_i : int32, gId_j : int32, self : P:ParameterType())
 	return evalJTF(i,j,gId_i, gId_j, self)._0
 end
 
@@ -1024,7 +1024,7 @@ end
 
 
 -- eval 2*JtJ (note that we keep the '2' to make it consistent with the gradient
-local terra applyJTJ(i : int64, j : int64, gi : int64, gj : int64, self : P:ParameterType(), pImage : P:UnknownType())
+local terra applyJTJ(i : int32, j : int32, gi : int32, gj : int32, self : P:ParameterType(), pImage : P:UnknownType())
 	var W : int = self.X:W()
 	var H : int = self.X:H()
 

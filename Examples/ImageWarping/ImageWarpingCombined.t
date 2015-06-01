@@ -3,7 +3,7 @@ local A = require("ImageWarpingAD")
 
 
 local oldJTJ = A.functions.applyJTJ.boundary
-A.functions.applyJTJ.boundary = terra(i : int64, j : int64, gi : int64, gj : int64, self : A:ParameterType(), pImage : A:UnknownType())
+A.functions.applyJTJ.boundary = terra(i : int32, j : int32, gi : int32, gj : int32, self : A:ParameterType(), pImage : A:UnknownType())
 	var a = oldJTJ(i,j,gi,gj,self,pImage)
 	var b = M.functions.applyJTJ.boundary(i,j,gi,gj,@[&M:ParameterType()](&self),@[&M:UnknownType()](&pImage))
 
@@ -29,7 +29,7 @@ A.functions.applyJTJ.boundary = terra(i : int64, j : int64, gi : int64, gj : int
 end
 
 local oldJTF = A.functions.evalJTF.boundary
-A.functions.evalJTF.boundary = terra(i : int64, j : int64, gi : int64, gj : int64, self : A:ParameterType())
+A.functions.evalJTF.boundary = terra(i : int32, j : int32, gi : int32, gj : int32, self : A:ParameterType())
 	var a,pa = oldJTF(i, j, gi, gj, self)	--auto-diff
 	var b,pb = M.functions.evalJTF.boundary(i,j,gi,gj,@[&M:ParameterType()](&self))
 
@@ -62,7 +62,7 @@ end
 
 
 local cost = A.functions.cost.boundary
-A.functions.cost.boundary = terra(i : int64, j : int64, gi : int64, gj : int64, self : A:ParameterType())
+A.functions.cost.boundary = terra(i : int32, j : int32, gi : int32, gj : int32, self : A:ParameterType())
 	var a = cost(i, j, gi, gj, self)	--auto-diff
 	var b = M.functions.cost.boundary(i,j,gi,gj,@[&M:ParameterType()](&self))
 

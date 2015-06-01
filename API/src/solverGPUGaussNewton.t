@@ -305,10 +305,10 @@ return function(problemSpec, vars)
 		C.fwrite(&channelCount, sizeof(int), 1, fileHandle)
 		C.fwrite(&datatype, sizeof(int), 1, fileHandle)
   
-		var size = sizeof(float) * [uint64](width*height*channelCount)
+		var size = sizeof(float) * [uint32](width*height*channelCount)
 		var ptr = C.malloc(size)
 		C.cudaMemcpy(ptr, imPtr, size, C.cudaMemcpyDeviceToHost)
-		C.fwrite(ptr, sizeof(float), [uint64](width*height*channelCount), fileHandle)
+		C.fwrite(ptr, sizeof(float), [uint32](width*height*channelCount), fileHandle)
 	    C.fclose(fileHandle)
 	    
 	    C.free(ptr)

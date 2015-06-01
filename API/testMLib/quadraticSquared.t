@@ -16,7 +16,7 @@ X = opt.Image(float,W,1)
 -- note that this depends on whether g_i should be the gradient of r_i or r_i^2?
 --
 
-local terra cost(i : uint64, j : uint64, xImage : X, aImage : A, bImage : B, cImage : C)
+local terra cost(i : uint32, j : uint32, xImage : X, aImage : A, bImage : B, cImage : C)
 	var x = xImage(i, j)
 	var a = aImage(i, j)
 	var b = bImage(i, j)
@@ -28,7 +28,7 @@ local terra cost(i : uint64, j : uint64, xImage : X, aImage : A, bImage : B, cIm
 	return v * v
 end
 
-local terra gradient(i : uint64, j : uint64, xImage : X, aImage : A, bImage : B, cImage : C)
+local terra gradient(i : uint32, j : uint32, xImage : X, aImage : A, bImage : B, cImage : C)
 	var x = xImage(i, j)
 	var a = aImage(i, j)
 	var b = bImage(i, j)
@@ -36,7 +36,7 @@ local terra gradient(i : uint64, j : uint64, xImage : X, aImage : A, bImage : B,
 	return 2.0 * (a * x * x + b * x + c) * (2.0 * a * x + b)
 end
 
-local terra gradientHack(i : uint64, j : uint64, xImage : X, hackImage : X, aImage : A, bImage : B, cImage : C)
+local terra gradientHack(i : uint32, j : uint32, xImage : X, hackImage : X, aImage : A, bImage : B, cImage : C)
 	return gradient(i, j, xImage, aImage, bImage, cImage)
 end
 

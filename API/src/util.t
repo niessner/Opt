@@ -56,8 +56,8 @@ end
 function Vector(T,debug)
     local struct Vector(S.Object) {
         _data : &T;
-        _size : int64;
-        _capacity : int64;
+        _size : int32;
+        _capacity : int32;
     }
     function Vector.metamethods.__typename() return ("Vector(%s)"):format(tostring(T)) end
     local assert = debug and S.assert or macro(function() return quote end end)
@@ -65,12 +65,12 @@ function Vector(T,debug)
         self._data,self._size,self._capacity = nil,0,0
         return self
     end
-    terra Vector:init(cap : int64) : &Vector
+    terra Vector:init(cap : int32) : &Vector
         self:init()
         self:reserve(cap)
         return self
     end
-    terra Vector:reserve(cap : int64)
+    terra Vector:reserve(cap : int32)
         if cap > 0 and cap > self._capacity then
             var oc = self._capacity
             if self._capacity == 0 then
@@ -94,7 +94,7 @@ function Vector(T,debug)
     end
     terra Vector:size() return self._size end
     
-    terra Vector:get(i : int64)
+    terra Vector:get(i : int32)
         assert(i < self._size) 
         return &self._data[i]
     end
@@ -102,7 +102,7 @@ function Vector(T,debug)
         return `@self:get(idx)
     end)
     
-    terra Vector:insert(idx : int64, N : int64, v : T) : {}
+    terra Vector:insert(idx : int32, N : int32, v : T) : {}
         assert(idx <= self._size)
         self._size = self._size + N
         self:reserve(self._size)
@@ -119,7 +119,7 @@ function Vector(T,debug)
             self._data[idx + i] = v
         end
     end
-    terra Vector:insert(idx : int64, v : T) : {}
+    terra Vector:insert(idx : int32, v : T) : {}
         return self:insert(idx,1,v)
     end
     terra Vector:insert(v : T) : {}
@@ -130,7 +130,7 @@ function Vector(T,debug)
         self:reserve(self._size)
         return self:get(self._size - 1)
     end
-    terra Vector:remove(idx : int64) : T
+    terra Vector:remove(idx : int32) : T
         assert(idx < self._size)
         var v = self._data[idx]
         self._size = self._size - 1
@@ -144,7 +144,7 @@ function Vector(T,debug)
         return self:remove(self._size - 1)
     end
 
-    terra Vector:indexof(v : T) : int64
+    terra Vector:indexof(v : T) : int32
     	for i = 0LL,self._size do
             if (v == self._data[i]) then
             	return i
@@ -173,7 +173,7 @@ util.symTable = function(typ, N, name)
 	return r
 end
 
-util.ceilingDivide = terra(a : int64, b : int64)
+util.ceilingDivide = terra(a : int32, b : int32)
 	return (a + b - 1) / b
 end
 
