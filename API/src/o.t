@@ -740,10 +740,10 @@ local function createfunction(problemspec,name,exps,usebounds,W,H)
                     end
 					loadexp = `blockload(a.channel)
                 end
-                --[[stmts:insert quote
+                stmts:insert quote
                     var [r] = loadexp
-                end]]
-                r = loadexp
+                end
+                --r = loadexp
             elseif "BoundsAccess" == a.kind then--bounds calculation
                 --assert(usebounds) -- if we removed them, we shouldn't see any boundary accesses
                 r = symbol(int,tostring(a))
