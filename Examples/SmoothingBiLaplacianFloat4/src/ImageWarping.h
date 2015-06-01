@@ -79,7 +79,7 @@ public:
 		float weightReg = 1.0f;
 		
 		unsigned int nonLinearIter = 10;
-		unsigned int linearIter = 10;
+		unsigned int linearIter = 2;
 		unsigned int patchIter = 16;
 
 		std::cout << "CUDA" << std::endl;

@@ -2,7 +2,7 @@ local W,H = opt.Dim("W",0), opt.Dim("H",1)
 local S = ad.ProblemSpec()
 local X = S:Image("X",W,H,0)
 local A = S:Image("A",W,H,1)
-
+S:UsePreconditioner(false)
 
 local w_fit = S:Param("w_fit", float, 0)
 local w_reg = S:Param("w_reg", float, 1)
