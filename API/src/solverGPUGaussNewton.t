@@ -93,7 +93,7 @@ return function(problemSpec, vars)
 				var pre : unknownElement = 0.0f	
 				if (not [problemSpec:EvalExclude(w,h,w,h,`pd.parameters)]) then
 								
-					if isBlockOnBoundary(w, h, pd.parameters.X:W(), pd.parameters.X:H()) then
+					if true or isBlockOnBoundary(w, h, pd.parameters.X:W(), pd.parameters.X:H()) then
 						residuum, pre = data.problemSpec.functions.evalJTF.boundary(w, h, w, h, pd.parameters)
 					else 
 						--residuum, pre = data.problemSpec.functions.evalJTF.interior(w, h, w, h, pd.parameters)
@@ -135,7 +135,7 @@ return function(problemSpec, vars)
 			if positionForValidLane(pd, "X", &w, &h) and (not [problemSpec:EvalExclude(w,h,w,h,`pd.parameters)]) then
 				var tmp : unknownElement = 0.0f
 				 -- A x p_k  => J^T x J x p_k 
-				if isBlockOnBoundary(w, h, pd.parameters.X:W(), pd.parameters.X:H()) then
+				if true or isBlockOnBoundary(w, h, pd.parameters.X:W(), pd.parameters.X:H()) then
 					tmp = data.problemSpec.functions.applyJTJ.boundary(w, h, w, h, pd.parameters, pd.p)
 				else 
 					tmp = data.problemSpec.functions.applyJTJ.interior(w, h, w, h, pd.parameters, pd.p)
