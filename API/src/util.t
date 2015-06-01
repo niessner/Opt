@@ -44,13 +44,10 @@ for k,v in pairs(mathParamCount) do
 	util.gpuMath[k] = terralib.externfunction(("__nv_%sf"):format(k), params -> float)
     util.cpuMath[k] = C[k.."f"]
 end
-util.cpuMath["abs"] = C["fabsf"]
-util.gpuMath["abs"] = terra (x : float)
-	if x < 0 then
-		x = -x
-	end
-	return x
-end
+util.cpuMath.abs = C.fabsf
+util.gpuMath.abs = terralib.externfunction("__nv_fmaxf", {float} -> float)
+util.gpuMath.max = terralib.externfunction("__nv_max", {int,int} -> int)
+util.gpuMath.min = terralib.externfunction("__nv_min", {int,int} -> int)
 
 
 function Vector(T,debug)

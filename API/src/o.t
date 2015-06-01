@@ -771,7 +771,12 @@ local function createfunction(problemspec,name,exps,usebounds,W,H)
             end
         end 
     end
-    local result = ad.toterra(exps,emitvar,generatormap)
+    local function shiftfn(key,v)
+        error("NYI")
+        return `4.f
+    end
+    
+    local result = ad.toterra(exps,emitvar,generatormap,shiftfn)
     local terra generatedfn([i], [j], [gi], [gj], [P], [extraimages])
         return result
     end
@@ -779,7 +784,7 @@ local function createfunction(problemspec,name,exps,usebounds,W,H)
     if verboseAD then
         generatedfn:printpretty(true, false)
     end
-    if name == "evalJTF" and usebounds then
+    if name == "evalJTF" and not usebounds then
         print(exps[1])
         --generatedfn:printpretty(true, false)
     end
@@ -818,7 +823,33 @@ local function createfunctionset(problemspec,name,...)
     problemspec.P:Function(name,{W,H},boundary,interior)
 end
 
-local getpair = terralib.memoize(function(x,y) return {x = x, y = y} end)
+local Pair = ad.newclass("Pair")
+function Pair:__tostring() return ("(%s,%s)"):format(self.x,self.y) end
+function Pair:shift(exp)
+    return shiftexp(exp,self.x,self.y)
+end
+function Pair:shiftinverse(exp)
+    return shiftexp(exp,-self.x,-self.y)
+end
+
+shouldcse = terralib.memoize(function (exp,x,y)
+    if true then return false end --disabled for now because we cannot handle codegen for it
+    if x == 0 and y == 0 then return false end
+    local accesses = 0
+    exp:rename(function(a)
+        if ImageAccess:is(a) then
+            accesses = accesses + 1
+        end
+        return ad.v[a]
+    end)
+    return accesses > 0
+end)
+
+function Pair:shouldcse(exp)
+    return shouldcse(exp,self.x,self.y)
+end
+
+local getpair = terralib.memoize(function(x,y) return Pair:new {x = x, y = y} end)
 
 local function unknowns(exp)
     local seenunknown = {}
@@ -881,7 +912,7 @@ local function createjtj(Fs,unknown,P)
             local nonzerounknowns = terralib.newlist()
         
             for _,r in ipairs(residuals) do
-                local rexp = shiftexp(F,r.x,r.y)
+                local rexp = ad.shift(F,getpair(r.x,r.y))
                 local drdx00 = rexp:d(x)
                 local unknowns = unknownsforresidual(r,unknownsupport)
                 for _,u in ipairs(unknowns) do
@@ -921,7 +952,7 @@ local function createjtf(problemSpec,Fs,unknown,P)
             local residuals = residualsincludingX00(unknownsupport,channel)
 
             for _,f in ipairs(residuals) do
-                local F_x = shiftexp(F,f.x,f.y)
+                local F_x = ad.shift(F,getpair(f.x,f.y))
                 local dfdx00 = F_x:d(x)		-- entry of J^T
                 local dfdx00F = dfdx00*F_x	-- entry of \gradF == J^TF
                 F_hat[channel+1] = F_hat[channel+1] + dfdx00F			-- summing it up to get \gradF
@@ -964,7 +995,7 @@ local function creategradient(unknown,costexp)
     local gradientsgathered = createzerolist(unknown.N)
     for i,u in ipairs(unknownvars) do
         local a = u:key()
-        local shift = shiftexp(gradient[i],-a.x,-a.y)
+        local shift = ad.shift(gradient[i],getpair(-a.x,-a.y))
         gradientsgathered[a.channel+1] = gradientsgathered[a.channel+1] + shift
     end
     dprint("grad gather")

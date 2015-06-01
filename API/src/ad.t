@@ -41,6 +41,7 @@ local Op = newclass("Op") -- a primitive operator like + or sin
 local Exp = newclass("Exp") -- an expression involving primitives
 local Var = Exp:Variant("Var") -- a variable
 local Apply = Exp:Variant("Apply") -- an application
+local Shift = Exp:Variant("Shift") -- special indicator to use another variant of an expression
 local Const = Exp:Variant("Const") -- a constant, C
 local ExpVector = newclass("ExpVector")
 
@@ -48,6 +49,7 @@ local ExpVector = newclass("ExpVector")
 local empty = terralib.newlist {}
 function Exp:children() return empty end
 function Apply:children() return self.args end 
+function Shift:children() return terralib.newlist {self.exp} end
 
 function Const:__tostring() return tostring(self.v) end
 
@@ -83,6 +85,7 @@ local function allconst(args)
 end
 
 function Var:key() return self.key_ end
+function Shift:key() return self.key_ end
 
 local function shouldcommute(a,b)
     if Const:is(a) then return true end
@@ -172,6 +175,13 @@ end
 local getapply = terralib.memoize(function(op,...)
     local args = terralib.newlist {...}
     return simplify(op,args)
+end)
+local getshift = terralib.memoize(function(exp,key)
+    if key:shouldcse(exp) then
+        return Shift:new { exp = assert(toexp(exp),"shift requires an expression") , key_ = assert(key) }
+    else
+        return key:shift(exp)
+    end
 end)
 
 function ExpVector:size() return #self.data end
@@ -300,6 +310,8 @@ function Exp:rename(vars)
             local nv = toexp(varsf(self:key()))
             return assert(nv,
                           ("rename: unknown invalid mapping for variable %s which maps to %s"):format(tostring(self:key()),tostring(nv)))
+        elseif self.kind == "Shift" then
+            return getshift(visitcached(self.exp),self:key())
         end
     end
     local cached = {} 
@@ -317,8 +329,8 @@ local function countuses(es)
     local uses = {}
     local function count(e)
         uses[e] = (uses[e] or 0) + 1
-        if uses[e] == 1 and e.kind == "Apply" then
-            for i,a in ipairs(e.args) do count(a) end
+        if uses[e] == 1 then
+            for i,a in ipairs(e:children()) do count(a) end
         end
     end
     for i,a in ipairs(es) do 
@@ -360,12 +372,14 @@ local function expstostring(es)
     local function emitprec(e,p)
         return (prec(e) < p and "(%s)" or "%s"):format(emit(e))
     end
-    local function emitapp(e)
-        if e.op.name == "unm" then
+    local function emitapporshift(e)
+        if Shift:is(e) then
+            return ("Shift(%s,%s)"):format(emit(e.exp),tostring(e:key()))
+        elseif e.op.name == "unm" then
             return ("-%s"):format(emitprec(e.args[1],3))
         elseif infix[e.op.name] then
             local o,p = unpack(infix[e.op.name])
-            return ("%s %s\n %s"):format(emitprec(e.args[1],p),o,emitprec(e.args[2],p+1))
+            return ("%s %s %s"):format(emitprec(e.args[1],p),o,emitprec(e.args[2],p+1))
         else
             return ("%s(%s)"):format(tostring(e.op),e.args:map(emit):concat(","))
         end
@@ -376,9 +390,9 @@ local function expstostring(es)
             return type(k) == "number" and ("v%d"):format(k) or tostring(e:key()) 
         elseif "Const" == e.kind then
             return tostring(e.v)
-        elseif "Apply" == e.kind then
+        elseif "Apply" == e.kind or "Shift" == e.kind then
             if emitted[e] then return emitted[e] end
-            local exp = emitapp(e)
+            local exp = emitapporshift(e)
             if manyuses[e] then
                 local r = ("r%d"):format(n)
                 n = n + 1
@@ -402,42 +416,6 @@ function Exp:__tostring()
 end
 
 local function defaultgenerator(op) return op.generator end
-
-
-local function emitprintexpression(e, recursionLevel)
-    return quote
-        escape
-            if "Var" == e.kind then
-                emit `printf([tostring(e:key())])
-                emit `printf(", ")
-            elseif "Const" == e.kind then
-                emit `printf("%f, ", float(e.v))
-            elseif "Apply" == e.kind then
-                emit `printf([e.op.name])
-                emit `printf("(")
-                if recursionLevel > 0 then
-                    for i,newE in ipairs(e.args) do
-                        if "Var" == newE.kind then
-                            emit `printf([tostring(newE:key())])
-                            emit `printf(", ")
-                        elseif "Const" == newE.kind then
-                            emit `printf("%f, ", float(newE.v))
-                        elseif "Apply" == newE.kind then
-                            emit `printf([newE.op.name])
-                        end
-                        -- recursion doesn't work? :(
-                        --emit `[emitprintexpression(newE, recursionLevel-1)]
-
-                     --   local recursiveExpression = emitprintexpression(newE)
-                     --   emit `[recursiveExpression]
-                    end
-                end
-                emit `printf("), ")
-            end
-        end
-    end
-    
-end
 
 local Vectors = {}
 function ad.isterravectortype(t) return Vectors[t] end
@@ -500,7 +478,7 @@ ad.TerraVector = terralib.memoize(function(typ,N)
     return VecType
 end)
 
-function ad.toterra(es,varmap_,generatormap_) 
+function ad.toterra(es,varmap_,generatormap_,shiftfn) 
     es = terralib.islist(es) and es or terralib.newlist(es)
      --varmap is a function or table mapping keys to what terra code should go there
     local varmap = type(varmap_) == "table" and function(v) return varmap_[v] end or varmap_
@@ -519,6 +497,9 @@ function ad.toterra(es,varmap_,generatormap_)
             return assert(varmap(statements,e:key()),"no mapping for variable key "..tostring(e:key()))
         elseif "Const" == e.kind then
             return `float(e.v)
+        elseif "Shift" == e.kind then
+            local l = emit(e.exp)
+            return shiftfn(l,e:key())
         elseif "Apply" == e.kind then
             if emitted[e] then return emitted[e] end
             local generator = assert(generatormap(e.op) or defaultgenerator(e.op))
@@ -563,9 +544,11 @@ function Exp:d(v)
     return r
 end
 
+--[[
 function Exp:partials()
     return empty
-end
+end 
+]]
 function Apply:partials()
     self.partiallist = self.partiallist or self.op.derivs:map("rename",self.args)
     return self.partiallist
@@ -588,7 +571,26 @@ function Apply:calcd(v)
     return r
 end
 
+-- shift(X(0,0),-1,0) means calculate X(-1,0)
+-- if we take derivative by X(0,0) we should get 0
+-- if we take the derivate by X(-1,0) we should get 1
+function Shift:calcd(v)
+    return getshift(self.exp:d(self:key():shiftinverse(v)),self:key())
+end
+
+ad.removeshift = terralib.memoize(function(e)
+    if "Apply" == e.kind then
+        return e.op(unpack(e:children():map(ad.removeshift)))
+    elseif "Var" == e.kind or "Const" == e.kind then
+        return e
+    elseif "Shift" == e.kind then
+        return e:key():shift(e.exp)
+    end
+    error("unknown")
+end)
+
 --calc d(thisexpress)/d(exps[1]) ... d(thisexpress)/d(exps[#exps]) (i.e. the gradient of this expression with relation to the inputs) 
+--[[
 function Exp:gradient(exps)
     exps = terralib.islist(exps) and exps or terralib.newlist(exps)
     -- reverse mode ad, work backward from this expression, accumulate stuff.
@@ -610,6 +612,17 @@ function Exp:gradient(exps)
         end
     end
     return exps:map(function(e) return tape[e] or zero end)
+end
+]]
+function Exp:gradient(exps)
+    return exps:map(function(e) return self:d(e) end)
+end
+function ad.shift(exp,k) 
+    if ExpVector:is(exp) then
+        return ad.Vector(unpack(exp:expressions():map(function(e) return ad.shift(e,k) end)))
+    else
+        return getshift(exp,k)
+    end
 end
 
 ad.add:define(function(x,y) return `x + y end,1,1)
@@ -693,4 +706,47 @@ local t = ad.toterra(g,{x = symbol("x"), y = symbol("y"), z = symbol("z")})
 t:printpretty()
 ]]
 --print(ad.select(ad.v.x,ad.select(ad.v.y,ad.v.z,0),0))
+
+--[[
+local getpair = terralib.memoize(function(x,y) 
+    local p = {x = x, y = y} 
+    function p:shift(exp)
+        return shiftexp(exp,self.x,self.y)
+    end
+    function p:shiftinverse(exp)
+        return shiftexp(exp,-self.x,-self.y)
+    end
+    function p:shouldcse(exp)
+        return true
+    end
+    setmetatable(p, { __tostring = function(self) return ("p(%s,%s)"):format(self.x,self.y) end } )
+    return p
+end)
+function shiftexp(exp,x,y)
+    local function rename(a)
+        return ad.v[getpair(a.x+x,a.y+y)]
+    end
+    return exp:rename(rename)
+end 
+
+
+local p = getpair
+
+local p00, p01, p02 = ad.v[p(0,0)],ad.v[p(0,1)],ad.v[p(0,2)]
+local theexp = 40*p00*p00+ 41*p01*p01
+
+--print(theexp)
+
+local r = ad.shift(ad.Vector(theexp,theexp), p(0,1)) --:d(p01)
+print(ad.tostrings({r(0),r(0)}))
+assert(r(0) == r(1))
+r = r(0)
+print("shifted",r)
+local c = 40*p01*p01 + 41*p02*p02
+print("correct",c:d(ad.v[p(0,1)]))
+print("removed",ad.removeshift(r))
+]]
+
+
+
 return ad
