@@ -47,12 +47,15 @@ morekeywords={ushort, uchar, uchar3},
 
 \newcommand{\code}[1]{{\small \textbf{\texttt{#1}}}}
 
+\newcommand*\diff{\mathop{}\!\mathrm{d}}
+\newcommand{\TAB}{\-\hspace{1em}}
+
 %\def \proof {\noindent {\it Proof: }~}
 %\def\etal{~{et al.}~}
 
 %Shorthand for consistent \fig references
 \newcommand{\fig}{Fig.}
-\newcommand{\figref}[1]{Fig.~\ref{#1}}
+\newcommand{\figref}[1]{Fig.~\ref{fig:#1}}
 \newcommand{\secref}[1]{Sec.~\ref{#1}}
 
 \DeclareMathOperator*{\argmin}{argmin}
