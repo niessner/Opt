@@ -21,8 +21,6 @@ end
 -- constants
 local verboseSolver = true
 local verboseAD = false
-local cseenabled        = util.shiftOptimizations
-local actuallyuseshifts = util.shiftOptimizations
 
 local function newclass(name)
     local mt = { __name = name }
@@ -237,10 +235,6 @@ local newImage
 function ProblemSpec:MaxStencil()
     self:Stage "functions"
 	return self.maxStencil
-end
-
-function ProblemSpec:MaxOvercompute()
-    return 2
 end
 
 function ProblemSpec:Stencil(stencil) 
@@ -688,54 +682,21 @@ local function removeboundaries(exp)
     return exp:rename(nobounds)
 end
 
-local function removeshift(exp)
-    if ad.ExpVector:is(exp) or terralib.islist(exp) then return exp:map(removeshift) end
-    return ad.removeshift(exp)
-end
-
 local function multipleof(x,m)
     if x % m == 0 then return x end
     return x + (m - x % m)
 end
 
-
-
 local function createfunction(problemspec,name,exps,usebounds,W,H)
     if not usebounds then
         exps = removeboundaries(exps)
     end
-    if cseenabled and not actuallyuseshifts then
-        exps = removeshift(exps)
-    end
-    
-    local i,j,gi,gj = symbol(int32,"i"), symbol(int32,"j"),symbol(int32,"gi"), symbol(int32,"gj")
-    
-    ---------- infrastructure for handling shared memory for shifting --------------------
-    local emittedsharedmemoryimageload = {}
-    local sharedmemoryforexpressiontable = {}
-    local function sharedmemoryforexpression(exp)
-        local m = macro(function()
-            return assert(sharedmemoryforexpressiontable[exp], "no assignment")
-        end)
-        return `m()
-    end
-    
-    local maxstencil = problemspec.P:MaxStencil()
-    local sharedwidth = problemspec.P:BlockSize()+2*maxstencil    
-    
-    local sharedimageops = terralib.newlist()
-    local function sharedimageaccess(exp,x,y,lvalue)
-        local mem = sharedmemoryforexpression(exp)
-        sharedimageops:insert { kind = lvalue and "def" or "use", exp = assert(exp) }
-        return `mem[(threadIdx.y+(y+maxstencil))*sharedwidth + (threadIdx.x+(x+maxstencil))]
-    end
-    -------------------
     
     local P = symbol(problemspec.P:ParameterType(),"P")
     local extraimages = terralib.newlist()
     local imagetosym = {} 
     local imageloadmap = {}
-    
+    local i,j,gi,gj = symbol(int32,"i"), symbol(int32,"j"),symbol(int32,"gi"), symbol(int32,"gj")
     local indexes = {[0] = i,j }
     local accesssyms = {}
     local function emitvar(stmts,a)
@@ -810,68 +771,16 @@ local function createfunction(problemspec,name,exps,usebounds,W,H)
             end
         end 
     end
-    local function shiftgenerator(stmts,exp,v,key)
-        if not emittedsharedmemoryimageload[exp] then 
-            local access = sharedimageaccess(exp,0,0,true)
-            stmts:insert quote
-                [access] = v
-                __syncthreads()
-            end
-            emittedsharedmemoryimageload[exp] = true 
-        end
-        return sharedimageaccess(exp,key.x,key.y,false)
-    end
-    local function lastuse(stmts, exp)
-    end
-    
-    local result = ad.toterra(exps,emitvar,generatormap,shiftgenerator, lastuse)
+    local result = ad.toterra(exps,emitvar,generatormap)
     local terra generatedfn([i], [j], [gi], [gj], [P], [extraimages])
         return result
     end
-    -------------------------
-    
-    local sharedfreelist = terralib.newlist()
-    local function allocatesharedimage()
-        if #sharedfreelist > 0 then
-            return sharedfreelist:remove()
-        end
-        return cudalib.sharedmemory(float,sharedwidth*sharedwidth)
-    end
-    local function releasesharedimage(im)
-        sharedfreelist:insert(im)
-    end
-    local debug = (name == "applyJTJ" or name == "evalJTF") and usebounds 
-    if debug then print(name,exps[1]) end
-        
-    local numimages,maximages = 0,0
-    for i = #sharedimageops,1,-1 do
-        local op = sharedimageops[i]
-        if debug then print(op.kind,op.exp) end
-        if op.kind == "use" then
-            if not sharedmemoryforexpressiontable[op.exp] then
-                if debug then print("alloc") end
-                numimages = numimages + 1
-                maximages = math.max(numimages,maximages)
-                sharedmemoryforexpressiontable[op.exp] = allocatesharedimage()
-            end
-        elseif op.kind == "def" then
-            local im = sharedmemoryforexpressiontable[op.exp]
-            if im then -- maybe dead
-                if debug then print("free") end
-                releasesharedimage(im)
-                numimages = numimages - 1
-            end
-        end
-    end
-    if debug then print(maximages, " used by kernel.") end
-    
-    -------------------------
-    
     generatedfn:setname(name)
     if verboseAD then
         generatedfn:printpretty(true, false)
     end
-    if debug then
+    if name == "evalJTF" and usebounds then
+        print(exps[1])
         --generatedfn:printpretty(true, false)
     end
     return generatedfn
@@ -909,33 +818,7 @@ local function createfunctionset(problemspec,name,...)
     problemspec.P:Function(name,{W,H},boundary,interior)
 end
 
-local Pair = ad.newclass("Pair")
-function Pair:__tostring() return ("(%s,%s)"):format(self.x,self.y) end
-function Pair:shift(exp)
-    return shiftexp(exp,self.x,self.y)
-end
-function Pair:shiftinverse(exp)
-    return shiftexp(exp,-self.x,-self.y)
-end
-
-shouldcse = terralib.memoize(function (exp,x,y)
-    if not cseenabled then return false end --disabled for now because we cannot handle codegen for it
-    if x == 0 and y == 0 then return false end
-    local accesses = 0
-    exp:rename(function(a)
-        if ImageAccess:is(a) then
-            accesses = accesses + 1
-        end
-        return ad.v[a]
-    end)
-    return accesses > 0
-end)
-
-function Pair:shouldcse(exp)
-    return shouldcse(exp,self.x,self.y)
-end
-
-local getpair = terralib.memoize(function(x,y) return Pair:new {x = x, y = y} end)
+local getpair = terralib.memoize(function(x,y) return {x = x, y = y} end)
 
 local function unknowns(exp)
     local seenunknown = {}
@@ -986,29 +869,23 @@ local function createzerolist(N)
     return r
 end
     
-local function createderiv(F, --the expression for residual (0,0)
-                           unknown, -- the unknown image
-                           rpair, -- the pair for the residual we actually want
-                           u) -- the ImageAccess for the unknown we want to :d it with
-    return ad.shift(F,rpair):d(unknown(u.x,u.y,u.channel))                           
-end
-
 local function createjtj(Fs,unknown,P)
     local P_hat = createzerolist(unknown.N)
 	local toprint = terralib.newlist()
     for rn,F in ipairs(Fs) do
         local unknownsupport = unknownaccesses(F)
         for channel = 0, unknown.N-1 do
-            local x00 = unknown(0,0,channel):key()
+            local x = unknown(0,0,channel)
             local residuals = residualsincludingX00(unknownsupport,channel)
             local columns = {}
             local nonzerounknowns = terralib.newlist()
         
             for _,r in ipairs(residuals) do
-                local drdx00 = createderiv(F,unknown,r,x00)
+                local rexp = shiftexp(F,r.x,r.y)
+                local drdx00 = rexp:d(x)
                 local unknowns = unknownsforresidual(r,unknownsupport)
                 for _,u in ipairs(unknowns) do
-                    local drdx_u = createderiv(F,unknown,r,u)
+                    local drdx_u = rexp:d(unknown(u.x,u.y,u.channel))
                     local exp = drdx00*drdx_u
                     --print(("df(%d,%d)/dx(%d,%d) * df(%d,%d)/dx(%d,%d) = %s"):format(r.x,r.y,0,0,r.x,r.y,u.x,u.y,tostring(exp)))
                     --print(("df_%d(%d,%d)/dx_%d(%d,%d)"):format(rn,r.x,r.y,u.channel,u.x,u.y))
@@ -1040,12 +917,12 @@ local function createjtf(problemSpec,Fs,unknown,P)
 	for _,F in ipairs(Fs) do
         local unknownsupport = unknownaccesses(F)
         for channel = 0, unknown.N-1 do
-            local x00 = unknown(0,0,channel):key()
+            local x = unknown(0,0,channel)
             local residuals = residualsincludingX00(unknownsupport,channel)
 
             for _,f in ipairs(residuals) do
-                local F_x = ad.shift(F,f)
-                local dfdx00 = createderiv(F,unknown,f, x00)		-- entry of J^T
+                local F_x = shiftexp(F,f.x,f.y)
+                local dfdx00 = F_x:d(x)		-- entry of J^T
                 local dfdx00F = dfdx00*F_x	-- entry of \gradF == J^TF
                 F_hat[channel+1] = F_hat[channel+1] + dfdx00F			-- summing it up to get \gradF
     
@@ -1087,7 +964,7 @@ local function creategradient(unknown,costexp)
     local gradientsgathered = createzerolist(unknown.N)
     for i,u in ipairs(unknownvars) do
         local a = u:key()
-        local shift = ad.shift(gradient[i],getpair(-a.x,-a.y))
+        local shift = shiftexp(gradient[i],-a.x,-a.y)
         gradientsgathered[a.channel+1] = gradientsgathered[a.channel+1] + shift
     end
     dprint("grad gather")

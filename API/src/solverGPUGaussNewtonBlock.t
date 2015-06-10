@@ -23,7 +23,22 @@ local vstore = macro(function(x,v) return `terralib.attrstore(x,v, {isvolatile =
 local FLOAT_EPSILON = `0.000001f
 local MINF = -math.huge
 
+--TODO this stuff needs to come from the cost function (patch size and stencil overlap)
+opt.BLOCK_SIZE = 16
+local BLOCK_SIZE 				=  opt.BLOCK_SIZE
+local SHARED_MEM_SIZE_BLOCK	   	= ((BLOCK_SIZE+2)*(BLOCK_SIZE+2))
+local SHARED_MEM_SIZE_VARIABLES = ((BLOCK_SIZE)*(BLOCK_SIZE))
+local SHARED_MEM_SIZE_RESIDUUMS = ((SHARED_MEM_SIZE_VARIABLES)+4*(SHARED_MEM_SIZE_VARIABLES))
 
+local function constanttable(tbl)
+	return terralib.constant(terralib.new(int[#tbl],tbl))
+end
+
+local offsetX = constanttable{math.floor(0.0*BLOCK_SIZE), math.floor((1.0/2.0)*BLOCK_SIZE), math.floor((1.0/4.0)*BLOCK_SIZE), math.floor((3.0/4.0)*BLOCK_SIZE), math.floor((1.0/8.0)*BLOCK_SIZE), math.floor((5.0/8.0)*BLOCK_SIZE), math.floor((3.0/8.0)*BLOCK_SIZE), math.floor((7.0/8.0)*BLOCK_SIZE)} -- Halton sequence base 2
+
+local offsetY = constanttable{math.floor(0.0*BLOCK_SIZE), math.floor((1.0/3.0)*BLOCK_SIZE), math.floor((2.0/3.0)*BLOCK_SIZE), math.floor((1.0/9.0)*BLOCK_SIZE), math.floor((4.0/9.0)*BLOCK_SIZE), math.floor((7.0/9.0)*BLOCK_SIZE), math.floor((2.0/9.0)*BLOCK_SIZE), math.floor((5.0/9.0)*BLOCK_SIZE)}	-- Halton sequence base 3
+
+	
 local terra min(a : float, b : float) : float
 	if a < b then return a
 	else return b end
@@ -35,6 +50,10 @@ end
 
 local terra isInsideImage(i : int, j : int, width : uint, height : uint) : bool
 	return i >= 0 and i < width and j >= 0 and j < height
+end
+
+local terra getLinearThreadId(tId_i : int, tId_j : int) : uint
+	return tId_j*BLOCK_SIZE + tId_i;
 end
 
 local vload = macro(function(x) return `terralib.attrload(x, {isvolatile = true}) end)
@@ -68,23 +87,6 @@ end
 
 
 return function(problemSpec, vars)
-
-	local BLOCK_SIZE 				=  problemSpec:BlockSize()
-	local SHARED_MEM_SIZE_BLOCK	   	= ((BLOCK_SIZE+2)*(BLOCK_SIZE+2))
-	local SHARED_MEM_SIZE_VARIABLES = ((BLOCK_SIZE)*(BLOCK_SIZE))
-	local SHARED_MEM_SIZE_RESIDUUMS = ((SHARED_MEM_SIZE_VARIABLES)+4*(SHARED_MEM_SIZE_VARIABLES))
-
-	local terra getLinearThreadId(tId_i : int, tId_j : int) : uint
-		return tId_j*BLOCK_SIZE + tId_i;
-	end
-	
-	local function constanttable(tbl)
-		return terralib.constant(terralib.new(int[#tbl],tbl))
-	end
-
-	local offsetX = constanttable{math.floor(0.0*BLOCK_SIZE), math.floor((1.0/2.0)*BLOCK_SIZE), math.floor((1.0/4.0)*BLOCK_SIZE), math.floor((3.0/4.0)*BLOCK_SIZE), math.floor((1.0/8.0)*BLOCK_SIZE), math.floor((5.0/8.0)*BLOCK_SIZE), math.floor((3.0/8.0)*BLOCK_SIZE), math.floor((7.0/8.0)*BLOCK_SIZE)} -- Halton sequence base 2
-
-	local offsetY = constanttable{math.floor(0.0*BLOCK_SIZE), math.floor((1.0/3.0)*BLOCK_SIZE), math.floor((2.0/3.0)*BLOCK_SIZE), math.floor((1.0/9.0)*BLOCK_SIZE), math.floor((4.0/9.0)*BLOCK_SIZE), math.floor((7.0/9.0)*BLOCK_SIZE), math.floor((2.0/9.0)*BLOCK_SIZE), math.floor((5.0/9.0)*BLOCK_SIZE)}	-- Halton sequence base 3
 
 	local unknownElement = problemSpec:UnknownType().metamethods.typ
 	
@@ -218,8 +220,8 @@ return function(problemSpec, vars)
 			
 			var cost = 0.0f
 			var w : int, h : int
-			if [positionForValidLane(pd, "X", `&w, `&h, problemSpec)] and (not [problemSpec:EvalExclude(tId_i, tId_j, gId_i, gId_j,`blockParams)]) then
-			--if [positionForValidLane(pd, "X", `&w, `&h, problemSpec)] then
+			if positionForValidLane(pd, "X", &w, &h) and (not [problemSpec:EvalExclude(tId_i, tId_j, gId_i, gId_j,`blockParams)]) then
+			--if positionForValidLane(pd, "X", &w, &h) then
 				if true or isBlockOnBoundary(gId_i, gId_j, W, H) then
 					cost = [float](data.problemSpec.functions.cost.boundary(tId_i, tId_j, gId_i, gId_j, blockParams))
 				else
