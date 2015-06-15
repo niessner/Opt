@@ -20,8 +20,14 @@ util.C = terralib.includecstring [[
 local C = util.C
 
 local cuda_version = cudalib.localversion()
-local libdevice = terralib.cudahome..string.format("/nvvm/libdevice/libdevice.compute_%d.10.bc",cuda_version)
-terralib.linklibrary(libdevice)
+local libdevicepath = terralib.cudahome..string.format("/nvvm/libdevice/libdevice.compute_%d.10.bc",cuda_version)
+local libdevice
+if terralib.linkllvm then
+    libdevice = terralib.linkllvm(libdevicepath)
+else
+    terralib.linklibrary(libdevicepath)
+    libdevice = { extern = function(self,n,t) return terralib.extenfunction(n,t) end }
+end
 
 local mathParamCount = {sqrt = 1,
 cos  = 1,
@@ -41,7 +47,7 @@ for k,v in pairs(mathParamCount) do
 	for i = 1,v do
 		params[i] = float
 	end
-	util.gpuMath[k] = terralib.externfunction(("__nv_%sf"):format(k), params -> float)
+	util.gpuMath[k] = libdevice:extern(("__nv_%sf"):format(k), params -> float)
     util.cpuMath[k] = C[k.."f"]
 end
 util.cpuMath["abs"] = C["fabsf"]
