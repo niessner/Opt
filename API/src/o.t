@@ -20,7 +20,7 @@ end
 
 -- constants
 local verboseSolver = true
-local verboseAD = true
+local verboseAD = false
 
 local function newclass(name)
     local mt = { __name = name }
@@ -690,8 +690,8 @@ end
 local function createfunction(problemspec,name,exps,usebounds,W,H)
     if not usebounds then
         exps = removeboundaries(exps)
-        print(ad.tostrings(exps))
     end
+    
     local P = symbol(problemspec.P:ParameterType(),"P")
     local extraimages = terralib.newlist()
     local imagetosym = {} 
@@ -777,6 +777,10 @@ local function createfunction(problemspec,name,exps,usebounds,W,H)
     end
     generatedfn:setname(name)
     if verboseAD then
+        generatedfn:printpretty(true, false)
+    end
+    if name == "evalJTF" and usebounds then
+        --print(exps[1])
         --generatedfn:printpretty(true, false)
     end
     return generatedfn
@@ -910,12 +914,16 @@ local function createjtf(problemSpec,Fs,unknown,P)
 	local F_hat = createzerolist(unknown.N) --preconditioner
 	local P_hat = createzerolist(unknown.N) --gradient
 	
-	for _,F in ipairs(Fs) do
+	for ridx,F in ipairs(Fs) do
+	    print("-------------")
+	    print(("R[%d] = "):format(ridx),F)
         local unknownsupport = unknownaccesses(F)
         for channel = 0, unknown.N-1 do
             local x = unknown(0,0,channel)
             local residuals = residualsincludingX00(unknownsupport,channel)
-
+            
+            
+            local sum = 0
             for _,f in ipairs(residuals) do
                 local F_x = shiftexp(F,f.x,f.y)
                 local dfdx00 = F_x:d(x)		-- entry of J^T
@@ -924,7 +932,11 @@ local function createjtf(problemSpec,Fs,unknown,P)
     
                 local dfdx00Sq = dfdx00*dfdx00	-- entry of Diag(J^TJ)
                 P_hat[channel+1] = P_hat[channel+1] + dfdx00Sq			-- summing the pre-conditioner up
+                --sum = sum + dfdx00F
+                print(("dR[%d]_%d_%d/dx[%d] = "):format(ridx,f.x,f.y,channel),dfdx00F)
             end
+            
+            
         end
     end
 	for i = 1,unknown.N do
@@ -936,6 +948,7 @@ local function createjtf(problemSpec,Fs,unknown,P)
 	    end
 	    F_hat[i] = 2.0*F_hat[i]
 	end
+	print("JTF =", ad.tostrings({F_hat[1], F_hat[2], F_hat[3]}))
     return conformtounknown(F_hat,unknown), conformtounknown(P_hat,unknown)
 end
 
@@ -953,19 +966,29 @@ local function creategradient(unknown,costexp)
     local unknownvars = unknowns(costexp)
     local gradient = costexp:gradient(unknownvars)
 
+    dprint("grad expression")
+    local names = table.concat(unknownvars:map(function(v) return tostring(v:key()) end),", ")
+    dprint(names.." = "..ad.tostrings(gradient))
+    
     local gradientsgathered = createzerolist(unknown.N)
     for i,u in ipairs(unknownvars) do
         local a = u:key()
         local shift = shiftexp(gradient[i],-a.x,-a.y)
         gradientsgathered[a.channel+1] = gradientsgathered[a.channel+1] + shift
     end
+    dprint("grad gather")
+    dprint(ad.tostrings(gradientsgathered))
     return conformtounknown(gradientsgathered,unknown)
 end
 
 function ProblemSpecAD:Cost(costexp_)
     local costexp = assert(ad.toexp(costexp_))
     local unknown = assert(self.nametoimage.X, "unknown image X is not defined")
-        
+    
+    
+    dprint("cost expression")
+    dprint(ad.tostrings({assert(costexp)}))
+    
     local gradient = creategradient(unknown,costexp)
     
     self.P:Stencil(stencilforexpression(costexp))
@@ -974,8 +997,11 @@ function ProblemSpecAD:Cost(costexp_)
     if SumOfSquares:is(costexp_) then
         local P = self:Image("P",unknown.type,unknown.W,unknown.H,-1)
         local jtjexp = createjtj(costexp_.terms,unknown,P)	-- includes the 2.0
+        dprint("jtjexp")
+        dprint(jtjexp)
         self.P:Stencil(stencilforexpression(jtjexp))
         createfunctionset(self,"applyJTJ",jtjexp)
+		--gradient with pre-conditioning
 		
 		local gradient,preconditioner = createjtf(self,costexp_.terms,unknown,P)	--includes the 2.0
 		createfunctionset(self,"evalJTF",gradient,preconditioner)
@@ -992,7 +1018,7 @@ function ProblemSpecAD:Cost(costexp_)
     
     if verboseAD then
         self.excludeexp = nil
-        --terralib.tree.printraw(self)
+        terralib.tree.printraw(self)
     end
     return self.P
 end

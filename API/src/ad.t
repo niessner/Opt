@@ -42,51 +42,28 @@ local Exp = newclass("Exp") -- an expression involving primitives
 local Var = Exp:Variant("Var") -- a variable
 local Apply = Exp:Variant("Apply") -- an application
 local Const = Exp:Variant("Const") -- a constant, C
+local ExpVector = newclass("ExpVector")
 
-local Shape = newclass("Shape") -- the shape of an expression Scalar, Vector, Matrix, etc.
-                                -- eventually this may incorporate vectors derived from traversing graph edges, etc.
-local Scalar = Shape:Variant("Scalar")
-local Array = Shape:Variant("Array") 
-
-local ScalarShape = Scalar:new {} --single representing the scalar shape
-function Scalar:__tostring() return "float" end
-function Array:__tostring() return ("%s[%d]"):format(tostring(self.element), self.N) end
-
-function Scalar:order()
-    return 0
-end
-function Array:order()
-    return self.order_
-end
-
-local function toshape(s)
-    if Shape:is(s) then return s
-    else return nil end
-end
-
-local ArrayShape = terralib.memoize(function(shape,N)
-    local element = assert(toshape(shape),"expected a shape")
-    return Array:new { element = element, N = assert(tonumber(N),"expected a number"), order_ = element:order() + 1 }
-end)
 
 local empty = terralib.newlist {}
 function Exp:children() return empty end
 function Apply:children() return self.args end 
 
-function Exp:shape() return self.shape_ end
-function Apply:argumentshapes() return self.argumentshapes_ end
+function Const:__tostring() return tostring(self.v) end
 
-local function newapply(op,config,args)
+local applyid = 0
+local function newapply(op,args)
+    local nvars = 0
     assert(not op.nparams or #args == op.nparams)
-    local shape,argumentshapes = op:shapefromarguments(config,args:map("shape"))
-    return Apply:new { op = op, config = config, args = args, argumentshapes_ = argumentshapes, shape_ = shape} 
+    applyid = applyid + 1
+    return Apply:new { op = op, args = args, nvars = nvars, id = applyid - 1 }
 end
 
-local getconst = terralib.memoize(function(shape,n) return Const:new { shape_ = shape, v = n } end)
+local getconst = terralib.memoize(function(n) return Const:new { v = n } end)
 local function toexp(n)
     if n then 
         if Exp:is(n) then return n
-        elseif type(n) == "number" then return getconst(ScalarShape,n)
+        elseif type(n) == "number" then return getconst(n)
         elseif type(n) == "table" then
             local mt = getmetatable(n)
             if mt and type(mt.__toadexp) == "function" then
@@ -121,7 +98,7 @@ local function factors(e)
     end
     return e,one
 end
-local function simplifymore(op,config,args)
+local function simplifymore(op,args)
     local x,y,z = unpack(args)
     
     if #args == 2 and Apply:is(x) and Apply:is(y) and x.op.name == "select" and y.op.name == "select" and x.args[1] == y.args[1] then
@@ -169,15 +146,14 @@ local function simplifymore(op,config,args)
     
 end
 
-local function simplify(op,config,args)
+local function simplify(op,args)
     local x,y,z = unpack(args)
     if commutes[op.name] and Const:is(x) then
         x,y = y,x
     end
     --print(x,y)
-    if allconst(args) then
-        local r = op:propagateconstants(op:shapefromarguments(config,args:map("shape")),config,args)
-        if r then return r end
+    if allconst(args) and op:getimpl() then
+        return toexp(op:getimpl()(unpack(args:map("v"))))
     end
     
     if op.name == "mul" then
@@ -202,48 +178,65 @@ local function simplify(op,config,args)
     elseif (op.name == "and_" or op.name == "or_") and x == y then
         return x
     end
-    
-    
-    local r = simplifymore(op,config,args)
+    --[[
+    local r = simplifymore(op,args)
     if r then
         return r
-    end
-    return newapply(op,config,args)
+    end]]
+    return newapply(op,args)
 end
 
 
-local getapply = terralib.memoize(function(op,...)
-    local config = terralib.newlist()
-    local args = terralib.newlist()
-    for i = 1,select('#',...) do
-        local e = select(i,...)
-        if i > op.nconfig then
-            local exp = assert(toexp(e),"attempting to us a value that is not an expression")
-            args:insert(exp)
-        else
-            config:insert(e)
-        end
-    end
-    return simplify(op,config,args)
-end)
+
+local getapply = --terralib.memoize(function(op,...) 
+function(op,...)
+    local args = terralib.newlist {...}
+    return simplify(op,args)
+end
+--end)
+
+function ExpVector:size() return #self.data end
+function ExpVector:__tostring() return "{"..ad.tostrings(self.data).."}" end
+function ExpVector:__index(key)
+    if type(key) == "number" then
+        assert(key >= 0 and key < #self.data, "index out of bounds")
+        return self.data[key+1]
+    else return ExpVector[key] end
+end
+ExpVector.__call = ExpVector.__index
+local function toexpvectorentry(v)
+    return ExpVector:is(v) and v or toexp(v)
+end
+function ExpVector:__newindex(key,v)
+    assert(type(key) == "number", "unknown field in ExpVector: "..tostring(key))
+    assert(key >= 0 and key < #self.data, "index out of bounds")
+    self.data[key+1] = assert(toexpvectorentry(v), "expected a ExpVector or a valid expression")
+end
+function ExpVector:map(fn)
+    return ad.Vector(unpack(self.data:map(fn)))
+end
+function ExpVector:expressions() return self.data end
 
 local function toexps(...)
+    local N
     local es = terralib.newlist {}
     for i = 1, select('#',...) do
         local e = select(i,...)
-        es[i] = assert(toexp(e),"attempting use a value that is not an expression")
+        if ExpVector:is(e) then
+            assert(not N or N == e:size(), "non-conforming vector sizes")
+            N = e:size()
+            es[i] = e
+        else
+            es[i] = assert(toexp(e),"attempting use a value that is not an expression")
+        end
     end
-    return es
+    return es,N
 end
     
 
-local getvar = terralib.memoize(function(shape,key)
-    return Var:new { shape_ = assert(toshape(shape)), key_ = assert(key) }
-end)
-
 -- generates variable names
 local v = setmetatable({},{__index = function(self,idx)
-    local r = getvar(ScalarShape,idx)
+    local r = Var:new { key_ = assert(idx) }
     self[idx] = r
     return r
 end})
@@ -254,11 +247,16 @@ local x,y,z = v[1],v[2],v[3]
 ad.v = v
 ad.toexp = toexp
 ad.newclass = newclass
-ad.newvar = getvar
 
 function ad.Vector(...)
-    error("TODO: ad.Vector")
+    local data = terralib.newlist()
+    for i = 1,select("#",...) do
+        local e = select(i,...)
+        data[i] = assert(toexpvectorentry(e),"expected a ExpVector or valid expression")
+    end
+    return ExpVector:new { data = data }
 end
+ad.ExpVector = ExpVector
 
 setmetatable(ad, { __index = function(self,idx) -- for just this file, auto-generate an op 
     local name = assert(type(idx) == "string" and idx)
@@ -268,60 +266,26 @@ setmetatable(ad, { __index = function(self,idx) -- for just this file, auto-gene
 end })
 
 function Op:__call(...)
-    return getapply(self,...)
-end
-
-local function conform(args)
-    local s = ScalarShape
-    for i,a in ipairs(args) do
-        s = s:meet(a)
-        if not s then return nil end
+    local args,N = toexps(...)
+    if not N then return getapply(self,unpack(args)) end
+    local exps = terralib.newlist()
+    for i = 0,N-1 do
+        local newargs = terralib.newlist()
+        for _,a in ipairs(args) do
+            newargs:insert(ExpVector:is(a) and a[i] or a)
+        end
+        exps:insert(self(unpack(newargs)))
     end
-    return s
+    return ExpVector:new { data = exps }
 end
-
-Op.nconfig = 0 -- overriden by custom operators
-
-function Op:shapefromarguments(config,args) -- ops with special behavior should override this
-    local r = conform(args)
-    if not r then
-        error("arguments do not conform "..table.concat(args:map(tostring),", "))
-    end
-    if self.nparams and self.nparams ~= #args then
-        error( ("expected %d arguments but found %d in op %s"):format(self.nparams,#args,self.name))
-    end
-    return r,args:map(function() return r end) 
-end
-
-
-local getscalarpartials = terralib.memoize(function(exp)
-    assert(Apply:is(exp) and exp.op.derivs)
-    return exp.op.derivs:map("rename",exp:children())
-end)
-
-
-function Op:applyJ(exp,rhs) -- ops with special behavior override this
-    local partials = getscalarpartials(exp)
-    local r = zero
-    assert(#partials == #rhs)
-    for i,p in ipairs(partials) do
-        r = r + p*rhs[i]
-    end
-    return r
-end
-
-function Op:define(generatorfn,...)
-    self.nparams = debug.getinfo(generatorfn,"u").nparams
-    self.generator = generatorfn
-    self.derivs = toexps(...)
+function Op:define(fn,...)
+    self.nparams = debug.getinfo(fn,"u").nparams
+    self.generator = fn
+    local N
+    self.derivs,N = toexps(...)
+    assert(not N, "derivative definitons cannot include ExpVectors")
     return self
 end
-function Op:definecustom(tbl)
-    for k,v in pairs(tbl) do
-        self[k] = v
-    end
-end
-
 function Op:getimpl()
     if self.impl then return self.impl end
     if not self.generator then return nil
@@ -334,41 +298,16 @@ function Op:getimpl()
         return self.impl
     end
 end
-local function extractelement(arg,i)
-    if type(arg) == "table" then
-        return assert(arg[i+1],"undefined element")
-    else assert(type(arg) == "number")
-        return arg
-    end
-end    
-function Op:propagateconstants(shape,config,args)
-    local impl = self:getimpl()
-    if not impl then return nil end
-    local function run(shape,constarguments)    
-        if Array:is(shape) then
-            local r = terralib.newlist()
-            for i = 1,shape.N do
-                local extractedargs = constarguments:map(extractelement,i-1)
-                local v = run(shape.element,extractedargs)
-                r:insert(v)
-            end
-            return r
-        else
-            return impl(unpack(constarguments))
-        end
-    end
-    local r = run(shape,args:map("v"))
-    return getconst(shape,r)
-end
 
 function Op:__tostring() return self.name end
 
 local mo = {"add","sub","mul","div"}
 for i,o in ipairs(mo) do
     local function impl(a,b) return (ad[o])(a,b) end
-    Exp["__"..o] = impl
+    Exp["__"..o], ExpVector["__"..o] = impl,impl
 end
 Exp.__unm = function(a) return ad.unm(a) end
+ExpVector.__unm = function(a) return ad.unm(a) end
 
 function Exp:rename(vars)
     local varsf = type(vars) == "function" and vars or function(k) return vars[k] end
@@ -404,7 +343,13 @@ local function countuses(es)
         end
     end
     for i,a in ipairs(es) do 
-        count(a)
+        if ExpVector:is(a) then
+            for i,e in ipairs(a:expressions()) do
+                count(e)
+            end
+        else
+            count(a)
+        end 
     end
     for k,v in pairs(uses) do
        uses[k] = v > 1 or nil
@@ -427,14 +372,70 @@ function Exp:prec()
 end
 local function expstostring(es)
     es = (terralib.islist(es) and es) or terralib.newlist(es)
-    local n = 0
+    local linearized = terralib.newlist()
+    local numfree = terralib.newlist()
+    local uses = {}
+    local exptoidx = {}
+    local function visit(e)
+        if not exptoidx[e] then
+            for i,c in ipairs(e:children()) do visit(c) end
+            linearized:insert(e)
+            exptoidx[e] = #linearized
+            uses[e] = 0
+        end
+        uses[e] = uses[e] + 1
+    end
+    for i,e in ipairs(es) do visit(e) end
+    
+-------------------------------
+    local exptoreg = {}
+    local nextregister = 0
+    local freeregisters = terralib.newlist()
+    local function releaseregister(i)
+        freeregisters:insert(i)
+    end
+    local function registerforexp(e)
+        if e.kind ~= "Apply" then return -1 end -- no registers for const/var
+        if exptoreg[e] then return exptoreg[e] end
+        local r
+        if #freeregisters > 0 then 
+            r = freeregisters:remove()
+        else 
+            r = nextregister
+            nextregister = nextregister + 1
+        end
+        exptoreg[e] = r
+        return r
+    end
+    
+    for i = #linearized,1,-1 do
+        local e = linearized[i]
+        if e.kind == "Apply" then
+            releaseregister(registerforexp(e))
+            for i,c in ipairs(e:children()) do
+                registerforexp(c)
+            end
+        end
+    end
+--------------------------------
+    
     local tbl = terralib.newlist()
-    local manyuses = countuses(es)
     local emitted = {}
-    local function prec(e) return (manyuses[e] and 3) or e:prec() end
-    local emit
+    
+    local function stringforuse(e)
+        if "Var" == e.kind then
+            local k = e:key()
+            return type(k) == "number" and ("v%d"):format(k) or tostring(e:key()) 
+        elseif "Const" == e.kind then
+            return tostring(e.v)
+        else
+            return ("r%d"):format(registerforexp(e))
+        end
+    end
+    
+    local function prec(e) return (uses[e] > 1 and 3) or e:prec() end
     local function emitprec(e,p)
-        return (prec(e) < p and "(%s)" or "%s"):format(emit(e))
+        return (prec(e) < p and "(%s)" or "%s"):format(stringforuse(e))
     end
     local function emitapp(e)
         if e.op.name == "unm" then
@@ -443,45 +444,20 @@ local function expstostring(es)
             local o,p = unpack(infix[e.op.name])
             return ("%s %s %s"):format(emitprec(e.args[1],p),o,emitprec(e.args[2],p+1))
         else
-            local name = tostring(e.op)
-            if e.op.nconfig > 0 then
-                name = ("%s[%s]"):format(name,e.config:map(tostring):concat(","))
-            end
-            return ("%s(%s)"):format(name,e.args:map(emit):concat(","))
+            return ("%s(%s)"):format(tostring(e.op),e.args:map(stringforuse):concat(","))
         end
     end
-    function emit(e)
-        if "Var" == e.kind then
-            local k = e:key()
-            return type(k) == "number" and ("v%d"):format(k) or tostring(e:key()) 
-        elseif "Const" == e.kind then
-            local function getpart(v)
-                if type(v) == "number" then return tostring(v)
-                else assert(terralib.islist(v))
-                    return "{"..v:map(getpart):concat(",").."}"
-                end
-            end
-            return getpart(e.v)
-        elseif "Apply" == e.kind then
-            if emitted[e] then return emitted[e] end
-            local exp = emitapp(e)
-            if manyuses[e] then
-                local r = ("r%d"):format(n)
-                n = n + 1
-                emitted[e] = r
-                tbl:insert(("  %s : %s = %s\n"):format(r,tostring(e:shape()),exp))            
-                return r
-            else
-                return exp
-            end
-            
-        end
+
+    for i,e in ipairs(linearized) do
+        if "Apply" == e.kind then
+            tbl:insert(("  r%d = %s\n"):format(registerforexp(e),emitapp(e)))
+        end            
     end
-    local r = es:map(emit)
-    r = r:concat(", ")
-    if #tbl == 0 then return r end
-    return ("let\n%sin\n  %s\nend\n"):format(tbl:concat(),r)
+    local estring = es:map(stringforuse):concat(",")
+    if #tbl == 0 then return estring end
+    return ("let (%d reg) \n%sin\n  %s\nend\n"):format(nextregister, tbl:concat(),estring)
 end
+
 ad.tostrings = expstostring
 function Exp:__tostring()
     return expstostring(terralib.newlist{self})
@@ -586,9 +562,13 @@ ad.TerraVector = terralib.memoize(function(typ,N)
     return VecType
 end)
 
-function ad.toterra(es,varmap,generatormap) 
+function ad.toterra(es,varmap_,generatormap_) 
     es = terralib.islist(es) and es or terralib.newlist(es)
-    generatormap = generatormap or defaultgenerator
+     --varmap is a function or table mapping keys to what terra code should go there
+    local varmap = type(varmap_) == "table" and function(v) return varmap_[v] end or varmap_
+    assert(varmap)
+    local generatormap = generatormap_ == "table" and function(op) return generatormap_[op] end
+                       or generatormap_ or defaultgenerator
     local manyuses = countuses(es)
     local nvars = 0
     local results = terralib.newlist {}
@@ -624,7 +604,14 @@ function ad.toterra(es,varmap,generatormap)
             end
         end
     end
-    local tes = es:map(emit)
+    local tes = es:map(function(e) 
+        if ExpVector:is(e) then
+            local exps = e.data:map(emit)
+            return `[ad.TerraVector(float,#exps)]{ array(exps) }
+        else
+            return emit(e)
+        end
+    end)
     return #statements == 0 and (`tes) or quote [statements] in [tes] end
 end
 
@@ -638,35 +625,33 @@ function Exp:d(v)
     return r
 end
 
+function Exp:partials()
+    return empty
+end
+function Apply:partials()
+    self.partiallist = self.partiallist or self.op.derivs:map("rename",self.args)
+    return self.partiallist
+end
+
 function Var:calcd(v)
    return self == v and toexp(1) or toexp(0)
 end
 function Const:calcd(v)
-    return zero
+    return toexp(0)
 end
-
-local function sum(xs)
-    local s = zero
-    for i,x in ipairs(xs) do s = s + x end
-    return s
-end
-
-function Apply:applyJ(rhs)
-    assert(#rhs == #self.args)
-    local r = self.op:applyJ(self,rhs)
-    return r
-end
-
 function Apply:calcd(v)
-    assert(v:shape() == ScalarShape, "currently deriv requires a scalar variable")
     local dargsdv = self.args:map("d",v)
-    local r = self:applyJ(dargsdv)
-    assert(r:shape():meet(self:shape()) == self:shape())
+    local dfdargs = self:partials()
+    local r
+    for i = 1,#self.args do
+        local e = dargsdv[i]*dfdargs[i]
+        r = (not r and e) or (r + e)
+    end
     return r
 end
 
 --calc d(thisexpress)/d(exps[1]) ... d(thisexpress)/d(exps[#exps]) (i.e. the gradient of this expression with relation to the inputs) 
---[[function Exp:gradient(exps)
+function Exp:gradient(exps)
     exps = terralib.islist(exps) and exps or terralib.newlist(exps)
     -- reverse mode ad, work backward from this expression, accumulate stuff.
     local tape = {} -- mapping from exp -> current accumulated derivative
@@ -681,33 +666,12 @@ end
     tape[self] = one -- the reverse ad 'seed'
     for i = #postorder,1,-1 do --reverse post order traversal from self to equation roots, all uses come before defs
         local e = postorder[i]
-        local partials = e:partials()
+        local p = e:partials()
         for j,c in ipairs(e:children()) do
-            tape[c] = tape[c] + tape[e] * partials[j]
+            tape[c] = tape[c] + tape[e]*p[j]
         end
     end
     return exps:map(function(e) return tape[e] or zero end)
-end]]
-function Exp:gradient(exps)
-    return terralib.newlist(exps):map(function(e) return self:d(e) end)
-end
-
-function Scalar:meet(s)
-    return s
-end
-function Array:meet(s)
-    if s == self or self.element == s then
-        return self
-    elseif self:order() > s:order() then
-        if self.element:meet(s) then
-            return self
-        end
-    elseif s:order() > self:order() then
-        if s.element:meet(self) then
-            return s
-        end
-    end
-    return nil
 end
 
 ad.add:define(function(x,y) return `x + y end,1,1)
@@ -733,6 +697,7 @@ ad.sqrt:define(function(x) return `C.sqrt(x) end, 1.0/(2.0*ad.sqrt(x)))
 ad.tan:define(function(x) return `C.tan(x) end, 1.0 + ad.tan(x)*ad.tan(x))
 ad.tanh:define(function(x) return `C.tanh(x) end, 1.0/(ad.cosh(x)*ad.cosh(x)))
 
+--ad.select:define(function(x,y,z) return `terralib.select(bool(x),y,z) end,0,ad.select(x,1,0),ad.select(x,0,1))
 ad.select:define(function(x,y,z) 
     return quote
         var r : float
@@ -747,7 +712,7 @@ end,0,ad.select(x,1,0),ad.select(x,0,1))
 ad.eq:define(function(x,y) return `int(x == y) end, 0,0)
 ad.abs:define(function(x) return `terralib.select(x >= 0,x,-x) end, ad.select(ad.greatereq(x, 0),1,-1))
 
---ad.and6:define(function(x0, x1, x2, x3, x4, x5) return `int(x0) and int(x1) and int(x2) and int(x3) and int(x4) and int(x5) end,0,0,0,0,0,0)
+ad.and6:define(function(x0, x1, x2, x3, x4, x5) return `int(x0) and int(x1) and int(x2) and int(x3) and int(x4) and int(x5) end,0,0,0,0,0,0)
 ad.and_:define(function(x,y) return `int(x) and int(y) end, 0, 0)
 ad.or_:define(function(x,y) return `int(x) or int(y) end, 0, 0)
 ad.less:define(function(x,y) return `int(x < y) end, 0,0)
@@ -756,49 +721,10 @@ ad.lesseq:define(function(x,y) return `int(x <= y) end,0,0)
 ad.greatereq:define(function(x,y) return `int(x >= y) end,0,0)
 ad.not_:define(function(x) return `int(not bool(x)) end, 0)
 
-
-local function rep(v,N)
-    local r = terralib.newlist()
-    for i = 1,N do r:insert(v) end
-    return r
-end
-
-ad.construct:definecustom {
-    shapefromarguments = function(self,config,argshapes)
-        local a = conform(argshapes)
-        return ArrayShape(a,#argshapes), rep(a,#argshapes)
-    end;
-    applyJ = function(self,exp,rhs)
-        return ad.construct(unpack(rhs))
-    end;
-    propagateconstants = function(self,shape,config,args)
-        return getconst(shape,args:map("v"))
-    end
-}
-
-ad.extract:definecustom {
-    nconfig = 1;
-    shapefromarguments = function(self,config,argshapes)
-        local idx = assert(tonumber(config[1]),"extract requires a number")
-        assert(#argshapes == 1)
-        local arg = argshapes[1]
-        assert(Array:is(arg),"extract requires an array")
-        assert(idx < arg.N, "index out of bounds")
-        return arg.element,argshapes
-    end;
-    applyJ = function(self,exp,rhs)
-        return ad.extract(exp.config[1],rhs[1])
-    end;
-    propagateconstants = function(self,shape,config,args)
-        local n = config[1]
-        return getconst(shape,extractelement(args[1].v,n))
-    end;
-}
-
 setmetatable(ad,nil) -- remove special metatable that generates new blank ops
 ad.Var,ad.Apply,ad.Const,ad.Exp = Var, Apply, Const, Exp
 
-
+--[[
 local x,y,z = ad.v.x,ad.v.y,ad.v.z
 print(expstostring(ad.atan2.derivs))
 assert(y == y)
@@ -809,36 +735,24 @@ print(expstostring( terralib.newlist { r, r + 1} ))
 print(x*-(-y+1)/4)
 print(r:rename({x = x+y,y = x+y}))
 local e = 2*x*x*x*3 -- - y*x
-print("WHAT",(ad.sin(x)):d(x))
-print("HI",e:d(x)*3+(4*x)*x)
+print((ad.sin(x)*ad.sin(x)):d(x))
+print(e:d(x)*3+(4*x)*x)
 
 
 local w = x*x
 
 local exp = (3*w + 4*w + 3*w*z)
 
-print(unpack((3*x*x*x + x):d(x)))
+--6x+8x+6xz
 
+-- 7x + (7x + (z*7x
+
+-- 7x + (r1 
+print(unpack((3*x*x + x):gradient{x}))
 local g = exp:gradient({x,y,z})
-print("g",expstostring(g))
-
-local m = { x = symbol("x"), y = symbol("y"), z = symbol("z")}
-local t = ad.toterra(g, function(stmts,x) return m[x] end)
-
+print(expstostring(g))
+local t = ad.toterra(g,{x = symbol("x"), y = symbol("y"), z = symbol("z")})
 t:printpretty()
-
-local float3 = ArrayShape(ScalarShape,3)
-
-local x3 = ad.newvar(float3,"x3")
-
-print(x3)
-print( (x3*x3+x*x):d(x) )
-
-
-local v = ad.construct(x*x,2,3*x*x)
-local v = v+ad.extract(1,v)
-
-print(v:d(x))
-print(ad.construct(1,2,3)+4)
-
+]]
+--print(ad.select(ad.v.x,ad.select(ad.v.y,ad.v.z,0),0))
 return ad
