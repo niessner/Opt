@@ -104,19 +104,19 @@ function dot(a,b)
 	return a(0)*b(0) + a(1)*b(1)
 end
 
-do
+local function JTJ()
 	local b = ad.Vector(0.0, 0.0)
 	local bA = 0.0
 	local i = 0
 	local j = 0
-	local pImage = self:Image("P",opt.float3,W,H,-1)
+	local pImage = S:Image("P",opt.float3,W,H,-1)
 	
 	-- fit/pos
 	local constraintUV = Constraints(0,0)	
-	local validConstraint = (constraintUV(0) >= 0 and constraintUV(1) >= 0) and Mask(0,0) == 0.0
-	if validConstraint then
+	--local validConstraint = (constraintUV(0) >= 0 and constraintUV(1) >= 0) and Mask(0,0) == 0.0
+	--if validConstraint then
 	 	b = b + (2.0*w_fitSqrt*w_fitSqrt)*getP(pImage,i,j)
-	end
+	--end
 
 	-- pos/reg
 	local e_reg = ad.Vector(0.0, 0.0)
@@ -164,29 +164,26 @@ do
 	--if valid2 then
 	do
 		local qHat = UrShape(i-1, j+0)
-		var D = mul(dR,(pHat - qHat))
+		local D = mul(dR,(pHat - qHat))
 		e_reg_angle = e_reg_angle + dot(D,D)*angleP 
 	end
 	--if valid3 then
 	do
-		var qHat = UrShape(i+1, j+0)
-		var D = mul(dR,(pHat - qHat))
+		local qHat = UrShape(i+1, j+0)
+		local D = mul(dR,(pHat - qHat))
 		e_reg_angle = e_reg_angle + dot(D,D)*angleP 
 	end
 			
 	bA = bA + (2.0*w_regSqrt*w_regSqrt)*e_reg_angle
 
-	return make_float3(b(0), b(1), bA)
-
+	return ad.Vector(b(0), b(1), bA)
 end
 
+local jtj = JTJ()
 
-
-
-
-
+print("JTJ = ",jtj)
 
 local cost = ad.sumsquared(unpack(terms))
-return S:Cost(cost)
+return S:Cost(cost,jtj)
 
 

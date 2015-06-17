@@ -907,6 +907,7 @@ local function createjtj(Fs,unknown,P)
     end
     --print(ad.tostrings(toprint))
     --error("DONE")
+    print("JTJorig = ", ad.tostrings(P_hat))
     return conformtounknown(P_hat,unknown)
 end
 
@@ -996,8 +997,9 @@ function ProblemSpecAD:Cost(costexp_,jtjexp)
     
     if SumOfSquares:is(costexp_) then
         local P = self:Image("P",unknown.type,unknown.W,unknown.H,-1)
+        local jtjorig = createjtj(costexp_.terms,unknown,P)
         if not jtjexp then
-            jtjexp = createjtj(costexp_.terms,unknown,P)	-- includes the 2.0
+            jtjexp = jtjorig	-- includes the 2.0
             dprint("jtjexp")
             dprint(jtjexp)
         end
