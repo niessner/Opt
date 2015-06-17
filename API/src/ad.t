@@ -186,14 +186,13 @@ local function simplify(op,args)
     return newapply(op,args)
 end
 
-
-
-local getapply = --terralib.memoize(function(op,...) 
-function(op,...)
+local function getapply(op,...) 
     local args = terralib.newlist {...}
     return simplify(op,args)
 end
---end)
+if true then
+    getapply = terralib.memoize(getapply)
+end
 
 function ExpVector:size() return #self.data end
 function ExpVector:__tostring() return "{"..ad.tostrings(self.data).."}" end

@@ -981,7 +981,7 @@ local function creategradient(unknown,costexp)
     return conformtounknown(gradientsgathered,unknown)
 end
 
-function ProblemSpecAD:Cost(costexp_)
+function ProblemSpecAD:Cost(costexp_,hgrad,hpreconditioner)
     local costexp = assert(ad.toexp(costexp_))
     local unknown = assert(self.nametoimage.X, "unknown image X is not defined")
     
@@ -1003,9 +1003,13 @@ function ProblemSpecAD:Cost(costexp_)
         createfunctionset(self,"applyJTJ",jtjexp)
 		--gradient with pre-conditioning
 		
-		local gradient,preconditioner = createjtf(self,costexp_.terms,unknown,P)	--includes the 2.0
-		createfunctionset(self,"evalJTF",gradient,preconditioner)
 		
+        if not hgrad then
+		    local gradient,preconditioner = createjtf(self,costexp_.terms,unknown,P)	--includes the 2.0
+		    createfunctionset(self,"evalJTF",gradient,preconditioner)
+		else
+		    createfunctionset(self,"evalJTF",hgrad,hpreconditioner)
+		end
 		--print("Gradient: ", removeboundaries(gradient))
 		--print("Preconditioner: ", removeboundaries(preconditioner))
     end
