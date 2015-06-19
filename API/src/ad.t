@@ -190,7 +190,7 @@ local function getapply(op,...)
     local args = terralib.newlist {...}
     return simplify(op,args)
 end
-if false then
+if true then
     getapply = terralib.memoize(getapply)
 end
 

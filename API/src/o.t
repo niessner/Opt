@@ -869,10 +869,19 @@ local function createzerolist(N)
     return r
 end
     
+local function lprintf(ident,fmt,...) 
+    local str = fmt:format(...)
+    ident = (" "):rep(ident*4)
+    str = ident..str:gsub('\n', "\n"..ident)
+    return print(str) 
+end
+
 local function createjtj(Fs,unknown,P)
     local P_hat = createzerolist(unknown.N)
 	local toprint = terralib.newlist()
     for rn,F in ipairs(Fs) do
+        lprintf(0,"\n\n\n\n\n##################################################")
+        lprintf(0,"r%d = %s",rn,F)
         local unknownsupport = unknownaccesses(F)
         for channel = 0, unknown.N-1 do
             local x = unknown(0,0,channel)
@@ -883,11 +892,13 @@ local function createjtj(Fs,unknown,P)
             for _,r in ipairs(residuals) do
                 local rexp = shiftexp(F,r.x,r.y)
                 local drdx00 = rexp:d(x)
+                lprintf(1,"instance:\ndr%d_%d%d/dx00[%d] = %s",rn,r.x,r.y,channel,tostring(drdx00))
                 local unknowns = unknownsforresidual(r,unknownsupport)
                 for _,u in ipairs(unknowns) do
                     local drdx_u = rexp:d(unknown(u.x,u.y,u.channel))
                     local exp = drdx00*drdx_u
-                    --print(("df(%d,%d)/dx(%d,%d) * df(%d,%d)/dx(%d,%d) = %s"):format(r.x,r.y,0,0,r.x,r.y,u.x,u.y,tostring(exp)))
+                    lprintf(2,"term:\ndr%d_%d%d/dx%d%d[%d] = %s",rn,r.x,r.y,u.x,u.y,u.channel,tostring(drdx_u))
+                    --print(("df(%d,%d)/dx(%d,%d)[%d] * df(%d,%d)/dx(%d,%d)[%d] = %s"):format(r.x,r.y,0,0,r.x,r.y,u.x,u.y,tostring(exp)))
                     --print(("df_%d(%d,%d)/dx_%d(%d,%d)"):format(rn,r.x,r.y,u.channel,u.x,u.y))
                     toprint:insert(drdx_u)
                     if not columns[u] then
