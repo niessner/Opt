@@ -324,7 +324,7 @@ util.getParameters = function(ProblemSpec, images, edgeValues, paramValues)
 			inits:insert(`entry.obj)
 		elseif entry.kind == "edgevalues" then
 			inits:insert(`entry.type { data = [&entry.type.metamethods.type](edgeValues[entry.idx]) })
-		elseif entry.kind == "param"then
+		elseif entry.kind == "param" then
 		    inits:insert `@[&entry.type](paramValues[entry.idx])
 		end
 	end

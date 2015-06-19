@@ -186,6 +186,7 @@ terra opt.ProblemDelete(p : &opt.Problem)
 end
 
 local ProblemSpec = newclass("ProblemSpec")
+opt.PSpec = ProblemSpec
 local PROBLEM_STAGES  = { inputs = 0, functions = 1 }
 function opt.ProblemSpec()
     local BlockedProblemParameters = terralib.types.newstruct("BlockedProblemParameters")
@@ -416,6 +417,7 @@ end
 function ProblemSpec:Image(name,typ,W,H,idx)
     self:Stage "inputs"
     typ = assert(tovalidimagetype(typ,"expected a number or an array of numbers"))
+
     local elemsize = assert(tonumber(opt.elemsizes[idx]))
     local stride = assert(tonumber(opt.strides[idx]))
     local r = newImage(typ, assert(todim(W)), assert(todim(H)), elemsize, stride)
@@ -519,19 +521,23 @@ local allPlans = terralib.newlist()
 
 errorPrint = rawget(_G,"errorPrint") or print
 
+function opt.problemSpecFromFile(filename)
+   local file, errorString = terralib.loadfile(filename)
+   if not file then
+      error(errorString, 0)
+   end
+   return file()
+end
+
 local function problemPlan(id, dimensions, elemsizes, strides, rowindexes, xs, ys, pplan)
     local success,p = xpcall(function() 
 		local problemmetadata = assert(problems[id])
         opt.dimensions,opt.elemsizes,opt.strides = dimensions,elemsizes,strides
         opt.rowindexes,opt.xs,opt.ys = rowindexes,xs,ys
         opt.math = problemmetadata.kind:match("GPU") and util.gpuMath or util.cpuMath
-		opt.problemkind = problemmetadata.kind
+	opt.problemkind = problemmetadata.kind
 		
-        local file, errorString = terralib.loadfile(problemmetadata.filename)
-        if not file then
-            error(errorString, 0)
-        end
-        local tbl = file()
+	local tbl = opt.problemSpecFromFile(problemmetadata.filename)
         assert(ProblemSpec:is(tbl))
 		local result = compilePlan(tbl,problemmetadata.kind,problemmetadata.params)
 		allPlans:insert(result)
@@ -923,8 +929,8 @@ local function createjtj(Fs,unknown,P)
 end
 
 local function createjtf(problemSpec,Fs,unknown,P)
-	local F_hat = createzerolist(unknown.N) --preconditioner
-	local P_hat = createzerolist(unknown.N) --gradient
+   local F_hat = createzerolist(unknown.N) --preconditioner
+   local P_hat = createzerolist(unknown.N) --gradient
 	
 	for ridx,F in ipairs(Fs) do
 	    print("-------------")
@@ -962,6 +968,7 @@ local function createjtf(problemSpec,Fs,unknown,P)
 	end
 	print("JTF =", ad.tostrings({F_hat[1], F_hat[2], F_hat[3]}))
     return conformtounknown(F_hat,unknown), conformtounknown(P_hat,unknown)
+
 end
 
 local lastTime = nil
@@ -1053,4 +1060,8 @@ util.Dot = macro(function(a,b)
         return `a*b
     end
 end)
+
+
+opt.newImage = newImage
+
 return opt

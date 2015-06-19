@@ -1,6 +1,6 @@
-
 local S = require("std")
 local util = require("util")
+local dbg = require("dbg")
 local C = util.C
 local Timer = util.Timer
 local positionForValidLane = util.positionForValidLane
@@ -24,7 +24,7 @@ return function(problemSpec, vars)
 
 	local unknownElement = problemSpec:UnknownType().metamethods.typ
 	local unknownType = problemSpec:UnknownType()
-	
+
 	local struct PlanData(S.Object) {
 		plan : opt.Plan
 		parameters : problemSpec:ParameterType(false)	--get the non-blocked version
@@ -278,50 +278,16 @@ return function(problemSpec, vars)
 	local gpu = util.makeGPUFunctions(problemSpec, vars, PlanData, kernels)
 
 	---------------------------------------DEBUGGING FUNCTIONS------------------------------------------
-	local terra initDebugImage(pd : &PlanData, imPtr : &&float, numChannels : int)
-		var width, height = pd.parameters.X:W(), pd.parameters.X:H() 
-		var numBytes : int = sizeof(float)*width*height*numChannels
-		C.printf("Num bytes: %d\n", numBytes)
-		var err = C.cudaMalloc([&&opaque](imPtr), numBytes)
-		if err ~= 0 then C.printf("cudaMalloc error: %d", err) end
-	end
 
 	local terra initAllDebugImages(pd : &PlanData)
 		C.printf("initAllDebugImages\n")
-		initDebugImage(pd, &pd.debugDumpImage, 1)
-		initDebugImage(pd, &pd.debugCostImage, 1)
-		initDebugImage(pd, &pd.debugJTJImage, sizeof([unknownElement]) / 4)
-		initDebugImage(pd, &pd.debugJTFImage, sizeof([unknownElement]) / 4)
-		initDebugImage(pd, &pd.debugPreImage, sizeof([unknownElement]) / 4)
+		dbg.initImage(pd, &pd.debugDumpImage, 1)
+		dbg.initImage(pd, &pd.debugCostImage, 1)
+		dbg.initImage(pd, &pd.debugJTJImage, sizeof([unknownElement]) / 4)
+		dbg.initImage(pd, &pd.debugJTFImage, sizeof([unknownElement]) / 4)
+		dbg.initImage(pd, &pd.debugPreImage, sizeof([unknownElement]) / 4)
 	end
 
-	local terra debugImageWrite(pd : &PlanData, imPtr : &float, channelCount : int, filename : rawstring)
-		var width : int = [int](pd.parameters.X:W())
-		var height : int = [int](pd.parameters.X:H())
-		var datatype : int = 0 -- floating point
-		var fileHandle = C.fopen(filename, 'wb') -- b for binary
-		C.fwrite(&width, sizeof(int), 1, fileHandle)
-		C.fwrite(&height, sizeof(int), 1, fileHandle)
-		C.fwrite(&channelCount, sizeof(int), 1, fileHandle)
-		C.fwrite(&datatype, sizeof(int), 1, fileHandle)
-  
-		var size = sizeof(float) * [uint32](width*height*channelCount)
-		var ptr = C.malloc(size)
-		C.cudaMemcpy(ptr, imPtr, size, C.cudaMemcpyDeviceToHost)
-		C.fwrite(ptr, sizeof(float), [uint32](width*height*channelCount), fileHandle)
-	    C.fclose(fileHandle)
-	    
-	    C.free(ptr)
-
-	end
-
-	local terra debugImageWritePrefix(pd : &PlanData, imPtr : &float, channelCount : int, prefix : rawstring)
-		var buffer : int8[128]
-		--var suffix = "AD"
-		var suffix = "optNoAD"
-		C.sprintf(buffer, "%s_%s.imagedump", prefix, suffix)
-		debugImageWrite(pd, imPtr, channelCount, buffer)
-	end
 
 
 
@@ -329,7 +295,7 @@ return function(problemSpec, vars)
 		if ([util.debugDumpInfo]) then
 			var buffer : int8[64]
 			C.sprintf(buffer, "%s_%d_%d.imagedump", name, nIter, lIter)
-			debugImageWrite(pd, ptr, 1, buffer)
+			dbg.imageWrite(pd, ptr, 1, buffer)
 		end
 	end
 
@@ -366,9 +332,9 @@ return function(problemSpec, vars)
 		    			C.printf("dumpingCostJTFAndPre\n")
 		    			gpu.dumpCostJTFAndPre(pd)
 		    			C.printf("saving\n")
-		    			debugImageWritePrefix(pd, pd.debugCostImage, 1, "cost")
-		    			debugImageWritePrefix(pd, pd.debugJTFImage, sizeof([unknownElement]) / 4, "JTF")
-		    			debugImageWritePrefix(pd, pd.debugPreImage, sizeof([unknownElement]) / 4, "Pre")
+		    			dbg.imageWritePrefix(pd, pd.debugCostImage, 1, "cost")
+		    			dbg.imageWritePrefix(pd, pd.debugJTFImage, sizeof([unknownElement]) / 4, "JTF")
+		    			dbg.imageWritePrefix(pd, pd.debugPreImage, sizeof([unknownElement]) / 4, "Pre")
 		    		end
 	    		end
 	    	end
@@ -389,7 +355,7 @@ return function(problemSpec, vars)
 			    			C.printf("dumpingJTJ\n")
 			    			gpu.dumpJTJ(pd)
 			    			C.printf("saving\n")
-			    			debugImageWritePrefix(pd, pd.debugJTJImage, sizeof([unknownElement]) / 4, "JTJ")
+			    			dbg.imageWritePrefix(pd, pd.debugJTJImage, sizeof([unknownElement]) / 4, "JTJ")
 			    		end
 		    		end
 		    	end
@@ -413,7 +379,7 @@ return function(problemSpec, vars)
 			escape
 				if util.debugDumpInfo then
 		    		emit quote
-						debugImageWritePrefix(pd, [&float](pd.parameters.X.data), sizeof([unknownElement]) / 4, "result")
+						dbg.imageWritePrefix(pd, [&float](pd.parameters.X.data), sizeof([unknownElement]) / 4, "result")
 					end
 				end
 			end
