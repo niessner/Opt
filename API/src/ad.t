@@ -147,26 +147,43 @@ local function simplifymore(op,args)
 end
 
 local function simplify(op,args)
+
+    if op.name == "add" then
+        local c = 0.0
+        local terms = terralib.newlist()
+        local function insertall(args)
+            for i,a in ipairs(args) do
+                if Const:is(a) then
+                    c = c + a.v
+                elseif Apply:is(a) and a.op.name == "add" then
+                    insertall(a.args)
+                else
+                    terms:insert(a)
+                end
+            end
+        end
+        insertall(args)
+        if c ~= 0.0 then
+            terms:insert(toexp(c))
+        end
+        if #terms == 1 then return terms[1] end
+        if #terms == 0 then return zero end
+        return newapply(op,terms)
+    end
+    
+    if allconst(args) then
+        local r = op:propagateconstant(args:map("v"))
+        if r then return r end
+    end
+    
     local x,y,z = unpack(args)
     if commutes[op.name] and Const:is(x) then
         x,y = y,x
-    end
-    --print(x,y)
-    if allconst(args) and op:getimpl() then
-        return toexp(op:getimpl()(unpack(args:map("v"))))
     end
     
     if op.name == "mul" then
         if y == one then return x
         elseif y == zero then return zero
-        elseif y == negone then return -x
-        end
-    elseif op.name == "add" then
-        if y == zero then return x end
-    elseif op.name == "sub" then
-        if x == y then return zero
-        elseif y == zero then return x
-        elseif x == zero then return -y 
         end
     elseif op.name == "div" then
         if y == one then return x
@@ -278,16 +295,20 @@ function Op:__call(...)
     return ExpVector:new { data = exps }
 end
 function Op:define(fn,...)
-    self.nparams = debug.getinfo(fn,"u").nparams
+    local dbg = debug.getinfo(fn,"u")
+    if not dbg.isvararg then
+        self.nparams = dbg.nparams
+    end
     self.generator = fn
     local N
     self.derivs,N = toexps(...)
     assert(not N, "derivative definitons cannot include ExpVectors")
     return self
 end
+
 function Op:getimpl()
     if self.impl then return self.impl end
-    if not self.generator then return nil
+    if not self.generator or not self.nparams then return nil
     else
         local s = terralib.newlist()
         for i = 1,self.nparams do
@@ -296,6 +317,12 @@ function Op:getimpl()
         terra self.impl([s]) return [self.generator(unpack(s))] end
         return self.impl
     end
+end
+
+function Op:propagateconstant(args)
+    local impl = self:getimpl()
+    if not impl then return nil end
+    return assert(toexp(impl(unpack(args))), "result is not an expression")
 end
 
 function Op:__tostring() return self.name end
@@ -437,11 +464,9 @@ local function expstostring(es)
         return (prec(e) < p and "(%s)" or "%s"):format(stringforuse(e))
     end
     local function emitapp(e)
-        if e.op.name == "unm" then
-            return ("-%s"):format(emitprec(e.args[1],3))
-        elseif infix[e.op.name] then
+        if infix[e.op.name] then
             local o,p = unpack(infix[e.op.name])
-            return ("%s %s %s"):format(emitprec(e.args[1],p),o,emitprec(e.args[2],p+1))
+            return e.args:map(emitprec,p):concat((" %s "):format(o))
         else
             return ("%s(%s)"):format(tostring(e.op),e.args:map(stringforuse):concat(","))
         end
@@ -561,13 +586,10 @@ ad.TerraVector = terralib.memoize(function(typ,N)
     return VecType
 end)
 
-function ad.toterra(es,varmap_,generatormap_) 
+function ad.toterra(es,varmap,generatormap) 
     es = terralib.islist(es) and es or terralib.newlist(es)
      --varmap is a function or table mapping keys to what terra code should go there
-    local varmap = type(varmap_) == "table" and function(v) return varmap_[v] end or varmap_
-    assert(varmap)
-    local generatormap = generatormap_ == "table" and function(op) return generatormap_[op] end
-                       or generatormap_ or defaultgenerator
+    generatormap = generatormap or defaultgenerator
     local manyuses = countuses(es)
     local nvars = 0
     local results = terralib.newlist {}
@@ -627,8 +649,14 @@ end
 function Exp:partials()
     return empty
 end
+
+function Op:getpartials(args)
+    assert(#self.derivs == #args, "number of arguments do not match number of partials")
+    return self.derivs:map("rename",args)
+end
+
 function Apply:partials()
-    self.partiallist = self.partiallist or self.op.derivs:map("rename",self.args)
+    self.partiallist = self.partiallist or self.op:getpartials(self.args)
     return self.partiallist
 end
 
@@ -673,11 +701,28 @@ function Exp:gradient(exps)
     return exps:map(function(e) return tape[e] or zero end)
 end
 
-ad.add:define(function(x,y) return `x + y end,1,1)
-ad.sub:define(function(x,y) return `x - y end,1,-1)
+local function rep(N,v) 
+    local r = terralib.newlist()
+    for i = 1,N do
+        r:insert(v)
+    end
+    return r
+end
+
+ad.add:define(function(x,...) 
+    for i = 2,select('#',...) do
+        local y = select(i,...)
+        x = `x + y
+    end
+    return x
+end)
+function ad.add:getpartials(args) return rep(#args,one) end
+
+function ad.sub(x,y) return x + -y end
 ad.mul:define(function(x,y) return `x * y end,y,x)
 ad.div:define(function(x,y) return `x / y end,1/y,-x/(y*y))
-ad.unm:define(function(x) return `-x end, -1)
+function ad.unm(x) return -1.0*x end
+
 ad.acos:define(function(x) return `C.acos(x) end, -1.0/ad.sqrt(1.0 - x*x))
 ad.acosh:define(function(x) return `C.acosh(x) end, 1.0/ad.sqrt(x*x - 1.0))
 ad.asin:define(function(x) return `C.asin(x) end, 1.0/ad.sqrt(1.0 - x*x))
@@ -721,10 +766,12 @@ ad.greatereq:define(function(x,y) return `int(x >= y) end,0,0)
 ad.not_:define(function(x) return `int(not bool(x)) end, 0)
 
 setmetatable(ad,nil) -- remove special metatable that generates new blank ops
+
 ad.Var,ad.Apply,ad.Const,ad.Exp = Var, Apply, Const, Exp
 
 --[[
 local x,y,z = ad.v.x,ad.v.y,ad.v.z
+
 print(expstostring(ad.atan2.derivs))
 assert(y == y)
 assert(ad.cos == ad.cos)
@@ -736,7 +783,6 @@ print(r:rename({x = x+y,y = x+y}))
 local e = 2*x*x*x*3 -- - y*x
 print((ad.sin(x)*ad.sin(x)):d(x))
 print(e:d(x)*3+(4*x)*x)
-
 
 local w = x*x
 
@@ -750,8 +796,10 @@ local exp = (3*w + 4*w + 3*w*z)
 print(unpack((3*x*x + x):gradient{x}))
 local g = exp:gradient({x,y,z})
 print(expstostring(g))
-local t = ad.toterra(g,{x = symbol("x"), y = symbol("y"), z = symbol("z")})
+local t = ad.toterra(g, function(stmts,v) return assert(({x = symbol("x"), y = symbol("y"), z = symbol("z")})[v]) end)
 t:printpretty()
+
+print(ad.select(ad.v.x,ad.select(ad.v.y,ad.v.z,0),0))
 ]]
---print(ad.select(ad.v.x,ad.select(ad.v.y,ad.v.z,0),0))
+
 return ad
