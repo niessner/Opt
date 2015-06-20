@@ -104,18 +104,31 @@ function dot(a,b)
 	return a(0)*b(0) + a(1)*b(1)
 end
 
+function doBoundsVec1(valid, expression) 
+	return ad.select(valid, expression, 0)
+end
+
+function doBoundsVec2(valid, expression) 
+	return expression
+	--return ad.select(valid, expression, ad.Vector(0,0))
+end
+
 local function JTJ()
 	local b = ad.Vector(0.0, 0.0)
 	local bA = 0.0
 	local i = 0
 	local j = 0
+	local gi = 0
+	local gj = 0
 	local pImage = S:Image("P",opt.float3,W,H,-1)
 	
 	-- fit/pos
 	local constraintUV = Constraints(0,0)	
-	--local validConstraint = (constraintUV(0) >= 0 and constraintUV(1) >= 0) and Mask(0,0) == 0.0
+	local validConstraint = ad.and_(ad.and_(ad.greatereq(constraintUV(0), 0), ad.greatereq(constraintUV(1), 0)), ad.eq(Mask(0,0), 0.0))
 	--if validConstraint then
-	 	b = b + (2.0*w_fitSqrt*w_fitSqrt)*getP(pImage,i,j)
+	local fit = (2.0*w_fitSqrt*w_fitSqrt)*getP(pImage,i,j)
+	fit = ad.select(validConstraint, fit, ad.Vector(0,0))
+	b = b + fit
 	--end
 
 	-- pos/reg
@@ -126,18 +139,23 @@ local function JTJ()
 	--local valid1 = inBounds(gi+0, gj+1, X) and Mask(i+0, j+1) == 0.0
 	--local valid2 = inBounds(gi-1, gj+0, X) and Mask(i-1, j+0) == 0.0
 	--local valid3 = inBounds(gi+1, gj+0, X) and Mask(i+1, j+0) == 0.0
-				
+	
+	local valid0 = ad.and_(opt.InBounds(gi+0, gj-1, 0, 0), ad.eq(Mask(i+0, j-1), 0.0))
+	local valid1 = ad.and_(opt.InBounds(gi+0, gj+1, 0, 0), ad.eq(Mask(i+0, j+1), 0.0))
+	local valid2 = ad.and_(opt.InBounds(gi-1, gj+0, 0, 0), ad.eq(Mask(i-1, j+0), 0.0))
+	local valid3 = ad.and_(opt.InBounds(gi+1, gj+0, 0, 0), ad.eq(Mask(i+1, j+0), 0.0))
+	
 	--if valid0 then
-		e_reg = e_reg + 2 * (p00 - getP(pImage,i+0, j-1))
+		e_reg = e_reg + doBoundsVec2(valid0, 2 * (p00 - getP(pImage,i+0, j-1)))
 	--end
 	--if valid1 then
-		e_reg = e_reg + 2 * (p00 - getP(pImage,i+0, j+1))
+		e_reg = e_reg + doBoundsVec2(valid1, 2 * (p00 - getP(pImage,i+0, j+1)))
 	--end
 	--if valid2 then
-		e_reg = e_reg + 2 * (p00 - getP(pImage,i-1, j+0))
+		e_reg = e_reg + doBoundsVec2(valid2, 2 * (p00 - getP(pImage,i-1, j+0)))
 	--end
 	--if valid3 then
-		e_reg = e_reg + 2 * (p00 - getP(pImage,i+1, j+0))
+		e_reg = e_reg + doBoundsVec2(valid3, 2 * (p00 - getP(pImage,i+1, j+0)))
 	--end
 	
 	
@@ -153,25 +171,25 @@ local function JTJ()
 	do
 		local qHat = UrShape(i+0, j-1)
 		local D = mul(dR,(pHat - qHat))
-		e_reg_angle = e_reg_angle + dot(D,D)*angleP 
+		e_reg_angle = e_reg_angle + doBoundsVec1(valid0, dot(D,D)*angleP) 
 	end
 	--if valid1 then
 	do
 		local qHat = UrShape(i+0, j+1)
 		local D = mul(dR,(pHat - qHat))
-		e_reg_angle = e_reg_angle + dot(D,D)*angleP 
+		e_reg_angle = e_reg_angle + doBoundsVec1(valid1, dot(D,D)*angleP)
 	end
 	--if valid2 then
 	do
 		local qHat = UrShape(i-1, j+0)
 		local D = mul(dR,(pHat - qHat))
-		e_reg_angle = e_reg_angle + dot(D,D)*angleP 
+		e_reg_angle = e_reg_angle + doBoundsVec1(valid2, dot(D,D)*angleP)
 	end
 	--if valid3 then
 	do
 		local qHat = UrShape(i+1, j+0)
 		local D = mul(dR,(pHat - qHat))
-		e_reg_angle = e_reg_angle + dot(D,D)*angleP 
+		e_reg_angle = e_reg_angle + doBoundsVec1(valid3, dot(D,D)*angleP)
 	end
 			
 	bA = bA + (2.0*w_regSqrt*w_regSqrt)*e_reg_angle
@@ -184,6 +202,6 @@ local jtj = JTJ()
 print("JTJ = ",jtj)
 
 local cost = ad.sumsquared(unpack(terms))
-return S:Cost(cost,jtj)
+return S:Cost(cost, jtj)
 
 

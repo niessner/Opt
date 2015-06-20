@@ -153,7 +153,7 @@ local terra evalJTF(i : int32, j : int32, gi : int32, gj : int32, self : P:Param
 	-- fit/pos
 	var constraintUV = self.Constraints(i,j)	
 	var validConstraint = (constraintUV(0) >= 0 and constraintUV(1) >= 0) and self.Mask(i,j) == 0.0f
-	do
+	if validConstraint then
 	 	b 	= b + (2.0f*self.w_fitSqrt*self.w_fitSqrt)*(getXFloat2(i,j,self) - constraintUV)
 	 	pre = pre + (2.0f*self.w_fitSqrt*self.w_fitSqrt)*make_float2(1.0f, 1.0f) 
 	end
@@ -170,28 +170,28 @@ local terra evalJTF(i : int32, j : int32, gi : int32, gj : int32, self : P:Param
 	var valid2 = inBounds(gi-1, gj+0, self.X) and (self.Mask(i-1, j+0) == 0.0f)
 	var valid3 = inBounds(gi+1, gj+0, self.X) and (self.Mask(i+1, j+0) == 0.0f)
 
-	do
+	if valid0 then
 		var q : float_2 	= getXFloat2(	i+0, j-1, self)
 		var qHat : float_2 	= self.UrShape(	i+0, j-1)
 		var R_j : float2x2 	= evalR(self.X(	i+0, j-1)(2)) 
 		e_reg 				= e_reg + 2 * (p - q) - mul(R_i + R_j, pHat - qHat)
 		pre 				= pre + (4.0f*self.w_regSqrt*self.w_regSqrt)*make_float2(1.0f, 1.0f) 
 	end
-	do
+	if valid1 then
 		var q : float_2 	= getXFloat2(	i+0, j+1, self)
 		var qHat : float_2 	= self.UrShape(	i+0, j+1)
 		var R_j : float2x2 	= evalR(self.X(	i+0, j+1)(2)) 
 		e_reg 				= e_reg + 2 * (p - q) - mul(R_i + R_j, pHat - qHat)
 		pre 				= pre + (4.0f*self.w_regSqrt*self.w_regSqrt)*make_float2(1.0f, 1.0f) 
 	end
-	do
+	if valid2 then
 		var q : float_2 	= getXFloat2(	i-1, j+0, self)
 		var qHat : float_2 	= self.UrShape(	i-1, j+0)
 		var R_j : float2x2 	= evalR(self.X(	i-1, j+0)(2)) 
 		e_reg 				= e_reg + 2 * (p - q) - mul(R_i + R_j, pHat - qHat)
 		pre 				= pre + (4.0f*self.w_regSqrt*self.w_regSqrt)*make_float2(1.0f, 1.0f) 
 	end
-	do
+	if valid3 then
 		var q : float_2 	= getXFloat2(	i+1, j+0, self)
 		var qHat : float_2 	= self.UrShape(	i+1, j+0)
 		var R_j : float2x2 	= evalR(self.X(	i+1, j+0)(2)) 
@@ -207,7 +207,7 @@ local terra evalJTF(i : int32, j : int32, gi : int32, gj : int32, self : P:Param
 	var e_reg_angle = 0.0f
 	
 	
-	do
+	if valid0 then
 		var q : float_2 	= getXFloat2(	i+0, j-1, self)
 		var qHat : float_2 	= self.UrShape(	i+0, j-1)
 		var D : float_2 	= -mul(dR,(pHat - qHat))
@@ -218,7 +218,7 @@ local terra evalJTF(i : int32, j : int32, gi : int32, gj : int32, self : P:Param
 		preA 				= preA 			+ D:dot(D) * self.w_regSqrt*self.w_regSqrt
 	end
 
-	do
+	if valid1 then
 		var q : float_2 	= getXFloat2(	i+0, j+1, self)
 		var qHat : float_2 	= self.UrShape(	i+0, j+1)
 		var D : float_2 	= -mul(dR,(pHat - qHat))
@@ -229,7 +229,7 @@ local terra evalJTF(i : int32, j : int32, gi : int32, gj : int32, self : P:Param
 		preA 				= preA 			+ D:dot(D) * self.w_regSqrt*self.w_regSqrt
 	end
 
-	do
+	if valid2 then
 		var q : float_2 	= getXFloat2(	i-1, j+0, self)
 		var qHat : float_2 	= self.UrShape(	i-1, j+0)
 		var D : float_2 	= -mul(dR,(pHat - qHat))
@@ -240,7 +240,7 @@ local terra evalJTF(i : int32, j : int32, gi : int32, gj : int32, self : P:Param
 		preA 				= preA 			+ D:dot(D) * self.w_regSqrt*self.w_regSqrt
 	end
 
-	do 
+	if valid3 then
 		var q : float_2 	= getXFloat2(	i+1, j+0, self)
 		var qHat : float_2 	= self.UrShape(	i+1, j+0)
 		var D : float_2 	= -mul(dR,(pHat - qHat))	
@@ -254,6 +254,15 @@ local terra evalJTF(i : int32, j : int32, gi : int32, gj : int32, self : P:Param
 	
 	preA = 2.0f* preA
 
+	if gi == 240 and gj == 80 then
+		--var m0 = self.Mask(i+0, j-1)
+		--var m1 = self.Mask(i+0, j+1)
+		--var m2 = self.Mask(i-1, j+0)
+		--var m3 = self.Mask(i+1, j+0)
+		--printf("R= %f %f %f %f\n", R(0), R(1), R(2), R(3))
+		--printf("dR= %f %f %f %f\n", dR(0), dR(1), dR(2), dR(3))
+		--printf("e_reg_angle %f; %f %f %f %f\n", e_reg_angle, m0, m1, m2, m3)
+	end
 	
 	bA = bA + (2.0f*self.w_regSqrt*self.w_regSqrt)*e_reg_angle
 
