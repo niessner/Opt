@@ -768,16 +768,13 @@ local function createfunction(problemspec,name,exps,usebounds,W,H)
         return accesssyms[a]
     end
     -- NOTE: math is set globally for the particular plan being compiled to either util.gpuMath or util.cpuMath
-    local function generatormap(op) 
-        local fn = opt.math[op.name]
+    local function generator(e,args)
+        local fn = opt.math[e.op.name]
         if fn then
-            return function(...) 
-                local args = {...} 
-                return `fn(args)
-            end
+            return `fn(args)
         end 
     end
-    local result = ad.toterra(exps,emitvar,generatormap)
+    local result = ad.toterra(exps,emitvar,generator)
     local terra generatedfn([i], [j], [gi], [gj], [P], [extraimages])
         return result
     end

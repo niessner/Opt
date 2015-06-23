@@ -44,6 +44,19 @@ local Apply = Exp:Variant("Apply") -- an application
 local Const = Exp:Variant("Const") -- a constant, C
 local ExpVector = newclass("ExpVector")
 
+local nextid = 0
+local function allocid()
+    nextid = nextid + 1
+    return nextid
+end
+
+local function sortexpressions(es)
+    local function order(a,b)
+        return a.id < b.id
+    end
+    table.sort(es,order)
+    return es
+end
 
 local empty = terralib.newlist {}
 function Exp:children() return empty end
@@ -51,15 +64,13 @@ function Apply:children() return self.args end
 
 function Const:__tostring() return tostring(self.v) end
 
-local applyid = 0
-local function newapply(op,args)
-    local nvars = 0
+local function newapply(op,config,args)
     assert(not op.nparams or #args == op.nparams)
-    applyid = applyid + 1
-    return Apply:new { op = op, args = args, nvars = nvars, id = applyid - 1 }
+    assert(type(config) == "table")
+    return Apply:new { op = op, args = args, config = config, id = allocid() }
 end
 
-local getconst = terralib.memoize(function(n) return Const:new { v = n } end)
+local getconst = terralib.memoize(function(n) return Const:new { v = n, id = allocid() } end)
 local function toexp(n)
     if n then 
         if Exp:is(n) then return n
@@ -84,132 +95,151 @@ end
 
 function Var:key() return self.key_ end
 
-local function shouldcommute(a,b)
-    if Const:is(a) then return true end
-    if b:prec() < a:prec() then return true end
-    return false
+--[[
+  cases: sum + sum -> turn each child into a factor (c,[t]) and join
+  cases: sum + prod -> use sum + sum
+  cases: sum + pow -> use sum + sum
+  
+  cases: prod*prod -> new factor with combined terms turn each term into pow (c,t) (done)
+  cases: prod*pow -> use prod*prod (done)
+  
+  cases: prod*sum -> distribute prod into sum
+]]
+
+local function asprod(exp)
+    if Apply:is(exp) and exp.op.name == "prod" then
+        return exp.config.c, exp:children()
+    elseif Const:is(exp) then
+        return exp.v, empty
+    else
+        return 1.0,terralib.newlist { exp }
+    end
+end
+local function aspowc(exp)
+    if Apply:is(exp) and exp.op.name == "powc" then
+        return exp.config.c, exp:children()[1]
+    else
+        return 1.0,exp
+    end
 end
 
-local commutes = { add = true, mul = true }
-local assoc = { add = true, mul = true }
-local function factors(e)
-    if Apply:is(e) and e.op.name == "mul" then
-        return e.args[1],e.args[2]
-    end
-    return e,one
-end
-local function simplifymore(op,args)
-    local x,y,z = unpack(args)
-    
-    if #args == 2 and Apply:is(x) and Apply:is(y) and x.op.name == "select" and y.op.name == "select" and x.args[1] == y.args[1] then
-        return ad.select(x.args[1],op(x.args[2],y.args[2]),op(x.args[3],y.args[3]))
-    end
-    if op.name == "select" and Apply:is(y) and y.op.name == "select" and y.args[3] == args[3] then
-        return ad.select(ad.and_(x,y.args[1]),y.args[2],args[3]) 
-    end
-    if assoc[op.name] and Apply:is(x) and x.op.name == op.name
-           and Const:is(x.args[2]) then -- (e + c) + ? -> e + (? + c)
-        --print("assoc1")
-        return op(x.args[1],op(x.args[2],y)) -- e0 + (e1 + c) ->  (e0 + e1) + c
-    elseif assoc[op.name] and Apply:is(y) and y.op.name == op.name
-           and Const:is(y.args[2]) then
-        --print("assoc2")
-        return op(op(x,y.args[1]),y.args[2])
-    elseif commutes[op.name] and shouldcommute(x,y) then 
-        --print("commute")
-        return op(y,x) -- constants will be on rhs
-    end
-    
-    if op.name == "mul" then
-        if Apply:is(x) and x.op.name == "select" then
-            if x.args[2] == one or x.args[2] == zero or x.args[3] == one or x.args[3] == zero then
-                return ad.select(x.args[1],y*x.args[2],y*x.args[3])
-            end
-        elseif Apply:is(y) and y.op.name == "select" then
-            if y.args[2] == one or y.args[2] == zero or y.args[3] == one or y.args[3] == zero then
-                return ad.select(y.args[1],x*y.args[2],x*y.args[3])
-            end
-        elseif Const:is(y) and Apply:is(x) and x.op.name == "unm" then
-            return x.args[1]*-y
-        end
-    elseif op.name == "add" then
-        local x0,x1 = factors(x)
-        local y0,y1 = factors(y)
-        if x1 ~= one or y1 ~= one or x0 == y0 then 
-            if x0 == y0 then return x0*(x1 + y1)
-            elseif x1 == y1 then return (x0 + y0)*x1
-            end
-        end
-    elseif op.name == "unm" and Apply:is(x) and x.op.name == "select" then
-        return ad.select(x.args[1],-x.args[2],-x.args[3])
-    end
-    
-end
 
-local function simplify(op,args)
-
-    if op.name == "add" then
-        local c = 0.0
-        local terms = terralib.newlist()
-        local function insertall(args)
-            for i,a in ipairs(args) do
-                if Const:is(a) then
-                    c = c + a.v
-                elseif Apply:is(a) and a.op.name == "add" then
-                    insertall(a.args)
-                else
-                    terms:insert(a)
-                end
-            end
-        end
-        insertall(args)
-        if c ~= 0.0 then
-            terms:insert(toexp(c))
-        end
-        if #terms == 1 then return terms[1] end
-        if #terms == 0 then return zero end
-        return newapply(op,terms)
-    end
-    
+local function simplify(op,config,args)
     if allconst(args) then
         local r = op:propagateconstant(args:map("v"))
         if r then return r end
     end
     
-    local x,y,z = unpack(args)
-    if commutes[op.name] and Const:is(x) then
-        x,y = y,x
+    if op.name == "sum" then
+        local root = {}
+        local function lookup(es)
+            local node = root
+            for _,e in ipairs(es) do
+                local next = node[e]
+                if not next then
+                    next = {}
+                    node[e] = next
+                end
+                node = next
+            end
+            return assert(node)
+        end
+        
+        local termnodes = terralib.newlist()
+        
+        local function insertall(args)
+            for i,a in ipairs(args) do
+                if Const:is(a) then
+                    config.c = config.c + a.v
+                elseif Apply:is(a) and a.op.name == "sum" then
+                    config.c = config.c + a.config.c
+                    insertall(a.args)
+                else
+                    local c,aa = asprod(a)
+                    local tbl = lookup(aa)
+                    if not tbl.value then
+                        tbl.c,tbl.value = 0,aa
+                        termnodes:insert(tbl)
+                    end
+                    tbl.c = tbl.c + c
+                end
+            end
+        end
+        insertall(args)
+    
+        if #termnodes == 0 then return toexp(config.c) end
+        local terms = terralib.newlist()
+        for _,t in ipairs(termnodes) do
+            if t.c ~= 0 then
+                terms:insert(ad.prod(t.c,unpack(t.value)))
+            end
+        end
+        if config.c == 0.0 and #terms == 1 then return terms[1] end
+        return newapply(op,config,sortexpressions(terms))
+    elseif op.name == "prod" then
+        local expmap = {} -- maps each term to the power it has
+        local function insertall(args)
+            for i,a in ipairs(args) do
+                local c, es = asprod(a)
+                config.c = config.c * c
+                for _,e in ipairs(es) do
+                    local c,ep = aspowc(e)
+                    expmap[ep] = (expmap[ep] or 0) + c
+                end
+            end
+        end
+        insertall(args)
+        if config.c == 0.0 then return zero end
+        
+        local factors = terralib.newlist()
+        for k,v in pairs(expmap) do
+            if v ~= 0 then
+                factors:insert(k^v)
+            end
+        end
+        
+        if #factors == 0 then return toexp(config.c) end
+        if #factors == 1 and config.c == 1.0 then return factors[1] end
+        return newapply(op,config,sortexpressions(factors))
     end
     
-    if op.name == "mul" then
-        if y == one then return x
-        elseif y == zero then return zero
-        end
-    elseif op.name == "div" then
-        if y == one then return x
-        elseif y == negone then return -x
-        elseif x == y then return one 
+    local x,y,z = unpack(args)
+    
+    if op.name == "pow" then
+        if Const:is(y) then
+            if y.v == 1.0 then
+                return x
+            elseif y.v == 0.0 then
+                return one
+            else
+                local c,xx = aspowc(x)
+                return ad.powc(y.v*c,xx)
+            end
         end
     elseif op.name == "select" and Const:is(x) then
         return  x.v ~= 0 and y or z
     elseif (op.name == "and_" or op.name == "or_") and x == y then
         return x
     end
-    --[[
-    local r = simplifymore(op,args)
-    if r then
-        return r
-    end]]
-    return newapply(op,args)
+    
+    return newapply(op,config,args)
 end
 
-local function getapply(op,...) 
-    local args = terralib.newlist {...}
-    return simplify(op,args)
+local function getapply(op,...)
+    local args = terralib.newlist()
+    local config = {}
+    for i = 1,select("#",...) do
+        local e = select(i,...)
+        if i <= #op.config then 
+            config[op.config[i]] = assert(tonumber(e),"config must be a number")
+        else
+            e = assert(toexp(e),"expected an expression")
+            args:insert(e)
+        end
+    end
+    return simplify(op,config,args)
 end
-if true then
-    getapply = terralib.memoize(getapply)
-end
+getapply = terralib.memoize(getapply)
 
 function ExpVector:size() return #self.data end
 function ExpVector:__tostring() return "{"..ad.tostrings(self.data).."}" end
@@ -231,28 +261,11 @@ end
 function ExpVector:map(fn)
     return ad.Vector(unpack(self.data:map(fn)))
 end
-function ExpVector:expressions() return self.data end
-
-local function toexps(...)
-    local N
-    local es = terralib.newlist {}
-    for i = 1, select('#',...) do
-        local e = select(i,...)
-        if ExpVector:is(e) then
-            assert(not N or N == e:size(), "non-conforming vector sizes")
-            N = e:size()
-            es[i] = e
-        else
-            es[i] = assert(toexp(e),"attempting use a value that is not an expression")
-        end
-    end
-    return es,N
-end
-    
+function ExpVector:expressions() return self.data end    
 
 -- generates variable names
 local v = setmetatable({},{__index = function(self,idx)
-    local r = Var:new { key_ = assert(idx) }
+    local r = Var:new { key_ = assert(idx), id = allocid() }
     self[idx] = r
     return r
 end})
@@ -281,53 +294,65 @@ setmetatable(ad, { __index = function(self,idx) -- for just this file, auto-gene
     return op
 end })
 
+local function conformvectors(start,...)
+    local N
+    local es = terralib.newlist {}
+    for i = start, select('#',...) do
+        local e = select(i,...)
+        if ExpVector:is(e) then
+            assert(not N or N == e:size(), "non-conforming vector sizes")
+            N = e:size()
+        end
+    end
+    return N
+end
+
+
 function Op:__call(...)
-    local args,N = toexps(...)
-    if not N then return getapply(self,unpack(args)) end
+    local N = conformvectors(#self.config+1,...)
+    if not N then return getapply(self,...) end
     local exps = terralib.newlist()
     for i = 0,N-1 do
         local newargs = terralib.newlist()
-        for _,a in ipairs(args) do
-            newargs:insert(ExpVector:is(a) and a[i] or a)
+        for j = 1,select("#",...) do
+            local e = select(j,...)
+            if j <= #self.config or not ExpVector:is(e) then
+                newargs:insert(e)
+            else
+                newargs:insert(e[i])
+            end
         end
         exps:insert(self(unpack(newargs)))
     end
     return ExpVector:new { data = exps }
 end
+Op.config = {} -- operators that have configuration override this
 function Op:define(fn,...)
     local dbg = debug.getinfo(fn,"u")
-    if not dbg.isvararg then
-        self.nparams = dbg.nparams
+    assert(not dbg.isvararg)
+    self.nparams = dbg.nparams
+    function self:generate(exp,args) return fn(unpack(args)) end
+    local s = terralib.newlist()
+    for i = 1,self.nparams do
+        s:insert(symbol(float))
     end
-    self.generator = fn
-    local N
-    self.derivs,N = toexps(...)
-    assert(not N, "derivative definitons cannot include ExpVectors")
+    terra self.impl([s]) return [ fn(unpack(s)) ] end    
+    self.derivs = terralib.newlist()
+    for i = 1,select("#",...) do
+        local e = select(i,...)
+        self.derivs:insert((assert(toexp(e),"expected an expression")))
+    end
     return self
 end
 
-function Op:getimpl()
-    if self.impl then return self.impl end
-    if not self.generator or not self.nparams then return nil
-    else
-        local s = terralib.newlist()
-        for i = 1,self.nparams do
-            s:insert(symbol(float))
-        end
-        terra self.impl([s]) return [self.generator(unpack(s))] end
-        return self.impl
-    end
-end
-
 function Op:propagateconstant(args)
-    local impl = self:getimpl()
-    if not impl then return nil end
-    return assert(toexp(impl(unpack(args))), "result is not an expression")
+   if not self.impl then return nil end
+    return assert(toexp(self.impl(unpack(args))), "result is not an expression")
 end
 
 function Op:__tostring() return self.name end
 
-local mo = {"add","sub","mul","div"}
+local mo = {"add","sub","mul","div", "pow"}
 for i,o in ipairs(mo) do
     local function impl(a,b) return (ad[o])(a,b) end
     Exp["__"..o], ExpVector["__"..o] = impl,impl
@@ -340,7 +365,11 @@ function Exp:rename(vars)
     local visitcached
     local function visit(self) 
         if self.kind == "Apply" then
-            return self.op(unpack(self.args:map(visitcached,vars)))
+            local nargs = self.args:map(visitcached,vars)
+            for i,c in ipairs(self.op.config) do
+                nargs:insert(i,self.config[c])
+            end
+            return self.op(unpack(nargs))
         elseif self.kind == "Const" then
             return self
         elseif self.kind == "Var" then
@@ -383,19 +412,8 @@ local function countuses(es)
     return uses
 end    
 
-
-
-local infix = { add = {"+",1}, sub = {"-",1}, mul = {"*",2}, div = {"/",2} }
-
-function Op:prec()
-    if not infix[self.name] then return 3
-    else return infix[self.name][2] end
-end
-
-function Exp:prec()
-    if self.kind ~= "Apply" then return 3
-    else return self.op:prec() end
-end
+local ispoly = {sum = 0, prod = 1, powc = 2}
+--local ispoly = {}
 local function expstostring(es)
     es = (terralib.islist(es) and es) or terralib.newlist(es)
     local linearized = terralib.newlist()
@@ -411,7 +429,9 @@ local function expstostring(es)
         end
         uses[e] = uses[e] + 1
     end
-    for i,e in ipairs(es) do visit(e) end
+    for i,e in ipairs(es) do 
+        visit(e) 
+    end
     
 -------------------------------
     local exptoreg = {}
@@ -433,7 +453,58 @@ local function expstostring(es)
         exptoreg[e] = r
         return r
     end
+---------------------------------
     
+    local shouldprint = {}
+    local function stringforuse(e)
+        shouldprint[e] = true
+        if "Var" == e.kind then
+            local k = e:key()
+            return type(k) == "number" and ("v%d"):format(k) or tostring(e:key()) 
+        elseif "Const" == e.kind then
+            return tostring(e.v)
+        else
+            return ("r%d"):format(exptoidx[e])
+        end
+    end    
+
+    local function emitpoly(e,l) 
+        if not Apply:is(e) or not ispoly[e.op.name] or l > ispoly[e.op.name] then
+            return stringforuse(e)
+        end
+        if e.op.name == "powc" then
+            return ("%s^%d"):format(stringforuse(e.args[1]),e.config.c)
+        elseif e.op.name == "prod" then
+            local r = e.args:map(emitpoly,2):concat("*")
+            if e.config.c ~= 1 then
+                r = ("%d*%s"):format(e.config.c,r)
+            end
+            return r
+        elseif e.op.name == "sum" then
+            local r = e.args:map(emitpoly,1):concat(" + ")
+            if e.config.c ~= 0 then
+                r = ("%s + %d"):format(r,e.config.c)
+            end
+            return r
+        end
+    end
+    
+    local function emitapp(e)
+        if ispoly[e.op.name] then
+            return emitpoly(e,0)
+        end
+        local name = e.op.name
+        if #e.op.config > 0 then
+            local cfgstr = terralib.list.map(e.op.config,function(name) return e.config[name] end):concat(",")
+            name = ("%s[%s]"):format(name,cfgstr)
+        end
+        return ("%s(%s)"):format(name,e.args:map(stringforuse):concat(","))
+    end
+    
+    
+    local estring = es:map(stringforuse):concat(",")
+    
+    local tbl = terralib.newlist()
     for i = #linearized,1,-1 do
         local e = linearized[i]
         if e.kind == "Apply" then
@@ -441,54 +512,24 @@ local function expstostring(es)
             for i,c in ipairs(e:children()) do
                 registerforexp(c)
             end
+            if shouldprint[e] then
+                tbl:insert(("[%2d]  r%d = %s\n"):format(registerforexp(e),i,emitapp(e)))
+            end
         end
     end
 --------------------------------
-    
-    local tbl = terralib.newlist()
-    local emitted = {}
-    
-    local function stringforuse(e)
-        if "Var" == e.kind then
-            local k = e:key()
-            return type(k) == "number" and ("v%d"):format(k) or tostring(e:key()) 
-        elseif "Const" == e.kind then
-            return tostring(e.v)
-        else
-            return ("r%d"):format(registerforexp(e))
-        end
+    local rtbl = terralib.newlist()
+    for i = #tbl,1,-1  do
+        rtbl:insert(tbl[i])
     end
-    
-    local function prec(e) return (uses[e] > 1 and 3) or e:prec() end
-    local function emitprec(e,p)
-        return (prec(e) < p and "(%s)" or "%s"):format(stringforuse(e))
-    end
-    local function emitapp(e)
-        if infix[e.op.name] then
-            local o,p = unpack(infix[e.op.name])
-            return e.args:map(emitprec,p):concat((" %s "):format(o))
-        else
-            return ("%s(%s)"):format(tostring(e.op),e.args:map(stringforuse):concat(","))
-        end
-    end
-
-    for i,e in ipairs(linearized) do
-        if "Apply" == e.kind then
-            tbl:insert(("  r%d = %s\n"):format(registerforexp(e),emitapp(e)))
-        end            
-    end
-    local estring = es:map(stringforuse):concat(",")
-    if #tbl == 0 then return estring end
-    return ("let (%d reg) \n%sin\n  %s\nend\n"):format(nextregister, tbl:concat(),estring)
+    if #rtbl == 0 then return estring end
+    return ("let (%d reg) \n%sin\n  %s\nend\n"):format(nextregister, rtbl:concat(),estring)
 end
 
 ad.tostrings = expstostring
 function Exp:__tostring()
     return expstostring(terralib.newlist{self})
 end
-
-local function defaultgenerator(op) return op.generator end
-
 
 local function emitprintexpression(e, recursionLevel)
     return quote
@@ -586,10 +627,9 @@ ad.TerraVector = terralib.memoize(function(typ,N)
     return VecType
 end)
 
-function ad.toterra(es,varmap,generatormap) 
+function ad.toterra(es,varmap,generator) 
     es = terralib.islist(es) and es or terralib.newlist(es)
      --varmap is a function or table mapping keys to what terra code should go there
-    generatormap = generatormap or defaultgenerator
     local manyuses = countuses(es)
     local nvars = 0
     local results = terralib.newlist {}
@@ -604,9 +644,12 @@ function ad.toterra(es,varmap,generatormap)
             return `float(e.v)
         elseif "Apply" == e.kind then
             if emitted[e] then return emitted[e] end
-            local generator = assert(generatormap(e.op) or defaultgenerator(e.op))
-            local exp = generator(unpack(e.args:map(emit)))
-            if e.op.name == "select" or manyuses[e] then -- we're turning this off now
+            local emittedargs = e.args:map(emit)
+            local exp = generator and generator(e,emittedargs)
+            if not exp then
+                exp = e.op:generate(e,emittedargs)
+            end
+            if e.op.name == "select" or manyuses[e] then 
                 local v = symbol(float,"e")
                 emitted[e] = v
                 statements:insert(quote 
@@ -650,13 +693,13 @@ function Exp:partials()
     return empty
 end
 
-function Op:getpartials(args)
-    assert(#self.derivs == #args, "number of arguments do not match number of partials")
-    return self.derivs:map("rename",args)
+function Op:getpartials(exp)
+    assert(#self.derivs == #exp.args, "number of arguments do not match number of partials")
+    return self.derivs:map("rename",exp.args)
 end
 
 function Apply:partials()
-    self.partiallist = self.partiallist or self.op:getpartials(self.args)
+    self.partiallist = self.partiallist or self.op:getpartials(self)
     return self.partiallist
 end
 
@@ -709,19 +752,82 @@ local function rep(N,v)
     return r
 end
 
-ad.add:define(function(x,...) 
-    for i = 2,select('#',...) do
-        local y = select(i,...)
+function ad.sum:generate(exp,args)
+    local x = args[1]
+    for i = 2,#args do
+        local y = args[i]
         x = `x + y
     end
-    return x
-end)
-function ad.add:getpartials(args) return rep(#args,one) end
+    if exp.config.c ~= 0 then
+        return `x + exp.config.c
+    else
+        return x
+    end
+end
+function ad.sum:getpartials(exp) return rep(#exp.args,one) end
+ad.sum.config = {"c"}
 
-function ad.sub(x,y) return x + -y end
-ad.mul:define(function(x,y) return `x * y end,y,x)
-ad.div:define(function(x,y) return `x / y end,1/y,-x/(y*y))
-function ad.unm(x) return -1.0*x end
+function ad.add(x,y) return ad.sum(0,x,y) end
+function ad.sub(x,y) return ad.sum(0,x,-y) end
+function ad.mul(x,y) return ad.prod(1,x,y) end
+function ad.div(x,y) return ad.prod(1,x,y^-1) end
+
+function ad.prod:generate(exp,args)
+    local x = args[1]
+    for i = 2,#args do
+        local y = args[i]
+        x = `x * y
+    end
+    if exp.config ~= 1.0 then
+        return `exp.config.c * x
+    else
+        return x
+    end
+end
+function ad.prod:getpartials(exp)
+    local r = terralib.newlist()
+    for i,a in ipairs(exp.args) do
+        local terms = terralib.newlist()
+        for j,a2 in ipairs(exp.args) do
+            if i ~= j then
+                terms:insert(a2)
+            end
+        end
+        r:insert(ad.prod(exp.config.c,unpack(terms)))
+    end
+    return r
+end
+ad.prod.config = { "c" }
+
+local function genpow(v,p)
+    assert(p > 0)
+    if p == 1 then return v end
+    local x = symbol("x")
+    local r = x
+    for i = 2,p do
+        r = `r*x
+    end
+    return quote var [x] = v in r end
+end
+
+function ad.powc:generate(exp,args)
+    local c = exp.config.c
+    assert(c ~= 0)
+    if c > 0 then
+        return genpow(args[1],c)
+    else
+        return `1.f/[genpow(args[1],-c)]
+    end
+end
+
+function ad.powc:getpartials(exp)
+    local x = exp.args[1]
+    local c = exp.config.c
+    return terralib.newlist { c*ad.pow(x,c-1) }
+end
+ad.powc.config = { "c" }
+
+function ad.unm(x) return ad.prod(-1.0,x) end
 
 ad.acos:define(function(x) return `C.acos(x) end, -1.0/ad.sqrt(1.0 - x*x))
 ad.acosh:define(function(x) return `C.acosh(x) end, 1.0/ad.sqrt(x*x - 1.0))
@@ -736,7 +842,7 @@ ad.log:define(function(x) return `C.log(x) end, 1.0/x)
 ad.log10:define(function(x) return `C.log10(x) end, 1.0/(ad.log(10.0)*x))
 ad.pow:define(function(x,y) return `C.pow(x,y) end, y*ad.pow(x,y)/x,ad.log(x)*ad.pow(x,y)) 
 ad.sin:define(function(x) return `C.sin(x) end, ad.cos(x))
-ad.sinh:define(function(x) return `C.sinh(a) end, ad.cosh(x))
+ad.sinh:define(function(x) return `C.sinh(x) end, ad.cosh(x))
 ad.sqrt:define(function(x) return `C.sqrt(x) end, 1.0/(2.0*ad.sqrt(x)))
 ad.tan:define(function(x) return `C.tan(x) end, 1.0 + ad.tan(x)*ad.tan(x))
 ad.tanh:define(function(x) return `C.tanh(x) end, 1.0/(ad.cosh(x)*ad.cosh(x)))
@@ -769,8 +875,18 @@ setmetatable(ad,nil) -- remove special metatable that generates new blank ops
 
 ad.Var,ad.Apply,ad.Const,ad.Exp = Var, Apply, Const, Exp
 
+
+
+
+local exp = v.param_w_regSqrt * (v.X_0_0_0 + -1*v.X_1_0_0 - ( ad.cos(v.X_0_0_2) * (v.UrShape_0_0_0 + -1*v.UrShape_1_0_0) -ad.sin(v.X_0_0_2) * (v.UrShape_0_0_1 - v.UrShape_1_0_1)))
+print(exp)
+print(exp:d(v.X_0_0_2))
+
+
+
 --[[
-local x,y,z = ad.v.x,ad.v.y,ad.v.z
+local f = -3*ad.pow(x,2)
+print(f:d(x))
 
 print(expstostring(ad.atan2.derivs))
 assert(y == y)
@@ -800,6 +916,16 @@ local t = ad.toterra(g, function(stmts,v) return assert(({x = symbol("x"), y = s
 t:printpretty()
 
 print(ad.select(ad.v.x,ad.select(ad.v.y,ad.v.z,0),0))
-]]
 
+print(3*ad.v.x*ad.v.y)
+print(3*ad.v.y*ad.v.x^3/ad.v.x^2)
+
+print(3*ad.v.x+4*ad.v.x*ad.v.y-3*ad.v.y*ad.v.x-ad.v.y*ad.v.x)
+
+local x = ad.v.x
+local foo = 3*x^50 - x*2 - 1
+
+print(foo)
+print(foo:d(x))
+]]
 return ad
