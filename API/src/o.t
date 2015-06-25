@@ -1,4 +1,3 @@
-
 --terralib.settypeerrordebugcallback( function(fn) fn:printpretty() end )
 
 opt = {} --anchor it in global namespace, otherwise it can be collected
@@ -887,6 +886,7 @@ local function createjtj(Fs,unknown,P)
         lprintf(0,"r%d = %s",rn,F)
         local unknownsupport = unknownaccesses(F)
         for channel = 0, unknown.N-1 do
+            print("BEGIN CHANNEL",channel)
             local x = unknown(0,0,channel)
             local residuals = residualsincludingX00(unknownsupport,channel)
             local columns = {}
@@ -900,7 +900,9 @@ local function createjtj(Fs,unknown,P)
                 for _,u in ipairs(unknowns) do
                     local drdx_u = rexp:d(unknown(u.x,u.y,u.channel))
                     local exp = drdx00*drdx_u
-                    lprintf(2,"term:\ndr%d_%d%d/dx%d%d[%d] = %s",rn,r.x,r.y,u.x,u.y,u.channel,tostring(drdx_u))
+                    if u.x == 1 and u.y == 0 and u.channel == 0 then
+                        lprintf(2,"term:\ndr%d_%d%d/dx%d%d[%d] = %s",rn,r.x,r.y,u.x,u.y,u.channel,tostring(drdx_u))
+                    end
                     --print(("df(%d,%d)/dx(%d,%d)[%d] * df(%d,%d)/dx(%d,%d)[%d] = %s"):format(r.x,r.y,0,0,r.x,r.y,u.x,u.y,tostring(exp)))
                     --print(("df_%d(%d,%d)/dx_%d(%d,%d)"):format(rn,r.x,r.y,u.channel,u.x,u.y))
                     toprint:insert(drdx_u)

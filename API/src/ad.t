@@ -123,6 +123,11 @@ local function aspowc(exp)
     end
 end
 
+local polycache = terralib.memoize(function(op,c,...)
+    local args,config = terralib.newlist {...}, { c = c }
+    return newapply(op,config,args)
+end)
+
 
 local function simplify(op,config,args)
     if allconst(args) then
@@ -175,7 +180,7 @@ local function simplify(op,config,args)
             end
         end
         if config.c == 0.0 and #terms == 1 then return terms[1] end
-        return newapply(op,config,sortexpressions(terms))
+        return polycache(op,config.c,unpack(sortexpressions(terms)))
     elseif op.name == "prod" then
         local expmap = {} -- maps each term to the power it has
         local function insertall(args)
@@ -200,7 +205,7 @@ local function simplify(op,config,args)
         
         if #factors == 0 then return toexp(config.c) end
         if #factors == 1 and config.c == 1.0 then return factors[1] end
-        return newapply(op,config,sortexpressions(factors))
+        return polycache(op,config.c,unpack(sortexpressions(factors)))
     end
     
     local x,y,z = unpack(args)
@@ -513,7 +518,7 @@ local function expstostring(es)
                 registerforexp(c)
             end
             if shouldprint[e] then
-                tbl:insert(("[%2d]  r%d = %s\n"):format(registerforexp(e),i,emitapp(e)))
+                tbl:insert(("[%2d,%d]  r%d = %s\n"):format(registerforexp(e),e.id,i,emitapp(e)))
             end
         end
     end
@@ -883,6 +888,123 @@ print(exp)
 print(exp:d(v.X_0_0_2))
 
 
+function ad.polysimplify(exp)
+    
+    local function sumtoterms(sum)
+        assert(Apply:is(sum) and sum.op.name == "sum")
+        local terms = terralib.newlist()
+        -- build internal list of terms
+        for i,f in ipairs(sum:children()) do
+            local c,ff = asprod(f)
+            local factor = {}
+            if c ~= 1 then
+                factor[toexp(c)] = 1
+            end
+            for j,p in ipairs(ff) do
+                local c,pp = aspowc(p)
+                pp = ad.polysimplify(pp)
+                factor[pp] = c
+            end
+            terms:insert(factor)
+        end
+        return terms,sum.config.c
+    end
+
+    local function createsum(terms,c)
+        local factors = terralib.newlist()
+        for i,t in ipairs(terms) do
+            local pows = terralib.newlist()
+            for k,v in pairs(t) do
+                pows:insert(k^v)
+            end
+            factors:insert(ad.prod(1,unpack(pows)))
+        end
+        return ad.sum(assert(tonumber(c),"NaN?"),unpack(factors))
+    end
+
+    local function simplifylist(terms,c)
+
+        -- short circuit when there is going to be no advantage to keep going
+        if #terms == 0 then return toexp(c)
+        elseif #terms == 1 then
+            return createsum(terms,c)
+        end
+
+        local minpower,maxnegpower = {},{}
+        local uses,neguses = {},{}
+
+        -- count total uses
+        for i,t in ipairs(terms) do
+            for k,v in pairs(t) do
+                if v > 0 then
+                    uses[k] = (uses[k] or 0) + 1
+                    minpower[k] = math.min(minpower[k] or math.huge, v)
+                else
+                    neguses[k] = (neguses[k] or 0) + 1
+                    maxnegpower[k] = math.max(maxnegpower[k] or -math.huge, v)
+                end
+            end
+        end
+        -- find maximum uses
+        local maxuse,power,maxkey = 0
+        for k,u in pairs(uses) do
+            if u > maxuse then
+                maxuse,maxkey,power = u,k,minpower[k]
+            end
+        end
+        for k,u in pairs(neguses) do
+            if u > maxuse then
+                maxuse,maxkey,power = u,k,maxnegpower[k]
+            end
+        end
+        if maxuse < 2 then
+            return createsum(terms,c) -- no benefit, so stop here
+        end
+        --print("FACTORING",maxuse,power,maxkey)
+        --partition terms
+        local used,notused = terralib.newlist(),terralib.newlist()
+        for i,t in pairs(terms) do
+            local v = t[maxkey]
+            if v and ((v > 0 and power > 0) or (v < 0 and power < 0)) then
+                local newv = v - power
+                if newv == 0 then newv = nil end
+                t[maxkey] = newv
+                used:insert(t) 
+            else
+                notused:insert(t)
+            end
+        end
+
+        -- simplify both sides, and make a new term
+
+        --print("recurse",#notused,#used)
+        local lhs = simplifylist(notused,0)
+        local rhs = simplifylist(used,0)
+        return ad.sum(c,lhs,maxkey^power * rhs)
+    end
+    
+    if Apply:is(exp) then
+        if exp.op.name == "sum" then
+            return simplifylist(sumtoterms(exp))
+        else
+            local nargs = exp:children():map(ad.polysimplify)
+            if exp.config.c then -- HACK! only works for fake config we have now
+                return exp.op(exp.config.c,unpack(nargs))
+            end
+            return exp.op(unpack(nargs))
+        end
+    else 
+        return exp
+    end
+    
+end
+
+local x,y,z = ad.v.x, ad.v.y, ad.v.z
+
+local p = 4*x^2*y*y + 4*x*y*y + 4*y*y  + -1*x^-1 - 2*x^-2*y*y
+
+print(p)
+print(ad.polysimplify(p))
 
 --[[
 local f = -3*ad.pow(x,2)
@@ -922,7 +1044,7 @@ print(3*ad.v.y*ad.v.x^3/ad.v.x^2)
 
 print(3*ad.v.x+4*ad.v.x*ad.v.y-3*ad.v.y*ad.v.x-ad.v.y*ad.v.x)
 
-local x = ad.v.x
+
 local foo = 3*x^50 - x*2 - 1
 
 print(foo)
