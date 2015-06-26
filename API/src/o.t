@@ -767,9 +767,10 @@ local function createfunction(problemspec,name,exps,usebounds,W,H)
         return accesssyms[a]
     end
     -- NOTE: math is set globally for the particular plan being compiled to either util.gpuMath or util.cpuMath
-    local function generator(e,args)
+    local function generator(e,emit)
         local fn = opt.math[e.op.name]
         if fn then
+            local args = e:children():map(emit)
             return `fn(args)
         end 
     end
@@ -778,12 +779,8 @@ local function createfunction(problemspec,name,exps,usebounds,W,H)
         return result
     end
     generatedfn:setname(name)
-    if verboseAD then
+    if verboseAD or true then
         generatedfn:printpretty(true, false)
-    end
-    if name == "evalJTF" and usebounds then
-        --print(exps[1])
-        --generatedfn:printpretty(true, false)
     end
     return generatedfn
 end
@@ -871,7 +868,8 @@ local function createzerolist(N)
     return r
 end
     
-local function lprintf(ident,fmt,...) 
+local function lprintf(ident,fmt,...)
+    if true then return end 
     local str = fmt:format(...)
     ident = (" "):rep(ident*4)
     str = ident..str:gsub('\n', "\n"..ident)
@@ -880,13 +878,11 @@ end
 
 local function createjtj(Fs,unknown,P)
     local P_hat = createzerolist(unknown.N)
-	local toprint = terralib.newlist()
-    for rn,F in ipairs(Fs) do
+	for rn,F in ipairs(Fs) do
         lprintf(0,"\n\n\n\n\n##################################################")
         lprintf(0,"r%d = %s",rn,F)
         local unknownsupport = unknownaccesses(F)
         for channel = 0, unknown.N-1 do
-            print("BEGIN CHANNEL",channel)
             local x = unknown(0,0,channel)
             local residuals = residualsincludingX00(unknownsupport,channel)
             local columns = {}
@@ -900,12 +896,7 @@ local function createjtj(Fs,unknown,P)
                 for _,u in ipairs(unknowns) do
                     local drdx_u = rexp:d(unknown(u.x,u.y,u.channel))
                     local exp = drdx00*drdx_u
-                    if u.x == 1 and u.y == 0 and u.channel == 0 then
-                        lprintf(2,"term:\ndr%d_%d%d/dx%d%d[%d] = %s",rn,r.x,r.y,u.x,u.y,u.channel,tostring(drdx_u))
-                    end
-                    --print(("df(%d,%d)/dx(%d,%d)[%d] * df(%d,%d)/dx(%d,%d)[%d] = %s"):format(r.x,r.y,0,0,r.x,r.y,u.x,u.y,tostring(exp)))
-                    --print(("df_%d(%d,%d)/dx_%d(%d,%d)"):format(rn,r.x,r.y,u.channel,u.x,u.y))
-                    toprint:insert(drdx_u)
+                    lprintf(2,"term:\ndr%d_%d%d/dx%d%d[%d] = %s",rn,r.x,r.y,u.x,u.y,u.channel,tostring(drdx_u))
                     if not columns[u] then
                         columns[u] = 0
                         nonzerounknowns:insert(u)
@@ -921,9 +912,9 @@ local function createjtj(Fs,unknown,P)
     for i,p in ipairs(P_hat) do
         P_hat[i] = 2.0 * p
     end
-    --print(ad.tostrings(toprint))
-    --error("DONE")
-    print("JTJorig = ", ad.tostrings(P_hat))
+    print("JTJ[nopoly] = ", ad.tostrings(P_hat))
+    P_hat = ad.polysimplify(P_hat)
+    print("JTJ[poly] = ", ad.tostrings(P_hat))
     return conformtounknown(P_hat,unknown)
 end
 
@@ -932,8 +923,8 @@ local function createjtf(problemSpec,Fs,unknown,P)
    local P_hat = createzerolist(unknown.N) --gradient
 	
 	for ridx,F in ipairs(Fs) do
-	    print("-------------")
-	    print(("R[%d] = "):format(ridx),F)
+	    lprintf(0,"-------------")
+	    lprintf(1,"R[%d] = %s",ridx,tostring(F))
         local unknownsupport = unknownaccesses(F)
         for channel = 0, unknown.N-1 do
             local x = unknown(0,0,channel)
@@ -950,7 +941,7 @@ local function createjtf(problemSpec,Fs,unknown,P)
                 local dfdx00Sq = dfdx00*dfdx00	-- entry of Diag(J^TJ)
                 P_hat[channel+1] = P_hat[channel+1] + dfdx00Sq			-- summing the pre-conditioner up
                 --sum = sum + dfdx00F
-                print(("dR[%d]_%d_%d/dx[%d] = "):format(ridx,f.x,f.y,channel),dfdx00F)
+                lprintf(2,"dR[%d]_%d_%d/dx[%d] = %s",ridx,f.x,f.y,channel,tostring(dfdx00F))
             end
             
             

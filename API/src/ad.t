@@ -336,7 +336,7 @@ function Op:define(fn,...)
     local dbg = debug.getinfo(fn,"u")
     assert(not dbg.isvararg)
     self.nparams = dbg.nparams
-    function self:generate(exp,args) return fn(unpack(args)) end
+    function self:generate(exp,emit) return fn(unpack(exp:children():map(emit))) end
     local s = terralib.newlist()
     for i = 1,self.nparams do
         s:insert(symbol(float))
@@ -650,23 +650,16 @@ function ad.toterra(es,varmap,generator)
         elseif "Apply" == e.kind then
             if emitted[e] then return emitted[e] end
             local emittedargs = e.args:map(emit)
-            local exp = generator and generator(e,emittedargs)
+            local exp = generator and generator(e,emit)
             if not exp then
-                exp = e.op:generate(e,emittedargs)
+                exp = e.op:generate(e,emit)
             end
-            if e.op.name == "select" or manyuses[e] then 
+            if manyuses[e] then 
                 local v = symbol(float,"e")
                 emitted[e] = v
                 statements:insert(quote 
                         var [v] = exp 
-                        --[[
-                        if not (exp == exp) then
-                            printf("Nan found: %f, \n", exp)
-                            [emitprintexpression(e,3)]
-                            printf("\n")
-                        end
-                        ]]
-                    end)
+                end)
                 return v
             else
                 return exp
@@ -757,17 +750,72 @@ local function rep(N,v)
     return r
 end
 
-function ad.sum:generate(exp,args)
-    local x = args[1]
-    for i = 2,#args do
-        local y = args[i]
-        x = `x + y
-    end
-    if exp.config.c ~= 0 then
-        return `x + exp.config.c
+
+local genpow = terralib.memoize(function(N)
+    local terra pow(a : float) : float
+        var r : float = 1.f
+        for i = 0,N do
+            r = r*a
+        end
+        return r
+    end 
+    pow:setname("pow"..tostring(N))
+    pow:disas()
+    return pow
+end)
+
+local function emitpow(emit,c,e)
+    assert(c ~= 0)
+    e = emit(e)
+    if c == 1 then
+        return e
+    elseif c > 0 then
+        return `[genpow(c)](e)
     else
-        return x
+        return `1.f/[genpow(-c)](e)
+    end 
+end
+local function emitfactor(emit,c,es)
+    local exp
+    if c ~= 1 then
+        exp = `c
     end
+    for i,e in ipairs(es) do
+        local c,ee = aspowc(e)
+        if not exp then
+            exp = emitpow(emit,c,ee)
+        elseif c > 0 then
+            local d = emitpow(emit,c,ee)
+            exp = `exp * d
+        else 
+            local d = emitpow(emit,-c,ee)
+            exp = `exp / d
+        end
+    end
+    return exp
+end
+local function emitsum(emit,c,es)
+    local exp
+    if c ~= 0 then
+        exp = `c
+    end
+    for i,e in ipairs(es) do
+        local c,ee = asprod(e)
+        if not exp then
+            exp = emitfactor(emit,c,ee)
+        elseif c > 0 then
+            local d = emitfactor(emit,c,ee)
+            exp = `exp + d
+        else 
+            local d = emitfactor(emit,-c,ee)
+            exp = `exp - d
+        end
+    end
+    return exp
+end
+
+function ad.sum:generate(exp,emit)
+    return emitsum(emit,exp.config.c,exp:children())
 end
 function ad.sum:getpartials(exp) return rep(#exp.args,one) end
 ad.sum.config = {"c"}
@@ -777,17 +825,8 @@ function ad.sub(x,y) return ad.sum(0,x,-y) end
 function ad.mul(x,y) return ad.prod(1,x,y) end
 function ad.div(x,y) return ad.prod(1,x,y^-1) end
 
-function ad.prod:generate(exp,args)
-    local x = args[1]
-    for i = 2,#args do
-        local y = args[i]
-        x = `x * y
-    end
-    if exp.config ~= 1.0 then
-        return `exp.config.c * x
-    else
-        return x
-    end
+function ad.prod:generate(exp,emit)
+    return emitfactor(emit,exp.config.c,exp:children())
 end
 function ad.prod:getpartials(exp)
     local r = terralib.newlist()
@@ -803,26 +842,8 @@ function ad.prod:getpartials(exp)
     return r
 end
 ad.prod.config = { "c" }
-
-local function genpow(v,p)
-    assert(p > 0)
-    if p == 1 then return v end
-    local x = symbol("x")
-    local r = x
-    for i = 2,p do
-        r = `r*x
-    end
-    return quote var [x] = v in r end
-end
-
-function ad.powc:generate(exp,args)
-    local c = exp.config.c
-    assert(c ~= 0)
-    if c > 0 then
-        return genpow(args[1],c)
-    else
-        return `1.f/[genpow(args[1],-c)]
-    end
+function ad.powc:generate(exp,emit)
+    return emitpow(emit,exp.config.c,exp:children()[1])
 end
 
 function ad.powc:getpartials(exp)
@@ -880,16 +901,7 @@ setmetatable(ad,nil) -- remove special metatable that generates new blank ops
 
 ad.Var,ad.Apply,ad.Const,ad.Exp = Var, Apply, Const, Exp
 
-
-
-
-local exp = v.param_w_regSqrt * (v.X_0_0_0 + -1*v.X_1_0_0 - ( ad.cos(v.X_0_0_2) * (v.UrShape_0_0_0 + -1*v.UrShape_1_0_0) -ad.sin(v.X_0_0_2) * (v.UrShape_0_0_1 - v.UrShape_1_0_1)))
-print(exp)
-print(exp:d(v.X_0_0_2))
-
-
-function ad.polysimplify(exp)
-    
+function ad.polysimplify(exps)
     local function sumtoterms(sum)
         assert(Apply:is(sum) and sum.op.name == "sum")
         local terms = terralib.newlist()
@@ -983,21 +995,34 @@ function ad.polysimplify(exp)
         return ad.sum(c,lhs,maxkey^power * rhs)
     end
     
-    if Apply:is(exp) then
-        if exp.op.name == "sum" then
-            return simplifylist(sumtoterms(exp))
-        else
-            local nargs = exp:children():map(ad.polysimplify)
-            if exp.config.c then -- HACK! only works for fake config we have now
-                return exp.op(exp.config.c,unpack(nargs))
+    local function dosimplify(exp)
+        if Apply:is(exp) then
+            if exp.op.name == "sum" then
+                return simplifylist(sumtoterms(exp))
+            else
+                local nargs = exp:children():map(ad.polysimplify)
+                if exp.config.c then -- HACK! only works for fake config we have now
+                    return exp.op(exp.config.c,unpack(nargs))
+                end
+                return exp.op(unpack(nargs))
             end
-            return exp.op(unpack(nargs))
+        else 
+            return exp
         end
-    else 
-        return exp
     end
-    
+    return terralib.islist(exps) and exps:map(dosimplify) or dosimplify(exps)
 end
+
+
+
+--[[
+
+
+local exp = v.param_w_regSqrt * (v.X_0_0_0 + -1*v.X_1_0_0 - ( ad.cos(v.X_0_0_2) * (v.UrShape_0_0_0 + -1*v.UrShape_1_0_0) -ad.sin(v.X_0_0_2) * (v.UrShape_0_0_1 - v.UrShape_1_0_1)))
+print(exp)
+print(exp:d(v.X_0_0_2))
+
+
 
 local x,y,z = ad.v.x, ad.v.y, ad.v.z
 
@@ -1005,8 +1030,6 @@ local p = 4*x^2*y*y + 4*x*y*y + 4*y*y  + -1*x^-1 - 2*x^-2*y*y
 
 print(p)
 print(ad.polysimplify(p))
-
---[[
 local f = -3*ad.pow(x,2)
 print(f:d(x))
 
