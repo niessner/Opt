@@ -254,21 +254,12 @@ local terra evalJTF(i : int32, j : int32, gi : int32, gj : int32, self : P:Param
 	
 	preA = 2.0f* preA
 
-	if gi == 240 and gj == 80 then
-		--var m0 = self.Mask(i+0, j-1)
-		--var m1 = self.Mask(i+0, j+1)
-		--var m2 = self.Mask(i-1, j+0)
-		--var m3 = self.Mask(i+1, j+0)
-		--printf("R= %f %f %f %f\n", R(0), R(1), R(2), R(3))
-		--printf("dR= %f %f %f %f\n", dR(0), dR(1), dR(2), dR(3))
-		--printf("e_reg_angle %f; %f %f %f %f\n", e_reg_angle, m0, m1, m2, m3)
-	end
 	
 	bA = bA + (2.0f*self.w_regSqrt*self.w_regSqrt)*e_reg_angle
 
 	-- disable preconditioner
-	--pre = make_float2(1.0f, 1.0f)
-	--preA = 1.0f
+	pre = make_float2(1.0f, 1.0f)
+	preA = 1.0f
 	
 	if P.usepreconditioner then		--pre-conditioner
 		
@@ -318,7 +309,7 @@ local terra applyJTJ(i : int32, j : int32, gi : int32, gj : int32, self : P:Para
 	end
 
 	-- pos/reg
-	var e_reg = make_float2(0.0f, 0.0f);
+	var e_reg = make_float2(0.0f, 0.0f)
 	var p00 = getP(pImage, i, j)
 
 	var valid0 = inBounds(gi+0, gj-1, self.X) and self.Mask(i+0, j-1) == 0.0f
@@ -369,6 +360,12 @@ local terra applyJTJ(i : int32, j : int32, gi : int32, gj : int32, self : P:Para
 	end
 			
 	bA = bA + (2.0f*self.w_regSqrt*self.w_regSqrt)*e_reg_angle
+	e_reg = make_float2(0.0f, 0.0f)
+	
+	-- upper right block
+	
+	
+	-- lower left block
 
 	return make_float3(b(0), b(1), bA)
 end
