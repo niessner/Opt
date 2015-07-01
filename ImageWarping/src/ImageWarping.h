@@ -88,17 +88,17 @@ public:
 		float weightFit = 100.0f;
 		float weightReg = 0.01f;
 
-		for (unsigned int i = 0; i < 20; i++)
+		for (unsigned int i = 0; i < 40; i++)
 		{
-			setConstraintImage((float)i/(float)20);
+			setConstraintImage((float)i/(float)40);
 		
-			unsigned int nonLinearIter = 20;
-			unsigned int linearIter = 50;
-			m_warpingSolver->solveGN(d_urshape, d_warpField, d_warpAngles, d_constraints, d_mask, nonLinearIter, linearIter, weightFit, weightReg);
+			//unsigned int nonLinearIter = 20;
+			//unsigned int linearIter = 50;
+			//m_warpingSolver->solveGN(d_urshape, d_warpField, d_warpAngles, d_constraints, d_mask, nonLinearIter, linearIter, weightFit, weightReg);
 			
-			//unsigned int nonLinearIter = 10;
-			//unsigned int patchIter = 32;
-			//m_warpingSolverPatch->solveGN(d_urshape, d_warpField, d_warpAngles, d_constraints, d_mask, nonLinearIter, patchIter, weightFit, weightReg);
+			unsigned int nonLinearIter = 20;
+			unsigned int patchIter = 32;
+			m_warpingSolverPatch->solveGN(d_urshape, d_warpField, d_warpAngles, d_constraints, d_mask, nonLinearIter, patchIter, weightFit, weightReg);
 		}
 
 		copyResultToCPU();

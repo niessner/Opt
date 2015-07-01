@@ -120,6 +120,12 @@ __inline__ __device__ float2 applyJTJDevice(int tId_i, int tId_j, int gId_i, int
 	float2 X_MC = readValueFromCache2D(inX, tId_i - 1, tId_j); float M_MC = readValueFromCache2D(inMask, tId_i - 1, tId_j); float2 U_MC = readValueFromCache2D(inUrshape, tId_i - 1, tId_j); float A_MC = readValueFromCache2D(inA, tId_i - 1, tId_j); float2 P_MC = readValueFromCache2D(inP, tId_i - 1, tId_j); float PA_MC = readValueFromCache2D(inPA, tId_i - 1, tId_j);
 	float2 X_PC = readValueFromCache2D(inX, tId_i + 1, tId_j); float M_PC = readValueFromCache2D(inMask, tId_i + 1, tId_j); float2 U_PC = readValueFromCache2D(inUrshape, tId_i + 1, tId_j); float A_PC = readValueFromCache2D(inA, tId_i + 1, tId_j); float2 P_PC = readValueFromCache2D(inP, tId_i + 1, tId_j); float PA_PC = readValueFromCache2D(inPA, tId_i + 1, tId_j);
 
+	float2x2 dR_CC = evalR_dR(A_CC);
+	float2x2 dR_CM = evalR_dR(A_CM);
+	float2x2 dR_CP = evalR_dR(A_CP);
+	float2x2 dR_MC = evalR_dR(A_MC);
+	float2x2 dR_PC = evalR_dR(A_PC);
+
 	const bool validN0 = isValid(X_CM) && M_CM == 0;
 	const bool validN1 = isValid(X_CP) && M_CP == 0;
 	const bool validN2 = isValid(X_MC) && M_MC == 0;
@@ -140,14 +146,29 @@ __inline__ __device__ float2 applyJTJDevice(int tId_i, int tId_j, int gId_i, int
 	// angle/reg
 	float	 e_reg_angle = 0.0f;
 	float	 angleP		 = PA_CC;
-	float2x2 dR			 = evalR_dR(PA_CC);
 	float2   pHat		 = U_CC;
-	if (validN0) { float2 qHat = U_CM; mat2x1 D = mat2x1(dR*(pHat - qHat)); e_reg_angle += D.getTranspose()*D*angleP; }
-	if (validN1) { float2 qHat = U_CP; mat2x1 D = mat2x1(dR*(pHat - qHat)); e_reg_angle += D.getTranspose()*D*angleP; }
-	if (validN2) { float2 qHat = U_MC; mat2x1 D = mat2x1(dR*(pHat - qHat)); e_reg_angle += D.getTranspose()*D*angleP; }
-	if (validN3) { float2 qHat = U_PC; mat2x1 D = mat2x1(dR*(pHat - qHat)); e_reg_angle += D.getTranspose()*D*angleP; }
+	if (validN0) { float2 qHat = U_CM; mat2x1 D = -mat2x1(dR_CC*(pHat - qHat)); e_reg_angle += D.getTranspose()*D*angleP; }
+	if (validN1) { float2 qHat = U_CP; mat2x1 D = -mat2x1(dR_CC*(pHat - qHat)); e_reg_angle += D.getTranspose()*D*angleP; }
+	if (validN2) { float2 qHat = U_MC; mat2x1 D = -mat2x1(dR_CC*(pHat - qHat)); e_reg_angle += D.getTranspose()*D*angleP; }
+	if (validN3) { float2 qHat = U_PC; mat2x1 D = -mat2x1(dR_CC*(pHat - qHat)); e_reg_angle += D.getTranspose()*D*angleP; }
 	bA += parameters.weightRegularizer*e_reg_angle;
 
+	// upper right block
+	e_reg = make_float2(0.0f, 0.0f);
+	if (validN0) { float2 qHat = U_CM; float2x2 dR_j = dR_CM; mat2x1 D = -mat2x1(dR_CC*(pHat - qHat)); mat2x1 D_j = mat2x1(dR_j*(pHat - qHat)); e_reg += (float2)(D*PA_CC - D_j*PA_CM); }
+	if (validN1) { float2 qHat = U_CP; float2x2 dR_j = dR_CP; mat2x1 D = -mat2x1(dR_CC*(pHat - qHat)); mat2x1 D_j = mat2x1(dR_j*(pHat - qHat)); e_reg += (float2)(D*PA_CC - D_j*PA_CP); }
+	if (validN2) { float2 qHat = U_MC; float2x2 dR_j = dR_MC; mat2x1 D = -mat2x1(dR_CC*(pHat - qHat)); mat2x1 D_j = mat2x1(dR_j*(pHat - qHat)); e_reg += (float2)(D*PA_CC - D_j*PA_MC); }
+	if (validN3) { float2 qHat = U_PC; float2x2 dR_j = dR_PC; mat2x1 D = -mat2x1(dR_CC*(pHat - qHat)); mat2x1 D_j = mat2x1(dR_j*(pHat - qHat)); e_reg += (float2)(D*PA_CC - D_j*PA_PC); }
+	b += parameters.weightRegularizer*e_reg;
+	
+	// lower left block
+	e_reg_angle = 0.0f;
+	if (validN0) { float2 qHat = U_CM; mat2x1 D = -mat2x1(dR_CC*(pHat - qHat)); e_reg_angle += D.getTranspose()*mat2x1(P_CC - P_CM); }
+	if (validN1) { float2 qHat = U_CP; mat2x1 D = -mat2x1(dR_CC*(pHat - qHat)); e_reg_angle += D.getTranspose()*mat2x1(P_CC - P_CP); }
+	if (validN2) { float2 qHat = U_MC; mat2x1 D = -mat2x1(dR_CC*(pHat - qHat)); e_reg_angle += D.getTranspose()*mat2x1(P_CC - P_MC); }
+	if (validN3) { float2 qHat = U_PC; mat2x1 D = -mat2x1(dR_CC*(pHat - qHat)); e_reg_angle += D.getTranspose()*mat2x1(P_CC - P_PC); }
+	bA += parameters.weightRegularizer*e_reg_angle;
+	
 	return b;
 }
 
