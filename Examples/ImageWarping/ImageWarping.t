@@ -258,8 +258,8 @@ local terra evalJTF(i : int32, j : int32, gi : int32, gj : int32, self : P:Param
 	bA = bA + (2.0f*self.w_regSqrt*self.w_regSqrt)*e_reg_angle
 
 	-- disable preconditioner
-	pre = make_float2(1.0f, 1.0f)
-	preA = 1.0f
+	--pre = make_float2(1.0f, 1.0f)
+	--preA = 1.0f
 	
 	if P.usepreconditioner then		--pre-conditioner
 		
@@ -330,13 +330,13 @@ local terra applyJTJ(i : int32, j : int32, gi : int32, gj : int32, self : P:Para
 		e_reg = e_reg + 2 * (p00 - getP(pImage,i+1, j+0))
 	end
 	
-	b = b + (2.0f*self.w_regSqrt*self.w_regSqrt)*e_reg;
+	b = b + (2.0f*self.w_regSqrt*self.w_regSqrt)*e_reg
 
 	-- angle/reg
 	var e_reg_angle = 0.0f;
 	var dR : float2x2 = evalR_dR(self.X(i,j)(2))
 	var angleP = pImage(i,j)(2)
-	var pHat :float_2 = self.UrShape(i,j)
+	var pHat : float_2 = self.UrShape(i,j)
 		
 	if valid0 then
 		var qHat : float_2 = self.UrShape(i+0, j-1)
@@ -360,13 +360,86 @@ local terra applyJTJ(i : int32, j : int32, gi : int32, gj : int32, self : P:Para
 	end
 			
 	bA = bA + (2.0f*self.w_regSqrt*self.w_regSqrt)*e_reg_angle
-	e_reg = make_float2(0.0f, 0.0f)
+	
+	
 	
 	-- upper right block
-	
+	e_reg = make_float2(0.0f, 0.0f)	
+	if valid0 then
+		var ni = i+0
+		var nj = j-1
+		var qHat : float_2 = self.UrShape(ni,nj)
+		var dR_j = evalR_dR(self.X(ni,nj)(2))
+		var D : float_2 	= -mul(dR,(pHat - qHat))
+		var D_j : float_2	= mul(dR_j,(pHat - qHat))
+		e_reg = e_reg + (D*pImage(i,j)(2) - D_j*pImage(ni,nj)(2))
+	end
+	if valid1 then
+		var ni = i+0
+		var nj = j+1
+		var qHat : float_2 = self.UrShape(ni,nj)
+		var dR_j = evalR_dR(self.X(ni,nj)(2))
+		var D : float_2 	= -mul(dR,(pHat - qHat))
+		var D_j : float_2	= mul(dR_j,(pHat - qHat))
+		e_reg = e_reg + (D*pImage(i,j)(2) - D_j*pImage(ni,nj)(2))
+	end
+	if valid2 then
+		var ni = i-1
+		var nj = j+0
+		var qHat : float_2 = self.UrShape(ni,nj)
+		var dR_j = evalR_dR(self.X(ni,nj)(2))
+		var D : float_2 	= -mul(dR,(pHat - qHat))
+		var D_j : float_2	= mul(dR_j,(pHat - qHat))
+		e_reg = e_reg + (D*pImage(i,j)(2) - D_j*pImage(ni,nj)(2))
+	end
+	if valid3 then
+		var ni = i+1
+		var nj = j+0
+		var qHat : float_2 = self.UrShape(ni,nj)
+		var dR_j = evalR_dR(self.X(ni,nj)(2))
+		var D : float_2 	= -mul(dR,(pHat - qHat))
+		var D_j : float_2	= mul(dR_j,(pHat - qHat))
+		e_reg = e_reg + (D*pImage(i,j)(2) - D_j*pImage(ni,nj)(2))
+	end
+	b = b + (2.0f*self.w_regSqrt*self.w_regSqrt)*e_reg
 	
 	-- lower left block
-
+	e_reg_angle = 0.0f
+	if valid0 then
+		var ni = i+0
+		var nj = j-1
+		var qHat : float_2	= self.UrShape(ni,nj)
+		var D : float_2		= -mul(dR,(pHat - qHat))
+		var diff : float_2	= getP(pImage,i,j) - getP(pImage,ni,nj)
+		e_reg_angle = e_reg_angle + D:dot(diff)
+	end
+	if valid1 then
+		var ni = i+0
+		var nj = j+1
+		var qHat : float_2	= self.UrShape(ni,nj)
+		var D : float_2		= -mul(dR,(pHat - qHat))
+		var diff : float_2	= getP(pImage,i,j) - getP(pImage,ni,nj)
+		e_reg_angle = e_reg_angle + D:dot(diff)
+	end
+	if valid2 then
+		var ni = i-1
+		var nj = j+0
+		var qHat : float_2	= self.UrShape(ni,nj)
+		var D : float_2		= -mul(dR,(pHat - qHat))
+		var diff : float_2	= getP(pImage,i,j) - getP(pImage,ni,nj)
+		e_reg_angle = e_reg_angle + D:dot(diff)
+	end
+	if valid3 then
+		var ni = i+1
+		var nj = j+0
+		var qHat : float_2	= self.UrShape(ni,nj)
+		var D : float_2		= -mul(dR,(pHat - qHat))
+		var diff : float_2	= getP(pImage,i,j) - getP(pImage,ni,nj)
+		e_reg_angle = e_reg_angle + D:dot(diff)
+	end
+	bA = bA + (2.0f*self.w_regSqrt*self.w_regSqrt)*e_reg_angle
+	
+	
 	return make_float3(b(0), b(1), bA)
 end
 
