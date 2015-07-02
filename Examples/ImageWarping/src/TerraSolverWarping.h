@@ -3,7 +3,7 @@
 #include <cassert>
 
 extern "C" {
-#include "../Opt.h"
+#include "Opt.h"
 }
 
 #include <cuda_runtime.h>
@@ -22,10 +22,10 @@ public:
 
 
 		uint32_t strides[] = { 
-			width * sizeof(float3), //X (includes uv, a)
-			width * sizeof(float2),	//UrShape
-			width * sizeof(float2),	//Constraints
-			width * sizeof(float)
+			width * (uint32_t)sizeof(float3), //X (includes uv, a)
+			width * (uint32_t)sizeof(float2),	//UrShape
+			width * (uint32_t)sizeof(float2),	//Constraints
+			width * (uint32_t)sizeof(float)
 		};
 		uint32_t elemsizes[] = { 
 			sizeof(float3), //X (includes uv, a)

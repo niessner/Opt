@@ -40,13 +40,13 @@ local x = ad.Vector(X(0,0,0), X(0,0,1))	-- uv-unknown : float2
 --fitting
 local constraintUV = Constraints(0,0)	-- float2
 
---local e_fit = ad.select(ad.eq(m,0.0), x - constraintUV, ad.Vector(0.0, 0.0))
---e_fit = ad.select(ad.greatereq(constraintUV(0), 0.0), e_fit, ad.Vector(0.0, 0.0))
+local e_fit = ad.select(ad.eq(m,0.0), x - constraintUV, ad.Vector(0.0, 0.0))
+e_fit = ad.select(ad.greatereq(constraintUV(0), 0.0), e_fit, ad.Vector(0.0, 0.0))
 --e_fit = ad.select(ad.greatereq(constraintUV(1), 0.0), e_fit, ad.Vector(0.0, 0.0))
 local e_fit = x - constraintUV
 
-terms:insert(w_fitSqrt*e_fit(0))
-terms:insert(w_fitSqrt*e_fit(1))
+--terms:insert(w_fitSqrt*e_fit(0))
+--terms:insert(w_fitSqrt*e_fit(1))
 
 
 --regularization
@@ -65,13 +65,13 @@ local ARAPCost2 = (x - n2)	-	mul(R, (xHat - UrShape( 0,1)))
 local ARAPCost3 = (x - n3)	-	mul(R, (xHat - UrShape(0,-1)))
 
 
---local ARAPCost0F = ad.select(opt.InBounds(0,0,0,0),	ad.select(opt.InBounds( 1,0,0,0), ARAPCost0, ad.Vector(0.0, 0.0)), ad.Vector(0.0, 0.0))
---local ARAPCost1F = ad.select(opt.InBounds(0,0,0,0),	ad.select(opt.InBounds(-1,0,0,0), ARAPCost1, ad.Vector(0.0, 0.0)), ad.Vector(0.0, 0.0))
+local ARAPCost0F = ad.select(opt.InBounds(0,0,0,0),	ad.select(opt.InBounds( 1,0,0,0), ARAPCost0, ad.Vector(0.0, 0.0)), ad.Vector(0.0, 0.0))
+local ARAPCost1F = ad.select(opt.InBounds(0,0,0,0),	ad.select(opt.InBounds(-1,0,0,0), ARAPCost1, ad.Vector(0.0, 0.0)), ad.Vector(0.0, 0.0))
 --local ARAPCost2F = ad.select(opt.InBounds(0,0,0,0),	ad.select(opt.InBounds( 0,1,0,0), ARAPCost2, ad.Vector(0.0, 0.0)), ad.Vector(0.0, 0.0))	
 --local ARAPCost3F = ad.select(opt.InBounds(0,0,0,0),	ad.select(opt.InBounds(0,-1,0,0), ARAPCost3, ad.Vector(0.0, 0.0)), ad.Vector(0.0, 0.0))
 
-local ARAPCost0F = ARAPCost0
-local ARAPCost1F = ARAPCost1
+--local ARAPCost0F = ARAPCost0
+--local ARAPCost1F = ARAPCost1
 local ARAPCost2F = ARAPCost2
 local ARAPCost3F = ARAPCost3
 
@@ -80,16 +80,16 @@ local m1 = Mask(-1,0)
 local m2 = Mask( 0,1)
 local m3 = Mask(0,-1)
 
---ARAPCost0F = ad.select(ad.eq(m0, 0.0), ARAPCost0F, ad.Vector(0.0, 0.0))
---ARAPCost1F = ad.select(ad.eq(m1, 0.0), ARAPCost1F, ad.Vector(0.0, 0.0))
+ARAPCost0F = ad.select(ad.eq(m0, 0.0), ARAPCost0F, ad.Vector(0.0, 0.0))
+ARAPCost1F = ad.select(ad.eq(m1, 0.0), ARAPCost1F, ad.Vector(0.0, 0.0))
 --ARAPCost2F = ad.select(ad.eq(m2, 0.0), ARAPCost2F, ad.Vector(0.0, 0.0))
 --ARAPCost3F = ad.select(ad.eq(m3, 0.0), ARAPCost3F, ad.Vector(0.0, 0.0))
 
-for i = 0,1 do
+for i = 0,0 do
 	terms:insert(w_regSqrt*ARAPCost0F(i))
 	terms:insert(w_regSqrt*ARAPCost1F(i))
-	terms:insert(w_regSqrt*ARAPCost2F(i))
-	terms:insert(w_regSqrt*ARAPCost3F(i))
+	--terms:insert(w_regSqrt*ARAPCost2F(i))
+	--terms:insert(w_regSqrt*ARAPCost3F(i))
 end
 
 
@@ -199,9 +199,9 @@ end
 
 local jtj = JTJ()
 
-print("JTJ = ",jtj)
+--print("JTJ = ",jtj)
 
 local cost = ad.sumsquared(unpack(terms))
-return S:Cost(cost, jtj)
+return S:Cost(cost)
 
 
