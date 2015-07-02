@@ -38,7 +38,8 @@ local function newclass(name)
     return mt
 end
 
-local vprintf = terralib.externfunction("vprintf", {&int8,&int8} -> int)
+local vprintfname = ffi.OS == "Windows" and "vprintf" or "cudart:vprintf"
+local vprintf = terralib.externfunction(vprintfname, {&int8,&int8} -> int)
 
 local function createbuffer(args)
     local Buf = terralib.types.newstruct()

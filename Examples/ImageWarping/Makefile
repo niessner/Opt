@@ -14,13 +14,13 @@ ifeq ($(UNAME), Linux)
 endif
 
 CUDAHOME = /usr/local/cuda
-FLAGS = -O3 -g -Isrc -Isrc/cutil/inc -I../../API/build -I$(TERRAHOME)/include -I$(CUDAHOME)/include -I$(MLIB)/include -I../Framework 
-CXXFLAGS = -MD -std=c++11 $(FLAGS) 
+FLAGS = -O3 -g -std=c++11 -Isrc -Isrc/cutil/inc -I../../API/build -I$(TERRAHOME)/include -I$(CUDAHOME)/include -I$(MLIB)/include -I../Framework 
+CXXFLAGS = -MD $(FLAGS) 
 NVCCFLAGS = -arch sm_35 $(FLAGS)
 
 TERRAHOME = $(HOME)/terra/release
 TERRA = $(TERRAHOME)/terra
-LFLAGS = -L../../API/build -L$(CUDAHOME)/lib$(S4) -Wl,-rpath,$(CUDAHOME)/lib$(S4) -lcudart -lOpt -Wl,-rpath,$(shell pwd)/build -L$(TERRAHOME) -lterra -Wl,-rpath,$(TERRAHOME)
+LFLAGS = -L../../API/build -L$(CUDAHOME)/lib$(S4) -Wl,-rpath,$(CUDAHOME)/lib$(S4) -lcudart -lOpt -Wl,-rpath,$(shell pwd)/../../API/build -L$(TERRAHOME) -lterra -Wl,-rpath,$(TERRAHOME)
 
 ifeq ($(UNAME), Darwin)
   LFLAGS += -pagezero_size 10000 -image_base 100000000
