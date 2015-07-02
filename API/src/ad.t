@@ -885,7 +885,7 @@ ad.sqrt:define(function(x) return `C.sqrt(x) end, 1.0/(2.0*ad.sqrt(x)))
 ad.tan:define(function(x) return `C.tan(x) end, 1.0 + ad.tan(x)*ad.tan(x))
 ad.tanh:define(function(x) return `C.tanh(x) end, 1.0/(ad.cosh(x)*ad.cosh(x)))
 
-ad.bool:define(function(x) return `bool(x) end, x)
+ad.bool:define(function(x) return `terralib.select(bool(x),1.f,0.f) end, x)
 --ad.select:define(function(x,y,z) return `terralib.select(bool(x),y,z) end,0,ad.select(x,1,0),ad.select(x,0,1))
 ad.select:define(function(x,y,z) 
     return quote
@@ -898,7 +898,7 @@ ad.select:define(function(x,y,z)
     in r end
 end,0,ad.select(x,1,0),ad.select(x,0,1))
 
-ad.eq_:define(function(x,y) return `int(x == y) end, 0,0)
+ad.eq_:define(function(x,y) return `x == y end, 0,0)
 function ad.eq(x,y) return ad.bool(ad.eq_(x,y)) end
 ad.abs:define(function(x) return `terralib.select(x >= 0,x,-x) end, ad.select(ad.greatereq(x, 0),1,-1))
 

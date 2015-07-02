@@ -953,8 +953,9 @@ local function createjtf(problemSpec,Fs,unknown,P)
 	    else
 		    P_hat[i] = 2.0*P_hat[i]
 		    P_hat[i] = ad.select(ad.greater(P_hat[i],.0001), 1.0/P_hat[i], 1.0)
+	        P_hat[i] = ad.polysimplify(P_hat[i])
 	    end
-	    F_hat[i] = 2.0*F_hat[i]
+	    F_hat[i] = ad.polysimplify(2.0*F_hat[i])
 	end
 	print("JTF =", ad.tostrings({F_hat[1], F_hat[2], F_hat[3]}))
     return conformtounknown(F_hat,unknown), conformtounknown(P_hat,unknown)
