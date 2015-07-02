@@ -67,7 +67,8 @@ function Const:__tostring() return tostring(self.v) end
 local function newapply(op,config,args)
     assert(not op.nparams or #args == op.nparams)
     assert(type(config) == "table")
-    return Apply:new { op = op, args = args, config = config, id = allocid() }
+    local id = allocid()
+    return Apply:new { op = op, args = args, config = config, id = id }
 end
 
 local getconst = terralib.memoize(function(n) return Const:new { v = n, id = allocid() } end)
@@ -221,8 +222,18 @@ local function simplify(op,config,args)
                 return ad.powc(y.v*c,xx)
             end
         end
-    elseif op.name == "select" and Const:is(x) then
-        return  x.v ~= 0 and y or z
+    elseif op.name == "powc" then
+        if Apply:is(x) and x.op.name == "bool" then
+            return x
+        end
+    elseif op.name == "select" then
+        if Const:is(x) then
+            return  x.v ~= 0 and y or z
+        elseif y == zero then
+            return x * z
+        elseif z == zero then
+            return x * y
+        end
     elseif (op.name == "and_" or op.name == "or_") and x == y then
         return x
     end
@@ -417,7 +428,7 @@ local function countuses(es)
     return uses
 end    
 
-local ispoly = {sum = 0, prod = 1, powc = 2}
+local ispoly = {sum = 0, prod = 1, powc = 2, bool = 3}
 --local ispoly = {}
 local function expstostring(es)
     es = (terralib.islist(es) and es) or terralib.newlist(es)
@@ -491,6 +502,8 @@ local function expstostring(es)
                 r = ("%s + %d"):format(r,e.config.c)
             end
             return r
+        elseif e.op.name == "bool" then
+            return ("<%s>"):format(stringforuse(e.args[1]))
         end
     end
     
@@ -760,7 +773,6 @@ local genpow = terralib.memoize(function(N)
         return r
     end 
     pow:setname("pow"..tostring(N))
-    pow:disas()
     return pow
 end)
 
@@ -873,6 +885,7 @@ ad.sqrt:define(function(x) return `C.sqrt(x) end, 1.0/(2.0*ad.sqrt(x)))
 ad.tan:define(function(x) return `C.tan(x) end, 1.0 + ad.tan(x)*ad.tan(x))
 ad.tanh:define(function(x) return `C.tanh(x) end, 1.0/(ad.cosh(x)*ad.cosh(x)))
 
+ad.bool:define(function(x) return `bool(x) end, x)
 --ad.select:define(function(x,y,z) return `terralib.select(bool(x),y,z) end,0,ad.select(x,1,0),ad.select(x,0,1))
 ad.select:define(function(x,y,z) 
     return quote
@@ -885,7 +898,8 @@ ad.select:define(function(x,y,z)
     in r end
 end,0,ad.select(x,1,0),ad.select(x,0,1))
 
-ad.eq:define(function(x,y) return `int(x == y) end, 0,0)
+ad.eq_:define(function(x,y) return `int(x == y) end, 0,0)
+function ad.eq(x,y) return ad.bool(ad.eq_(x,y)) end
 ad.abs:define(function(x) return `terralib.select(x >= 0,x,-x) end, ad.select(ad.greatereq(x, 0),1,-1))
 
 ad.and6:define(function(x0, x1, x2, x3, x4, x5) return `int(x0) and int(x1) and int(x2) and int(x3) and int(x4) and int(x5) end,0,0,0,0,0,0)
@@ -907,16 +921,16 @@ function ad.polysimplify(exps)
         local terms = terralib.newlist()
         -- build internal list of terms
         for i,f in ipairs(sum:children()) do
-            local c,ff = asprod(f)
+            local c,ff = asprod(ad.polysimplify(f))
             local factor = {}
+            for j,p in ipairs(ff) do
+                local c,pp = aspowc(p)
+                factor[pp] = c
+            end
             if c ~= 1 then
                 factor[toexp(c)] = 1
             end
-            for j,p in ipairs(ff) do
-                local c,pp = aspowc(p)
-                pp = ad.polysimplify(pp)
-                factor[pp] = c
-            end
+            
             terms:insert(factor)
         end
         return terms,sum.config.c
@@ -931,7 +945,8 @@ function ad.polysimplify(exps)
             end
             factors:insert(ad.prod(1,unpack(pows)))
         end
-        return ad.sum(assert(tonumber(c),"NaN?"),unpack(factors))
+        local r = ad.sum(assert(tonumber(c),"NaN?"),unpack(factors))
+        return r
     end
 
     local function simplifylist(terms,c)
@@ -992,7 +1007,8 @@ function ad.polysimplify(exps)
         --print("recurse",#notused,#used)
         local lhs = simplifylist(notused,0)
         local rhs = simplifylist(used,0)
-        return ad.sum(c,lhs,maxkey^power * rhs)
+        local r = ad.sum(c,lhs,maxkey^power * rhs)
+        return r
     end
     
     local function dosimplify(exp)
@@ -1004,7 +1020,8 @@ function ad.polysimplify(exps)
                 if exp.config.c then -- HACK! only works for fake config we have now
                     return exp.op(exp.config.c,unpack(nargs))
                 end
-                return exp.op(unpack(nargs))
+                local r = exp.op(unpack(nargs))
+                return r
             end
         else 
             return exp

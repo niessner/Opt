@@ -657,7 +657,7 @@ function Image:__call(x,y,c)
 end
 function opt.InBounds(x,y,sx,sy)
 	assert(x and y and sx and sy, "InBounds Requires 4 values (x,y,stencil_x,stencil_y)")
-    return ad.v[BoundsAccess:get(x,y,sx,sy)]
+    return ad.bool(ad.v[BoundsAccess:get(x,y,sx,sy)])
 end
 function BoundsAccess:shift(x,y)
     return BoundsAccess:get(self.x+x,self.y+y,self.sx,self.sy)
