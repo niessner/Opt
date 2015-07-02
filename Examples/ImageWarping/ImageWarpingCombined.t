@@ -82,6 +82,10 @@ A.functions.cost.boundary = terra(i : int32, j : int32, gi : int32, gj : int32, 
 		printf("x: %f %f %f;  c: %f %f;   e: %f\n", self.X(i,j)(0), self.X(i,j)(1), self.X(i,j)(2), self.Constraints(i,j)(0), self.Constraints(i,j)(1), expected)
 	end
 	
+	--if gi == 0 and gj == 0 then
+	--	printf("bla\n")
+	--end
+	
 	return a
 end
 

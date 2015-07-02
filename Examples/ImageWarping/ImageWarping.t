@@ -258,8 +258,8 @@ local terra evalJTF(i : int32, j : int32, gi : int32, gj : int32, self : P:Param
 	bA = bA + (2.0f*self.w_regSqrt*self.w_regSqrt)*e_reg_angle
 
 	-- disable preconditioner
-	--pre = make_float2(1.0f, 1.0f)
-	--preA = 1.0f
+	pre = make_float2(1.0f, 1.0f)
+	preA = 1.0f
 	
 	if P.usepreconditioner then		--pre-conditioner
 		
