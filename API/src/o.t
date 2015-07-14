@@ -38,7 +38,7 @@ local function newclass(name)
     return mt
 end
 
-local vprintfname = ffi.OS == "Windows" and "vprintf" or "cudart:vprintf"
+local vprintfname = ffi.OS == "Windows" and "vprintf" or "vprintf"
 local vprintf = terralib.externfunction(vprintfname, {&int8,&int8} -> int)
 
 local function createbuffer(args)

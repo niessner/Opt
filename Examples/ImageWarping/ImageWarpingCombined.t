@@ -31,10 +31,11 @@ end
 A.functions.evalJTF.boundary = terra(i : int32, j : int32, gi : int32, gj : int32, self : A:ParameterType())
 	var a,pa = A.functions.evalJTF.boundary(i, j, gi, gj, self)	--auto-diff
 	var b,pb = M.functions.evalJTF.boundary(i,j,gi,gj,@[&M:ParameterType()](&self))
+	var c,pc = M.functions.evalJTFNumeric.boundary(i,j,gi,gj,@[&M:ParameterType()](&self))
 	
 	for i = 0,3 do
 	    if gi == 61 and gj == 47 and relerror(a(i), b(i)) > 0 then
-    		printf("JTF (%d,%d)[%d]: a = %e, b = %e, err = %e\n",int(gi),int(gj),i,a(i),b(i),relerror(a(i), b(i)))
+    		printf("JTF (%d,%d)[%d]: a = %e, b = %e, c = %e, err = %e\n",int(gi),int(gj),i,a(i),b(i),c(i),relerror(a(i), b(i)))
     	end
 	end
 

@@ -89,12 +89,15 @@ local terra evalR_dR(angle : float)
 	return eval_dR(opt.math.cos(angle), opt.math.sin(angle))
 end
 
-local terra cost(i : int32, j : int32, gi : int32, gj : int32, self : P:ParameterType()) : float
+
+
+
+local terra costEpsilon(i : int32, j : int32, gi : int32, gj : int32, self : P:ParameterType(), eps : float_3) : float
 	var e : float_2  = make_float2(0.0f, 0.0f)
 
-	var x = make_float2(self.X(i, j)(0), self.X(i, j)(1))
+	var x = make_float2(self.X(i, j)(0) + eps(0), self.X(i, j)(1) + eps(1))
 	var xHat : float_2 = self.UrShape(i,j)
-	var a = self.X(i, j)(2)
+	var a = self.X(i, j)(2) + eps(2)
 	var m = self.Mask(i,j)
 	var c = self.Constraints(i, j)
 	
@@ -139,6 +142,11 @@ local terra cost(i : int32, j : int32, gi : int32, gj : int32, self : P:Paramete
 end
 
 
+
+
+local terra cost(i : int32, j : int32, gi : int32, gj : int32, self : P:ParameterType()) : float
+	return costEpsilon(i, j, gi, gj, self, make_float3(0.0f, 0.0f, 0.0f))
+end
 
 
 
@@ -285,6 +293,23 @@ local terra evalJTF(i : int32, j : int32, gi : int32, gj : int32, self : P:Param
 	return (make_float3(b(0), b(1), bA)), make_float3(pre(0), pre(1), preA)
 
 end
+
+
+
+local terra evalJTFNumeric(i : int32, j : int32, gi : int32, gj : int32, self : P:ParameterType())
+	
+	var cBase = costEpsilon(i, j, gi, gj, self, make_float3(0.0f, 0.0f, 0.0f))
+
+	var eps = 1e-4f
+	var c0 = costEpsilon(i, j, gi, gj, self, make_float3(eps, 0.0f, 0.0f))
+	var c1 = costEpsilon(i, j, gi, gj, self, make_float3(0.0f, eps, 0.0f))
+	var c2 = costEpsilon(i, j, gi, gj, self, make_float3(0.0f, 0.0f, eps))
+
+	return (make_float3((c0 - cBase) / eps, (c1 - cBase) / eps, (c2 - cBase) / eps)), make_float3(1.0f, 1.0f, 1.0f)
+
+end
+
+
 
 -- eval 2*JtF == \nabla(F); eval diag(2*(Jt)^2) == pre-conditioner
 local terra gradient(i : int32, j : int32, gi : int32, gj : int32, self : P:ParameterType())
@@ -446,6 +471,7 @@ end
 P:Function("cost", {W,H}, cost)
 P:Function("gradient", {W,H}, gradient)
 P:Function("evalJTF", {W,H}, evalJTF)
+P:Function("evalJTFNumeric", {W,H}, evalJTFNumeric)
 P:Function("applyJTJ", {W,H}, applyJTJ)
 
 return P
