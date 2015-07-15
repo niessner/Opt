@@ -780,7 +780,7 @@ local function createfunction(problemspec,name,exps,usebounds,W,H)
         return result
     end
     generatedfn:setname(name)
-    if verboseAD or true then
+    if verboseAD then
         generatedfn:printpretty(true, false)
     end
     return generatedfn
