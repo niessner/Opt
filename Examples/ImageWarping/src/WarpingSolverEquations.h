@@ -74,7 +74,13 @@ __inline__ __device__ float2 evalMinusJTFDevice(unsigned int variableIdx, Solver
 	float2	 pHat = state.d_urshape[get1DIdx(i, j, input.width, input.height)];
 	float2x2 R_i = evalR(state.d_A[get1DIdx(i, j, input.width, input.height)]);
 	float2 e_reg = make_float2(0.0f, 0.0f);
-	if (validN0){ float2 q = state.d_x[get1DIdx(n0_i, n0_j, input.width, input.height)]; float2 qHat = state.d_urshape[get1DIdx(n0_i, n0_j, input.width, input.height)]; float2x2 R_j = evalR(state.d_A[get1DIdx(n0_i, n0_j, input.width, input.height)]); e_reg += 2 * (p - q) - float2(mat2x2(R_i + R_j)*mat2x1(pHat - qHat)); pre += 2.0f*parameters.weightRegularizer; }
+	if (validN0){ 
+		float2 q = state.d_x[get1DIdx(n0_i, n0_j, input.width, input.height)]; 
+		float2 qHat = state.d_urshape[get1DIdx(n0_i, n0_j, input.width, input.height)]; 
+		float2x2 R_j = evalR(state.d_A[get1DIdx(n0_i, n0_j, input.width, input.height)]); 
+		e_reg += 2 * (p - q) - float2(mat2x2(R_i + R_j)*mat2x1(pHat - qHat)); 
+		pre += 2.0f*parameters.weightRegularizer; 
+	}
 	if (validN1){ float2 q = state.d_x[get1DIdx(n1_i, n1_j, input.width, input.height)]; float2 qHat = state.d_urshape[get1DIdx(n1_i, n1_j, input.width, input.height)]; float2x2 R_j = evalR(state.d_A[get1DIdx(n1_i, n1_j, input.width, input.height)]); e_reg += 2 * (p - q) - float2(mat2x2(R_i + R_j)*mat2x1(pHat - qHat)); pre += 2.0f*parameters.weightRegularizer; }
 	if (validN2){ float2 q = state.d_x[get1DIdx(n2_i, n2_j, input.width, input.height)]; float2 qHat = state.d_urshape[get1DIdx(n2_i, n2_j, input.width, input.height)]; float2x2 R_j = evalR(state.d_A[get1DIdx(n2_i, n2_j, input.width, input.height)]); e_reg += 2 * (p - q) - float2(mat2x2(R_i + R_j)*mat2x1(pHat - qHat)); pre += 2.0f*parameters.weightRegularizer; }
 	if (validN3){ float2 q = state.d_x[get1DIdx(n3_i, n3_j, input.width, input.height)]; float2 qHat = state.d_urshape[get1DIdx(n3_i, n3_j, input.width, input.height)]; float2x2 R_j = evalR(state.d_A[get1DIdx(n3_i, n3_j, input.width, input.height)]); e_reg += 2 * (p - q) - float2(mat2x2(R_i + R_j)*mat2x1(pHat - qHat)); pre += 2.0f*parameters.weightRegularizer; }
@@ -157,6 +163,11 @@ __inline__ __device__ float2 evalMinusJTFDevice(unsigned int variableIdx, Solver
 	else					  preA = 1.0f;
 	state.d_precondionerA[variableIdx] = preA;
 	
+
+	if (i == 47 && j == 61) {
+		printf("out: %f %f %f \n", b.x, b.y, bA);
+	}
+
 	return b;
 }
 
