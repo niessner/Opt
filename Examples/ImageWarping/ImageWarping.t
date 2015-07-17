@@ -360,7 +360,7 @@ local terra applyJTJ(i : int32, j : int32, gi : int32, gj : int32, self : P:Para
 	var constraintUV = self.Constraints(i,j)	
 	var validConstraint = (constraintUV(0) >= 0 and constraintUV(1) >= 0) and self.Mask(i,j) == 0.0f
 	if validConstraint then
-	 	b 	= b + (2.0f*self.w_fitSqrt*self.w_fitSqrt)*getP(pImage,i,j)
+	 	b = b + (2.0f*self.w_fitSqrt*self.w_fitSqrt)*getP(pImage,i,j)
 	end
 
 	-- pos/reg
@@ -371,18 +371,67 @@ local terra applyJTJ(i : int32, j : int32, gi : int32, gj : int32, self : P:Para
 	var valid1 = inBounds(gi+0, gj+1, self.X) and self.Mask(i+0, j+1) == 0.0f
 	var valid2 = inBounds(gi-1, gj+0, self.X) and self.Mask(i-1, j+0) == 0.0f
 	var valid3 = inBounds(gi+1, gj+0, self.X) and self.Mask(i+1, j+0) == 0.0f
+	
+	var b_  = inBounds(gi+0, gj+0, self.X)
+	var b0 = inBounds(gi+0, gj-1, self.X)
+	var b1 = inBounds(gi+0, gj+1, self.X)
+	var b2 = inBounds(gi-1, gj+0, self.X)
+	var b3 = inBounds(gi+1, gj+0, self.X)	
+	
+	b0 = b0 and b_
+	b1 = b1 and b_
+	b2 = b2 and b_
+	b3 = b3 and b_
+
+	var m  = (self.Mask(i+0, j+0) == 0.0f)
+	var m0 = (self.Mask(i+0, j-1) == 0.0f)
+	var m1 = (self.Mask(i+0, j+1) == 0.0f)
+	var m2 = (self.Mask(i-1, j+0) == 0.0f)
+	var m3 = (self.Mask(i+1, j+0) == 0.0f)
 				
-	if valid0 then
-		e_reg = e_reg + 2 * (p00 - getP(pImage,i+0, j-1))
+	if b0 then
+		if m then
+			e_reg = e_reg + p00
+			e_reg = e_reg - getP(pImage,i+0, j-1)
+		end
+		if m0 then
+			e_reg = e_reg + p00
+			e_reg = e_reg - getP(pImage,i+0, j-1)
+		end	
+		--e_reg = e_reg + 2 * (p00 - getP(pImage,i+0, j-1))
 	end
-	if valid1 then
-		e_reg = e_reg + 2 * (p00 - getP(pImage,i+0, j+1))
+	if b1 then
+		if m then
+			e_reg = e_reg + p00
+			e_reg = e_reg - getP(pImage,i+0, j+1)
+		end
+		if m1 then
+			e_reg = e_reg + p00
+			e_reg = e_reg - getP(pImage,i+0, j+1)
+		end	
+		--e_reg = e_reg + 2 * (p00 - getP(pImage,i+0, j+1))
 	end
-	if valid2 then
-		e_reg = e_reg + 2 * (p00 - getP(pImage,i-1, j+0))
+	if b2 then
+		if m then
+			e_reg = e_reg + p00
+			e_reg = e_reg - getP(pImage,i-1, j+0)
+		end
+		if m2 then
+			e_reg = e_reg + p00
+			e_reg = e_reg - getP(pImage,i-1, j+0)
+		end		
+		--e_reg = e_reg + 2 * (p00 - getP(pImage,i-1, j+0))
 	end
-	if valid3 then
-		e_reg = e_reg + 2 * (p00 - getP(pImage,i+1, j+0))
+	if b3 then
+		if m then
+			e_reg = e_reg + p00
+			e_reg = e_reg - getP(pImage,i+1, j+0)
+		end
+		if m3 then
+			e_reg = e_reg + p00
+			e_reg = e_reg - getP(pImage,i+1, j+0)
+		end		
+		--e_reg = e_reg + 2 * (p00 - getP(pImage,i+1, j+0))
 	end
 	
 	b = b + (2.0f*self.w_regSqrt*self.w_regSqrt)*e_reg
@@ -420,41 +469,65 @@ local terra applyJTJ(i : int32, j : int32, gi : int32, gj : int32, self : P:Para
 	
 	-- upper right block
 	e_reg = make_float2(0.0f, 0.0f)	
-	if valid0 then
+	if b0 then
 		var ni = i+0
 		var nj = j-1
 		var qHat : float_2 = self.UrShape(ni,nj)
 		var dR_j = evalR_dR(self.X(ni,nj)(2))
 		var D : float_2 	= -mul(dR,(pHat - qHat))
 		var D_j : float_2	= mul(dR_j,(pHat - qHat))
-		e_reg = e_reg + (D*pImage(i,j)(2) - D_j*pImage(ni,nj)(2))
+		--e_reg = e_reg + (D*pImage(i,j)(2) - D_j*pImage(ni,nj)(2))
+		if m0 then 
+			e_reg = e_reg + D*pImage(i,j)(2)
+		end
+		if m then
+			e_reg = e_reg - D_j*pImage(ni,nj)(2)
+		end
 	end
-	if valid1 then
+	if b1 then
 		var ni = i+0
 		var nj = j+1
 		var qHat : float_2 = self.UrShape(ni,nj)
 		var dR_j = evalR_dR(self.X(ni,nj)(2))
 		var D : float_2 	= -mul(dR,(pHat - qHat))
 		var D_j : float_2	= mul(dR_j,(pHat - qHat))
-		e_reg = e_reg + (D*pImage(i,j)(2) - D_j*pImage(ni,nj)(2))
+		--e_reg = e_reg + (D*pImage(i,j)(2) - D_j*pImage(ni,nj)(2))
+		if m1 then 
+			e_reg = e_reg + D*pImage(i,j)(2)
+		end
+		if m then
+			e_reg = e_reg - D_j*pImage(ni,nj)(2)
+		end
 	end
-	if valid2 then
+	if b2 then
 		var ni = i-1
 		var nj = j+0
 		var qHat : float_2 = self.UrShape(ni,nj)
 		var dR_j = evalR_dR(self.X(ni,nj)(2))
 		var D : float_2 	= -mul(dR,(pHat - qHat))
 		var D_j : float_2	= mul(dR_j,(pHat - qHat))
-		e_reg = e_reg + (D*pImage(i,j)(2) - D_j*pImage(ni,nj)(2))
+		--e_reg = e_reg + (D*pImage(i,j)(2) - D_j*pImage(ni,nj)(2))
+		if m2 then 
+			e_reg = e_reg + D*pImage(i,j)(2)
+		end
+		if m then
+			e_reg = e_reg - D_j*pImage(ni,nj)(2)
+		end
 	end
-	if valid3 then
+	if b3 then
 		var ni = i+1
 		var nj = j+0
 		var qHat : float_2 = self.UrShape(ni,nj)
 		var dR_j = evalR_dR(self.X(ni,nj)(2))
 		var D : float_2 	= -mul(dR,(pHat - qHat))
 		var D_j : float_2	= mul(dR_j,(pHat - qHat))
-		e_reg = e_reg + (D*pImage(i,j)(2) - D_j*pImage(ni,nj)(2))
+		--e_reg = e_reg + (D*pImage(i,j)(2) - D_j*pImage(ni,nj)(2))
+		if m3 then 
+			e_reg = e_reg + D*pImage(i,j)(2)
+		end
+		if m then
+			e_reg = e_reg - D_j*pImage(ni,nj)(2)
+		end
 	end
 	b = b + (2.0f*self.w_regSqrt*self.w_regSqrt)*e_reg
 	
