@@ -18,13 +18,21 @@ A.functions.applyJTJ.boundary = terra(i : int32, j : int32, gi : int32, gj : int
 	var a = A.functions.applyJTJ.boundary(i,j,gi,gj,self,pImage)
 	var b = M.functions.applyJTJ.boundary(i,j,gi,gj,@[&M:ParameterType()](&self),@[&M:UnknownType()](&pImage))
 
-	var diff = a - b
-	var d : float = diff:dot(diff)
-	if d < 0.0f then d = -d end
-	if d > 0.1f then
-		--printf("%d,%d: ad=%f b=%f\n",int(gi),int(gj),a(0),b(0))
-	end
 	
+	
+	var constraintUV = self.Constraints(i,j)	
+	var validConstraint = (constraintUV(0) >= 0 and constraintUV(1) >= 0)
+	var valid  = (self.Mask(i+0, j+0) == 0.0f)
+	var valid0 = (self.Mask(i+0, j-1) == 0.0f)
+	var valid1 = (self.Mask(i+0, j+1) == 0.0f)
+	var valid2 = (self.Mask(i-1, j+0) == 0.0f)
+	var valid3 = (self.Mask(i+1, j+0) == 0.0f)
+	
+	for i = 0,3 do
+	    if relerror(a(i), b(i)) > 1e-3  and b(i) > 1e-5 then
+    		printf("JTJ (%d,%d)[%d]: a = %e, b = %e, err = %e (%d,%d,%d,%d,%d,%d)\n",int(gi),int(gj),i,a(i),b(i),relerror(a(i), b(i)), int(validConstraint),int(valid),int(valid0),int(valid1),int(valid2),int(valid3))
+    	end
+	end
 	return b
 end
 
@@ -34,7 +42,7 @@ A.functions.evalJTF.boundary = terra(i : int32, j : int32, gi : int32, gj : int3
 	var c,pc = M.functions.evalJTFNumeric.boundary(i,j,gi,gj,@[&M:ParameterType()](&self))
 	
 	for i = 0,3 do
-	    if gi == 61 and gj == 47 and relerror(a(i), b(i)) > 0 then
+	    if relerror(a(i), b(i)) > 1e-3  and b(i) > 1e-5 then
     		printf("JTF (%d,%d)[%d]: a = %e, b = %e, c = %e, err = %e\n",int(gi),int(gj),i,a(i),b(i),c(i),relerror(a(i), b(i)))
     	end
 	end
@@ -52,8 +60,7 @@ A.functions.cost.boundary = terra(i : int32, j : int32, gi : int32, gj : int32, 
 	var d : float = a - b
 	if d < 0.0f then d = -d end
 	if d > 0.1f then
-		
-		--printf("cost (%d|%d): ad=%f b=%f\n",int(gi),int(gj),a,b)
+		printf("cost (%d|%d): ad=%f b=%f\n",int(gi),int(gj),a,b)
 	end
 	
 	return b

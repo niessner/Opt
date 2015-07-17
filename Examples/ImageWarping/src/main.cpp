@@ -83,7 +83,9 @@ int main(int argc, const char * argv[]) {
 	LodePNG::save(out, "output.png");
 	LodePNG::save(image, "inputMark.png");
 
-	getchar();
+    #ifdef _WIN32
+ 	    getchar();
+    #endif
 
 	return 0;
 }
