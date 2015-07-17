@@ -27,7 +27,7 @@ public:
 		m_warpingSolver		 = new CUDAWarpingSolver(m_image.getWidth(), m_image.getHeight());
 		m_warpingSolverPatch = new CUDAPatchSolverWarping(m_image.getWidth(), m_image.getHeight());
 
-		m_warpingSolverTerraAD = new TerraSolverWarping(m_image.getWidth(), m_image.getHeight(), "ImageWarpingCombined.t", "gaussNewtonGPU");
+		m_warpingSolverTerraAD = new TerraSolverWarping(m_image.getWidth(), m_image.getHeight(), "ImageWarpingAD.t", "gaussNewtonGPU");
 		//m_warpingSolverBlockTerraAD = new TerraSolverWarping(m_image.getWidth(), m_image.getHeight(), "ImageWarpingAD.t", "gaussNewtonBlockGPU");
 
         m_warpingSolverTerra = new TerraSolverWarping(m_image.getWidth(), m_image.getHeight(), "ImageWarping.t", "gaussNewtonGPU");
@@ -117,14 +117,14 @@ public:
 
 		resetGPU();
 		for (unsigned int i = 0; i < numIter; i++)	{
-			std::cout << "//////////// ITERATION"  << i << "  (CUDA) ///////////////" << std::endl;
+			std::cout << "//////////// ITERATION"  << i << "  (CUDA/TERRA) ///////////////" << std::endl;
 			setConstraintImage((float)i / (float)20);
 
-			m_warpingSolver->solveGN(d_urshape, d_warpField, d_warpAngles, d_constraints, d_mask, nonLinearIter, linearIter, weightFit, weightReg);
-			//	//m_warpingSolverPatch->solveGN(d_urshape, d_warpField, d_warpAngles, d_constraints, d_mask, nonLinearIter, linearIter, patchIter, weightFit, weightReg);
-			//          //m_warpingSolverTerraAD->solve(d_warpField, d_warpAngles, d_urshape, d_constraints, d_mask, nonLinearIter, linearIter, patchIter, weightFit, weightReg);
-			//          //m_warpingSolverBlockTerraAD->solve(d_warpField, d_warpAngles, d_urshape, d_constraints, d_mask, nonLinearIter, linearIter, patchIter, weightFit, weightReg);
-			//	//m_warpingSolverTerra->solve(d_warpField, d_warpAngles, d_urshape, d_constraints, d_mask, nonLinearIter, linearIter, patchIter, weightFit, weightReg);
+			//m_warpingSolver->solveGN(d_urshape, d_warpField, d_warpAngles, d_constraints, d_mask, nonLinearIter, linearIter, weightFit, weightReg);
+			//m_warpingSolverPatch->solveGN(d_urshape, d_warpField, d_warpAngles, d_constraints, d_mask, nonLinearIter, linearIter, patchIter, weightFit, weightReg);
+			//m_warpingSolverTerraAD->solve(d_warpField, d_warpAngles, d_urshape, d_constraints, d_mask, nonLinearIter, linearIter, patchIter, weightFit, weightReg);
+			//m_warpingSolverBlockTerraAD->solve(d_warpField, d_warpAngles, d_urshape, d_constraints, d_mask, nonLinearIter, linearIter, patchIter, weightFit, weightReg);
+			m_warpingSolverTerra->solve(d_warpField, d_warpAngles, d_urshape, d_constraints, d_mask, nonLinearIter, linearIter, patchIter, weightFit, weightReg);
 			//	//m_warpingSolverBlockTerra->solve(d_warpField, d_warpAngles, d_urshape, d_constraints, d_mask, nonLinearIter, linearIter, patchIter, weightFit, weightReg);
 			//	std::cout << std::endl;
 		}
@@ -135,7 +135,7 @@ public:
 		std::cout << std::endl << std::endl;
 		 
 		for (unsigned int i = 0; i < numIter; i++)	{
-			std::cout << "//////////// ITERATION" << i << "  (TERRA) ///////////////" << std::endl;
+			std::cout << "//////////// ITERATION" << i << "  (DSL AD) ///////////////" << std::endl;
 			setConstraintImage((float)i / (float)20);
 
 			//m_warpingSolver->solveGN(d_urshape, d_warpField, d_warpAngles, d_constraints, d_mask, nonLinearIter, linearIter, weightFit, weightReg);
