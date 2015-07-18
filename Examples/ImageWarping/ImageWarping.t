@@ -13,7 +13,7 @@ local w_fitSqrt = P:Param("w_fitSqrt", float, 0)
 local w_regSqrt = P:Param("w_regSqrt", float, 1)
 
 P:Stencil(2)
-P:UsePreconditioner(false)
+P:UsePreconditioner(true)
 
 local unknownElement = P:UnknownType().metamethods.typ
 

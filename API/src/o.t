@@ -920,8 +920,8 @@ local function createjtj(Fs,unknown,P)
 end
 
 local function createjtf(problemSpec,Fs,unknown,P)
-   local F_hat = createzerolist(unknown.N) --preconditioner
-   local P_hat = createzerolist(unknown.N) --gradient
+   local F_hat = createzerolist(unknown.N) --gradient
+   local P_hat = createzerolist(unknown.N) --preconditioner
 	
 	for ridx,F in ipairs(Fs) do
 	    lprintf(0,"-------------")

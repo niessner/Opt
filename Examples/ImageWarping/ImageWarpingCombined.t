@@ -45,6 +45,10 @@ A.functions.evalJTF.boundary = terra(i : int32, j : int32, gi : int32, gj : int3
 	    if relerror(a(i), b(i)) > 1e-3  and b(i) > 1e-5 then
     		printf("JTF (%d,%d)[%d]: a = %e, b = %e, c = %e, err = %e\n",int(gi),int(gj),i,a(i),b(i),c(i),relerror(a(i), b(i)))
     	end
+		
+		if relerror(pa(i), pb(i)) > 1e-3  and pb(i) > 1e-5 then
+    		printf("JTF (%d,%d)[%d]: pa = %e, pb = %e, pc = %e, err = %e\n",int(gi),int(gj),i,pa(i),pb(i),pc(i),relerror(pa(i), pb(i)))
+    	end
 	end
 
     return b,pb
