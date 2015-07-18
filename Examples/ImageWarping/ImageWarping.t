@@ -13,7 +13,7 @@ local w_fitSqrt = P:Param("w_fitSqrt", float, 0)
 local w_regSqrt = P:Param("w_regSqrt", float, 1)
 
 P:Stencil(2)
-P:UsePreconditioner(true)
+P:UsePreconditioner(false)
 
 local unknownElement = P:UnknownType().metamethods.typ
 
@@ -191,10 +191,10 @@ local terra evalJTF(i : int32, j : int32, gi : int32, gj : int32, self : P:Param
 	b3 = b3 and b_
 
 	var m  = (self.Mask(i+0, j+0) == 0.0f)
-	var m0 = (self.Mask(i+0, j-1) == 0.0f)
-	var m1 = (self.Mask(i+0, j+1) == 0.0f)
-	var m2 = (self.Mask(i-1, j+0) == 0.0f)
-	var m3 = (self.Mask(i+1, j+0) == 0.0f)
+	var m0 = valid0
+	var m1 = valid1
+	var m2 = valid2
+	var m3 = valid3
 	
 	if b0 then
 		var q : float_2 	= getXFloat2(	i+0, j-1, self)
@@ -295,9 +295,6 @@ local terra evalJTF(i : int32, j : int32, gi : int32, gj : int32, self : P:Param
 	
 	bA = bA + (2.0f*self.w_regSqrt*self.w_regSqrt)*e_reg_angle
 
-	-- disable preconditioner
-	pre = make_float2(1.0f, 1.0f)
-	preA = 1.0f
 	
 	if P.usepreconditioner then		--pre-conditioner
 		
@@ -384,10 +381,10 @@ local terra applyJTJ(i : int32, j : int32, gi : int32, gj : int32, self : P:Para
 	b3 = b3 and b_
 
 	var m  = (self.Mask(i+0, j+0) == 0.0f)
-	var m0 = (self.Mask(i+0, j-1) == 0.0f)
-	var m1 = (self.Mask(i+0, j+1) == 0.0f)
-	var m2 = (self.Mask(i-1, j+0) == 0.0f)
-	var m3 = (self.Mask(i+1, j+0) == 0.0f)
+	var m0 = valid0
+	var m1 = valid1
+	var m2 = valid2
+	var m3 = valid3
 				
 	if b0 then
 		if m then
