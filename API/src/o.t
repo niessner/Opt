@@ -688,15 +688,117 @@ local function removeboundaries(exp)
     return exp:rename(nobounds)
 end
 
-local function multipleof(x,m)
-    if x % m == 0 then return x end
-    return x + (m - x % m)
+
+local function postorder(es)
+    
+    local linearized = terralib.newlist()
+    local exptoidx = {}
+    local function visit(e)
+        if not exptoidx[e] then
+            for i,c in ipairs(e:children()) do visit(c) end
+            linearized:insert(e)
+            exptoidx[e] = #linearized
+        end
+    end
+    for i,e in ipairs(es) do visit(e) end
+    return linearized
+end
+local function calculateconditions(es)
+    local function Intersect(a,b)
+        local amap = {}
+        for i,c in ipairs(a) do
+            amap[c] = true
+        end
+        local r = terralib.newlist()
+        for i,c in ipairs(b) do
+            if amap[c] then
+                r:insert(c)
+            end
+        end
+        return r
+    end
+    local function Union(a,b)
+        local amap = {}
+        local r = terralib.newlist()
+        for i,c in ipairs(a) do
+            amap[c] = true
+            r:insert(c)
+        end
+        for i,c in ipairs(b) do
+            if not amap[c] then
+                r:insert(c)
+            end
+        end
+        return r
+    end
+    es = (terralib.islist(es) and es) or terralib.newlist(es)
+    local required = terralib.newlist()
+    for i,e in ipairs(es) do
+        if ad.ExpVector:is(e) then required:insertall(e.data)
+        else required:insert(e) end
+    end
+    local linearized = postorder(required)
+    
+    local conditions = {} -- nil => never executes, <list> -> and'd list of conditions when thing executes
+                          -- keys can be expressions or image access patterns
+    for i,e in ipairs(required) do
+        conditions[e] = terralib.newlist()
+    end
+    local function mergecondition(exp,cond)
+        local old = conditions[exp]
+        if not old then
+            conditions[exp] = cond
+        else
+            conditions[exp] = Intersect(old,cond)
+        end
+    end
+    for i = #linearized,1,-1 do
+        local e = linearized[i]
+        if e.kind == "Apply" then    
+            local econd = conditions[e]
+            if e.op.name == "prod" then
+                for i,c in ipairs(e:children()) do
+                    if c.kind == "Apply" and c.op.name == "bool" then
+                        econd = Union(econd,terralib.newlist{c})
+                        mergecondition(c,conditions[e]) -- a bool is unconditionally executed by this product
+                    end 
+                end
+            end
+            for i,c in ipairs(e:children()) do
+                mergecondition(c,econd)
+            end
+        elseif e.kind == "Var" then
+            local a = e:key()
+            if a.kind == "ImageAccess" then
+                local ia = ImageAccess:get(a.image,a.x,a.y,0) --make vectors the same thing
+                mergecondition(ia,conditions[e])
+            end
+        end
+    end
+    return conditions
 end
 
 local function createfunction(problemspec,name,exps,usebounds,W,H)
     if not usebounds then
         exps = removeboundaries(exps)
     end
+    --if usebounds and name == "applyJTJ" then
+        local function mytostring(e)
+            if e.kind == "Apply" and e.op.name == "bool" then
+                return mytostring(e:children()[1])
+            else
+                return tostring(e)
+            end
+        end
+        --print(name,"conditions")
+        --print(ad.tostrings(exps))
+        local conditions = calculateconditions(exps)
+        for k,v in pairs(conditions) do
+            if k.kind == "ImageAccess" then
+                print(k, "has condition {",v:map(mytostring):concat(","),"}")
+            end
+        end
+    --end
     
     local P = symbol(problemspec.P:ParameterType(),"P")
     local extraimages = terralib.newlist()
@@ -705,7 +807,7 @@ local function createfunction(problemspec,name,exps,usebounds,W,H)
     local i,j,gi,gj = symbol(int32,"i"), symbol(int32,"j"),symbol(int32,"gi"), symbol(int32,"gj")
     local indexes = {[0] = i,j }
     local accesssyms = {}
-    local function emitvar(stmts,a)
+    local function emitvar(stmts,a,emit)
         if not accesssyms[a] then
             local r 
             if "ImageAccess" == a.kind then
@@ -731,9 +833,21 @@ local function createfunction(problemspec,name,exps,usebounds,W,H)
                     if not blockload then
                         local s = symbol(("%s_%s_%s"):format(a.image.name,a.x,a.y))
                         if usebounds then
+                            local cond = assert(conditions[pattern])
+                            local cexp = `true
+                            for i,c in ipairs(cond) do
+                                assert(c.kind == "Apply" and c.op.name == "bool")
+                                local sb = c:children()[1]
+                                if sb.kind == "Var" and sb:key().kind == "BoundsAccess" then
+                                    print("skipping bounds",sb:key())
+                                else
+                                    local exp = emit(c)
+                                    cexp = `cexp and exp
+                                end
+                            end
                             stmts:insert quote
                                 var [s] : a.image.type = 0.f
-                                if opt.InBoundsCalc(gi+[a.x],gj+[a.y],[W.size],[H.size],0,0) then
+                                if opt.InBoundsCalc(gi+[a.x],gj+[a.y],[W.size],[H.size],0,0) and cexp then
                                     [s] = im(i+[a.x],j+[a.y])
                                 end
                             end

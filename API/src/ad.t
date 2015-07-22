@@ -657,7 +657,7 @@ function ad.toterra(es,varmap,generator)
     local function emit(e)
         e = assert(toexp(e),"expected an expression but found ")
         if "Var" == e.kind then
-            return assert(varmap(statements,e:key()),"no mapping for variable key "..tostring(e:key()))
+            return assert(varmap(statements,e:key(),emit),"no mapping for variable key "..tostring(e:key()))
         elseif "Const" == e.kind then
             return `float(e.v)
         elseif "Apply" == e.kind then

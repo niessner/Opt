@@ -21,8 +21,13 @@ local C = util.C
 
 local cuda_version = cudalib.localversion()
 local libdevice = terralib.cudahome..string.format("/nvvm/libdevice/libdevice.compute_%d.10.bc",cuda_version)
-terralib.linklibrary(libdevice)
-
+local extern = terralib.externfunction
+if terralib.linkllvm then
+    local obj = terralib.linkllvm(libdevice)
+    function extern(...) return obj:extern(...) end
+else
+    terralib.linklibrary(libdevice)
+end
 local mathParamCount = {sqrt = 1,
 cos  = 1,
 acos = 1,
@@ -43,7 +48,7 @@ for k,v in pairs(mathParamCount) do
 	for i = 1,v do
 		params[i] = float
 	end
-	util.gpuMath[k] = terralib.externfunction(("__nv_%sf"):format(k), params -> float)
+	util.gpuMath[k] = extern(("__nv_%sf"):format(k), params -> float)
     util.cpuMath[k] = C[k.."f"]
 end
 util.cpuMath["abs"] = C["fabsf"]
