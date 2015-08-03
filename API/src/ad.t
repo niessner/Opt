@@ -352,7 +352,7 @@ function Op:define(fn,...)
     for i = 1,self.nparams do
         s:insert(symbol(float))
     end
-    terra self.impl([s]) return [ fn(unpack(s)) ] end    
+    terra self.impl([s]) return float([ fn(unpack(s)) ]) end    
     self.derivs = terralib.newlist()
     for i = 1,select("#",...) do
         local e = select(i,...)
@@ -679,12 +679,19 @@ function ad.toterra(es,varmap,generator)
             end
         end
     end
+    local function emitfinal(e)
+       local r,exp = symbol(float), emit(e)
+       statements:insert(quote
+        var [r] = exp
+       end)
+       return r
+    end
     local tes = es:map(function(e) 
         if ExpVector:is(e) then
-            local exps = e.data:map(emit)
+            local exps = e.data:map(emitfinal)
             return `[ad.TerraVector(float,#exps)]{ array(exps) }
         else
-            return emit(e)
+            return emitfinal(e)
         end
     end)
     return #statements == 0 and (`tes) or quote [statements] in [tes] end
@@ -908,7 +915,9 @@ ad.or_:define(function(x,y) return `int(x) or int(y) end, 0, 0)
 ad.less:define(function(x,y) return `int(x < y) end, 0,0)
 ad.greater:define(function(x,y) return `int(x > y) end, 0,0)
 ad.lesseq:define(function(x,y) return `int(x <= y) end,0,0)
-ad.greatereq:define(function(x,y) return `int(x >= y) end,0,0)
+ad.greatereq_:define(function(x,y) return `int(x >= y) end,0,0)
+function ad.greatereq(x,y) return ad.bool(ad.greatereq_(x,y)) end
+
 ad.not_:define(function(x) return `int(not bool(x)) end, 0)
 
 setmetatable(ad,nil) -- remove special metatable that generates new blank ops
