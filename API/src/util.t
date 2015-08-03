@@ -417,14 +417,15 @@ util.makeGPUFunctions = function(problemSpec, vars, PlanData, kernels)
 		kernelTemplate[k] = v(data)
 	end
 	local kernelFunctions = {}
+	local key = "_"..tostring(os.time())
 	for k,v in pairs(kernelTemplate) do
-	    kernelFunctions[k] = v.kernel
+	    kernelFunctions[k..key] = v.kernel
 	end
 	
 	local compiledKernels = terralib.cudacompile(kernelFunctions, false)
 	
-	for k, v in pairs(compiledKernels) do
-		gpu[k] = makeGPULauncher(compiledKernels[k], kernelFunctions[k].name, kernelTemplate[k].header, kernelTemplate[k].footer, problemSpec, PlanData)
+	for k, v in pairs(kernelTemplate) do
+		gpu[k] = makeGPULauncher(compiledKernels[k..key], kernelFunctions[k..key].name, kernelTemplate[k].header, kernelTemplate[k].footer, problemSpec, PlanData)
 	end
 	
 	
