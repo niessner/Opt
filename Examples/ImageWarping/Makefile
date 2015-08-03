@@ -19,8 +19,8 @@ CXXFLAGS = -MD $(FLAGS)
 NVCCFLAGS = -arch sm_35 $(FLAGS)
 
 TERRAHOME = $(HOME)/terra/release
-TERRA = $(TERRAHOME)/terra
-LFLAGS = -L../../API/build -L$(CUDAHOME)/lib$(S4) -Wl,-rpath,$(CUDAHOME)/lib$(S4) -lcudart -lOpt -Wl,-rpath,$(shell pwd)/../../API/build -L$(TERRAHOME) -lterra -Wl,-rpath,$(TERRAHOME)
+TERRA = $(TERRAHOME)/terra/bin/terra
+LFLAGS = -L../../API/build -L$(CUDAHOME)/lib$(S4) -Wl,-rpath,$(CUDAHOME)/lib$(S4) -lcudart -lOpt -Wl,-rpath,$(shell pwd)/../../API/build -L$(TERRAHOME)/lib -lterra -ldl -pthread
 
 ifeq ($(UNAME), Darwin)
   LFLAGS += -pagezero_size 10000 -image_base 100000000
