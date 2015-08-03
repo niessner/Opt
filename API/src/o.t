@@ -782,24 +782,7 @@ local function createfunction(problemspec,name,exps,usebounds,W,H)
     if not usebounds then
         exps = removeboundaries(exps)
     end
-    --if usebounds and name == "applyJTJ" then
-        local function mytostring(e)
-            if e.kind == "Apply" and e.op.name == "bool" then
-                return mytostring(e:children()[1])
-            else
-                return tostring(e)
-            end
-        end
-        --print(name,"conditions")
-        --print(ad.tostrings(exps))
-        local conditions = calculateconditions(exps)
-        for k,v in pairs(conditions) do
-            if k.kind == "ImageAccess" then
-                print(k, "has condition {",v:map(mytostring):concat(","),"}")
-            end
-        end
-    --end
-    
+      
     local P = symbol(problemspec.P:ParameterType(),"P")
     local extraimages = terralib.newlist()
     local imagetosym = {} 
@@ -833,21 +816,9 @@ local function createfunction(problemspec,name,exps,usebounds,W,H)
                     if not blockload then
                         local s = symbol(("%s_%s_%s"):format(a.image.name,a.x,a.y))
                         if usebounds then
-                            local cond = assert(conditions[pattern])
-                            local cexp = `true
-                            for i,c in ipairs(cond) do
-                                assert(c.kind == "Apply" and c.op.name == "bool")
-                                local sb = c:children()[1]
-                                if sb.kind == "Var" and sb:key().kind == "BoundsAccess" then
-                                    print("skipping bounds",sb:key())
-                                else
-                                    local exp = emit(c)
-                                    cexp = `cexp and exp
-                                end
-                            end
                             stmts:insert quote
                                 var [s] : a.image.type = 0.f
-                                if opt.InBoundsCalc(gi+[a.x],gj+[a.y],[W.size],[H.size],0,0) and cexp then
+                                if opt.InBoundsCalc(gi+[a.x],gj+[a.y],[W.size],[H.size],0,0) then
                                     [s] = im(i+[a.x],j+[a.y])
                                 end
                             end
@@ -867,11 +838,7 @@ local function createfunction(problemspec,name,exps,usebounds,W,H)
             elseif "BoundsAccess" == a.kind then--bounds calculation
                 --assert(usebounds) -- if we removed them, we shouldn't see any boundary accesses
                 r = symbol(int,tostring(a))
-                --[[stmts:insert quote
-                    var [r] = opt.InBoundsCalc(gi+a.x,gj+a.y,W.size,H.size,a.sx,a.sy)
-                end]]
                 r = `opt.InBoundsCalc(gi+a.x,gj+a.y,W.size,H.size,a.sx,a.sy)
-                
             elseif "IndexValue" == a.kind then
                 r = `[ assert(indexes[a.dim._index]) ] + a._shift 
             else assert("ParamValue" == a.kind)
@@ -889,9 +856,50 @@ local function createfunction(problemspec,name,exps,usebounds,W,H)
             return `fn(args)
         end 
     end
-    local result = ad.toterra(exps,emitvar,generator)
+    
+    local statements = terralib.newlist()
+    local emitted = {}
+    
+    local function emit(e)
+        e = assert(ad.toexp(e),"expected an expression but found ")
+        if "Var" == e.kind then
+            return assert(emitvar(statements,e:key(),emit),"no mapping for variable key "..tostring(e:key()))
+        elseif "Const" == e.kind then
+            return `float(e.v)
+        elseif "Apply" == e.kind then
+            if emitted[e] then return emitted[e] end
+            local emittedargs = e.args:map(emit)
+            local exp = generator and generator(e,emit)
+            if not exp then
+                exp = e.op:generate(e,emit)
+            end
+            local v = symbol("e")
+            emitted[e] = v
+            statements:insert(quote 
+                var [v] = exp 
+            end)
+            return v
+        end
+    end
+    local function emitfinal(e)
+       local r,exp = symbol(float), emit(e)
+       statements:insert(quote
+            var [r] = exp
+       end)
+       return r
+    end
+    local results = exps:map(function(e) 
+        if ad.ExpVector:is(e) then
+            local exps = e.data:map(emitfinal)
+            return `[ad.TerraVector(float,#exps)]{ array(exps) }
+        else
+            return emitfinal(e)
+        end
+    end)
+    
     local terra generatedfn([i], [j], [gi], [gj], [P], [extraimages])
-        return result
+        [statements]
+        return [results]
     end
     generatedfn:setname(name)
     if verboseAD then

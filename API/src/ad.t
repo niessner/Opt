@@ -645,58 +645,6 @@ ad.TerraVector = terralib.memoize(function(typ,N)
     return VecType
 end)
 
-function ad.toterra(es,varmap,generator) 
-    es = terralib.islist(es) and es or terralib.newlist(es)
-     --varmap is a function or table mapping keys to what terra code should go there
-    local manyuses = countuses(es)
-    local nvars = 0
-    local results = terralib.newlist {}
-    
-    local statements = terralib.newlist()
-    local emitted = {}
-    local function emit(e)
-        e = assert(toexp(e),"expected an expression but found ")
-        if "Var" == e.kind then
-            return assert(varmap(statements,e:key(),emit),"no mapping for variable key "..tostring(e:key()))
-        elseif "Const" == e.kind then
-            return `float(e.v)
-        elseif "Apply" == e.kind then
-            if emitted[e] then return emitted[e] end
-            local emittedargs = e.args:map(emit)
-            local exp = generator and generator(e,emit)
-            if not exp then
-                exp = e.op:generate(e,emit)
-            end
-            if manyuses[e] then 
-                local v = symbol(float,"e")
-                emitted[e] = v
-                statements:insert(quote 
-                        var [v] = exp 
-                end)
-                return v
-            else
-                return exp
-            end
-        end
-    end
-    local function emitfinal(e)
-       local r,exp = symbol(float), emit(e)
-       statements:insert(quote
-        var [r] = exp
-       end)
-       return r
-    end
-    local tes = es:map(function(e) 
-        if ExpVector:is(e) then
-            local exps = e.data:map(emitfinal)
-            return `[ad.TerraVector(float,#exps)]{ array(exps) }
-        else
-            return emitfinal(e)
-        end
-    end)
-    return #statements == 0 and (`tes) or quote [statements] in [tes] end
-end
-
 function Exp:d(v)
     assert(Var:is(v))
     self.derivs = self.derivs or {}
@@ -1039,6 +987,9 @@ function ad.polysimplify(exps)
     return terralib.islist(exps) and exps:map(dosimplify) or dosimplify(exps)
 end
 
+function ad.removepoly(exp)
+    
+end
 
 
 --[[
