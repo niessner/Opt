@@ -827,28 +827,135 @@ local function createfunction(problemspec,name,exps,usebounds,W,H)
     
     local irroots = exps:map(irmap)
     
-    local function schedule(roots)
-        local instructions = terralib.newlist()
+    local function calcuse(roots)
         local uses = {}
-        local function visit(ir)
+        local ready = terralib.newlist()
+        local function visit(parent,ir)
             if uses[ir] then 
-                uses[ir] = uses[ir] + 1 return 
+                if parent then
+                    uses[ir]:insert(parent)
+                end
+                return 
             end
             if ir.children then
                 for i,c in ipairs(ir.children) do
-                    visit(c)
+                    visit(ir,c)
                 end
+            else
+                ready:insert(ir)
             end
-            uses[ir] = 1
-            instructions:insert(ir)
+            uses[ir] = terralib.newlist()
+            if parent then
+                uses[ir]:insert(parent)
+            end
         end
         for i, r in ipairs(roots) do
-            visit(r)
+            visit(nil,r)
         end
-        return instructions,uses
+        return ready,uses
     end
     
-    local instructions,uses = schedule(irroots)
+    local ready,uses = calcuse(irroots)
+    
+    
+    local function calcdepth(uses)
+        local depth = {}
+        local function visit(n)
+            if depth[n] then return depth[n] end
+            local d = 0
+            for i,u in ipairs(uses[n]) do
+                d = math.max(d,1 + visit(u))
+            end
+            depth[n] = d
+            return d
+        end
+        for k,v in pairs(uses) do
+            visit(k)
+        end
+        return depth
+    end
+    
+    local depth = calcdepth(uses)
+    
+    
+    
+    local function schedule(ready,uses,depth)
+        local state = {} -- ir -> "ready" or ir -> "scheduled"
+        local used = {}
+        
+        local function registerscreated(ir)
+            if ir.kind == "const" or ir.kind == "vectorextract" or ir.kind == "reduce" then
+                return 0
+            else
+                return 1
+            end
+        end
+        local function netregisterswhenscheduled(ir)
+            local n = registerscreated(ir)
+            if ir.children then
+                local newused = {}
+                for i,c in ipairs(ir.children) do
+                    newused[c] = (newused[c] or used[c]) + 1
+                end
+                for k,newused_k in pairs(newused) do
+                    assert(#uses[k] >= newused[k])
+                    if #uses[k] == newused_k then -- it kills this instruction
+                        n = n - registerscreated(k)
+                    end
+                end
+            end
+            return n
+        end
+        local function priority(a,b) -- is a worse than b to schedule?
+            local ra,rb = netregisterswhenscheduled(a),netregisterswhenscheduled(b)
+            if ra < rb then
+                return false
+            elseif ra > rb then
+                return true
+            elseif depth[a] < depth[b] then
+                return true
+            elseif depth[b] > depth[a] then
+                return false
+            else
+                return false
+            end 
+        end
+        local function choose()
+            table.sort(ready,priority)
+            return table.remove(ready)
+        end
+        local function checkready(ir)
+            if state[ir] ~= "ready" then
+                assert(ir.children,"no children but not initially ready?")
+                for i,c in ipairs(ir.children) do
+                    if state[c] ~= "scheduled" then return end -- not ready
+                end            
+                ready:insert(ir)
+                state[ir] = "ready"
+            end
+        end
+        local instructions = terralib.newlist()
+        while #ready > 0 do
+            local ir = choose()
+            state[ir] = "scheduled"
+            used[ir] = 0
+            instructions:insert(ir)
+            for i,u in ipairs(uses[ir]) do 
+                checkready(u)
+            end
+            if ir.children then
+                for i,c in ipairs(ir.children) do
+                    used[c] = used[c] + 1
+                end
+            end
+        end
+        return instructions
+    end
+    
+    local instructions = schedule(ready,uses,depth)
+    
+    
+    local used = setmetatable({}, { __index = function() return 0 end })
     
     local P = symbol(problemspec.P:ParameterType(),"P")
     local i,j,gi,gj = symbol(int32,"i"), symbol(int32,"j"),symbol(int32,"gi"), symbol(int32,"gj")
@@ -930,10 +1037,10 @@ local function createfunction(problemspec,name,exps,usebounds,W,H)
     local emitted,emittedpos = {},{}
     local activereg = 0
     
-    function emit(ir) 
-        assert(uses[ir] > 0)
-        uses[ir] = uses[ir] - 1
-        if uses[ir] == 0 then
+    function emit(ir)
+        assert(#uses[ir] == 0 or used[ir] < #uses[ir])
+        used[ir] = used[ir] + 1
+        if used[ir] == #uses[ir] then
             activereg = activereg - 1
         end
         return assert(emitted[ir],"use before def")
@@ -980,7 +1087,7 @@ local function createfunction(problemspec,name,exps,usebounds,W,H)
         emittedpos[ir] = i
         activereg = activereg + 1
         if usebounds and name == "applyJTJ" then
-            print(("[%d] r%d = %s"):format(activereg,i,formatinst(ir)))
+            print(("[%d,%d] r%d = %s"):format(activereg,depth[ir],i,formatinst(ir)))
         end
     end
     

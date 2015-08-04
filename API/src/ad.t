@@ -129,6 +129,15 @@ local polycache = terralib.memoize(function(op,c,...)
     return newapply(op,config,args)
 end)
 
+local function orderedexpressionkeys(tbl)
+    local keys = terralib.newlist()
+    for k,v in pairs(tbl) do
+        keys:insert(k)
+    end
+    sortexpressions(keys)
+    return keys
+end
+
 
 local function simplify(op,config,args)
     if allconst(args) then
@@ -198,7 +207,9 @@ local function simplify(op,config,args)
         if config.c == 0.0 then return zero end
         
         local factors = terralib.newlist()
-        for k,v in pairs(expmap) do
+        local keys = orderedexpressionkeys(expmap)
+        for _,k in ipairs(keys) do
+            local v = expmap[k]
             if v ~= 0 then
                 factors:insert(k^v)
             end
@@ -861,7 +872,9 @@ function ad.polysimplify(exps)
         local factors = terralib.newlist()
         for i,t in ipairs(terms) do
             local pows = terralib.newlist()
-            for k,v in pairs(t) do
+            local keys = orderedexpressionkeys(t)
+            for _,k in ipairs(keys) do
+                local v = t[k]
                 pows:insert(k^v)
             end
             factors:insert(ad.prod(1,unpack(pows)))
@@ -884,6 +897,7 @@ function ad.polysimplify(exps)
         -- count total uses
         for i,t in ipairs(terms) do
             for k,v in pairs(t) do
+                local v = t[k]
                 if v > 0 then
                     uses[k] = (uses[k] or 0) + 1
                     minpower[k] = math.min(minpower[k] or math.huge, v)
@@ -895,12 +909,17 @@ function ad.polysimplify(exps)
         end
         -- find maximum uses
         local maxuse,power,maxkey = 0
-        for k,u in pairs(uses) do
+        
+        local keys = orderedexpressionkeys(uses)
+        for _,k in ipairs(keys) do
+            local u = uses[k]
             if u > maxuse then
                 maxuse,maxkey,power = u,k,minpower[k]
             end
         end
-        for k,u in pairs(neguses) do
+        local keys = orderedexpressionkeys(neguses)
+        for _,k in ipairs(keys) do
+            local u = neguses[k]
             if u > maxuse then
                 maxuse,maxkey,power = u,k,maxnegpower[k]
             end
@@ -911,7 +930,7 @@ function ad.polysimplify(exps)
         --print("FACTORING",maxuse,power,maxkey)
         --partition terms
         local used,notused = terralib.newlist(),terralib.newlist()
-        for i,t in pairs(terms) do
+        for i,t in ipairs(terms) do
             local v = t[maxkey]
             if v and ((v > 0 and power > 0) or (v < 0 and power < 0)) then
                 local newv = v - power
