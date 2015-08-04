@@ -806,6 +806,15 @@ local function createfunction(problemspec,name,exps,usebounds,W,H)
         elseif "Const" == e.kind then
             return { kind = "const", value = e.v }
         elseif "Apply" == e.kind then
+            if (e.op.name == "sum" or e.op.name == "prod") and #e:children() > 2 then
+                local v = { kind = "vardecl", value = e.config.c }
+                local children = terralib.newlist { v }
+                for i,c in ipairs(e:children()) do
+                    children:insert { kind = "reduce", op = e.op.name, children = terralib.newlist { v, irmap(c) } }
+                end
+                return { kind = "varuse", children = children }
+            end
+            
             local fn,gen = opt.math[e.op.name]
             if fn then
                 function gen(args) return `fn(args) end
@@ -871,6 +880,28 @@ local function createfunction(problemspec,name,exps,usebounds,W,H)
         elseif "apply" == ir.kind then
             local exps = ir.children:map(emit)
             return ir.generator(exps)
+        elseif "vardecl" == ir.kind then
+            local r = symbol(float,"r")
+            statements:insert(quote
+                var [r] = ir.value
+            end)
+            return r
+        elseif "varuse" == ir.kind then
+            local children = ir.children:map(emit)
+            return children[1]
+        elseif "reduce" == ir.kind then
+            local children = ir.children:map(emit)
+            local r,exp = children[1],children[2]
+            if ir.op == "sum" then
+                statements:insert quote
+                    [r] = [r] + [exp]
+                end
+            else
+                statements:insert quote
+                    [r] = [r] * [exp]
+                end
+            end
+            return children[1]
         end
     end
     local emitted = {}
