@@ -806,7 +806,13 @@ local function createfunction(problemspec,name,exps,usebounds,W,H)
         elseif "Const" == e.kind then
             return { kind = "const", value = e.v }
         elseif "Apply" == e.kind then
-            return { kind = "apply", exp = e, children = e:children():map(irmap) }
+            local fn,gen = opt.math[e.op.name]
+            if fn then
+                function gen(args) return `fn(args) end
+            else
+                function gen(args)  return e.op:generate(e,args) end
+            end
+            return { kind = "apply", generator = gen, children = e:children():map(irmap) }
         end
     end)
     
@@ -864,12 +870,7 @@ local function createfunction(problemspec,name,exps,usebounds,W,H)
             return `[ad.TerraVector(float,#exps)]{ array(exps) }
         elseif "apply" == ir.kind then
             local exps = ir.children:map(emit)
-            local fn = opt.math[ir.exp.op.name]
-            if fn then
-                return `fn(exps)
-            else
-                return ir.exp.op:generate(ir.exp,exps)
-            end
+            return ir.generator(exps)
         end
     end
     local emitted = {}
