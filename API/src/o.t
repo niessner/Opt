@@ -807,12 +807,12 @@ local function createfunction(problemspec,name,exps,usebounds,W,H)
             return { kind = "const", value = e.v }
         elseif "Apply" == e.kind then
             if (e.op.name == "sum" or e.op.name == "prod") and #e:children() > 2 then
-                local v = { kind = "vardecl", value = e.config.c }
-                local children = terralib.newlist { v }
+                local decl = { value = e.config.c }
+                local children = terralib.newlist {}
                 for i,c in ipairs(e:children()) do
-                    children:insert { kind = "reduce", op = e.op.name, children = terralib.newlist { v, irmap(c) } }
+                    children:insert { kind = "reduce", op = e.op.name, decl = decl, children = terralib.newlist { irmap(c) } }
                 end
-                return { kind = "varuse", children = children }
+                return { kind = "varuse", children = children, decl = decl }
             end
             
             local fn,gen = opt.math[e.op.name]
@@ -824,6 +824,10 @@ local function createfunction(problemspec,name,exps,usebounds,W,H)
             return { kind = "apply", op = e.op.name, generator = gen, children = e:children():map(irmap) }
         end
     end)
+    local function children(ir)
+        if ir.children then return ipairs(ir.children)
+        else return function() return nil end end
+    end
     
     local irroots = exps:map(irmap)
     
@@ -882,26 +886,30 @@ local function createfunction(problemspec,name,exps,usebounds,W,H)
     local function schedule(ready,uses,depth)
         local state = {} -- ir -> "ready" or ir -> "scheduled"
         local used = {}
-        
+        local vardeclinuse = {} -- map from declaration table to the reduce ir that liven
         local function registerscreated(ir)
-            if ir.kind == "const" or ir.kind == "vectorextract" or ir.kind == "reduce" then
+            if ir.kind == "const" or ir.kind == "vectorextract" or ir.kind == "varuse" then
                 return 0
+            elseif ir.kind == "reduce" then
+                return vardeclinuse[ir.decl] and 0 or 1
             else
                 return 1
             end
         end
+        local function registersdestroyed(ir)
+            if ir.kind == "varuse" then return 1
+            else return registerscreated(ir) end
+        end
         local function netregisterswhenscheduled(ir)
             local n = registerscreated(ir)
-            if ir.children then
-                local newused = {}
-                for i,c in ipairs(ir.children) do
-                    newused[c] = (newused[c] or used[c]) + 1
-                end
-                for k,newused_k in pairs(newused) do
-                    assert(#uses[k] >= newused[k])
-                    if #uses[k] == newused_k then -- it kills this instruction
-                        n = n - registerscreated(k)
-                    end
+            local newused = {}
+            for i,c in children(ir) do
+                newused[c] = (newused[c] or used[c]) + 1
+            end
+            for k,newused_k in pairs(newused) do
+                assert(#uses[k] >= newused[k])
+                if #uses[k] == newused_k then -- it kills this instruction
+                    n = n - registersdestroyed(k)
                 end
             end
             return n
@@ -939,10 +947,11 @@ local function createfunction(problemspec,name,exps,usebounds,W,H)
             for i,u in ipairs(uses[ir]) do 
                 checkready(u)
             end
-            if ir.children then
-                for i,c in ipairs(ir.children) do
-                    used[c] = used[c] + 1
-                end
+            for i,c in children(ir) do
+                used[c] = used[c] + 1
+            end
+            if ir.kind == "reduce" then
+                vardeclinuse[ir.decl] = true
             end
         end
         return instructions
@@ -1006,25 +1015,25 @@ local function createfunction(problemspec,name,exps,usebounds,W,H)
         elseif "apply" == ir.kind then
             local exps = ir.children:map(emit)
             return ir.generator(exps)
-        elseif "vardecl" == ir.kind then
-            local r = symbol(float,"r")
-            statements:insert(quote
-                var [r] = ir.value
-            end)
-            return r
         elseif "varuse" == ir.kind then
             local children = ir.children:map(emit)
-            return children[1]
+            return assert(ir.decl.sym, "decl not initialized?")
         elseif "reduce" == ir.kind then
+            if not ir.decl.sym then
+                ir.decl.sym = symbol("vd")
+                statements:insert quote
+                    var [ir.decl.sym] : float = ir.decl.value
+                end
+            end
             local children = ir.children:map(emit)
-            local r,exp = children[1],children[2]
+            local exp = children[1]
             if ir.op == "sum" then
                 statements:insert quote
-                    [r] = [r] + [exp]
+                    [ir.decl.sym] = [ir.decl.sym] + [exp]
                 end
             else
                 statements:insert quote
-                    [r] = [r] * [exp]
+                    [ir.decl.sym] = [ir.decl.sym] * [exp]
                 end
             end
             return children[1]
@@ -1070,7 +1079,7 @@ local function createfunction(problemspec,name,exps,usebounds,W,H)
     
     for i,ir in ipairs(instructions) do
         local r
-        if ir.kind == "const" or ir.kind == "varuse" or ir.kind == "reduce" or ir.kind == "vardecl" then 
+        if ir.kind == "const" or ir.kind == "varuse" or ir.kind == "reduce" then 
             r = createexp(ir) 
         else
             r = symbol("r")
