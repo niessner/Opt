@@ -821,7 +821,7 @@ local function createfunction(problemspec,name,exps,usebounds,W,H)
             else
                 function gen(args)  return e.op:generate(e,args) end
             end
-            return { kind = "apply", generator = gen, children = e:children():map(irmap) }
+            return { kind = "apply", op = e.op.name, generator = gen, children = e:children():map(irmap) }
         end
     end)
     
@@ -829,24 +829,26 @@ local function createfunction(problemspec,name,exps,usebounds,W,H)
     
     local function schedule(roots)
         local instructions = terralib.newlist()
-        local visited = {}
+        local uses = {}
         local function visit(ir)
-            if visited[ir] then return end
+            if uses[ir] then 
+                uses[ir] = uses[ir] + 1 return 
+            end
             if ir.children then
                 for i,c in ipairs(ir.children) do
                     visit(c)
                 end
             end
-            visited[ir] = true
+            uses[ir] = 1
             instructions:insert(ir)
         end
         for i, r in ipairs(roots) do
             visit(r)
         end
-        return instructions
+        return instructions,uses
     end
     
-    local instructions = schedule(irroots)
+    local instructions,uses = schedule(irroots)
     
     local P = symbol(problemspec.P:ParameterType(),"P")
     local i,j,gi,gj = symbol(int32,"i"), symbol(int32,"j"),symbol(int32,"gi"), symbol(int32,"gj")
@@ -925,13 +927,47 @@ local function createfunction(problemspec,name,exps,usebounds,W,H)
             return children[1]
         end
     end
-    local emitted = {}
-    local ic = 1
-    function emit(ir) return assert(emitted[ir],"use before def") end
+    local emitted,emittedpos = {},{}
+    local activereg = 0
+    
+    function emit(ir) 
+        assert(uses[ir] > 0)
+        uses[ir] = uses[ir] - 1
+        if uses[ir] == 0 then
+            activereg = activereg - 1
+        end
+        return assert(emitted[ir],"use before def")
+    end
+    
+    local function formatchildren(children)
+        local cs = terralib.newlist()
+        for i,c in ipairs(children) do
+            cs:insert("r"..tostring(emittedpos[c]))
+        end
+        return cs:concat(",")
+    end
+    local function formatinst(inst)
+        local fs = terralib.newlist()
+        fs:insert(inst.kind.." ")
+        for k,v in pairs(inst) do
+            if k ~= "kind" and k ~= "children" and type(v) ~= "function" then
+                --fs:insert(k)
+                --fs:insert(" = ")
+                fs:insert(tostring(v))
+                fs:insert(" ")
+            end
+        end
+        if inst.children then
+            fs:insert("{")
+            fs:insert(formatchildren(inst.children))
+            fs:insert("}")
+        end
+        return fs:concat()
+    end
     
     for i,ir in ipairs(instructions) do
         local r
-        if ir.kind == "const" then 
+        if ir.kind == "const" or ir.kind == "varuse" or ir.kind == "reduce" or ir.kind == "vardecl" then 
             r = createexp(ir) 
         else
             r = symbol("r")
@@ -941,6 +977,11 @@ local function createfunction(problemspec,name,exps,usebounds,W,H)
             end)
         end
         emitted[ir] = r
+        emittedpos[ir] = i
+        activereg = activereg + 1
+        if usebounds and name == "applyJTJ" then
+            print(("[%d] r%d = %s"):format(activereg,i,formatinst(ir)))
+        end
     end
     
     local results = irroots:map(emit)
