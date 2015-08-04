@@ -827,6 +827,27 @@ local function createfunction(problemspec,name,exps,usebounds,W,H)
     
     local irroots = exps:map(irmap)
     
+    local function schedule(roots)
+        local instructions = terralib.newlist()
+        local visited = {}
+        local function visit(ir)
+            if visited[ir] then return end
+            if ir.children then
+                for i,c in ipairs(ir.children) do
+                    visit(c)
+                end
+            end
+            visited[ir] = true
+            instructions:insert(ir)
+        end
+        for i, r in ipairs(roots) do
+            visit(r)
+        end
+        return instructions
+    end
+    
+    local instructions = schedule(irroots)
+    
     local P = symbol(problemspec.P:ParameterType(),"P")
     local i,j,gi,gj = symbol(int32,"i"), symbol(int32,"j"),symbol(int32,"gi"), symbol(int32,"gj")
     local indexes = {[0] = i,j }
@@ -905,16 +926,21 @@ local function createfunction(problemspec,name,exps,usebounds,W,H)
         end
     end
     local emitted = {}
-    function emit(ir)
-        if ir.kind == "const" then return createexp(ir) end
-        if emitted[ir] then return emitted[ir] end
-        local r = symbol("r")
-        local exp = createexp(ir)
-        statements:insert(quote
-            var [r] = exp
-        end)
+    local ic = 1
+    function emit(ir) return assert(emitted[ir],"use before def") end
+    
+    for i,ir in ipairs(instructions) do
+        local r
+        if ir.kind == "const" then 
+            r = createexp(ir) 
+        else
+            r = symbol("r")
+            local exp = createexp(ir)
+            statements:insert(quote
+                var [r] = exp
+            end)
+        end
         emitted[ir] = r
-        return r
     end
     
     local results = irroots:map(emit)
