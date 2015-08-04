@@ -912,13 +912,9 @@ local function createfunction(problemspec,name,exps,usebounds,W,H)
                 return false
             elseif ra > rb then
                 return true
-            elseif depth[a] < depth[b] then
-                return true
-            elseif depth[b] > depth[a] then
-                return false
             else
-                return false
-            end 
+                return depth[a] < depth[b]
+            end
         end
         local function choose()
             table.sort(ready,priority)
