@@ -347,7 +347,7 @@ function Op:define(fn,...)
     local dbg = debug.getinfo(fn,"u")
     assert(not dbg.isvararg)
     self.nparams = dbg.nparams
-    function self:generate(exp,emit) return fn(unpack(exp:children():map(emit))) end
+    function self:generate(exp,args) return fn(unpack(args)) end
     local s = terralib.newlist()
     for i = 1,self.nparams do
         s:insert(symbol(float))
@@ -718,71 +718,12 @@ local function rep(N,v)
     return r
 end
 
-
-local genpow = terralib.memoize(function(N)
-    local terra pow(a : float) : float
-        var r : float = 1.f
-        for i = 0,N do
-            r = r*a
-        end
-        return r
-    end 
-    pow:setname("pow"..tostring(N))
-    return pow
-end)
-
-local function emitpow(emit,c,e)
-    assert(c ~= 0)
-    e = emit(e)
-    if c == 1 then
-        return e
-    elseif c > 0 then
-        return `[genpow(c)](e)
-    else
-        return `1.f/[genpow(-c)](e)
-    end 
-end
-local function emitfactor(emit,c,es)
-    local exp
-    if c ~= 1 then
-        exp = `c
+function ad.sum:generate(exp,args)
+    local r = exp.config.c
+    for i,c in ipairs(args) do
+        r = `r+c
     end
-    for i,e in ipairs(es) do
-        local c,ee = aspowc(e)
-        if not exp then
-            exp = emitpow(emit,c,ee)
-        elseif c > 0 then
-            local d = emitpow(emit,c,ee)
-            exp = `exp * d
-        else 
-            local d = emitpow(emit,-c,ee)
-            exp = `exp / d
-        end
-    end
-    return exp
-end
-local function emitsum(emit,c,es)
-    local exp
-    if c ~= 0 then
-        exp = `c
-    end
-    for i,e in ipairs(es) do
-        local c,ee = asprod(e)
-        if not exp then
-            exp = emitfactor(emit,c,ee)
-        elseif c > 0 then
-            local d = emitfactor(emit,c,ee)
-            exp = `exp + d
-        else 
-            local d = emitfactor(emit,-c,ee)
-            exp = `exp - d
-        end
-    end
-    return exp
-end
-
-function ad.sum:generate(exp,emit)
-    return emitsum(emit,exp.config.c,exp:children())
+    return r
 end
 function ad.sum:getpartials(exp) return rep(#exp.args,one) end
 ad.sum.config = {"c"}
@@ -792,8 +733,12 @@ function ad.sub(x,y) return ad.sum(0,x,-y) end
 function ad.mul(x,y) return ad.prod(1,x,y) end
 function ad.div(x,y) return ad.prod(1,x,y^-1) end
 
-function ad.prod:generate(exp,emit)
-    return emitfactor(emit,exp.config.c,exp:children())
+function ad.prod:generate(exp,args)
+    local r = exp.config.c
+    for i,c in ipairs(args) do
+        r = `r*c
+    end
+    return r
 end
 function ad.prod:getpartials(exp)
     local r = terralib.newlist()
@@ -809,8 +754,27 @@ function ad.prod:getpartials(exp)
     return r
 end
 ad.prod.config = { "c" }
-function ad.powc:generate(exp,emit)
-    return emitpow(emit,exp.config.c,exp:children()[1])
+
+local genpow = terralib.memoize(function(N)
+    local terra pow(a : float) : float
+        var r : float = 1.f
+        for i = 0,N do
+            r = r*a
+        end
+        return r
+    end 
+    pow:setname("pow"..tostring(N))
+    return pow
+end)
+function ad.powc:generate(exp,args)
+    local c,e = exp.config.c, args[1]
+    if c == 1 then
+        return e
+    elseif c > 0 then
+        return `[genpow(c)](e)
+    else
+        return `1.f/[genpow(-c)](e)
+    end
 end
 
 function ad.powc:getpartials(exp)

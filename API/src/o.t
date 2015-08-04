@@ -38,7 +38,7 @@ local function newclass(name)
     return mt
 end
 
-local vprintfname = ffi.OS == "Windows" and "vprintf" or "vprintf"
+local vprintfname = ffi.os == "Windows" and "vprintf" or "cudart:vprintf"
 local vprintf = terralib.externfunction(vprintfname, {&int8,&int8} -> int)
 
 local function createbuffer(args)
@@ -754,7 +754,7 @@ local function calculateconditions(es)
     end
     for i = #linearized,1,-1 do
         local e = linearized[i]
-        if e.kind == "Apply" then    
+        if e.kind == "Apply" then
             local econd = conditions[e]
             if e.op.name == "prod" then
                 for i,c in ipairs(e:children()) do
@@ -782,121 +782,110 @@ local function createfunction(problemspec,name,exps,usebounds,W,H)
     if not usebounds then
         exps = removeboundaries(exps)
     end
-      
-    local P = symbol(problemspec.P:ParameterType(),"P")
-    local extraimages = terralib.newlist()
-    local imagetosym = {} 
-    local imageloadmap = {}
-    local i,j,gi,gj = symbol(int32,"i"), symbol(int32,"j"),symbol(int32,"gi"), symbol(int32,"gj")
-    local indexes = {[0] = i,j }
-    local accesssyms = {}
-    local function emitvar(stmts,a,emit)
-        if not accesssyms[a] then
-            local r 
-            if "ImageAccess" == a.kind then
-                local im = imagetosym[a.image] 
-                if not im then
-                    if a.image.idx >= 0 then
-                        im = symbol(problemspec.P:TypeOf(a.image.name),a.image.name)
-                        stmts:insert(quote var [im] = P.[a.image.name] end)
-                    else
-                        local imtype = problemspec.P:InternalImage(a.image.type,a.image.W,a.image.H)
-                        im = symbol(imtype,a.image.name)
-                        extraimages[-a.image.idx] = im
-                    end
-                    imagetosym[a.image] = im
-                end
-                r = symbol(tostring(a))
-                -- note: implicit cast to float happens here for non-float images.
-                local loadexp = usebounds and (`im:get(i+[a.x],j+[a.y],gi+[a.x],gj+[a.y])) or (`im(i+[a.x],j+[a.y]))
-                --local loadexp = (`im(i+[a.x],j+[a.y]))
-                if not a.image.type:isarithmetic() then
-                    local pattern = ImageAccess:get(a.image,a.x,a.y,0)
-                    local blockload = imageloadmap[pattern]
-                    if not blockload then
-                        local s = symbol(("%s_%s_%s"):format(a.image.name,a.x,a.y))
-                        if usebounds then
-                            stmts:insert quote
-                                var [s] : a.image.type = 0.f
-                                if opt.InBoundsCalc(gi+[a.x],gj+[a.y],[W.size],[H.size],0,0) then
-                                    [s] = im(i+[a.x],j+[a.y])
-                                end
-                            end
-                        else
-                            stmts:insert quote
-                                var [s] : a.image.type = im(i+[a.x],j+[a.y])
-                            end
-                        end
-						blockload,imageloadmap[pattern] = s,s
-                    end
-					loadexp = `blockload(a.channel)
-                end
-                stmts:insert quote
-                    var [r] = loadexp
-                end
-                --r = loadexp
-            elseif "BoundsAccess" == a.kind then--bounds calculation
-                --assert(usebounds) -- if we removed them, we shouldn't see any boundary accesses
-                r = symbol(int,tostring(a))
-                r = `opt.InBoundsCalc(gi+a.x,gj+a.y,W.size,H.size,a.sx,a.sy)
-            elseif "IndexValue" == a.kind then
-                r = `[ assert(indexes[a.dim._index]) ] + a._shift 
-            else assert("ParamValue" == a.kind)
-                r = `float(P.[a.name])
-            end
-            accesssyms[a] = r
-        end
-        return accesssyms[a]
-    end
-    -- NOTE: math is set globally for the particular plan being compiled to either util.gpuMath or util.cpuMath
-    local function generator(e,emit)
-        local fn = opt.math[e.op.name]
-        if fn then
-            local args = e:children():map(emit)
-            return `fn(args)
-        end 
-    end
     
-    local statements = terralib.newlist()
-    local emitted = {}
-    
-    local function emit(e)
-        e = assert(ad.toexp(e),"expected an expression but found ")
-        if "Var" == e.kind then
-            return assert(emitvar(statements,e:key(),emit),"no mapping for variable key "..tostring(e:key()))
-        elseif "Const" == e.kind then
-            return `float(e.v)
-        elseif "Apply" == e.kind then
-            if emitted[e] then return emitted[e] end
-            local emittedargs = e.args:map(emit)
-            local exp = generator and generator(e,emit)
-            if not exp then
-                exp = e.op:generate(e,emit)
-            end
-            local v = symbol("e")
-            emitted[e] = v
-            statements:insert(quote 
-                var [v] = exp 
-            end)
-            return v
-        end
-    end
-    local function emitfinal(e)
-       local r,exp = symbol(float), emit(e)
-       statements:insert(quote
-            var [r] = exp
-       end)
-       return r
-    end
-    local results = exps:map(function(e) 
+    local imageload = terralib.memoize(function(image)
+        return { kind = "vectorload", value = image }
+    end)
+    -- code ir is a table { kind = "...", ... }
+    local irmap
+    irmap = terralib.memoize(function(e)
         if ad.ExpVector:is(e) then
-            local exps = e.data:map(emitfinal)
-            return `[ad.TerraVector(float,#exps)]{ array(exps) }
-        else
-            return emitfinal(e)
+            return { kind = "vectorconstruct", children = e.data:map(irmap) }
+        elseif "Var" == e.kind then
+            local a = e:key()
+            if "ImageAccess" == a.kind then
+                if not a.image.type:isarithmetic() then
+                    local loadvec = imageload(ImageAccess:get(a.image,a.x,a.y,0))
+                    return { kind = "vectorextract", children = terralib.newlist { loadvec }, channel = a.channel }  
+                else
+                    return { kind = "load", value = a }
+                end 
+          else
+                return { kind = "intrinsic", value = a }
+            end
+        elseif "Const" == e.kind then
+            return { kind = "const", value = e.v }
+        elseif "Apply" == e.kind then
+            return { kind = "apply", exp = e, children = e:children():map(irmap) }
         end
     end)
     
+    local irroots = exps:map(irmap)
+    
+    local P = symbol(problemspec.P:ParameterType(),"P")
+    local i,j,gi,gj = symbol(int32,"i"), symbol(int32,"j"),symbol(int32,"gi"), symbol(int32,"gj")
+    local indexes = {[0] = i,j }
+    local statements = terralib.newlist()
+    local extraimages = terralib.newlist()
+    local emit
+    local function createexp(ir)
+        local function imageref(image)
+            if image.idx >= 0 then
+                return `P.[image.name]
+            else
+                if not extraimages[-image.idx] then
+                    local imtype = problemspec.P:InternalImage(image.type,image.W,image.H)
+                    extraimages[-image.idx] = symbol(imtype,image.name)
+                end
+                return extraimages[-image.idx]
+            end
+        end
+        if "const" == ir.kind then
+            return `float(ir.value)
+        elseif "intrinsic" == ir.kind then
+            local a = ir.value
+            if "BoundsAccess" == a.kind then--bounds calculation
+                return `opt.InBoundsCalc(gi+a.x,gj+a.y,W.size,H.size,a.sx,a.sy)
+            elseif "IndexValue" == a.kind then
+                return `[ assert(indexes[a.dim._index]) ] + a._shift 
+            else assert("ParamValue" == a.kind)
+                return `float(P.[a.name])
+            end
+        elseif "load" == ir.kind then
+           local a = ir.value
+           local im = imageref(a.image)
+           return `im:get(i+[a.x],j+[a.y],gi+[a.x],gj+[a.y])
+        elseif "vectorload" == ir.kind then
+            local a = ir.value
+            local im = imageref(a.image)
+            local s = symbol(("%s_%s_%s"):format(a.image.name,a.x,a.y))
+            statements:insert(quote
+                var [s] : a.image.type = 0.f
+                if opt.InBoundsCalc(gi+[a.x],gj+[a.y],[W.size],[H.size],0,0) then
+                    [s] = im(i+[a.x],j+[a.y])
+                end
+            end)
+            return s
+        elseif "vectorextract" == ir.kind then
+            local v = emit(ir.children[1])
+            return `v(ir.channel)
+        elseif "vectorconstruct" == ir.kind then
+            local exps = ir.children:map(emit)
+            return `[ad.TerraVector(float,#exps)]{ array(exps) }
+        elseif "apply" == ir.kind then
+            local exps = ir.children:map(emit)
+            local fn = opt.math[ir.exp.op.name]
+            if fn then
+                return `fn(exps)
+            else
+                return ir.exp.op:generate(ir.exp,exps)
+            end
+        end
+    end
+    local emitted = {}
+    function emit(ir)
+        if ir.kind == "const" then return createexp(ir) end
+        if emitted[ir] then return emitted[ir] end
+        local r = symbol("r")
+        local exp = createexp(ir)
+        statements:insert(quote
+            var [r] = exp
+        end)
+        emitted[ir] = r
+        return r
+    end
+    
+    local results = irroots:map(emit)
     local terra generatedfn([i], [j], [gi], [gj], [P], [extraimages])
         [statements]
         return [results]
