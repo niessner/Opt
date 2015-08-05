@@ -1014,28 +1014,31 @@ local function createfunction(problemspec,name,exps,usebounds,W,H)
             end
             return n
         end
-        local invocations,depthc = 0,0
-        local function priority(a,b) -- is a worse than b to schedule?
-            local ra,rb = netregisterswhenscheduled(a),netregisterswhenscheduled(b)
-            if ra < rb then
-                return false
-            elseif ra > rb then
-                return true
-            else
-                return depth[a] < depth[b]
+        local function cost(idx,ir)
+            local c =  { netregisterswhenscheduled(ir) } -- , -depth[ir] }
+            --print("cost",idx,unpack(c))
+            return c
+        end
+        local function costless(n,a,b)
+            for i,ac in ipairs(a) do
+                local bc = b[i]
+                if ac ~= bc then return ac < bc end
             end
+            return false
         end
         local function choose()
-            table.sort(ready,priority)
-            local a,b = ready[#ready],ready[#ready-1]
-            if a and b then
-                local ra,rb = netregisterswhenscheduled(a),netregisterswhenscheduled(b)
-                if ra == rb then
-                    depthc = depthc+1
+            --print("-------------")
+            local best = cost(1,ready[1])
+            local bestidx = 1
+            for i = 2,#ready do
+                local ci = cost(i,ready[i])
+                if costless(i,ci,best) then
+                    bestidx = i
+                    best = ci
                 end
-                invocations = invocations + 1
             end
-            return table.remove(ready)
+            --print("choose",bestidx)
+            return table.remove(ready,bestidx)
         end
         local function checkready(ir)
             if state[ir] ~= "ready" then
@@ -1064,7 +1067,6 @@ local function createfunction(problemspec,name,exps,usebounds,W,H)
                 reductionsleft[ir.decl] = reductionsleft[ir.decl] - 1
             end
         end
-        print(invocations,depthc,depthc/invocations)
         return instructions,depth
     end
     
