@@ -796,6 +796,7 @@ local function createfunction(problemspec,name,exps,usebounds,W,H)
             if "ImageAccess" == a.kind then
                 if not a.image.type:isarithmetic() then
                     local loadvec = imageload(ImageAccess:get(a.image,a.x,a.y,0))
+                    loadvec.size = math.max(loadvec.size or 0,a.channel + 1)
                     return { kind = "vectorextract", children = terralib.newlist { loadvec }, channel = a.channel }  
                 else
                     return { kind = "load", value = a }
@@ -861,29 +862,26 @@ local function createfunction(problemspec,name,exps,usebounds,W,H)
     
     local ready,uses = calcuse(irroots)
     
-    
-    local function calcdepth(uses)
-        local depth = {}
-        local function visit(n)
-            if depth[n] then return depth[n] end
-            local d = 0
-            for i,u in ipairs(uses[n]) do
-                d = math.max(d,1 + visit(u))
+    --[[local function scheduleforwards(ready,uses)
+        local function calcdepth(uses)
+            local depth = {}
+            local function visit(n)
+                if depth[n] then return depth[n] end
+                local d = 0
+                for i,u in ipairs(uses[n]) do
+                    d = math.max(d,1 + visit(u))
+                end
+                depth[n] = d
+                return d
             end
-            depth[n] = d
-            return d
+            for k,v in pairs(uses) do
+                visit(k)
+            end
+            return depth
         end
-        for k,v in pairs(uses) do
-            visit(k)
-        end
-        return depth
-    end
     
-    local depth = calcdepth(uses)
+        local depth = calcdepth(uses)
     
-    
-    
-    local function schedule(ready,uses,depth)
         local state = {} -- ir -> "ready" or ir -> "scheduled"
         local used = {}
         local vardeclinuse = {} -- map from declaration table to the reduce ir that liven
@@ -954,10 +952,123 @@ local function createfunction(problemspec,name,exps,usebounds,W,H)
                 vardeclinuse[ir.decl] = true
             end
         end
-        return instructions
+        return instructions,depth
+    end]]
+    
+    
+    local function schedulebackwards(roots,uses,depth)
+        
+        local function calcdepth()
+            local depth = {}
+            local function visit(n)
+                if depth[n] then return depth[n] end
+                local d = 0
+                for i,c in children(n) do
+                    d = math.max(d,1 + visit(c))
+                end
+                depth[n] = d
+                return d
+            end
+            for i,ir in ipairs(roots) do
+                visit(ir)
+            end
+            return depth
+        end
+        local depth = calcdepth()
+        
+        local state = {} -- ir -> "ready" or ir -> "scheduled"
+        local ready = terralib.newlist()
+        for i,r in ipairs(roots) do
+            state[r] = "ready"
+            ready:insert(r)
+        end
+        
+        
+        local reductionsleft = {} -- map from declaration table to the reduce ir that liven
+        local function registersreleased(ir)
+            if ir.kind == "const" then return 0
+            elseif ir.kind == "vectorload" then return ir.size 
+            elseif ir.kind == "vectorextract" then return 1
+            elseif ir.kind == "varuse" then return 0
+            elseif ir.kind == "reduce" then return reductionsleft[ir.decl] == 1 and 1 or 0
+            else return 1 end
+        end
+        local function registersliveonuse(ir)
+            if ir.kind == "const" then return 0
+            elseif ir.kind == "vectorload" then return 0 
+            elseif ir.kind == "vectorextract" then return 1
+            elseif ir.kind == "varuse" then return 1
+            elseif ir.kind == "reduce" then return 0
+            else return 1 end
+        end
+        local function netregisterswhenscheduled(ir)
+            local n = -registersreleased(ir)
+            local newlive = {}
+            for i,c in children(ir) do
+                newlive[c] = true
+            end
+            for k,_ in pairs(newlive) do
+                if not state[k] then
+                    n = n + registersliveonuse(k)
+                end
+            end
+            return n
+        end
+        local invocations,depthc = 0,0
+        local function priority(a,b) -- is a worse than b to schedule?
+            local ra,rb = netregisterswhenscheduled(a),netregisterswhenscheduled(b)
+            if ra < rb then
+                return false
+            elseif ra > rb then
+                return true
+            else
+                return depth[a] < depth[b]
+            end
+        end
+        local function choose()
+            table.sort(ready,priority)
+            local a,b = ready[#ready],ready[#ready-1]
+            if a and b then
+                local ra,rb = netregisterswhenscheduled(a),netregisterswhenscheduled(b)
+                if ra == rb then
+                    depthc = depthc+1
+                end
+                invocations = invocations + 1
+            end
+            return table.remove(ready)
+        end
+        local function checkready(ir)
+            if state[ir] ~= "ready" then
+                for i,u in ipairs(uses[ir]) do
+                    if state[u] ~= "scheduled" then return end -- not ready
+                end            
+                ready:insert(ir)
+                state[ir] = "ready"
+            end
+        end
+        local instructions = terralib.newlist()
+        while #ready > 0 do
+            local ir = choose()
+            instructions:insert(1,ir)
+            state[ir] = "scheduled"
+            for i,c in children(ir) do 
+                if not state[c] then
+                    state[c] = "used"
+                end
+                checkready(c)
+            end
+            if ir.kind == "varuse" then
+                reductionsleft[ir.decl] = #ir.children
+            elseif ir.kind == "reduce" then
+                assert(reductionsleft[ir.decl] > 0, "reduce count")
+                reductionsleft[ir.decl] = reductionsleft[ir.decl] - 1
+            end
+        end
+        print(invocations,depthc,depthc/invocations)
+        return instructions,depth
     end
     
-    local instructions = schedule(ready,uses,depth)
+    local instructions,depth = schedulebackwards(irroots,uses)
     
     
     local used = setmetatable({}, { __index = function() return 0 end })
