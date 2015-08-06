@@ -806,12 +806,12 @@ local function createfunction(problemspec,name,exps,usebounds,W,H)
             return { kind = "const", value = e.v }
         elseif "Apply" == e.kind then
             if (e.op.name == "sum" or e.op.name == "prod") and #e:children() > 2 then
-                local decl = { value = e.config.c }
                 local children = terralib.newlist {}
+                local varuse = { kind = "varuse", children = children, constant = e.config.c }
                 for i,c in ipairs(e:children()) do
-                    children:insert { kind = "reduce", op = e.op.name, decl = decl, children = terralib.newlist { irmap(c) } }
+                    children:insert { kind = "reduce", op = e.op.name, varuse = varuse, children = terralib.newlist { irmap(c) } }
                 end
-                return { kind = "varuse", children = children, decl = decl }
+                return varuse
             end
             
             local fn,gen = opt.math[e.op.name]
@@ -859,101 +859,7 @@ local function createfunction(problemspec,name,exps,usebounds,W,H)
     end
     
     local ready,uses = calcuse(irroots)
-    
-    --[[local function scheduleforwards(ready,uses)
-        local function calcdepth(uses)
-            local depth = {}
-            local function visit(n)
-                if depth[n] then return depth[n] end
-                local d = 0
-                for i,u in ipairs(uses[n]) do
-                    d = math.max(d,1 + visit(u))
-                end
-                depth[n] = d
-                return d
-            end
-            for k,v in pairs(uses) do
-                visit(k)
-            end
-            return depth
-        end
-    
-        local depth = calcdepth(uses)
-    
-        local state = {} -- ir -> "ready" or ir -> "scheduled"
-        local used = {}
-        local vardeclinuse = {} -- map from declaration table to the reduce ir that liven
-        local function registerscreated(ir)
-            if ir.kind == "const" or ir.kind == "vectorextract" or ir.kind == "varuse" then
-                return 0
-            elseif ir.kind == "reduce" then
-                return vardeclinuse[ir.decl] and 0 or 1
-            else
-                return 1
-            end
-        end
-        local function registersdestroyed(ir)
-            if ir.kind == "varuse" then return 1
-            else return registerscreated(ir) end
-        end
-        local function netregisterswhenscheduled(ir)
-            local n = registerscreated(ir)
-            local newused = {}
-            for i,c in children(ir) do
-                newused[c] = (newused[c] or used[c]) + 1
-            end
-            for k,newused_k in pairs(newused) do
-                assert(#uses[k] >= newused[k])
-                if #uses[k] == newused_k then -- it kills this instruction
-                    n = n - registersdestroyed(k)
-                end
-            end
-            return n
-        end
-        local function priority(a,b) -- is a worse than b to schedule?
-            local ra,rb = netregisterswhenscheduled(a),netregisterswhenscheduled(b)
-            if ra < rb then
-                return false
-            elseif ra > rb then
-                return true
-            else
-                return depth[a] < depth[b]
-            end
-        end
-        local function choose()
-            table.sort(ready,priority)
-            return table.remove(ready)
-        end
-        local function checkready(ir)
-            if state[ir] ~= "ready" then
-                assert(ir.children,"no children but not initially ready?")
-                for i,c in ipairs(ir.children) do
-                    if state[c] ~= "scheduled" then return end -- not ready
-                end            
-                ready:insert(ir)
-                state[ir] = "ready"
-            end
-        end
-        local instructions = terralib.newlist()
-        while #ready > 0 do
-            local ir = choose()
-            state[ir] = "scheduled"
-            used[ir] = 0
-            instructions:insert(ir)
-            for i,u in ipairs(uses[ir]) do 
-                checkready(u)
-            end
-            for i,c in children(ir) do
-                used[c] = used[c] + 1
-            end
-            if ir.kind == "reduce" then
-                vardeclinuse[ir.decl] = true
-            end
-        end
-        return instructions,depth
-    end]]
-    
-    
+     
     local function schedulebackwards(roots,uses,depth)
         
         local function calcdepth()
@@ -981,14 +887,18 @@ local function createfunction(problemspec,name,exps,usebounds,W,H)
             ready:insert(r)
         end
         
-        
-        local reductionsleft = {} -- map from declaration table to the reduce ir that liven
         local function registersreleased(ir)
             if ir.kind == "const" then return 0
             elseif ir.kind == "vectorload" then return ir.count
             elseif ir.kind == "vectorextract" then return 0
             elseif ir.kind == "varuse" then return 0
-            elseif ir.kind == "reduce" then return reductionsleft[ir.decl] == 1 and 1 or 0
+            elseif ir.kind == "reduce" then 
+                for i,c in children(ir.varuse) do
+                    if c ~= ir and state[c] ~= "scheduled" then -- is there another reduce for this var that is not scheduled yet
+                        return 0
+                    end
+                end
+                return 1
             else return 1 end
         end
         local function registersliveonuse(ir)
@@ -1062,12 +972,6 @@ local function createfunction(problemspec,name,exps,usebounds,W,H)
                 end
                 checkready(c)
             end
-            if ir.kind == "varuse" then
-                reductionsleft[ir.decl] = #ir.children
-            elseif ir.kind == "reduce" then
-                assert(reductionsleft[ir.decl] > 0, "reduce count")
-                reductionsleft[ir.decl] = reductionsleft[ir.decl] - 1
-            end
         end
         return instructions,depth,regcounts
     end
@@ -1132,23 +1036,23 @@ local function createfunction(problemspec,name,exps,usebounds,W,H)
             return ir.generator(exps)
         elseif "varuse" == ir.kind then
             local children = ir.children:map(emit)
-            return assert(ir.decl.sym, "decl not initialized?")
+            return assert(ir.sym, "varuse not initialized?")
         elseif "reduce" == ir.kind then
-            if not ir.decl.sym then
-                ir.decl.sym = symbol("vd")
+            if not ir.varuse.sym then
+                ir.varuse.sym = symbol("vd")
                 statements:insert quote
-                    var [ir.decl.sym] : float = ir.decl.value
+                    var [ir.varuse.sym] : float = ir.varuse.constant
                 end
             end
             local children = ir.children:map(emit)
             local exp = children[1]
             if ir.op == "sum" then
                 statements:insert quote
-                    [ir.decl.sym] = [ir.decl.sym] + [exp]
+                    [ir.varuse.sym] = [ir.varuse.sym] + [exp]
                 end
             else
                 statements:insert quote
-                    [ir.decl.sym] = [ir.decl.sym] * [exp]
+                    [ir.varuse.sym] = [ir.varuse.sym] * [exp]
                 end
             end
             return children[1]
@@ -1177,7 +1081,7 @@ local function createfunction(problemspec,name,exps,usebounds,W,H)
         local fs = terralib.newlist()
         fs:insert(inst.kind.." ")
         for k,v in pairs(inst) do
-            if k ~= "kind" and k ~= "children" and type(v) ~= "function" then
+            if k ~= "kind" and k ~= "children" and type(v) ~= "function" and k ~= "sym" then
                 --fs:insert(k)
                 --fs:insert(" = ")
                 fs:insert(tostring(v))
