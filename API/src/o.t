@@ -679,10 +679,10 @@ local function shiftexp(exp,x,y)
     return exp:rename(rename)
 end 
 
-local function removeboundaries(exp)
+local function removeboundaries(exp,zeroonly)
     if ad.ExpVector:is(exp) or terralib.islist(exp) then return exp:map(removeboundaries) end
     local function nobounds(a)
-        if BoundsAccess:is(a) then return ad.toexp(1)
+        if BoundsAccess:is(a) and (not zeroonly or (a.x == 0 and a.y == 0 and a.sx == 0 and a.sy == 0)) then return ad.toexp(1)
         else return ad.v[a] end
     end
     return exp:rename(nobounds)
@@ -779,9 +779,7 @@ local function calculateconditions(es)
 end
 
 local function createfunction(problemspec,name,exps,usebounds,W,H)
-    if not usebounds then
-        exps = removeboundaries(exps)
-    end
+    exps = removeboundaries(exps,usebounds)
     
     local imageload = terralib.memoize(function(image)
         return { kind = "vectorload", value = image }
@@ -796,12 +794,12 @@ local function createfunction(problemspec,name,exps,usebounds,W,H)
             if "ImageAccess" == a.kind then
                 if not a.image.type:isarithmetic() then
                     local loadvec = imageload(ImageAccess:get(a.image,a.x,a.y,0))
-                    loadvec.size = math.max(loadvec.size or 0,a.channel + 1)
+                    loadvec.count = (loadvec.count or 0) + 1
                     return { kind = "vectorextract", children = terralib.newlist { loadvec }, channel = a.channel }  
                 else
                     return { kind = "load", value = a }
                 end 
-          else
+            else
                 return { kind = "intrinsic", value = a }
             end
         elseif "Const" == e.kind then
@@ -987,8 +985,8 @@ local function createfunction(problemspec,name,exps,usebounds,W,H)
         local reductionsleft = {} -- map from declaration table to the reduce ir that liven
         local function registersreleased(ir)
             if ir.kind == "const" then return 0
-            elseif ir.kind == "vectorload" then return ir.size 
-            elseif ir.kind == "vectorextract" then return 1
+            elseif ir.kind == "vectorload" then return ir.count
+            elseif ir.kind == "vectorextract" then return 0
             elseif ir.kind == "varuse" then return 0
             elseif ir.kind == "reduce" then return reductionsleft[ir.decl] == 1 and 1 or 0
             else return 1 end
@@ -1050,9 +1048,13 @@ local function createfunction(problemspec,name,exps,usebounds,W,H)
             end
         end
         local instructions = terralib.newlist()
+        local regcounts = terralib.newlist()
+        local currentregcount = 1
         while #ready > 0 do
             local ir = choose()
             instructions:insert(1,ir)
+            regcounts:insert(1,currentregcount)
+            currentregcount = currentregcount + netregisterswhenscheduled(ir)
             state[ir] = "scheduled"
             for i,c in children(ir) do 
                 if not state[c] then
@@ -1067,10 +1069,10 @@ local function createfunction(problemspec,name,exps,usebounds,W,H)
                 reductionsleft[ir.decl] = reductionsleft[ir.decl] - 1
             end
         end
-        return instructions,depth
+        return instructions,depth,regcounts
     end
     
-    local instructions,depth = schedulebackwards(irroots,uses)
+    local instructions,depth,regcounts = schedulebackwards(irroots,uses)
     
     
     local used = setmetatable({}, { __index = function() return 0 end })
@@ -1205,7 +1207,7 @@ local function createfunction(problemspec,name,exps,usebounds,W,H)
         emittedpos[ir] = i
         activereg = activereg + 1
         if usebounds and name == "applyJTJ" then
-            print(("[%d,%d] r%d = %s"):format(activereg,depth[ir],i,formatinst(ir)))
+            print(("[%d,%d] r%d = %s"):format(regcounts[i],depth[ir],i,formatinst(ir)))
         end
     end
     
