@@ -880,11 +880,23 @@ local function createfunction(problemspec,name,exps,usebounds,W,H)
         end
         local depth = calcdepth()
         
-        local state = {} -- ir -> "ready" or ir -> "scheduled"
-        local ready = terralib.newlist()
+        local state = nil -- ir -> "ready" or ir -> "scheduled"
+        local readylists = terralib.newlist()
+        
+        local function enter()
+            state = setmetatable({}, {__index = state})
+            readylists:insert(terralib.newlist())
+        end
+        enter() --initial root level for non-speculative moves
+        
         for i,r in ipairs(roots) do
             state[r] = "ready"
-            ready:insert(r)
+            readylists[#readylists]:insert(r)
+        end
+        
+        local function leave()
+            readylists:remove()
+            state = assert(getmetatable(state).__index,"pop!")    
         end
         
         local function registersreleased(ir)
@@ -922,11 +934,54 @@ local function createfunction(problemspec,name,exps,usebounds,W,H)
             end
             return n
         end
+        local function checkandmarkready(ir)
+            if state[ir] ~= "ready" then
+                for i,u in ipairs(uses[ir]) do
+                    if state[u] ~= "scheduled" then return end -- not ready
+                end            
+                readylists[#readylists]:insert(ir)
+                state[ir] = "ready"
+            end
+        end
+        local function markscheduled(ir)
+            state[ir] = "scheduled"
+            for i,c in children(ir) do 
+                if not state[c] then
+                    state[c] = "used"
+                end
+                checkandmarkready(c)
+            end
+        end
+        
+        local function costspeculate(depth,ir)
+            local c = netregisterswhenscheduled(ir)
+            if depth > 0 then
+                local minr = math.huge
+                enter() -- start speculation level
+                markscheduled(ir)
+                
+                for _,rl in ipairs(readylists) do
+                    for _,candidate in ipairs(rl) do
+                        if state[candidate] == "ready" then -- might not be ready because an overlay already scheduled it and we don't track the deletions
+                            minr = math.min(minr,costspeculate(depth-1,candidate))
+                        end
+                    end
+                end
+                
+                leave()
+                if minr ~= math.huge then
+                    c = c + minr
+                end
+            end
+            return c
+        end
+        
         local function cost(idx,ir)
-            local c =  { netregisterswhenscheduled(ir) } -- , -depth[ir] }
+            local c =  { costspeculate(1,ir) } -- , -depth[ir] }
             --print("cost",idx,unpack(c))
             return c
         end
+        
         local function costless(n,a,b)
             for i,ac in ipairs(a) do
                 local bc = b[i]
@@ -934,9 +989,10 @@ local function createfunction(problemspec,name,exps,usebounds,W,H)
             end
             return false
         end
+        local ready = readylists[1] -- the true ready list is the first one, the rest are the speculative lists
         local function choose()
-            --print("-------------")
-            local best = cost(1,ready[1])
+            --print("---------------------")
+            local best = cost(1,assert(ready[1]))
             local bestidx = 1
             for i = 2,#ready do
                 local ci = cost(i,ready[i])
@@ -948,15 +1004,7 @@ local function createfunction(problemspec,name,exps,usebounds,W,H)
             --print("choose",bestidx)
             return table.remove(ready,bestidx)
         end
-        local function checkready(ir)
-            if state[ir] ~= "ready" then
-                for i,u in ipairs(uses[ir]) do
-                    if state[u] ~= "scheduled" then return end -- not ready
-                end            
-                ready:insert(ir)
-                state[ir] = "ready"
-            end
-        end
+        
         local instructions = terralib.newlist()
         local regcounts = terralib.newlist()
         local currentregcount = 1
@@ -965,13 +1013,7 @@ local function createfunction(problemspec,name,exps,usebounds,W,H)
             instructions:insert(1,ir)
             regcounts:insert(1,currentregcount)
             currentregcount = currentregcount + netregisterswhenscheduled(ir)
-            state[ir] = "scheduled"
-            for i,c in children(ir) do 
-                if not state[c] then
-                    state[c] = "used"
-                end
-                checkready(c)
-            end
+            markscheduled(ir)
         end
         return instructions,depth,regcounts
     end
