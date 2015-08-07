@@ -1020,8 +1020,43 @@ local function createfunction(problemspec,name,exps,usebounds,W,H)
     
     local instructions,depth,regcounts = schedulebackwards(irroots,uses)
     
+    local function printschedule(instructions,regcounts)
+        print("schedule for ",name,"-----------")
+        local emittedpos = {}
+        local function formatchildren(children)
+            local cs = terralib.newlist()
+            for i,c in ipairs(children) do
+                cs:insert("r"..tostring(emittedpos[c]))
+            end
+            return cs:concat(",")
+        end
     
-    local used = setmetatable({}, { __index = function() return 0 end })
+        local function formatinst(inst)
+            local fs = terralib.newlist()
+            fs:insert(inst.kind.." ")
+            for k,v in pairs(inst) do
+                if k ~= "kind" and k ~= "children" and type(v) ~= "function" and k ~= "sym" then
+                    fs:insert(tostring(v))
+                    fs:insert(" ")
+                end
+            end
+            if inst.children then
+                fs:insert("{")
+                fs:insert(formatchildren(inst.children))
+                fs:insert("}")
+            end
+            return fs:concat()
+        end
+        for i,ir in ipairs(instructions) do
+            emittedpos[ir] = i
+            print(("[%d,%d] r%d = %s"):format(regcounts[i],depth[ir],i,formatinst(ir)))
+        end
+        print("----------------------")
+    end
+    
+    if not usebounds and name == "applyJTJ" then
+        printschedule(instructions,regcounts)
+    end
     
     local P = symbol(problemspec.P:ParameterType(),"P")
     local i,j,gi,gj = symbol(int32,"i"), symbol(int32,"j"),symbol(int32,"gi"), symbol(int32,"gj")
@@ -1100,42 +1135,11 @@ local function createfunction(problemspec,name,exps,usebounds,W,H)
             return children[1]
         end
     end
-    local emitted,emittedpos = {},{}
-    local activereg = 0
+    
+    local emitted = {}
     
     function emit(ir)
-        assert(#uses[ir] == 0 or used[ir] < #uses[ir])
-        used[ir] = used[ir] + 1
-        if used[ir] == #uses[ir] then
-            activereg = activereg - 1
-        end
         return assert(emitted[ir],"use before def")
-    end
-    
-    local function formatchildren(children)
-        local cs = terralib.newlist()
-        for i,c in ipairs(children) do
-            cs:insert("r"..tostring(emittedpos[c]))
-        end
-        return cs:concat(",")
-    end
-    local function formatinst(inst)
-        local fs = terralib.newlist()
-        fs:insert(inst.kind.." ")
-        for k,v in pairs(inst) do
-            if k ~= "kind" and k ~= "children" and type(v) ~= "function" and k ~= "sym" then
-                --fs:insert(k)
-                --fs:insert(" = ")
-                fs:insert(tostring(v))
-                fs:insert(" ")
-            end
-        end
-        if inst.children then
-            fs:insert("{")
-            fs:insert(formatchildren(inst.children))
-            fs:insert("}")
-        end
-        return fs:concat()
     end
     
     for i,ir in ipairs(instructions) do
@@ -1150,11 +1154,6 @@ local function createfunction(problemspec,name,exps,usebounds,W,H)
             end)
         end
         emitted[ir] = r
-        emittedpos[ir] = i
-        activereg = activereg + 1
-        if usebounds and name == "applyJTJ" then
-            print(("[%d,%d] r%d = %s"):format(regcounts[i],depth[ir],i,formatinst(ir)))
-        end
     end
     
     local results = irroots:map(emit)
