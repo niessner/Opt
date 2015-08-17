@@ -778,20 +778,22 @@ local function calculateconditions(es)
     return conditions
 end
 
+
+-- code ir is a table { kind = "...", ... }    
 local IRNode,nextirid = newclass("IRNode"),0
 function IRNode:create(body)
     local ir = IRNode:new(body)
     ir.id,nextirid = nextirid,nextirid+1
     return ir
 end
+local Condition = newclass("Condition")
+
 local function createfunction(problemspec,name,exps,usebounds,W,H)
     exps = removeboundaries(exps,usebounds)
     
     local imageload = terralib.memoize(function(image)
         return IRNode:create { kind = "vectorload", value = image }
     end)
-    -- code ir is a table { kind = "...", ... }
-    
     local irmap
     irmap = terralib.memoize(function(e)
         if ad.ExpVector:is(e) then
@@ -1048,7 +1050,7 @@ local function createfunction(problemspec,name,exps,usebounds,W,H)
         print("----------------------")
     end
     
-    if not usebounds and name == "applyJTJ" then
+    if usebounds and name == "applyJTJ" then
         printschedule(instructions,regcounts)
     end
     
@@ -1125,7 +1127,12 @@ local function createfunction(problemspec,name,exps,usebounds,W,H)
             return children[1]
         end
     end
-    
+    local function terratype(ir)
+        if "vectorconstruct" == ir.kind then return ad.TerraVector(float,#ir.children)
+        elseif "vectorload" == ir.kind then return ir.value.image.type
+        elseif "apply" == ir.kind and ir.op:match("_$") then return bool
+        else return float end
+    end
     local emitted = {}
     
     function emit(ir)
@@ -1133,15 +1140,17 @@ local function createfunction(problemspec,name,exps,usebounds,W,H)
         return assert(emitted[ir],"use before def")
     end
     
+    local declarations = terralib.newlist()
     for i,ir in ipairs(instructions) do
         local r
         if ir.kind == "const" or ir.kind == "varuse" or ir.kind == "reduce" then 
             r = assert(createexp(ir),"nil exp") 
         else
-            r = symbol("r")
+            r = symbol(terratype(ir),"r"..tostring(i))
+            declarations:insert quote var [r] end
             local exp = assert(createexp(ir),"nil exp")
             statements:insert(quote
-                var [r] = exp
+                [r] = exp
             end)
         end
         emitted[ir] = r
@@ -1149,12 +1158,13 @@ local function createfunction(problemspec,name,exps,usebounds,W,H)
     
     local results = irroots:map(emit)
     local terra generatedfn([i], [j], [gi], [gj], [P], [extraimages])
+        [declarations]
         [statements]
         return [results]
     end
     generatedfn:setname(name)
     if verboseAD then
-        generatedfn:printpretty(true, false)
+        generatedfn:printpretty(false, false)
     end
     return generatedfn
 end

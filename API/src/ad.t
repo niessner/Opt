@@ -838,7 +838,7 @@ ad.or_:define(function(x,y) return `int(x) or int(y) end, 0, 0)
 ad.less:define(function(x,y) return `int(x < y) end, 0,0)
 ad.greater:define(function(x,y) return `int(x > y) end, 0,0)
 ad.lesseq:define(function(x,y) return `int(x <= y) end,0,0)
-ad.greatereq_:define(function(x,y) return `int(x >= y) end,0,0)
+ad.greatereq_:define(function(x,y) return `x >= y end,0,0)
 function ad.greatereq(x,y) return ad.bool(ad.greatereq_(x,y)) end
 
 ad.not_:define(function(x) return `int(not bool(x)) end, 0)
