@@ -778,39 +778,46 @@ local function calculateconditions(es)
     return conditions
 end
 
+local IRNode,nextirid = newclass("IRNode"),0
+function IRNode:create(body)
+    local ir = IRNode:new(body)
+    ir.id,nextirid = nextirid,nextirid+1
+    return ir
+end
 local function createfunction(problemspec,name,exps,usebounds,W,H)
     exps = removeboundaries(exps,usebounds)
     
     local imageload = terralib.memoize(function(image)
-        return { kind = "vectorload", value = image }
+        return IRNode:create { kind = "vectorload", value = image }
     end)
     -- code ir is a table { kind = "...", ... }
+    
     local irmap
     irmap = terralib.memoize(function(e)
         if ad.ExpVector:is(e) then
-            return { kind = "vectorconstruct", children = e.data:map(irmap) }
+            return IRNode:create { kind = "vectorconstruct", children = e.data:map(irmap) }
         elseif "Var" == e.kind then
             local a = e:key()
             if "ImageAccess" == a.kind then
                 if not a.image.type:isarithmetic() then
                     local loadvec = imageload(ImageAccess:get(a.image,a.x,a.y,0))
                     loadvec.count = (loadvec.count or 0) + 1
-                    return { kind = "vectorextract", children = terralib.newlist { loadvec }, channel = a.channel }  
+                    return IRNode:create { kind = "vectorextract", children = terralib.newlist { loadvec }, channel = a.channel }  
                 else
-                    return { kind = "load", value = a }
+                    return IRNode:create { kind = "load", value = a }
                 end 
             else
-                return { kind = "intrinsic", value = a }
+                return IRNode:create { kind = "intrinsic", value = a }
             end
         elseif "Const" == e.kind then
-            return { kind = "const", value = e.v }
+            return IRNode:create { kind = "const", value = e.v }
         elseif "Apply" == e.kind then
             if (e.op.name == "sum" or e.op.name == "prod") and #e:children() > 2 then
-                local vardecl = { kind = "vardecl", constant = e.config.c }
-                local children = terralib.newlist()
-                local varuse = { kind = "varuse", vardecl = vardecl, children = children }
+                local vardecl = IRNode:create { kind = "vardecl", constant = e.config.c }
+                local children = terralib.newlist { vardecl }
+                local varuse = IRNode:create { kind = "varuse", children = children }
                 for i,c in ipairs(e:children()) do
-                    children:insert { kind = "reduce", op = e.op.name, children = terralib.newlist { vardecl, irmap(c) } }
+                    children:insert(IRNode:create { kind = "reduce", op = e.op.name, children = terralib.newlist { vardecl, irmap(c) } })
                 end
                 return varuse
             end
@@ -821,7 +828,7 @@ local function createfunction(problemspec,name,exps,usebounds,W,H)
             else
                 function gen(args)  return e.op:generate(e,args) end
             end
-            return { kind = "apply", op = e.op.name, generator = gen, children = e:children():map(irmap) }
+            return IRNode:create { kind = "apply", op = e.op.name, generator = gen, children = e:children():map(irmap) }
         end
     end)
     local function children(ir)
@@ -1022,7 +1029,7 @@ local function createfunction(problemspec,name,exps,usebounds,W,H)
             local fs = terralib.newlist()
             fs:insert(inst.kind.." ")
             for k,v in pairs(inst) do
-                if k ~= "kind" and k ~= "children" and type(v) ~= "function" and k ~= "sym" then
+                if k ~= "kind" and k ~= "children" and type(v) ~= "function" and k ~= "id" then
                     fs:insert(tostring(v))
                     fs:insert(" ")
                 end
@@ -1101,8 +1108,8 @@ local function createfunction(problemspec,name,exps,usebounds,W,H)
         elseif "vardecl" == ir.kind then
             return `float(ir.constant)
         elseif "varuse" == ir.kind then
-            ir.children:map(emit)
-            return emit(ir.vardecl) -- return the variable declaration, which was already emitted by the reductions
+            local children = ir.children:map(emit)
+            return children[1] -- return the variable declaration, which is the first child
         elseif "reduce" == ir.kind then
             local children = ir.children:map(emit)
             local vd, exp = children[1], children[2]
