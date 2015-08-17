@@ -679,10 +679,10 @@ local function shiftexp(exp,x,y)
     return exp:rename(rename)
 end 
 
-local function removeboundaries(exp,zeroonly)
+local function removeboundaries(exp)
     if ad.ExpVector:is(exp) or terralib.islist(exp) then return exp:map(removeboundaries) end
     local function nobounds(a)
-        if BoundsAccess:is(a) and (not zeroonly or (a.x == 0 and a.y == 0 and a.sx == 0 and a.sy == 0)) then return ad.toexp(1)
+        if BoundsAccess:is(a) and (a.x == 0 and a.y == 0 and a.sx == 0 and a.sy == 0) then return ad.toexp(1)
         else return ad.v[a] end
     end
     return exp:rename(nobounds)
@@ -786,15 +786,39 @@ function IRNode:create(body)
     ir.id,nextirid = nextirid,nextirid+1
     return ir
 end
-local Condition = newclass("Condition")
+local function sortcondition(cond)
+    local function cmp(a,b)
+        if a.kind == "intrinsic" and b.kind ~= "intrinsic" then return true
+        elseif a.kind ~= "intrinsic" and b.kind == "intrinsic" then return false
+        else return a.id < b.id end
+    end
+    table.sort(cond,cmp)
+end
 
 local function createfunction(problemspec,name,exps,usebounds,W,H)
-    exps = removeboundaries(exps,usebounds)
+    exps = removeboundaries(exps)
     
     local imageload = terralib.memoize(function(image)
         return IRNode:create { kind = "vectorload", value = image }
     end)
+    
     local irmap
+    local function createreduce(op,vardecl,n)
+        local conditions
+        --[[if op == "sum" and n.kind == "Apply" and n.op.name == "prod" then
+            conditions = terralib.newlist()
+            local factors = terralib.newlist()
+            for i,c in ipairs(n:children()) do
+                if c.kind == "Apply" and c.op.name == "bool" then
+                    conditions:insert(irmap(c))
+                else
+                    factors:insert(c)
+                end
+            end
+            n = ad.prod(n.config.c,unpack(factors))
+        end]]
+        return IRNode:create { kind = "reduce", op = op, children = terralib.newlist { vardecl, irmap(n) }, conditions = conditions }
+    end
     irmap = terralib.memoize(function(e)
         if ad.ExpVector:is(e) then
             return IRNode:create { kind = "vectorconstruct", children = e.data:map(irmap) }
@@ -819,7 +843,7 @@ local function createfunction(problemspec,name,exps,usebounds,W,H)
                 local children = terralib.newlist { vardecl }
                 local varuse = IRNode:create { kind = "varuse", children = children }
                 for i,c in ipairs(e:children()) do
-                    children:insert(IRNode:create { kind = "reduce", op = e.op.name, children = terralib.newlist { vardecl, irmap(c) } })
+                    children:insert(createreduce(e.op.name,vardecl,c))
                 end
                 return varuse
             end
@@ -833,31 +857,22 @@ local function createfunction(problemspec,name,exps,usebounds,W,H)
             return IRNode:create { kind = "apply", op = e.op.name, generator = gen, children = e:children():map(irmap) }
         end
     end)
-    local function children(ir)
-        if ir.children then return ipairs(ir.children)
-        else return function() return nil end end
-    end
     
     local irroots = exps:map(irmap)
     
-    local function calcuse(roots)
-        local uses = {}
-        local ready = terralib.newlist()
+    local function calculateusesanddeps(roots)
+        local uses,deps = {},{}
+        
         local function visit(parent,ir)
-            if uses[ir] then 
-                if parent then
-                    uses[ir]:insert(parent)
+            if not deps[ir] then assert(not uses[ir])
+                uses[ir],deps[ir] = terralib.newlist(),terralib.newlist()
+                if ir.children then
+                    for i,c in ipairs(ir.children) do
+                        deps[ir]:insert(c)
+                        visit(ir,c)
+                    end
                 end
-                return 
             end
-            if ir.children then
-                for i,c in ipairs(ir.children) do
-                    visit(ir,c)
-                end
-            else
-                ready:insert(ir)
-            end
-            uses[ir] = terralib.newlist()
             if parent then
                 uses[ir]:insert(parent)
             end
@@ -865,10 +880,10 @@ local function createfunction(problemspec,name,exps,usebounds,W,H)
         for i, r in ipairs(roots) do
             visit(nil,r)
         end
-        return ready,uses
+        return uses,deps
     end
     
-    local ready,uses = calcuse(irroots)
+    local uses,deps = calculateusesanddeps(irroots)
      
     local function schedulebackwards(roots,uses)
         
@@ -912,7 +927,7 @@ local function createfunction(problemspec,name,exps,usebounds,W,H)
         local function netregisterswhenscheduled(ir)
             local n = -registersreleased(ir)
             local newlive = {}
-            for i,c in children(ir) do
+            for i,c in ipairs(deps[ir]) do
                 newlive[c] = true
             end
             for k,_ in pairs(newlive) do
@@ -933,7 +948,7 @@ local function createfunction(problemspec,name,exps,usebounds,W,H)
         end
         local function markscheduled(ir)
             state[ir] = "scheduled"
-            for i,c in children(ir) do 
+            for i,c in ipairs(deps[ir]) do 
                 if not state[c] then
                     state[c] = "used"
                 end
@@ -1031,7 +1046,7 @@ local function createfunction(problemspec,name,exps,usebounds,W,H)
             local fs = terralib.newlist()
             fs:insert(inst.kind.." ")
             for k,v in pairs(inst) do
-                if k ~= "kind" and k ~= "children" and type(v) ~= "function" and k ~= "id" then
+                if k ~= "kind" and k ~= "children" and type(v) ~= "function" and k ~= "id" and k ~= "conditions" then
                     fs:insert(tostring(v))
                     fs:insert(" ")
                 end
@@ -1040,6 +1055,11 @@ local function createfunction(problemspec,name,exps,usebounds,W,H)
                 fs:insert("{")
                 fs:insert(formatchildren(inst.children))
                 fs:insert("}")
+            end
+            if inst.conditions then
+                fs:insert("[")
+                fs:insert(formatchildren(inst.conditions))
+                fs:insert("]")
             end
             return fs:concat()
         end
@@ -1131,6 +1151,7 @@ local function createfunction(problemspec,name,exps,usebounds,W,H)
         if "vectorconstruct" == ir.kind then return ad.TerraVector(float,#ir.children)
         elseif "vectorload" == ir.kind then return ir.value.image.type
         elseif "apply" == ir.kind and ir.op:match("_$") then return bool
+        elseif "intrinsic" == ir.kind and ir.value.kind == "BoundsAccess" then return bool
         else return float end
     end
     local emitted = {}
