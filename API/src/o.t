@@ -861,25 +861,7 @@ local function createfunction(problemspec,name,exps,usebounds,W,H)
     
     local ready,uses = calcuse(irroots)
      
-    local function schedulebackwards(roots,uses,depth)
-        
-        local function calcdepth()
-            local depth = {}
-            local function visit(n)
-                if depth[n] then return depth[n] end
-                local d = 0
-                for i,c in children(n) do
-                    d = math.max(d,1 + visit(c))
-                end
-                depth[n] = d
-                return d
-            end
-            for i,ir in ipairs(roots) do
-                visit(ir)
-            end
-            return depth
-        end
-        local depth = calcdepth()
+    local function schedulebackwards(roots,uses)
         
         local state = nil -- ir -> "ready" or ir -> "scheduled"
         local readylists = terralib.newlist()
@@ -1020,10 +1002,10 @@ local function createfunction(problemspec,name,exps,usebounds,W,H)
             currentregcount = currentregcount + netregisterswhenscheduled(ir)
             markscheduled(ir)
         end
-        return instructions,depth,regcounts
+        return instructions,regcounts
     end
     
-    local instructions,depth,regcounts = schedulebackwards(irroots,uses)
+    local instructions,regcounts = schedulebackwards(irroots,uses)
     
     local function printschedule(instructions,regcounts)
         print("schedule for ",name,"-----------")
@@ -1054,7 +1036,7 @@ local function createfunction(problemspec,name,exps,usebounds,W,H)
         end
         for i,ir in ipairs(instructions) do
             emittedpos[ir] = i
-            print(("[%d,%d] r%d = %s"):format(regcounts[i],depth[ir],i,formatinst(ir)))
+            print(("[%d] r%d = %s"):format(regcounts[i],i,formatinst(ir)))
         end
         print("----------------------")
     end
