@@ -806,10 +806,11 @@ local function createfunction(problemspec,name,exps,usebounds,W,H)
             return { kind = "const", value = e.v }
         elseif "Apply" == e.kind then
             if (e.op.name == "sum" or e.op.name == "prod") and #e:children() > 2 then
-                local children = terralib.newlist {}
-                local varuse = { kind = "varuse", children = children, constant = e.config.c }
+                local vardecl = { kind = "vardecl", constant = e.config.c }
+                local children = terralib.newlist()
+                local varuse = { kind = "varuse", vardecl = vardecl, children = children }
                 for i,c in ipairs(e:children()) do
-                    children:insert { kind = "reduce", op = e.op.name, varuse = varuse, children = terralib.newlist { irmap(c) } }
+                    children:insert { kind = "reduce", op = e.op.name, children = terralib.newlist { vardecl, irmap(c) } }
                 end
                 return varuse
             end
@@ -904,13 +905,8 @@ local function createfunction(problemspec,name,exps,usebounds,W,H)
             elseif ir.kind == "vectorload" then return ir.count
             elseif ir.kind == "vectorextract" then return 0
             elseif ir.kind == "varuse" then return 0
-            elseif ir.kind == "reduce" then 
-                for i,c in children(ir.varuse) do
-                    if c ~= ir and state[c] ~= "scheduled" then -- is there another reduce for this var that is not scheduled yet
-                        return 0
-                    end
-                end
-                return 1
+            elseif ir.kind == "vardecl" then return 1
+            elseif ir.kind == "reduce" then return 0 
             else return 1 end
         end
         local function registersliveonuse(ir)
@@ -919,6 +915,7 @@ local function createfunction(problemspec,name,exps,usebounds,W,H)
             elseif ir.kind == "vectorextract" then return 1
             elseif ir.kind == "varuse" then return 1
             elseif ir.kind == "reduce" then return 0
+            elseif ir.kind == "vardecl" then return 0
             else return 1 end
         end
         local function netregisterswhenscheduled(ir)
@@ -953,8 +950,16 @@ local function createfunction(problemspec,name,exps,usebounds,W,H)
             end
         end
         
+        local function vardeclcost(ir)
+            return ir.kind == "vardecl" and 0 or 1
+        end
+        
+        local function totalcost(ir)
+            return vardeclcost(ir) * 1000 + netregisterswhenscheduled(ir)
+        end
+        
         local function costspeculate(depth,ir)
-            local c = netregisterswhenscheduled(ir)
+            local c = totalcost(ir)
             if depth > 0 then
                 local minr = math.huge
                 enter() -- start speculation level
@@ -975,9 +980,9 @@ local function createfunction(problemspec,name,exps,usebounds,W,H)
             end
             return c
         end
-        
+
         local function cost(idx,ir)
-            local c =  { costspeculate(1,ir) } -- , -depth[ir] }
+            local c =  { costspeculate(1,ir) }
             --print("cost",idx,unpack(c))
             return c
         end
@@ -1111,25 +1116,21 @@ local function createfunction(problemspec,name,exps,usebounds,W,H)
         elseif "apply" == ir.kind then
             local exps = ir.children:map(emit)
             return ir.generator(exps)
+        elseif "vardecl" == ir.kind then
+            return `float(ir.constant)
         elseif "varuse" == ir.kind then
-            local children = ir.children:map(emit)
-            return assert(ir.sym, "varuse not initialized?")
+            ir.children:map(emit)
+            return emit(ir.vardecl) -- return the variable declaration, which was already emitted by the reductions
         elseif "reduce" == ir.kind then
-            if not ir.varuse.sym then
-                ir.varuse.sym = symbol("vd")
-                statements:insert quote
-                    var [ir.varuse.sym] : float = ir.varuse.constant
-                end
-            end
             local children = ir.children:map(emit)
-            local exp = children[1]
+            local vd, exp = children[1], children[2]
             if ir.op == "sum" then
                 statements:insert quote
-                    [ir.varuse.sym] = [ir.varuse.sym] + [exp]
+                    [vd] = [vd] + [exp]
                 end
             else
                 statements:insert quote
-                    [ir.varuse.sym] = [ir.varuse.sym] * [exp]
+                    [vd] = [vd] * [exp]
                 end
             end
             return children[1]
@@ -1139,16 +1140,17 @@ local function createfunction(problemspec,name,exps,usebounds,W,H)
     local emitted = {}
     
     function emit(ir)
+        assert(ir)
         return assert(emitted[ir],"use before def")
     end
     
     for i,ir in ipairs(instructions) do
         local r
         if ir.kind == "const" or ir.kind == "varuse" or ir.kind == "reduce" then 
-            r = createexp(ir) 
+            r = assert(createexp(ir),"nil exp") 
         else
             r = symbol("r")
-            local exp = createexp(ir)
+            local exp = assert(createexp(ir),"nil exp")
             statements:insert(quote
                 var [r] = exp
             end)
