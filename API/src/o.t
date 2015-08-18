@@ -1195,6 +1195,18 @@ local function createfunction(problemspec,name,exps,usebounds,W,H)
         end
         statements = statementstack[#statementstack]
     end
+    local function conditioncoversload(condition,x,y)
+        for i,m in ipairs(condition.members) do
+            assert(m.kind == "apply" and m.op == "bool")
+            local ir = m.children[1]
+            if ir.kind == "intrinsic" and ir.value.kind == "BoundsAccess" then
+                if x == ir.value.x and y == ir.value.y then
+                    return true
+                end
+            end
+        end
+        return false
+    end
     
     local function createexp(ir)
         local function imageref(image)
@@ -1220,19 +1232,30 @@ local function createfunction(problemspec,name,exps,usebounds,W,H)
                 return `float(P.[a.name])
             end
         elseif "load" == ir.kind then
-           local a = ir.value
-           local im = imageref(a.image)
-           return `im:get(i+[a.x],j+[a.y],gi+[a.x],gj+[a.y])
+            local a = ir.value
+            local im = imageref(a.image)
+            if conditioncoversload(ir.condition,a.x,a.y) then
+               return `im(i+[a.x],j+[a.y])
+            else
+               return `im:get(i+[a.x],j+[a.y],gi+[a.x],gj+[a.y])
+            end
         elseif "vectorload" == ir.kind then
             local a = ir.value
             local im = imageref(a.image)
             local s = symbol(("%s_%s_%s"):format(a.image.name,a.x,a.y))
-            statements:insert(quote
-                var [s] : a.image.type = 0.f
-                if opt.InBoundsCalc(gi+[a.x],gj+[a.y],[W.size],[H.size],0,0) then
-                    [s] = im(i+[a.x],j+[a.y])
-                end
-            end)
+            
+            if conditioncoversload(ir.condition,a.x,a.y) then
+                statements:insert(quote
+                    var [s] : a.image.type = im(i+[a.x],j+[a.y])
+                end)
+            else 
+                statements:insert(quote
+                    var [s] : a.image.type = 0.f
+                    if opt.InBoundsCalc(gi+[a.x],gj+[a.y],[W.size],[H.size],0,0) then
+                        [s] = im(i+[a.x],j+[a.y])
+                    end
+                end)
+            end
             return s
         elseif "vectorextract" == ir.kind then
             local v = emit(ir.children[1])
@@ -1281,7 +1304,6 @@ local function createfunction(problemspec,name,exps,usebounds,W,H)
     for i,ir in ipairs(instructions) do
         emitconditionchange(currentcondition,ir.condition)
         currentcondition = ir.condition
-        
         if false then -- dynamically check dependencies are initialized before use, very slow, only use for debugging
             local ruse = symbol(bool,"ruse"..tostring(i))
             declarations:insert quote var [ruse] = false end
