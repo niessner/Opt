@@ -130,14 +130,56 @@ local terra perlinNoise(im : &float, width : int, height : int, seed : float)
    end
 end 
 
-local function run(file1,file2)
+
+-- see if the file exists
+function fileExists(file)
+   local f = io.open(file, "rb")
+   if f then f:close() end
+  return f ~= nil
+end
+
+-- get all lines from a file, returns an empty 
+-- list/table if the file does not exist
+function linesFrom(file)
+   if not fileExists(file) then return {} end
+   local lines = {}
+   for line in io.lines(file) do 
+      lines[#lines + 1] = line
+  end
+  return lines
+end
+
+local function loadParameters(filename)
+   local numbers = {}
+   local lineArray = linesFrom(filename)
+   print(lineArray[1])
+   for k,line in ipairs(lineArray) do
+      local n = tonumber(line)
+      print(n)
+      print(line)
+      numbers[#numbers + 1] = n
+
+   end
+   return numbers
+end
+
+
+local function run(file1, file2, inputImageFiles, inputParameterFile)
    local p1 = opt.problemSpecFromFile(file1)
    local p2 = opt.problemSpecFromFile(file2)
    
    local sumResult = makeSumResult(p1:UnknownType())
    local unknownImage = p1.parameters[p1.names["X"]]
 
-   local resultImageType = opt.newImage(float,Wtype,Htype,4,4*W) --TODO: need to pass type
+
+   local resultImageType 
+
+   if inputImageFiles then
+      resultImageType = opt.newImage(float,Wtype,Htype,4,4*W) --TODO: need to pass type
+   else
+      resultImageType = opt.newImage(float,Wtype,Htype,4,4*W) --TODO: need to pass type
+   end
+   
 
    local struct diffImageData {
       result1 : resultImageType
@@ -154,7 +196,16 @@ local function run(file1,file2)
    local compareJTFs = makeCompareJTFs(p1, p2, diffImageData)
    local compareJTJs = makeCompareJTJs(p1, p2, diffImageData)
 
-   local params = {}
+   local params_lua = {0.0}
+   local paramData = nil
+   if inputParameterFile then
+      params_lua = loadParameters(inputParameterFile)
+      paramData = terralib.new(float[#params_lua])
+      for i = 1,#params_lua do
+	 paramData[i-1] = params_lua[i]
+      end
+   end
+
 
    local terra printSumError(name : rawstring, im : resultImageType)
       var sum = sumResult(im)
@@ -169,6 +220,7 @@ local function run(file1,file2)
       C.printf("%f - %f = %f\n", costSum1, costSum2, sum);
       C.printf("%s Difference: %f%%\n", name, 2.0f*100.0f*sum/(costSum1+costSum2))
    end
+
 
    local terra runComparison()
       var costImages : diffImageData
@@ -190,8 +242,18 @@ local function run(file1,file2)
       perlinNoise([&float](images[0]), W, H, 0.0)
       perlinNoise([&float](images[1]), W, H, 1.0)
 
-      var params1 = [util.getParameters(p1, images, nil, params)] -- TODO: need to pass parameters
-      var params2 = [util.getParameters(p2, images, nil, params)] -- TODO: need to pass parameters
+      var finalParams : &&opaque = nil
+      var paramData : &float
+      
+      if [not not inputParameterFile] then
+	 finalParams = [&&opaque](C.malloc([#params_lua]*8))
+	 for i = 0,[#params_lua-1] do
+	    finalParams[i] = &paramData[i]
+	 end
+      end
+
+      var params1 = [util.getParameters(p1, images, nil, finalParams)] -- TODO: need to pass parameters
+      var params2 = [util.getParameters(p2, images, nil, finalParams)] -- TODO: need to pass parameters
 
       compareCosts(costImages, params1, params2)
       compareJTFs(gradientImages, preconditionerImages, params1, params2)
@@ -206,7 +268,19 @@ local function run(file1,file2)
    runComparison()
 
 end
+local argparse = require "argparse"
 
-run("../../API/testMLib/imageSmoothing.t",
-    "../../API/testMLib/imageSmoothingAD.t")
+local parser = argparse("dbgADComparison.t", "Compares two Opt problems to each other. Optionally specify the input images, and input parameters. If none are specified, we provide randomly generated defaults.")
+local arg = parser:argument("input0", "First terra input file.")
+arg:default("../../API/testMLib/imageSmoothing.t")
+arg = parser:argument("input1", "Second terra input file.")
+arg:default("../../API/testMLib/imageSmoothingAD.t")
+
+local option = parser:option("-i --images", "Image Files", "a.imagedump"):count("*")
+option = parser:option("-p --parameters", "Paramter File")
+--parser:option("-I --include", "Include locations."):count("*")
+local args = parser:parse()
+
+
+run(args["input0"], args["input1"], args["images"], args["parameters"])
 
