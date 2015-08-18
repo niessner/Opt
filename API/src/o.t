@@ -786,7 +786,7 @@ function IRNode:create(body)
     ir.id,nextirid = nextirid,nextirid+1
     return ir
 end
-local function sortcondition(cond)
+local function sortconditions(cond)
     local function cmp(a,b)
         if a.kind == "intrinsic" and b.kind ~= "intrinsic" then return true
         elseif a.kind ~= "intrinsic" and b.kind == "intrinsic" then return false
@@ -805,7 +805,7 @@ local function createfunction(problemspec,name,exps,usebounds,W,H)
     local irmap
     local function createreduce(op,vardecl,n)
         local conditions
-        --[[if op == "sum" and n.kind == "Apply" and n.op.name == "prod" then
+        if op == "sum" and n.kind == "Apply" and n.op.name == "prod" then
             conditions = terralib.newlist()
             local factors = terralib.newlist()
             for i,c in ipairs(n:children()) do
@@ -816,7 +816,8 @@ local function createfunction(problemspec,name,exps,usebounds,W,H)
                 end
             end
             n = ad.prod(n.config.c,unpack(factors))
-        end]]
+            sortconditions(conditions)
+        end
         return IRNode:create { kind = "reduce", op = op, children = terralib.newlist { vardecl, irmap(n) }, conditions = conditions }
     end
     irmap = terralib.memoize(function(e)
@@ -866,12 +867,14 @@ local function createfunction(problemspec,name,exps,usebounds,W,H)
         local function visit(parent,ir)
             if not deps[ir] then assert(not uses[ir])
                 uses[ir],deps[ir] = terralib.newlist(),terralib.newlist()
-                if ir.children then
-                    for i,c in ipairs(ir.children) do
+                local function visitlist(lst)
+                    for i,c in ipairs(lst) do
                         deps[ir]:insert(c)
                         visit(ir,c)
                     end
                 end
+                if ir.children then visitlist(ir.children) end
+                if ir.conditions then visitlist(ir.conditions) end
             end
             if parent then
                 uses[ir]:insert(parent)
@@ -959,13 +962,9 @@ local function createfunction(problemspec,name,exps,usebounds,W,H)
         local function vardeclcost(ir)
             return ir.kind == "vardecl" and 0 or 1
         end
-        
-        local function totalcost(ir)
-            return vardeclcost(ir) * 1000 + netregisterswhenscheduled(ir)
-        end
-        
+
         local function costspeculate(depth,ir)
-            local c = totalcost(ir)
+            local c = netregisterswhenscheduled(ir)
             if depth > 0 then
                 local minr = math.huge
                 enter() -- start speculation level
@@ -981,14 +980,14 @@ local function createfunction(problemspec,name,exps,usebounds,W,H)
                 
                 leave()
                 if minr ~= math.huge then
-                    c = c + minr
+                    c = c*10 + minr
                 end
             end
             return c
         end
 
         local function cost(idx,ir)
-            local c =  { costspeculate(1,ir) }
+            local c =  { vardeclcost(ir), costspeculate(1,ir) }
             --print("cost",idx,unpack(c))
             return c
         end
@@ -1135,15 +1134,25 @@ local function createfunction(problemspec,name,exps,usebounds,W,H)
         elseif "reduce" == ir.kind then
             local children = ir.children:map(emit)
             local vd, exp = children[1], children[2]
+            local op
             if ir.op == "sum" then
+                op = quote [vd] = [vd] + [exp] end
+            else
+                op = quote [vd] = [vd] * [exp] end
+            end
+            if ir.conditions and #ir.conditions > 0 then
+                local conds = ir.conditions:map(emit)
+                local c = `bool([conds[1]])
+                for i = 2,#conds do
+                    c = `c and bool([conds[i]])
+                end
                 statements:insert quote
-                    [vd] = [vd] + [exp]
+                    if c then op end
                 end
             else
-                statements:insert quote
-                    [vd] = [vd] * [exp]
-                end
+                statements:insert(op)
             end
+                
             return children[1]
         end
     end
