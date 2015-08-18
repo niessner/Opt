@@ -786,13 +786,46 @@ function IRNode:create(body)
     ir.id,nextirid = nextirid,nextirid+1
     return ir
 end
-local function sortconditions(cond)
+
+local Condition = newclass("Condition")
+
+function Condition:create(members)
     local function cmp(a,b)
         if a.kind == "intrinsic" and b.kind ~= "intrinsic" then return true
         elseif a.kind ~= "intrinsic" and b.kind == "intrinsic" then return false
         else return a.id < b.id end
     end
-    table.sort(cond,cmp)
+    table.sort(members,cmp)
+    return Condition:new { members = members }
+end
+
+function Condition:Intersect(rhs)
+    local lhsmap = {}
+    for i,m in ipairs(self.members) do
+        lhsmap[m] = true
+    end
+    local r = terralib.newlist()
+    for i,m in ipairs(rhs.members) do
+        if lhsmap[m] then
+            r:insert(m)
+        end
+    end
+    return Condition:create(r)
+end
+
+function Condition:Union(rhs)
+    local lhsmap = {}
+    local r = terralib.newlist()
+    for i,m in ipairs(self.members) do
+        lhsmap[m] = true
+        r:insert(m)
+    end
+    for i,m in ipairs(rhs.members) do
+        if not lhsmap[m] then
+            r:insert(m)
+        end
+    end
+    return Condition:create(r)
 end
 
 local function createfunction(problemspec,name,exps,usebounds,W,H)
@@ -804,9 +837,9 @@ local function createfunction(problemspec,name,exps,usebounds,W,H)
     
     local irmap
     local function createreduce(op,vardecl,n)
-        local conditions
+        local cond
         if op == "sum" and n.kind == "Apply" and n.op.name == "prod" then
-            conditions = terralib.newlist()
+            local conditions = terralib.newlist()
             local factors = terralib.newlist()
             for i,c in ipairs(n:children()) do
                 if c.kind == "Apply" and c.op.name == "bool" then
@@ -816,9 +849,9 @@ local function createfunction(problemspec,name,exps,usebounds,W,H)
                 end
             end
             n = ad.prod(n.config.c,unpack(factors))
-            sortconditions(conditions)
+            cond = Condition:create(conditions)
         end
-        return IRNode:create { kind = "reduce", op = op, children = terralib.newlist { vardecl, irmap(n) }, conditions = conditions }
+        return IRNode:create { kind = "reduce", op = op, children = terralib.newlist { vardecl, irmap(n) }, condition = cond }
     end
     irmap = terralib.memoize(function(e)
         if ad.ExpVector:is(e) then
@@ -861,9 +894,50 @@ local function createfunction(problemspec,name,exps,usebounds,W,H)
     
     local irroots = exps:map(irmap)
     
+    local function  linearizedorder(irroots)
+        local visited = {}
+        local linearized = terralib.newlist()
+        local function visit(ir)
+            if visited[ir] then return end
+            visited[ir] = true
+            if ir.children then
+                for i,c in ipairs(ir.children) do visit(c) end
+            end
+            if ir.condition then
+                for i,c in ipairs(ir.condition.members) do visit(c) end
+            end
+            linearized:insert(ir)
+        end
+        for i,r in ipairs(irroots) do
+            visit(r)
+        end
+        return linearized
+    end
+    
+    -- tighten the conditions under which ir nodes execute
+    local linearized = linearizedorder(irroots)
+    for i = #linearized,1,-1 do
+        local ir = linearized[i]
+        if not ir.condition then
+            ir.condition = Condition:create {}
+        end
+        local function applyconditiontolist(condition,lst)
+            for i,c in ipairs(lst) do
+                if not c.condition then
+                    c.condition = condition
+                elseif c.kind == "reduce" then -- single use is this node, so the condition is the already established condition plus any that the variable use imposes
+                    c.condition = c.condition:Union(condition)
+                else
+                    c.condition = c.condition:Intersect(condition)
+                end
+            end
+        end
+        if ir.children then applyconditiontolist(ir.condition,ir.children) end
+        if ir.kind == "reduce" then applyconditiontolist(Condition:create {}, ir.condition.members) end
+    end
+    
     local function calculateusesanddeps(roots)
         local uses,deps = {},{}
-        
         local function visit(parent,ir)
             if not deps[ir] then assert(not uses[ir])
                 uses[ir],deps[ir] = terralib.newlist(),terralib.newlist()
@@ -874,7 +948,7 @@ local function createfunction(problemspec,name,exps,usebounds,W,H)
                     end
                 end
                 if ir.children then visitlist(ir.children) end
-                if ir.conditions then visitlist(ir.conditions) end
+                if ir.condition then visitlist(ir.condition.members) end
             end
             if parent then
                 uses[ir]:insert(parent)
@@ -888,11 +962,26 @@ local function createfunction(problemspec,name,exps,usebounds,W,H)
     
     local uses,deps = calculateusesanddeps(irroots)
      
+    local function prefixsize(a,b)
+        for i = 1,math.huge do
+            if a[i] ~= b[i] or a[i] == nil then return i - 1 end
+        end
+    end
+    local function conditiondiff(current,next)
+        local i = prefixsize(current.members,next.members)
+        local uplevels,downlevels = #current.members - i, #next.members - i
+        return uplevels,downlevels
+    end
+    local function conditioncost(current,next)
+        local uplevels,downlevels = conditiondiff(current,next)
+        return uplevels*1000 + downlevels
+    end
+        
     local function schedulebackwards(roots,uses)
         
         local state = nil -- ir -> "ready" or ir -> "scheduled"
         local readylists = terralib.newlist()
-        
+        local currentcondition = Condition:create {}
         local function enter()
             state = setmetatable({}, {__index = state})
             readylists:insert(terralib.newlist())
@@ -987,7 +1076,7 @@ local function createfunction(problemspec,name,exps,usebounds,W,H)
         end
 
         local function cost(idx,ir)
-            local c =  { vardeclcost(ir), costspeculate(1,ir) }
+            local c =  { conditioncost(currentcondition,ir.condition), vardeclcost(ir), costspeculate(1,ir) }
             --print("cost",idx,unpack(c))
             return c
         end
@@ -1024,6 +1113,7 @@ local function createfunction(problemspec,name,exps,usebounds,W,H)
             regcounts:insert(1,currentregcount)
             currentregcount = currentregcount + netregisterswhenscheduled(ir)
             markscheduled(ir)
+            currentcondition = ir.condition
         end
         return instructions,regcounts
     end
@@ -1045,7 +1135,7 @@ local function createfunction(problemspec,name,exps,usebounds,W,H)
             local fs = terralib.newlist()
             fs:insert(inst.kind.." ")
             for k,v in pairs(inst) do
-                if k ~= "kind" and k ~= "children" and type(v) ~= "function" and k ~= "id" and k ~= "conditions" then
+                if k ~= "kind" and k ~= "children" and type(v) ~= "function" and k ~= "id" and k ~= "condition" then
                     fs:insert(tostring(v))
                     fs:insert(" ")
                 end
@@ -1055,16 +1145,22 @@ local function createfunction(problemspec,name,exps,usebounds,W,H)
                 fs:insert(formatchildren(inst.children))
                 fs:insert("}")
             end
-            if inst.conditions then
-                fs:insert("[")
-                fs:insert(formatchildren(inst.conditions))
-                fs:insert("]")
-            end
             return fs:concat()
+        end
+        local function formatcondition(c)
+            local fs = terralib.newlist()
+            fs:insert("[")
+            fs:insert(formatchildren(c.members))
+            fs:insert("]")
+            local r = fs:concat()
+            return r .. (" "):rep(4*(1+#c.members) - #r)
         end
         for i,ir in ipairs(instructions) do
             emittedpos[ir] = i
-            print(("[%d] r%d = %s"):format(regcounts[i],i,formatinst(ir)))
+            print(("[%d]%sr%d = %s"):format(regcounts[i],formatcondition(ir.condition),i,formatinst(ir)))
+            if instructions[i+1] and conditioncost(ir.condition,instructions[i+1].condition) ~= 0 then
+                print("---------------------")
+            end
         end
         print("----------------------")
     end
@@ -1076,9 +1172,30 @@ local function createfunction(problemspec,name,exps,usebounds,W,H)
     local P = symbol(problemspec.P:ParameterType(),"P")
     local i,j,gi,gj = symbol(int32,"i"), symbol(int32,"j"),symbol(int32,"gi"), symbol(int32,"gj")
     local indexes = {[0] = i,j }
-    local statements = terralib.newlist()
+    
+    local statementstack = terralib.newlist { terralib.newlist() } 
+    local statements = statementstack[1]
     local extraimages = terralib.newlist()
     local emit
+    
+    local function emitconditionchange(current,next)
+        local u,d = conditiondiff(current,next)
+        for i = 0,u - 1 do
+            local c = current.members[#current.members - i]
+            local ce = emit(c)
+            local stmts = statementstack:remove()
+            statementstack[#statementstack]:insert quote
+                if bool(ce) then
+                    [stmts]
+                end
+            end
+        end
+        for i = 1,d do
+            statementstack:insert(terralib.newlist())
+        end
+        statements = statementstack[#statementstack]
+    end
+    
     local function createexp(ir)
         local function imageref(image)
             if image.idx >= 0 then
@@ -1140,19 +1257,7 @@ local function createfunction(problemspec,name,exps,usebounds,W,H)
             else
                 op = quote [vd] = [vd] * [exp] end
             end
-            if ir.conditions and #ir.conditions > 0 then
-                local conds = ir.conditions:map(emit)
-                local c = `bool([conds[1]])
-                for i = 2,#conds do
-                    c = `c and bool([conds[i]])
-                end
-                statements:insert quote
-                    if c then op end
-                end
-            else
-                statements:insert(op)
-            end
-                
+            statements:insert(op)
             return children[1]
         end
     end
@@ -1163,15 +1268,38 @@ local function createfunction(problemspec,name,exps,usebounds,W,H)
         elseif "intrinsic" == ir.kind and ir.value.kind == "BoundsAccess" then return bool
         else return float end
     end
-    local emitted = {}
+    local emitted,emitteduse = {},{}
     
     function emit(ir)
         assert(ir)
         return assert(emitted[ir],"use before def")
     end
-    
+
+    local basecondition = Condition:create {}
+    local currentcondition = basecondition
     local declarations = terralib.newlist()
     for i,ir in ipairs(instructions) do
+        emitconditionchange(currentcondition,ir.condition)
+        currentcondition = ir.condition
+        
+        if false then -- dynamically check dependencies are initialized before use, very slow, only use for debugging
+            local ruse = symbol(bool,"ruse"..tostring(i))
+            declarations:insert quote var [ruse] = false end
+            statements:insert quote [ruse] = true end
+            emitteduse[ir] = ruse
+            for _,u in ipairs(deps[ir]) do
+                if ir.kind ~= "varuse" or ir.children[1] == u then
+                    local ruse = assert(emitteduse[u])
+                    local str = ("%s r%s used %s which is not initialized\n"):format(name,tostring(i),tostring(ruse))
+                    statements:insert quote
+                        if not ruse then
+                            printf(str)
+                        end
+                    end
+                end
+            end
+        end
+        
         local r
         if ir.kind == "const" or ir.kind == "varuse" or ir.kind == "reduce" then 
             r = assert(createexp(ir),"nil exp") 
@@ -1185,6 +1313,8 @@ local function createfunction(problemspec,name,exps,usebounds,W,H)
         end
         emitted[ir] = r
     end
+    emitconditionchange(currentcondition,basecondition)
+    assert(#statementstack == 1)
     
     local results = irroots:map(emit)
     local terra generatedfn([i], [j], [gi], [gj], [P], [extraimages])
@@ -1226,7 +1356,7 @@ local function createfunctionset(problemspec,name,...)
     dprint("bound")
     local boundary = createfunction(problemspec,name,exps,true,W,H)
     dprint("interior")
-    local interior = createfunction(problemspec,name,exps,false,W,H)
+    local interior = boundary --createfunction(problemspec,name,exps,false,W,H) -- we don't currently use interior only
     
     problemspec.P:Function(name,{W,H},boundary,interior)
 end

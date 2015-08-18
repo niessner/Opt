@@ -419,7 +419,7 @@ util.makeGPUFunctions = function(problemSpec, vars, PlanData, kernels)
 	local kernelFunctions = {}
 	local key = "_"..tostring(os.time())
 	for k,v in pairs(kernelTemplate) do
-	    kernelFunctions[k..key] = { kernel = v.kernel } --, annotations = { {"maxntidx", 16}, {"maxntidy", 16}, {"maxntidz", 1}, {"minctasm",5} } }
+	    kernelFunctions[k..key] = { kernel = v.kernel , annotations = { {"maxntidx", 16}, {"maxntidy", 16}, {"maxntidz", 1}, {"minctasm",5} } }
 	end
 	
 	local compiledKernels = terralib.cudacompile(kernelFunctions, false)
