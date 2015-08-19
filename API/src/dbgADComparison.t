@@ -11,31 +11,26 @@ local stb = terralib.includecstring [[
 local W = 16
 local H = 16
 
-
-opt.dimensions = {}
-opt.dimensions[0] = W--Wtype
-opt.dimensions[1] = H--Htype
-
-opt.elemsizes = {}
-opt.strides = {}
-for i=0,2 do 
-   opt.elemsizes[i] = 4
-   opt.strides[i] = 4*W
+local terra abs(f : float)
+   return C.fabsf(f)
 end
-opt.problemkind = ""
 
-local Wtype = opt.Dim("W", 0)
-local Htype = opt.Dim("H", 1)
+local terra abs(v : opt.float2) : opt.float2
+   return v:abs()
+end
+
+local terra abs(v : opt.float3) : opt.float3
+   return v:abs()
+end
 
 
 
-opt.math = require("util").cpuMath
 local function makeSumResult(resultType)
    local terra sumResult(result : resultType)
-      var sum = 0.0f
+      var sum : float = 0.0f
       for j=0,H do
 	 for i=0,W do
-	    sum = sum + C.fabsf(result(i,j))--result(i,j))
+	    sum = sum + abs(result(i,j))--result(i,j))
 	 end
       end
       return sum
@@ -88,6 +83,8 @@ end
 
 local function makeCompareJTJs(ps1,ps2, imageStructType)
    local unknownElement = ps1:UnknownType().metamethods.typ
+   print ("makeCompareJTJs ps1:UnknownType(): " .. tostring(ps1:UnknownType()))
+   print ("makeCompareJTJs ps2:UnknownType(): " .. tostring(ps2:UnknownType()))
    local terra compareJTJ(images : imageStructType, params1 : ps1:ParameterType(), params2 : ps2:ParameterType())
       var p1 : ps1:UnknownType()
       p1:initCPU()
@@ -120,12 +117,14 @@ local function makeCompareJTJs(ps1,ps2, imageStructType)
    return compareJTJ
 end
 
--- Operates on one channel floating point images
-local terra perlinNoise(im : &float, width : int, height : int, seed : float)
+-- Operates on floating point images
+local terra perlinNoise(im : &float, width : int, height : int, channels : int, seed : float)
    for j=0,height do
       for i=0,width do
-	 var result = stb.stb_perlin_noise3([float](i)/width, [float](j)/height, seed, 0, 0, 0)
-	 im[j*width+i] = result
+	 for c=0,channels do
+	    var result = stb.stb_perlin_noise3([float](i)/width, [float](j)/height, seed+c, 0, 0, 0)
+	    im[(j*width+i)*channels + c] = result
+	 end
       end
    end
 end 
@@ -152,34 +151,101 @@ end
 local function loadParameters(filename)
    local numbers = {}
    local lineArray = linesFrom(filename)
-   print(lineArray[1])
+--   print(lineArray[1])
    for k,line in ipairs(lineArray) do
       local n = tonumber(line)
       print(n)
-      print(line)
+  --    print(line)
       numbers[#numbers + 1] = n
 
    end
    return numbers
 end
 
+function tableLength(T)
+  local count = 0
+  for _ in pairs(T) do count = count + 1 end
+  return count
+end
 
-local function run(file1, file2, inputImageFiles, inputParameterFile)
+local function run(file1, file2, inputImageTypesFile, inputImageFiles, inputParameterFile)
+   opt.dimensions = {}
+   opt.dimensions[0] = W--Wtype
+   opt.dimensions[1] = H--Htype
+
+   opt.elemsizes = {}
+   opt.strides = {}
+
+   local chans = loadParameters(inputImageTypesFile)
+
+   for i=0,#chans-1 do 
+      opt.elemsizes[i] = 4*chans[i+1]
+      opt.strides[i] = 4*W*chans[i+1]
+   end
+   opt.problemkind = ""
+   
+   local Wtype = opt.Dim("W", 0)
+   local Htype = opt.Dim("H", 1)
+
+   opt.math = require("util").cpuMath
+
    local p1 = opt.problemSpecFromFile(file1)
    local p2 = opt.problemSpecFromFile(file2)
    
    local sumResult = makeSumResult(p1:UnknownType())
    local unknownImage = p1.parameters[p1.names["X"]]
 
+   local imageTypes = {}
+   local paramTypes = {}
 
-   local resultImageType 
-
-   if inputImageFiles then
-      resultImageType = opt.newImage(float,Wtype,Htype,4,4*W) --TODO: need to pass type
-   else
-      resultImageType = opt.newImage(float,Wtype,Htype,4,4*W) --TODO: need to pass type
+   for key, entry in ipairs(p1.parameters) do
+      if entry.kind == "image" then
+	 imageTypes[entry.idx] = entry.type
+	 print("" .. key .. " = imageTypes[" .. entry.idx .. "] = " .. tostring(entry.type))
+      elseif entry.kind == "param" then
+	 paramTypes[entry.idx] = entry.type
+      end
    end
-   
+
+   local p2ParamCount = 0
+   local p2ImageCount = 0
+   for _, entry in ipairs(p2.parameters) do
+      if entry.kind == "image" then
+	 assert(imageTypes[entry.idx], "Image " .. entry.idx .. " exists only in second problem spec")
+	 assert(imageTypes[entry.idx] == entry.type, "Image type mismatch (" .. entry.idx .. "): " .. tostring(imageTypes[entry.idx]) .. " != " .. tostring(entry.type))	    
+	 p2ImageCount = p2ImageCount + 1
+      elseif entry.kind == "param" then
+	 assert(paramTypes[entry.idx], "Parameter " .. entry.idx .. " exists only in second problem spec")
+	 assert(paramTypes[entry.idx] == entry.type, "Param type mismatch (" .. entry.idx .. "): " .. tostring(paramTypes[entry.idx]) .. " != " .. tostring(entry.type))
+	 p2ParamCount = p2ParamCount + 1
+      end
+   end
+   -- TODO: print what parameter(s) missing
+   assert(tableLength(paramTypes) == p2ParamCount, "Parameter count mismatch: " .. tableLength(paramTypes) .. " vs " .. p2ParamCount)
+   assert(tableLength(imageTypes) == p2ImageCount, "Image count mismatch: " .. tableLength(imageTypes) .. " vs " .. p2ImageCount)
+
+
+   local resultImageType = p1.parameters[p1.names["X"]].type
+   print("Result Image Type: " .. tostring(resultImageType))
+   local imCount = tableLength(imageTypes)
+   local strides = terralib.new(int[imCount])
+   local channels = terralib.new(int[imCount])
+   for i = 0,imCount-1 do
+      strides[i] = imageTypes[i].metamethods.stride
+
+      local pixelType = imageTypes[i].metamethods.typ
+      if pixelType == float then
+	 channels[i] = 1 
+      elseif pixelType == opt.float2 then
+	 channels[i] = 2
+      elseif pixelType == opt.float3 then
+	 channels[i] = 3
+      elseif pixelType == opt.float4 then
+	 channels[i] = 4
+      else
+	 assert(false, "Only floating point image types are available in the test bench. Pixel type found: " .. tostring(pixelType))
+      end
+   end
 
    local struct diffImageData {
       result1 : resultImageType
@@ -196,7 +262,7 @@ local function run(file1, file2, inputImageFiles, inputParameterFile)
    local compareJTFs = makeCompareJTFs(p1, p2, diffImageData)
    local compareJTJs = makeCompareJTJs(p1, p2, diffImageData)
 
-   local params_lua = {0.0}
+   local params_lua = {}
    local paramData = nil
    if inputParameterFile then
       params_lua = loadParameters(inputParameterFile)
@@ -206,11 +272,12 @@ local function run(file1, file2, inputImageFiles, inputParameterFile)
       end
    end
 
+   assert(#params_lua == p2ParamCount, "The parameter file has a different amount of parameters than is required by the terra files: ".. #params_lua .. " vs " .. p2ParamCount)
+
 
    local terra printSumError(name : rawstring, im : resultImageType)
       var sum = sumResult(im)
       C.printf("%s Difference: %f\n", name, sum)
-     
    end
 
    local terra printPercentDifference(name : rawstring, diffImages : diffImageData)
@@ -233,14 +300,15 @@ local function run(file1, file2, inputImageFiles, inputParameterFile)
       preconditionerImages:initCPU()
       jtjImages:initCPU()
 
+
       -- TODO figure out how many images they are, what type they are, and generate based on that
-      var images = [&&uint8](C.malloc(16)) 
-      images[0] = [&uint8](C.malloc(W*H*4)) 
-      C.memset(images[0], 0, W*H*4)
-      images[1] = [&uint8](C.malloc(W*H*4)) 
-      C.memset(images[1], 0, W*H*4)      
-      perlinNoise([&float](images[0]), W, H, 0.0)
-      perlinNoise([&float](images[1]), W, H, 1.0)
+      var images = [&&uint8](C.malloc([tableLength(imageTypes)]*sizeof([&&uint8]))) 
+      for i = 0,[tableLength(imageTypes)] do
+	 var imSize = strides[i]*H
+	 images[i] = [&uint8](C.malloc(imSize))
+	 C.memset(images[i], 0, imSize)
+	 perlinNoise([&float](images[0]), W, H, channels[i], [float](i))
+      end
 
       var finalParams : &&opaque = nil
       var paramData : &float
@@ -270,17 +338,18 @@ local function run(file1, file2, inputImageFiles, inputParameterFile)
 end
 local argparse = require "argparse"
 
-local parser = argparse("dbgADComparison.t", "Compares two Opt problems to each other. Optionally specify the input images, and input parameters. If none are specified, we provide randomly generated defaults.")
+local parser = argparse("dbgADComparison.t", "Compares two Opt problems to each other. Optionally specify the input images (an image types), and input parameters. If none are specified, we provide randomly generated defaults.")
 local arg = parser:argument("input0", "First terra input file.")
-arg:default("../../API/testMLib/imageSmoothing.t")
+arg:default("../../Examples/ImageWarping/ImageWarping.t")
 arg = parser:argument("input1", "Second terra input file.")
-arg:default("../../API/testMLib/imageSmoothingAD.t")
-
+arg:default("../../Examples/ImageWarping/ImageWarpingAD.t")
+arg = parser:argument("imageTypes", "File with # of floating-point channels for each image, 1 per line")
+arg:default("ImageWarpingImageTypes.txt")
 local option = parser:option("-i --images", "Image Files", "a.imagedump"):count("*")
 option = parser:option("-p --parameters", "Paramter File")
 --parser:option("-I --include", "Include locations."):count("*")
 local args = parser:parse()
 
 
-run(args["input0"], args["input1"], args["images"], args["parameters"])
+run(args["input0"], args["input1"], args["imageTypes"], args["images"], args["parameters"])
 

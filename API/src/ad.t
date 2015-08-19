@@ -655,6 +655,19 @@ ad.TerraVector = terralib.memoize(function(typ,N)
         end
         return c
     end
+    terra VecType:abs()
+       var c : VecType
+       for i = 0,N do
+	  -- TODO: use opt.abs
+	  if self.data[i] < 0 then
+	     c.data[i] = -self.data[i]
+	  else
+	     c.data[i] = self.data[i]
+	  end
+       end
+       return c
+    end
+
     terra VecType:dot(b : VecType)
         var c : typ = 0
         for i = 0,N do
