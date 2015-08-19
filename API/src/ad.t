@@ -62,16 +62,21 @@ local empty = terralib.newlist {}
 function Exp:children() return empty end
 function Apply:children() return self.args end 
 
+function Exp:type() 
+    assert(self.type_ == bool or self.type_ == float) 
+    return self.type_ 
+end
+
 function Const:__tostring() return tostring(self.v) end
 
 local function newapply(op,config,args)
     assert(not op.nparams or #args == op.nparams)
     assert(type(config) == "table")
     local id = allocid()
-    return Apply:new { op = op, args = args, config = config, id = id }
+    return Apply:new { op = op, args = args, config = config, id = id, type_ = op:propagatetype(args) }
 end
 
-local getconst = terralib.memoize(function(n) return Const:new { v = n, id = allocid() } end)
+local getconst = terralib.memoize(function(n) return Const:new { v = n, id = allocid(), type_ = float } end)
 local function toexp(n)
     if n then 
         if Exp:is(n) then return n
@@ -234,7 +239,7 @@ local function simplify(op,config,args)
             end
         end
     elseif op.name == "powc" then
-        if Apply:is(x) and x.op.name == "bool" then
+        if x:type() == bool then
             return x
         end
     elseif op.name == "select" then
@@ -245,8 +250,15 @@ local function simplify(op,config,args)
         elseif z == zero then
             return x * y
         end
-    elseif (op.name == "and_" or op.name == "or_") and x == y then
-        return x
+    elseif op.name == "or_" then
+        if x == y then return x
+        elseif Const:is(x) then
+            if x.v ~= 0 then return one
+            else return y end
+        elseif Const:is(y) then
+            if y.v  ~= 0 then return one
+            else return x end
+        end
     end
     
     return newapply(op,config,args)
@@ -290,11 +302,22 @@ function ExpVector:map(fn)
 end
 function ExpVector:expressions() return self.data end    
 
+
 -- generates variable names
-local v = setmetatable({},{__index = function(self,idx)
-    local r = Var:new { key_ = assert(idx), id = allocid() }
-    self[idx] = r
+local v = {} 
+
+function ad.getvar(typ,key)
+    local r = rawget(v,key)
+    if not r then
+        assert(typ == float or typ == bool)
+        r = Var:new { type_ = typ, key_ = assert(key), id = allocid() }
+        v[key] = r
+    end
+    assert(r:type() == typ, "variable with key exists with a different type")
     return r
+end
+setmetatable(v,{__index = function(self,key)
+    return ad.getvar(float,key)
 end})
 
 local x,y,z = v[1],v[2],v[3]
@@ -353,22 +376,44 @@ function Op:__call(...)
     end
     return ExpVector:new { data = exps }
 end
+
+local function insertcast(from,to,exp)
+    assert(terralib.types.istype(from) and terralib.types.istype(to))
+    if from == to then return exp
+    else return `to(exp) end
+end
+local function insertcasts(exp,args)
+    local nargs = terralib.newlist()
+    local t,ta = exp.op:propagatetype(exp:children()) 
+    for i,from in ipairs(exp:children()) do
+        nargs[i] = insertcast(from:type(),ta[i],args[i])
+    end
+    return nargs
+end
+
 Op.config = {} -- operators that have configuration override this
 function Op:define(fn,...)
     local dbg = debug.getinfo(fn,"u")
     assert(not dbg.isvararg)
     self.nparams = dbg.nparams
-    function self:generate(exp,args) return fn(unpack(args)) end
-    local s = terralib.newlist()
-    for i = 1,self.nparams do
-        s:insert(symbol(float))
+    function self:generate(exp,args) 
+        return fn(unpack(insertcasts(exp,args)))
     end
-    terra self.impl([s]) return float([ fn(unpack(s)) ]) end    
     self.derivs = terralib.newlist()
     for i = 1,select("#",...) do
         local e = select(i,...)
         self.derivs:insert((assert(toexp(e),"expected an expression")))
     end
+    
+    local syms,vars = terralib.newlist(),terralib.newlist()
+    for i = 1,self.nparams do
+        syms:insert(symbol(float))
+        vars:insert(ad.v[i])
+    end
+    local cpropexpression = self(unpack(vars))
+    local r = self:generate(cpropexpression,syms)
+    terra self.impl([syms]) return float(r) end    
+    
     return self
 end
 
@@ -376,6 +421,20 @@ function Op:propagateconstant(args)
    if not self.impl then return nil end
     return assert(toexp(self.impl(unpack(args))), "result is not an expression")
 end
+
+local function rep(N,v) 
+    local r = terralib.newlist()
+    for i = 1,N do
+        r:insert(v)
+    end
+    return r
+end
+    
+function Op:propagatetype(args) --returns a 2: <returntype>, <castedargumenttypes>
+    -- default is 'float', special ops will override this
+    return float, rep(#args,float)
+end
+
 
 function Op:__tostring() return self.name end
 
@@ -439,8 +498,7 @@ local function countuses(es)
     return uses
 end    
 
-local ispoly = {sum = 0, prod = 1, powc = 2, bool = 3}
---local ispoly = {}
+local ispoly = {sum = 0, prod = 1, powc = 2}
 local function expstostring(es)
     es = (terralib.islist(es) and es) or terralib.newlist(es)
     local linearized = terralib.newlist()
@@ -485,14 +543,19 @@ local function expstostring(es)
     local shouldprint = {}
     local function stringforuse(e)
         shouldprint[e] = true
+        local r
         if "Var" == e.kind then
             local k = e:key()
-            return type(k) == "number" and ("v%d"):format(k) or tostring(e:key()) 
+            r = type(k) == "number" and ("v%d"):format(k) or tostring(e:key()) 
         elseif "Const" == e.kind then
-            return tostring(e.v)
+            r = tostring(e.v)
         else
-            return ("r%d"):format(exptoidx[e])
+            r = ("r%d"):format(exptoidx[e])
         end
+        if e:type() == bool then
+            r = ("<%s>"):format(r)
+        end
+        return r
     end    
 
     local function emitpoly(e,l) 
@@ -500,21 +563,19 @@ local function expstostring(es)
             return stringforuse(e)
         end
         if e.op.name == "powc" then
-            return ("%s^%d"):format(stringforuse(e.args[1]),e.config.c)
+            return ("%s^%s"):format(stringforuse(e.args[1]),e.config.c)
         elseif e.op.name == "prod" then
             local r = e.args:map(emitpoly,2):concat("*")
             if e.config.c ~= 1 then
-                r = ("%d*%s"):format(e.config.c,r)
+                r = ("%s*%s"):format(e.config.c,r)
             end
             return r
         elseif e.op.name == "sum" then
             local r = e.args:map(emitpoly,1):concat(" + ")
             if e.config.c ~= 0 then
-                r = ("%s + %d"):format(r,e.config.c)
+                r = ("%s + %s"):format(r,e.config.c)
             end
             return r
-        elseif e.op.name == "bool" then
-            return ("<%s>"):format(stringforuse(e.args[1]))
         end
     end
     
@@ -558,41 +619,6 @@ end
 ad.tostrings = expstostring
 function Exp:__tostring()
     return expstostring(terralib.newlist{self})
-end
-
-local function emitprintexpression(e, recursionLevel)
-    return quote
-        escape
-            if "Var" == e.kind then
-                emit `printf([tostring(e:key())])
-                emit `printf(", ")
-            elseif "Const" == e.kind then
-                emit `printf("%f, ", float(e.v))
-            elseif "Apply" == e.kind then
-                emit `printf([e.op.name])
-                emit `printf("(")
-                if recursionLevel > 0 then
-                    for i,newE in ipairs(e.args) do
-                        if "Var" == newE.kind then
-                            emit `printf([tostring(newE:key())])
-                            emit `printf(", ")
-                        elseif "Const" == newE.kind then
-                            emit `printf("%f, ", float(newE.v))
-                        elseif "Apply" == newE.kind then
-                            emit `printf([newE.op.name])
-                        end
-                        -- recursion doesn't work? :(
-                        --emit `[emitprintexpression(newE, recursionLevel-1)]
-
-                     --   local recursiveExpression = emitprintexpression(newE)
-                     --   emit `[recursiveExpression]
-                    end
-                end
-                emit `printf("), ")
-            end
-        end
-    end
-    
 end
 
 local Vectors = {}
@@ -721,15 +747,8 @@ function Exp:gradient(exps)
     return exps:map(function(e) return tape[e] or zero end)
 end
 
-local function rep(N,v) 
-    local r = terralib.newlist()
-    for i = 1,N do
-        r:insert(v)
-    end
-    return r
-end
-
 function ad.sum:generate(exp,args)
+    args = insertcasts(exp,args)
     local r = exp.config.c
     for i,c in ipairs(args) do
         r = `r+c
@@ -745,6 +764,7 @@ function ad.mul(x,y) return ad.prod(1,x,y) end
 function ad.div(x,y) return ad.prod(1,x,y^-1) end
 
 function ad.prod:generate(exp,args)
+    args = insertcasts(exp,args)
     local r = exp.config.c
     for i,c in ipairs(args) do
         r = `r*c
@@ -778,6 +798,7 @@ local genpow = terralib.memoize(function(N)
     return pow
 end)
 function ad.powc:generate(exp,args)
+    args = insertcasts(exp,args)
     local c,e = exp.config.c, args[1]
     if c == 1 then
         return e
@@ -815,12 +836,13 @@ ad.sqrt:define(function(x) return `C.sqrt(x) end, 1.0/(2.0*ad.sqrt(x)))
 ad.tan:define(function(x) return `C.tan(x) end, 1.0 + ad.tan(x)*ad.tan(x))
 ad.tanh:define(function(x) return `C.tanh(x) end, 1.0/(ad.cosh(x)*ad.cosh(x)))
 
-ad.bool:define(function(x) return `terralib.select(bool(x),1.f,0.f) end, x)
---ad.select:define(function(x,y,z) return `terralib.select(bool(x),y,z) end,0,ad.select(x,1,0),ad.select(x,0,1))
+
+
+function ad.select:propagatetype(args) return float, {bool,float,float} end
 ad.select:define(function(x,y,z) 
     return quote
         var r : float
-        if bool(x) then
+        if x then
             r = y
         else    
             r = z
@@ -828,20 +850,26 @@ ad.select:define(function(x,y,z)
     in r end
 end,0,ad.select(x,1,0),ad.select(x,0,1))
 
-ad.eq_:define(function(x,y) return `x == y end, 0,0)
-function ad.eq(x,y) return ad.bool(ad.eq_(x,y)) end
 ad.abs:define(function(x) return `terralib.select(x >= 0,x,-x) end, ad.select(ad.greatereq(x, 0),1,-1))
 
-ad.and6:define(function(x0, x1, x2, x3, x4, x5) return `int(x0) and int(x1) and int(x2) and int(x3) and int(x4) and int(x5) end,0,0,0,0,0,0)
-ad.and_:define(function(x,y) return `int(x) and int(y) end, 0, 0)
-ad.or_:define(function(x,y) return `int(x) or int(y) end, 0, 0)
-ad.less:define(function(x,y) return `int(x < y) end, 0,0)
-ad.greater:define(function(x,y) return `int(x > y) end, 0,0)
-ad.lesseq:define(function(x,y) return `int(x <= y) end,0,0)
-ad.greatereq_:define(function(x,y) return `x >= y end,0,0)
-function ad.greatereq(x,y) return ad.bool(ad.greatereq_(x,y)) end
+function ad.and_(x,y) return x*y end
 
-ad.not_:define(function(x) return `int(not bool(x)) end, 0)
+function ad.or_:propagatetype(args) return bool,{bool,bool} end
+ad.or_:define(function(x,y) return `x or y end, 0, 0)
+
+local comparisons = { "less", "greater", "lesseq", "greatereq", "eq" }
+for i,c in ipairs(comparisons) do
+    ad[c].propagatetype = function(self,args) return bool, {float,float} end
+end 
+
+ad.eq:define(function(x,y) return `x == y end, 0,0)
+ad.less:define(function(x,y) return `x < y end, 0,0)
+ad.greater:define(function(x,y) return `x > y end, 0,0)
+ad.lesseq:define(function(x,y) return `x <= y end,0,0)
+ad.greatereq:define(function(x,y) return `x >= y end,0,0)
+
+function ad.not_:propagatetype(args) return bool, {bool} end
+ad.not_:define(function(x) return `not x end, 0)
 
 setmetatable(ad,nil) -- remove special metatable that generates new blank ops
 
@@ -970,11 +998,6 @@ function ad.polysimplify(exps)
     return terralib.islist(exps) and exps:map(dosimplify) or dosimplify(exps)
 end
 
-function ad.removepoly(exp)
-    
-end
-
-
 --[[
 
 
@@ -985,7 +1008,8 @@ print(exp:d(v.X_0_0_2))
 
 
 local x,y,z = ad.v.x, ad.v.y, ad.v.z
-
+local bx,by,bz = ad.getvar(bool,"bx"),ad.getvar(bool,"by"),ad.getvar(bool,"bz")
+print(ad.or_(ad.eq(x,0),ad.eq(y,0))/4.0)
 local p = 4*x^2*y*y + 4*x*y*y + 4*y*y  + -1*x^-1 - 2*x^-2*y*y
 
 print(p)

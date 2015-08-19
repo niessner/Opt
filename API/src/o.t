@@ -535,9 +535,9 @@ local function problemPlan(id, dimensions, elemsizes, strides, rowindexes, xs, y
         opt.dimensions,opt.elemsizes,opt.strides = dimensions,elemsizes,strides
         opt.rowindexes,opt.xs,opt.ys = rowindexes,xs,ys
         opt.math = problemmetadata.kind:match("GPU") and util.gpuMath or util.cpuMath
-	opt.problemkind = problemmetadata.kind
+        opt.problemkind = problemmetadata.kind
 		
-	local tbl = opt.problemSpecFromFile(problemmetadata.filename)
+        local tbl = opt.problemSpecFromFile(problemmetadata.filename)
         assert(ProblemSpec:is(tbl))
 		local result = compilePlan(tbl,problemmetadata.kind,problemmetadata.params)
 		allPlans:insert(result)
@@ -658,7 +658,7 @@ function Image:__call(x,y,c)
 end
 function opt.InBounds(x,y,sx,sy)
 	assert(x and y and sx and sy, "InBounds Requires 4 values (x,y,stencil_x,stencil_y)")
-    return ad.bool(ad.v[BoundsAccess:get(x,y,sx,sy)])
+    return ad.getvar(bool, BoundsAccess:get(x,y,sx,sy))
 end
 function BoundsAccess:shift(x,y)
     return BoundsAccess:get(self.x+x,self.y+y,self.sx,self.sy)
@@ -688,102 +688,12 @@ local function removeboundaries(exp)
     return exp:rename(nobounds)
 end
 
-
-local function postorder(es)
-    
-    local linearized = terralib.newlist()
-    local exptoidx = {}
-    local function visit(e)
-        if not exptoidx[e] then
-            for i,c in ipairs(e:children()) do visit(c) end
-            linearized:insert(e)
-            exptoidx[e] = #linearized
-        end
-    end
-    for i,e in ipairs(es) do visit(e) end
-    return linearized
-end
-local function calculateconditions(es)
-    local function Intersect(a,b)
-        local amap = {}
-        for i,c in ipairs(a) do
-            amap[c] = true
-        end
-        local r = terralib.newlist()
-        for i,c in ipairs(b) do
-            if amap[c] then
-                r:insert(c)
-            end
-        end
-        return r
-    end
-    local function Union(a,b)
-        local amap = {}
-        local r = terralib.newlist()
-        for i,c in ipairs(a) do
-            amap[c] = true
-            r:insert(c)
-        end
-        for i,c in ipairs(b) do
-            if not amap[c] then
-                r:insert(c)
-            end
-        end
-        return r
-    end
-    es = (terralib.islist(es) and es) or terralib.newlist(es)
-    local required = terralib.newlist()
-    for i,e in ipairs(es) do
-        if ad.ExpVector:is(e) then required:insertall(e.data)
-        else required:insert(e) end
-    end
-    local linearized = postorder(required)
-    
-    local conditions = {} -- nil => never executes, <list> -> and'd list of conditions when thing executes
-                          -- keys can be expressions or image access patterns
-    for i,e in ipairs(required) do
-        conditions[e] = terralib.newlist()
-    end
-    local function mergecondition(exp,cond)
-        local old = conditions[exp]
-        if not old then
-            conditions[exp] = cond
-        else
-            conditions[exp] = Intersect(old,cond)
-        end
-    end
-    for i = #linearized,1,-1 do
-        local e = linearized[i]
-        if e.kind == "Apply" then
-            local econd = conditions[e]
-            if e.op.name == "prod" then
-                for i,c in ipairs(e:children()) do
-                    if c.kind == "Apply" and c.op.name == "bool" then
-                        econd = Union(econd,terralib.newlist{c})
-                        mergecondition(c,conditions[e]) -- a bool is unconditionally executed by this product
-                    end 
-                end
-            end
-            for i,c in ipairs(e:children()) do
-                mergecondition(c,econd)
-            end
-        elseif e.kind == "Var" then
-            local a = e:key()
-            if a.kind == "ImageAccess" then
-                local ia = ImageAccess:get(a.image,a.x,a.y,0) --make vectors the same thing
-                mergecondition(ia,conditions[e])
-            end
-        end
-    end
-    return conditions
-end
-
-
 -- code ir is a table { kind = "...", ... }    
 local IRNode,nextirid = newclass("IRNode"),0
 function IRNode:create(body)
     local ir = IRNode:new(body)
     ir.id,nextirid = nextirid,nextirid+1
+    assert(body.type and terralib.types.istype(body.type),"missing type")
     return ir
 end
 
@@ -832,17 +742,25 @@ local function createfunction(problemspec,name,exps,usebounds,W,H)
     exps = removeboundaries(exps)
     
     local imageload = terralib.memoize(function(image)
-        return IRNode:create { kind = "vectorload", value = image }
+        return IRNode:create { kind = "vectorload", value = image, type = image.image.type }
     end)
     
     local irmap
+    
+    local function tofloat(ir,exp)
+        if ir.type ~= float then
+            return `float(exp)
+        else
+            return exp
+        end
+    end
     local function createreduce(op,vardecl,n)
         local cond
         if op == "sum" and n.kind == "Apply" and n.op.name == "prod" then
             local conditions = terralib.newlist()
             local factors = terralib.newlist()
             for i,c in ipairs(n:children()) do
-                if c.kind == "Apply" and c.op.name == "bool" then
+                if c:type() == bool then
                     conditions:insert(irmap(c))
                 else
                     factors:insert(c)
@@ -851,44 +769,50 @@ local function createfunction(problemspec,name,exps,usebounds,W,H)
             n = ad.prod(n.config.c,unpack(factors))
             cond = Condition:create(conditions)
         end
-        return IRNode:create { kind = "reduce", op = op, children = terralib.newlist { vardecl, irmap(n) }, condition = cond }
+        return IRNode:create { kind = "reduce", op = op, children = terralib.newlist { vardecl, irmap(n) }, condition = cond, type = float }
     end
     irmap = terralib.memoize(function(e)
         if ad.ExpVector:is(e) then
-            return IRNode:create { kind = "vectorconstruct", children = e.data:map(irmap) }
+            return IRNode:create { kind = "vectorconstruct", children = e.data:map(irmap), type = ad.TerraVector(float,#e.data) }
         elseif "Var" == e.kind then
             local a = e:key()
             if "ImageAccess" == a.kind then
                 if not a.image.type:isarithmetic() then
                     local loadvec = imageload(ImageAccess:get(a.image,a.x,a.y,0))
                     loadvec.count = (loadvec.count or 0) + 1
-                    return IRNode:create { kind = "vectorextract", children = terralib.newlist { loadvec }, channel = a.channel }  
+                    return IRNode:create { kind = "vectorextract", children = terralib.newlist { loadvec }, channel = a.channel, type = e:type() }  
                 else
-                    return IRNode:create { kind = "load", value = a }
+                    return IRNode:create { kind = "load", value = a, type = e:type() }
                 end 
             else
-                return IRNode:create { kind = "intrinsic", value = a }
+                return IRNode:create { kind = "intrinsic", value = a, type = e:type() }
             end
         elseif "Const" == e.kind then
-            return IRNode:create { kind = "const", value = e.v }
+            return IRNode:create { kind = "const", value = e.v, type = e:type() }
         elseif "Apply" == e.kind then
             if (e.op.name == "sum" or e.op.name == "prod") and #e:children() > 2 then
-                local vardecl = IRNode:create { kind = "vardecl", constant = e.config.c }
+                local vardecl = IRNode:create { kind = "vardecl", constant = e.config.c, type = float }
                 local children = terralib.newlist { vardecl }
-                local varuse = IRNode:create { kind = "varuse", children = children }
+                local varuse = IRNode:create { kind = "varuse", children = children, type = float }
                 for i,c in ipairs(e:children()) do
                     children:insert(createreduce(e.op.name,vardecl,c))
                 end
                 return varuse
             end
-            
+            local children = e:children():map(irmap)
             local fn,gen = opt.math[e.op.name]
             if fn then
-                function gen(args) return `fn(args) end
+                function gen(args)
+                    local nargs = terralib.newlist()
+                    for i,a in ipairs(args) do
+                        nargs[i] = tofloat(children[i],a)
+                    end
+                    return `fn(nargs) 
+                end
             else
-                function gen(args)  return e.op:generate(e,args) end
+                function gen(args) return e.op:generate(e,args) end
             end
-            return IRNode:create { kind = "apply", op = e.op.name, generator = gen, children = e:children():map(irmap) }
+            return IRNode:create { kind = "apply", op = e.op.name, generator = gen, children = children, type = e:type() }
         end
     end)
     
@@ -1165,7 +1089,7 @@ local function createfunction(problemspec,name,exps,usebounds,W,H)
         print("----------------------")
     end
     
-    if usebounds and name == "applyJTJ" then
+    if verboseAD then
         printschedule(instructions,regcounts)
     end
     
@@ -1185,7 +1109,7 @@ local function createfunction(problemspec,name,exps,usebounds,W,H)
             local ce = emit(c)
             local stmts = statementstack:remove()
             statementstack[#statementstack]:insert quote
-                if bool(ce) then
+                if ce then
                     [stmts]
                 end
             end
@@ -1195,10 +1119,11 @@ local function createfunction(problemspec,name,exps,usebounds,W,H)
         end
         statements = statementstack[#statementstack]
     end
+    local currentidx
     local function conditioncoversload(condition,x,y)
-        for i,m in ipairs(condition.members) do
-            assert(m.kind == "apply" and m.op == "bool")
-            local ir = m.children[1]
+        if x == 0 and y == 0 then return true end
+        for i,ir in ipairs(condition.members) do
+            assert(ir.type == bool)
             if ir.kind == "intrinsic" and ir.value.kind == "BoundsAccess" then
                 if x == ir.value.x and y == ir.value.y then
                     return true
@@ -1273,7 +1198,7 @@ local function createfunction(problemspec,name,exps,usebounds,W,H)
             return children[1] -- return the variable declaration, which is the first child
         elseif "reduce" == ir.kind then
             local children = ir.children:map(emit)
-            local vd, exp = children[1], children[2]
+            local vd, exp = children[1], tofloat(ir.children[2],children[2])
             local op
             if ir.op == "sum" then
                 op = quote [vd] = [vd] + [exp] end
@@ -1284,13 +1209,7 @@ local function createfunction(problemspec,name,exps,usebounds,W,H)
             return children[1]
         end
     end
-    local function terratype(ir)
-        if "vectorconstruct" == ir.kind then return ad.TerraVector(float,#ir.children)
-        elseif "vectorload" == ir.kind then return ir.value.image.type
-        elseif "apply" == ir.kind and ir.op:match("_$") then return bool
-        elseif "intrinsic" == ir.kind and ir.value.kind == "BoundsAccess" then return bool
-        else return float end
-    end
+    
     local emitted,emitteduse = {},{}
     
     function emit(ir)
@@ -1302,6 +1221,7 @@ local function createfunction(problemspec,name,exps,usebounds,W,H)
     local currentcondition = basecondition
     local declarations = terralib.newlist()
     for i,ir in ipairs(instructions) do
+        currentidx = i
         emitconditionchange(currentcondition,ir.condition)
         currentcondition = ir.condition
         if false then -- dynamically check dependencies are initialized before use, very slow, only use for debugging
@@ -1326,7 +1246,7 @@ local function createfunction(problemspec,name,exps,usebounds,W,H)
         if ir.kind == "const" or ir.kind == "varuse" or ir.kind == "reduce" then 
             r = assert(createexp(ir),"nil exp") 
         else
-            r = symbol(terratype(ir),"r"..tostring(i))
+            r = symbol(ir.type,"r"..tostring(i))
             declarations:insert quote var [r] end
             local exp = assert(createexp(ir),"nil exp")
             statements:insert(quote
@@ -1478,9 +1398,9 @@ local function createjtj(Fs,unknown,P)
     for i,p in ipairs(P_hat) do
         P_hat[i] = 2.0 * p
     end
-    print("JTJ[nopoly] = ", ad.tostrings(P_hat))
+    dprint("JTJ[nopoly] = ", ad.tostrings(P_hat))
     P_hat = ad.polysimplify(P_hat)
-    print("JTJ[poly] = ", ad.tostrings(P_hat))
+    dprint("JTJ[poly] = ", ad.tostrings(P_hat))
     return conformtounknown(P_hat,unknown)
 end
 
@@ -1523,7 +1443,7 @@ local function createjtf(problemSpec,Fs,unknown,P)
 	    end
 	    F_hat[i] = ad.polysimplify(2.0*F_hat[i])
 	end
-	print("JTF =", ad.tostrings({F_hat[1], F_hat[2], F_hat[3]}))
+	dprint("JTF =", ad.tostrings({F_hat[1], F_hat[2], F_hat[3]}))
     return conformtounknown(F_hat,unknown), conformtounknown(P_hat,unknown)
 
 end

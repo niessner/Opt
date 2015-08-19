@@ -419,11 +419,9 @@ util.makeGPUFunctions = function(problemSpec, vars, PlanData, kernels)
 	local kernelFunctions = {}
 	local key = "_"..tostring(os.time())
 	for k,v in pairs(kernelTemplate) do
-	    kernelFunctions[k..key] = { kernel = v.kernel , annotations = { {"maxntidx", 16}, {"maxntidy", 16}, {"maxntidz", 1}, {"minctasm",5} } }
+	    kernelFunctions[k..key] = { kernel = v.kernel , annotations = { {"maxntidx", 16}, {"maxntidy", 16}, {"maxntidz", 1}, {"minctasm",5} } } -- force at least 5 threadblocks to run per SM
 	end
-	
 	local compiledKernels = terralib.cudacompile(kernelFunctions, false)
-	
 	for k, v in pairs(kernelTemplate) do
 		gpu[k] = makeGPULauncher(compiledKernels[k..key], kernelFunctions[k..key].kernel.name, kernelTemplate[k].header, kernelTemplate[k].footer, problemSpec, PlanData)
 	end
