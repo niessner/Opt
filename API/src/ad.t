@@ -667,7 +667,13 @@ ad.TerraVector = terralib.memoize(function(typ,N)
        end
        return c
     end
-
+    terra VecType:sum()
+       var c : typ = 0
+       for i = 0,N do
+	  c = c + self.data[i]
+       end
+       return c
+    end
     terra VecType:dot(b : VecType)
         var c : typ = 0
         for i = 0,N do

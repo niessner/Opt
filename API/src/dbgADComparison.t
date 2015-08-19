@@ -11,16 +11,16 @@ local stb = terralib.includecstring [[
 local W = 16
 local H = 16
 
-local terra abs(f : float)
+local terra absReduce(f : float)
    return C.fabsf(f)
 end
 
-local terra abs(v : opt.float2) : opt.float2
-   return v:abs()
+local terra absReduce(v : opt.float2)
+   return v:abs():sum()
 end
 
-local terra abs(v : opt.float3) : opt.float3
-   return v:abs()
+local terra absReduce(v : opt.float3)
+   return v:abs():sum()
 end
 
 
@@ -30,7 +30,7 @@ local function makeSumResult(resultType)
       var sum : float = 0.0f
       for j=0,H do
 	 for i=0,W do
-	    sum = sum + abs(result(i,j))--result(i,j))
+	    sum = sum + absReduce(result(i,j))--result(i,j))
 	 end
       end
       return sum
