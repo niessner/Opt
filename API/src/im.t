@@ -1,3 +1,19 @@
+--[[
+This file is for reading and writing our ad-hoc floating-point image format.
+The only commonly-used image format that has full support for uncompressed 32-bit
+floating point images is OpenEXR, and it is not widely supported (and more relevantly for us,
+   would require importing a large library that may or may not go well)
+
+So our .imagedump format is as follows
+
+width : int32
+height : int32
+channelCount : int32
+datatype : int32 (0 means 32-bit floating point, all other values are reserved in case we need to support other types)
+pixelData (row-major, no padding between rows, takes up width*height*channelCount*sizeof(type indicated by datatype)
+
+]]
+
 local util = require("util")
 local C = util.C
 local im = {}
