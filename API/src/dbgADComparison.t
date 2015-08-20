@@ -23,8 +23,6 @@ local terra absReduce(v : opt.float3)
    return v:abs():sum()
 end
 
-
-
 local function makeSumResult(resultType)
    local terra sumResult(result : resultType)
       var sum : float = 0.0f
@@ -123,12 +121,28 @@ local terra perlinNoise(im : &float, width : int, height : int, channels : int, 
       for i=0,width do
 	 for c=0,channels do
 	    var result = stb.stb_perlin_noise3([float](i)/width, [float](j)/height, seed+c, 0, 0, 0)
-	    im[(j*width+i)*channels + c] = result
+	    -- add one to go positive
+	    im[(j*width+i)*channels + c] = result + 1.0
 	 end
       end
    end
 end 
 
+
+function imagedumpHeader(filename)
+   local terra readHeader()
+      var fileHandle = C.fopen(filename, 'rb')
+      var width : int, height : int, numChannels :int, datatype : int
+      C.fread(&width, sizeof(int), 1, fileHandle)
+      C.fread(&height, sizeof(int), 1, fileHandle)
+      C.fread(&numChannels, sizeof(int), 1, fileHandle)
+      C.fread(&datatype, sizeof(int), 1, fileHandle)
+      C.fclose(fileHandle)
+      return {width,height,numChannels,datatype}
+   end
+   local header = readHeader()
+   return header._0, header._1, header._2, header._3
+end
 
 -- see if the file exists
 function fileExists(file)
@@ -170,18 +184,44 @@ end
 
 local function run(file1, file2, inputImageTypesFile, inputImageFiles, inputParameterFile)
    opt.dimensions = {}
-   opt.dimensions[0] = W--Wtype
-   opt.dimensions[1] = H--Htype
 
    opt.elemsizes = {}
    opt.strides = {}
 
-   local chans = loadParameters(inputImageTypesFile)
+   local doLoadImages = false
+   local imFilenames = {}
+   print(inputImageFiles[1])
+   if #inputImageFiles > 0 then
+      doLoadImages = true
+      imFilenames = inputImageFiles--linesFrom(inputImageFiles)
+      local chans = {}
+      local datatype = 0
+      W, H, chans[1], datatype = imagedumpHeader(imFilenames[1])
+      opt.elemsizes[0] = 4*chans[1]
+      opt.strides[0] = 4*W*chans[1]
+      for i=2,#imFilenames do
+	 local newWidth = 0
+	 local newHeight = 0
+	 newWidth, newHeight, chans[i], datatype = imagedumpHeader(imFilenames[i])
+	 assert(W == newWidth and H == newHeight, 
+		"Widths and heights of images not identical")
+	 opt.elemsizes[i-1] = 4*chans[i]
+	 opt.strides[i-1] = 4*W*chans[i]
+      end
+   else 
+      assert(inputImageTypesFile, "Must have at least one of inputImageTypesFile and inputImageFile") 
+      local chans = loadParameters(inputImageTypesFile)
 
-   for i=0,#chans-1 do 
-      opt.elemsizes[i] = 4*chans[i+1]
-      opt.strides[i] = 4*W*chans[i+1]
+      for i=0,#chans-1 do 
+	 opt.elemsizes[i] = 4*chans[i+1]
+	 opt.strides[i] = 4*W*chans[i+1]
+      end
    end
+
+   opt.dimensions[0] = W--Wtype
+   opt.dimensions[1] = H--Htype
+
+
    opt.problemkind = ""
    
    local Wtype = opt.Dim("W", 0)
@@ -211,18 +251,24 @@ local function run(file1, file2, inputImageTypesFile, inputImageFiles, inputPara
    local p2ImageCount = 0
    for _, entry in ipairs(p2.parameters) do
       if entry.kind == "image" then
-	 assert(imageTypes[entry.idx], "Image " .. entry.idx .. " exists only in second problem spec")
-	 assert(imageTypes[entry.idx] == entry.type, "Image type mismatch (" .. entry.idx .. "): " .. tostring(imageTypes[entry.idx]) .. " != " .. tostring(entry.type))	    
+	 assert(imageTypes[entry.idx], 
+		"Image " .. entry.idx .. " exists only in second problem spec")
+	 assert(imageTypes[entry.idx] == entry.type, 
+		"Image type mismatch (" .. entry.idx .. "): " .. tostring(imageTypes[entry.idx]) .. " != " .. tostring(entry.type))	    
 	 p2ImageCount = p2ImageCount + 1
       elseif entry.kind == "param" then
-	 assert(paramTypes[entry.idx], "Parameter " .. entry.idx .. " exists only in second problem spec")
-	 assert(paramTypes[entry.idx] == entry.type, "Param type mismatch (" .. entry.idx .. "): " .. tostring(paramTypes[entry.idx]) .. " != " .. tostring(entry.type))
+	 assert(paramTypes[entry.idx], 
+		"Parameter " .. entry.idx .. " exists only in second problem spec")
+	 assert(paramTypes[entry.idx] == entry.type, 
+		"Param type mismatch (" .. entry.idx .. "): " .. tostring(paramTypes[entry.idx]) .. " != " .. tostring(entry.type))
 	 p2ParamCount = p2ParamCount + 1
       end
    end
    -- TODO: print what parameter(s) missing
-   assert(tableLength(paramTypes) == p2ParamCount, "Parameter count mismatch: " .. tableLength(paramTypes) .. " vs " .. p2ParamCount)
-   assert(tableLength(imageTypes) == p2ImageCount, "Image count mismatch: " .. tableLength(imageTypes) .. " vs " .. p2ImageCount)
+   assert(tableLength(paramTypes) == p2ParamCount, 
+	  "Parameter count mismatch: " .. tableLength(paramTypes) .. " vs " .. p2ParamCount)
+   assert(tableLength(imageTypes) == p2ImageCount, 
+	  "Image count mismatch: " .. tableLength(imageTypes) .. " vs " .. p2ImageCount)
 
 
    local resultImageType = p1.parameters[p1.names["X"]].type
@@ -300,14 +346,28 @@ local function run(file1, file2, inputImageTypesFile, inputImageFiles, inputPara
       preconditionerImages:initCPU()
       jtjImages:initCPU()
 
-
-      -- TODO figure out how many images they are, what type they are, and generate based on that
-      var images = [&&uint8](C.malloc([tableLength(imageTypes)]*sizeof([&&uint8]))) 
-      for i = 0,[tableLength(imageTypes)] do
-	 var imSize = strides[i]*H
-	 images[i] = [&uint8](C.malloc(imSize))
-	 C.memset(images[i], 0, imSize)
-	 perlinNoise([&float](images[0]), W, H, channels[i], [float](i))
+      var images : &&uint8
+      if [doLoadImages] then
+	 images = [&&uint8](C.malloc([tableLength(imFilenames)]*sizeof([&&uint8]))) 
+	 var width : int, height : int, numChannels : int
+	 escape 
+	    for i = 0,tableLength(imFilenames)-1 do
+	       emit `dbg.imageRead([&&float](&images[i]), &width, &height, &numChannels, [imFilenames[i+1]]) 
+	    end
+	 end
+      else
+	 images = [&&uint8](C.malloc([tableLength(imageTypes)]*sizeof([&&uint8]))) 
+	 for i = 0,[tableLength(imageTypes)] do
+	    var imSize = strides[i]*H
+	    images[i] = [&uint8](C.malloc(imSize))
+	    C.memset(images[i], 0, imSize)
+	    if i < 3 then
+	       perlinNoise([&float](images[i]), W, H, channels[i], [float](i))
+	    end
+	    var buffer : int8[128]
+	    C.sprintf(buffer, "image%d.imagedump", i)
+	    dbg.imageWrite([&float](images[i]), W, H, channels[i], buffer)
+	 end	 
       end
 
       var finalParams : &&opaque = nil
@@ -343,13 +403,12 @@ local arg = parser:argument("input0", "First terra input file.")
 arg:default("../../Examples/ImageWarping/ImageWarping.t")
 arg = parser:argument("input1", "Second terra input file.")
 arg:default("../../Examples/ImageWarping/ImageWarpingAD.t")
-arg = parser:argument("imageTypes", "File with # of floating-point channels for each image, 1 per line")
-arg:default("ImageWarpingImageTypes.txt")
-local option = parser:option("-i --images", "Image Files", "a.imagedump"):count("*")
+local option = parser:option("-i --images", "Image Files"):count("*")
 option = parser:option("-p --parameters", "Paramter File")
+option = parser:option("-t --imagetypes", "File with # of floating-point channels for each image, 1 per line")
 --parser:option("-I --include", "Include locations."):count("*")
 local args = parser:parse()
 
 
-run(args["input0"], args["input1"], args["imageTypes"], args["images"], args["parameters"])
+run(args["input0"], args["input1"], args["imagetypes"], args["images"], args["parameters"])
 
