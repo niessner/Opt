@@ -332,7 +332,7 @@ return function(problemSpec, vars)
 		    if entry.kind == "image" then
 		       print("" .. key .. " = imageTypes[" .. entry.idx .. "] = " .. tostring(entry.type))
 		       local channel = 0 
-		       local pixelType = imageTypes[i].metamethods.typ
+		       local pixelType = entry.type.metamethods.typ
 		       if pixelType == float then
 			  channel = 1 
 		       elseif pixelType == opt.float2 then
