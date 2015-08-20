@@ -328,7 +328,7 @@ return function(problemSpec, vars)
 	   escape
 	      --TODO: Remove
  	      if true then
-		 for key, entry in ipairs(p1.parameters) do
+		 for key, entry in ipairs(problemSpec.parameters) do
 		    if entry.kind == "image" then
 		       print("" .. key .. " = imageTypes[" .. entry.idx .. "] = " .. tostring(entry.type))
 		       local channel = 0 
