@@ -1,19 +1,19 @@
 local util = require("util")
 local C = util.C
 local dbg = require("dbg")
-
+local im = require("im")
 local stb = terralib.includecstring [[
 #include "stb_perlin.c"
 ]]
 
 
 -- Operates on floating point images
-local terra perlinNoise(im : &float, width : int, height : int, channels : int, seed : float)
+local terra perlinNoise(img : &float, width : int, height : int, channels : int, seed : float)
    for j=0,height do
       for i=0,width do
 	 for c=0,channels do
 	    var result = stb.stb_perlin_noise3([float](i)/width, [float](j)/height, seed+c, 0, 0, 0)
-	    im[(j*width+i)*channels + c] = result
+	    img[(j*width+i)*channels + c] = result
 	 end
       end
    end
@@ -24,17 +24,17 @@ end
 terra imageTest(width : int, height : int, channels : int) 
    C.printf("imageTestBegin\n")
    var imPtr : &float
-   dbg.initImage(&imPtr, width, height, channels)
+   im.initImage(&imPtr, width, height, channels)
    C.printf("imageTestInitImage\n")
    perlinNoise(imPtr, width, height, channels, 0.0f)
    C.printf("imageTestPerlin\n")
    var filename = "testImage.imagedump"
-   dbg.imageWrite(imPtr, width, height, channels, filename)
+   im.imageWrite(imPtr, width, height, channels, filename)
    C.printf("imageTestWrite\n")
    var imPtr2 : &float
 
    var width2 : int, height2 : int, channels2 : int
-   dbg.imageRead(&imPtr2, &width2, &height2, &channels2, filename)
+   im.imageRead(&imPtr2, &width2, &height2, &channels2, filename)
    C.printf("imageTestRead\n")
    for j=0,height do
       for i=0,width do

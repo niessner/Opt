@@ -352,7 +352,7 @@ local function run(file1, file2, inputImageTypesFile, inputImageFiles, inputPara
 	 var width : int, height : int, numChannels : int
 	 escape 
 	    for i = 0,tableLength(imFilenames)-1 do
-	       emit `dbg.imageRead([&&float](&images[i]), &width, &height, &numChannels, [imFilenames[i+1]]) 
+	       emit `im.imageRead([&&float](&images[i]), &width, &height, &numChannels, [imFilenames[i+1]]) 
 	    end
 	 end
       else
@@ -364,9 +364,9 @@ local function run(file1, file2, inputImageTypesFile, inputImageFiles, inputPara
 	    if i < 3 then
 	       perlinNoise([&float](images[i]), W, H, channels[i], [float](i))
 	    end
-	    var buffer : int8[128]
+	    --[[var buffer : int8[128]
 	    C.sprintf(buffer, "image%d.imagedump", i)
-	    dbg.imageWrite([&float](images[i]), W, H, channels[i], buffer)
+	       im.imageWrite([&float](images[i]), W, H, channels[i], buffer)]]--
 	 end	 
       end
 
@@ -400,9 +400,9 @@ local argparse = require "argparse"
 
 local parser = argparse("dbgADComparison.t", "Compares two Opt problems to each other. Optionally specify the input images (an image types), and input parameters. If none are specified, we provide randomly generated defaults.")
 local arg = parser:argument("input0", "First terra input file.")
-arg:default("../../Examples/ImageWarping/ImageWarping.t")
+arg:default("../testMLib/imageSmoothing.t")
 arg = parser:argument("input1", "Second terra input file.")
-arg:default("../../Examples/ImageWarping/ImageWarpingAD.t")
+arg:default("../testMLib/imageSmoothingAD.t")
 local option = parser:option("-i --images", "Image Files"):count("*")
 option = parser:option("-p --parameters", "Paramter File")
 option = parser:option("-t --imagetypes", "File with # of floating-point channels for each image, 1 per line")
