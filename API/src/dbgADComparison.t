@@ -2,6 +2,7 @@ local S = require("std")
 local opt = require("o")
 local util = require("util")
 local dbg = require("dbg")
+local im = require("im")
 C = util.C
 local stb = terralib.includecstring [[
 #include "stb_perlin.c"
@@ -404,7 +405,7 @@ arg:default("../testMLib/imageSmoothing.t")
 arg = parser:argument("input1", "Second terra input file.")
 arg:default("../testMLib/imageSmoothingAD.t")
 local option = parser:option("-i --images", "Image Files"):count("*")
-option = parser:option("-p --parameters", "Paramter File")
+option = parser:option("-p --parameters", "Parameter File")
 option = parser:option("-t --imagetypes", "File with # of floating-point channels for each image, 1 per line")
 --parser:option("-I --include", "Include locations."):count("*")
 local args = parser:parse()

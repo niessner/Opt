@@ -16,7 +16,7 @@ local function noFooter(pd)
 end
 
 opt.BLOCK_SIZE = 16
-local BLOCK_SIZE 				=  opt.BLOCK_SIZE
+local BLOCK_SIZE =  opt.BLOCK_SIZE
 
 local FLOAT_EPSILON = `0.000001f
 -- GAUSS NEWTON (non-block version)
@@ -299,28 +299,64 @@ return function(problemSpec, vars)
 		end
 	end
 
+	local function tableLength(T)
+	   local count = 0
+	   for _ in pairs(T) do count = count + 1 end
+	   return count
+	end
+
+
 	---------------------------------------END DEBUGGING FUNCTIONS------------------------------------------
 
 	
 	local terra init(data_ : &opaque, images : &&opaque, edgeValues : &&opaque, params_ : &&opaque, solverparams : &&opaque)
-		var pd = [&PlanData](data_)
-		pd.timer:init()
-		pd.parameters = [util.getParameters(problemSpec, images, edgeValues,params_)]
+	   var pd = [&PlanData](data_)
+	   pd.timer:init()
+	   pd.parameters = [util.getParameters(problemSpec, images, edgeValues,params_)]
 
-	    pd.nIter = 0
-		
-		escape 
-	    	if util.debugDumpInfo then
-	    		emit quote
-		    		C.printf("initDebugImages\n")
-		    		initAllDebugImages(pd)
-	    		end
-	    	end
-		end
+	   pd.nIter = 0
+	   
+	   escape 
+	      if util.debugDumpInfo then
+		 emit quote
+		    C.printf("initDebugImages\n")
+		    initAllDebugImages(pd)
+		 end
+	      end
+	   end
+	   var buffer : int8[64]
+	   escape
+	      --TODO: Remove
+ 	      if true then
+		 for key, entry in ipairs(p1.parameters) do
+		    if entry.kind == "image" then
+		       print("" .. key .. " = imageTypes[" .. entry.idx .. "] = " .. tostring(entry.type))
+		       local channel = 0 
+		       local pixelType = imageTypes[i].metamethods.typ
+		       if pixelType == float then
+			  channel = 1 
+		       elseif pixelType == opt.float2 then
+			  channel = 2
+		       elseif pixelType == opt.float3 then
+			  channel = 3
+		       elseif pixelType == opt.float4 then
+			  channel = 4
+		       end
+		       emit
+		          C.sprintf(buffer, "arapTest%d.imagedump", i)
+			  dbg.imageWriteFromCuda(pd, images[entry.idx], channel, buffer)
+		       end
 
-		pd.nIterations = @[&int](solverparams[0])
-		pd.lIterations = @[&int](solverparams[1])
+		    end
+		 end
+
+	      
+	      end
+	   end
+           pd.nIterations = @[&int](solverparams[0])
+	   pd.lIterations = @[&int](solverparams[1])
 	end
+
 	local terra step(data_ : &opaque, images : &&opaque, edgeValues : &&opaque, params_ : &&opaque, solverparams : &&opaque)
 		var pd = [&PlanData](data_)
 		pd.parameters = [util.getParameters(problemSpec, images, edgeValues,params_)]
