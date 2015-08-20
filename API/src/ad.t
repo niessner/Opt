@@ -306,18 +306,22 @@ function ExpVector:expressions() return self.data end
 -- generates variable names
 local v = {} 
 
-function ad.getvar(typ,key)
+function ad.getvar(key)
     local r = rawget(v,key)
     if not r then
-        assert(typ == float or typ == bool)
-        r = Var:new { type_ = typ, key_ = assert(key), id = allocid() }
-        v[key] = r
+        
     end
-    assert(r:type() == typ, "variable with key exists with a different type")
     return r
 end
 setmetatable(v,{__index = function(self,key)
-    return ad.getvar(float,key)
+    local type_ = float
+    if type(key) == "table" and type(key.type) == "function" then
+        type_ = key:type()
+    end 
+    assert(type_ == float or type_ == bool, "variable with key exists with a different type")
+    local r = Var:new { type_ = type_, key_ = assert(key), id = allocid() }
+    v[key] = r
+    return r
 end})
 
 local x,y,z = v[1],v[2],v[3]

@@ -658,11 +658,12 @@ function Image:__call(x,y,c)
 end
 function opt.InBounds(x,y,sx,sy)
 	assert(x and y and sx and sy, "InBounds Requires 4 values (x,y,stencil_x,stencil_y)")
-    return ad.getvar(bool, BoundsAccess:get(x,y,sx,sy))
+    return ad.v[BoundsAccess:get(x,y,sx,sy)]
 end
 function BoundsAccess:shift(x,y)
     return BoundsAccess:get(self.x+x,self.y+y,self.sx,self.sy)
 end
+function BoundsAccess:type() return bool end
 function ImageAccess:shift(x,y)
     return ImageAccess:get(self.image,self.x + x, self.y + y,self.channel)
 end
@@ -1059,7 +1060,7 @@ local function createfunction(problemspec,name,exps,usebounds,W,H)
             local fs = terralib.newlist()
             fs:insert(inst.kind.." ")
             for k,v in pairs(inst) do
-                if k ~= "kind" and k ~= "children" and type(v) ~= "function" and k ~= "id" and k ~= "condition" then
+                if k ~= "kind" and k ~= "children" and type(v) ~= "function" and k ~= "id" and k ~= "condition" and k ~= "type" then
                     fs:insert(tostring(v))
                     fs:insert(" ")
                 end
@@ -1081,7 +1082,7 @@ local function createfunction(problemspec,name,exps,usebounds,W,H)
         end
         for i,ir in ipairs(instructions) do
             emittedpos[ir] = i
-            print(("[%d]%sr%d = %s"):format(regcounts[i],formatcondition(ir.condition),i,formatinst(ir)))
+            print(("[%d]%sr%d : %s = %s"):format(regcounts[i],formatcondition(ir.condition),i,tostring(ir.type),formatinst(ir)))
             if instructions[i+1] and conditioncost(ir.condition,instructions[i+1].condition) ~= 0 then
                 print("---------------------")
             end
@@ -1089,7 +1090,7 @@ local function createfunction(problemspec,name,exps,usebounds,W,H)
         print("----------------------")
     end
     
-    if verboseAD then
+    if true or verboseAD then
         printschedule(instructions,regcounts)
     end
     

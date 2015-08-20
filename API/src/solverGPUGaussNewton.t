@@ -281,11 +281,11 @@ return function(problemSpec, vars)
 
 	local terra initAllDebugImages(pd : &PlanData)
 		C.printf("initAllDebugImages\n")
-		dbg.initImage(pd, &pd.debugDumpImage, 1)
-		dbg.initImage(pd, &pd.debugCostImage, 1)
-		dbg.initImage(pd, &pd.debugJTJImage, sizeof([unknownElement]) / 4)
-		dbg.initImage(pd, &pd.debugJTFImage, sizeof([unknownElement]) / 4)
-		dbg.initImage(pd, &pd.debugPreImage, sizeof([unknownElement]) / 4)
+		dbg.initCudaImage(pd, &pd.debugDumpImage, 1)
+		dbg.initCudaImage(pd, &pd.debugCostImage, 1)
+		dbg.initCudaImage(pd, &pd.debugJTJImage, sizeof([unknownElement]) / 4)
+		dbg.initCudaImage(pd, &pd.debugJTFImage, sizeof([unknownElement]) / 4)
+		dbg.initCudaImage(pd, &pd.debugPreImage, sizeof([unknownElement]) / 4)
 	end
 
 
@@ -295,7 +295,7 @@ return function(problemSpec, vars)
 		if ([util.debugDumpInfo]) then
 			var buffer : int8[64]
 			C.sprintf(buffer, "%s_%d_%d.imagedump", name, nIter, lIter)
-			dbg.imageWrite(pd, ptr, 1, buffer)
+			dbg.imageWriteFromCuda(pd, ptr, 1, buffer)
 		end
 	end
 
