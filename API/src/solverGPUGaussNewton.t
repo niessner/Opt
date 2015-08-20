@@ -343,7 +343,7 @@ return function(problemSpec, vars)
 			  channel = 4
 		       end
 		       emit quote
-			     C.sprintf(buffer, "arapTest%d.imagedump", i)
+			     C.sprintf(buffer, "arapTest%d.imagedump", entry.idx)
 			     dbg.imageWriteFromCuda(pd, images[entry.idx], channel, buffer)
 		       end
 
