@@ -342,11 +342,9 @@ return function(problemSpec, vars)
 		       elseif pixelType == opt.float4 then
 			  channel = 4
 		       end
-		       emit
-		          quote
+		       emit quote
 			     C.sprintf(buffer, "arapTest%d.imagedump", i)
 			     dbg.imageWriteFromCuda(pd, images[entry.idx], channel, buffer)
-			  end
 		       end
 
 		    end
