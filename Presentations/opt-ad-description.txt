@@ -1,0 +1,167 @@
+Pipeline:
+
+
+auto-diff IR ----------------------------------
+1. Construction: Lua functions construct auto-diff IR, lowering vector operators into scalar unrolled math as they go
+2. Greedy Simplify: Whenever auto-diff IR is created it is immediately simplified and all common sub-expressions are eliminated.
+3. Derivate Calculation: Derivative calculations are then done as a transformation of auto-diff IR to auto-diff IR.
+4. JTF/JTJ Creation: Functions that create JTF and JTJ transform  auto-diff IR using the ability to generate derivates into new auto-diff IR
+4. Polynomial Simplify: the final expressions for a function are treated as polynomials and factored greedily to simply them.
+scheduling IR ---------------------------------
+5. Scheduling IR Creation: auto-diff IR expressions are transformed into scheduling IR, each node in scheduling IR represents a single operation on a finite
+set of arguments. Unlike scheduling IR, it also explicitly represents non-mathematical operations such as image loads and boundary checks.
+6. Conditionalization: each auto-diff IR node is assigned a "condition" which is another expression that controls the dynamic conditions when that node executes. 
+This allows boundaries and masks to turn off expensive calculations.
+7. Scheduling: scheduling IR is linearized into an order of execution (the schedule), it is done backwards from the final computation to the first, minimizing the number of condition changes and register use.
+8. Code Gen: scheduling IR is turned into Terra code. this is mostly straightforward except for conditions. the code generator tracks the current conditions and changes where code is emitted to create nests of if statements.
+
+
+== auto-diff IR (defined in ad.t, except for External which is in o.t)
+
+Exp  = Apply(op : Op,c : Float, arguments : [Exp]) -- perform Op on list of inputs, possibly with a floating point number for configuration
+     | Const(value : Float)
+     | Var(key : External) --key contains information about non-mathematical things that this variable represents (e.g. it is an image value, a boundary check, an index, a parameter)
+     
+
+Op = Sum -- c + a0 + a1 + a2 + ..., subtract is represented as a0 + -1*a1
+   | Prod -- c * a0 * a1 * a2 * ...
+   | PowC -- a0^c, a0^-1 represents a divide
+   | Sin
+   | Pow
+   | ...
+   | LessThan
+   | ...
+
+External = ImageAccess(image : Image, x : int, y : int, channel : Int) -- image is the Lua object representing one image in the problem, created by the problem specification
+         | BoundsAccess(x : int, y : int)
+         | IndexValue(selector : int) -- selector == 0 means get actual value of x index, 1 means value of y
+         | ParamValue(name : String) -- value of named parameter
+
+
+== Construction:
+
+image(0,0)   -- Image objects internally create a new Var(ImageAcces(image,0,0)) node and return it
+Exp0 + Exp1  -- also any operator like ad.sin(exp). These create new expressions from existing ones and are part of the API the end user writes.
+             -- these create a new Expression by calling simplify on the arguments first: simplify(ad.Add, {Exp0,Exp1})
+
+
+Exp:rename(fn : Function ) -- make a new expression where each variable with key k is replaced with the result of fn(k), used for doing things like shifting the calculation by changing ImageAccess objects
+                           -- like anything that generates expressions, they are simplified when made
+
+Exp:type() : TerraType -- float or bool
+    bools are 0 or 1 and convert freely to floats, but the simplifier knows that b^c == b for all bools b, which is important for boundaries.
+    most operations convert to float, comparisons turn things into bools, and some variables like boundaries start as bools
+
+
+== Greedy Simplify
+               
+simplify(op : Op,args : [Exp]) -> Exp -- generate the simplest form of of an expression of Op applied to arguments.
+          the goal is to come up with an expression that is simplified while guarenteeing we do not make the resulting term bigger than the expression that would result from not doing anything
+          this means we don't do things like distribute a*(b + c) but will take 3*a+4*a and make it 7*a
+          this does the following for each of the following ops
+          for Sum:
+            View each argument as its own sum in the form c + k0*t0 + k1*t1 + ... where k0 are constants and t0 are any expression
+            Expressions like sin(x) which do not fit the pattern are promoted (0 + 1*sin(x))
+            Then all the c's are added together, and all the constants k for identical terms t across all the arguments are aggregated together.
+            If the result is not a proper sum (e.g. 0 + 1*e) then it is reduced to its simplest form (e.g. e).
+            
+          for Prod: process is analogous to sum
+            View each argument as its own prod in the form  c*t0^k0*t1^k1...
+            Expressions like (1 + 4*e) which do not fit the pattern are promoted (1*(1 + 4*e)^1)
+            Then all the c's are multiplied together, and thee the constants k for identical terms t across all the arguments are aggregated together.
+            If the result is not a proper product (e.g. 1*e^1) then it is reduced to its simplest form (e.g. e)
+          
+          other rules:
+          
+          x^0 -> 0
+          x^1 -> x
+          b^y -> b where b is a boolean type
+          (x^c2)^c -> x^(c*c2)
+          select(0,y,z) -> z
+          select(c,y,z) -> y, c ~= 0
+          select(b,y,0) -> b*y
+          select(b,0,z) -> not(b)*y
+          x or x -> x
+          0 or x -> x
+          1 or x -> 1
+
+== Derivative Calculation: 
+
+
+== JTF/JTJ Creation: this is an entire discussion in itself. It works as an auto-diff IR to auto-diff IR transformation using the primitives we have defined:
+  -- differentiate exp by variable v
+  -- rename exp to replace all image access at x,y with accesses at x+c,y+k (e.g. shift the calculation)
+  -- Create new expressions by adding existing expressions together.
+  
+== Scheduling IR (defined in o.t) and its creation
+
+Type = float | bool
+Condition = [ Node ] -- a list of nodes, if any are false, then we do not need the value of a not with this condition
+
+Node(type : Type, condition : Condition) -- all nodes have a type and a condition when they must execute 
+     = BoundsAccess(x : int, y : int) -- these are the same as the External nodes in the auto-diff IR
+     | IndexValue(selector : int)
+     | ParamValue(name : String)
+     | Load(image : Image, x : int, y : int, channel : Int) 
+     
+     | Const(value : Float) -- similar to auto-diff IR
+     | Apply(op : Op, c : Float,arguments : [Node])
+     
+     -- though the math works on scalars only, multi-channel images are represented as vectors for scheduling to accurately track registers and emit efficient loads
+     | VectorLoad(image : Image) 
+     | VectorExtract(expression : Node, channel : Int)
+     
+     -- polynomials of sufficient length are split into reductions:
+     | Reduce(op : ROp, variable : VarDecl, expression : Node)
+     | VarDecl(initializer : Float)
+     | VarUse(variable : VarDecl, arguments : [Reduce])
+     -- e.g: c + t0 + t1 turns into
+     -- var r = c, VarDecl
+     -- r += k0, Reduce
+     -- r += k1, Reduce
+     -- (r), VarUse depends on both Reduce statements in scheduling
+     -- this allows the scheduling to reorder long polynomials in a way that respects conditions
+     -- it also allows each reduce statement to have a different condition
+
+ROp = Sum | Prod
+
+== Conditionalization:
+
+Conditions are conservative. 
+Represented as ordered lists, boundaries first, whose conjunction is the condition.
+In code this will be come a nest of if statements.
+Empty list is unconditional execution.
+
+Base Case: outputs must be computed. 
+Induction: condition of node is the union of the conditions of uses. To avoid creating long boolean expressions union
+is done conservatively by taking the common prefix of all uses.
+Base Case Introducing a condition: Reduce(Sum,v,Apply(Prod(c, {cond1,cond2,cond3,exp1,exp2,exp3,...}) 
+                          becomes: Reduce(Sum,v,Prod(const,{exp1,exp2,exp3}) with condition {cond1,cond2,cond3}
+Base Case: All IR nodes used as a condition are unconditionally executed (for simplicity and because it is generally not expensive to compute them)
+
+
+== Scheduling:
+
+Occurs bottom up from the output expressions. Therefore uses are scheduled before definitions.
+Works in a greedy scheduling framework.
+A ready-list tracks the instructions which can be scheduled next. Instructions are ready when all of their uses have been scheduled.
+scheduling proceeds by choosing the best instruction from a ready list.
+Instructions are given a cost vector, and the lowest cost is chosen first.
+
+cost vector is currently: { condition change cost, register use cost, position in ready list }
+
+condition change: is {number of conditions we need to leave given the current condition, number of conditions we need to enter}
+                  that is, it is cheapest to keep the same condition, but cheaper to enter deeper if-statements than exit one.
+                  this encourages if statements to group together, which in turn encourages things that work on the same part of the image to group together.
+
+register use cost: the change in the number of total live registers after scheduling the instruction.
+                   right now this is combined with a 1 depth lookahead: what is the change in live registers after scheduling this instruction, and the next instruction you would choose after it.
+                   it is not clear that the lookahead is actually needed, but I haven't removed it yet since it is relatively self-contained as a calculation.
+                   
+position in ready list: if everything else is equal we choose the instruction that has been ready for the longest time. this seems to work better than tie-breaking via newest ready first.
+
+== Code Generation:
+
+the code generator tracks the current conditions and changes where code is emitted to create nests of if statements.
+when a load from an image happens, we check if the condition of the load instruction includes a bounds check for location of the load. If so, we do not generate a guard for the load.
+
