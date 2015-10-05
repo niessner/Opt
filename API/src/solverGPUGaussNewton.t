@@ -327,7 +327,7 @@ return function(problemSpec, vars)
 	   var buffer : int8[64]
 	   escape
 	      --TODO: Remove
- 	      if true then
+ 	     if false then
 		 for key, entry in ipairs(problemSpec.parameters) do
 		    if entry.kind == "image" then
 		       print("" .. key .. " = imageTypes[" .. entry.idx .. "] = " .. tostring(entry.type))
