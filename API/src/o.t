@@ -1090,7 +1090,7 @@ local function createfunction(problemspec,name,exps,usebounds,W,H)
         print("----------------------")
     end
     
-    if true or verboseAD then
+    if verboseAD then
         printschedule(instructions,regcounts)
     end
     

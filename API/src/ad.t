@@ -48,11 +48,24 @@ function Shape:isprefixof(rhs)
     end
     return true
 end
-function Shape:join(rhs)
-    if self:isprefixof(rhs) then return rhs
-    elseif rhs:isprefixof(self) then return self
-    else return nil end
+local function joinshapes(shapes)
+    local longest = scalarshape
+    for i,s in ipairs(shapes) do
+        assert(Shape:is(s),"not a shape")
+        if #s.keys > #longest.keys then
+            longest = s
+        end
+    end
+    for i = 1,#longest.keys do
+        local lk = longest.keys[i]
+        for _,s in ipairs(shapes) do
+            local k = s.keys[i]
+            if k and k ~= lk then return nil end 
+        end
+    end
+    return longest
 end
+
 function Shape:fromreduction()
     if #self.keys == 0 then return nil end
     local newkeys = terralib.newlist()
@@ -93,17 +106,20 @@ function Exp:type()
     assert(self.type_ == bool or self.type_ == float) 
     return self.type_ 
 end
-
+function Exp:shape()
+    assert(Shape:is(self.shape_),"not a shape?")
+    return self.shape_
+end
 function Const:__tostring() return tostring(self.v) end
 
 local function newapply(op,config,args)
     assert(not op.nparams or #args == op.nparams)
     assert(type(config) == "table")
     local id = allocid()
-    return Apply:new { op = op, args = args, config = config, id = id, type_ = op:propagatetype(args) }
+    return Apply:new { op = op, args = args, config = config, id = id, type_ = op:propagatetype(args), shape_ = joinshapes(args:map("shape")) }
 end
 
-local getconst = terralib.memoize(function(n) return Const:new { v = n, id = allocid(), type_ = float } end)
+local getconst = terralib.memoize(function(n) return Const:new { v = n, id = allocid(), type_ = float, shape_ = scalarshape } end)
 local function toexp(n)
     if n then 
         if Exp:is(n) then return n
@@ -346,7 +362,11 @@ setmetatable(v,{__index = function(self,key)
         type_ = key:type()
     end 
     assert(type_ == float or type_ == bool, "variable with key exists with a different type")
-    local r = Var:new { type_ = type_, key_ = assert(key), id = allocid() }
+    local shape = scalarshape
+    if type(key) == "table" and type(key.shape) == "function" then
+        shape = key:shape()
+    end
+    local r = Var:new { type_ = type_, key_ = assert(key), id = allocid(), shape_ = shape }
     v[key] = r
     return r
 end})
@@ -357,6 +377,7 @@ local x,y,z = v[1],v[2],v[3]
 ad.v = v
 ad.toexp = toexp
 ad.newclass = newclass
+ad.Shape = Shape
 
 function ad.Vector(...)
     local data = terralib.newlist()
@@ -634,7 +655,7 @@ local function expstostring(es)
                 registerforexp(c)
             end
             if shouldprint[e] then
-                tbl:insert(("[%2d,%d]  r%d = %s\n"):format(registerforexp(e),e.id,i,emitapp(e)))
+                tbl:insert(("[%2d,%d]  r%d : %s %s = %s\n"):format(registerforexp(e),e.id,i,e:type(),e:shape(),emitapp(e)))
             end
         end
     end
