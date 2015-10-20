@@ -38,6 +38,33 @@ end
 
 local Op = newclass("Op") -- a primitive operator like + or sin
 
+local Shape = newclass("Shape")
+function Shape:fromkeys(keys) return Shape:new { keys = terralib.newlist(keys) } end
+local scalarshape = Shape:fromkeys {} 
+function Shape:isprefixof(rhs)
+    if #self.keys > #rhs.keys then return false end
+    for i,k in ipairs(self.keys) do
+        if k ~= rhs.keys[i] then return false end
+    end
+    return true
+end
+function Shape:join(rhs)
+    if self:isprefixof(rhs) then return rhs
+    elseif rhs:isprefixof(self) then return self
+    else return nil end
+end
+function Shape:fromreduction()
+    if #self.keys == 0 then return nil end
+    local newkeys = terralib.newlist()
+    for i = 1,#self.keys-1 do
+        newkeys[i] = self.keys[i]
+    end
+    return Shape:fromkeys(keys)
+end
+function Shape:__tostring()
+    return "{"..table.concat(self.keys:map(tostring),",").."}"
+end
+
 local Exp = newclass("Exp") -- an expression involving primitives
 local Var = Exp:Variant("Var") -- a variable
 local Apply = Exp:Variant("Apply") -- an application
