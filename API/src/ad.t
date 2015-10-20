@@ -72,7 +72,7 @@ function Shape:fromreduction()
     for i = 1,#self.keys-1 do
         newkeys[i] = self.keys[i]
     end
-    return Shape:fromkeys(keys)
+    return Shape:fromkeys(newkeys)
 end
 function Shape:__tostring()
     return "{"..table.concat(self.keys:map(tostring),",").."}"
@@ -82,6 +82,7 @@ local Exp = newclass("Exp") -- an expression involving primitives
 local Var = Exp:Variant("Var") -- a variable
 local Apply = Exp:Variant("Apply") -- an application
 local Const = Exp:Variant("Const") -- a constant, C
+local Reduce = Exp:Variant("Reduce") -- summation across the inner-most shape
 local ExpVector = newclass("ExpVector")
 
 local nextid = 0
@@ -101,6 +102,7 @@ end
 local empty = terralib.newlist {}
 function Exp:children() return empty end
 function Apply:children() return self.args end 
+function Reduce:children() return self.args end
 
 function Exp:type() 
     assert(self.type_ == bool or self.type_ == float) 
@@ -133,7 +135,13 @@ local function toexp(n)
     end
     return nil
 end
-
+local getreduce = terralib.memoize(function(v) 
+    assert(Exp:is(v))
+    local ns = assert(v:shape():fromreduction(),"attempting to reduce a scalar value") 
+    local typ = v:type()
+    return Reduce:new { args = terralib.newlist{v}, v = v, type_ = typ, shape_ = ns, id = allocid() }
+end)
+ 
 local zero,one,negone = toexp(0),toexp(1),toexp(-1)
 local function allconst(args)
     for i,a in ipairs(args) do
@@ -514,6 +522,8 @@ function Exp:rename(vars)
             local nv = toexp(varsf(self:key()))
             return assert(nv,
                           ("rename: unknown invalid mapping for variable %s which maps to %s"):format(tostring(self:key()),tostring(nv)))
+        elseif self.kind == "Reduce" then
+            return getreduce(visitcached(self.v))
         end
     end
     local cached = {} 
@@ -531,8 +541,8 @@ local function countuses(es)
     local uses = {}
     local function count(e)
         uses[e] = (uses[e] or 0) + 1
-        if uses[e] == 1 and e.kind == "Apply" then
-            for i,a in ipairs(e.args) do count(a) end
+        if uses[e] == 1  then
+            for i,a in e:children() do count(a) end
         end
     end
     for i,a in ipairs(es) do 
@@ -578,7 +588,7 @@ local function expstostring(es)
         freeregisters:insert(i)
     end
     local function registerforexp(e)
-        if e.kind ~= "Apply" then return -1 end -- no registers for const/var
+        if e.kind == "Apply" or e.kind == "Const" then return -1 end -- no registers for const/var
         if exptoreg[e] then return exptoreg[e] end
         local r
         if #freeregisters > 0 then 
@@ -643,19 +653,24 @@ local function expstostring(es)
         return ("%s(%s)"):format(name,e.args:map(stringforuse):concat(","))
     end
     
-    
     local estring = es:map(stringforuse):concat(",")
     
     local tbl = terralib.newlist()
     for i = #linearized,1,-1 do
         local e = linearized[i]
-        if e.kind == "Apply" then
+        if e.kind == "Apply" or e.kind == "Reduce" then
             releaseregister(registerforexp(e))
             for i,c in ipairs(e:children()) do
                 registerforexp(c)
             end
             if shouldprint[e] then
-                tbl:insert(("[%2d,%d]  r%d : %s %s = %s\n"):format(registerforexp(e),e.id,i,e:type(),e:shape(),emitapp(e)))
+                local rhs
+                if e.kind == "Reduce" then
+                    rhs = ("Reduce(%s)"):format(stringforuse(e.v))
+                else
+                    rhs = emitapp(e)
+                end
+                tbl:insert(("[%2d,%d]  r%d : %s %s = %s\n"):format(registerforexp(e),e.id,i,e:type(),e:shape(),rhs))
             end
         end
     end
@@ -794,6 +809,8 @@ function Apply:calcd(v)
     return r
 end
 
+function Reduce:calcd(v) error("NYI - derivatives on reduce") end
+function Reduce:partials() error("NYI - derivatives on reduce") end
 --calc d(thisexpress)/d(exps[1]) ... d(thisexpress)/d(exps[#exps]) (i.e. the gradient of this expression with relation to the inputs) 
 function Exp:gradient(exps)
     exps = terralib.islist(exps) and exps or terralib.newlist(exps)
@@ -944,7 +961,7 @@ ad.not_:define(function(x) return `not x end, 0)
 
 setmetatable(ad,nil) -- remove special metatable that generates new blank ops
 
-ad.Var,ad.Apply,ad.Const,ad.Exp = Var, Apply, Const, Exp
+ad.Var,ad.Apply,ad.Const,ad.Exp,ad.Reduce = Var, Apply, Const, Exp, Reduce
 
 function ad.polysimplify(exps)
     local function sumtoterms(sum)
@@ -1127,5 +1144,17 @@ local foo = 3*x^50 - x*2 - 1
 
 print(foo)
 print(foo:d(x))
+local VC = newclass("VC")
+function VC:__tostring() return "VC" end
+function VC:shape() return Shape:fromkeys{1,2} end 
+
+local vx = ad.v[ VC:new {} ]
+local r = (x + getreduce(y + vx))
+print(r)
+local rr = r:rename(function(x) if x == "y" then return ad.v.x else return ad.v[x] end end)
+print(rr)
 ]]
+local x,y,z = ad.v.x, ad.v.y, ad.v.z
+
+
 return ad
