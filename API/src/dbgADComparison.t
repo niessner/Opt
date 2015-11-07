@@ -210,7 +210,6 @@ local function run(file1, file2, inputImageTypesFile, inputImageFiles, inputPara
 	 opt.strides[i-1] = 4*W*chans[i]
       end
    else 
-      assert(inputImageTypesFile, "Must have at least one of inputImageTypesFile and inputImageFile") 
       local chans = loadParameters(inputImageTypesFile)
 
       for i=0,#chans-1 do 
@@ -411,5 +410,14 @@ option = parser:option("-t --imagetypes", "File with # of floating-point channel
 local args = parser:parse()
 
 
-run(args["input0"], args["input1"], args["imagetypes"], args["images"], args["parameters"])
+
+
+if not (args["imagetypes"] or (#args["images"] > 0)) then
+    print("Must have at least one of inputImageTypesFile and inputImageFile") 
+    print(parser:get_help())
+else
+    run(args["input0"], args["input1"], args["imagetypes"], args["images"], args["parameters"])
+end
+
+
 

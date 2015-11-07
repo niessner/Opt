@@ -20,6 +20,7 @@ util.C = terralib.includecstring [[
 local C = util.C
 
 local cuda_version = cudalib.localversion()
+
 local libdevice = terralib.cudahome..string.format("/nvvm/libdevice/libdevice.compute_%d.10.bc",cuda_version)
 local extern = terralib.externfunction
 if terralib.linkllvm then
@@ -275,7 +276,7 @@ local terra warpReduce(val : float)
     val = val + __shfl_down(val, offset, warpSize);
     offset =  offset >> 1
   end
--- Is unrolling worth it
+-- Is unrolling worth it?
   return val;
 
 end

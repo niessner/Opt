@@ -22,7 +22,7 @@ local C,CN = terralib.includecstring[[
     #include <Windows.h>
     #include <Shlwapi.h>
     #endif
-    #include "terra.h"
+    #include "terra/terra.h"
 ]]
 
 
