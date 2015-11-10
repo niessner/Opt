@@ -1,22 +1,18 @@
 .PHONY:	all clean purge
 
+# If the defaults for TERRAHOME and TERRA are not right for your installation, create a Makefile.inc
+# and set them up there
+
+-include Makefile.inc
+
 # Setup-specific variables
 CUDAHOME = /usr/local/cuda
-TERRAHOME = $(HOME)/terra/release
-TERRA = $(HOME)/terra/terra
+TERRAHOME ?= $(HOME)/terra/release
+TERRA ?= $(HOME)/terra/terra
 MLIB = ../mLib
 
-# Modify to work on Michael's laptop
-#ifeq ($(UNAME), Darwin)
-#  TERRAHOME = $(HOME)/terra/lib
-#  TERRA = $(HOME)/terra/bin/terra
-#endif
-
-
-
-UNAME := $(shell uname)
-
 CXX = clang++
+LINK = $(CXX)
 
 
 UNAME := $(shell uname)
@@ -27,13 +23,11 @@ endif
 
 
 FLAGS = -O3 -g -MD -Ibuild  -I$(TERRAHOME)/include -I$(CUDAHOME)/include -I$(MLIB)/include -I../Framework -std=c++11 -ferror-limit=0
-LFLAGS = -Lbuild -L$(CUDAHOME)/lib$(S4) -Wl,-rpath,$(CUDAHOME)/lib$(S4) -lcudart -lOpt -Wl,-rpath,$(shell pwd)/build -L$(TERRAHOME) -lterra -Wl,-rpath,$(TERRAHOME)
+LFLAGS = -Lbuild -L$(CUDAHOME)/lib$(S4) -Wl,-rpath,$(CUDAHOME)/lib$(S4) -lcudart -lOpt -Wl,-rpath,$(shell pwd)/build -L$(TERRAHOME)/lib -lterra -Wl,-rpath,$(TERRAHOME)/lib
 
 ifeq ($(UNAME), Darwin)
   LFLAGS += -pagezero_size 10000 -image_base 100000000
 endif
-
-LINK = clang++
 
 EXAMPLE = example/example
 TEST = test/test

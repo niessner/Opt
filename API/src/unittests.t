@@ -6,7 +6,6 @@ local stb = terralib.includecstring [[
 #include "stb_perlin.c"
 ]]
 
-
 -- Operates on floating point images
 local terra perlinNoise(img : &float, width : int, height : int, channels : int, seed : float)
    for j=0,height do

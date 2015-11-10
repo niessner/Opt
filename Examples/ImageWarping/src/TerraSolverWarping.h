@@ -34,7 +34,6 @@ public:
 			sizeof(float)
 		};
 		uint32_t dims[] = { width, height };
-
 		m_plan = Opt_ProblemPlan(m_optimizerState, m_problem, dims, elemsizes, strides, nullptr, nullptr, nullptr);
 
 		m_width = width;

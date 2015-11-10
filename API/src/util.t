@@ -355,7 +355,7 @@ local cd = macro(function(cufunc)
     return quote
         var r = cufunc
         if r ~= 0 then  
-            C.printf("cuda reported error %d",r)
+            C.printf("Cuda reported error %d\n",r)
             return r
         end
     end
@@ -385,10 +385,9 @@ local makeGPULauncher = function(compiledKernel, kernelName, header, footer, pro
 			C.cudaEventCreate(&timingInfo.endEvent)
 	        C.cudaEventRecord(timingInfo.startEvent, stream)
 			timingInfo.eventName = kernelName
-	    end
-	    compiledKernel(&launch, @pd, params)
+		end
+		compiledKernel(&launch, @pd, params)
 	    cd(C.cudaGetLastError())
-		
 		
 		if ([timeIndividualKernels]) then
 			cd(C.cudaEventRecord(timingInfo.endEvent, stream))

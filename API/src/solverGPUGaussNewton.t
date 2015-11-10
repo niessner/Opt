@@ -228,10 +228,16 @@ return function(problemSpec, vars)
 			end
 		end
 		local function header(pd)
-			return quote @pd.scratchF = 0.0f end
+		    return quote
+			C.cudaMemset(pd.scratchF, 0, sizeof(float))
+		    end
 		end
 		local function footer(pd)
-			return quote return @pd.scratchF end
+		    return quote
+			var f : float
+			C.cudaMemcpy(&f, pd.scratchF, sizeof(float), C.cudaMemcpyDeviceToHost)
+			return f
+		    end
 		end
 		
 		return { kernel = computeCostGPU, header = header, footer = footer, mapMemberName = "X" }
@@ -360,7 +366,6 @@ return function(problemSpec, vars)
 	local terra step(data_ : &opaque, images : &&opaque, edgeValues : &&opaque, params_ : &&opaque, solverparams : &&opaque)
 		var pd = [&PlanData](data_)
 		pd.parameters = [util.getParameters(problemSpec, images, edgeValues,params_)]
-
 		escape 
 	    	if util.debugDumpInfo then
 	    		emit quote
@@ -375,12 +380,12 @@ return function(problemSpec, vars)
 	    		end
 	    	end
 		end
-	
+
 		if pd.nIter < pd.nIterations then
 		    var startCost = gpu.computeCost(pd)
 			logSolver("iteration %d, cost=%f\n", pd.nIter, startCost)
 			
-			pd.scanAlpha[0] = 0.0	--scan in PCGInit1 requires reset
+			C.cudaMemset(pd.scanAlpha, 0, sizeof(float))	--scan in PCGInit1 requires reset
 			gpu.PCGInit1(pd)
 			gpu.PCGInit2(pd)
 			
@@ -397,10 +402,10 @@ return function(problemSpec, vars)
 		    	end
 		    end
 
-			for lIter = 0, pd.lIterations do	
-				pd.scanAlpha[0] = 0.0	--scan in PCGStep1 requires reset
+		for lIter = 0, pd.lIterations do
+		                C.cudaMemset(pd.scanAlpha, 0, sizeof(float))
 				gpu.PCGStep1(pd)
-				pd.scanBeta[0] = 0.0	--scan in PCGStep2 requires reset
+				C.cudaMemset(pd.scanBeta, 0, sizeof(float))
 				gpu.PCGStep2(pd)
 				gpu.PCGStep3(pd)
 				
@@ -440,11 +445,10 @@ return function(problemSpec, vars)
 		pd.preconditioner:initGPU()
 		pd.rDotzOld:initGPU()
 		
-		--TODO make this exclusively GPU
-		C.cudaMallocManaged([&&opaque](&(pd.scanAlpha)), sizeof(float), C.cudaMemAttachGlobal)
-		C.cudaMallocManaged([&&opaque](&(pd.scanBeta)), sizeof(float), C.cudaMemAttachGlobal)
+		C.cudaMalloc([&&opaque](&(pd.scanAlpha)), sizeof(float))
+		C.cudaMalloc([&&opaque](&(pd.scanBeta)), sizeof(float))
 		
-		C.cudaMallocManaged([&&opaque](&(pd.scratchF)), sizeof(float), C.cudaMemAttachGlobal)
+		C.cudaMalloc([&&opaque](&(pd.scratchF)), sizeof(float))
 		return &pd.plan
 	end
 	return makePlan

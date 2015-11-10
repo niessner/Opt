@@ -10,16 +10,17 @@ struct TimingInfo {
     std::string eventName;
 };
 
-/** Copied wholesale from mLib, so nvcc doesn't choke. */
+/** Copied wholesale from mLib, so nvcc doesn't choke. Then modified, since nvcc doesn't seem to support C++11 on Michael's computer */
+
 template<class T>
 int findFirstIndex(const std::vector<T> &collection, const T &value)
 {
-    int index = 0;
-    for (const auto &element : collection)
+
+
+    for (int i = 0; i < collection.size(); ++i)
     {
-        if (element == value)
-            return index;
-        index++;
+        if (collection[i] == value)
+            return i;
     }
     return -1;
 }

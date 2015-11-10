@@ -194,7 +194,7 @@ local function saveaslibrary(libraryname, terrasourcefile)
     
     local flags = {}
     if ffi.os == "OSX" then
-        flags = { "-install_name", "@rpath/"..libraryfmtname }
+        flags = { "-install_name", "@rpath/"..libraryfmtname, "-L"..terralib.terrahome.."/lib", "-lterra" }
     elseif ffi.os == "Windows" then
 		flags = terralib.newlist { string.format("/IMPLIB:%s.lib",libraryname),terralib.terrahome.."\\terra.lib",terralib.terrahome.."\\lua51.lib","Shlwapi.lib" }
         
