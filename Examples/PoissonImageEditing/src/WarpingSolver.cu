@@ -93,7 +93,7 @@ __global__ void PCGInit_Kernel1(SolverInput input, SolverState state, SolverPara
 	}
 	else
 	{
-		state.d_p[x] = make_float4(0.0f, 0.0f, 0.0f, 0.0f);
+	//	state.d_p[x] = make_float4(0.0f, 0.0f, 0.0f, 0.0f); Bad Ideas CHECKCHECK
 	}
 
 	bucket[threadIdx.x] = d;
