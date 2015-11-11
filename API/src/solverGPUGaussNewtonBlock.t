@@ -236,12 +236,18 @@ return function(problemSpec, vars)
 			end
 			
 			
-		end
+	        end
 		local function header(pd)
-			return quote @pd.scratchF = 0.0f end
+		    return quote
+			C.cudaMemset(pd.scratchF, 0, sizeof(float))
+		    end
 		end
 		local function footer(pd)
-			return quote return @pd.scratchF end
+		    return quote
+			var f : float
+			C.cudaMemcpy(&f, pd.scratchF, sizeof(float), C.cudaMemcpyDeviceToHost)
+			return f
+		    end
 		end
 		
 		return { kernel = computeCostGPU, header = header, footer = footer, mapMemberName = "X" }
@@ -513,8 +519,8 @@ return function(problemSpec, vars)
 		pd.plan.init,pd.plan.step = init,step
 
 		--pd.delta:initGPU()
+		C.cudaMalloc([&&opaque](&(pd.scratchF)), sizeof(float))
 		
-		C.cudaMallocManaged([&&opaque](&(pd.scratchF)), sizeof(float), C.cudaMemAttachGlobal)
 		--var err = C.cudaMallocManaged([&&opaque](&(pd.scratchF)), sizeof(float), C.cudaMemAttachGlobal)
 		--if err ~= 0 then C.printf("cudaMallocManaged error: %d", err) end
 		return &pd.plan
