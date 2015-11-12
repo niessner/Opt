@@ -1708,6 +1708,7 @@ inline __device__ __host__ matNxM<3, 1>::operator float3()
 	return make_float3(entries[0], entries[1], entries[2]);
 }
 
+template<>
 inline __device__ __host__ matNxM<4, 1>::operator float4()
 {
 	return make_float4(entries[0],  entries[1], entries[2], entries[3]);
