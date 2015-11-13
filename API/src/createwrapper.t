@@ -119,8 +119,9 @@ local function saveaslibrary(libraryname, terrasourcefile)
         C.strncat(path,terrapath,4096)
         C.lua_getfield(L,LUA_GLOBALSINDEX,"package")
         C.lua_getfield(L,-1,"terrapath")
+		C.lua_pushstring(L,";")
         C.lua_pushstring(L,path)
-        C.lua_concat(L,2)
+        C.lua_concat(L,3)
         C.lua_setfield(L,-2,"terrapath")
         C.lua_getfield(L,LUA_GLOBALSINDEX,"require")
         C.lua_pushstring(L,packagename)
@@ -196,7 +197,7 @@ local function saveaslibrary(libraryname, terrasourcefile)
     if ffi.os == "OSX" then
         flags = { "-install_name", "@rpath/"..libraryfmtname, "-L"..terralib.terrahome.."/lib", "-lterra" }
     elseif ffi.os == "Windows" then
-		flags = terralib.newlist { string.format("/IMPLIB:%s.lib",libraryname),terralib.terrahome.."\\terra.lib",terralib.terrahome.."\\lua51.lib","Shlwapi.lib" }
+		flags = terralib.newlist { string.format("/IMPLIB:%s.lib",libraryname),terralib.terrahome.."\\lib\\terra.lib",terralib.terrahome.."\\lib\\lua51.lib","Shlwapi.lib" }
         
 		for i,k in ipairs(names) do
             flags:insert("/EXPORT:"..k)

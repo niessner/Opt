@@ -19,9 +19,9 @@ util.C = terralib.includecstring [[
 ]]
 local C = util.C
 
-local cuda_version = cudalib.localversion()
+local cuda_compute_version = 30
+local libdevice = terralib.cudahome..string.format("/nvvm/libdevice/libdevice.compute_%d.10.bc",cuda_compute_version)
 
-local libdevice = terralib.cudahome..string.format("/nvvm/libdevice/libdevice.compute_%d.10.bc",cuda_version)
 local extern = terralib.externfunction
 if terralib.linkllvm then
     local obj = terralib.linkllvm(libdevice)

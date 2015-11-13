@@ -1,7 +1,6 @@
 echo Remaking Opt.dll
 set TERRAHOME=%1
-set TERRA=%TERRAHOME%\release\terra
-set LUAHOME=%TERRAHOME%\..\LuaJIT-2.0.3
+set TERRA=%TERRAHOME%\release\bin\terra
 set OPT_DIR=%2
 set TARGET_DIR=%3
 
