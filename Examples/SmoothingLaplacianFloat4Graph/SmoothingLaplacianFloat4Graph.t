@@ -42,23 +42,32 @@ local terra cost(i : int32, j : int32, gi : int32, gj : int32, self : P:Paramete
 	
 	var v2 = x - a
 	var e_fit = w_fit * v2 * v2	
+
 	
 	var laplacian : unknownElement = 0.0f
 	for adj in self.G:neighbors(i,j) do
-		var l_n = x - self.X(adj.x,adj.y)
-		laplacian = laplacian + (l_n*l_n)
+--	    if (i == 0)
+--	    res = res + 1.0f
+--	    IO.printf("Adjacency!\n");
+	    var l_n = x - self.X(adj.x,adj.y)
+	    laplacian = laplacian + (l_n*l_n)
 	end
 		
 	var e_reg = w_reg*laplacian
-	
+
 	var res : float = 
 		e_fit(0) + e_fit(1) + e_fit(2) + e_fit(3) +
 		e_reg(0) + e_reg(1) + e_reg(2) + e_reg(3)
 	
+--[[	res = 0.0f
+	if (i==0) then
+	    res = [float](self.G.rowpointer[2])
+	end
+		
+		]]--
 	--if gi == 0 and gj == 0 or gi == 10 and gj == 10 then
 	--	printf("cost=%f (%d|%d); x=%f\n", e_reg(0), int(gi), int(gj), x(0)) 
 	--end
-	
 	return res
 end
 

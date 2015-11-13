@@ -3,13 +3,19 @@
 
 int main(int argc, const char * argv[])
 {
-	// MONA
-	const std::string inputImage = "MonaSource1.png";
+
+        
+        // MONA
+	std::string inputImage = "MonaSource1.png";
+	if (argc >= 2) {
+	  inputImage = std::string(argv[1]);
+	}
+
 	ColorImageR8G8B8A8	   image = LodePNG::load(inputImage);
 	ColorImageR32G32B32A32 imageR32(image.getWidth(), image.getHeight());
 	for (unsigned int y = 0; y < image.getHeight(); y++) {
 		for (unsigned int x = 0; x < image.getWidth(); x++) {
-			imageR32(x,y) = image(x,y);
+			imageR32(x,y) = image(x,y);		
 		}
 	}
 	

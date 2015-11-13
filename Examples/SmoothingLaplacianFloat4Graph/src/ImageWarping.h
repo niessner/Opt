@@ -6,7 +6,7 @@
 #include <cudaUtil.h>
 
 #include "CUDAWarpingSolver.h"
-#include "CUDAPatchSolverWarping.h"
+
 #include "TerraSolverWarpingFloat4.h"
 
 class ImageWarping {
@@ -23,10 +23,8 @@ public:
 
 		resetGPUMemory();
 
-		/*
+		
 		m_warpingSolver	= new CUDAWarpingSolver(m_image.getWidth(), m_image.getHeight());
-		m_patchSolver = new CUDAPatchSolverWarping(m_image.getWidth(), m_image.getHeight());
-		*/
 		m_terraSolverFloat4 = new TerraSolverWarpingFloat4(m_image.getWidth(), m_image.getHeight(), "smoothingLaplacianFloat4Graph.t", "gaussNewtonGPU");
 		/*		m_terraBlockSolverFloat4 = new TerraSolverWarpingFloat4(m_image.getWidth(), m_image.getHeight(), "smoothingLaplacianFloat4AD.t", "gaussNewtonBlockGPU");*/
 		
@@ -67,8 +65,8 @@ public:
 		cutilSafeCall(cudaFree(d_imageFloat));
 		cutilSafeCall(cudaFree(d_targetFloat));
 
-		//		SAFE_DELETE(m_warpingSolver);
-		//		SAFE_DELETE(m_patchSolver);
+		SAFE_DELETE(m_warpingSolver);
+
 		SAFE_DELETE(m_terraSolverFloat4);
 		//		SAFE_DELETE(m_terraBlockSolverFloat4);
 	}
@@ -82,27 +80,18 @@ public:
 		unsigned int linearIter = 10;
 		unsigned int patchIter = 16;
 
-		/*
+				
 		std::cout << "CUDA" << std::endl;
 		resetGPUMemory();
 		m_warpingSolver->solveGN(d_imageFloat4, d_targetFloat4, nonLinearIter, linearIter, weightFit, weightReg);
 		copyResultToCPUFromFloat4();
 		
-		std::cout << "\n\nCUDA_PATCH" << std::endl;
-		resetGPUMemory();
-		m_patchSolver->solveGN(d_imageFloat4, d_targetFloat4, nonLinearIter, linearIter, patchIter, weightFit, weightReg);
-		copyResultToCPUFromFloat4();
-		*/
-		std::cout << "\n\nTERRA_FLOAT4" << std::endl;
+
+		std::cout << "\n\nTERRA" << std::endl;
 		resetGPUMemory();
 		m_terraSolverFloat4->solve(d_imageFloat4, d_targetFloat4, nonLinearIter, linearIter, patchIter, weightFit, weightReg);
 		copyResultToCPUFromFloat4();
-		/*
-		std::cout << "\n\nTERRA_BLOCK" << std::endl;
-		resetGPUMemory();
-		m_terraBlockSolverFloat4->solve(d_imageFloat4, d_targetFloat4, nonLinearIter, linearIter, patchIter, weightFit, weightReg);
-		copyResultToCPUFromFloat4();		
-		*/
+		
 		return &m_result;
 	}
 
@@ -135,7 +124,7 @@ private:
 	float4* d_targetFloat4;
 	
 	CUDAWarpingSolver*			m_warpingSolver;
-	CUDAPatchSolverWarping*		m_patchSolver;
+
 	TerraSolverWarpingFloat4*	m_terraSolverFloat4; 
 	TerraSolverWarpingFloat4*	m_terraBlockSolverFloat4;
 

@@ -35,18 +35,18 @@ __global__ void EvalResidualDevice(SolverInput input, SolverState state, SolverP
 {
 	const unsigned int N = input.N; // Number of block variables
 	const unsigned int x = blockIdx.x * blockDim.x + threadIdx.x;
-
+	float residual = 0.0f;
 	if (x < N)
 	{
-		float residual = evalFDevice(x, input, state, parameters);
-		residual = warpReduce(residual);
+	  residual = evalFDevice(x, input, state, parameters);
+	}
+	residual = warpReduce(residual);
 
-		unsigned int laneid;
-		//This command gets the lane ID within the current warp
-		asm("mov.u32 %0, %%laneid;" : "=r"(laneid));
-		if (laneid == 0) {
-			atomicAdd(&state.d_sumResidual[0], residual);
-		}
+	unsigned int laneid;
+	//This command gets the lane ID within the current warp
+	asm("mov.u32 %0, %%laneid;" : "=r"(laneid));
+	if (laneid == 0) {
+	  atomicAdd(&state.d_sumResidual[0], residual);
 	}
 }
 
@@ -94,7 +94,7 @@ __global__ void PCGInit_Kernel1(SolverInput input, SolverState state, SolverPara
 	}
 	else
 	{
-		state.d_p[x] = make_float4(0.0f, 0.0f, 0.0f, 0.0f);
+	  //state.d_p[x] = make_float4(0.0f, 0.0f, 0.0f, 0.0f); Why are we writing off the edge?!
 	}
 
 	bucket[threadIdx.x] = d;

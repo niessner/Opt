@@ -274,5 +274,4 @@ src/main.o: src/main.cpp src/main.h src/resource.h src/mLibInclude.h \
   src/cutil/inc/drvapi_error_string.h src/cutil/inc/string_helper.h \
   src/cutil/inc/cutil_math.h src/CUDAWarpingSolver.h \
   src/WarpingSolverParameters.h src/WarpingSolverState.h \
-  src/CUDAPatchSolverWarping.h src/PatchSolverWarpingState.h \
   src/TerraSolverWarpingFloat4.h ../../API/build/Opt.h

@@ -54,7 +54,8 @@ public:
 		    }
 		  }
 		}
-
+		offsets.push_back(xCoords.size());
+		
 		d_offsets = createDeviceBuffer(offsets);
 		d_xCoords = createDeviceBuffer(xCoords);
 		d_yCoords = createDeviceBuffer(yCoords);
