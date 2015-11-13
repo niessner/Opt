@@ -5,6 +5,7 @@
 #include <cuda_runtime.h>
 #include <cudaUtil.h>
 
+#include "TerraWarpingSolver.h"
 #include "CUDAWarpingSolver.h"
 #include "OpenMesh.h"
 
@@ -28,6 +29,7 @@ class ImageWarping
 			resetGPUMemory();
 
 			m_warpingSolver	= new CUDAWarpingSolver(N);
+			m_terraWarpingSolver = new TerraWarpingSolver(N, 2*E, d_neighbourIdx, d_neighbourOffset, "MeshSmoothingLaplacian.t", "gaussNewtonGPU");
 		}
 
 		void resetGPUMemory()
@@ -51,8 +53,8 @@ class ImageWarping
 			h_neighbourOffset[0] = 0;
 			for (SimpleMesh::VertexIter v_it = m_result.vertices_begin(); v_it != m_result.vertices_end(); ++v_it)
 			{
-				VertexHandle c_vh(v_it.handle());
-
+			        VertexHandle c_vh(v_it.handle());
+				//				printf("%d\n", c_vh.idx());
 				unsigned int valance = m_result.valence(c_vh);
 				h_numNeighbours[count] = valance;
 
@@ -90,6 +92,7 @@ class ImageWarping
 			cutilSafeCall(cudaFree(d_neighbourOffset));
 
 			SAFE_DELETE(m_warpingSolver);
+			SAFE_DELETE(m_terraWarpingSolver);
 		}
 
 		SimpleMesh* solve()
@@ -104,7 +107,13 @@ class ImageWarping
 			resetGPUMemory();
 			m_warpingSolver->solveGN(d_vertexPosFloat3, d_numNeighbours, d_neighbourIdx, d_neighbourOffset, d_vertexPosTargetFloat3, nonLinearIter, linearIter, weightFit, weightReg);
 			copyResultToCPUFromFloat3();
-		
+			
+			std::cout << "TERRA" << std::endl;
+			resetGPUMemory();
+			m_terraWarpingSolver->solve(d_vertexPosFloat3, d_vertexPosTargetFloat3, nonLinearIter, linearIter, 1, weightFit, weightReg);
+			copyResultToCPUFromFloat3();
+			
+			
 			return &m_result;
 		}
 
@@ -132,5 +141,6 @@ class ImageWarping
 		int*	d_neighbourIdx;
 		int* 	d_neighbourOffset;
 
+		TerraWarpingSolver* m_terraWarpingSolver;
 		CUDAWarpingSolver* m_warpingSolver;
 };

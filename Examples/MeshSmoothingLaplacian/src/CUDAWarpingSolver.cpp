@@ -40,6 +40,8 @@ void CUDAWarpingSolver::solveGN(float3* d_vertexPosFloat3, int* d_numNeighbours,
 {
 	m_solverState.d_target = d_vertexPosTargetFloat3;
 	m_solverState.d_x = d_vertexPosFloat3;
+
+	printf("Fit: %f; Reg %f\n", weightFit, weightReg);
 	
 	SolverParameters parameters;
 	parameters.weightFitting = weightFit;
