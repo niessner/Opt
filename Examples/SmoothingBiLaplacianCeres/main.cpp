@@ -1,4 +1,4 @@
-// Ceres Solver - A fast non-linear least squares minimizer
+﻿// Ceres Solver - A fast non-linear least squares minimizer
 // Copyright 2010, 2011, 2012 Google Inc. All rights reserved.
 // http://code.google.com/p/ceres-solver/
 //
@@ -31,6 +31,7 @@
 #include "ceres/ceres.h"
 #include "glog/logging.h"
 
+using ceres::DynamicAutoDiffCostFunction;
 using ceres::AutoDiffCostFunction;
 using ceres::CostFunction;
 using ceres::Problem;
@@ -202,7 +203,14 @@ int main(int argc, char** argv) {
     std::cout << "Initial m: " << 0.0 << " c: " << 0.0 << "\n";
     std::cout << "Final   m: " << m << " c: " << c << "\n";*/
 
-    DynamicAutoDiffCostFunction<MyCostFunctor, 4> costFunction(new MyCostFunctor());
+    //DynamicAutoDiffCostFunction<MyCostFunctor, 4> costFunction(new MyCostFunctor());
+
+    Problem problem;
+
+
+
+    //for ()
+    //    problem.AddResidualBlock(costFunction);
 
     return 0;
 }
