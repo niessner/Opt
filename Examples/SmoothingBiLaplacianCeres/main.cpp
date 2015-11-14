@@ -28,6 +28,8 @@
 //
 // Author: sameeragarwal@google.com (Sameer Agarwal)
 
+#include "main.h"
+
 #include "ceres/ceres.h"
 #include "glog/logging.h"
 
@@ -38,179 +40,148 @@ using ceres::Problem;
 using ceres::Solver;
 using ceres::Solve;
 
-// Data generated using the following octave code.
-//   randn('seed', 23497);
-//   m = 0.3;
-//   c = 0.1;
-//   x=[0:0.075:5];
-//   y = exp(m * x + c);
-//   noise = randn(size(x)) * 0.2;
-//   y_observed = y + noise;
-//   data = [x', y_observed'];
+const int kStride = 4;
 
-const int kNumObservations = 67;
-const double data[] = {
-    0.000000e+00, 1.133898e+00,
-    7.500000e-02, 1.334902e+00,
-    1.500000e-01, 1.213546e+00,
-    2.250000e-01, 1.252016e+00,
-    3.000000e-01, 1.392265e+00,
-    3.750000e-01, 1.314458e+00,
-    4.500000e-01, 1.472541e+00,
-    5.250000e-01, 1.536218e+00,
-    6.000000e-01, 1.355679e+00,
-    6.750000e-01, 1.463566e+00,
-    7.500000e-01, 1.490201e+00,
-    8.250000e-01, 1.658699e+00,
-    9.000000e-01, 1.067574e+00,
-    9.750000e-01, 1.464629e+00,
-    1.050000e+00, 1.402653e+00,
-    1.125000e+00, 1.713141e+00,
-    1.200000e+00, 1.527021e+00,
-    1.275000e+00, 1.702632e+00,
-    1.350000e+00, 1.423899e+00,
-    1.425000e+00, 1.543078e+00,
-    1.500000e+00, 1.664015e+00,
-    1.575000e+00, 1.732484e+00,
-    1.650000e+00, 1.543296e+00,
-    1.725000e+00, 1.959523e+00,
-    1.800000e+00, 1.685132e+00,
-    1.875000e+00, 1.951791e+00,
-    1.950000e+00, 2.095346e+00,
-    2.025000e+00, 2.361460e+00,
-    2.100000e+00, 2.169119e+00,
-    2.175000e+00, 2.061745e+00,
-    2.250000e+00, 2.178641e+00,
-    2.325000e+00, 2.104346e+00,
-    2.400000e+00, 2.584470e+00,
-    2.475000e+00, 1.914158e+00,
-    2.550000e+00, 2.368375e+00,
-    2.625000e+00, 2.686125e+00,
-    2.700000e+00, 2.712395e+00,
-    2.775000e+00, 2.499511e+00,
-    2.850000e+00, 2.558897e+00,
-    2.925000e+00, 2.309154e+00,
-    3.000000e+00, 2.869503e+00,
-    3.075000e+00, 3.116645e+00,
-    3.150000e+00, 3.094907e+00,
-    3.225000e+00, 2.471759e+00,
-    3.300000e+00, 3.017131e+00,
-    3.375000e+00, 3.232381e+00,
-    3.450000e+00, 2.944596e+00,
-    3.525000e+00, 3.385343e+00,
-    3.600000e+00, 3.199826e+00,
-    3.675000e+00, 3.423039e+00,
-    3.750000e+00, 3.621552e+00,
-    3.825000e+00, 3.559255e+00,
-    3.900000e+00, 3.530713e+00,
-    3.975000e+00, 3.561766e+00,
-    4.050000e+00, 3.544574e+00,
-    4.125000e+00, 3.867945e+00,
-    4.200000e+00, 4.049776e+00,
-    4.275000e+00, 3.885601e+00,
-    4.350000e+00, 4.110505e+00,
-    4.425000e+00, 4.345320e+00,
-    4.500000e+00, 4.161241e+00,
-    4.575000e+00, 4.363407e+00,
-    4.650000e+00, 4.161576e+00,
-    4.725000e+00, 4.619728e+00,
-    4.800000e+00, 4.737410e+00,
-    4.875000e+00, 4.727863e+00,
-    4.950000e+00, 4.669206e+00,
-};
+struct EdgeConstraint {
+    typedef DynamicAutoDiffCostFunction<EdgeConstraint, kStride> EdgeCostFunction;
 
-struct ExponentialResidual {
-    ExponentialResidual(double x, double y)
-        : x_(x), y_(y) {}
-
-    template <typename T> bool operator()(const T* const m,
-        const T* const c,
-        T* residual) const {
-        residual[0] = T(y_) - exp(m[0] * T(x_) + c[0]);
-        return true;
-    }
-
-private:
-    const double x_;
-    const double y_;
-};
-
-struct BiLaplacianResidual {
-
-
-    template <typename T> bool operator()(const T* const values,
-        T* residual) const {
-        residual[0] = T(y_) - exp(m[0] * T(x_) + c[0]);
-        return true;
-    }
-
-
-};
-
-struct BiLaplacianEdgeResidual {
-    BiLaplacianEdgeResidual(int _pixel0, int _pixel1)
-        : pixel0(_pixel0), pixel1(_pixel1) {}
+    EdgeConstraint(int _pixel0, int _pixel1, float _weight)
+        : pixel0(_pixel0), pixel1(_pixel1), weight(_weight) {}
 
     template<typename T>
     bool operator()(T const* const* parameters, T* residuals) const
     {
-        residuals[0] = parameters[pixel0][0] - parameters[pixel1][0];
+        residuals[0] = (parameters[0][0] - parameters[1][0]) * T(weight);
+        return true;
+    }
+
+    static EdgeCostFunction* Create(int pixel0, int pixel1, float weight,
+        vector<double>& values,
+        vector<double*>& parameterBlocks) {
+        auto constraint = new EdgeConstraint(pixel0, pixel1, weight);
+        auto costFunction = new EdgeCostFunction(constraint);
+        
+        // Add all the parameter blocks that affect this constraint.
+        parameterBlocks.clear();
+        
+        cout << pixel0 << "v" << pixel1 << endl;
+        parameterBlocks.push_back(&(values[pixel0]));
+        costFunction->AddParameterBlock(1);
+
+        parameterBlocks.push_back(&(values[pixel1]));
+        costFunction->AddParameterBlock(1);
+
+        costFunction->SetNumResiduals(1);
+        return costFunction;
     }
 
 private:
     const int pixel0;
     const int pixel1;
+    const float weight;
 };
 
-struct BiLaplacianReconstructionResidual {
-    BiLaplacianReconstructionResidual(int _pixel, float _value)
-        : pixel(_pixel), value(_value) {}
+struct ReconstructionConstraint {
+    typedef DynamicAutoDiffCostFunction<ReconstructionConstraint, kStride> ReconstructionCostFunction;
+
+    ReconstructionConstraint(int _pixel, float _value, float _weight)
+        : pixel(_pixel), value(_value), weight(_weight) {}
 
     template<typename T>
     bool operator()(T const* const* parameters, T* residuals) const
     {
-        residuals[0] = parameters[pixel][0] - T(value);
+        residuals[0] = (parameters[0][0] - T(value)) * T(weight);
+        return true;
+    }
+
+    static ReconstructionCostFunction* Create(int pixel, float value, float weight,
+        vector<double>& values,
+        vector<double*>& parameterBlocks) {
+        auto constraint = new ReconstructionConstraint(pixel, value, weight);
+        auto costFunction = new ReconstructionCostFunction(constraint);
+
+        // Add all the parameter blocks that affect this constraint.
+        parameterBlocks.clear();
+
+        parameterBlocks.push_back(&(values[pixel]));
+        costFunction->AddParameterBlock(1);
+
+        costFunction->SetNumResiduals(1);
+        return costFunction;
     }
 
 private:
     const int pixel;
     const float value;
+    const float weight;
 };
 
 int main(int argc, char** argv) {
     google::InitGoogleLogging(argv[0]);
 
-    /*double m = 0.0;
-    double c = 0.0;
+    Grid2<float> grid(2, 2);
+    const int width = (int)grid.getDimX();
+    const int height = (int)grid.getDimY();
+    const float edgeWeight = 1.0f;
+    const float reconWeight = 0.1f;
+
+    auto getPixelIndex = [=](int x, int y)
+    {
+        return (y * width + x);
+    };
+
+    vector<vec2i> edges;
+    for (int x = 0; x < width - 1; x++)
+    {
+        for (int y = 0; y < height - 1; y++)
+        {
+            edges.push_back(vec2i(getPixelIndex(x, y), getPixelIndex(x + 1, y)));
+            edges.push_back(vec2i(getPixelIndex(x, y), getPixelIndex(x, y + 1)));
+        }
+    }
+
+    for (int x = 0; x < width - 1; x++)
+        edges.push_back(vec2i(getPixelIndex(x, height - 1), getPixelIndex(x + 1, height - 1)));
+
+    for (int y = 0; y < height - 1; y++)
+        edges.push_back(vec2i(getPixelIndex(width - 1, y), getPixelIndex(width - 1, y + 1)));
+
+    vector<double> variables(width * height);
+    for (auto &v : variables)
+        v = 0.0;
 
     Problem problem;
-    for (int i = 0; i < kNumObservations; ++i) {
-    problem.AddResidualBlock(
-    new AutoDiffCostFunction<ExponentialResidual, 1, 1, 1>(
-    new ExponentialResidual(data[2 * i], data[2 * i + 1])),
-    NULL,
-    &m, &c);
+
+    // add all edge constraints
+    for (auto e : edges)
+    {
+        vector<double*> parameterBlocks;
+        auto costFunction = EdgeConstraint::Create(e.x, e.y, edgeWeight, variables, parameterBlocks);
+        problem.AddResidualBlock(costFunction, NULL, parameterBlocks);
+    }
+
+    // add all reconstruction constraints
+    for (const auto &v : grid)
+    {
+        vector<double*> parameterBlocks;
+        auto costFunction = ReconstructionConstraint::Create(getPixelIndex(v.x, v.y), v.value, reconWeight, variables, parameterBlocks);
+        problem.AddResidualBlock(costFunction, NULL, parameterBlocks);
     }
 
     Solver::Options options;
-    options.max_num_iterations = 25;
-    options.linear_solver_type = ceres::DENSE_QR;
-    options.minimizer_progress_to_stdout = true;
-
     Solver::Summary summary;
+
+    options.minimizer_progress_to_stdout = true;
+    
+    cout << "Solving..." << endl;
     Solve(options, &problem, &summary);
-    std::cout << summary.BriefReport() << "\n";
-    std::cout << "Initial m: " << 0.0 << " c: " << 0.0 << "\n";
-    std::cout << "Final   m: " << m << " c: " << c << "\n";*/
-
-    //DynamicAutoDiffCostFunction<MyCostFunctor, 4> costFunction(new MyCostFunctor());
-
-    Problem problem;
-
-
-
-    //for ()
-    //    problem.AddResidualBlock(costFunction);
-
+    cout << "Done." << endl;
+    cout << summary.FullReport() << endl;
+    
+    cout << "Final values:" << endl;
+    for (const auto &v : grid)
+    {
+        cout << "(" << v.x << "," << v.y << ") = " << variables[getPixelIndex(v.x, v.y)] << endl;
+    }
     return 0;
 }

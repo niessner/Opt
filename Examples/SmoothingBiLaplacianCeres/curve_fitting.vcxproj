@@ -83,6 +83,7 @@
     <ClCompile Include="mLibSource.cpp" />
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="example.h" />
     <ClInclude Include="main.h" />
     <ClInclude Include="mLibInclude.h" />
   </ItemGroup>
