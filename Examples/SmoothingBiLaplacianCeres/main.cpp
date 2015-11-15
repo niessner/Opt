@@ -64,7 +64,6 @@ struct EdgeConstraint {
         // Add all the parameter blocks that affect this constraint.
         parameterBlocks.clear();
         
-        cout << pixel0 << "v" << pixel1 << endl;
         parameterBlocks.push_back(&(values[pixel0]));
         costFunction->AddParameterBlock(1);
 
@@ -119,7 +118,14 @@ private:
 int main(int argc, char** argv) {
     google::InitGoogleLogging(argv[0]);
 
-    Grid2<float> grid(2, 2);
+    auto image = LodePNG::load("input.png");
+
+    Grid2<float> grid(image.getDimX(), image.getDimY());
+    for (auto &p : image)
+    {
+        grid(p.x, p.y) = p.value.r / 255.0f;
+    }
+
     const int width = (int)grid.getDimX();
     const int height = (int)grid.getDimY();
     const float edgeWeight = 1.0f;
@@ -172,16 +178,40 @@ int main(int argc, char** argv) {
     Solver::Summary summary;
 
     options.minimizer_progress_to_stdout = true;
+    //options.linear_solver_type = ceres::LinearSolverType::SPARSE_NORMAL_CHOLESKY;
+    options.linear_solver_type = ceres::LinearSolverType::CGNR;
+    //options.linear_solver_type = ceres::LinearSolverType::SPARSE_SCHUR;
+    //options.linear_solver_type = ceres::LinearSolverType::ITERATIVE_SCHUR;
+    
+    options.min_lm_diagonal = options.max_lm_diagonal;
+    //options.max_lm_diagonal = 10000000.0;
     
     cout << "Solving..." << endl;
-    Solve(options, &problem, &summary);
-    cout << "Done." << endl;
+
+    double elapsedTime;
+    {
+        ml::Timer timer;
+        Solve(options, &problem, &summary);
+        elapsedTime = timer.getElapsedTimeMS();
+    }
+
+    cout << "Done, " << elapsedTime << "ms" << endl;
+
+    for (auto &p : image)
+    {
+        unsigned char v = util::boundToByte(variables[getPixelIndex(p.x, p.y)] * 255.0f);
+        p.value.r = v;
+        p.value.g = v;
+        p.value.b = v;
+    }
+    LodePNG::save(image, "output.png");
+
     cout << summary.FullReport() << endl;
     
     cout << "Final values:" << endl;
     for (const auto &v : grid)
     {
-        cout << "(" << v.x << "," << v.y << ") = " << variables[getPixelIndex(v.x, v.y)] << endl;
+        //cout << "(" << v.x << "," << v.y << ") = " << variables[getPixelIndex(v.x, v.y)] << endl;
     }
     return 0;
 }
