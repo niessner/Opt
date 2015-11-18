@@ -1,10 +1,11 @@
 local IO = terralib.includec("stdio.h")
-local P = opt.ProblemSpec()
+local adP = ad.ProblemSpec()
+local P = adP.P
 local W,H = opt.Dim("W",0), opt.Dim("H",1)
 
-P:Image("X", opt.float4,W,H,0)
-P:Image("A", opt.float4,W,H,1)
-P:Adjacency("G", {W,H}, {W,H}, 0)
+local X = adP:Image("X", opt.float4,W,H,0)
+local A = adP:Image("A", opt.float4,W,H,1)
+local G = adP:Adjacency("G", {W,H}, {W,H}, 0)
 P:Stencil(2)
 
 local C = terralib.includecstring [[
@@ -71,6 +72,7 @@ local terra cost(i : int32, j : int32, gi : int32, gj : int32, self : P:Paramete
 	return res
 end
 
+
 -- eval 2*JtF == \nabla(F); eval diag(2*(Jt)^2) == pre-conditioner
 local terra gradient(i : int32, j : int32, gi : int32, gj : int32, self : P:ParameterType()) : unknownElement
 	
@@ -123,11 +125,13 @@ local terra applyJTJ(i : int32, j : int32, gi : int32, gj : int32, self : P:Para
 end
 
 
+local math_cost = w_fit * (X(0,0) - A(0,0)) ^ 2 + w_reg * ad.reduce((X(G) - X(0,0))^2)
+math_cost = math_cost:sum()
+print(math_cost)
 
 P:Function("cost", {W,H}, cost)
 P:Function("gradient", {W,H}, gradient)
 P:Function("evalJTF", {W,H}, evalJTF)
 P:Function("applyJTJ", {W,H}, applyJTJ)
-
 
 return P
