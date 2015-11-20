@@ -39,8 +39,12 @@ end
 local Op = newclass("Op") -- a primitive operator like + or sin
 
 local Shape = newclass("Shape")
-function Shape:fromkeys(keys) return Shape:new { keys = terralib.newlist(keys) } end
-local scalarshape = Shape:fromkeys {} 
+
+local newshape = terralib.memoize(function(...) return Shape:new { keys = terralib.newlist {...} } end)
+
+function Shape:fromkeys(...) return newshape(...) end
+ad.scalar = Shape:fromkeys()
+ 
 function Shape:isprefixof(rhs)
     if #self.keys > #rhs.keys then return false end
     for i,k in ipairs(self.keys) do
@@ -49,7 +53,7 @@ function Shape:isprefixof(rhs)
     return true
 end
 local function joinshapes(shapes)
-    local longest = scalarshape
+    local longest = ad.scalar
     for i,s in ipairs(shapes) do
         assert(Shape:is(s),"not a shape")
         if #s.keys > #longest.keys then
@@ -65,15 +69,9 @@ local function joinshapes(shapes)
     end
     return longest
 end
-function Shape:isscalar() return #self.keys == 0 end
-
 function Shape:fromreduction()
     if #self.keys == 0 then return nil end
-    local newkeys = terralib.newlist()
-    for i = 1,#self.keys-1 do
-        newkeys[i] = self.keys[i]
-    end
-    return Shape:fromkeys(newkeys)
+    return Shape:fromkeys(unpack(self.keys,1,#self.keys-1))
 end
 function Shape:__tostring()
     return "{"..table.concat(self.keys:map(tostring),",").."}"
@@ -122,7 +120,7 @@ local function newapply(op,config,args)
     return Apply:new { op = op, args = args, config = config, id = id, type_ = op:propagatetype(args), shape_ = joinshapes(args:map("shape")) }
 end
 
-local getconst = terralib.memoize(function(n) return Const:new { v = n, id = allocid(), type_ = float, shape_ = scalarshape } end)
+local getconst = terralib.memoize(function(n) return Const:new { v = n, id = allocid(), type_ = float, shape_ = ad.scalar } end)
 local function toexp(n)
     if n then 
         if Exp:is(n) then return n
@@ -377,7 +375,7 @@ setmetatable(v,{__index = function(self,key)
         type_ = key:type()
     end 
     assert(type_ == float or type_ == bool, "variable with key exists with a different type")
-    local shape = scalarshape
+    local shape = ad.scalar
     if type(key) == "table" and type(key.shape) == "function" then
         shape = key:shape()
     end
