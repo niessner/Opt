@@ -1,0 +1,101 @@
+s_sensorIdx = 4;	// 1 = PrimeSense; 2 = KinectOne; 3 = GroundTruth; 4 = BinaryDumpReader
+
+s_filenameDump = "refined.sensor";
+
+s_windowWidth = 640
+s_windowHeight = 480
+
+s_adapterWidth = 640
+s_adapterHeight = 480
+
+s_rowOffset = 64; //Offset for the Primesense in high resolution mode
+
+s_segmentationDepthThres = 6.0f;
+s_lightingSolverThresDepth = 1.0f;
+
+s_depthSigmaD = 2.0f;
+s_depthSigmaR = 0.1f;
+s_depthFilter = true;
+
+s_colorSigmaD = 1.0f;
+s_colorSigmaR = 0.08f;
+s_colorFilter = true;
+
+s_bUseCameraCalibration		= false
+s_onlySaveForeground		= false;
+s_timingsDetailledEnabled   	= false;
+s_timingsTotalEnabled		= false;
+s_refineForeground		= true;
+s_useColorForRendering		= false;
+s_useSyntheticLighting		= false;
+
+s_playData = true;
+
+s_weightPriorLight = 10.0f;
+
+s_convergenceAnalysisIsRunning = false;
+
+s_edgeThresholdSaveToFileOffset = 1.01f;  	   // discontinuity offset in meter
+s_edgeThresholdSaveToFileLin	= 1.001f; 	   // additional discontinuity threshold per meter
+
+s_renderingDepthDiscontinuityThresOffset = 10.012f;  // discontinuity offset in meter
+s_renderingDepthDiscontinuityThresLin	 = 10.001f; // additional discontinuity threshold per meter
+
+s_remappingDepthDiscontinuityThresOffset = 10.012f; // discontinuity offset in meter
+s_remappingDepthDiscontinuityThresLin	 = 10.001f; // additional discontinuity threshold per meter
+
+s_ambientLightColor  = 0.1f 0.1f 0.1f 1.0f;
+s_diffuseLightColor  = 0.7f 0.7f 0.7f 1.0f;
+s_specularLightColor = 0.2f 0.2f 0.2f 1.0f;
+s_materialShininess  = 30.0f;
+s_materialSpecular   = 1.0f 1.0f 1.0f, 1.0f;
+s_lightDirection     = 0.0f 0.1f 1.0f;
+s_materialDiffuse    = 1.0f 1.0f 1.0f, 1.0f;
+
+s_RenderMode = 1;
+
+s_minDepth = 0.1f;
+s_maxDepth = 8.0f;
+
+s_texture_threshold = 0.5;
+
+s_bRenderModeChanged = true;
+s_bFilterKinectInputData = true;
+
+s_nNonLinearIterations[0] = 1;
+s_nNonLinearIterations[1] = 1;
+s_nNonLinearIterations[2] = 1;
+s_nLinearIterations[0] = 10;
+s_nLinearIterations[1] = 10;
+s_nLinearIterations[2] = 10;
+s_nPatchIterations[0] = 8;
+s_nPatchIterations[1] = 8;
+s_nPatchIterations[2] = 8;
+s_weightFitting[0] = 100.0f;
+s_weightFitting[1] = 100.0f;
+s_weightFitting[2] = 100.0f;
+s_weightRegularizer[0] = 100.0f;
+s_weightRegularizer[1] = 100.0f;
+s_weightRegularizer[2] = 100.0f;
+s_weightShadingStart[0] = 1.0f;
+s_weightShadingStart[1] = 1.0f;
+s_weightShadingStart[2] = 1.0f;
+s_weightShadingIncrement[0] = 0.0f
+s_weightShadingIncrement[1] = 0.0f
+s_weightShadingIncrement[2] = 0.0f
+s_weightBoundary[0] = 0.0f;
+s_weightBoundary[1] = 0.0f;
+s_weightBoundary[2] = 0.0f;
+s_weightPrior[0] = 0.0f;
+s_weightPrior[1] = 0.0f;
+s_weightPrior[2] = 0.0f;
+
+s_bRecordDepthData = true;
+s_numHierarchyLevels = 1;
+s_optimizer = 0; // 0: CUDA, 1: AD, 2: NO_AD
+s_useBlockSolver = true;
+
+s_playData = true;
+s_renderToFile = false;
+s_renderToFileResWidth = 1024 //this case adapter and window dimensions should match
+s_renderToFileResHeight = 768

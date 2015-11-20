@@ -1,0 +1,323 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup>
+    <ClCompile Include="RealtimeSFS.cpp" />
+    <ClCompile Include="GlobalAppState.cpp" />
+    <ClCompile Include="DXUT\Core\DXUT.cpp">
+      <Filter>DirectX\DXUT</Filter>
+    </ClCompile>
+    <ClCompile Include="DXUT\Optional\DXUTcamera.cpp">
+      <Filter>DirectX\DXUT</Filter>
+    </ClCompile>
+    <ClCompile Include="DXUT\Core\DXUTDevice11.cpp">
+      <Filter>DirectX\DXUT</Filter>
+    </ClCompile>
+    <ClCompile Include="DXUT\Core\DXUTDevice9.cpp">
+      <Filter>DirectX\DXUT</Filter>
+    </ClCompile>
+    <ClCompile Include="DXUT\Optional\DXUTgui.cpp">
+      <Filter>DirectX\DXUT</Filter>
+    </ClCompile>
+    <ClCompile Include="DXUT\Core\DXUTmisc.cpp">
+      <Filter>DirectX\DXUT</Filter>
+    </ClCompile>
+    <ClCompile Include="DXUT\Optional\DXUTres.cpp">
+      <Filter>DirectX\DXUT</Filter>
+    </ClCompile>
+    <ClCompile Include="DXUT\Optional\DXUTsettingsdlg.cpp">
+      <Filter>DirectX\DXUT</Filter>
+    </ClCompile>
+    <ClCompile Include="DX11PhongLighting.cpp">
+      <Filter>DirectX</Filter>
+    </ClCompile>
+    <ClCompile Include="DX11QuadDrawer.cpp">
+      <Filter>DirectX</Filter>
+    </ClCompile>
+    <ClCompile Include="DX11Utils.cpp">
+      <Filter>DirectX</Filter>
+    </ClCompile>
+    <ClCompile Include="DXUT\Optional\SDKmesh.cpp">
+      <Filter>DirectX\DXUT</Filter>
+    </ClCompile>
+    <ClCompile Include="DXUT\Optional\SDKmisc.cpp">
+      <Filter>DirectX\DXUT</Filter>
+    </ClCompile>
+    <ClCompile Include="StdOutputLogger.cpp">
+      <Filter>Util</Filter>
+    </ClCompile>
+    <ClCompile Include="Cuda\PatchSolverSFS\CUDAPatchSolverSFS.cpp">
+      <Filter>Cuda\PatchSolverSFS</Filter>
+    </ClCompile>
+    <ClCompile Include="KinectOneSensor.cpp">
+      <Filter>IO</Filter>
+    </ClCompile>
+    <ClCompile Include="PrimeSenseSensor.cpp">
+      <Filter>IO</Filter>
+    </ClCompile>
+    <ClCompile Include="stdafx.cpp" />
+    <ClCompile Include="GroundTruthSensor.cpp">
+      <Filter>IO</Filter>
+    </ClCompile>
+    <ClCompile Include="Cuda\CudaScan.cpp">
+      <Filter>Cuda\Scan</Filter>
+    </ClCompile>
+    <ClCompile Include="Cuda\CUDACameraTrackingMultiRes.cpp">
+      <Filter>Cuda\ICP</Filter>
+    </ClCompile>
+    <ClCompile Include="Cuda\CUDABuildLinearSystem.cpp">
+      <Filter>Cuda\ICP</Filter>
+    </ClCompile>
+    <ClCompile Include="Cuda\CUDAImageHelper.cpp">
+      <Filter>Cuda\ICP</Filter>
+    </ClCompile>
+    <ClCompile Include="CUDARGBDSensor.cpp">
+      <Filter>IO</Filter>
+    </ClCompile>
+    <ClCompile Include="RGBDSensor.cpp">
+      <Filter>IO</Filter>
+    </ClCompile>
+    <ClCompile Include="CUDARGBDAdapter.cpp">
+      <Filter>IO</Filter>
+    </ClCompile>
+    <ClCompile Include="DX11CustomRenderTarget.cpp">
+      <Filter>DirectX</Filter>
+    </ClCompile>
+    <ClCompile Include="DX11RGBDRenderer.cpp">
+      <Filter>DirectX</Filter>
+    </ClCompile>
+    <ClCompile Include="CUDAHoleFiller.cpp">
+      <Filter>Cuda</Filter>
+    </ClCompile>
+    <ClCompile Include="ICPErrorLog.cpp">
+      <Filter>Util</Filter>
+    </ClCompile>
+    <ClCompile Include="TimingLog.cpp">
+      <Filter>Util</Filter>
+    </ClCompile>
+    <ClCompile Include="Cuda\CUDASolverSHLighting.cpp">
+      <Filter>Cuda\SolverSHLighting</Filter>
+    </ClCompile>
+    <ClCompile Include="BinaryDumpReader.cpp">
+      <Filter>IO</Filter>
+    </ClCompile>
+    <ClCompile Include="Cuda\PatchSolverSFS\Optimizer.cpp" />
+    <ClCompile Include="DumpOptImage.cpp" />
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="RealtimeSFS.h" />
+    <ClInclude Include="GlobalAppState.h" />
+    <CLInclude Include="resource.h" />
+    <ClInclude Include="DXUT\Optional\DXUTsettingsdlg.h">
+      <Filter>DirectX\DXUT</Filter>
+    </ClInclude>
+    <ClInclude Include="DXUT\Core\DXUT.h">
+      <Filter>DirectX\DXUT</Filter>
+    </ClInclude>
+    <ClInclude Include="DXUT\Optional\DXUTcamera.h">
+      <Filter>DirectX\DXUT</Filter>
+    </ClInclude>
+    <ClInclude Include="DXUT\Core\DXUTDevice11.h">
+      <Filter>DirectX\DXUT</Filter>
+    </ClInclude>
+    <ClInclude Include="DXUT\Core\DXUTDevice9.h">
+      <Filter>DirectX\DXUT</Filter>
+    </ClInclude>
+    <ClInclude Include="DXUT\Optional\DXUTgui.h">
+      <Filter>DirectX\DXUT</Filter>
+    </ClInclude>
+    <ClInclude Include="DXUT\Core\DXUTmisc.h">
+      <Filter>DirectX\DXUT</Filter>
+    </ClInclude>
+    <ClInclude Include="DXUT\Optional\DXUTres.h">
+      <Filter>DirectX\DXUT</Filter>
+    </ClInclude>
+    <ClInclude Include="DX11PhongLighting.h">
+      <Filter>DirectX</Filter>
+    </ClInclude>
+    <ClInclude Include="DX11QuadDrawer.h">
+      <Filter>DirectX</Filter>
+    </ClInclude>
+    <ClInclude Include="DX11Utils.h">
+      <Filter>DirectX</Filter>
+    </ClInclude>
+    <ClInclude Include="DXUT\Optional\SDKmesh.h">
+      <Filter>DirectX\DXUT</Filter>
+    </ClInclude>
+    <ClInclude Include="DXUT\Optional\SDKmisc.h">
+      <Filter>DirectX\DXUT</Filter>
+    </ClInclude>
+    <ClInclude Include="StdOutputLogger.h">
+      <Filter>Util</Filter>
+    </ClInclude>
+    <ClInclude Include="Eigen.h">
+      <Filter>Util</Filter>
+    </ClInclude>
+    <ClInclude Include="MatrixConversion.h">
+      <Filter>Util</Filter>
+    </ClInclude>
+    <ClInclude Include="cudaUtil.h">
+      <Filter>Cuda\Util</Filter>
+    </ClInclude>
+    <ClInclude Include="Cuda\SolverUtil.h">
+      <Filter>Cuda\Util</Filter>
+    </ClInclude>
+    <ClInclude Include="Cuda\PatchSolverSFS\CUDAPatchSolverSFS.h">
+      <Filter>Cuda\PatchSolverSFS</Filter>
+    </ClInclude>
+    <ClInclude Include="Cuda\PatchSolverSFS\PatchSolverSFSEquations.h">
+      <Filter>Cuda\PatchSolverSFS</Filter>
+    </ClInclude>
+    <ClInclude Include="Cuda\PatchSolverSFS\PatchSolverSFSParameters.h">
+      <Filter>Cuda\PatchSolverSFS</Filter>
+    </ClInclude>
+    <ClInclude Include="Cuda\PatchSolverSFS\PatchSolverSFSState.h">
+      <Filter>Cuda\PatchSolverSFS</Filter>
+    </ClInclude>
+    <ClInclude Include="Cuda\PatchSolverSFS\PatchSolverSFSUtil.h">
+      <Filter>Cuda\PatchSolverSFS</Filter>
+    </ClInclude>
+    <ClInclude Include="Cuda\CameraParams.h">
+      <Filter>Cuda\Util</Filter>
+    </ClInclude>
+    <ClInclude Include="KinectOneSensor.h">
+      <Filter>IO</Filter>
+    </ClInclude>
+    <ClInclude Include="PrimeSenseSensor.h">
+      <Filter>IO</Filter>
+    </ClInclude>
+    <ClInclude Include="stdafx.h" />
+    <ClInclude Include="GroundTruthSensor.h">
+      <Filter>IO</Filter>
+    </ClInclude>
+    <ClInclude Include="Cuda\CUDAScan.h">
+      <Filter>Cuda\Scan</Filter>
+    </ClInclude>
+    <ClInclude Include="Cuda\CUDABuildLinearSystem.h">
+      <Filter>Cuda\ICP</Filter>
+    </ClInclude>
+    <ClInclude Include="Cuda\CUDACameraTrackingMultiRes.h">
+      <Filter>Cuda\ICP</Filter>
+    </ClInclude>
+    <ClInclude Include="Cuda\CUDAImageHelper.h">
+      <Filter>Cuda\ICP</Filter>
+    </ClInclude>
+    <ClInclude Include="CUDARGBDSensor.h">
+      <Filter>IO</Filter>
+    </ClInclude>
+    <ClInclude Include="RGBDSensor.h">
+      <Filter>IO</Filter>
+    </ClInclude>
+    <ClInclude Include="CUDARGBDAdapter.h">
+      <Filter>IO</Filter>
+    </ClInclude>
+    <ClInclude Include="DX11CustomRenderTarget.h">
+      <Filter>DirectX</Filter>
+    </ClInclude>
+    <ClInclude Include="DX11RGBDRenderer.h">
+      <Filter>DirectX</Filter>
+    </ClInclude>
+    <ClInclude Include="CUDAHoleFiller.h">
+      <Filter>Cuda</Filter>
+    </ClInclude>
+    <ClInclude Include="ICPErrorLog.h">
+      <Filter>Util</Filter>
+    </ClInclude>
+    <ClInclude Include="TimingLog.h">
+      <Filter>Util</Filter>
+    </ClInclude>
+    <ClInclude Include="Cuda\CUDASolverSHLighting.h">
+      <Filter>Cuda\SolverSHLighting</Filter>
+    </ClInclude>
+    <ClInclude Include="Cuda\SolverSFS\SolverSFSState.h">
+      <Filter>Cuda\SolverSHLighting</Filter>
+    </ClInclude>
+    <ClInclude Include="Cuda\ICUDASolverSFS.h">
+      <Filter>Cuda\PatchSolverSFS</Filter>
+    </ClInclude>
+    <ClInclude Include="Cuda\CUDAHierarchicalSolverSFS.h">
+      <Filter>Cuda\PatchSolverSFS</Filter>
+    </ClInclude>
+    <ClInclude Include="BinaryDumpReader.h">
+      <Filter>IO</Filter>
+    </ClInclude>
+    <ClInclude Include="Cuda\SolverSHLightingState.h">
+      <Filter>Cuda\SolverSHLighting</Filter>
+    </ClInclude>
+    <ClInclude Include="ConvergenceAnalysis.h" />
+    <ClInclude Include="Optimizer.h" />
+    <ClInclude Include="DumpOptImage.h" />
+    <ClInclude Include="CUDATimer.h" />
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="Shaders\PhongLighting.hlsl">
+      <Filter>DirectX\Shader</Filter>
+    </None>
+    <None Include="Shaders\QuadDrawer.hlsl">
+      <Filter>DirectX\Shader</Filter>
+    </None>
+    <None Include="Shaders\RGBDRenderer.hlsl">
+      <Filter>DirectX\Shader</Filter>
+    </None>
+  </ItemGroup>
+  <ItemGroup>
+    <Filter Include="IO">
+      <UniqueIdentifier>{69774661-008b-4e87-a3ab-9093d35ed995}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="DirectX">
+      <UniqueIdentifier>{aad50133-7ced-4fed-85e4-fc6b6ddbed58}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Util">
+      <UniqueIdentifier>{82c8c3ee-c28b-4c6e-9967-16cc5a4295cf}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Cuda">
+      <UniqueIdentifier>{934859ac-9a7f-4b5b-9b4a-997022d11897}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="DirectX\Shader">
+      <UniqueIdentifier>{5fbd385d-4284-4abe-ac87-6595a64737f3}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="DirectX\DXUT">
+      <UniqueIdentifier>{77da53f0-ed30-4f4c-879b-83a3038f41f5}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Cuda\Util">
+      <UniqueIdentifier>{e7290343-df6e-4135-96f6-91ba5a345aca}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Cuda\PatchSolverSFS">
+      <UniqueIdentifier>{0961497d-4018-4b37-932c-0bb0974c52de}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Cuda\Scan">
+      <UniqueIdentifier>{60d53587-6b5d-4a16-8189-42e43554ab9b}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Cuda\ICP">
+      <UniqueIdentifier>{66eb91bd-d90e-4025-83c9-9b28b8e6a4b9}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Cuda\SolverSHLighting">
+      <UniqueIdentifier>{10d895dc-7457-4e0a-b0ec-1b06abaabc70}</UniqueIdentifier>
+    </Filter>
+  </ItemGroup>
+  <ItemGroup>
+    <CudaCompile Include="Cuda\CameraUtil.cu">
+      <Filter>Cuda\Util</Filter>
+    </CudaCompile>
+    <CudaCompile Include="Cuda\PatchSolverSFS\PatchSolverSFS.cu">
+      <Filter>Cuda\PatchSolverSFS</Filter>
+    </CudaCompile>
+    <CudaCompile Include="Cuda\ScanCS.cu">
+      <Filter>Cuda\Scan</Filter>
+    </CudaCompile>
+    <CudaCompile Include="Cuda\CUDABuildLinearSystem.cu">
+      <Filter>Cuda\ICP</Filter>
+    </CudaCompile>
+    <CudaCompile Include="Cuda\CUDAImageHelper.cu">
+      <Filter>Cuda\ICP</Filter>
+    </CudaCompile>
+    <CudaCompile Include="Cuda\SolverSHLighting.cu">
+      <Filter>Cuda\SolverSHLighting</Filter>
+    </CudaCompile>
+    <CudaCompile Include="Cuda\CUDAHoleFiller.cu">
+      <Filter>Cuda</Filter>
+    </CudaCompile>
+  </ItemGroup>
+  <ItemGroup>
+    <Text Include="zParametersDefault.txt" />
+  </ItemGroup>
+</Project>

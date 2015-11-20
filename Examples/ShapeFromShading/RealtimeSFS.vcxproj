@@ -1,0 +1,291 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project DefaultTargets="Build" ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup Label="ProjectConfigurations">
+    <ProjectConfiguration Include="Debug|x64">
+      <Configuration>Debug</Configuration>
+      <Platform>x64</Platform>
+    </ProjectConfiguration>
+    <ProjectConfiguration Include="Release|x64">
+      <Configuration>Release</Configuration>
+      <Platform>x64</Platform>
+    </ProjectConfiguration>
+  </ItemGroup>
+  <PropertyGroup Label="Globals">
+    <ProjectGuid>{CA9DD020-FC04-44B1-8741-AFC2A99756D1}</ProjectGuid>
+    <Keyword>Win32Proj</Keyword>
+    <RootNamespace>DepthWithColor.D3D</RootNamespace>
+    <ProjectName>RealtimeSFS</ProjectName>
+  </PropertyGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'" Label="Configuration">
+    <ConfigurationType>Application</ConfigurationType>
+    <UseDebugLibraries>true</UseDebugLibraries>
+    <CharacterSet>Unicode</CharacterSet>
+    <PlatformToolset>v120</PlatformToolset>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'" Label="Configuration">
+    <ConfigurationType>Application</ConfigurationType>
+    <UseDebugLibraries>false</UseDebugLibraries>
+    <WholeProgramOptimization>true</WholeProgramOptimization>
+    <CharacterSet>Unicode</CharacterSet>
+    <PlatformToolset>v120</PlatformToolset>
+  </PropertyGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.props" />
+  <ImportGroup Label="ExtensionSettings">
+    <Import Project="$(VCTargetsPath)\BuildCustomizations\CUDA 6.5.props" />
+  </ImportGroup>
+  <ImportGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'" Label="PropertySheets">
+    <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
+  </ImportGroup>
+  <ImportGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'" Label="PropertySheets">
+    <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
+  </ImportGroup>
+  <PropertyGroup Label="UserMacros" />
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
+    <LinkIncremental>true</LinkIncremental>
+    <ExecutablePath>$(WindowsSDK_ExecutablePath_x86);$(WindowsSDK_ExecutablePath_x64);$(ExecutablePath)</ExecutablePath>
+    <IncludePath>$(IncludePath);$(WindowsSDK_IncludePath);$(KINECTSDK10_DIR)\inc;$(KINECTSDK20_DIR)\inc;$(OPENNI2_INCLUDE64);Include\FreeImage\Source;Include\mLib;$(DXSDK_DIR)Include;.\;..\..\..\..\mLibExternal\include;$(CUDA_INC_PATH)</IncludePath>
+    <LibraryPath>$(LibraryPath);$(WindowsSDK_LibraryPath_x64);$(KINECTSDK10_DIR)\lib\amd64;$(KINECTSDK20_DIR)\lib\x64;$(OPENNI2_LIB64);$(DXSDK_DIR)Lib\x64;Libs;$(CUDA_LIB_PATH);..\..\..\mLibExternal\libsWindows\lib64</LibraryPath>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
+    <LinkIncremental>false</LinkIncremental>
+    <ExecutablePath>$(DXSDK_DIR)Utilities\bin\x64;$(DXSDK_DIR)Utilities\bin\x86;$(ExecutablePath)</ExecutablePath>
+    <IncludePath>$(IncludePath);$(DXSDK_DIR)Include;$(KINECTSDK10_DIR)\inc;$(CUDA_INC_PATH);$(KINECTSDK20_DIR)\inc;$(OPENNI2_INCLUDE64);Include\FreeImage\Source;Include\mLib;.\;..\..\..\..\mLibExternal\include</IncludePath>
+    <LibraryPath>$(LibraryPath);$(DXSDK_DIR)Lib\x64;$(KINECTSDK10_DIR)\lib\amd64;$(CUDA_LIB_PATH);$(KINECTSDK20_DIR)\lib\x64;$(OPENNI2_LIB64);Libs;..\..\..\mLibExternal\libsWindows\lib64</LibraryPath>
+  </PropertyGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
+    <ClCompile>
+      <WarningLevel>Level3</WarningLevel>
+      <Optimization>Disabled</Optimization>
+      <RuntimeLibrary>MultiThreadedDebugDLL</RuntimeLibrary>
+      <OpenMPSupport>false</OpenMPSupport>
+      <IntrinsicFunctions>true</IntrinsicFunctions>
+      <FloatingPointModel>Fast</FloatingPointModel>
+      <ExceptionHandling>Sync</ExceptionHandling>
+      <PreprocessorDefinitions>WIN32;_DEBUG;DEBUG;PROFILE;_CONSOLE;D3DXFX_LARGEADDRESS_HANDLE;_CRT_SECURE_NO_WARNINGS;NOMINMAX;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <BasicRuntimeChecks>EnableFastChecks</BasicRuntimeChecks>
+      <AdditionalIncludeDirectories>DXUT\Optional;DXUT\Core;..\Eigen_3.2.0\;$(SolutionDir)\cutil\inc;..\opencv\include\;$(KINECTSDK20_DIR)\lib;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <PrecompiledHeader>Use</PrecompiledHeader>
+    </ClCompile>
+    <Link>
+      <AdditionalDependencies>Kinect10.lib;d3d11.lib;d3dcompiler.lib;d3dx11d.lib;d3dx9d.lib;dxerr.lib;dxguid.lib;winmm.lib;comctl32.lib;Shlwapi.lib;cudart.lib;cublas.lib;FreeImage.lib;zlib64.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <SubSystem>Console</SubSystem>
+      <GenerateDebugInformation>true</GenerateDebugInformation>
+      <AdditionalLibraryDirectories>../opencv/lib/;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
+    </Link>
+    <Manifest>
+      <EnableDPIAwareness>true</EnableDPIAwareness>
+    </Manifest>
+    <CudaCompile>
+      <Include>$(SolutionDir)\cutil\inc;$(SolutionDir)</Include>
+      <TargetMachinePlatform>64</TargetMachinePlatform>
+      <CodeGeneration>compute_35,sm_35</CodeGeneration>
+      <MaxRegCount>62</MaxRegCount>
+    </CudaCompile>
+    <PreBuildEvent>
+      <Command>call "../common/optMake.bat" "$(ProjectDir)/../../../terra" "$(ProjectDir)/../build" "$(ProjectDir)"</Command>
+    </PreBuildEvent>
+  </ItemDefinitionGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
+    <ClCompile>
+      <WarningLevel>Level3</WarningLevel>
+      <Optimization>MaxSpeed</Optimization>
+      <RuntimeLibrary>MultiThreadedDLL</RuntimeLibrary>
+      <OpenMPSupport>false</OpenMPSupport>
+      <FunctionLevelLinking>true</FunctionLevelLinking>
+      <IntrinsicFunctions>true</IntrinsicFunctions>
+      <FloatingPointModel>Fast</FloatingPointModel>
+      <ExceptionHandling>Sync</ExceptionHandling>
+      <PreprocessorDefinitions>WIN32;NDEBUG;_WINDOWS;D3DXFX_LARGEADDRESS_HANDLE;_CRT_SECURE_NO_WARNINGS;NOMINMAX;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <AdditionalIncludeDirectories>DXUT\Optional;DXUT\Core;..\Eigen_3.2.0\;$(SolutionDir)\cutil\inc;..\opencv\include\;$(KINECTSDK20_DIR)\lib;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <PrecompiledHeader>Use</PrecompiledHeader>
+    </ClCompile>
+    <Link>
+      <AdditionalDependencies>Opt.lib;Kinect10.lib;d3d11.lib;d3dcompiler.lib;d3dx11.lib;d3dx9.lib;dxerr.lib;dxguid.lib;winmm.lib;comctl32.lib;Shlwapi.lib;cudart.lib;cublas.lib;opencv_world300.lib;opencv_ts300.lib;FreeImage.lib;zlib64.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <GenerateDebugInformation>true</GenerateDebugInformation>
+      <EnableCOMDATFolding>true</EnableCOMDATFolding>
+      <SubSystem>Console</SubSystem>
+      <OptimizeReferences>true</OptimizeReferences>
+      <AdditionalLibraryDirectories>../opencv/lib/;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
+    </Link>
+    <Manifest>
+      <EnableDPIAwareness>true</EnableDPIAwareness>
+    </Manifest>
+    <CudaCompile>
+      <TargetMachinePlatform>64</TargetMachinePlatform>
+      <Include>$(SolutionDir)\cutil\inc;$(SolutionDir)</Include>
+      <CodeGeneration>compute_30,sm_30;compute_35,sm_35</CodeGeneration>
+      <MaxRegCount>
+      </MaxRegCount>
+      <FastMath>true</FastMath>
+      <Optimization>O3</Optimization>
+    </CudaCompile>
+    <PreBuildEvent>
+      <Command>call "../common/optMake.bat" "$(ProjectDir)/../../../terra" "$(ProjectDir)/../build" "$(ProjectDir)"</Command>
+    </PreBuildEvent>
+  </ItemDefinitionGroup>
+  <ItemGroup>
+    <None Include="Shaders\PhongLighting.hlsl" />
+    <None Include="Shaders\QuadDrawer.hlsl" />
+  </ItemGroup>
+  <ItemGroup>
+    <ClCompile Include="BinaryDumpReader.cpp" />
+    <ClCompile Include="CUDARGBDAdapter.cpp" />
+    <ClCompile Include="Cuda\CUDABuildLinearSystem.cpp" />
+    <ClCompile Include="Cuda\CUDACameraTrackingMultiRes.cpp" />
+    <ClCompile Include="Cuda\CUDAImageHelper.cpp" />
+    <ClCompile Include="Cuda\CudaScan.cpp" />
+    <ClCompile Include="Cuda\CUDASolverSHLighting.cpp" />
+    <ClCompile Include="Cuda\PatchSolverSFS\CUDAPatchSolverSFS.cpp" />
+    <ClCompile Include="Cuda\PatchSolverSFS\Optimizer.cpp" />
+    <ClCompile Include="DumpOptImage.cpp" />
+    <ClCompile Include="DX11CustomRenderTarget.cpp" />
+    <ClCompile Include="DX11RGBDRenderer.cpp" />
+    <ClCompile Include="RGBDSensor.cpp" />
+    <ClCompile Include="CUDARGBDSensor.cpp" />
+    <ClCompile Include="DX11PhongLighting.cpp" />
+    <ClCompile Include="DX11QuadDrawer.cpp" />
+    <ClCompile Include="DX11Utils.cpp" />
+    <ClCompile Include="GroundTruthSensor.cpp" />
+    <ClCompile Include="ICPErrorLog.cpp" />
+    <ClCompile Include="KinectOneSensor.cpp" />
+    <ClCompile Include="PrimeSenseSensor.cpp" />
+    <ClCompile Include="RealtimeSFS.cpp" />
+    <ClCompile Include="DXUT\Core\DXUT.cpp">
+      <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Release|x64'">NotUsing</PrecompiledHeader>
+      <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">NotUsing</PrecompiledHeader>
+    </ClCompile>
+    <ClCompile Include="DXUT\Core\DXUTDevice11.cpp">
+      <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Release|x64'">NotUsing</PrecompiledHeader>
+      <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">NotUsing</PrecompiledHeader>
+    </ClCompile>
+    <ClCompile Include="DXUT\Core\DXUTDevice9.cpp">
+      <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Release|x64'">NotUsing</PrecompiledHeader>
+      <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">NotUsing</PrecompiledHeader>
+    </ClCompile>
+    <ClCompile Include="DXUT\Core\DXUTmisc.cpp">
+      <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Release|x64'">NotUsing</PrecompiledHeader>
+      <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">NotUsing</PrecompiledHeader>
+    </ClCompile>
+    <ClCompile Include="DXUT\Optional\DXUTcamera.cpp">
+      <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Release|x64'">NotUsing</PrecompiledHeader>
+      <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">NotUsing</PrecompiledHeader>
+    </ClCompile>
+    <ClCompile Include="DXUT\Optional\DXUTgui.cpp">
+      <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Release|x64'">NotUsing</PrecompiledHeader>
+      <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">NotUsing</PrecompiledHeader>
+    </ClCompile>
+    <ClCompile Include="DXUT\Optional\DXUTres.cpp">
+      <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Release|x64'">NotUsing</PrecompiledHeader>
+      <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">NotUsing</PrecompiledHeader>
+    </ClCompile>
+    <ClCompile Include="DXUT\Optional\DXUTsettingsdlg.cpp">
+      <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Release|x64'">NotUsing</PrecompiledHeader>
+      <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">NotUsing</PrecompiledHeader>
+    </ClCompile>
+    <ClCompile Include="DXUT\Optional\SDKmesh.cpp">
+      <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Release|x64'">NotUsing</PrecompiledHeader>
+      <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">NotUsing</PrecompiledHeader>
+    </ClCompile>
+    <ClCompile Include="DXUT\Optional\SDKmisc.cpp">
+      <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Release|x64'">NotUsing</PrecompiledHeader>
+      <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">NotUsing</PrecompiledHeader>
+    </ClCompile>
+    <ClCompile Include="GlobalAppState.cpp" />
+    <ClCompile Include="stdafx.cpp">
+      <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Create</PrecompiledHeader>
+      <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">Create</PrecompiledHeader>
+    </ClCompile>
+    <ClCompile Include="StdOutputLogger.cpp" />
+    <ClCompile Include="TimingLog.cpp" />
+    <ClCompile Include="CUDAHoleFiller.cpp" />
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="BinaryDumpReader.h" />
+    <ClInclude Include="ConvergenceAnalysis.h" />
+    <ClInclude Include="CUDARGBDAdapter.h" />
+    <ClInclude Include="CUDATimer.h" />
+    <ClInclude Include="cudaUtil.h" />
+    <ClInclude Include="Cuda\CameraParams.h" />
+    <ClInclude Include="Cuda\CUDABuildLinearSystem.h" />
+    <ClInclude Include="Cuda\CUDACameraTrackingMultiRes.h" />
+    <ClInclude Include="Cuda\CUDAHierarchicalSolverSFS.h" />
+    <ClInclude Include="Cuda\CUDAImageHelper.h" />
+    <ClInclude Include="Cuda\CUDAScan.h" />
+    <ClInclude Include="Cuda\CUDASolverSHLighting.h" />
+    <ClInclude Include="Cuda\ICUDASolverSFS.h" />
+    <ClInclude Include="Cuda\PatchSolverSFS\CUDAPatchSolverSFS.h" />
+    <ClInclude Include="Cuda\PatchSolverSFS\PatchSolverSFSEquations.h" />
+    <ClInclude Include="Cuda\PatchSolverSFS\PatchSolverSFSParameters.h" />
+    <ClInclude Include="Cuda\PatchSolverSFS\PatchSolverSFSState.h" />
+    <ClInclude Include="Cuda\PatchSolverSFS\PatchSolverSFSUtil.h" />
+    <ClInclude Include="Cuda\SolverSFS\SolverSFSState.h" />
+    <ClInclude Include="Cuda\SolverSHLightingState.h" />
+    <ClInclude Include="Cuda\SolverUtil.h" />
+    <ClInclude Include="DumpOptImage.h" />
+    <ClInclude Include="DX11CustomRenderTarget.h" />
+    <ClInclude Include="DX11RGBDRenderer.h" />
+    <ClInclude Include="Optimizer.h" />
+    <ClInclude Include="RGBDSensor.h" />
+    <ClInclude Include="CUDARGBDSensor.h" />
+    <ClInclude Include="DX11PhongLighting.h" />
+    <ClInclude Include="DX11QuadDrawer.h" />
+    <ClInclude Include="DX11Utils.h" />
+    <ClInclude Include="GroundTruthSensor.h" />
+    <ClInclude Include="ICPErrorLog.h" />
+    <ClInclude Include="KinectOneSensor.h" />
+    <ClInclude Include="PrimeSenseSensor.h" />
+    <ClInclude Include="RealtimeSFS.h" />
+    <ClInclude Include="DXUT\Core\DXUT.h" />
+    <ClInclude Include="DXUT\Core\DXUTDevice11.h" />
+    <ClInclude Include="DXUT\Core\DXUTDevice9.h" />
+    <ClInclude Include="DXUT\Core\DXUTmisc.h" />
+    <ClInclude Include="DXUT\Optional\DXUTcamera.h" />
+    <ClInclude Include="DXUT\Optional\DXUTgui.h" />
+    <ClInclude Include="DXUT\Optional\DXUTres.h" />
+    <ClInclude Include="DXUT\Optional\DXUTsettingsdlg.h" />
+    <ClInclude Include="DXUT\Optional\SDKmesh.h" />
+    <ClInclude Include="DXUT\Optional\SDKmisc.h" />
+    <ClInclude Include="Eigen.h" />
+    <ClInclude Include="GlobalAppState.h" />
+    <ClInclude Include="MatrixConversion.h" />
+    <CLInclude Include="resource.h" />
+    <ClInclude Include="stdafx.h" />
+    <ClInclude Include="StdOutputLogger.h" />
+    <ClInclude Include="TimingLog.h" />
+    <ClInclude Include="CUDAHoleFiller.h" />
+  </ItemGroup>
+  <ItemGroup>
+    <Reference Include="System" />
+    <Reference Include="System.Data" />
+    <Reference Include="System.Drawing" />
+    <Reference Include="System.Windows.Forms" />
+    <Reference Include="System.Xml" />
+  </ItemGroup>
+  <ItemGroup>
+    <CudaCompile Include="Cuda\CameraUtil.cu">
+      <MaxRegCount Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
+      </MaxRegCount>
+    </CudaCompile>
+    <CudaCompile Include="Cuda\CUDABuildLinearSystem.cu" />
+    <CudaCompile Include="Cuda\CUDAHoleFiller.cu" />
+    <CudaCompile Include="Cuda\CUDAImageHelper.cu" />
+    <CudaCompile Include="Cuda\PatchSolverSFS\PatchSolverSFS.cu">
+      <PtxAsOptionV Condition="'$(Configuration)|$(Platform)'=='Release|x64'">true</PtxAsOptionV>
+    </CudaCompile>
+    <CudaCompile Include="Cuda\ScanCS.cu" />
+    <CudaCompile Include="Cuda\SolverSHLighting.cu" />
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="Shaders\RGBDRenderer.hlsl">
+      <FileType>Document</FileType>
+    </None>
+  </ItemGroup>
+  <ItemGroup>
+    <Text Include="zParametersDefault.txt" />
+  </ItemGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
+  <ImportGroup Label="ExtensionTargets">
+    <Import Project="$(VCTargetsPath12)\BuildCustomizations\CUDA 6.5.targets" />
+  </ImportGroup>
+</Project>
