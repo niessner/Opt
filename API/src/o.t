@@ -587,8 +587,8 @@ function BoundsAccess:__tostring() return ("bounds_%d_%d_%d_%d"):format(self.x,s
 function IndexValue:__tostring() return ({[0] = "i","j","k"})[self.dim._index] end
 function ParamValue:__tostring() return "param_"..self.name end
 
-ImageAccess.get = terralib.memoize(function(self,im,x,y,channel, ...)
-    return ImageAccess:new { image = im, x = x, y = y, channel = channel, _shape = ad.Shape:fromkeys { ... } }
+ImageAccess.get = terralib.memoize(function(self,im,x,y,channel)
+    return ImageAccess:new { image = im, x = x, y = y, channel = channel, _shape = ad.Shape:fromkeys { } }
 end)
 
 BoundsAccess.get = terralib.memoize(function(self,x,y,sx,sy)
@@ -669,11 +669,11 @@ function Image:__call(x,y,c,extra)
     x,y,c = assert(tonumber(x)),assert(tonumber(y)),tonumber(c)
     assert(not c or c < self.N, "channel outside of range")
     if self.N == 1 or c then
-        return ad.v[ImageAccess:get(self,x,y,c or 0,edge)]
+        return ad.v[ImageAccess:get(self,x,y,c or 0)]
     else
         local r = {}
         for i = 1,self.N do
-            r[i] = ad.v[ImageAccess:get(self,x,y,i-1,edge)]
+            r[i] = ad.v[ImageAccess:get(self,x,y,i-1)]
         end
         return ad.Vector(unpack(r))
     end
@@ -805,7 +805,7 @@ local function createfunction(problemspec,name,exps,usebounds,W,H)
             local a = e:key()
             if "ImageAccess" == a.kind then
                 if not a.image.type:isarithmetic() then
-                    local loadvec = imageload(ImageAccess:get(a.image,a.x,a.y,0,a:shape().keys[1]))
+                    local loadvec = imageload(ImageAccess:get(a.image,a.x,a.y,0))
                     loadvec.count = (loadvec.count or 0) + 1
                     return IRNode:create { kind = "vectorextract", children = terralib.newlist { loadvec }, channel = a.channel, type = e:type(), shape = a:shape() }  
                 else
