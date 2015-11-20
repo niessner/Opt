@@ -9,7 +9,7 @@
 CUDAHOME = /usr/local/cuda
 TERRAHOME ?= $(HOME)/terra/release
 TERRA ?= $(HOME)/terra/terra
-MLIB = ../mLib
+MLIB = $(HOME)/mLib
 
 CXX = clang++
 LINK = $(CXX)

@@ -19,7 +19,7 @@ end
 
 -- constants
 local verboseSolver = true
-local verboseAD = false
+local verboseAD = true
 
 local function newclass(name)
     local mt = { __name = name }
@@ -577,14 +577,18 @@ local IndexValue = VarDef:Variant("IndexValue") -- query of the numeric index
 local ParamValue = VarDef:Variant("ParamValue") -- get one of the global parameter values
 
 function ImageAccess:__tostring()
-    return ("%s_%s_%s_%s"):format(self.image.name,self.x,self.y,self.channel)
+    local r = ("%s_%s_%s_%s"):format(self.image.name,self.x,self.y,self.channel)
+    if not self:shape():isscalar() then
+        r = r .. ("_%s"):format(tostring(self:shape()))
+    end
+    return r
 end
 function BoundsAccess:__tostring() return ("bounds_%d_%d_%d_%d"):format(self.x,self.y,self.sx,self.sy) end
 function IndexValue:__tostring() return ({[0] = "i","j","k"})[self.dim._index] end
 function ParamValue:__tostring() return "param_"..self.name end
 
-ImageAccess.get = terralib.memoize(function(self,im,x,y,channel)
-    return ImageAccess:new { image = im, x = x, y = y, channel = channel }
+ImageAccess.get = terralib.memoize(function(self,im,x,y,channel, ...)
+    return ImageAccess:new { image = im, x = x, y = y, channel = channel, _shape = ad.Shape:fromkeys { ... } }
 end)
 
 BoundsAccess.get = terralib.memoize(function(self,x,y,sx,sy)
@@ -593,6 +597,10 @@ end)
 IndexValue.get = terralib.memoize(function(self,dim,shift)
     return IndexValue:new { _shift = tonumber(shift) or 0, dim = assert(todim(dim),"expected a dimension object") } 
 end)
+
+function ImageAccess:shape()
+    return self._shape
+end
 
 function Dim:index() return ad.v[IndexValue:get(self)] end
 
@@ -639,19 +647,33 @@ function ProblemSpecAD:Image(name,typ,W,H,idx)
     return r
 end
 
+local Adjacency = newclass("Adjacency")
+function Adjacency:__tostring() return "<" .. self.name .. ">" end
+
+function ProblemSpecAD:Adjacency(name,fromdim,todim,idx)
+    self.P:Adjacency(name,fromdim,todim,idx)
+    return Adjacency:new { name = tostring(name) }
+end
+
 function ProblemSpecAD:Param(name,typ,idx)
     self.P:Param(name,float,idx)
     return ad.v[ParamValue:new { name = name, type = typ }]
 end
-function Image:__call(x,y,c)
+
+function Image:__call(x,y,c,extra)
+    local edge = nil
+    if Adjacency:is(x) and y == nil and c == nil then
+        edge = x
+        x,y,c = y or 0,c or 0,extra
+    end
     x,y,c = assert(tonumber(x)),assert(tonumber(y)),tonumber(c)
     assert(not c or c < self.N, "channel outside of range")
     if self.N == 1 or c then
-        return ad.v[ImageAccess:get(self,x,y,c or 0)]
+        return ad.v[ImageAccess:get(self,x,y,c or 0,edge)]
     else
         local r = {}
         for i = 1,self.N do
-            r[i] = ad.v[ImageAccess:get(self,x,y,i-1)]
+            r[i] = ad.v[ImageAccess:get(self,x,y,i-1,edge)]
         end
         return ad.Vector(unpack(r))
     end

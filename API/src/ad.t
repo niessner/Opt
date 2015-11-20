@@ -65,6 +65,7 @@ local function joinshapes(shapes)
     end
     return longest
 end
+function Shape:isscalar() return #self.keys == 0 end
 
 function Shape:fromreduction()
     if #self.keys == 0 then return nil end
@@ -297,7 +298,7 @@ local function simplify(op,config,args)
         if Const:is(x) then
             return  x.v ~= 0 and y or z
         elseif y == zero then
-            return x * z
+            return ad.not_(x) * z
         elseif z == zero then
             return x * y
         end
@@ -352,7 +353,13 @@ function ExpVector:map(fn)
     return ad.Vector(unpack(self.data:map(fn)))
 end
 function ExpVector:expressions() return self.data end    
-
+function ExpVector:sum()
+    local s = 0
+    for i,e in ipairs(self:expressions()) do
+        s = s + e
+    end
+    return s
+end
 
 -- generates variable names
 local v = {} 
@@ -962,7 +969,12 @@ ad.not_:define(function(x) return `not x end, 0)
 setmetatable(ad,nil) -- remove special metatable that generates new blank ops
 
 ad.Var,ad.Apply,ad.Const,ad.Exp,ad.Reduce = Var, Apply, Const, Exp, Reduce
-
+function ad.reduce(x)
+    if ExpVector:is(x) then
+        return x:map(getreduce)
+    end
+    return getreduce(x)
+end
 function ad.polysimplify(exps)
     local function sumtoterms(sum)
         assert(Apply:is(sum) and sum.op.name == "sum")
