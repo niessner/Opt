@@ -713,10 +713,14 @@ end
 
 -- code ir is a table { kind = "...", ... }    
 local IRNode,nextirid = newclass("IRNode"),0
+local scalarshape = ad.Shape:fromkeys {}
 function IRNode:create(body)
     local ir = IRNode:new(body)
     ir.id,nextirid = nextirid,nextirid+1
     assert(body.type and terralib.types.istype(body.type),"missing type")
+    if not ir.shape then
+        ir.shape = scalarshape
+    end
     return ir
 end
 
@@ -765,7 +769,7 @@ local function createfunction(problemspec,name,exps,usebounds,W,H)
     exps = removeboundaries(exps)
     
     local imageload = terralib.memoize(function(image)
-        return IRNode:create { kind = "vectorload", value = image, type = image.image.type }
+        return IRNode:create { kind = "vectorload", value = image, type = image.image.type, shape = image:shape() }
     end)
     
     local irmap
@@ -792,7 +796,7 @@ local function createfunction(problemspec,name,exps,usebounds,W,H)
             n = ad.prod(n.config.c,unpack(factors))
             cond = Condition:create(conditions)
         end
-        return IRNode:create { kind = "reduce", op = op, children = terralib.newlist { vardecl, irmap(n) }, condition = cond, type = float }
+        return IRNode:create { kind = "reduce", op = op, children = terralib.newlist { vardecl, irmap(n) }, condition = cond, type = float, shape = vardecl.shape }
     end
     irmap = terralib.memoize(function(e)
         if ad.ExpVector:is(e) then
@@ -801,11 +805,11 @@ local function createfunction(problemspec,name,exps,usebounds,W,H)
             local a = e:key()
             if "ImageAccess" == a.kind then
                 if not a.image.type:isarithmetic() then
-                    local loadvec = imageload(ImageAccess:get(a.image,a.x,a.y,0))
+                    local loadvec = imageload(ImageAccess:get(a.image,a.x,a.y,0,a:shape().keys[1]))
                     loadvec.count = (loadvec.count or 0) + 1
-                    return IRNode:create { kind = "vectorextract", children = terralib.newlist { loadvec }, channel = a.channel, type = e:type() }  
+                    return IRNode:create { kind = "vectorextract", children = terralib.newlist { loadvec }, channel = a.channel, type = e:type(), shape = a:shape() }  
                 else
-                    return IRNode:create { kind = "load", value = a, type = e:type() }
+                    return IRNode:create { kind = "load", value = a, type = e:type(), shape = a:shape() }
                 end 
             else
                 return IRNode:create { kind = "intrinsic", value = a, type = e:type() }
@@ -814,9 +818,9 @@ local function createfunction(problemspec,name,exps,usebounds,W,H)
             return IRNode:create { kind = "const", value = e.v, type = e:type() }
         elseif "Apply" == e.kind then
             if (e.op.name == "sum" or e.op.name == "prod") and #e:children() > 2 then
-                local vardecl = IRNode:create { kind = "vardecl", constant = e.config.c, type = float }
+                local vardecl = IRNode:create { kind = "vardecl", constant = e.config.c, type = float, shape = e:shape() }
                 local children = terralib.newlist { vardecl }
-                local varuse = IRNode:create { kind = "varuse", children = children, type = float }
+                local varuse = IRNode:create { kind = "varuse", children = children, type = float, shape = e:shape() }
                 for i,c in ipairs(e:children()) do
                     children:insert(createreduce(e.op.name,vardecl,c))
                 end
@@ -835,7 +839,14 @@ local function createfunction(problemspec,name,exps,usebounds,W,H)
             else
                 function gen(args) return e.op:generate(e,args) end
             end
-            return IRNode:create { kind = "apply", op = e.op.name, generator = gen, children = children, type = e:type() }
+            return IRNode:create { kind = "apply", op = e.op.name, generator = gen, children = children, type = e:type(), shape = e:shape() }
+        elseif "Reduce" == e.kind then
+            local vardecl = IRNode:create { kind = "vardecl", constant = 0, type = e:type(), shape = e:shape() }
+            local arg = e.args[1]
+            local red = IRNode:create { kind = "reduce", op = "sum", children  = terralib.newlist { vardecl, irmap(arg) }, type = vardecl.type, shape = arg:shape() }
+            local children = terralib.newlist { vardecl, red }
+            local varuse = IRNode:create { kind = "varuse", children = children, type = vardecl.type, shape = e:shape() }
+            return varuse
         end
     end)
     
@@ -923,12 +934,16 @@ local function createfunction(problemspec,name,exps,usebounds,W,H)
         local uplevels,downlevels = conditiondiff(current,next)
         return uplevels*1000 + downlevels
     end
+    local function shapecost(current,next)
+        if current.keys[1] ~= next.keys[1] then return 1 end
+        return 0
+    end
         
     local function schedulebackwards(roots,uses)
         
         local state = nil -- ir -> "ready" or ir -> "scheduled"
         local readylists = terralib.newlist()
-        local currentcondition = Condition:create {}
+        local currentcondition,currentshape = Condition:create {}, ad.Shape:fromkeys {}
         local function enter()
             state = setmetatable({}, {__index = state})
             readylists:insert(terralib.newlist())
@@ -1023,7 +1038,7 @@ local function createfunction(problemspec,name,exps,usebounds,W,H)
         end
 
         local function cost(idx,ir)
-            local c =  { conditioncost(currentcondition,ir.condition), vardeclcost(ir), costspeculate(1,ir) }
+            local c =  { shapecost(currentshape,ir.shape), conditioncost(currentcondition,ir.condition), vardeclcost(ir), costspeculate(1,ir) }
             --print("cost",idx,unpack(c))
             return c
         end
@@ -1060,7 +1075,7 @@ local function createfunction(problemspec,name,exps,usebounds,W,H)
             regcounts:insert(1,currentregcount)
             currentregcount = currentregcount + netregisterswhenscheduled(ir)
             markscheduled(ir)
-            currentcondition = ir.condition
+            currentcondition,currentshape = ir.condition,ir.shape
         end
         return instructions,regcounts
     end
@@ -1104,7 +1119,7 @@ local function createfunction(problemspec,name,exps,usebounds,W,H)
         end
         for i,ir in ipairs(instructions) do
             emittedpos[ir] = i
-            print(("[%d]%sr%d : %s = %s"):format(regcounts[i],formatcondition(ir.condition),i,tostring(ir.type),formatinst(ir)))
+            print(("[%d]%sr%d : %s%s = %s"):format(regcounts[i],formatcondition(ir.condition),i,tostring(ir.type),tostring(ir.shape),formatinst(ir)))
             if instructions[i+1] and conditioncost(ir.condition,instructions[i+1].condition) ~= 0 then
                 print("---------------------")
             end
@@ -1312,18 +1327,17 @@ local function stencilforexpression(exp)
     end)
     return stencil
 end
-local function createfunctionset(problemspec,name,...)
+function ProblemSpecAD:createfunctionset(name,...)
     local exps = terralib.newlist {...}
-    local ut = problemspec.P:UnknownType()
+    local ut = self.P:UnknownType()
     local W,H = ut.metamethods.W,ut.metamethods.H
     
     dprint("function set for: ",name)
     dprint("bound")
-    local boundary = createfunction(problemspec,name,exps,true,W,H)
+    local boundary = createfunction(self,name,exps,true,W,H)
     dprint("interior")
-    local interior = boundary --createfunction(problemspec,name,exps,false,W,H) -- we don't currently use interior only
-    
-    problemspec.P:Function(name,{W,H},boundary,interior)
+    local interior = boundary -- we don't currently use interior only
+    self.P:Function(name,{W,H},boundary,interior)
 end
 
 local getpair = terralib.memoize(function(x,y) return {x = x, y = y} end)
@@ -1522,19 +1536,19 @@ function ProblemSpecAD:Cost(costexp_,jtjexp)
             dprint(jtjexp)
         end
         self.P:Stencil(stencilforexpression(jtjexp))
-        createfunctionset(self,"applyJTJ",jtjexp)
+        self:createfunctionset("applyJTJ",jtjexp)
 		--gradient with pre-conditioning
         local gradient,preconditioner = createjtf(self,costexp_.terms,unknown,P)	--includes the 2.0
-		createfunctionset(self,"evalJTF",gradient,preconditioner)
+		self:createfunctionset("evalJTF",gradient,preconditioner)
 		
 		--print("Gradient: ", removeboundaries(gradient))
 		--print("Preconditioner: ", removeboundaries(preconditioner))
     end
     
-    createfunctionset(self,"cost",costexp)
-    createfunctionset(self,"gradient",gradient)
+    self:createfunctionset("cost",costexp)
+    self:createfunctionset("gradient",gradient)
     if self.excludeexp then
-        createfunctionset(self,"exclude",self.excludeexp)
+        self:createfunctionset("exclude",self.excludeexp)
     end
     
     if verboseAD then

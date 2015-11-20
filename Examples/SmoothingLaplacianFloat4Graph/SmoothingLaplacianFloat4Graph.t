@@ -130,6 +130,7 @@ math_cost = math_cost:sum()
 print(math_cost)
 
 P:Function("cost", {W,H}, cost)
+--adP:createfunctionset("cost",math_cost)
 P:Function("gradient", {W,H}, gradient)
 P:Function("evalJTF", {W,H}, evalJTF)
 P:Function("applyJTJ", {W,H}, applyJTJ)
