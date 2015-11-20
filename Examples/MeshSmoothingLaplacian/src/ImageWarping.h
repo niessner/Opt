@@ -100,14 +100,14 @@ class ImageWarping
 			float weightFit = 50.0f;
 			float weightReg = 100.0f;
 		
-			unsigned int nonLinearIter = 10;
-			unsigned int linearIter = 10;
-
+			unsigned int nonLinearIter = 1;
+			unsigned int linearIter = 1;
+			/*
 			std::cout << "CUDA" << std::endl;
 			resetGPUMemory();
 			m_warpingSolver->solveGN(d_vertexPosFloat3, d_numNeighbours, d_neighbourIdx, d_neighbourOffset, d_vertexPosTargetFloat3, nonLinearIter, linearIter, weightFit, weightReg);
 			copyResultToCPUFromFloat3();
-			
+			*/
 			std::cout << "TERRA" << std::endl;
 			resetGPUMemory();
 			m_terraWarpingSolver->solve(d_vertexPosFloat3, d_vertexPosTargetFloat3, nonLinearIter, linearIter, 1, weightFit, weightReg);

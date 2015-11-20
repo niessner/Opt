@@ -92,10 +92,6 @@ __global__ void PCGInit_Kernel1(SolverInput input, SolverState state, SolverPara
 
 		d = dot(residuum, p);								 // x-th term of nomimator for computing alpha and denominator for computing beta
 	}
-	else
-	{
-	  //state.d_p[x] = make_float4(0.0f, 0.0f, 0.0f, 0.0f); Why are we writing off the edge?!
-	}
 
 	bucket[threadIdx.x] = d;
 

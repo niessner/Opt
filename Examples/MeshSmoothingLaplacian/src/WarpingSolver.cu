@@ -36,17 +36,18 @@ __global__ void EvalResidualDevice(SolverInput input, SolverState state, SolverP
 	const unsigned int N = input.N; // Number of block variables
 	const unsigned int x = blockIdx.x * blockDim.x + threadIdx.x;
 
+	float residual = 0.0f;
 	if (x < N)
 	{
-		float residual = evalFDevice(x, input, state, parameters);
-		residual = warpReduce(residual);
+		residual = evalFDevice(x, input, state, parameters);
+	}
+	residual = warpReduce(residual);
 
-		unsigned int laneid;
-		//This command gets the lane ID within the current warp
-		asm("mov.u32 %0, %%laneid;" : "=r"(laneid));
-		if (laneid == 0) {
-			atomicAdd(&state.d_sumResidual[0], residual);
-		}
+	unsigned int laneid;
+	//This command gets the lane ID within the current warp
+	asm("mov.u32 %0, %%laneid;" : "=r"(laneid));
+	if (laneid == 0) {
+	  atomicAdd(&state.d_sumResidual[0], residual);
 	}
 }
 
@@ -92,11 +93,7 @@ __global__ void PCGInit_Kernel1(SolverInput input, SolverState state, SolverPara
 
 		d = dot(residuum, p);								 // x-th term of nomimator for computing alpha and denominator for computing beta
 	}
-	else
-	{
-		state.d_p[x] = make_float3(0.0f, 0.0f, 0.0f);
-	}
-
+	
 	bucket[threadIdx.x] = d;
 
 	scanPart1(threadIdx.x, blockIdx.x, blockDim.x, state.d_scanAlpha);		// sum over x-th terms to compute nominator and denominator of alpha and beta inside this block

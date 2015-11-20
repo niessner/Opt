@@ -30,8 +30,13 @@ local terra cost(i : int32, j : int32, gi : int32, gj : int32, self : P:Paramete
 	
 	var laplacian : unknownElement = 0.0f
 	for adj in self.G:neighbors(i,j) do
-		var l_n = x - self.X(adj.x,adj.y)
-		laplacian = laplacian + (l_n*l_n)
+	    var l_n = x - self.X(adj.x,adj.y)
+	    -- l_n*l_n gives different (wrong) results. Why?
+	    var edgeCost = opt.float3(l_n(0)*l_n(0), l_n(1)*l_n(1), l_n(2)*l_n(2))
+	    laplacian = laplacian + edgeCost
+	    
+	    printf("%d,%d: %f\n", i, adj.x, edgeCost*1000000.0);
+	    
 	end
 		
 	var e_reg = w_reg*laplacian
