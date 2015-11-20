@@ -32,7 +32,7 @@
   </PropertyGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.props" />
   <ImportGroup Label="ExtensionSettings">
-    <Import Project="$(VCTargetsPath)\BuildCustomizations\CUDA 6.5.props" />
+    <Import Project="$(VCTargetsPath)\BuildCustomizations\CUDA 7.0.props" />
   </ImportGroup>
   <ImportGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'" Label="PropertySheets">
     <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
@@ -68,7 +68,7 @@
       <PrecompiledHeader>Use</PrecompiledHeader>
     </ClCompile>
     <Link>
-      <AdditionalDependencies>Kinect10.lib;d3d11.lib;d3dcompiler.lib;d3dx11d.lib;d3dx9d.lib;dxerr.lib;dxguid.lib;winmm.lib;comctl32.lib;Shlwapi.lib;cudart.lib;cublas.lib;FreeImage.lib;zlib64.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalDependencies>Opt.lib;Kinect10.lib;d3d11.lib;d3dcompiler.lib;d3dx11d.lib;d3dx9d.lib;dxerr.lib;dxguid.lib;winmm.lib;comctl32.lib;Shlwapi.lib;cudart.lib;cublas.lib;FreeImage.lib;zlib64.lib;%(AdditionalDependencies)</AdditionalDependencies>
       <SubSystem>Console</SubSystem>
       <GenerateDebugInformation>true</GenerateDebugInformation>
       <AdditionalLibraryDirectories>../opencv/lib/;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
@@ -83,7 +83,7 @@
       <MaxRegCount>62</MaxRegCount>
     </CudaCompile>
     <PreBuildEvent>
-      <Command>call "../common/optMake.bat" "$(ProjectDir)/../../../terra" "$(ProjectDir)/../build" "$(ProjectDir)"</Command>
+      <Command>call "../../API/common/optMake.bat" "$(ProjectDir)/../../../terra" "$(ProjectDir)/../../API/build" "$(ProjectDir)"</Command>
     </PreBuildEvent>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
@@ -121,7 +121,7 @@
       <Optimization>O3</Optimization>
     </CudaCompile>
     <PreBuildEvent>
-      <Command>call "../common/optMake.bat" "$(ProjectDir)/../../../terra" "$(ProjectDir)/../build" "$(ProjectDir)"</Command>
+      <Command>call "../../API/common/optMake.bat" "$(ProjectDir)/../../../terra" "$(ProjectDir)/../../API/build" "$(ProjectDir)"</Command>
     </PreBuildEvent>
   </ItemDefinitionGroup>
   <ItemGroup>
@@ -286,6 +286,6 @@
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">
-    <Import Project="$(VCTargetsPath12)\BuildCustomizations\CUDA 6.5.targets" />
+    <Import Project="$(VCTargetsPath12)\BuildCustomizations\CUDA 7.0.targets" />
   </ImportGroup>
 </Project>

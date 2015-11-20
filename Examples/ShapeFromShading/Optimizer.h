@@ -1,5 +1,5 @@
 extern "C" {
-#include "../build/Opt.h"
+#include "Opt.h"
 }
 #include <string>
 class Optimizer {
