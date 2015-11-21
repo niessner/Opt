@@ -1129,6 +1129,7 @@ local function createfunction(problemspec,name,exps,usebounds,W,H)
     
     local P = symbol(problemspec.P:ParameterType(),"P")
     local i,j,gi,gj = symbol(int32,"i"), symbol(int32,"j"),symbol(int32,"gi"), symbol(int32,"gj")
+    local mi,mj = symbol(int32,"mi"), symbol(int32,"mj")
     local indexes = {[0] = i,j }
     
     local statementstack = terralib.newlist { terralib.newlist() } 
@@ -1194,9 +1195,9 @@ local function createfunction(problemspec,name,exps,usebounds,W,H)
             local a = ir.value
             local im = imageref(a.image)
             if conditioncoversload(ir.condition,a.x,a.y) then
-               return `im(i+[a.x],j+[a.y])
+               return `im(mi+[a.x],mj+[a.y])
             else
-               return `im:get(i+[a.x],j+[a.y],gi+[a.x],gj+[a.y])
+               return `im:get(mi+[a.x],mj+[a.y],mi+[a.x],mj+[a.y])
             end
         elseif "vectorload" == ir.kind then
             local a = ir.value
@@ -1205,13 +1206,13 @@ local function createfunction(problemspec,name,exps,usebounds,W,H)
             
             if conditioncoversload(ir.condition,a.x,a.y) then
                 statements:insert(quote
-                    var [s] : a.image.type = im(i+[a.x],j+[a.y])
+                    var [s] : a.image.type = im(mi+[a.x],mj+[a.y])
                 end)
             else 
                 statements:insert(quote
                     var [s] : a.image.type = 0.f
-                    if opt.InBoundsCalc(gi+[a.x],gj+[a.y],[W.size],[H.size],0,0) then
-                        [s] = im(i+[a.x],j+[a.y])
+                    if opt.InBoundsCalc(mi+[a.x],mj+[a.y],[W.size],[H.size],0,0) then
+                        [s] = im(mi+[a.x],mj+[a.y])
                     end
                 end)
             end
@@ -1253,11 +1254,38 @@ local function createfunction(problemspec,name,exps,usebounds,W,H)
 
     local basecondition = Condition:create {}
     local currentcondition = basecondition
+    local currentshape = ad.scalar
+    
+    local function emitshapechange(current,next)
+        if current == next then return end
+        emitconditionchange(currentcondition,basecondition) -- exit all conditions
+        currentcondition = basecondition
+        while not current:isprefixof(next) do
+            local stmts = statementstack:remove()
+            local a = current.keys[#current.keys]
+            statementstack[#statementstack]:insert quote
+                for adj in P.[a.name]:neighbors(mi,mj) do
+                    var [mi],[mj] = adj.x,adj.y
+                    [stmts]
+                end
+            end
+            current = current:fromreduction()
+       end
+       for i = 1,#next.keys - #current.keys do
+            statementstack:insert(terralib.newlist())
+       end
+       statements = statementstack[#statementstack]
+    end
+    
     local declarations = terralib.newlist()
     for i,ir in ipairs(instructions) do
         currentidx = i
+        emitshapechange(currentshape,ir.shape)
+        currentshape = ir.shape
+        
         emitconditionchange(currentcondition,ir.condition)
         currentcondition = ir.condition
+        
         if false then -- dynamically check dependencies are initialized before use, very slow, only use for debugging
             local ruse = symbol(bool,"ruse"..tostring(i))
             declarations:insert quote var [ruse] = false end
@@ -1289,11 +1317,13 @@ local function createfunction(problemspec,name,exps,usebounds,W,H)
         end
         emitted[ir] = r
     end
-    emitconditionchange(currentcondition,basecondition)
+    --emitconditionchange(currentcondition,basecondition)
+    emitshapechange(currentshape,ad.scalar) -- also blanks condition
     assert(#statementstack == 1)
     
     local results = irroots:map(emit)
     local terra generatedfn([i], [j], [gi], [gj], [P], [extraimages])
+        var [mi],[mj] = [i],[j]
         [declarations]
         [statements]
         return [results]
