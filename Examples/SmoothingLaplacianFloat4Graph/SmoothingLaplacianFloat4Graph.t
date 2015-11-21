@@ -127,9 +127,8 @@ end
 
 local math_cost = w_fit * (X(0,0) - A(0,0)) ^ 2 + w_reg * ad.reduce((X(G) - X(0,0))^2)
 math_cost = math_cost:sum()
---print(math_cost)
+print(math_cost)
 --adP:createfunctionset("cost",math_cost)
-
 P:Function("cost", {W,H}, cost)
 P:Function("gradient", {W,H}, gradient)
 P:Function("evalJTF", {W,H}, evalJTF)

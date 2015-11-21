@@ -12,7 +12,7 @@ programnames=(meshsmoothing imagewarping)
 for index in ${!foldernames[*]}
 do
     cd ${foldernames[$index]}
-    make clean
+    #make clean
     make
     ./${programnames[$index]}
     cd ..
