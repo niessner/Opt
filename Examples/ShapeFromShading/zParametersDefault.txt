@@ -92,7 +92,7 @@ s_weightPrior[2] = 0.0f;
 
 s_bRecordDepthData = true;
 s_numHierarchyLevels = 1;
-s_optimizer = 2; // 0: CUDA, 1: AD, 2: NO_AD
+s_optimizer = 1; // 0: CUDA, 1: AD, 2: NO_AD
 s_useBlockSolver = true;
 
 s_playData = true;

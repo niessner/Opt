@@ -155,12 +155,13 @@ if USE_REGULARIZATION then
 	local E_s_noCheck = sqMagnitude(plus(times(4.0,p(0,0)), times(-1.0, plus(p(-1,0), plus(p(0,-1), plus(p(1,0), p(0,1)))))))
 	local d = X(0,0)
 
-	local E_s_guard = ad.and_(opt.InBounds(0,0,1,1), 
-						ad.and_(cross_valid, 
-						ad.and_(ad.less(ad.abs(d - X(1,0)), DEPTH_DISCONTINUITY_THRE),
-						ad.and_(ad.less(ad.abs(d - X(-1,0)), DEPTH_DISCONTINUITY_THRE),
-						ad.and_(ad.less(ad.abs(d - X(0,1)), DEPTH_DISCONTINUITY_THRE),
-						ad.and_(ad.less(ad.abs(d - X(0,-1)), DEPTH_DISCONTINUITY_THRE)))))))
+	local E_s_guard =   ad.and_(ad.less(ad.abs(d - X(0,-1)), DEPTH_DISCONTINUITY_THRE), 
+                            ad.and_(ad.less(ad.abs(d - X(0,1)), DEPTH_DISCONTINUITY_THRE), 
+                                ad.and_(ad.less(ad.abs(d - X(-1,0)), DEPTH_DISCONTINUITY_THRE), 
+                                    ad.and_(ad.less(ad.abs(d - X(1,0)), DEPTH_DISCONTINUITY_THRE), 
+                                        ad.and_(opt.InBounds(0,0,1,1), cross_valid)
+                        ))))
+
 	E_s = ad.select(E_s_guard, E_s_noCheck, 0)
 
 end

@@ -1,7 +1,17 @@
 **Development Journal** 
 		Michael Mara
 
-2015/11/20 15:27
+**2015/11/20 16:42**
+
+Brought all versions of ShapeFromShading online. Current status:
+
+CUDA (block solver only): *Increases* cost
+Terra: Seems to work fairly well
+Terra AD: NaNs are propagating.
+
+Things to do next: switch terra versions to non-blocked version. Write non-blocked CUDA version. Debug AD version.
+
+**2015/11/20 15:27**
 
 Added areWeBroken.sh, which is meant to be a one-button regression test. Right now, just compiles and runs the known-good samples.
 

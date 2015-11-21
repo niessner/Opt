@@ -9,7 +9,10 @@ Opt and all of its examples require a recent version of [Terra](https://github.c
 
 Our recommended directory structure for development is:
 
-
+/DSL/Opt (this repo)
+/DSL/terra
+/DSL/LLVM
+/DSL/LuaJIT-2.0.4
 
 
 Examples/ShapeFromShading works only on Windows and requires the following:
