@@ -135,7 +135,7 @@ int main(int argc, char** argv)
 		//Read the global app state
 		ParameterFile parameterFileGlobalApp(fileNameDescGlobalApp);
 		GlobalAppState::getInstance().readMembers(parameterFileGlobalApp);
-		//GlobalAppState::getInstance().print();
+		GlobalAppState::getInstance().print();
 		
 		// Set DXUT callbacks
 		DXUTSetCallbackDeviceChanging( ModifyDeviceSettings );

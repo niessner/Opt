@@ -273,9 +273,9 @@ void CUDAPatchSolverSFS::solveSFS(float* d_targetDepth, float* d_depthMapRefined
     case TERRA_AD: 
         {
 #           if OPT_CPU
-                Plan* plan = maybeInitOptimizerAndPlan(true, "../testMLib/shapeFromShadingAD.t", "gradientDescentCPU", m_solverInput.width, m_solverInput.height, elemsize);
+                Plan* plan = maybeInitOptimizerAndPlan(true, "shapeFromShadingAD.t", "gradientDescentCPU", m_solverInput.width, m_solverInput.height, elemsize);
 #           else
-            Plan* plan = maybeInitOptimizerAndPlan(true, "../testMLib/shapeFromShadingAD.t", GlobalAppState::get().s_useBlockSolver ? "gaussNewtonBlockGPU" : "gaussNewtonGPU", m_solverInput.width, m_solverInput.height, elemsize);
+            Plan* plan = maybeInitOptimizerAndPlan(true, "shapeFromShadingAD.t", GlobalAppState::get().s_useBlockSolver ? "gaussNewtonBlockGPU" : "gaussNewtonGPU", m_solverInput.width, m_solverInput.height, elemsize);
 #           endif
 
             std::vector<void*> images;
@@ -289,9 +289,9 @@ void CUDAPatchSolverSFS::solveSFS(float* d_targetDepth, float* d_depthMapRefined
     case TERRA_NO_AD:
         {
 #           if OPT_CPU
-                Plan* plan = maybeInitOptimizerAndPlan(false, "../testMLib/shapeFromShading.t", "gradientDescentCPU", m_solverInput.width, m_solverInput.height, elemsize);
+                Plan* plan = maybeInitOptimizerAndPlan(false, "shapeFromShading.t", "gradientDescentCPU", m_solverInput.width, m_solverInput.height, elemsize);
 #           else
-            Plan* plan = maybeInitOptimizerAndPlan(false, "../testMLib/shapeFromShading.t", GlobalAppState::get().s_useBlockSolver ? "gaussNewtonBlockGPU" : "gaussNewtonGPU", m_solverInput.width, m_solverInput.height, elemsize);
+            Plan* plan = maybeInitOptimizerAndPlan(false, "shapeFromShading.t", GlobalAppState::get().s_useBlockSolver ? "gaussNewtonBlockGPU" : "gaussNewtonGPU", m_solverInput.width, m_solverInput.height, elemsize);
 #           endif
             std::vector<void*> images;
             TerraSolverParameters tParams;

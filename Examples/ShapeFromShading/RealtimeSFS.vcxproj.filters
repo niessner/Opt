@@ -258,6 +258,12 @@
     <None Include="Shaders\RGBDRenderer.hlsl">
       <Filter>DirectX\Shader</Filter>
     </None>
+    <None Include="shapeFromShadingAD.t">
+      <Filter>Terra</Filter>
+    </None>
+    <None Include="shapeFromShading.t">
+      <Filter>Terra</Filter>
+    </None>
   </ItemGroup>
   <ItemGroup>
     <Filter Include="IO">
@@ -292,6 +298,9 @@
     </Filter>
     <Filter Include="Cuda\SolverSHLighting">
       <UniqueIdentifier>{10d895dc-7457-4e0a-b0ec-1b06abaabc70}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Terra">
+      <UniqueIdentifier>{a14ccf20-bbb9-4d26-bdc0-279bd42ade76}</UniqueIdentifier>
     </Filter>
   </ItemGroup>
   <ItemGroup>

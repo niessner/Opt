@@ -101,7 +101,7 @@
       <PrecompiledHeader>Use</PrecompiledHeader>
     </ClCompile>
     <Link>
-      <AdditionalDependencies>Opt.lib;Kinect10.lib;d3d11.lib;d3dcompiler.lib;d3dx11.lib;d3dx9.lib;dxerr.lib;dxguid.lib;winmm.lib;comctl32.lib;Shlwapi.lib;cudart.lib;cublas.lib;opencv_world300.lib;opencv_ts300.lib;FreeImage.lib;zlib64.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalDependencies>Opt.lib;Kinect10.lib;d3d11.lib;d3dcompiler.lib;d3dx11.lib;d3dx9.lib;dxerr.lib;dxguid.lib;winmm.lib;comctl32.lib;Shlwapi.lib;cudart.lib;cublas.lib;FreeImage.lib;zlib64.lib;%(AdditionalDependencies)</AdditionalDependencies>
       <GenerateDebugInformation>true</GenerateDebugInformation>
       <EnableCOMDATFolding>true</EnableCOMDATFolding>
       <SubSystem>Console</SubSystem>
@@ -127,6 +127,8 @@
   <ItemGroup>
     <None Include="Shaders\PhongLighting.hlsl" />
     <None Include="Shaders\QuadDrawer.hlsl" />
+    <None Include="shapeFromShading.t" />
+    <None Include="shapeFromShadingAD.t" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="BinaryDumpReader.cpp" />
