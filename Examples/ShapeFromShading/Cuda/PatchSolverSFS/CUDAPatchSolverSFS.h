@@ -1,11 +1,12 @@
 #pragma once
-
+/** TODO: Refactor and rename this to reflect the fact that all optimization variants run through this code path */
 #include <cuda_runtime.h>
 #include <cuda_d3d11_interop.h>
 
 #include "../../cudaUtil.h"
 #include "PatchSolverSFSParameters.h"
 #include "PatchSolverSFSState.h"
+#include "../SolverSFS/SolverSFSState.h"
 #include "../ICUDASolverSFS.h"
 #include "../CUDAScan.h"
 #include "../../ConvergenceAnalysis.h"
@@ -34,7 +35,8 @@ class CUDAPatchSolverSFS : public ICUDASolverSFS
 		CUDAScan		m_scan;
 
 		PatchSolverInput m_solverInput;
-		PatchSolverState m_solverState;
+		PatchSolverState m_patchSolverState;
+        SolverState      m_solverState;
 
 		unsigned int m_imageWidth;
 		unsigned int m_imageHeight;

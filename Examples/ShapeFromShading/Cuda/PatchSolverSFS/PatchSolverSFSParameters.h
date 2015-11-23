@@ -18,6 +18,7 @@ struct PatchSolverParameters
 
 	unsigned int nNonLinearIterations;		// Steps of the non-linear solver	
 	unsigned int nLinIterations;			// Steps of the linear solver
+    // Unused for non-patch solver
 	unsigned int nPatchIterations;			// Steps on linear step on block level
 };
 

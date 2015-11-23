@@ -1,6 +1,17 @@
 **Development Journal** 
 		Michael Mara
 
+**2015/11/20 13:42**
+
+Tested non-blocked versions of both terra and terra AD solver. Terra version seems same as blocked, AD version is definitely not correct, but seems to propagate NaNs less strongly than the non-blocked version. 
+
+Fixing the AD version is still an open issue.
+
+Added in the framework for a non-blocked CUDA solver by copying over files from PoissonImageEditing and adding plumbing code so that we can call it in place of the other solvers.
+Currently tracking down an issue where there are illegal memory accesses, despite the fact I stripped out most of the code that should be doing anything. Solving this and then slowly implementing full functionality to
+bring it on par with the blocked solver are my highest priorities.
+
+
 **2015/11/20 16:42**
 
 Brought all versions of ShapeFromShading online. Current status:

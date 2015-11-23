@@ -221,7 +221,12 @@
     <ClInclude Include="Cuda\PatchSolverSFS\PatchSolverSFSParameters.h" />
     <ClInclude Include="Cuda\PatchSolverSFS\PatchSolverSFSState.h" />
     <ClInclude Include="Cuda\PatchSolverSFS\PatchSolverSFSUtil.h" />
+    <ClInclude Include="Cuda\PatchSolverSFS\TerraSolverParameters.h" />
     <ClInclude Include="Cuda\SolverSFS\SolverSFSState.h" />
+    <ClInclude Include="Cuda\SolverSFS\SolverSFSEquations.h" />
+    <ClInclude Include="Cuda\SolverSFS\SolverSFSState.h" />
+    <ClInclude Include="Cuda\SolverSFS\SolverSFSUtil.h" />
+    <ClInclude Include="Cuda\SolverSFS\SolverUtil.h" />
     <ClInclude Include="Cuda\SolverSHLightingState.h" />
     <ClInclude Include="Cuda\SolverUtil.h" />
     <ClInclude Include="DumpOptImage.h" />
@@ -276,6 +281,7 @@
       <PtxAsOptionV Condition="'$(Configuration)|$(Platform)'=='Release|x64'">true</PtxAsOptionV>
     </CudaCompile>
     <CudaCompile Include="Cuda\ScanCS.cu" />
+    <CudaCompile Include="Cuda\SolverSFS\SolverSFS.cu" />
     <CudaCompile Include="Cuda\SolverSHLighting.cu" />
   </ItemGroup>
   <ItemGroup>

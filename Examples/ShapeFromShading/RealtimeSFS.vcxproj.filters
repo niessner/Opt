@@ -247,6 +247,21 @@
     <ClInclude Include="Optimizer.h" />
     <ClInclude Include="DumpOptImage.h" />
     <ClInclude Include="CUDATimer.h" />
+    <ClInclude Include="Cuda\SolverSFS\SolverSFSState.h">
+      <Filter>Cuda\SolverSFS</Filter>
+    </ClInclude>
+    <ClInclude Include="Cuda\SolverSFS\SolverSFSUtil.h">
+      <Filter>Cuda\SolverSFS</Filter>
+    </ClInclude>
+    <ClInclude Include="Cuda\SolverSFS\SolverSFSEquations.h">
+      <Filter>Cuda\SolverSFS</Filter>
+    </ClInclude>
+    <ClInclude Include="Cuda\PatchSolverSFS\TerraSolverParameters.h">
+      <Filter>Cuda\PatchSolverSFS</Filter>
+    </ClInclude>
+    <ClInclude Include="Cuda\SolverSFS\SolverUtil.h">
+      <Filter>Cuda\SolverSFS</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <None Include="Shaders\PhongLighting.hlsl">
@@ -302,6 +317,9 @@
     <Filter Include="Terra">
       <UniqueIdentifier>{a14ccf20-bbb9-4d26-bdc0-279bd42ade76}</UniqueIdentifier>
     </Filter>
+    <Filter Include="Cuda\SolverSFS">
+      <UniqueIdentifier>{fd21b5f9-6f79-48cc-8645-160cf867c182}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
   <ItemGroup>
     <CudaCompile Include="Cuda\CameraUtil.cu">
@@ -324,6 +342,9 @@
     </CudaCompile>
     <CudaCompile Include="Cuda\CUDAHoleFiller.cu">
       <Filter>Cuda</Filter>
+    </CudaCompile>
+    <CudaCompile Include="Cuda\SolverSFS\SolverSFS.cu">
+      <Filter>Cuda\SolverSFS</Filter>
     </CudaCompile>
   </ItemGroup>
   <ItemGroup>
