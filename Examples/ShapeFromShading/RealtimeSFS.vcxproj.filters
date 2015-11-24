@@ -259,8 +259,8 @@
     <ClInclude Include="Cuda\PatchSolverSFS\TerraSolverParameters.h">
       <Filter>Cuda\PatchSolverSFS</Filter>
     </ClInclude>
-    <ClInclude Include="Cuda\SolverSFS\SolverUtil.h">
-      <Filter>Cuda\SolverSFS</Filter>
+    <ClInclude Include="Cuda\PatchSolverSFS\SolverTerms.h">
+      <Filter>Cuda\PatchSolverSFS</Filter>
     </ClInclude>
   </ItemGroup>
   <ItemGroup>

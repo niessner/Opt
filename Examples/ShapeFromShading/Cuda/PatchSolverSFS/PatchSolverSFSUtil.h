@@ -181,4 +181,19 @@ __inline__ __device__ void SetPatchToZero_SFS(volatile float* cache, float value
 		cache[idxtmp] =  value;
 }
 
+
+__inline__ __device__ float3 point(float d, int posx, int posy, PatchSolverInput& input) {
+    const float fx = input.calibparams.fx;
+    const float fy = input.calibparams.fy;
+    const float ux = input.calibparams.ux;
+    const float uy = input.calibparams.uy;
+    return make_float3((((float)posx - ux) / fx)*d, (((float)posy - uy) / fy)*d, d);
+
+}
+
+__inline__ __device__ float sqMagnitude(float3 in) {
+    return in.x*in.x + in.y*in.y + in.z*in.z;
+}
+
+
 #endif

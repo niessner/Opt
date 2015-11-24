@@ -87,8 +87,7 @@ __global__ void PCGInit_Kernel1(PatchSolverInput input, SolverState state, Patch
     float d = 0.0f;
     if (x < N)
     {
-        d = 1.0f;
-        /*
+        
         const float residuum = evalMinusJTFDevice(x, input, state, parameters); // residuum = J^T x -F - A x delta_0  => J^T x -F, since A x x_0 == 0 
         state.d_r[x] = residuum;												 // store for next iteration
 
@@ -96,7 +95,7 @@ __global__ void PCGInit_Kernel1(PatchSolverInput input, SolverState state, Patch
         state.d_p[x] = p;
 
         d = residuum * p;								 // x-th term of nomimator for computing alpha and denominator for computing beta
-        */
+        
     }
     
     d = warpReduce(d);

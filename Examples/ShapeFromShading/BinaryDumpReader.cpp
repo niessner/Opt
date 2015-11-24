@@ -43,6 +43,24 @@ HRESULT BinaryDumpReader::createFirstConnected()
 	std::cout << "Loading finished" << std::endl;
 	std::cout << sensorData << std::endl;
 
+    /** Hack for producing small test cases. 
+    int size = 2;
+    // Make sure file doesn't exist or this will just append uselessly to its end
+    BinaryDataStreamFile outputStream("smalltest.sensor", false);
+    sensorData.m_ColorImages.resize(size);
+    sensorData.m_DepthImages.resize(size);
+    sensorData.m_ColorImagesTimeStamps.resize(size);
+    sensorData.m_DepthImagesTimeStamps.resize(size);
+    sensorData.m_DepthNumFrames = size;
+    sensorData.m_ColorNumFrames = size;
+    outputStream << sensorData;
+    outputStream.closeStream();
+    exit(0);
+    */
+    
+    
+    
+
 	RGBDSensor::init(sensorData.m_DepthImageWidth, sensorData.m_DepthImageHeight, std::max(sensorData.m_ColorImageWidth,1u), std::max(sensorData.m_ColorImageHeight,1u), 1);	
 	initializeDepthIntrinsics(sensorData.m_CalibrationDepth.m_Intrinsic(0,0), sensorData.m_CalibrationDepth.m_Intrinsic(1,1), sensorData.m_CalibrationDepth.m_Intrinsic(0,2), sensorData.m_CalibrationDepth.m_Intrinsic(1,2));	
 	initializeColorIntrinsics(sensorData.m_CalibrationColor.m_Intrinsic(0,0), sensorData.m_CalibrationColor.m_Intrinsic(1,1), sensorData.m_CalibrationColor.m_Intrinsic(0,2), sensorData.m_CalibrationColor.m_Intrinsic(1,2));

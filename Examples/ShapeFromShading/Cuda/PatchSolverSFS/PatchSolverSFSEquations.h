@@ -10,13 +10,7 @@
 #include "PatchSolverSFSState.h"
 #include "PatchSolverSFSParameters.h"
 
-#define USE_MASK_REFINE
-
-#define USE_REGULARIZATION 1
-#define USE_SHADING_CONSTRAINT 1
-#define USE_DEPTH_CONSTRAINT 1
-#define USE_TEMPORAL_CONSTRAINT 0
-#define USE_PRECONDITIONER 0
+#include "SolverTerms.h"
 
 #define DEPTH_DISCONTINUITY_THRE 0.01
 
@@ -401,19 +395,6 @@ __device__ inline void prior_normal_from_previous_depth(float d,int gidx, int gi
 	normal2 = estimate_normal_from_depth2(input.d_depthMapRefinedLastFrameFloat, posx, posy+1, W, H,ax, ay+ufy, fx, fy);
 
 	return ;	
-}
-
-__inline__ __device__ float3 point(float d, int posx, int posy, PatchSolverInput& input) {
-    const float fx = input.calibparams.fx;
-    const float fy = input.calibparams.fy;
-    const float ux = input.calibparams.ux;
-    const float uy = input.calibparams.uy;
-    return make_float3((((float)posx - ux) / fx)*d, (((float)posy - uy) / fy)*d, d);
-
-}
-
-__inline__ __device__ float sqMagnitude(float3 in) {
-    return in.x*in.x + in.y*in.y + in.z*in.z;
 }
 
 ////////////////////////////////////////

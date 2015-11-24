@@ -1,6 +1,6 @@
 s_sensorIdx = 4;	// 1 = PrimeSense; 2 = KinectOne; 3 = GroundTruth; 4 = BinaryDumpReader
 
-s_filenameDump = "refined.sensor";
+s_filenameDump = "smalltest.sensor";
 
 s_windowWidth = 640
 s_windowHeight = 480
@@ -93,7 +93,7 @@ s_weightPrior[2] = 0.0f;
 s_bRecordDepthData = true;
 s_numHierarchyLevels = 1;
 s_optimizer = 0; // 0: CUDA, 1: AD, 2: NO_AD
-s_useBlockSolver = false;
+s_useBlockSolver = true;
 
 s_playData = true;
 s_renderToFile = false;
