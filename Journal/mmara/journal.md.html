@@ -1,6 +1,25 @@
 **Development Journal** 
 		Michael Mara
 
+
+**2015/11/24 15:53**
+
+After debugging improper warp reductions, I have a cost function for the non-block solver running, but producing results *very* different than the block solver. Time to debug! Tahnkfully I have the ability to turn individual terms off, which should help quite a bit.
+
+**2015/11/24 13:53**
+
+Went down a couple of dead ends while trying to get the non-block solver to work. Reverted some stuff and now going to try to change pieces at a time while checking each change to make sure the blocked solver doesn't change.
+
+Made a small (2 frame) test case to run experiments on. First up is making sure the initial cost is repeatable:
+
+Trial 1: 7955.705078
+Trial 2: 7955.706543
+Trial 3: 7955.706055
+
+Seems fairly repeatable. What I don't understand is why the first frame always looks so much worse than the rest. (This is true for all of the optimizers and regardless of what the frames actually are (I tried swapping first and second frames to no perceivable difference))
+
+
+
 **2015/11/23 17:12**
 
 Gilbert is all set up to work on Opt! Beyond that, struggled through getting the CUDA non-patch solver to not crash, rewrote it to use warp reductions, found null pointers, etc. Now ready to start slotting in the SFS code.

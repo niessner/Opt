@@ -187,7 +187,14 @@ void CUDAPatchSolverSFS::solveSFS(float* d_targetDepth, float* d_depthMapRefined
     m_solverInput.d_remapArray = d_remappingArrayDepthMask;
     m_solverInput.deltaTransform = float4x4(deltaTransform.ptr()); // transformation to last frame
 
-    if (useRemapping) m_solverInput.N = numElements;
+    if (useRemapping) {
+        m_solverInput.N = numElements;
+    }
+
+    if (!GlobalAppState::get().s_useBlockSolver) {
+        m_solverInput.N = m_solverInput.width*m_solverInput.height;
+    }
+
     m_solverInput.m_useRemapping = useRemapping;
 
     PatchSolverParameters parameters;

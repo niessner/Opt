@@ -105,7 +105,7 @@ __inline__ __device__ float evalFDevice(int variableIdx, SolverInput& input, Sol
                 && abs(d - d2)<DEPTH_DISCONTINUITY_THRE
                 && abs(d - d3)<DEPTH_DISCONTINUITY_THRE)
             {
-               // E_s = sqMagnitude(4.0f*point(d, posx, posy, input) - (point(d1, posx + 1, posy, input) + point(d0, posx - 1, posy, input) + point(d3, posx, posy + 1, input) + point(d2, posx, posy - 1, input)));
+                E_s = sqMagnitude(4.0f*point(d, posx, posy, input) - (point(d1, posx + 1, posy, input) + point(d0, posx - 1, posy, input) + point(d3, posx, posy + 1, input) + point(d2, posx, posy - 1, input)));
             }
 #           endif
 

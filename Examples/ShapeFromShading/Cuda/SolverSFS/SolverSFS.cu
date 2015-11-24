@@ -23,6 +23,9 @@
 #define EXPORT
 #endif
 
+#define WARP_SIZE 32u
+#define WARP_MASK (WARP_SIZE-1u)
+
 /////////////////////////////////////////////////////////////////////////
 // Eval Residual
 /////////////////////////////////////////////////////////////////////////
@@ -35,21 +38,20 @@ __global__ void ResetResidualDevice(SolverInput input, SolverState state, PatchS
 
 __global__ void EvalResidualDevice(PatchSolverInput input, SolverState state, PatchSolverParameters parameters)
 {
-
-    const unsigned int W = input.width;
-    const unsigned int H = input.height;
     const unsigned int x = blockIdx.x * blockDim.x + threadIdx.x;
-    const unsigned int y = blockIdx.y * blockDim.y + threadIdx.y;
+
+    const unsigned int N = input.N;
+    
 
     float residual = 0.0f;
-	if (x < W && y < H)
+	if (x < N)
 	{
 		residual = evalFDevice(x, input, state, parameters);
 	}
     // Must do shuffle in entire warp
     float r = warpReduce(residual);
-    if (threadIdx.x == 0 && threadIdx.y == 0) {
-        atomicAdd(&state.d_sumResidual[0], r);
+    if ((threadIdx.x & WARP_MASK) == 0) {
+        atomicAdd(state.d_sumResidual, r);
     }
 }
 
@@ -99,7 +101,7 @@ __global__ void PCGInit_Kernel1(PatchSolverInput input, SolverState state, Patch
     }
     
     d = warpReduce(d);
-    if ((threadIdx.x + threadIdx.y) == 0) {
+    if ((threadIdx.x & WARP_MASK) == 0) {
         atomicAdd(state.d_scanAlpha, d);
     }
 }
@@ -161,7 +163,7 @@ __global__ void PCGStep_Kernel1(PatchSolverInput input, SolverState state, Patch
 	}
 
     d = warpReduce(d);
-    if ((threadIdx.x + threadIdx.y) == 0) {
+    if ((threadIdx.x & WARP_MASK) == 0) {
         atomicAdd(state.d_scanAlpha, d); // sum over x-th terms to compute denominator of alpha inside this block
     }		
 }
@@ -192,7 +194,7 @@ __global__ void PCGStep_Kernel2(PatchSolverInput input, SolverState state)
 
 
     b = warpReduce(b);
-    if ((threadIdx.x + threadIdx.y) == 0) {
+    if ((threadIdx.x & WARP_MASK) == 0) {
         atomicAdd(state.d_scanBeta, b); // sum over x-th terms to compute denominator of alpha inside this block
     }
 
