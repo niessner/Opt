@@ -81,33 +81,35 @@ float EvalResidual(PatchSolverInput& input, SolverState& state, PatchSolverParam
 
 __global__ void PCGInit_Kernel1(PatchSolverInput input, SolverState state, PatchSolverParameters parameters)
 {
-	const unsigned int N = input.N;
-	const int x = blockIdx.x * blockDim.x + threadIdx.x;
+    const unsigned int N = input.N;
+    const int x = blockIdx.x * blockDim.x + threadIdx.x;
 
-	float d = 0.0f;
-	if (x < N && state.d_mask[x] == 0)
-	{
-		const float residuum = evalMinusJTFDevice(x, input, state, parameters); // residuum = J^T x -F - A x delta_0  => J^T x -F, since A x x_0 == 0 
-		state.d_r[x]  = residuum;												 // store for next iteration
+    float d = 0.0f;
+    if (x < N)
+    {
+        d = 1.0f;
+        /*
+        const float residuum = evalMinusJTFDevice(x, input, state, parameters); // residuum = J^T x -F - A x delta_0  => J^T x -F, since A x x_0 == 0 
+        state.d_r[x] = residuum;												 // store for next iteration
 
-		const float p  = state.d_preconditioner[x]  * residuum;					 // apply preconditioner M^-1
-		state.d_p[x] = p;
+        const float p = state.d_preconditioner[x] * residuum;					 // apply preconditioner M^-1
+        state.d_p[x] = p;
 
-		d = residuum * p;								 // x-th term of nomimator for computing alpha and denominator for computing beta
-	}
-
-	bucket[threadIdx.x] = d;
-
-	scanPart1(threadIdx.x, blockIdx.x, blockDim.x, state.d_scanAlpha);		// sum over x-th terms to compute nominator and denominator of alpha and beta inside this block
+        d = residuum * p;								 // x-th term of nomimator for computing alpha and denominator for computing beta
+        */
+    }
+    
+    d = warpReduce(d);
+    if ((threadIdx.x + threadIdx.y) == 0) {
+        atomicAdd(state.d_scanAlpha, d);
+    }
 }
 
 __global__ void PCGInit_Kernel2(unsigned int N, SolverState state)
 {
 	const unsigned int x = blockIdx.x * blockDim.x + threadIdx.x;
 
-	scanPart2(threadIdx.x, blockDim.x, gridDim.x, state.d_scanAlpha);		// sum over block results to compute nominator and denominator of alpha and beta
-
-	if (x < N && state.d_mask[x] == 0) state.d_rDotzOld[x] = bucket[0];								// store result for next kernel call
+    if (x < N) state.d_rDotzOld[x] = state.d_scanAlpha[0];								// store result for next kernel call
 }
 
 void Initialization(PatchSolverInput& input, SolverState& state, PatchSolverParameters& parameters, CUDATimer& timer)
@@ -150,7 +152,7 @@ __global__ void PCGStep_Kernel1(PatchSolverInput input, SolverState state, Patch
 	const unsigned int x = blockIdx.x * blockDim.x + threadIdx.x;
 
 	float d = 0.0f;
-	if (x < N && state.d_mask[x] == 0)
+	if (x < N)
 	{
 		const float tmp = applyJTJDevice(x, input, state, parameters);		// A x p_k  => J^T x J x p_k 
 
@@ -159,9 +161,10 @@ __global__ void PCGStep_Kernel1(PatchSolverInput input, SolverState state, Patch
 		d = state.d_p[x] * tmp;													// x-th term of denominator of alpha
 	}
 
-	bucket[threadIdx.x] = d;
-
-	scanPart1(threadIdx.x, blockIdx.x, blockDim.x, state.d_scanAlpha);		// sum over x-th terms to compute denominator of alpha inside this block
+    d = warpReduce(d);
+    if ((threadIdx.x + threadIdx.y) == 0) {
+        atomicAdd(state.d_scanAlpha, d); // sum over x-th terms to compute denominator of alpha inside this block
+    }		
 }
 
 __global__ void PCGStep_Kernel2(PatchSolverInput input, SolverState state)
@@ -169,11 +172,10 @@ __global__ void PCGStep_Kernel2(PatchSolverInput input, SolverState state)
 	const unsigned int N = input.N;
 	const unsigned int x = blockIdx.x * blockDim.x + threadIdx.x;
 
-	scanPart2(threadIdx.x, blockDim.x, gridDim.x, state.d_scanAlpha);		// sum over block results to compute denominator of alpha
 	const float dotProduct = bucket[0];
 
 	float b = 0.0f;
-	if (x < N && state.d_mask[x] == 0)
+	if (x < N)
 	{
 		float alpha = 0.0f;
 		if (dotProduct > FLOAT_EPSILON) alpha = state.d_rDotzOld[x] / dotProduct;  // update step size alpha
@@ -189,11 +191,12 @@ __global__ void PCGStep_Kernel2(PatchSolverInput input, SolverState state)
 		b = z * r;														// compute x-th term of the nominator of beta
 	}
 
-	__syncthreads();														// Only write if every thread in the block has has read bucket[0]
 
-	bucket[threadIdx.x] = b;
+    b = warpReduce(b);
+    if ((threadIdx.x + threadIdx.y) == 0) {
+        atomicAdd(state.d_scanBeta, b); // sum over x-th terms to compute denominator of alpha inside this block
+    }
 
-	scanPart1(threadIdx.x, blockIdx.x, blockDim.x, state.d_scanBeta);		// sum over x-th terms to compute nominator of beta inside this block
 }
 
 __global__ void PCGStep_Kernel3(PatchSolverInput input, SolverState state)
@@ -201,9 +204,8 @@ __global__ void PCGStep_Kernel3(PatchSolverInput input, SolverState state)
 	const unsigned int N = input.N;
 	const unsigned int x = blockIdx.x * blockDim.x + threadIdx.x;
 
-	scanPart2(threadIdx.x, blockDim.x, gridDim.x, state.d_scanBeta);		// sum over block results to compute nominator of beta
 
-	if (x < N && state.d_mask[x] == 0)
+	if (x < N)
 	{
 		const float rDotzNew = bucket[0];										// get new nominator
 		const float rDotzOld = state.d_rDotzOld[x];								// get old denominator
@@ -264,7 +266,7 @@ __global__ void ApplyLinearUpdateDevice(PatchSolverInput input, SolverState stat
 	const unsigned int N = input.N; // Number of block variables
 	const unsigned int x = blockIdx.x * blockDim.x + threadIdx.x;
 
-	if (x < N && state.d_mask[x] == 0) {
+	if (x < N) {
 		state.d_x[x] = state.d_x[x] + state.d_delta[x];
 	}
 }

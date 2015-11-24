@@ -175,7 +175,8 @@ void CUDAPatchSolverSFS::solveSFS(float* d_targetDepth, float* d_depthMapRefined
         computeRemappingArrayPatchDepthMask(d_remappingArrayDepthMask, d_depthMapMaskFloat, d_prefixSumDepthMask, 16, m_solverInput.width, m_solverInput.height);
     }
 
-    m_patchSolverState.d_x = outputDepth;
+    m_patchSolverState.d_x  = outputDepth;
+    m_solverState.d_x       = outputDepth;
 
     m_solverInput.d_targetIntensity = d_targetIntensity;
     m_solverInput.d_targetDepth = d_targetDepth;

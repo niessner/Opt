@@ -1,6 +1,12 @@
 **Development Journal** 
 		Michael Mara
 
+**2015/11/20 15:48**
+
+Stalled progress on non-blocked SFS, but had a very productive series of meetings with Matthias + Gilbert about fast solving strategies 
+(specifically, the idea, proposed by Gilbert, that we should materialize the matrix coefficients at the start of each non-linear 
+iteration and just apply the matrix repeatedly for PCG).
+
 **2015/11/20 13:42**
 
 Tested non-blocked versions of both terra and terra AD solver. Terra version seems same as blocked, AD version is definitely not correct, but seems to propagate NaNs less strongly than the non-blocked version. 
