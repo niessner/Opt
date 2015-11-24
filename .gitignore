@@ -1,0 +1,11 @@
+
+API/build/*
+
+*/*/*.d
+*/*/*.o
+*/*/*/*.d
+*/*/*/*.o
+
+API/testMLib/testMLib
+Examples/ImageWarping/imagewarping
+Examples/SmoothingLaplacianFloat4Graph/meshsmoothing

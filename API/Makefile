@@ -23,7 +23,7 @@ endif
 
 
 FLAGS = -O3 -g -MD -Ibuild  -I$(TERRAHOME)/include -I$(CUDAHOME)/include -I$(MLIB)/include -I../Framework -std=c++11 -ferror-limit=0
-LFLAGS = -Lbuild -L$(CUDAHOME)/lib$(S4) -Wl,-rpath,$(CUDAHOME)/lib$(S4) -lcudart -lOpt -Wl,-rpath,$(shell pwd)/build -L$(TERRAHOME)/lib -lterra -Wl,-rpath,$(TERRAHOME)/lib
+LFLAGS = -Lbuild -L$(CUDAHOME)/lib$(S4) -ldl -pthread -Wl,-rpath,$(CUDAHOME)/lib$(S4) -lcudart -lOpt -Wl,-rpath,$(shell pwd)/build -L$(TERRAHOME)/lib -lterra -Wl,-rpath,$(TERRAHOME)/lib
 
 ifeq ($(UNAME), Darwin)
   LFLAGS += -pagezero_size 10000 -image_base 100000000
