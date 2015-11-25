@@ -1,8 +1,24 @@
 **Development Journal** 
 		Michael Mara
 
+**2015/11/24 16:15**
 
-**2015/11/24 15:53**
+Initial port of solver done. not giving correct results (shocking!). First thing to do tomorrow is to bring the "imagedump" functionality back online.
+
+
+**2015/11/24 15:15**
+
+Depth Constraint + Smoothing only
+Block: 0.005650
+Non-Block: 0.005652
+
+With shading as well (non-block):
+7957.30127
+
+Pretty close. I'm going to go ahead and implement the other functions, then get fine-grain comparisons via image dumping.
+
+
+**2015/11/24 14:53**
 
 After debugging improper warp reductions, I have a cost function for the non-block solver running, but producing results *very* different than the block solver. Time to debug! Tahnkfully I have the ability to turn individual terms off, which should help quite a bit.
 
