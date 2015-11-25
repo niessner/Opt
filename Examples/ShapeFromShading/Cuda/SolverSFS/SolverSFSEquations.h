@@ -219,7 +219,7 @@ __device__ inline float3 est_lap_3d_bsp_imp(SolverState& state, int posx, int po
 // applyJT : this function is called per variable and evaluates each residual influencing that variable (i.e., each energy term per variable)
 ////////////////////////////////////////
 
-__inline__ __device__ float evalMinusJTFDevice(unsigned int variableIdx, SolverInput& input, SolverState& state, SolverParameters& parameters)
+__inline__ __device__ float evalMinusJTFDevice(unsigned int variableIdx, SolverInput& input, SolverState& state, SolverParameters& parameters, float& pre)
 {
     int posy; int posx; get2DIdx(variableIdx, input.width, input.height, posy, posx);
 
@@ -430,10 +430,10 @@ __inline__ __device__ float evalMinusJTFDevice(unsigned int variableIdx, SolverI
     }
 
 
-    if (p > FLOAT_EPSILON) state.d_preconditioner[variableIdx] = 1.0f / p;
-    else			      state.d_preconditioner[variableIdx] = 1.0f;
+    if (p > FLOAT_EPSILON) pre = 1.0f / p;
+    else			      pre = 1.0f;
 #if USE_PRECONDITIONER == 0
-    state.d_preconditioner[variableIdx] = 1.0f;
+    pre = 1.0f;
 #endif
     return b;
 }

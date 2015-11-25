@@ -89,11 +89,12 @@ __global__ void PCGInit_Kernel1(PatchSolverInput input, SolverState state, Patch
     float d = 0.0f;
     if (x < N)
     {
-        
-        const float residuum = evalMinusJTFDevice(x, input, state, parameters); // residuum = J^T x -F - A x delta_0  => J^T x -F, since A x x_0 == 0 
+        float pre = 1.0f;
+        const float residuum = evalMinusJTFDevice(x, input, state, parameters, pre); // residuum = J^T x -F - A x delta_0  => J^T x -F, since A x x_0 == 0 
         state.d_r[x] = residuum;												 // store for next iteration
+        state.d_preconditioner[x] = pre;
 
-        const float p = state.d_preconditioner[x] * residuum;					 // apply preconditioner M^-1
+        const float p =  pre * residuum;					 // apply preconditioner M^-1
         state.d_p[x] = p;
 
         d = residuum * p;								 // x-th term of nomimator for computing alpha and denominator for computing beta
@@ -321,4 +322,60 @@ extern "C" void solveSFSStub(PatchSolverInput& input, SolverState& state, PatchS
 
 	float residual = EvalResidual(input, state, parameters, timer);
 	printf("final cost: %f\n", residual);
+}
+
+__global__ void PCGStep_Kernel_SaveInitialCostJTFAndPre(PatchSolverInput input, SolverState state, PatchSolverParameters parameters,
+    float* costResult, float* jtfResult, float* preResult) {
+
+    const unsigned int N = input.N;
+    const int x = blockIdx.x * blockDim.x + threadIdx.x;
+
+    if (x < N)
+    {
+        float pre = 1.0f;
+        costResult[x] = evalFDevice(x, input, state, parameters);
+        
+        const float residuum = evalMinusJTFDevice(x, input, state, parameters, pre); // residuum = J^T x -F - A x delta_0  => J^T x -F, since A x x_0 == 0 
+        jtfResult[x] = -2.0f*residuum;//TODO: port
+        preResult[x] = pre;
+    }
+
+}
+
+__global__ void PCGStep_Kernel_SaveJTJ(PatchSolverInput input, SolverState state, PatchSolverParameters parameters, float* jtjResult)
+{
+    const unsigned int N = input.N;											// Number of block variables
+    const unsigned int x = blockIdx.x * blockDim.x + threadIdx.x;
+
+    if (x < N)
+    {
+        jtjResult[x] = applyJTJDevice(x, input, state, parameters);		// A x p_k  => J^T x J x p_k 
+    }
+}
+
+
+void NonPatchSaveInitialCostJTFAndPreAndJTJ(PatchSolverInput& input, SolverState& state, PatchSolverParameters& parameters, float* costResult, float* jtfResult, float* preResult, float* jtjResult)
+{
+    const unsigned int N = input.N; // Number of block variables
+    cutilSafeCall(cudaDeviceSynchronize());
+    PCGStep_Kernel_SaveInitialCostJTFAndPre<< <(N + THREADS_PER_BLOCK - 1) / THREADS_PER_BLOCK, THREADS_PER_BLOCK >> >(input, state, parameters, costResult, jtfResult, preResult);
+
+    cutilSafeCall(cudaDeviceSynchronize());
+    cutilCheckMsg(__FUNCTION__);
+
+    CUDATimer timer;
+    timer.reset();
+    Initialization(input, state, parameters, timer);
+    PCGStep_Kernel_SaveJTJ<< <(N + THREADS_PER_BLOCK - 1) / THREADS_PER_BLOCK, THREADS_PER_BLOCK >> >(input, state, parameters, jtjResult);
+
+}
+
+
+extern "C" void solveSFSEvalCurrentCostJTFPreAndJTJStub(PatchSolverInput& input, SolverState& state, PatchSolverParameters& parameters, float* costResult, float* jtfResult, float* preResult, float* jtjResult)
+{
+    parameters.weightShading = parameters.weightShadingStart;
+
+
+    NonPatchSaveInitialCostJTFAndPreAndJTJ(input, state, parameters, costResult, jtfResult, preResult, jtjResult);
+
 }

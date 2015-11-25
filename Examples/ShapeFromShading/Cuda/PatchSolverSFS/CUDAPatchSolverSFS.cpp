@@ -14,7 +14,7 @@ extern "C" void patchSolveSFSStub(PatchSolverInput& input, PatchSolverState& sta
 extern "C" void solveSFSStub(PatchSolverInput& input, SolverState& state, PatchSolverParameters& parameters, ConvergenceAnalysis<float>* ca);
 
 extern "C" void patchSolveSFSEvalCurrentCostJTFPreAndJTJStub(PatchSolverInput& input, PatchSolverState& state, PatchSolverParameters& parameters, float* costResult, float* jtfResult, float* preResult, float* jtjResult);
-//extern "C" void solveSFSEvalCurrentCostJTFPreAndJTJStub(PatchSolverInput& input, SolverState& state, PatchSolverParameters& parameters, float* costResult, float* jtfResult, float* preResult, float* jtjResult);
+extern "C" void solveSFSEvalCurrentCostJTFPreAndJTJStub(PatchSolverInput& input, SolverState& state, PatchSolverParameters& parameters, float* costResult, float* jtfResult, float* preResult, float* jtjResult);
 
 extern "C" void clearDecissionArrayPatchDepthMask(int* d_output, unsigned int inputWidth, unsigned int inputHeight);
 extern "C" void computeDecissionArrayPatchDepthMask(int* d_output, float* d_input, unsigned int patchSize, unsigned int inputWidth, unsigned int inputHeight);
@@ -218,7 +218,7 @@ void CUDAPatchSolverSFS::solveSFS(float* d_targetDepth, float* d_depthMapRefined
     for (int i = 0; i < 2; ++i) {
         elemsize.push_back(sizeof(char));
     }
-    bool saveJTFAndPreAndJTJ = false;
+    bool saveJTFAndPreAndJTJ = true;
     switch (mode) {
     case CUDA:
         {
@@ -239,12 +239,18 @@ void CUDAPatchSolverSFS::solveSFS(float* d_targetDepth, float* d_depthMapRefined
                 cutilSafeCall(cudaMemset(jtjResult, 0, sizeof(float)*numberOfVariables));
                 cutilSafeCall(cudaMemset(costResult, 0, sizeof(float)*numberOfVariables));
 
-                patchSolveSFSEvalCurrentCostJTFPreAndJTJStub(m_solverInput, m_patchSolverState, parameters, costResult, jtfResult, preResult, jtjResult);
+                if (GlobalAppState::get().s_useBlockSolver) {
+                    patchSolveSFSEvalCurrentCostJTFPreAndJTJStub(m_solverInput, m_patchSolverState, parameters, costResult, jtfResult, preResult, jtjResult);
+                } else {
+                    solveSFSEvalCurrentCostJTFPreAndJTJStub(m_solverInput, m_solverState, parameters, costResult, jtfResult, preResult, jtjResult);
+                }
 
-                OptUtil::dumpOptImage(costResult, "cost_cuda.imagedump", m_solverInput.width, m_solverInput.height, 1);
-                OptUtil::dumpOptImage(jtfResult, "JTF_cuda.imagedump", m_solverInput.width, m_solverInput.height, 1);
-                OptUtil::dumpOptImage(preResult, "Pre_cuda.imagedump", m_solverInput.width, m_solverInput.height, 1);
-                OptUtil::dumpOptImage(jtjResult, "JTJ_cuda.imagedump", m_solverInput.width, m_solverInput.height, 1);
+                std::string prefix = GlobalAppState::get().s_useBlockSolver ? "block_" : "nonblock_";
+                std::string suffix = prefix + "cuda.imagedump";
+                OptUtil::dumpOptImage(costResult, "cost_" + suffix, m_solverInput.width, m_solverInput.height, 1);
+                OptUtil::dumpOptImage(jtfResult, "JTF_" + suffix, m_solverInput.width, m_solverInput.height, 1);
+                OptUtil::dumpOptImage(preResult, "Pre_" + suffix, m_solverInput.width, m_solverInput.height, 1);
+                OptUtil::dumpOptImage(jtjResult, "JTJ_" + suffix, m_solverInput.width, m_solverInput.height, 1);
                 cutilSafeCall(cudaFree(costResult));
                 cutilSafeCall(cudaFree(jtfResult));
                 cutilSafeCall(cudaFree(preResult));
