@@ -32,7 +32,8 @@ public:
     // You can override onGraphics if you want more control over the rendering loop.
     // virtual void onGraphics(RenderDevice* rd, Array<shared_ptr<Surface> >& surface, Array<shared_ptr<Surface2D> >& surface2D) override;
 
-    virtual void onGraphics3D(RenderDevice* rd, Array<shared_ptr<Surface> >& surface3D) override;
+    // Override this for custom rendering
+    //virtual void onGraphics3D(RenderDevice* rd, Array<shared_ptr<Surface> >& surface3D) override;
     virtual void onGraphics2D(RenderDevice* rd, Array<shared_ptr<Surface2D> >& surface2D) override;
 
     virtual bool onEvent(const GEvent& e) override;

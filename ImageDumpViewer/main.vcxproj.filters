@@ -17,10 +17,10 @@
     <None Include="data-files\test.Scene.Any">
       <Filter>Scene Files</Filter>
     </None>
-    <None Include="data-files\imageQuotient.pix">
+    <None Include="data-files\imageDifference.pix">
       <Filter>Shader Files</Filter>
     </None>
-    <None Include="data-files\imageDifference.pix">
+    <None Include="data-files\imageQuotient.pix">
       <Filter>Shader Files</Filter>
     </None>
   </ItemGroup>

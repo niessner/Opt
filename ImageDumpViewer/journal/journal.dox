@@ -6,6 +6,23 @@
 
 <i>Newest entries are at the top</i>
 
+\section S20151125 2015-11-25: Comparing CUDA Block and NonBlock Solvers
+
+\thumbnail{2015-11-25_002_ImageDumpViewer_g3d_r397_JTF_Difference__JTF_Differences_only_locally_around_the_cost_differences_.png, JTF Differences only locally around the cost differences.}
+
+
+
+
+\thumbnail{2015-11-25_001_ImageDumpViewer_g3d_r397_D__Projects_DSL_Optimization_Examples_ShapeFromShading_cost_block_cuda_imagedump-D__Projects_DSL_Optimization_Examples_ShapeFromShading_cost_nonblock_cuda_imagedump__The_Cost_difference_image_shows_differences_only_in_three_pixels__where_the_block_solver_sets_the_results_to_0__but_the_non-block_solver_has_a_non-zero_result_.png, The Cost difference image shows differences only in three pixels\, where the block solver sets the results to 0\, but the non-block solver has a non-zero result.}
+
+
+
+
+
+\thumbnail{2015-11-25_000_ImageDumpViewer_g3d_r397_JTJ_Quotient__The_JTJ_Quotient_Image_reveals_drastic_differences.png, The JTJ Quotient Image reveals drastic differences}
+
+
+
 \section notes Formatting Notes
 Put the newest entry at the top of this file, like a blog. 
 Begin the title of each section with a date in ISO format (YYYY-MM-DD).

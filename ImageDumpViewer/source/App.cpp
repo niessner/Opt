@@ -135,44 +135,48 @@ void App::onInit() {
     // developerWindow->videoRecordDialog->setCaptureGui(false);
     developerWindow->cameraControlWindow->moveTo(Point2(developerWindow->cameraControlWindow->rect().x0(), 0));
     
-    String directory = "E:/Projects/DSL/Optimization/Examples/ImageWarping/";
+    String directory = "D:/Projects/DSL/Optimization/Examples/ShapeFromShading/";
 
     Array<String> filenames;
     FileSystem::getFiles(directory+"*.imagedump", filenames);
     for (auto f : filenames) {
         loadImageDump(directory + f);
     }
+
+    String nonBlock = "_nonblock_cuda.imagedump";
+    String block = "_block_cuda.imagedump";
     
     RenderDevice* rd = RenderDevice::current;
     
-    shared_ptr<Texture> jtfCuda = Texture::getTextureByName(directory + "JTF_AD.imagedump");
-    shared_ptr<Texture> jtfOptNoAD = Texture::getTextureByName(directory + "JTF_optNoAD.imagedump");
+    shared_ptr<Texture> jtfBlock = Texture::getTextureByName(directory + "JTF" + block);
+    shared_ptr<Texture> jtfNBlock = Texture::getTextureByName(directory + "JTF" + nonBlock);
     
 
-    shared_ptr<Texture> costCuda = Texture::getTextureByName(directory + "cost_AD.imagedump");
-    shared_ptr<Texture> costOptNoAD = Texture::getTextureByName(directory + "cost_optNoAD.imagedump");
+    shared_ptr<Texture> costBlock = Texture::getTextureByName(directory + "cost" + block);
+    shared_ptr<Texture> costNBlock = Texture::getTextureByName(directory + "cost" + nonBlock);
     
 
     static shared_ptr<Texture> preDiff = Texture::singleChannelDifference(rd,
-        Texture::getTextureByName(directory + "Pre_AD.imagedump"),
-        Texture::getTextureByName(directory + "Pre_optNoAD.imagedump"));
-
-    shared_ptr<Texture> jtjCuda = Texture::getTextureByName(directory + "JTJ_AD.imagedump");
-    shared_ptr<Texture> jtjOptNoAD = Texture::getTextureByName(directory + "JTJ_optNoAD.imagedump");
+        Texture::getTextureByName(directory + "Pre" + block),
+        Texture::getTextureByName(directory + "Pre" + nonBlock));
+    
+    shared_ptr<Texture> jtjBlock = Texture::getTextureByName(directory + "JTJ" + block);
+    shared_ptr<Texture> jtjNBlock = Texture::getTextureByName(directory + "JTJ" + nonBlock);
 
     
-
+    /**
     shared_ptr<Texture> resultOpt = Texture::getTextureByName(directory + "result_AD.imagedump");
     shared_ptr<Texture> resultOptNoAD = Texture::getTextureByName(directory + "result_optNoAD.imagedump");
+    */
 
-    static shared_ptr<Texture> jtfDiff = differenceImage(rd, "JTF Difference", jtfCuda, jtfOptNoAD);
-    static shared_ptr<Texture> costDiff = Texture::singleChannelDifference(rd, costCuda, costOptNoAD);
-    static shared_ptr<Texture> jtjDiff = differenceImage(rd, "JTJ Difference", jtjCuda, jtjOptNoAD);
-    static shared_ptr<Texture> resultDiff = differenceImage(rd, "Result Difference", resultOpt, resultOptNoAD);
+    static shared_ptr<Texture> jtfDiff = differenceImage(rd, "JTF Difference", jtfBlock, jtfNBlock);
+    static shared_ptr<Texture> costDiff = Texture::singleChannelDifference(rd, costBlock, costNBlock);
+    static shared_ptr<Texture> jtjDiff = differenceImage(rd, "JTJ Difference", jtjBlock, jtjNBlock);
+    //static shared_ptr<Texture> resultDiff = differenceImage(rd, "Result Difference", resultOpt, resultOptNoAD);
     jtfDiff->visualization.documentGamma = 2.2f;
     costDiff->visualization.documentGamma = 2.2f;
     jtjDiff->visualization.documentGamma = 2.2f;
-    resultDiff->visualization.documentGamma = 2.2f;
+    //resultDiff->visualization.documentGamma = 2.2f;
 
     /*
     static shared_ptr<Texture> initDiff = Texture::singleChannelDifference(rd, Texture::getTextureByName("E:/Projects/DSL/Optimization/API/RealtimeSFS/initial_depth.imagedump"), resultOpt);
@@ -181,8 +185,9 @@ void App::onInit() {
     initDiff2->visualization.documentGamma = 2.2f;
     */
 
-    static shared_ptr<Texture> jtjQ = quotientImage(rd, "JTJ Quotient", jtjCuda, jtjOptNoAD);
-    static shared_ptr<Texture> jtfQ = quotientImage(rd, "JTF Quotient", jtfCuda, jtfOptNoAD);
+    static shared_ptr<Texture> jtjQ = quotientImage(rd, "JTJ Quotient", jtjBlock, jtjNBlock);
+    static shared_ptr<Texture> jtfQ = quotientImage(rd, "JTF Quotient", jtfBlock, jtfNBlock);
+    static shared_ptr<Texture> costQ = quotientImage(rd, "Cost Quotient", costBlock, costNBlock);
 
 
     dynamic_pointer_cast<DefaultRenderer>(m_renderer)->setOrderIndependentTransparency(false);
@@ -211,52 +216,6 @@ void App::makeGUI() {
 
     debugWindow->pack();
     debugWindow->setRect(Rect2D::xywh(0, 0, (float)window()->width(), debugWindow->rect().height()));
-}
-
-
-void App::onGraphics3D(RenderDevice* rd, Array<shared_ptr<Surface> >& allSurfaces) {
-    // This implementation is equivalent to the default GApp's. It is repeated here to make it
-    // easy to modify rendering. If you don't require custom rendering, just delete this
-    // method from your application and rely on the base class.
-
-    if (! scene()) {
-        return;
-    }
-
-    m_gbuffer->setSpecification(m_gbufferSpecification);
-    m_gbuffer->resize(m_framebuffer->width(), m_framebuffer->height());
-    m_gbuffer->prepare(rd, activeCamera(), 0, -(float)previousSimTimeStep(), m_settings.depthGuardBandThickness, m_settings.colorGuardBandThickness);
-
-    m_renderer->render(rd, m_framebuffer, m_depthPeelFramebuffer, scene()->lightingEnvironment(), m_gbuffer, allSurfaces);
-
-    // Debug visualizations and post-process effects
-    rd->pushState(m_framebuffer); {
-        // Call to make the App show the output of debugDraw(...)
-        drawDebugShapes();
-        const shared_ptr<Entity>& selectedEntity = (notNull(developerWindow) && notNull(developerWindow->sceneEditorWindow)) ? developerWindow->sceneEditorWindow->selectedEntity() : shared_ptr<Entity>();
-        //scene()->visualize(rd, selectedEntity, sceneVisualizationSettings());
-
-        // Post-process special effects
-        m_depthOfField->apply(rd, m_framebuffer->texture(0), m_framebuffer->texture(Framebuffer::DEPTH), activeCamera(), m_settings.depthGuardBandThickness - m_settings.colorGuardBandThickness);
-        
-        m_motionBlur->apply(rd, m_framebuffer->texture(0), m_gbuffer->texture(GBuffer::Field::SS_EXPRESSIVE_MOTION), 
-                            m_framebuffer->texture(Framebuffer::DEPTH), activeCamera(), 
-                            m_settings.depthGuardBandThickness - m_settings.colorGuardBandThickness);
-    } rd->popState();
-
-    if ((bufferSwapMode() == BufferSwapMode::EXPLICIT) && (!renderDevice->swapBuffersAutomatically())) {
-        // We're about to render to the actual back buffer, so swap the buffers now.
-        // This call also allows the screenshot and video recording to capture the
-        // previous frame just before it is displayed.
-        swapBuffers();
-    }
-
-	// Clear the entire screen (needed even though we'll render over it, since
-    // AFR uses clear() to detect that the buffer is not re-used.)
-    rd->clear();
-
-    // Perform gamma correction, bloom, and SSAA, and write to the native window frame buffer
-    m_film->exposeAndRender(rd, activeCamera()->filmSettings(), m_framebuffer->texture(0));
 }
 
 
