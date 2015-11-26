@@ -487,7 +487,6 @@ __global__ void PCGStepPatch_Kernel_SFS_BSP_Mask_Prior_Cost(PatchSolverInput inp
     __shared__ float Gradz[SHARED_MEM_SIZE_PATCH_SFS_GE];
     __shared__ float Shadingdif[SHARED_MEM_SIZE_PATCH_SFS_GE];		PreComputeGrad_LS(tId_j, tId_i, g_off_x, g_off_y, X, input, Gradx, Grady, Gradz, Shadingdif);
 
-    __shared__ float P[SHARED_MEM_SIZE_PATCH_SFS];					SetPatchToZero_SFS(P, 0.0f, tId_i, tId_j, g_off_y, g_off_x);
 
     //////////////////////////////////////////////////////////////////////////////////////////
     // CACHE data to registers

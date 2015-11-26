@@ -1,6 +1,10 @@
 **Development Journal** 
 		Michael Mara
 
+
+**2015/11/25 17:24**
+The terra block solvers have the same problem! Also, I have verified that with the shading and depth constraint terms added back in, SFS block and non-block CUDA solvers give identical results except on patch boundaries.
+
 **2015/11/25 16:24**
 Went through a ton of debugging, fixed some problems reading the wrong buffers and being off by a factor of 2, now only obvious error is on patch boundaries.
 After much investigation, realized we never initialize the p values on the boundaries; for *any* of the CUDA block solvers.
