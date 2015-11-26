@@ -201,11 +201,11 @@ __device__ inline float3 est_lap_3d_bsp_imp(SolverState& state, int posx, int po
 {
     float3 retval;
     
-    const float d = readX(state, posy, posx, W);
-    const float d0 = readX(state, posy, posx - 1, W);
-    const float d1 = readX(state, posy, posx + 1, W);
-    const float d2 = readX(state, posy - 1, posx, W);
-    const float d3 = readX(state, posy + 1, posx, W);
+    const float d = readP(posy, posx, state, W);
+    const float d0 = readP(posy, posx - 1, state, W);
+    const float d1 = readP(posy, posx + 1, state, W);
+    const float d2 = readP(posy - 1, posx, state, W);
+    const float d3 = readP(posy + 1, posx, state, W);
 
     retval.x = (d * 4 * w0 - d0 * (w0 - ufx) - d1 * (w0 + ufx) - d2 * w0 - d3 * w0);
     retval.y = (d * 4 * w1 - d0 * w1 - d1 * w1 - d2 * (w1 - ufy) - d3 * (w1 + ufy));
@@ -347,7 +347,7 @@ __inline__ __device__ float evalMinusJTFDevice(unsigned int variableIdx, SolverI
 
             val0 = (posx - ux) / fx;
             val1 = (posy - uy) / fy;
-
+            
             //smoothness term							
             float3 lapval = est_lap_init_3d_imp(state, posx, posy, val0, val1, ufx, ufy, W, b_valid);
             sum = 0.0f;
@@ -583,7 +583,8 @@ __inline__ __device__ float applyJTJDevice(unsigned int variableIdx, SolverInput
             //////////////////////////////////////////////////////////////////
             //                  Smoothness Term
             /////////////////////////////////////////////////////////////////
-#           if USE_REGULARIZATION				
+#           if USE_REGULARIZATION	
+
             sum = 0;
             val0 = (posx - ux) / fx;
             val1 = (posy - uy) / fy;
@@ -592,7 +593,7 @@ __inline__ __device__ float applyJTJDevice(unsigned int variableIdx, SolverInput
             sum += lapval.x*val0*(4.0f);
             sum += lapval.y*val1*(4.0f);
             sum += lapval.z*(4.0f);
-
+            
             lapval = est_lap_3d_bsp_imp(state, posx - 1, posy, val0 - ufx, val1, ufx, ufy, W);
             sum -= lapval.x*val0;
             sum -= lapval.y*val1;
@@ -613,7 +614,7 @@ __inline__ __device__ float applyJTJDevice(unsigned int variableIdx, SolverInput
             sum -= lapval.y*val1;
             sum -= lapval.z;
 
-
+            //sum = readP(posy - 1, posx, state, W);
             b += sum*parameters.weightRegularizer;
 #           endif
 

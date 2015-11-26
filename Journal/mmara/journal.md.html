@@ -1,6 +1,16 @@
 **Development Journal** 
 		Michael Mara
 
+**2015/11/25 16:24**
+Went through a ton of debugging, fixed some problems reading the wrong buffers and being off by a factor of 2, now only obvious error is on patch boundaries.
+After much investigation, realized we never initialize the p values on the boundaries; for *any* of the CUDA block solvers.
+
+**2015/11/25 14:46**
+
+Added image dump support to the non-block CUDA solver for Shape From Shading, and started comparing cost, JTF and JTJ images between the two CUDA solvers.
+
+With only the regularization and depth constraint terms enabled, cost and JTF are identical, while JTJ is very different, the biggest different is on the edges of the valid depths, where the nonblock solver has QNANs and -infinities.
+
 **2015/11/25 11:43**
 
 Documented the .imagedump file format in the main README.

@@ -736,16 +736,16 @@ __inline__ __device__ float applyJTJDeviceLS_SFS_Shared_BSP_Mask_Prior(int tidy,
 			//////////////////////////////////////////////////////////////////
 			//                  Smoothness Term
 			/////////////////////////////////////////////////////////////////
-#           if USE_REGULARIZATION				
+#           if USE_REGULARIZATION	
 			    sum = 0;	
 			    val0 = (posx - ux)/fx;
 			    val1 = (posy - uy)/fy;
 			
-			    float3 lapval = est_lap_3d_bsp_imp(inP,tidx,tidy,val0,val1,ufx,ufy);			
+			    float3 lapval = est_lap_3d_bsp_imp(inP,tidx,tidy,val0,val1,ufx,ufy);	
 			    sum += lapval.x*val0*(4.0f);
 			    sum += lapval.y*val1*(4.0f);
 			    sum += lapval.z*(4.0f);
-						
+                
 			    lapval = est_lap_3d_bsp_imp(inP,tidx-1,tidy,val0-ufx,val1,ufx,ufy);
 			    sum -= lapval.x*val0;
 			    sum -= lapval.y*val1;
@@ -765,8 +765,8 @@ __inline__ __device__ float applyJTJDeviceLS_SFS_Shared_BSP_Mask_Prior(int tidy,
 			    sum -= lapval.x*val0;
 			    sum -= lapval.y*val1;
 			    sum -= lapval.z;
-
-
+                
+                // sum = inP[getLinearShareMemLocate_SFS(tidy-1, tidx)];
                 b += sum*parameters.weightRegularizer;
 #           endif
 

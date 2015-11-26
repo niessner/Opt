@@ -90,7 +90,9 @@ __global__ void PCGInit_Kernel1(PatchSolverInput input, SolverState state, Patch
     if (x < N)
     {
         float pre = 1.0f;
-        const float residuum = evalMinusJTFDevice(x, input, state, parameters, pre); // residuum = J^T x -F - A x delta_0  => J^T x -F, since A x x_0 == 0 
+        float residuum = evalMinusJTFDevice(x, input, state, parameters, pre); // residuum = J^T x -F - A x delta_0  => J^T x -F, since A x x_0 == 0 
+        residuum = 2.0f * residuum;//TODO: Check if results are still okay once we fix this
+        
         state.d_r[x] = residuum;												 // store for next iteration
         state.d_preconditioner[x] = pre;
 
@@ -156,8 +158,8 @@ __global__ void PCGStep_Kernel1(PatchSolverInput input, SolverState state, Patch
 	float d = 0.0f;
 	if (x < N)
 	{
-		const float tmp = applyJTJDevice(x, input, state, parameters);		// A x p_k  => J^T x J x p_k 
-
+		float tmp = applyJTJDevice(x, input, state, parameters);		// A x p_k  => J^T x J x p_k 
+        
 		state.d_Ap_X[x]  = tmp;														// store for next kernel call
 
 		d = state.d_p[x] * tmp;													// x-th term of denominator of alpha
@@ -349,7 +351,7 @@ __global__ void PCGStep_Kernel_SaveJTJ(PatchSolverInput input, SolverState state
 
     if (x < N)
     {
-        jtjResult[x] = applyJTJDevice(x, input, state, parameters);		// A x p_k  => J^T x J x p_k 
+        jtjResult[x] = 2.0f * applyJTJDevice(x, input, state, parameters);		// A x p_k  => J^T x J x p_k 
     }
 }
 
