@@ -24,11 +24,11 @@ __inline__ __device__ float readP(int posy, int posx, SolverState& state, int W)
     return state.d_p[posy*W + posx];
 }
 
-__inline__ __device__ float rowMask(int posy, int posx, SolverState& state, PatchSolverInput &input) {
+__inline__ __device__ float rowMask(int posy, int posx, PatchSolverInput &input) {
     return input.d_maskEdgeMap[posy*input.width + posx];
 }
 
-__inline__ __device__ float colMask(int posy, int posx, SolverState& state, PatchSolverInput &input) {
+__inline__ __device__ float colMask(int posy, int posx, PatchSolverInput &input) {
     return input.d_maskEdgeMap[posy*input.width + posx + (input.width*input.height)];
 }
 
@@ -260,53 +260,53 @@ __inline__ __device__ float evalMinusJTFDevice(unsigned int variableIdx, SolverI
             sum = 0.0f;
             tmpval = 0.0f;
             tmpval = -(calShading2depthGrad(state, posx - 1, posy, input).w - calShading2depthGrad(state, posx, posy, input).w);// edge 0				
-            maskval = rowMask(posy, posx - 1, state, input);
+            maskval = rowMask(posy, posx - 1, input);
             sum += tmpval*(-val0) * maskval;//(posy, posx-1)*val0,(posy,posx)*(-val0)			
             tmpval += val0*val0*maskval;
 
             tmpval = -(calShading2depthGrad(state, posx, posy, input).w - calShading2depthGrad(state, posx + 1, posy, input).w);//edge 2				
-            maskval = rowMask(posy, posx, state, input);
+            maskval = rowMask(posy, posx, input);
             sum += tmpval*(val0 - val1) * maskval;// (posy,posx)*(val1-val0), (posy,posx+1)*(val0-val1)			
             tmpval += (val0 - val1)*(val0 - val1)* maskval;
 
             tmpval = -(calShading2depthGrad(state, posx + 1, posy, input).w - calShading2depthGrad(state, posx + 2, posy, input).w);//edge 4				
-            maskval = rowMask(posy, posx + 1, state, input);
+            maskval = rowMask(posy, posx + 1, input);
             sum += tmpval*(val1)* maskval;//(posy,posx+1)*(-val1), (posy,posx+2)*(val1)			
             tmpval += val1*val1* maskval;
 
             tmpval = -(calShading2depthGrad(state, posx - 1, posy + 1, input).w - calShading2depthGrad(state, posx, posy + 1, input).w);//edge 5				
-            maskval = rowMask(posy + 1, posx - 1, state, input);
+            maskval = rowMask(posy + 1, posx - 1, input);
             sum += tmpval*(-val2) * maskval;//(posy+1,posx-1)*(val2),(posy+1,pox)*(-val2)			
             tmpval += val2*val2* maskval;
 
             tmpval = -(calShading2depthGrad(state, posx, posy + 1, input).w - calShading2depthGrad(state, posx + 1, posy + 1, input).w);//edge 7				
-            maskval = rowMask(posy + 1, posx, state, input);
+            maskval = rowMask(posy + 1, posx, input);
             sum += tmpval*val2 * maskval;//(posy+1,posx)*(-val2),(posy+1,posx+1)*(val2)
             tmpval += val2*val2 * maskval;
 
             //column edge constraint			
             tmpval = -(calShading2depthGrad(state, posx, posy - 1, input).w - calShading2depthGrad(state, posx, posy, input).w);//edge 1
-            maskval = colMask(posy - 1, posx, state, input);
+            maskval = colMask(posy - 1, posx, input);
             sum += tmpval*(-val0) * maskval;//(posy-1,posx)*(val0),(posy,posx)*(-val0)			
             tmpval += val0*val0* maskval;
 
             tmpval = -(calShading2depthGrad(state, posx + 1, posy - 1, input).w - calShading2depthGrad(state, posx + 1, posy, input).w);//edge 3
-            maskval = colMask(posy - 1, posx + 1, state, input);
+            maskval = colMask(posy - 1, posx + 1, input);
             sum += tmpval*(-val1) * maskval;//(posy-1,posx+1)*(val1),(posy,posx+1)*(-val1)			
             tmpval += val1*val1* maskval;
 
             tmpval = -(calShading2depthGrad(state, posx, posy, input).w - calShading2depthGrad(state, posx, posy + 1, input).w);//edge 6
-            maskval = colMask(posy, posx, state, input);
+            maskval = colMask(posy, posx, input);
             sum += tmpval*(val0 - val2) * maskval;//(posy,posx)*(val2-val0),(posy+1,posx)*(val0-val2)			
             tmpval += (val0 - val2)*(val0 - val2)* maskval;
 
             tmpval = -(calShading2depthGrad(state, posx + 1, posy, input).w - calShading2depthGrad(state, posx + 1, posy + 1, input).w);//edge 8
-            maskval = colMask(posy, posx + 1, state, input);
+            maskval = colMask(posy, posx + 1, input);
             sum += tmpval*val1 * maskval;//(posy,posx+1)*(-val1),(posy+1,posx+1)*(val1)
             tmpval += val1*val1* maskval;
 
             tmpval = -(calShading2depthGrad(state, posx, posy + 1, input).w - calShading2depthGrad(state, posx, posy + 2, input).w);//edge 9
-            maskval = colMask(posy + 1, posx, state, input);
+            maskval = colMask(posy + 1, posx, input);
             sum += tmpval*val2 * maskval;//(posy+1,posx)*(-val2),(posy+2,posx)*(val2)
             tmpval += val2*val2* maskval;
 
@@ -488,7 +488,7 @@ __inline__ __device__ float applyJTJDevice(unsigned int variableIdx, SolverInput
                     tmpval += readP(posy - 1, posx - 1, state, W) *  calShading2depthGrad(state, posx - 1, posy, input).z;
                     tmpval -= readP(posy, posx, state, W) *  calShading2depthGrad(state, posx, posy, input).y;
                     tmpval -= readP(posy - 1, posx, state, W) *  calShading2depthGrad(state, posx, posy, input).z;
-                    sum += (-val0) * tmpval  * rowMask(posy, posx - 1, state, input);
+                    sum += (-val0) * tmpval  * rowMask(posy, posx - 1, input);
 
                     //-val0, edge 1
                     tmpval = readP(posy - 1, posx - 1, state, W) *  calShading2depthGrad(state, posx, posy - 1, input).x;
@@ -496,7 +496,7 @@ __inline__ __device__ float applyJTJDevice(unsigned int variableIdx, SolverInput
                     tmpval += readP(posy - 2, posx, state, W) *  calShading2depthGrad(state, posx, posy - 1, input).z;
                     tmpval -= readP(posy, posx - 1, state, W) *  calShading2depthGrad(state, posx, posy, input).x;
                     tmpval -= readP(posy, posx, state, W) *  calShading2depthGrad(state, posx, posy, input).y;
-                    sum += (-val0) * tmpval  * colMask(posy - 1, posx, state, input);
+                    sum += (-val0) * tmpval  * colMask(posy - 1, posx, input);
 
                     //val0-val1, edge 2
                     tmpval = readP(posy, posx - 1, state, W) *  calShading2depthGrad(state, posx, posy, input).x;
@@ -504,7 +504,7 @@ __inline__ __device__ float applyJTJDevice(unsigned int variableIdx, SolverInput
                     tmpval += readP(posy - 1, posx, state, W) *  calShading2depthGrad(state, posx, posy, input).z;
                     tmpval -= readP(posy, posx + 1, state, W) *  calShading2depthGrad(state, posx + 1, posy, input).y;
                     tmpval -= readP(posy - 1, posx + 1, state, W) *  calShading2depthGrad(state, posx + 1, posy, input).z;
-                    sum += (val0 - val1) * tmpval * rowMask(posy, posx, state, input);
+                    sum += (val0 - val1) * tmpval * rowMask(posy, posx, input);
 
                     //-val1, edge 3			
                     tmpval = readP(posy - 1, posx, state, W) *  calShading2depthGrad(state, posx + 1, posy - 1, input).x;
@@ -512,7 +512,7 @@ __inline__ __device__ float applyJTJDevice(unsigned int variableIdx, SolverInput
                     tmpval += readP(posy - 2, posx + 1, state, W) *  calShading2depthGrad(state, posx + 1, posy - 1, input).z;
                     tmpval -= readP(posy, posx, state, W) *  calShading2depthGrad(state, posx + 1, posy, input).x;
                     tmpval -= readP(posy, posx + 1, state, W) *  calShading2depthGrad(state, posx + 1, posy, input).y;
-                    sum += (-val1) * tmpval	* colMask(posy - 1, posx + 1, state, input);
+                    sum += (-val1) * tmpval	* colMask(posy - 1, posx + 1, input);
 
                     //val1, edge 4
                     tmpval = readP(posy, posx, state, W) *  calShading2depthGrad(state, posx + 1, posy, input).x;
@@ -520,7 +520,7 @@ __inline__ __device__ float applyJTJDevice(unsigned int variableIdx, SolverInput
                     tmpval += readP(posy - 1, posx + 1, state, W) *  calShading2depthGrad(state, posx + 1, posy, input).z;
                     tmpval -= readP(posy, posx + 2, state, W) *  calShading2depthGrad(state, posx + 2, posy, input).y;
                     tmpval -= readP(posy - 1, posx + 2, state, W) *  calShading2depthGrad(state, posx + 2, posy, input).z;
-                    sum += (val1)* tmpval * rowMask(posy, posx + 1, state, input);
+                    sum += (val1)* tmpval * rowMask(posy, posx + 1, input);
 
                     //-val2, edge 5			
                     tmpval = readP(posy + 1, posx - 2, state, W) *  calShading2depthGrad(state, posx - 1, posy + 1, input).x;
@@ -528,7 +528,7 @@ __inline__ __device__ float applyJTJDevice(unsigned int variableIdx, SolverInput
                     tmpval += readP(posy, posx - 1, state, W) *  calShading2depthGrad(state, posx - 1, posy + 1, input).z;
                     tmpval -= readP(posy + 1, posx, state, W) *  calShading2depthGrad(state, posx, posy + 1, input).y;
                     tmpval -= readP(posy, posx, state, W) *  calShading2depthGrad(state, posx, posy + 1, input).z;
-                    sum += (-val2) * tmpval * rowMask(posy + 1, posx - 1, state, input);
+                    sum += (-val2) * tmpval * rowMask(posy + 1, posx - 1, input);
 
                     //val0-val2, edge 6
                     tmpval = readP(posy, posx - 1, state, W) *  calShading2depthGrad(state, posx, posy, input).x;
@@ -536,7 +536,7 @@ __inline__ __device__ float applyJTJDevice(unsigned int variableIdx, SolverInput
                     tmpval += readP(posy - 1, posx, state, W) *  calShading2depthGrad(state, posx, posy, input).z;
                     tmpval -= readP(posy + 1, posx - 1, state, W) *  calShading2depthGrad(state, posx, posy + 1, input).x;
                     tmpval -= readP(posy + 1, posx, state, W) *  calShading2depthGrad(state, posx, posy + 1, input).y;
-                    sum += (val0 - val2) * tmpval * colMask(posy, posx, state, input);
+                    sum += (val0 - val2) * tmpval * colMask(posy, posx, input);
 
                     //val2, edge 7
                     tmpval = readP(posy + 1, posx - 1, state, W) *  calShading2depthGrad(state, posx, posy + 1, input).x;
@@ -544,7 +544,7 @@ __inline__ __device__ float applyJTJDevice(unsigned int variableIdx, SolverInput
                     tmpval += readP(posy, posx, state, W) *  calShading2depthGrad(state, posx, posy + 1, input).z;
                     tmpval -= readP(posy + 1, posx + 1, state, W) *  calShading2depthGrad(state, posx + 1, posy + 1, input).y;
                     tmpval -= readP(posy, posx + 1, state, W) *  calShading2depthGrad(state, posx + 1, posy + 1, input).z;
-                    sum += val2 * tmpval * rowMask(posy + 1, posx, state, input);
+                    sum += val2 * tmpval * rowMask(posy + 1, posx, input);
 
                     //val1, edge 8
                     tmpval = readP(posy, posx, state, W) *  calShading2depthGrad(state, posx + 1, posy, input).x;
@@ -552,7 +552,7 @@ __inline__ __device__ float applyJTJDevice(unsigned int variableIdx, SolverInput
                     tmpval += readP(posy - 1, posx + 1, state, W) *  calShading2depthGrad(state, posx + 1, posy, input).z;
                     tmpval -= readP(posy + 1, posx, state, W) *  calShading2depthGrad(state, posx + 1, posy + 1, input).x;
                     tmpval -= readP(posy + 1, posx + 1, state, W) *  calShading2depthGrad(state, posx + 1, posy + 1, input).y;
-                    sum += val1 * tmpval * colMask(posy, posx + 1, state, input);
+                    sum += val1 * tmpval * colMask(posy, posx + 1, input);
 
                     //val2, edge 9
                     tmpval = readP(posy + 1, posx - 1, state, W) *  calShading2depthGrad(state, posx, posy + 1, input).x;
@@ -560,7 +560,7 @@ __inline__ __device__ float applyJTJDevice(unsigned int variableIdx, SolverInput
                     tmpval += readP(posy, posx, state, W) *  calShading2depthGrad(state, posx, posy + 1, input).z;
                     tmpval -= readP(posy + 2, posx - 1, state, W) *  calShading2depthGrad(state, posx, posy + 2, input).x;
                     tmpval -= readP(posy + 2, posx, state, W) *  calShading2depthGrad(state, posx, posy + 2, input).y;
-                    sum += val2 * tmpval * colMask(posy + 1, posx, state, input);
+                    sum += val2 * tmpval * colMask(posy + 1, posx, input);
 
                     b += sum * parameters.weightShading;
 

@@ -7,9 +7,69 @@
 #include "../../ConvergenceAnalysis.h"
 #include "../../CUDATimer.h"
 
+#include "SolverTerms.h"
+#include "PatchSolverSFSNoSharedEquations.h"
+
 // For the naming scheme of the variables see:
 // http://en.wikipedia.org/wiki/Conjugate_gradient_method
 // This code is an implementation of their PCG pseudo code
+
+
+
+
+__inline__ __device__ void fillPatchBorderPWithJTF(volatile float* P, int patchID_x, int patchID_y, int tidy, int tidx, int posy, int posx, unsigned int W, unsigned int H, //volatile float* inPriorDepth,
+    PatchSolverState& state, PatchSolverInput& input, PatchSolverParameters& parameters) {
+
+    const int indexInPatch = tidx + tidy*patchID_x;
+    const int extPatchSize = PATCH_SIZE + (2 * EXTRA_BD);
+    const int borderSize = EXTRA_BD;
+
+    const int base_x = posx - tidx;
+    const int base_y = posy - tidy;
+
+    //   +----------+
+    //   |  Case 1  |
+    //   |--+----+--|
+    //   | 2|    |2 | 
+    //   |--+----+--|
+    //   |  Case 3  |
+    //   +----------+
+
+
+
+    int borderPosX = -1;
+    int borderPosY = -1;
+    int case1Ext = extPatchSize*borderSize;
+    int case2Ext = (PATCH_SIZE * 2 * borderSize);
+    if (indexInPatch < case1Ext) { // case 1
+        borderPosX = (indexInPatch % extPatchSize);
+        borderPosY = (indexInPatch / extPatchSize);
+    } else if (indexInPatch < (case1Ext + case2Ext)) {
+        int indexInCase2 = indexInPatch - case1Ext;
+        int xOff = indexInCase2 % (2 * borderSize);
+        borderPosX = (xOff > borderSize) ? (xOff + PATCH_SIZE) : xOff;
+        borderPosY = (indexInCase2 / (2 * borderSize));
+    } else if (indexInPatch < ((2*case1Ext) + case2Ext)) {
+        int indexInCase3 = indexInPatch - (case1Ext + case2Ext);
+        borderPosX = (indexInCase3 % extPatchSize);
+        borderPosY = (indexInCase3 / extPatchSize);
+    } 
+    int newPosX = base_x + borderPosX;
+    int newPosY = base_y + borderPosY;
+    
+
+    bool inExtPatch = borderPosX >= 0 && borderPosY >= 0 && borderPosX < extPatchSize && borderPosY < extPatchSize;
+    if (isInsideImage(borderPosY, borderPosX, W, H) && inExtPatch) {
+        float Pre;
+        float R = evalMinusJTFDeviceNoShared(newPosY, newPosX, W, H, state, input, parameters, Pre); // residuum = J^T x -F - A x delta_0  => J^T x -F, since A x x_0 == 0 		
+        R *= 2.0f; //TODO: Check if results are still okay once we fix this
+        const float preRes = Pre*R;
+        P[getLinearShareMemLocate_SFS(borderPosY - borderSize, borderPosX - borderSize)] = preRes;
+    }
+}
+
+
+
 
 /////////////////////////////////////////////////////////////////////////
 // PCG Patch Iteration
@@ -77,6 +137,8 @@ __global__ void PCGStepPatch_Kernel_SFS_BSP_Mask_Prior(PatchSolverInput input, P
 	//////////////////////////////////////////////////////////////////////////////////////////
 	// Initialize linear patch systems
 	//////////////////////////////////////////////////////////////////////////////////////////
+
+    fillPatchBorderPWithJTF(P, patchID_x, patchID_y, tId_i, tId_j, gId_i, gId_j, W, H, state, input, parameters);
 
 	float d = 0.0f;
 	if(isInsideImage(gId_i, gId_j, W, H))
@@ -225,6 +287,8 @@ __global__ void PCGStepPatch_Kernel_SaveInitialCostJTFAndPreAndJTJ(PatchSolverIn
 
 
     int resultIndex = gId_i*W + gId_j;
+
+    fillPatchBorderPWithJTF(P, patchID_x, patchID_y, tId_i, tId_j, gId_i, gId_j, W, H, state, input, parameters);
 
     //////////////////////////////////////////////////////////////////////////////////////////
     // Initialize linear patch systems

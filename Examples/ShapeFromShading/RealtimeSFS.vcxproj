@@ -218,6 +218,7 @@
     <ClInclude Include="Cuda\ICUDASolverSFS.h" />
     <ClInclude Include="Cuda\PatchSolverSFS\CUDAPatchSolverSFS.h" />
     <ClInclude Include="Cuda\PatchSolverSFS\PatchSolverSFSEquations.h" />
+    <ClInclude Include="Cuda\PatchSolverSFS\PatchSolverSFSNoSharedEquations.h" />
     <ClInclude Include="Cuda\PatchSolverSFS\PatchSolverSFSParameters.h" />
     <ClInclude Include="Cuda\PatchSolverSFS\PatchSolverSFSState.h" />
     <ClInclude Include="Cuda\PatchSolverSFS\PatchSolverSFSUtil.h" />

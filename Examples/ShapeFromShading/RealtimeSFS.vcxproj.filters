@@ -262,6 +262,9 @@
     <ClInclude Include="Cuda\PatchSolverSFS\SolverTerms.h">
       <Filter>Cuda\PatchSolverSFS</Filter>
     </ClInclude>
+    <ClInclude Include="Cuda\PatchSolverSFS\PatchSolverSFSNoSharedEquations.h">
+      <Filter>Cuda\PatchSolverSFS</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <None Include="Shaders\PhongLighting.hlsl">

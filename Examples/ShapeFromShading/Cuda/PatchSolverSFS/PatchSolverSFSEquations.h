@@ -371,6 +371,7 @@ __inline__ __device__ float evalCost(int tidy, int tidx, int posy, int posx, uns
 // evalMinusJTF
 ////////////////////////////////////////
 
+
 __inline__ __device__ float evalMinusJTFDeviceLS_SFS_Shared_Mask_Prior(int tidy, int tidx, int posy, int posx, unsigned int W, unsigned int H, volatile float* inGradx, volatile float* inGrady,volatile float* inGradz,
 														  volatile float* inShadingdif, volatile float* inX, volatile unsigned char* inMaskRow, volatile unsigned char* inMaskCol, float3 &normal0, float3 &normal1, float3 &normal2,//volatile float* inPriorDepth,
 														  PatchSolverInput& input, PatchSolverParameters& parameters, float& outPre)
