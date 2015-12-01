@@ -814,8 +814,9 @@ function Apply:calcd(v)
     return r
 end
 
-function Reduce:calcd(v) error("NYI - derivatives on reduce") end
-function Reduce:partials() error("NYI - derivatives on reduce") end
+function Reduce:calcd(v) return self.args[1]:d(v) end
+local reducepartials = terralib.newlist { one }
+function Reduce:partials() return reducepartials end
 --calc d(thisexpress)/d(exps[1]) ... d(thisexpress)/d(exps[#exps]) (i.e. the gradient of this expression with relation to the inputs) 
 function Exp:gradient(exps)
     exps = terralib.islist(exps) and exps or terralib.newlist(exps)
@@ -963,6 +964,8 @@ ad.greatereq:define(function(x,y) return `x >= y end,0,0)
 
 function ad.not_:propagatetype(args) return bool, {bool} end
 ad.not_:define(function(x) return `not x end, 0)
+ad.materialize:define(function(x) return x end,1) -- preserved across math optimizations
+
 
 setmetatable(ad,nil) -- remove special metatable that generates new blank ops
 

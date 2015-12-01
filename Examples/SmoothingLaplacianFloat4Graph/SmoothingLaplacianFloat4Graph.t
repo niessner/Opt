@@ -125,13 +125,28 @@ local terra applyJTJ(i : int32, j : int32, gi : int32, gj : int32, self : P:Para
 end
 
 
-local math_cost = w_fit * (X(0,0) - A(0,0)) ^ 2 + w_reg * ad.reduce((X(G) - X(0,0))^2)
+-- same functions, but expressed in math language
+local IP = adP:Image("P",opt.float4,W,H,-1)
+local x,x_n = X(0,0),X(G)
+local a = A(0,0)
+local p,p_n = IP(0,0), IP(G)
+local sum = ad.reduce
+local math_cost = w_fit * (x - a) ^ 2 + w_reg * sum((x - x_n)^2)
 math_cost = math_cost:sum()
-print(math_cost)
---adP:createfunctionset("cost",math_cost)
-P:Function("cost", {W,H}, cost)
-P:Function("gradient", {W,H}, gradient)
-P:Function("evalJTF", {W,H}, evalJTF)
-P:Function("applyJTJ", {W,H}, applyJTJ)
+
+local math_grad = w_fit*2.0*(x - a) + 2*w_reg*sum(2*(x - x_n))
+local math_jtj = w_fit*2.0*p + 2*w_reg*sum(2*(p - p_n))
+
+if false then
+    adP:createfunctionset("cost",math_cost)
+    adP:createfunctionset("gradient",math_grad)
+    adP:createfunctionset("evalJTF",math_grad,ad.toexp(1.0))
+    adP:createfunctionset("applyJTJ",math_jtj)
+else 
+    P:Function("cost", {W,H}, cost)
+    P:Function("gradient", {W,H}, gradient)
+    P:Function("evalJTF", {W,H}, evalJTF)
+    P:Function("applyJTJ", {W,H}, applyJTJ)
+end
 
 return P
