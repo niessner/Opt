@@ -20,7 +20,7 @@
 __inline__ __device__ void fillPatchBorderPWithJTF(volatile float* P, int patchID_x, int patchID_y, int tidy, int tidx, int posy, int posx, unsigned int W, unsigned int H, //volatile float* inPriorDepth,
     PatchSolverState& state, PatchSolverInput& input, PatchSolverParameters& parameters) {
 
-    const int indexInPatch = tidx + tidy*patchID_x;
+    const int indexInPatch = tidx + (tidy*PATCH_SIZE);
     const int extPatchSize = PATCH_SIZE + (2 * EXTRA_BD);
     const int borderSize = EXTRA_BD;
 
@@ -47,24 +47,25 @@ __inline__ __device__ void fillPatchBorderPWithJTF(volatile float* P, int patchI
     } else if (indexInPatch < (case1Ext + case2Ext)) {
         int indexInCase2 = indexInPatch - case1Ext;
         int xOff = indexInCase2 % (2 * borderSize);
-        borderPosX = (xOff > borderSize) ? (xOff + PATCH_SIZE) : xOff;
-        borderPosY = (indexInCase2 / (2 * borderSize));
+        borderPosX = (xOff >= borderSize) ? (xOff + PATCH_SIZE) : xOff;
+        borderPosY = (indexInCase2 / (2 * borderSize)) + borderSize;
     } else if (indexInPatch < ((2*case1Ext) + case2Ext)) {
         int indexInCase3 = indexInPatch - (case1Ext + case2Ext);
         borderPosX = (indexInCase3 % extPatchSize);
-        borderPosY = (indexInCase3 / extPatchSize);
+        borderPosY = (indexInCase3 / extPatchSize) + borderSize + PATCH_SIZE;
     } 
-    int newPosX = base_x + borderPosX;
-    int newPosY = base_y + borderPosY;
+    int newPosX = base_x + borderPosX - borderSize;
+    int newPosY = base_y + borderPosY - borderSize;
     
 
     bool inExtPatch = borderPosX >= 0 && borderPosY >= 0 && borderPosX < extPatchSize && borderPosY < extPatchSize;
-    if (isInsideImage(borderPosY, borderPosX, W, H) && inExtPatch) {
+    if (isInsideImage(newPosY, newPosX, W, H) && inExtPatch) {
         float Pre;
         float R = evalMinusJTFDeviceNoShared(newPosY, newPosX, W, H, state, input, parameters, Pre); // residuum = J^T x -F - A x delta_0  => J^T x -F, since A x x_0 == 0 		
         R *= 2.0f; //TODO: Check if results are still okay once we fix this
         const float preRes = Pre*R;
         P[getLinearShareMemLocate_SFS(borderPosY - borderSize, borderPosX - borderSize)] = preRes;
+        //P[getLinearShareMemLocate_SFS(tidy, tidx)] = borderPosY / 200.0f;
     }
 }
 
@@ -298,7 +299,7 @@ __global__ void PCGStepPatch_Kernel_SaveInitialCostJTFAndPreAndJTJ(PatchSolverIn
     if (isInsideImage(gId_i, gId_j, W, H))
     {
         costResult[resultIndex] = evalCost(tId_i, tId_j, gId_i, gId_j, W, H, Gradx, Grady, Gradz, Shadingdif, X, MaskRow, MaskCol, normal0, normal1, normal2, input, parameters);
-        R = evalMinusJTFDeviceLS_SFS_Shared_Mask_Prior(tId_i, tId_j, gId_i, gId_j, W, H, Gradx, Grady, Gradz, Shadingdif, X, MaskRow, MaskCol, normal0, normal1, normal2, input, parameters, Pre); // residuum = J^T x -F - A x delta_0  => J^T x -F, since A x x_0 == 0 	
+        R = evalMinusJTFDeviceNoShared(gId_i, gId_j, W, H, state, input, parameters, Pre);//evalMinusJTFDeviceLS_SFS_Shared_Mask_Prior(tId_i, tId_j, gId_i, gId_j, W, H, Gradx, Grady, Gradz, Shadingdif, X, MaskRow, MaskCol, normal0, normal1, normal2, input, parameters, Pre); // residuum = J^T x -F - A x delta_0  => J^T x -F, since A x x_0 == 0 	
         R *= 2.0f; //TODO: port
         jtfResult[resultIndex] = -R;
         preResult[resultIndex] = Pre;

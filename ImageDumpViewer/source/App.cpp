@@ -117,6 +117,71 @@ static shared_ptr<Texture> differenceImage(RenderDevice* rd, const String& name,
 
 
 
+static void compareCUDABlockAndNonBlock(RenderDevice* rd, const String& directory) {
+    String nonBlock = "_nonblock_cuda.imagedump";
+    String block = "_block_cuda.imagedump";
+
+    shared_ptr<Texture> jtfBlock = Texture::getTextureByName(directory + "JTF" + block);
+    shared_ptr<Texture> jtfNBlock = Texture::getTextureByName(directory + "JTF" + nonBlock);
+
+
+    shared_ptr<Texture> costBlock = Texture::getTextureByName(directory + "cost" + block);
+    shared_ptr<Texture> costNBlock = Texture::getTextureByName(directory + "cost" + nonBlock);
+
+
+    static shared_ptr<Texture> preDiff = Texture::singleChannelDifference(rd,
+        Texture::getTextureByName(directory + "Pre" + block),
+        Texture::getTextureByName(directory + "Pre" + nonBlock));
+
+    shared_ptr<Texture> jtjBlock = Texture::getTextureByName(directory + "JTJ" + block);
+    shared_ptr<Texture> jtjNBlock = Texture::getTextureByName(directory + "JTJ" + nonBlock);
+    static shared_ptr<Texture> jtfDiff = differenceImage(rd, "JTF Difference", jtfBlock, jtfNBlock);
+    static shared_ptr<Texture> costDiff = Texture::singleChannelDifference(rd, costBlock, costNBlock);
+    static shared_ptr<Texture> jtjDiff = differenceImage(rd, "JTJ Difference", jtjBlock, jtjNBlock);
+
+    jtfDiff->visualization.documentGamma = 2.2f;
+    costDiff->visualization.documentGamma = 2.2f;
+    jtjDiff->visualization.documentGamma = 2.2f;
+
+    static shared_ptr<Texture> jtjQ = quotientImage(rd, "JTJ Quotient", jtjBlock, jtjNBlock);
+    static shared_ptr<Texture> jtfQ = quotientImage(rd, "JTF Quotient", jtfBlock, jtfNBlock);
+    static shared_ptr<Texture> costQ = quotientImage(rd, "Cost Quotient", costBlock, costNBlock);
+}
+
+static void compareCUDAAndTerraNonBlock(RenderDevice* rd, const String& directory) {
+    String cuda = "_nonblock_cuda.imagedump";
+    String terra = "_optNoAD.imagedump";
+
+    shared_ptr<Texture> jtfCUDA = Texture::getTextureByName(directory + "JTF" + cuda);
+    shared_ptr<Texture> jtfTerra = Texture::getTextureByName(directory + "JTF" + terra);
+
+
+    shared_ptr<Texture> costCUDA = Texture::getTextureByName(directory + "cost" + cuda);
+    shared_ptr<Texture> costTerra = Texture::getTextureByName(directory + "cost" + terra);
+
+
+    static shared_ptr<Texture> preDiff = Texture::singleChannelDifference(rd,
+        Texture::getTextureByName(directory + "Pre" + cuda),
+        Texture::getTextureByName(directory + "Pre" + terra));
+
+    shared_ptr<Texture> jtjCUDA = Texture::getTextureByName(directory + "JTJ" + cuda);
+    shared_ptr<Texture> jtjTerra = Texture::getTextureByName(directory + "JTJ" + terra);
+
+    static shared_ptr<Texture> jtfDiff = differenceImage(rd, "JTF Difference", jtfCUDA, jtfTerra);
+    static shared_ptr<Texture> costDiff = Texture::singleChannelDifference(rd, costCUDA, costTerra);
+    static shared_ptr<Texture> jtjDiff = differenceImage(rd, "JTJ Difference", jtjCUDA, jtjTerra);
+
+    jtfDiff->visualization.documentGamma = 2.2f;
+    costDiff->visualization.documentGamma = 2.2f;
+    jtjDiff->visualization.documentGamma = 2.2f;
+
+    static shared_ptr<Texture> jtjQ = quotientImage(rd, "JTJ Quotient", jtjCUDA, jtjTerra);
+    static shared_ptr<Texture> jtfQ = quotientImage(rd, "JTF Quotient", jtfCUDA, jtfTerra);
+    static shared_ptr<Texture> costQ = quotientImage(rd, "Cost Quotient", costCUDA, costTerra);
+}
+
+
+
 // Called before the application loop begins.  Load data here and
 // not in the constructor so that common exceptions will be
 // automatically caught.
@@ -143,51 +208,12 @@ void App::onInit() {
         loadImageDump(directory + f);
     }
 
-    String nonBlock = "_nonblock_cuda.imagedump";
-    String block = "_block_cuda.imagedump";
+    
     
     RenderDevice* rd = RenderDevice::current;
-    
-    shared_ptr<Texture> jtfBlock = Texture::getTextureByName(directory + "JTF" + block);
-    shared_ptr<Texture> jtfNBlock = Texture::getTextureByName(directory + "JTF" + nonBlock);
-    
+    //compareCUDABlockAndNonBlock(rd, directory);
 
-    shared_ptr<Texture> costBlock = Texture::getTextureByName(directory + "cost" + block);
-    shared_ptr<Texture> costNBlock = Texture::getTextureByName(directory + "cost" + nonBlock);
-    
-
-    static shared_ptr<Texture> preDiff = Texture::singleChannelDifference(rd,
-        Texture::getTextureByName(directory + "Pre" + block),
-        Texture::getTextureByName(directory + "Pre" + nonBlock));
-    
-    shared_ptr<Texture> jtjBlock = Texture::getTextureByName(directory + "JTJ" + block);
-    shared_ptr<Texture> jtjNBlock = Texture::getTextureByName(directory + "JTJ" + nonBlock);
-
-    
-    /**
-    shared_ptr<Texture> resultOpt = Texture::getTextureByName(directory + "result_AD.imagedump");
-    shared_ptr<Texture> resultOptNoAD = Texture::getTextureByName(directory + "result_optNoAD.imagedump");
-    */
-
-    static shared_ptr<Texture> jtfDiff = differenceImage(rd, "JTF Difference", jtfBlock, jtfNBlock);
-    static shared_ptr<Texture> costDiff = Texture::singleChannelDifference(rd, costBlock, costNBlock);
-    static shared_ptr<Texture> jtjDiff = differenceImage(rd, "JTJ Difference", jtjBlock, jtjNBlock);
-    //static shared_ptr<Texture> resultDiff = differenceImage(rd, "Result Difference", resultOpt, resultOptNoAD);
-    jtfDiff->visualization.documentGamma = 2.2f;
-    costDiff->visualization.documentGamma = 2.2f;
-    jtjDiff->visualization.documentGamma = 2.2f;
-    //resultDiff->visualization.documentGamma = 2.2f;
-
-    /*
-    static shared_ptr<Texture> initDiff = Texture::singleChannelDifference(rd, Texture::getTextureByName("E:/Projects/DSL/Optimization/API/RealtimeSFS/initial_depth.imagedump"), resultOpt);
-    static shared_ptr<Texture> initDiff2 = Texture::singleChannelDifference(rd, Texture::getTextureByName("E:/Projects/DSL/Optimization/API/RealtimeSFS/initial_depth.imagedump"), resultOptNoAD);
-    initDiff->visualization.documentGamma = 2.2f;
-    initDiff2->visualization.documentGamma = 2.2f;
-    */
-
-    static shared_ptr<Texture> jtjQ = quotientImage(rd, "JTJ Quotient", jtjBlock, jtjNBlock);
-    static shared_ptr<Texture> jtfQ = quotientImage(rd, "JTF Quotient", jtfBlock, jtfNBlock);
-    static shared_ptr<Texture> costQ = quotientImage(rd, "Cost Quotient", costBlock, costNBlock);
+    compareCUDAAndTerraNonBlock(rd, directory);
 
 
     dynamic_pointer_cast<DefaultRenderer>(m_renderer)->setOrderIndependentTransparency(false);

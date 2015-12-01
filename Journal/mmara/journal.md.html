@@ -1,6 +1,21 @@
 **Development Journal** 
 		Michael Mara
 
+**2015/11/30 11:20**
+Actually checking in work from Monday and weekend, also changed boundary handling in the terra cost function to match the cuda one. It is super important to make sure boundary handling is the same across all the different implementations (CUDA, Terra, Opt).
+
+**2015/11/30 14:12**
+Fixed a lot; one of the big bugs is that every access to the color image (I), does a weird quasi blur. Need to investigate this more. But the current problem to debug is the cost at the border of valid depth is different
+for CUDA vs Terra.
+
+**2015/11/30 12:35**
+No noticeable difference between CUDA and Terra if comparing only the regularization and depth constraints, so bug is in shading. Also, the masks are (accidentally) already handled correctly.
+
+**2015/11/30 10:52**
+CUDA and Terra giving very different results. Weird horizontal NaN problems in CUDA version. Going to bring the terra .imagedump functionality back online to compare the two. Side note: I noticed the masks are uint8s in Terra, but I think we might treat them as uint8s in CUDA... Worth a look.
+
+**2015/11/30 10:36**
+As of 11/28, had fixed all the bugs and the initial JTJ for the block and non-block SFS solver gives exact results. Now need to compare Terra and CUDA versions; also need to ask Matthias about the extra x2s.
 
 **2015/11/28 13:54**
 Implemented a first attempt at calculating P on the borders in the SFS patch solver. Currently giving old results and not sure why, debugging now...
