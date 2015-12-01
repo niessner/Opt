@@ -964,6 +964,8 @@ ad.greatereq:define(function(x,y) return `x >= y end,0,0)
 
 function ad.not_:propagatetype(args) return bool, {bool} end
 ad.not_:define(function(x) return `not x end, 0)
+ad.materialize:define(function(x) return x end,1) -- preserved across math optimizations
+
 
 setmetatable(ad,nil) -- remove special metatable that generates new blank ops
 

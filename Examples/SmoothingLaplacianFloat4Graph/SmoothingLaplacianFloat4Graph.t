@@ -133,6 +133,7 @@ local p,p_n = IP(0,0), IP(G)
 local sum = ad.reduce
 local math_cost = w_fit * (x - a) ^ 2 + w_reg * sum((x - x_n)^2)
 math_cost = math_cost:sum()
+
 local math_grad = w_fit*2.0*(x - a) + 2*w_reg*sum(2*(x - x_n))
 local math_jtj = w_fit*2.0*p + 2*w_reg*sum(2*(p - p_n))
 
