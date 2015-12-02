@@ -18,7 +18,7 @@ end
 opt.BLOCK_SIZE = 16
 local BLOCK_SIZE =  opt.BLOCK_SIZE
 
-local FLOAT_EPSILON = `0.000001f
+local FLOAT_EPSILON = `0.000001f 
 -- GAUSS NEWTON (non-block version)
 return function(problemSpec, vars)
 
@@ -91,7 +91,7 @@ return function(problemSpec, vars)
 								
 				var residuum : unknownElement = 0.0f
 				var pre : unknownElement = 0.0f	
-				if (not [problemSpec:EvalExclude(w,h,w,h,`pd.parameters)]) then
+				if (not [problemSpec:EvalExclude(w,h,w,h,`pd.parameters)]) then 
 								
 					if true or isBlockOnBoundary(w, h, pd.parameters.X:W(), pd.parameters.X:H()) then
 						residuum, pre = data.problemSpec.functions.evalJTF.boundary(w, h, w, h, pd.parameters)
@@ -287,11 +287,11 @@ return function(problemSpec, vars)
 
 	local terra initAllDebugImages(pd : &PlanData)
 		C.printf("initAllDebugImages\n")
-		dbg.initCudaImage(pd, &pd.debugDumpImage, 1)
-		dbg.initCudaImage(pd, &pd.debugCostImage, 1)
-		dbg.initCudaImage(pd, &pd.debugJTJImage, sizeof([unknownElement]) / 4)
-		dbg.initCudaImage(pd, &pd.debugJTFImage, sizeof([unknownElement]) / 4)
-		dbg.initCudaImage(pd, &pd.debugPreImage, sizeof([unknownElement]) / 4)
+		dbg.initCudaImage(&pd.debugDumpImage,pd.parameters.X:W(), pd.parameters.X:H(),  1)
+		dbg.initCudaImage(&pd.debugCostImage,pd.parameters.X:W(), pd.parameters.X:H(),  1)
+		dbg.initCudaImage(&pd.debugJTJImage, pd.parameters.X:W(), pd.parameters.X:H(), sizeof([unknownElement]) / 4)
+		dbg.initCudaImage(&pd.debugJTFImage, pd.parameters.X:W(), pd.parameters.X:H(), sizeof([unknownElement]) / 4)
+		dbg.initCudaImage(&pd.debugPreImage, pd.parameters.X:W(), pd.parameters.X:H(), sizeof([unknownElement]) / 4)
 	end
 
 
@@ -373,9 +373,9 @@ return function(problemSpec, vars)
 		    			C.printf("dumpingCostJTFAndPre\n")
 		    			gpu.dumpCostJTFAndPre(pd)
 		    			C.printf("saving\n")
-		    			dbg.imageWritePrefix(pd, pd.debugCostImage, 1, "cost")
-		    			dbg.imageWritePrefix(pd, pd.debugJTFImage, sizeof([unknownElement]) / 4, "JTF")
-		    			dbg.imageWritePrefix(pd, pd.debugPreImage, sizeof([unknownElement]) / 4, "Pre")
+		    			dbg.imageWriteFromCudaPrefix(pd.debugCostImage, pd.parameters.X:W(), pd.parameters.X:H(), 1, "cost")
+		    			dbg.imageWriteFromCudaPrefix(pd.debugJTFImage, pd.parameters.X:W(), pd.parameters.X:H(), sizeof([unknownElement]) / 4, "JTF")
+		    			dbg.imageWriteFromCudaPrefix(pd.debugPreImage, pd.parameters.X:W(), pd.parameters.X:H(), sizeof([unknownElement]) / 4, "Pre")
 		    		end
 	    		end
 	    	end
@@ -396,31 +396,33 @@ return function(problemSpec, vars)
 			    			C.printf("dumpingJTJ\n")
 			    			gpu.dumpJTJ(pd)
 			    			C.printf("saving\n")
-			    			dbg.imageWritePrefix(pd, pd.debugJTJImage, sizeof([unknownElement]) / 4, "JTJ")
+			    			dbg.imageWriteFromCudaPrefix(pd.debugJTJImage, pd.parameters.X:W(), pd.parameters.X:H(), sizeof([unknownElement]) / 4, "JTJ")
+			    			return 0
 			    		end
 		    		end
 		    	end
 		    end
 
-		for lIter = 0, pd.lIterations do
-		                C.cudaMemset(pd.scanAlpha, 0, sizeof(float))
-				gpu.PCGStep1(pd)
-				C.cudaMemset(pd.scanBeta, 0, sizeof(float))
-				gpu.PCGStep2(pd)
-				gpu.PCGStep3(pd)
+			for lIter = 0, pd.lIterations do
+	                C.cudaMemset(pd.scanAlpha, 0, sizeof(float))
+					gpu.PCGStep1(pd)
+					C.cudaMemset(pd.scanBeta, 0, sizeof(float))
+					gpu.PCGStep2(pd)
+					gpu.PCGStep3(pd)
+					
+					--var currCost = gpu.computeCost(pd)
+					--logSolver("after linear iteration %d, cost=%f\n", lIter, currCost)
+				end
 				
-				--var currCost = gpu.computeCost(pd)
-				--logSolver("after linear iteration %d, cost=%f\n", lIter, currCost)
-			end
-			
-			gpu.PCGLinearUpdate(pd)
-		    pd.nIter = pd.nIter + 1
-		    return 1
-		else
+				gpu.PCGLinearUpdate(pd)
+			    pd.nIter = pd.nIter + 1
+			    return 1
+			else
 			escape
 				if util.debugDumpInfo then
 		    		emit quote
-						dbg.imageWritePrefix(pd, [&float](pd.parameters.X.data), sizeof([unknownElement]) / 4, "result")
+						dbg.imageWriteFromCudaPrefix([&float](pd.parameters.X.data), pd.parameters.X:W(), pd.parameters.X:H(), sizeof([unknownElement]) / 4, "result")
+
 					end
 				end
 			end

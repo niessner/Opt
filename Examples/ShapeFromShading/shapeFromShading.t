@@ -7,6 +7,8 @@ local USE_TEMPORAL_CONSTRAINT 	= false
 local USE_PRECONDITIONER 		= false
 
 
+local USE_CRAPPY_SHADING_BOUNDARY = true
+
 local FLOAT_EPSILON = 0.000001
 local DEPTH_DISCONTINUITY_THRE = 0.01
 
@@ -122,7 +124,8 @@ local terra isInsideImage(i : int, j : int, width : int, height : int)
 end
 
 local terra I(self : P:ParameterType(), i : int32, j : int32)
-	return self.I(i,j)--*0.5f + 0.25f*(self.I(i-1,j)+self.I(i,j-1))
+    -- TODO: WHYYYYYYYYYY?
+	return self.I(i,j)*0.5f + 0.25f*(self.I(i-1,j)+self.I(i,j-1))
 end
 
 -- equation 8
@@ -439,14 +442,20 @@ local terra cost(i : int32, j : int32, gi : int32, gj : int32, self : P:Paramete
 	
 
 	var pointValid 				= isInsideImage(gi,gj, W, H) and IsValidPoint(self.X(i,j))
-	var leftAndCenterValid 		= pointValid and isInsideImage(gi-1,gj, W, H) and IsValidPoint(self.X(i-1,j))
-	var upAndCenterValid   		= pointValid and isInsideImage(gi,gj-1, W, H) and IsValidPoint(self.X(i,j-1))
+    var leftValid 				= isInsideImage(gi-1,gj, W, H) and IsValidPoint(self.X(i-1,j))
+    var rightValid 				= isInsideImage(gi+1,gj, W, H) and IsValidPoint(self.X(i+1,j))
+    var upValid 				= isInsideImage(gi,gj-1, W, H) and IsValidPoint(self.X(i,j-1))
+    var downValid 				= isInsideImage(gi,gj+1, W, H) and IsValidPoint(self.X(i,j+1))
+	var leftAndCenterValid 		= pointValid and leftValid
+    var rightAndCenterValid 	= pointValid and rightValid
+	var upAndCenterValid   		= pointValid and upValid
+    var downAndCenterValid      = pointValid and downValid
 	var leftUpAndCenterValid 	= pointValid and isInsideImage(gi-1,gj-1, W, H) and IsValidPoint(self.X(i-1,j-1))
 	var rightUpValid 			= isInsideImage(gi+1,gj-1, W, H) and IsValidPoint(self.X(i+1,j-1))
 	var leftDownValid 			= isInsideImage(gi-1,gj+1, W, H) and IsValidPoint(self.X(i-1,j+1))
 
-	var horizontalLineValid 	= leftAndCenterValid and isInsideImage(gi+1,gj, W, H) and IsValidPoint(self.X(i+1,j))
-	var verticalLineValid 		= upAndCenterValid and isInsideImage(gi,gj+1, W, H) and IsValidPoint(self.X(i,j+1))
+	var horizontalLineValid 	= leftAndCenterValid and rightValid
+	var verticalLineValid 		= upAndCenterValid and downValid
 	var crossValid 				= horizontalLineValid and verticalLineValid
 
 	if [USE_DEPTH_CONSTRAINT] and pointValid then 
@@ -454,15 +463,39 @@ local terra cost(i : int32, j : int32, gi : int32, gj : int32, self : P:Paramete
 	end 
 
 	var shadingDifference = 0.0f
-	if [USE_SHADING_CONSTRAINT] and horizontalLineValid and rightUpValid and upAndCenterValid then
+	if [USE_SHADING_CONSTRAINT] then
 		if (not [USE_MASK_REFINE]) or self.edgeMaskR(i,j) > 0.0f then
-			E_g_h = B(i,j,gi,gj,self) - B(i+1,j,gi+1,gj,self) - (I(self, i,j) - I(self, i+1,j))
+            if [USE_CRAPPY_SHADING_BOUNDARY] then
+                if leftAndCenterValid and upValid then
+                    E_g_h = B(i,j,gi,gj,self) - I(self, i,j)
+                end
+                if rightUpValid and rightAndCenterValid then
+                    E_g_h = E_g_h - (B(i+1,j,gi+1,gj,self) - I(self, i+1,j))
+                end
+            else
+                if (horizontalLineValid and rightUpValid and upAndCenterValid) then
+                    E_g_h = B(i,j,gi,gj,self) - B(i+1,j,gi+1,gj,self) - (I(self, i,j) - I(self, i+1,j))
+                end
+            end
+			
 		end
 	end
-	
-	if [USE_SHADING_CONSTRAINT] and verticalLineValid and leftAndCenterValid and leftDownValid then
+
+    if [USE_SHADING_CONSTRAINT] then
 		if (not [USE_MASK_REFINE]) or self.edgeMaskC(i,j) > 0.0f then
-			E_g_v = B(i,j,gi,gj,self) - B(i,j+1,gi,gj+1,self) - (I(self, i,j) - I(self, i,j+1))
+            if [USE_CRAPPY_SHADING_BOUNDARY] then
+                if leftAndCenterValid and upValid then
+                    E_g_v = B(i,j,gi,gj,self) - I(self, i,j)
+                end
+                if leftDownValid and downAndCenterValid then
+                    E_g_v = E_g_v - (B(i,j+1,gi,gj+1,self) - I(self, i,j+1))
+                end
+            else
+                if (verticalLineValid and leftAndCenterValid and leftDownValid) then
+                   E_g_v = B(i,j,gi,gj,self) - B(i,j+1,gi,gj+1,self) - (I(self, i,j) - I(self, i,j+1))
+                end
+            end
+			
 		end
 	end
 
@@ -496,8 +529,14 @@ local terra cost(i : int32, j : int32, gi : int32, gj : int32, self : P:Paramete
 		E_r_d = dot(n_p, p(i,j,gi,gj,self) - p(i-1,j-1,gi-1,gj-1,self))
 	end
 
-	var cost = self.w_s*E_s*E_s + self.w_p*E_p*E_p + self.w_g*E_g_h*E_g_h + self.w_g*E_g_v*E_g_v + self.w_r*E_r_h*E_r_h + self.w_r*E_r_v*E_r_v + self.w_r*E_r_d*E_r_d 
-	return cost
+	var cost : float = self.w_s*E_s*E_s + self.w_p*E_p*E_p + self.w_g*E_g_h*E_g_h + self.w_g*E_g_v*E_g_v + self.w_r*E_r_h*E_r_h + self.w_r*E_r_v*E_r_v + self.w_r*E_r_d*E_r_d 
+	--[[
+    if gi>1 and gi<(W - 5) and gj>1 and gj<(H - 5) then
+        cost = [float](self.edgeMaskC(i,j))
+    end
+    --]]
+    
+    return cost
 	
 end
 

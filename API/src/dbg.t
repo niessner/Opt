@@ -13,7 +13,7 @@ end
 
 terra dbg.imageWriteFromCuda(imPtr : &float, width : int, height : int, channelCount : int, filename : rawstring)
    var size = sizeof(float) * [uint32](width*height*channelCount)
-   var ptr = C.malloc(size)
+   var ptr = [&float](C.malloc(size))
    C.cudaMemcpy(ptr, imPtr, size, C.cudaMemcpyDeviceToHost)
    im.imageWrite(ptr, width, height, channelCount, filename)
    C.free(ptr)

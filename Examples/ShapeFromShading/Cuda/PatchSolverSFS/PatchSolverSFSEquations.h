@@ -306,10 +306,6 @@ __inline__ __device__ float evalCost(int tidy, int tidx, int posy, int posx, uns
             float val0, val1, val2;
             unsigned char maskval = 1;
 #           if USE_SHADING_CONSTRAINT
-            val0 = readValueFromCache2DLS_SFS(inGrady, tidy, tidx);
-            val1 = readValueFromCache2DLS_SFS(inGradx, tidy, tidx + 1);
-            val2 = readValueFromCache2DLS_SFS(inGradz, tidy + 1, tidx);
-
 #               ifdef USE_MASK_REFINE
                     E_g_h = (readValueFromCache2DLS_SFS(inShadingdif, tidy, tidx) - readValueFromCache2DLS_SFS(inShadingdif, tidy, tidx+1)) * readValueFromCache2DLS_SFS_MASK(inMaskRow, tidy, tidx);
                     E_g_v = (readValueFromCache2DLS_SFS(inShadingdif, tidy, tidx) - readValueFromCache2DLS_SFS(inShadingdif, tidy+1, tidx)) * readValueFromCache2DLS_SFS_MASK(inMaskCol, tidy, tidx);
@@ -767,7 +763,7 @@ __inline__ __device__ float applyJTJDeviceLS_SFS_Shared_BSP_Mask_Prior(int tidy,
 			    sum -= lapval.y*val1;
 			    sum -= lapval.z;
                 
-                // sum = inP[getLinearShareMemLocate_SFS(tidy-1, tidx)];
+                //sum = inP[getLinearShareMemLocate_SFS(tidy+1, tidx+2)];
                 b += sum*parameters.weightRegularizer;
 #           endif
 

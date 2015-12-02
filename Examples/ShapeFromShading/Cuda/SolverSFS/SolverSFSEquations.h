@@ -25,11 +25,11 @@ __inline__ __device__ float readP(int posy, int posx, SolverState& state, int W)
 }
 
 __inline__ __device__ float rowMask(int posy, int posx, PatchSolverInput &input) {
-    return input.d_maskEdgeMap[posy*input.width + posx];
+    return float(input.d_maskEdgeMap[posy*input.width + posx]);
 }
 
 __inline__ __device__ float colMask(int posy, int posx, PatchSolverInput &input) {
-    return input.d_maskEdgeMap[posy*input.width + posx + (input.width*input.height)];
+    return float(input.d_maskEdgeMap[posy*input.width + posx + (input.width*input.height)]);
 }
 
 
@@ -81,17 +81,13 @@ __inline__ __device__ float evalFDevice(int variableIdx, SolverInput& input, Sol
     {
         if (posx>1 && posx<(W - 5) && posy>1 && posy<(H - 5)){
 
-            float sum, tmpval;
-            float val0, val1, val2;
-            unsigned char maskval = 1;
 #           if USE_SHADING_CONSTRAINT
                 float4 temp00 = calShading2depthGrad(state, posx, posy, input);
                 float4 temp10 = calShading2depthGrad(state, posx+1, posy, input);
                 float4 temp01 = calShading2depthGrad(state, posx, posy+1, input);
 
-                val0 = temp00.y;
-                val1 = temp10.x;
-                val2 = temp01.z;
+                
+
                 E_g_h = (temp00.w - temp10.w);
                 E_g_v = (temp00.w - temp01.w);
 #               ifdef USE_MASK_REFINE
@@ -139,6 +135,7 @@ __inline__ __device__ float evalFDevice(int variableIdx, SolverInput& input, Sol
                 (parameters.weightFitting       * E_p*E_p) + // 
                 (parameters.weightShading       * (E_g_h*E_g_h + E_g_v*E_g_v)) +
                 (parameters.weightPrior * (E_r_h*E_r_h + E_r_v*E_r_v + E_r_d*E_r_d));
+            //cost = input.d_maskEdgeMap[variableIdx+W*H];
             //cost = calShading2depthGrad(state, posx, posy, input).w;
         }
     }
@@ -439,6 +436,14 @@ __inline__ __device__ float evalMinusJTFDevice(unsigned int variableIdx, SolverI
 }
 
 
+__device__ inline float add_mul_inp_grad_ls_bsp(SolverState& state, SolverInput& input, int posx, int posy, const int W)
+{
+    float4 temp = calShading2depthGrad(state, posx, posy, input);
+    return (readP(posy, posx - 1, state, W)	* temp.x
+        + readP(posy, posx, state, W)	    * temp.y
+        + readP(posy - 1, posx, state, W)	* temp.z);
+}
+
 
 
 ////////////////////////////////////////
@@ -565,16 +570,16 @@ __inline__ __device__ float applyJTJDevice(unsigned int variableIdx, SolverInput
                     b += sum * parameters.weightShading;
 
 #               else											
-                    sum += (val1*4.0f - val0) * add_mul_inp_grad_ls_bsp(inP, inGradx, inGrady, inGradz, tidx + 1, tidy);//mulitplication of grad with inP needs to consid			
-                    sum += (val2*4.0f - val0) * add_mul_inp_grad_ls_bsp(inP, inGradx, inGrady, inGradz, tidx, tidy + 1);
-                    sum += (val0*4.0f - val1 - val2) * add_mul_inp_grad_ls_bsp(inP, inGradx, inGrady, inGradz, tidx, tidy);
-                    sum += (-val2 - val1) * add_mul_inp_grad_ls_bsp(inP, inGradx, inGrady, inGradz, tidx + 1, tidy + 1);
-                    sum += (-val0) * add_mul_inp_grad_ls_bsp(inP, inGradx, inGrady, inGradz, tidx - 1, tidy);
-                    sum += (-val1) * add_mul_inp_grad_ls_bsp(inP, inGradx, inGrady, inGradz, tidx + 2, tidy);
-                    sum += (-val0) * add_mul_inp_grad_ls_bsp(inP, inGradx, inGrady, inGradz, tidx, tidy - 1);
-                    sum += (-val1) *  add_mul_inp_grad_ls_bsp(inP, inGradx, inGrady, inGradz, tidx + 1, tidy - 1);
-                    sum += (-val2) *  add_mul_inp_grad_ls_bsp(inP, inGradx, inGrady, inGradz, tidx - 1, tidy + 1);
-                    sum += (-val2) *  add_mul_inp_grad_ls_bsp(inP, inGradx, inGrady, inGradz, tidx, tidy + 2);
+                    sum += (val1*4.0f - val0) * add_mul_inp_grad_ls_bsp(state, input, posx + 1, posy, W);//mulitplication of grad with inP needs to consid			
+                    sum += (val2*4.0f - val0) * add_mul_inp_grad_ls_bsp(state, input, posx, posy + 1, W);
+                    sum += (val0*4.0f - val1 - val2) * add_mul_inp_grad_ls_bsp(state, input, posx, posy, W);
+                    sum += (-val2 - val1) * add_mul_inp_grad_ls_bsp(state, input, posx + 1, posy + 1, W);
+                    sum += (-val0) * add_mul_inp_grad_ls_bsp(state, input, posx - 1, posy, W);
+                    sum += (-val1) * add_mul_inp_grad_ls_bsp(state, input, posx + 2, posy, W);
+                    sum += (-val0) * add_mul_inp_grad_ls_bsp(state, input, posx, posy - 1, W);
+                    sum += (-val1) *  add_mul_inp_grad_ls_bsp(state, input, posx + 1, posy - 1, W);
+                    sum += (-val2) *  add_mul_inp_grad_ls_bsp(state, input, posx - 1, posy + 1, W);
+                    sum += (-val2) *  add_mul_inp_grad_ls_bsp(state, input, posx, posy + 2, W);
                     b += sum * parameters.weightShading;
 #               endif
 #           endif
@@ -614,7 +619,7 @@ __inline__ __device__ float applyJTJDevice(unsigned int variableIdx, SolverInput
             sum -= lapval.y*val1;
             sum -= lapval.z;
 
-            //sum = readP(posy - 1, posx, state, W);
+            //sum = readP(posy + 1, posx + 2, state, W);
             b += sum*parameters.weightRegularizer;
 #           endif
 
