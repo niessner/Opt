@@ -858,12 +858,21 @@ function ad.mul(x,y) return ad.prod(1,x,y) end
 function ad.div(x,y) return ad.prod(1,x,y^-1) end
 
 function ad.prod:generate(exp,args)
-    args = insertcasts(exp,args)
     local r = exp.config.c
-    for i,c in ipairs(args) do
-        r = `r*c
+    local condition = true
+    for i,ce in ipairs(exp:children()) do
+        local a = args[i]
+        if ce:type() == bool then
+            condition = `condition and a
+        else
+            r = `r*a
+        end
     end
-    return r
+    if condition == true then
+        return r
+    else
+        return `terralib.select(condition,r,0.f)
+    end
 end
 function ad.prod:getpartials(exp)
     local r = terralib.newlist()
