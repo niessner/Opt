@@ -814,7 +814,7 @@ local function createfunction(problemspec,name,exps,usebounds,W,H)
         elseif "Const" == e.kind then
             return IRNode:create { kind = "const", value = e.v, type = e:type() }
         elseif "Apply" == e.kind then
-            if (e.op.name == "sum" or e.op.name == "prod") and #e:children() > 2 then
+            if (e.op.name == "sum") and #e:children() > 2 then
                 local vardecl = IRNode:create { kind = "vardecl", constant = e.config.c, type = float, shape = e:shape() }
                 local children = terralib.newlist { vardecl }
                 local varuse = IRNode:create { kind = "varuse", children = children, type = float, shape = e:shape() }
