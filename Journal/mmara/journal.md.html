@@ -1,6 +1,11 @@
 **Development Journal** 
 		Michael Mara
 
+**2015/12/3 16:19**
+Error persists even when cost is calculated only as sqMagnitude(4.0*p(0,0)). Going to investigate p more.
+
+OOp, think I found it. p() in AD was using the x coordinate twice instead of alterately using the y coord....
+
 **2015/12/3 16:11**
 Decided on Tuesday that errors in JTF mismatch are probably from floating point errors. Will sometime check this by making all intermediates in the solvers into doubles. For now working on getting
 the costs the same between Opt and the terra implementation. Getting small differences that are spatially coherent, even when only checking regularization term, and with the DEPTH_DISCONTINUITY checks turned off.
