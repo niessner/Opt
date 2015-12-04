@@ -1,7 +1,7 @@
 local USE_MASK_REFINE 			= true
 
-local USE_DEPTH_CONSTRAINT 		= true
-local USE_REGULARIZATION 		= true
+local USE_DEPTH_CONSTRAINT 		= false
+local USE_REGULARIZATION 		= false
 local USE_SHADING_CONSTRAINT 	= true
 local USE_TEMPORAL_CONSTRAINT 	= false
 local USE_PRECONDITIONER 		= false
