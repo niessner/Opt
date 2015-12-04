@@ -1,6 +1,12 @@
 **Development Journal** 
 		Michael Mara
 
+**2015/12/4 10:43**
+Brought the (AD vs no AD) cost in line with what I believe to be floating-point error, even in the shading term case, sans small boundary errors. About to deep-dive into those.
+
+**2015/12/4 9:48**
+The error found at the end of the last entry was the biggest problem. Now it seems like (for the no-shading term case) we may be down to floating point error.
+
 **2015/12/3 16:19**
 Error persists even when cost is calculated only as sqMagnitude(4.0*p(0,0)). Going to investigate p more.
 

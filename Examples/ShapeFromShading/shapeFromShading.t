@@ -501,10 +501,13 @@ local terra cost(i : int32, j : int32, gi : int32, gj : int32, self : P:Paramete
 
 	if [USE_REGULARIZATION] and crossValid then
 		var d = self.X(i,j)
-		if 	opt.math.abs(d - self.X(i+1,j)) < [float](DEPTH_DISCONTINUITY_THRE) and 
+		
+         if 	opt.math.abs(d - self.X(i+1,j)) < [float](DEPTH_DISCONTINUITY_THRE) and 
 			opt.math.abs(d - self.X(i-1,j)) < [float](DEPTH_DISCONTINUITY_THRE) and 
 			opt.math.abs(d - self.X(i,j+1)) < [float](DEPTH_DISCONTINUITY_THRE) and 
 			opt.math.abs(d - self.X(i,j-1)) < [float](DEPTH_DISCONTINUITY_THRE) then
+         
+                --E_s = p(i,j,gi,gj,self)[0] --sqMagnitude(4.0*p(i,j,gi,gj,self))
 				E_s = sqMagnitude(4.0f*p(i,j,gi,gj,self) - (p(i-1,j,gi-1,gj, self) + p(i,j-1,gi,gj-1, self) + p(i+1, j,gi+1,gj, self) + p(i,j+1,gi,gj+1, self)))
 		end
 	end

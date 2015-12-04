@@ -12,8 +12,23 @@ uniform sampler2D input1_buffer;
 out vec4 result;
 
 void main() {
-    float ep = 0.0000001;
+    float ep = 0.00000001;
+    //ep = 0.01;
     vec4 eps = vec4(ep,ep,ep,ep);
-    result = (texelFetch(input0_buffer, ivec2(gl_FragCoord.xy), 0) + eps)  / (texelFetch(input1_buffer, ivec2(gl_FragCoord.xy), 0) + eps);
+
+    vec4 numerator   = texelFetch(input0_buffer, ivec2(gl_FragCoord.xy), 0);
+    vec4 denominator = texelFetch(input1_buffer, ivec2(gl_FragCoord.xy), 0); 
+
+    result =  (numerator+eps) / (denominator+eps);
+    /*
+    for (int i = 0; i < 4; ++i) {
+        if (numerator[i] == 0.0 && denominator[i] == 0.0) {
+            result[i] = 1.0;
+        } else if (denominator[i] == 0.0) {
+            result[i] = sign(numerator[i]) * 10.0;
+        }
+    }
+    */
+
 }
 

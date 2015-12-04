@@ -6,6 +6,8 @@ local USE_SHADING_CONSTRAINT 	= true
 local USE_TEMPORAL_CONSTRAINT 	= false
 local USE_PRECONDITIONER 		= false
 
+local USE_CRAPPY_SHADING_BOUNDARY = true
+
 local DEPTH_DISCONTINUITY_THRE = 0.01
 
 
@@ -14,7 +16,7 @@ local P 	= ad.ProblemSpec()
 local X 	= P:Image("X",float, W,H,0) -- Refined Depth
 local D_i 	= P:Image("D_i",float, W,H,1) -- Depth input
 
-local I 	= P:Image("I",float, W,H,2) -- Target Intensity
+local Im 	= P:Image("Im",float, W,H,2) -- Target Intensity
 local D_p 	= P:Image("D_p",float, W,H,3) -- Previous Depth
 local edgeMaskR = P:Image("edgeMaskR",uint8, W,H,4) -- Edge mask. 
 local edgeMaskC = P:Image("edgeMaskC",uint8, W,H,5) -- Edge mask. 
@@ -83,7 +85,7 @@ function p(offX,offY)
     local d = X(offX,offY)
     local i = offX + posX
     local j = offY + posY
-    local point = {((i-u_x)/f_x)*d, ((i-u_y)/f_y)*d, d}
+    local point = {((i-u_x)/f_x)*d, ((j-u_y)/f_y)*d, d}
     return point
 end
 
@@ -114,6 +116,11 @@ function B(offX, offY)
 	return 1.0*lighting -- replace 1.0 with estimated albedo in slower version
 end
 
+function I(offX, offY)
+    -- TODO: WHYYYYYYYYYY?
+	return Im(offX,offY)*0.5 + 0.25*(Im(offX-1,offY)+Im(offX,offY-1))
+end
+
 local E_s = 0.0
 local E_p = 0.0
 local E_r_h = 0.0 
@@ -129,23 +136,37 @@ if USE_DEPTH_CONSTRAINT then
 end 
 
 if USE_SHADING_CONSTRAINT then
-	local shading_h_valid = ad.greater(D_i(-1,0) + D_i(0,0) + D_i(1,0) + D_i(0,-1) + D_i(1,-1), 0)
+    if USE_CRAPPY_SHADING_BOUNDARY then
+        local shading_center_valid = ad.greater(D_i(-1,0) + D_i(0,0) + D_i(0,-1), 0)
+        local center_tap = ad.select(shading_center_valid, B(0,0) - I(0,0), 0.0)
+        local shading_h_valid = ad.greater(D_i(1,-1) + D_i(0,0) + D_i(1,0), 0)
+        local shading_v_valid = ad.greater(D_i(-1,1) + D_i(0,0) + D_i(0,1), 0)
+		local E_g_h_noCheck = center_tap - (B(1,0) - I(1,0))
+        local E_g_v_noCheck = center_tap - (B(0,1) - I(0,1))
+        if USE_MASK_REFINE then
+		    E_g_h_noCheck = E_g_h_noCheck * edgeMaskR(0,0)
+		    E_g_v_noCheck = E_g_v_noCheck * edgeMaskC(0,0)
+	    end
+	    E_g_h = ad.select(opt.InBounds(0,0,1,1), ad.select(shading_h_valid, E_g_h_noCheck, 0.0), 0.0) 
+	    E_g_v = ad.select(opt.InBounds(0,0,1,1), ad.select(shading_v_valid, E_g_v_noCheck, 0.0), 0.0) 
+        
+    else
+	    local shading_h_valid = ad.greater(D_i(-1,0) + D_i(0,0) + D_i(1,0) + D_i(0,-1) + D_i(1,-1), 0)
 	
-	local E_g_h_noCheck = B(0,0) - B(1,0) - (I(0,0) - I(1,0))
-	if USE_MASK_REFINE then
-		E_g_h_noCheck = E_g_h_noCheck * edgeMaskR(0,0)
+	    local E_g_h_noCheck = B(0,0) - B(1,0) - (I(0,0) - I(1,0))
+	    if USE_MASK_REFINE then
+		    E_g_h_noCheck = E_g_h_noCheck * edgeMaskR(0,0)
+	    end
+	    E_g_h = ad.select(opt.InBounds(0,0,1,1), ad.select(shading_h_valid, E_g_h_noCheck, 0.0), 0.0) 
+
+	    local shading_v_valid = ad.greater(D_i(0,-1) + D_i(0,0) + D_i(0,1) + D_i(-1,0) + D_i(-1,1), 0)
+	
+	    local E_g_v_noCheck = B(0,0) - B(0,1) - (I(0,0) - I(0,1))
+	    if USE_MASK_REFINE then
+		    E_g_v_noCheck = E_g_v_noCheck * edgeMaskC(0,0)
+	    end
+	    E_g_v = ad.select(opt.InBounds(0,0,1,1), ad.select(shading_v_valid, E_g_v_noCheck, 0.0), 0.0) 
 	end
-	E_g_h = ad.select(opt.InBounds(0,0,1,1), ad.select(shading_h_valid, E_g_h_noCheck, 0.0), 0.0) 
-end
-	
-if USE_SHADING_CONSTRAINT then
-	local shading_v_valid = ad.greater(D_i(0,-1) + D_i(0,0) + D_i(0,1) + D_i(-1,0) + D_i(-1,1), 0)
-	
-	local E_g_v_noCheck = B(0,0) - B(0,1) - (I(0,0) - I(0,1))
-	if USE_MASK_REFINE then
-		E_g_v_noCheck = E_g_v_noCheck * edgeMaskC(0,0)
-	end
-	E_g_v = ad.select(opt.InBounds(0,0,1,1), ad.select(shading_v_valid, E_g_v_noCheck, 0.0), 0.0) 
 end
 
 
@@ -153,7 +174,8 @@ if USE_REGULARIZATION then
 	local cross_valid = ad.greater(D_i(0,0) + D_i(0,-1) + D_i(0,1) + D_i(-1,0) + D_i(1,0), 0)
 
 	local E_s_noCheck = sqMagnitude(plus(times(4.0,p(0,0)), times(-1.0, plus(p(-1,0), plus(p(0,-1), plus(p(1,0), p(0,1)))))))
-	local d = X(0,0)
+	--local E_s_noCheck = p(0,0)[1] --sqMagnitude(times(4.0,p(0,0)))
+    local d = X(0,0)
 
 	local E_s_guard =   ad.and_(ad.less(ad.abs(d - X(0,-1)), DEPTH_DISCONTINUITY_THRE), 
                             ad.and_(ad.less(ad.abs(d - X(0,1)), DEPTH_DISCONTINUITY_THRE), 
