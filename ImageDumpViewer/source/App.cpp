@@ -180,6 +180,37 @@ static void compareCUDAAndTerraNonBlock(RenderDevice* rd, const String& director
     static shared_ptr<Texture> costQ = quotientImage(rd, "Cost Quotient", costCUDA, costTerra);
 }
 
+static void compareOptAndTerraNonBlock(RenderDevice* rd, const String& directory) {
+    String opt = "_optAD.imagedump";
+    String terra = "_optNoAD.imagedump";
+
+    shared_ptr<Texture> jtfOpt = Texture::getTextureByName(directory + "JTF" + opt);
+    shared_ptr<Texture> jtfTerra = Texture::getTextureByName(directory + "JTF" + terra);
+
+
+    shared_ptr<Texture> costOpt = Texture::getTextureByName(directory + "cost" + opt);
+    shared_ptr<Texture> costTerra = Texture::getTextureByName(directory + "cost" + terra);
+
+
+    static shared_ptr<Texture> preDiff = Texture::singleChannelDifference(rd,
+        Texture::getTextureByName(directory + "Pre" + opt),
+        Texture::getTextureByName(directory + "Pre" + terra));
+
+    shared_ptr<Texture> jtjOpt = Texture::getTextureByName(directory + "JTJ" + opt);
+    shared_ptr<Texture> jtjTerra = Texture::getTextureByName(directory + "JTJ" + terra);
+
+    static shared_ptr<Texture> jtfDiff = differenceImage(rd, "JTF Difference", jtfOpt, jtfTerra);
+    static shared_ptr<Texture> costDiff = Texture::singleChannelDifference(rd, costOpt, costTerra);
+    static shared_ptr<Texture> jtjDiff = differenceImage(rd, "JTJ Difference", jtjOpt, jtjTerra);
+
+    jtfDiff->visualization.documentGamma = 2.2f;
+    costDiff->visualization.documentGamma = 2.2f;
+    jtjDiff->visualization.documentGamma = 2.2f;
+
+    static shared_ptr<Texture> jtjQ = quotientImage(rd, "JTJ Quotient", jtjOpt, jtjTerra);
+    static shared_ptr<Texture> jtfQ = quotientImage(rd, "JTF Quotient", jtfOpt, jtfTerra);
+    static shared_ptr<Texture> costQ = quotientImage(rd, "Cost Quotient", costOpt, costTerra);
+}
 
 
 // Called before the application loop begins.  Load data here and
@@ -213,8 +244,9 @@ void App::onInit() {
     RenderDevice* rd = RenderDevice::current;
     //compareCUDABlockAndNonBlock(rd, directory);
 
-    compareCUDAAndTerraNonBlock(rd, directory);
+    //compareCUDAAndTerraNonBlock(rd, directory);
 
+    compareOptAndTerraNonBlock(rd, directory);
 
     dynamic_pointer_cast<DefaultRenderer>(m_renderer)->setOrderIndependentTransparency(false);
 }

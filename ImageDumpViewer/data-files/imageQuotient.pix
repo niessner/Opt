@@ -12,7 +12,7 @@ uniform sampler2D input1_buffer;
 out vec4 result;
 
 void main() {
-    float ep = 0.000001;
+    float ep = 0.0000001;
     vec4 eps = vec4(ep,ep,ep,ep);
     result = (texelFetch(input0_buffer, ivec2(gl_FragCoord.xy), 0) + eps)  / (texelFetch(input1_buffer, ivec2(gl_FragCoord.xy), 0) + eps);
 }

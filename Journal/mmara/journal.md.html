@@ -1,7 +1,11 @@
 **Development Journal** 
 		Michael Mara
 
-**2015/11/30 11:20**
+**2015/12/3 16:11**
+Decided on Tuesday that errors in JTF mismatch are probably from floating point errors. Will sometime check this by making all intermediates in the solvers into doubles. For now working on getting
+the costs the same between Opt and the terra implementation. Getting small differences that are spatially coherent, even when only checking regularization term, and with the DEPTH_DISCONTINUITY checks turned off.
+
+**2015/12/01 11:20**
 Actually checking in work from Monday and weekend, also changed boundary handling in the terra cost function to match the cuda one. It is super important to make sure boundary handling is the same across all the different implementations (CUDA, Terra, Opt).
 
 **2015/11/30 14:12**
