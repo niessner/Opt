@@ -5,7 +5,7 @@
 #include "cutil.h"
 
 extern "C" {
-#include "Opt.h"
+#include "../Opt.h"
 }
 
 template <class type> type* createDeviceBuffer(const std::vector<type>& v) {
@@ -29,7 +29,7 @@ public:
 		std::vector<int> yCoords;
 
 		
-		for (int y = 0; y < edgeCount; ++y) {
+		for (unsigned int y = 0; y < edgeCount; ++y) {
 		  yCoords.push_back(0);
 		}
 

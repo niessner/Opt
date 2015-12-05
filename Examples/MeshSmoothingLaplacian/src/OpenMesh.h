@@ -1,7 +1,9 @@
 #pragma once
 
 // Includes OpenMesh
+#ifndef NOMINMAX
 #define NOMINMAX
+#endif
 #define _USE_MATH_DEFINES
 
 #include <OpenMesh/Core/IO/MeshIO.hh>
