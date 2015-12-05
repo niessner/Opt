@@ -4,6 +4,42 @@
 // Tells C++ to invoke command-line main() function even on OS X and Win32.
 G3D_START_AT_MAIN();
 
+static void highPrecisionCompare(const String& name, shared_ptr<Texture> t0, shared_ptr<Texture> t1) {
+    shared_ptr<PixelTransferBuffer> ptb0 = t0->toPixelTransferBuffer();
+    shared_ptr<PixelTransferBuffer> ptb1 = t1->toPixelTransferBuffer();
+
+    alwaysAssertM(ptb0->format() == ImageFormat::R32F(), "Must be float");
+    alwaysAssertM(ptb1->format() == ImageFormat::R32F(), "Must be float");
+    alwaysAssertM(ptb0->width() == ptb1->width(), "Widths must be identical");
+    alwaysAssertM(ptb0->height() == ptb1->height(), "Heights must be identical");
+    int numPixels = ptb0->width() * ptb0->height();
+    Array<float> val0;
+    Array<float> val1;
+    val0.resize(numPixels);
+    val1.resize(numPixels);
+    ptb0->getData(val0.getCArray());
+    ptb1->getData(val1.getCArray());
+
+    double totalError = 0.0;
+    double sumVal0 = 0.0;
+    double sumVal1 = 0.0;
+    for (int i = 0; i < numPixels; ++i) {
+        sumVal0 += G3D::abs(double(val0[i]));
+        sumVal1 += G3D::abs(double(val1[i]));
+        totalError += G3D::abs(double(val0[i]) - double(val1[i]));
+    }
+    debugPrintf("\n\n%s\n-------------\n", name.c_str());
+    debugPrintf(" Sum Value 0: %f\n", sumVal0);
+    debugPrintf(" Sum Value 1: %f\n", sumVal1);
+    debugPrintf(" Sum Val 0-1: %f\n", sumVal0 - sumVal1);
+    debugPrintf(" Total Error: %f\n", totalError);
+    debugPrintf(" Error/Val0: %f\n", totalError / sumVal0);
+    debugPrintf(" Error/Val1: %f\n", totalError / sumVal1);
+
+
+}
+
+
 int main(int argc, const char* argv[]) {
     {
         G3DSpecification g3dSpec;
@@ -171,6 +207,11 @@ static void compareCUDAAndTerraNonBlock(RenderDevice* rd, const String& director
     static shared_ptr<Texture> costDiff = Texture::singleChannelDifference(rd, costCUDA, costTerra);
     static shared_ptr<Texture> jtjDiff = differenceImage(rd, "JTJ Difference", jtjCUDA, jtjTerra);
 
+
+    highPrecisionCompare("Cost", costCUDA, costTerra);
+    highPrecisionCompare("JTF", jtfCUDA, jtfTerra);
+    highPrecisionCompare("JTJ", jtjCUDA, jtjTerra);
+
     jtfDiff->visualization.documentGamma = 2.2f;
     costDiff->visualization.documentGamma = 2.2f;
     jtjDiff->visualization.documentGamma = 2.2f;
@@ -179,6 +220,8 @@ static void compareCUDAAndTerraNonBlock(RenderDevice* rd, const String& director
     static shared_ptr<Texture> jtfQ = quotientImage(rd, "JTF Quotient", jtfCUDA, jtfTerra);
     static shared_ptr<Texture> costQ = quotientImage(rd, "Cost Quotient", costCUDA, costTerra);
 }
+
+
 
 static void compareOptAndTerraNonBlock(RenderDevice* rd, const String& directory) {
     String opt = "_optAD.imagedump";
@@ -199,9 +242,15 @@ static void compareOptAndTerraNonBlock(RenderDevice* rd, const String& directory
     shared_ptr<Texture> jtjOpt = Texture::getTextureByName(directory + "JTJ" + opt);
     shared_ptr<Texture> jtjTerra = Texture::getTextureByName(directory + "JTJ" + terra);
 
-    static shared_ptr<Texture> jtfDiff = differenceImage(rd, "JTF Difference", jtfOpt, jtfTerra);
+
     static shared_ptr<Texture> costDiff = Texture::singleChannelDifference(rd, costOpt, costTerra);
-    static shared_ptr<Texture> jtjDiff = differenceImage(rd, "JTJ Difference", jtjOpt, jtjTerra);
+    static shared_ptr<Texture> jtfDiff = Texture::singleChannelDifference(rd, jtfOpt, jtfTerra);
+    static shared_ptr<Texture> jtjDiff = Texture::singleChannelDifference(rd, jtjOpt, jtjTerra);
+
+
+    highPrecisionCompare("Cost", costOpt, costTerra);
+    highPrecisionCompare("JTF", jtfOpt, jtfTerra);
+    highPrecisionCompare("JTJ", jtjOpt, jtjTerra);
 
     jtfDiff->visualization.documentGamma = 2.2f;
     costDiff->visualization.documentGamma = 2.2f;
@@ -244,9 +293,9 @@ void App::onInit() {
     RenderDevice* rd = RenderDevice::current;
     //compareCUDABlockAndNonBlock(rd, directory);
 
-    //compareCUDAAndTerraNonBlock(rd, directory);
+    compareCUDAAndTerraNonBlock(rd, directory);
 
-    compareOptAndTerraNonBlock(rd, directory);
+    //compareOptAndTerraNonBlock(rd, directory);
 
     dynamic_pointer_cast<DefaultRenderer>(m_renderer)->setOrderIndependentTransparency(false);
 }

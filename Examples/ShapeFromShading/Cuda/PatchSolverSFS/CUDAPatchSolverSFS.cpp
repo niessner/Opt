@@ -94,7 +94,7 @@ CUDAPatchSolverSFS::~CUDAPatchSolverSFS()
 enum SolveMode {TERRA_NO_AD, TERRA_AD, CUDA};
 
 
-static void constructTerraInput(void* d_x, const PatchSolverInput& solverInput, const PatchSolverParameters& parameters, float* deltaTransformPtr, std::vector<void*>& images, TerraSolverParameters& tParams, bool optCPU) {
+static void constructTerraInput(void* d_x, const PatchSolverInput& solverInput, const PatchSolverParameters& parameters, float* deltaTransformPtr, std::vector<void*>& images, TerraSolverParameters& tParams, unsigned int solveCount, bool optCPU) {
     
     if (optCPU) {
         int numBytes = sizeof(float)*solverInput.width * solverInput.height;
@@ -124,7 +124,7 @@ static void constructTerraInput(void* d_x, const PatchSolverInput& solverInput, 
         images.push_back(solverInput.d_maskEdgeMap + (solverInput.width * solverInput.height)); // col
     }
 
-    tParams = TerraSolverParameters(parameters, solverInput.calibparams, deltaTransformPtr, solverInput.d_litcoeff);
+    tParams = TerraSolverParameters(parameters, solverInput.calibparams, deltaTransformPtr, solverInput.d_litcoeff, solveCount);
 }
 
 Plan* CUDAPatchSolverSFS::maybeInitOptimizerAndPlan(bool useAD, const std::string& terraFile, const std::string& solverName, int width, int height, const std::vector<uint32_t>& elemsize) {
@@ -218,11 +218,11 @@ void CUDAPatchSolverSFS::solveSFS(float* d_targetDepth, float* d_depthMapRefined
     for (int i = 0; i < 2; ++i) {
         elemsize.push_back(sizeof(char));
     }
-    bool saveJTFAndPreAndJTJ = true;
+    bool saveJTFAndPreAndJTJ = false;
     switch (mode) {
     case CUDA:
         {
-            
+            static int step = 0;
             if (saveJTFAndPreAndJTJ) {
                 float *jtfResult;
                 float *preResult;
@@ -255,8 +255,9 @@ void CUDAPatchSolverSFS::solveSFS(float* d_targetDepth, float* d_depthMapRefined
                 cutilSafeCall(cudaFree(jtfResult));
                 cutilSafeCall(cudaFree(preResult));
                 cutilSafeCall(cudaFree(jtjResult));
+                exit(0);
             }
-
+            ++step;
             if (GlobalAppState::get().s_useBlockSolver) {
                 patchSolveSFSStub(m_solverInput, m_patchSolverState, parameters, ca);
             } else {
@@ -266,6 +267,8 @@ void CUDAPatchSolverSFS::solveSFS(float* d_targetDepth, float* d_depthMapRefined
         break;
     case TERRA_AD: 
         {
+            static unsigned int solveCount = 0;
+            
 #           if OPT_CPU
                 Plan* plan = maybeInitOptimizerAndPlan(true, "shapeFromShadingAD.t", "gradientDescentCPU", m_solverInput.width, m_solverInput.height, elemsize);
 #           else
@@ -275,13 +278,15 @@ void CUDAPatchSolverSFS::solveSFS(float* d_targetDepth, float* d_depthMapRefined
             std::vector<void*> images;
             TerraSolverParameters tParams;
             
-            constructTerraInput(m_patchSolverState.d_x, m_solverInput, parameters, deltaTransform.ptr(), images, tParams, OPT_CPU == 1 ? true : false);
+            constructTerraInput(m_patchSolverState.d_x, m_solverInput, parameters, deltaTransform.ptr(), images, tParams, solveCount, OPT_CPU == 1 ? true : false);
             TerraSolverParameterPointers indirectParameters(tParams);
             s_optimizerAD->solve(plan, images, &indirectParameters);
+            ++solveCount;
         }
         break;
     case TERRA_NO_AD:
         {
+            static unsigned int solveCount = 0;
 #           if OPT_CPU
                 Plan* plan = maybeInitOptimizerAndPlan(false, "shapeFromShading.t", "gradientDescentCPU", m_solverInput.width, m_solverInput.height, elemsize);
 #           else
@@ -289,9 +294,10 @@ void CUDAPatchSolverSFS::solveSFS(float* d_targetDepth, float* d_depthMapRefined
 #           endif
             std::vector<void*> images;
             TerraSolverParameters tParams;
-            constructTerraInput(m_patchSolverState.d_x, m_solverInput, parameters, deltaTransform.ptr(), images, tParams, OPT_CPU == 1 ? true : false);
+            constructTerraInput(m_patchSolverState.d_x, m_solverInput, parameters, deltaTransform.ptr(), images, tParams, solveCount, OPT_CPU == 1 ? true : false);
             TerraSolverParameterPointers indirectParameters(tParams);
             s_optimizerNoAD->solve(plan, images, &indirectParameters);
+            ++solveCount;
         }
         break;
     default:

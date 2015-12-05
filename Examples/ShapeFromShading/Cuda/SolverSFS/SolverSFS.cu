@@ -26,6 +26,46 @@
 #define WARP_SIZE 32u
 #define WARP_MASK (WARP_SIZE-1u)
 
+
+
+
+/*
+static void checkForNan(std::string name, float* cudaPtr, int W, int H) {
+int numBytes = W*H*sizeof(float);
+float* ptr = (float*)malloc(numBytes);
+printf("%s:\n", name.c_str());
+cutilSafeCall(cudaMemcpy(ptr, cudaPtr, numBytes, cudaMemcpyDeviceToHost));
+
+for (int i = 0; i < W*H; ++i) {
+if (isnan(ptr[i])) {
+printf("Is nan at (%d, %d)\n", i % W, i / W);
+}
+}
+free(ptr);
+
+}
+*/
+
+static void checkEverythingForNan(PatchSolverInput& input, SolverState& state) {
+    /*
+    checkForNan("d_x", state.d_x, input.width, input.height);
+    checkForNan("d_preconditioner", state.d_preconditioner, input.width, input.height);
+
+    checkForNan(state.d_delta,          input.width, input.height);
+    checkForNan(state.d_r,              input.width, input.height);
+    checkForNan(state.d_z,              input.width, input.height);
+    checkForNan(state.d_p,              input.width, input.height);
+    //checkForNan(state.d_Ap_X,           input.width, input.height);
+    //checkForNan(state.d_scanAlpha,      input.width, input.height);
+    //checkForNan(state.d_scanBeta,       input.width, input.height);
+    checkForNan(state.d_rDotzOld,       input.width, input.height);
+    checkForNan(state.d_preconditioner, input.width, input.height);
+    //m_solverState.d_sumResidual,    sizeof(float)));
+    */
+
+
+}
+
 /////////////////////////////////////////////////////////////////////////
 // Eval Residual
 ////////////////////////  /////////////////////////////////////////////////
@@ -113,7 +153,10 @@ __global__ void PCGInit_Kernel2(unsigned int N, SolverState state)
 {
 	const unsigned int x = blockIdx.x * blockDim.x + threadIdx.x;
 
-    if (x < N) state.d_rDotzOld[x] = state.d_scanAlpha[0];								// store result for next kernel call
+    if (x < N) {
+        state.d_rDotzOld[x] = state.d_scanAlpha[0];
+        state.d_delta[x] = 0.0;
+    }
 }
 
 void Initialization(PatchSolverInput& input, SolverState& state, PatchSolverParameters& parameters, CUDATimer& timer)
@@ -128,13 +171,18 @@ void Initialization(PatchSolverInput& input, SolverState& state, PatchSolverPara
 		std::cout << "Too many variables for this block size. Maximum number of variables for two kernel scan: " << THREADS_PER_BLOCK*THREADS_PER_BLOCK << std::endl;
 		while (1);
 	}
-
+    cutilSafeCall(cudaMemset(state.d_scanAlpha, 0, sizeof(float)));
     timer.startEvent("PCGInit_Kernel1");
 	PCGInit_Kernel1 << <blocksPerGrid, THREADS_PER_BLOCK, shmem_size >> >(input, state, parameters);
     timer.endEvent();
 	#ifdef _DEBUG
 		cutilSafeCall(cudaDeviceSynchronize());
 		cutilCheckMsg(__FUNCTION__);
+
+        float scanAlpha = 0.0f;
+        cutilSafeCall(cudaMemcpy(&scanAlpha, state.d_scanAlpha, sizeof(float), cudaMemcpyDeviceToHost));
+        //printf("ScanAlpha: %f\n", scanAlpha);
+        checkEverythingForNan(input, state);
 	#endif
 
 	timer.startEvent("PCGInit_Kernel2");
@@ -158,7 +206,7 @@ __global__ void PCGStep_Kernel1(PatchSolverInput input, SolverState state, Patch
 	float d = 0.0f;
 	if (x < N)
 	{
-		float tmp = applyJTJDevice(x, input, state, parameters);		// A x p_k  => J^T x J x p_k 
+		float tmp = 2.0*applyJTJDevice(x, input, state, parameters);		// A x p_k  => J^T x J x p_k 
         
 		state.d_Ap_X[x]  = tmp;														// store for next kernel call
 
@@ -176,7 +224,7 @@ __global__ void PCGStep_Kernel2(PatchSolverInput input, SolverState state)
 	const unsigned int N = input.N;
 	const unsigned int x = blockIdx.x * blockDim.x + threadIdx.x;
 
-	const float dotProduct = bucket[0];
+    const float dotProduct = state.d_scanAlpha[0];
 
 	float b = 0.0f;
 	if (x < N)
@@ -192,7 +240,8 @@ __global__ void PCGStep_Kernel2(PatchSolverInput input, SolverState state)
 		float z = state.d_preconditioner[x] * r;								// apply preconditioner M^-1
 		state.d_z[x] = z;													// save for next kernel call
 
-		b = z * r;														// compute x-th term of the nominator of beta
+        b = z * r;														// compute x-th term of the nominator of beta
+
 	}
 
 
@@ -211,7 +260,7 @@ __global__ void PCGStep_Kernel3(PatchSolverInput input, SolverState state)
 
 	if (x < N)
 	{
-		const float rDotzNew = bucket[0];										// get new nominator
+        const float rDotzNew = state.d_scanBeta[0];										// get new nominator
 		const float rDotzOld = state.d_rDotzOld[x];								// get old denominator
 
 		float beta = 0.0f;
@@ -221,6 +270,8 @@ __global__ void PCGStep_Kernel3(PatchSolverInput input, SolverState state)
 		state.d_p[x]  = state.d_z[x]  + beta*state.d_p[x];							// update decent direction
 	}
 }
+
+
 
 void PCGIteration(PatchSolverInput& input, SolverState& state, PatchSolverParameters& parameters, CUDATimer& timer)
 {
@@ -235,21 +286,32 @@ void PCGIteration(PatchSolverInput& input, SolverState& state, PatchSolverParame
 		std::cout << "Too many variables for this block size. Maximum number of variables for two kernel scan: " << THREADS_PER_BLOCK*THREADS_PER_BLOCK << std::endl;
 		while (1);
 	}
-
+    cutilSafeCall(cudaMemset(state.d_scanAlpha, 0, sizeof(float)));
     timer.startEvent("PCGStep_Kernel1");
     PCGStep_Kernel1 << <blocksPerGrid, THREADS_PER_BLOCK, shmem_size >> >(input, state, parameters);
     timer.endEvent();
 	#ifdef _DEBUG
 		cutilSafeCall(cudaDeviceSynchronize());
 		cutilCheckMsg(__FUNCTION__);
-	#endif
 
+        float scanAlpha = 0.0f;
+        cutilSafeCall(cudaMemcpy(&scanAlpha, state.d_scanAlpha, sizeof(float), cudaMemcpyDeviceToHost));
+        //printf("ScanAlpha: %f\n", scanAlpha);
+        checkEverythingForNan(input, state);
+	#endif
+    
+    cutilSafeCall(cudaMemset(state.d_scanBeta, 0, sizeof(float)));
 	timer.startEvent("PCGStep_Kernel2");
 	PCGStep_Kernel2 << <blocksPerGrid, THREADS_PER_BLOCK, shmem_size >> >(input, state);
 	timer.endEvent();
 	#ifdef _DEBUG
 		cutilSafeCall(cudaDeviceSynchronize());
 		cutilCheckMsg(__FUNCTION__);
+
+        float scanBeta = 0.0f;
+        cutilSafeCall(cudaMemcpy(&scanBeta, state.d_scanBeta, sizeof(float), cudaMemcpyDeviceToHost));
+        //printf("ScanBeta: %f\n", scanBeta);
+        checkEverythingForNan(input, state);
 	#endif
 
 	timer.startEvent("PCGStep_Kernel3");
@@ -258,6 +320,7 @@ void PCGIteration(PatchSolverInput& input, SolverState& state, PatchSolverParame
 	#ifdef _DEBUG
 		cutilSafeCall(cudaDeviceSynchronize());
 		cutilCheckMsg(__FUNCTION__);
+        checkEverythingForNan(input, state);
 	#endif
 }
 
@@ -308,6 +371,7 @@ extern "C" void solveSFSStub(PatchSolverInput& input, SolverState& state, PatchS
 		Initialization(input, state, parameters, timer);
 
 		for (unsigned int linIter = 0; linIter < parameters.nLinIterations; linIter++) {
+            printf("Iteration %d\n", linIter);
 			PCGIteration(input, state, parameters, timer);
             parameters.weightShading += parameters.weightShadingIncrement;
             if (ca != NULL) 

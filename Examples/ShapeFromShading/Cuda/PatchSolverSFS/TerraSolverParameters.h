@@ -27,8 +27,10 @@ struct TerraSolverParameters {
     unsigned int nLinIterations;			// Steps of the linear solver
     unsigned int nPatchIterations;			// Steps on linear step on block level
 
+    unsigned int solveCount; // So that the solver can know; used for debugging
+
     TerraSolverParameters() {}
-    TerraSolverParameters(const PatchSolverParameters& p, const CameraParams& cameraParams, float* deltaTransformPtr, float* d_lightCoeffs) :
+    TerraSolverParameters(const PatchSolverParameters& p, const CameraParams& cameraParams, float* deltaTransformPtr, float* d_lightCoeffs, unsigned int solveCount) :
         weightFitting(p.weightFitting),
         weightRegularizer(p.weightRegularizer),
         weightPrior(p.weightPrior),
@@ -43,7 +45,8 @@ struct TerraSolverParameters {
         deltaTransform(deltaTransformPtr),
         nNonLinearIterations(p.nNonLinearIterations),
         nLinIterations(p.nLinIterations),
-        nPatchIterations(p.nPatchIterations)
+        nPatchIterations(p.nPatchIterations),
+        solveCount(solveCount)
     {
         CUDA_SAFE_CALL(cudaMemcpy(lightingCoefficients, d_lightCoeffs, sizeof(float) * 9, cudaMemcpyDeviceToHost));
     }
@@ -51,12 +54,12 @@ struct TerraSolverParameters {
 
 struct TerraSolverParameterPointers {
     float* floatPointers[36];
-    unsigned int* uintPointers[3];
+    unsigned int* uintPointers[4];
     TerraSolverParameterPointers(const TerraSolverParameters& p) {
         for (int i = 0; i < 36; ++i) {
             floatPointers[i] = ((float*)(&p)) + i;
         }
-        for (int i = 0; i < 3; ++i) {
+        for (int i = 0; i < 4; ++i) {
             uintPointers[i] = (unsigned int*)(floatPointers[35] + 1) + i;
         }
     }

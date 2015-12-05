@@ -1,8 +1,27 @@
 **Development Journal** 
 		Michael Mara
 
+**2015/12/4 10:01**
+We were not properly clearing "ScanAlpha" in the initialization phase. SFS Terra and CUDA solvers now demonstrate near identical results.
+
+**2015/12/4 9:37**
+Initial Cost, JTF, and JTJ identical for second frame (SFS Terra vs CUDA). The divergence lies elsewhere
+
+**2015/12/4 18:15**
+SFS Terra vs CUDA now gives identical results for the first frame, but substantially different results for the second frame. Will investigate tomorrow.
+
+**2015/12/4 17:10**
+I think that all differences between all SFS solvers in Cost, JTF, and JTJ boil down to floating point error at the moment. Verifying this is still important. However, currently, I have noticed the
+CUDA non-patch solver is borked. Right now I have fixed it so that scanAlpha is computed the same between the two, but scanBeta is not. Things to check: state.d_r[x], state.d_rDotzOld[x], state.d_Ap_X[x]
+
+**2015/12/4 14:17**
+For shading error only:
+SFS JTF error on the order of thousandths, with values on the order of hundreds, which is a 6 order of magnitude difference.
+SFS JTJ error on the order of thousands, with values ranging up to the order of billions, which is a 6 order of magnitude difference.
+That error is low enough for me to move on to comparing results.
+
 **2015/12/4 13:59**
-AD vs no AD error on the order of a millionth, with the values on the order of tenths to hundredths, even in the shading term case. Will assume floating point error for now.
+SFS AD vs no AD error on the order of a millionth, with the values on the order of tenths to hundredths, even in the shading term case. Will assume floating point error for now.
 
 **2015/12/4 10:43**
 Brought the (AD vs no AD) cost in line with what I believe to be floating-point error, even in the shading term case, sans small boundary errors. About to deep-dive into those.

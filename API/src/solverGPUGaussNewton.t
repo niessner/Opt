@@ -369,6 +369,9 @@ return function(problemSpec, vars)
 		escape 
 	    	if util.debugDumpInfo then
 	    		emit quote
+
+	    			-- Hack for SFS
+	    			--var solveCount = ([&&uint32](params_))[39][0]
 	    			if pd.nIter == 0 then
 		    			C.printf("dumpingCostJTFAndPre\n")
 		    			gpu.dumpCostJTFAndPre(pd)
@@ -377,6 +380,8 @@ return function(problemSpec, vars)
 		    			dbg.imageWriteFromCudaPrefix(pd.debugJTFImage, pd.parameters.X:W(), pd.parameters.X:H(), sizeof([unknownElement]) / 4, "JTF")
 		    			dbg.imageWriteFromCudaPrefix(pd.debugPreImage, pd.parameters.X:W(), pd.parameters.X:H(), sizeof([unknownElement]) / 4, "Pre")
 		    		end
+
+
 	    		end
 	    	end
 		end
@@ -384,7 +389,7 @@ return function(problemSpec, vars)
 		if pd.nIter < pd.nIterations then
 		    var startCost = gpu.computeCost(pd)
 			logSolver("iteration %d, cost=%f\n", pd.nIter, startCost)
-			
+
 			C.cudaMemset(pd.scanAlpha, 0, sizeof(float))	--scan in PCGInit1 requires reset
 			gpu.PCGInit1(pd)
 			gpu.PCGInit2(pd)
@@ -392,6 +397,9 @@ return function(problemSpec, vars)
 			escape
 				if util.debugDumpInfo then
 		    		emit quote
+			    		-- Hack for SFS
+		    			--var solveCount = ([&&uint32](params_))[39][0]
+		    			
 		    			if pd.nIter == 0 then
 			    			C.printf("dumpingJTJ\n")
 			    			gpu.dumpJTJ(pd)
@@ -404,20 +412,20 @@ return function(problemSpec, vars)
 		    end
 
 			for lIter = 0, pd.lIterations do
-	                C.cudaMemset(pd.scanAlpha, 0, sizeof(float))
-					gpu.PCGStep1(pd)
-					C.cudaMemset(pd.scanBeta, 0, sizeof(float))
-					gpu.PCGStep2(pd)
-					gpu.PCGStep3(pd)
-					
-					--var currCost = gpu.computeCost(pd)
-					--logSolver("after linear iteration %d, cost=%f\n", lIter, currCost)
-				end
 				
-				gpu.PCGLinearUpdate(pd)
-			    pd.nIter = pd.nIter + 1
-			    return 1
-			else
+
+                C.cudaMemset(pd.scanAlpha, 0, sizeof(float))
+				gpu.PCGStep1(pd)
+
+				C.cudaMemset(pd.scanBeta, 0, sizeof(float))
+				gpu.PCGStep2(pd)
+				gpu.PCGStep3(pd)
+			end
+				
+			gpu.PCGLinearUpdate(pd)
+		    pd.nIter = pd.nIter + 1
+		    return 1
+		else
 			escape
 				if util.debugDumpInfo then
 		    		emit quote
