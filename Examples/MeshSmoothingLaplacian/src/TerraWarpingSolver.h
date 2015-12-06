@@ -29,7 +29,7 @@ public:
 		std::vector<int> yCoords;
 
 		
-		for (unsigned int y = 0; y < edgeCount; ++y) {
+		for (int y = 0; y < (int)edgeCount; ++y) {
 		  yCoords.push_back(0);
 		}
 

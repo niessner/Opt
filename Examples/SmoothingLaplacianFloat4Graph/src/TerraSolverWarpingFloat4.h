@@ -33,9 +33,9 @@ public:
 		std::vector<int> yCoords;
 
 		
-		for (int y = 0; y < height; ++y) {
-		  for (int x = 0; x < width; ++x) {
-		    offsets.push_back(xCoords.size());
+		for (int y = 0; y < (int)height; ++y) {
+		  for (int x = 0; x < (int)width; ++x) {
+		    offsets.push_back((int)xCoords.size());
 		    if (x > 0) {
 		      xCoords.push_back(x-1);
 		      yCoords.push_back(y);
@@ -44,17 +44,17 @@ public:
 		      xCoords.push_back(x);
 		      yCoords.push_back(y-1);
 		    }
-		    if (x < width-1) {
+		    if (x < (int)width-1) {
 		      xCoords.push_back(x+1);
 		      yCoords.push_back(y);
 		    }
-		    if (y < height-1) {
+		    if (y < (int)height-1) {
 		      xCoords.push_back(x);
 		      yCoords.push_back(y+1);
 		    }
 		  }
 		}
-		offsets.push_back(xCoords.size());
+		offsets.push_back((int)xCoords.size());
 		
 		d_offsets = createDeviceBuffer(offsets);
 		d_xCoords = createDeviceBuffer(xCoords);

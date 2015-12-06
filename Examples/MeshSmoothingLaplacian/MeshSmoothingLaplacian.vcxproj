@@ -132,6 +132,7 @@
     <ClInclude Include="src\CUDAWarpingSolver.h" />
     <ClInclude Include="src\ImageWarping.h" />
     <ClInclude Include="src\OpenMesh.h" />
+    <ClInclude Include="src\TerraWarpingSolver.h" />
     <ClInclude Include="src\WarpingSolverEquations.h" />
     <ClInclude Include="src\WarpingSolverParameters.h" />
     <ClInclude Include="src\WarpingSolverState.h" />
