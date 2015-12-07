@@ -126,6 +126,7 @@ local function compilePlan(problemSpec, kind, params)
 		costFunctionType = problemSpec.functions.cost.boundary:gettype()
 	}
 
+	--todo clean up: i.e., remove non-existing solvers
 	if kind == "gradientDescentCPU" then
         return solversCPU.gradientDescentCPU(problemSpec, vars)
 	elseif kind == "gradientDescentGPU" then
