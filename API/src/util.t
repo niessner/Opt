@@ -1,11 +1,16 @@
 
 local timeIndividualKernels = true
+-- For saving intermediate buffers to file
 local debugDumpInfo = false
+-- For printing a bunch of junk during the solve
+local debugPrintSolverInfo = true
+
 
 local S = require("std")
 
 local util = {}
 util.debugDumpInfo = debugDumpInfo
+util.debugPrintSolverInfo = debugPrintSolverInfo
 
 util.C = terralib.includecstring [[
 #include <stdio.h>

@@ -405,11 +405,22 @@ return function(problemSpec)
 
 			C.cudaMemset(pd.scanAlpha, 0, sizeof(float))	--scan in PCGInit1 requires reset
 			gpu.PCGInit1(pd)
+			gpu.PCGInit1_Graph(pd)			
 			gpu.PCGInit2(pd)
 			
 			escape
-				if util.debugDumpInfo then
-		    		emit quote
+			    if util.debugPrintSolverInfo then
+				emit quote
+				    var temp : float
+				    C.cudaMemcpy(&temp, pd.scanAlpha, sizeof(float), C.cudaMemcpyDeviceToHost)
+				    C.printf("ScanAlpha (Init): %f\n", temp);
+
+				end
+			    end
+
+			    if util.debugDumpInfo then
+
+				    emit quote
 			    		-- Hack for SFS
 		    			--var solveCount = ([&&uint32](params_))[39][0]
 		    			
@@ -434,6 +445,20 @@ return function(problemSpec)
 				C.cudaMemset(pd.scanBeta, 0, sizeof(float))
 				gpu.PCGStep2(pd)
 				gpu.PCGStep3(pd)
+
+
+				escape
+				    if util.debugPrintSolverInfo then
+					emit quote
+					var temp : float
+					C.cudaMemcpy(&temp, pd.scanAlpha, sizeof(float), C.cudaMemcpyDeviceToHost)
+					C.printf("ScanAlpha (Step): %f\n", temp);
+					C.cudaMemcpy(&temp, pd.scanBeta, sizeof(float), C.cudaMemcpyDeviceToHost)
+					C.printf("ScanBeta (Step): %f\n", temp);		
+					end
+				    end
+			        end
+
 			end
 				
 			gpu.PCGLinearUpdate(pd)
