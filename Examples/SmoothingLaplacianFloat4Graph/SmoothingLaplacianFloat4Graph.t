@@ -105,6 +105,11 @@ local terra evalJTF_graph(idx : int32, self : P:ParameterType(), p : P:UnknownTy
 	var _p1 = _pre1*_residuum1
 	p:atomicAdd(w0, h0, _p0)
 	p:atomicAdd(w1, h1, _p1)
+	
+	var d = 0.0f
+	d = d + opt.Dot(_p0, _residuum0)
+	d = d + opt.Dot(_p1, _residuum1)	
+	return d
 end
 
 
