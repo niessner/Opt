@@ -28,7 +28,7 @@ public:
 		m_patchSolver = new CUDAPatchSolverWarping(m_image.getWidth(), m_image.getHeight());
 
 		m_terraSolverFloat4 = new TerraSolverWarpingFloat4(m_image.getWidth(), m_image.getHeight(), "smoothingBiLaplacianFloat4AD.t", "gaussNewtonGPU");
-		m_terraBlockSolverFloat4 = new TerraSolverWarpingFloat4(m_image.getWidth(), m_image.getHeight(), "smoothingBiLaplacianFloat4AD.t", "gaussNewtonBlockGPU");
+		//m_terraBlockSolverFloat4 = new TerraSolverWarpingFloat4(m_image.getWidth(), m_image.getHeight(), "smoothingBiLaplacianFloat4AD.t", "gaussNewtonBlockGPU");
 		
 	}
 
@@ -70,7 +70,7 @@ public:
 		SAFE_DELETE(m_warpingSolver);
 		SAFE_DELETE(m_patchSolver);
 		SAFE_DELETE(m_terraSolverFloat4);
-		SAFE_DELETE(m_terraBlockSolverFloat4);
+		//SAFE_DELETE(m_terraBlockSolverFloat4);
 	}
 
 	ColorImageR32G32B32A32* solve()
@@ -79,7 +79,7 @@ public:
 		float weightReg = 1.0f;
 		
 		unsigned int nonLinearIter = 10;
-		unsigned int linearIter = 2;
+		unsigned int linearIter = 10;
 		unsigned int patchIter = 16;
 
 		std::cout << "CUDA" << std::endl;
@@ -97,10 +97,10 @@ public:
 		m_terraSolverFloat4->solve(d_imageFloat4, d_targetFloat4, nonLinearIter, linearIter, patchIter, weightFit, weightReg);
 		copyResultToCPUFromFloat4();
 
-		std::cout << "\n\nTERRA_BLOCK" << std::endl;
-		resetGPUMemory();
-		m_terraBlockSolverFloat4->solve(d_imageFloat4, d_targetFloat4, nonLinearIter, linearIter, patchIter, weightFit, weightReg);
-		copyResultToCPUFromFloat4();		
+		//std::cout << "\n\nTERRA_BLOCK" << std::endl;
+		//resetGPUMemory();
+		//m_terraBlockSolverFloat4->solve(d_imageFloat4, d_targetFloat4, nonLinearIter, linearIter, patchIter, weightFit, weightReg);
+		//copyResultToCPUFromFloat4();
 
 		return &m_result;
 	}
@@ -136,7 +136,7 @@ private:
 	CUDAWarpingSolver*			m_warpingSolver;
 	CUDAPatchSolverWarping*		m_patchSolver;
 	TerraSolverWarpingFloat4*	m_terraSolverFloat4; 
-	TerraSolverWarpingFloat4*	m_terraBlockSolverFloat4;
+	//TerraSolverWarpingFloat4*	m_terraBlockSolverFloat4;
 
 
 	float* d_imageFloat;
