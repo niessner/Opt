@@ -130,18 +130,18 @@ return function(problemSpec)
 	
 	terra kernels.PCGStep1_Graph(pd : PlanData)
         var d = 0.0f
-        --var w : int, h : int
-        --if getValidUnknown(pd, &w, &h) and (not [problemSpec:EvalExclude(w,h,w,h,`pd.parameters)]) then
-            --var tmp : unknownElement = 0.0f
-            -- A x p_k  => J^T x J x p_k 
-            --tmp = problemSpec.functions.applyJTJ_Graph.unknownfunction(w, h, w, h, pd.parameters, pd.p)
-        var tIdx = 0 	
-            escape 
-                for i,applyJTJ in ipairs(problemSpec.functions.applyJTJ.graphfunctions) do
-                    emit quote d = d + applyJTJ.implementation(tIdx, pd.parameters, pd.p, pd.Ap_X) end
-                end
-            end
-        --end
+		var tIdx = 0 	
+        escape 
+			for i,func in ipairs(problemSpec.functions.applyJTJ.graphfunctions) do
+				local name,implementation = func.graph.name,func.implementation
+				emit quote 
+				    if util.getValidGraphElement(pd,[name],&tIdx) then
+				        d = d + implementation(tIdx, pd.parameters, pd.p, pd.Ap_X)
+				    end 
+				end
+			end
+		end
+		
         d = util.warpReduce(d)
         if (util.laneid() == 0) then
             util.atomicAdd(pd.scanAlpha, d)
@@ -217,20 +217,19 @@ return function(problemSpec)
 		
 		var tIdx = 0 	
         escape 
-			for i,applyJTJ in ipairs(problemSpec.functions.applyJTJ.graphfunctions) do
-				emit quote d = d + applyJTJ.implementation(tIdx, pd.parameters, pd.p, pd.Ap_X) end
+			for i,func in ipairs(problemSpec.functions.cost.graphfunctions) do
+				local name,implementation = func.graph.name,func.implementation
+				emit quote 
+				    if util.getValidGraphElement(pd,[name],&tIdx) then
+				        cost = cost + implementation(tIdx, pd.parameters)
+				    end 
+				end
 			end
 		end
-			
-        var w : int, h : int
-        if util.getValidUnknown(pd, &w, &h)  and (not [problemSpec:EvalExclude(w,h,w,h,`pd.parameters)]) then
-            var params = pd.parameters				
-            cost = cost + [float](problemSpec.functions.cost.unknownfunction(w, h, w, h, params))
-        end
-
+		
         cost = util.warpReduce(cost)
         if (util.laneid() == 0) then
-        util.atomicAdd(pd.scratchF, cost)
+            util.atomicAdd(pd.scratchF, cost)
         end
     end
 
@@ -349,6 +348,7 @@ return function(problemSpec)
     local terra computeCost(pd : &PlanData) : float
         C.cudaMemset(pd.scratchF, 0, sizeof(float))
         gpu.computeCost(pd)
+        gpu.computeCost_Graph(pd)
         var f : float
         C.cudaMemcpy(&f, pd.scratchF, sizeof(float), C.cudaMemcpyDeviceToHost)
         return f
@@ -407,9 +407,7 @@ return function(problemSpec)
 
                 C.cudaMemset(pd.scanAlpha, 0, sizeof(float))
 				gpu.PCGStep1(pd)
-				if true then	--graph or not...
-					gpu.PCGStep1_Graph(pd)
-				end
+				gpu.PCGStep1_Graph(pd)
 				
 				C.cudaMemset(pd.scanBeta, 0, sizeof(float))
 				gpu.PCGStep2(pd)
