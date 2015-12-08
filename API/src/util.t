@@ -406,9 +406,10 @@ function util.makeGPUFunctions(problemSpec, PlanData, kernels)
                     var N = 0
                     escape
                         for i,gf in ipairs(problemSpec.functions.cost.graphfunctions) do
+                            local name = gf.graph.name
                             emit quote
-                                if N < pd.[name].N then
-                                    N = pd.[name].N
+                                if N < pd.parameters.[name].N then
+                                    N = pd.parameters.[name].N
                                 end
                             end
                         end
