@@ -1527,7 +1527,7 @@ util.Dot = macro(function(a,b)
         return `a*b
     end
 end)
-
+opt.Dot = util.Dot
 
 opt.newImage = newImage
 
