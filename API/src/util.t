@@ -323,13 +323,18 @@ local function noFooter(pd)
 	return quote end
 end
 
-util.getParameters = function(ProblemSpec, images, edgeValues, paramValues)
+util.getParameters = function(ProblemSpec, images, graphSizes, edgeValues, xs, ys, paramValues)
 	local inits = terralib.newlist()
 	for _, entry in ipairs(ProblemSpec.parameters) do
 		if entry.kind == "image" then
 			inits:insert(`entry.type { data = [&uint8](images[entry.idx])})
-		elseif entry.kind == "adjacency" then
-			inits:insert(`entry.obj)
+		elseif entry.kind == "graph" then
+		    local graphinits = terralib.newlist { `graphSizes[entry.idx] }
+		    for i,e in ipairs(entry.type.metamethods.elements) do
+		        graphinits:insert( `xs[e.idx] )
+		        graphinits:insert( `ys[e.idx] )
+		    end
+			inits:insert(`entry.type { graphinits } )
 		elseif entry.kind == "edgevalues" then
 			inits:insert(`entry.type { data = [&entry.type.metamethods.type](edgeValues[entry.idx]) })
 		elseif entry.kind == "param" then
@@ -403,7 +408,7 @@ local makeGPULauncher = function(compiledKernel, kernelName, header, footer, pro
 end
 
 
-util.makeGPUFunctions = function(problemSpec, vars, PlanData, kernels)
+util.makeGPUFunctions = function(problemSpec, PlanData, kernels)
 	local gpu = {}
 	local kernelTemplate = {}
 	local wrappedKernels = {}

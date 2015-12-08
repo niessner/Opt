@@ -122,40 +122,8 @@ local problems = {}
 -- allocates the plan
 
 local function compilePlan(problemSpec, kind, params)
-	local vars = {
-		costFunctionType = problemSpec.functions.cost.boundary:gettype()
-	}
-
-	if kind == "gradientDescentCPU" then
-        return solversCPU.gradientDescentCPU(problemSpec, vars)
-	elseif kind == "gradientDescentGPU" then
-		return solversGPU.gradientDescentGPU(problemSpec, vars)
-	elseif kind == "conjugateGradientCPU" then
-		return solversCPU.conjugateGradientCPU(problemSpec, vars)
-	elseif kind == "linearizedConjugateGradientCPU" then
-		return solversCPU.linearizedConjugateGradientCPU(problemSpec, vars)
-	elseif kind == "linearizedConjugateGradientGPU" then
-		return solversGPU.linearizedConjugateGradientGPU(problemSpec, vars)
-	elseif kind == "lbfgsCPU" then
-		return solversCPU.lbfgsCPU(problemSpec, vars)
-	elseif kind == "vlbfgsCPU" then
-		return solversCPU.vlbfgsCPU(problemSpec, vars)
-	elseif kind == "vlbfgsGPU" then
-		return solversGPU.vlbfgsGPU(problemSpec, vars)
-	elseif kind == "bidirectionalVLBFGSCPU" then
-		return solversCPU.bidirectionalVLBFGSCPU(problemSpec, vars)
-	elseif kind == "adaDeltaGPU" then
-		return solversGPU.adaDeltaGPU(problemSpec, vars)
-	elseif kind == "conjugateGradientGPU" then
-		return solversGPU.conjugateGradientGPU(problemSpec, vars)
-	elseif kind == "gaussNewtonGPU" then
-		return solversGPU.gaussNewtonGPU(problemSpec, vars)
-	elseif kind == "gaussNewtonBlockGPU" then
-		return solversGPU.gaussNewtonBlockGPU(problemSpec, vars)
-	end
-	
-	error("unknown kind: "..kind)
-    
+    assert(kind == "gaussNewtonGPU","expected solver kind to be gaussNewtonGPU")
+    return solversGPU.gaussNewtonGPU(problemSpec)
 end
 
 struct opt.GradientDescentPlanParams {
@@ -163,8 +131,8 @@ struct opt.GradientDescentPlanParams {
 }
 
 struct opt.Plan(S.Object) {
-    init : {&opaque,&&opaque,&&opaque,&&opaque,&&opaque} -> {}
-    step : {&opaque,&&opaque,&&opaque,&&opaque,&&opaque} -> int
+    init : {&opaque,&&opaque,&int32,&&opaque,&&int32,&&int32,&&opaque,&&opaque} -> {}
+    step : {&opaque,&&opaque,&int32,&&opaque,&&int32,&&int32,&&opaque,&&opaque} -> int
     data : &opaque
 } 
 
@@ -192,7 +160,7 @@ function opt.ProblemSpec()
     local BlockedProblemParameters = terralib.types.newstruct("BlockedProblemParameters")
 	local problemSpec = ProblemSpec:new { 
 	                         shouldblock = opt.problemkind:match("Block") or false,
-                             parameters = terralib.newlist(),-- listing of each parameter, {name = <string>, kind = <image|adjacency|edgevalue>, idx = <number>, type = <thetypeusedtostoreit>, obj = <theobject for adj> }
+                             parameters = terralib.newlist(),-- listing of each parameter, {name = <string>, kind = <image|graph|edgevalue>, idx = <number>, type = <thetypeusedtostoreit> }
                              names = {}, -- name -> index in parameters list
                              ProblemParameters = terralib.types.newstruct("ProblemParameters"),
                              BlockedProblemParameters = BlockedProblemParameters,
@@ -267,8 +235,8 @@ function ProblemSpec:BlockedTypeForImageEntry(p)
 	return self:BlockedTypeForImage(mm.W,mm.H,mm.typ)
 end
 
-function ProblemSpec:newparameter(name,kind,idx,typ,obj)
-    self.parameters:insert { name = self:toname(name), kind = kind, idx = idx, type = typ, obj = obj }
+function ProblemSpec:newparameter(name,kind,idx,typ)
+    self.parameters:insert { name = self:toname(name), kind = kind, idx = idx, type = typ }
 	self.ProblemParameters.entries:insert { name, typ }
 end
 
@@ -298,12 +266,18 @@ function ProblemSpec:TypeOf(name,blocked)
 	return blocked and self:BlockedTypeForImageEntry(p) or p.type
 end
 
-function ProblemSpec:Function(name,dimensions,boundary,interior)
+function ProblemSpec:Function(name,unknownfunction, ...)
     self:Stage "functions"
-    interior = interior or boundary
-    interior:gettype() -- check this typechecks
-    self.functions[name] = { name = name, dimensions = dimensions, boundary = boundary, interior = interior }
+    unknownfunction:gettype() -- check this typechecks
+    local graphfunctions = terralib.newlist()
+    for i = 1,select("#",...),2 do
+        local graphname, implementation =  select(i,...)
+        implementation:gettype()
+        graphfunctions:insert { graph = graphname, implementation = implementation }
+    end
+    self.functions[name] = { name = name, unknownfunction = unknownfunction, graphfunctions = graphfunctions }
 end
+
 function ProblemSpec:Param(name,typ,idx)
     self:Stage "inputs"
     self:newparameter(name,"param",idx,typ)
@@ -421,7 +395,7 @@ function ProblemSpec:Image(name,typ,W,H,idx)
     local elemsize = assert(tonumber(opt.elemsizes[idx]))
     local stride = assert(tonumber(opt.strides[idx]))
     local r = newImage(typ, assert(todim(W)), assert(todim(H)), elemsize, stride)
-    self:newparameter(name,"image",idx,r,nil)
+    self:newparameter(name,"image",idx,r)
 end
 
 
@@ -440,81 +414,22 @@ function ProblemSpec:InternalImage(typ,W,H,blocked)
 	end
 end
 
-
-local newAdjacency = terralib.memoize(function(w0,h0,w1,h1)
-    local struct Adj {
-        rowpointer : &int32 --size: w0*h0+1
-        x : &int32 --size is number of total edges in graph
-        y : &int32
-    }
-    local struct AdjEntry {
-        x : int32
-        y : int32
-    }
-    function Adj.metamethods.__typename()
-	  return string.format("Adj( {%s,%s}, {%s,%s} )",w0.name, h0.name,w1.name,h1.name)
-	end
-    local mm = Adj.metamethods
-    terra Adj:count(i : int32, j : int32)
-        var idx = j*w0.size + i
-        return self.rowpointer[idx+1] - self.rowpointer[idx]
-    end
-    terra Adj:W0() return w0.size end
-    terra Adj:H0() return h0.size end
-    terra Adj:W1() return w1.size end
-    terra Adj:H1() return h1.size end
-    local struct AdjIter {
-        adj : &Adj
-        idx : int32
-    }
-    terra Adj:neighbors(i : int32, j : int32)
-        return AdjIter { self, j*self:W0() + i }
-    end
-    AdjIter.metamethods.__for = function(syms,iter,body)
-        return syms, quote
-            var it = iter
-            for i = it.adj.rowpointer[it.idx], it.adj.rowpointer[it.idx+1] do
-                var [syms[1]] : AdjEntry = AdjEntry { it.adj.x[i], it.adj.y[i] }
-                body
-            end
-        end
-    end
-    mm.fromDim = {w0,h0}
-    mm.toDim = {w1,h1}
-    mm.entry = AdjEntry
-    return Adj
-end)
-
-
-function ProblemSpec:Adjacency(name,fromDim,toDim,idx)
+function ProblemSpec:Graph(name, idx, ...)
     self:Stage "inputs"
-    local w0,h0,w1,h1 = assert(todim(fromDim[1])),assert(todim(fromDim[2])),assert(todim(toDim[1])),assert(todim(toDim[2]))
-    local Adj = newAdjacency(w0,h0,w1,h1)
-    local obj = terralib.new(Adj,{assert(opt.rowindexes[idx]),assert(opt.xs[idx]),assert(opt.ys[idx])})
-    self:newparameter(name,"adjacency",idx,Adj,obj)
-end
-
-local newEdgeValues = terralib.memoize(function(typ,adj)
-     assert(terralib.types.istype(typ))
-     local struct EdgeValues {
-        data : &typ
-     }
-	 EdgeValues.metamethods.type = typ
-     terra EdgeValues:get(a : adj.metamethods.entry) : &typ
-        return self.data + a.y*[adj.metamethods.toDim[1].size] + a.x
-     end
-     EdgeValues.metamethods.__apply = macro(function(self, a)
-	    return `@self:get(a)
-	 end)
-	 return EdgeValues
-end)
-
-function ProblemSpec:EdgeValues(name,typ,adjName, idx)
-    self:Stage "inputs"
-    local param = self.parameters[assert(self.names[adjName],"unknown adjacency")]
-    assert(param.kind == "adjacency", "expected the name of an adjacency")
-    local ev = newEdgeValues(typ, param.type)
-    self:newparameter(name,"edgevalues",idx,ev,nil)
+    local GraphType = terralib.types.newstruct(name)
+    GraphType.entrines:insert { {"N",int32} }
+    
+    local mm = GraphType.metamethods
+    mm.idx = idx -- the index into the graph size table
+    mm.elements = terralib.newlist()
+    for i = 1, select("#",...),4 do
+        local name,W,H,idx = select(i,...) --TODO: we don't bother to track the dimensions of these things now
+        assert(todim(W) and todim(H),"Expected dimensions")
+        GraphType.entries:insert { {name .. "_x", &int32},{name .. "_y", &int32} } 
+        mm.elements:insert( { name = name, idx = assert(tonumber(idx),"expected a numeric index") } )
+    end
+    
+    self:newparameter(name, "graph", idx, GraphType)
 end
 
 local allPlans = terralib.newlist()
@@ -529,11 +444,10 @@ function opt.problemSpecFromFile(filename)
    return file()
 end
 
-local function problemPlan(id, dimensions, elemsizes, strides, rowindexes, xs, ys, pplan)
+local function problemPlan(id, dimensions, elemsizes, strides, pplan)
     local success,p = xpcall(function() 
 		local problemmetadata = assert(problems[id])
         opt.dimensions,opt.elemsizes,opt.strides = dimensions,elemsizes,strides
-        opt.rowindexes,opt.xs,opt.ys = rowindexes,xs,ys
         opt.math = problemmetadata.kind:match("GPU") and util.gpuMath or util.cpuMath
         opt.problemkind = problemmetadata.kind
 		
@@ -545,9 +459,9 @@ local function problemPlan(id, dimensions, elemsizes, strides, rowindexes, xs, y
     end,function(err) errorPrint(debug.traceback(err,2)) end)
 end
 
-terra opt.ProblemPlan(problem : &opt.Problem, dimensions : &uint32, elemsizes : &uint32, strides : &uint32, rowindexes : &&int32, xs : &&int32, ys : &&int32) : &opt.Plan
+terra opt.ProblemPlan(problem : &opt.Problem, dimensions : &uint32, elemsizes : &uint32, strides : &uint32) : &opt.Plan
 	var p : &opt.Plan = nil 
-	problemPlan(int(int64(problem)),dimensions,elemsizes,strides,rowindexes,xs,ys,&p)
+	problemPlan(int(int64(problem)),dimensions,elemsizes,strides,&p)
 	return p
 end 
 
@@ -556,15 +470,15 @@ terra opt.PlanFree(plan : &opt.Plan)
     plan:delete()
 end
 
-terra opt.ProblemInit(plan : &opt.Plan, images : &&opaque, edgevalues : &&opaque, params : &&opaque, solverparams : &&opaque) 
-    return plan.init(plan.data, images, edgevalues, params, solverparams)
+terra opt.ProblemInit(plan : &opt.Plan, images : &&opaque, graphsizes : &int32, edgevalues : &&opaque, xs : &&int32, ys : &&int32, params : &&opaque, solverparams : &&opaque) 
+    return plan.init(plan.data, images, graphsizes, edgevalues, xs, ys, params, solverparams)
 end
-terra opt.ProblemStep(plan : &opt.Plan, images : &&opaque, edgevalues : &&opaque, params : &&opaque, solverparams : &&opaque) : int
-    return plan.step(plan.data, images, edgevalues, params, solverparams)
+terra opt.ProblemStep(plan : &opt.Plan, images : &&opaque, graphsizes : &int32, edgevalues : &&opaque, xs : &&int32, ys : &&int32, params : &&opaque, solverparams : &&opaque) : int
+    return plan.step(plan.data, images, graphsizes, edgevalues, xs, ys, params, solverparams)
 end
-terra opt.ProblemSolve(plan : &opt.Plan, images : &&opaque, edgevalues : &&opaque, params : &&opaque, solverparams : &&opaque)
-   opt.ProblemInit(plan, images, edgevalues, params, solverparams)
-   while opt.ProblemStep(plan, images, edgevalues, params, solverparams) ~= 0 do end
+terra opt.ProblemSolve(plan : &opt.Plan, images : &&opaque, graphsizes : &int32, edgevalues : &&opaque, xs : &&int32, ys : &&int32, params : &&opaque, solverparams : &&opaque)
+   opt.ProblemInit(plan, images, graphsizes, edgevalues, xs, ys, params, solverparams)
+   while opt.ProblemStep(plan, images, graphsizes, edgevalues, xs, ys, params, solverparams) ~= 0 do end
 end
 
 
@@ -645,12 +559,12 @@ function ProblemSpecAD:Image(name,typ,W,H,idx)
     return r
 end
 
-local Adjacency = newclass("Adjacency")
-function Adjacency:__tostring() return "<" .. self.name .. ">" end
+local Graph = newclass("Graph")
+function Graph:__tostring() return "< graph" .. self.name .. ">" end
 
-function ProblemSpecAD:Adjacency(name,fromdim,todim,idx)
-    self.P:Adjacency(name,fromdim,todim,idx)
-    return Adjacency:new { name = tostring(name) }
+function ProblemSpecAD:Graph(name,...)
+    self.P:Graph(name,...)
+    return Graph:new { name = tostring(name) }
 end
 
 function ProblemSpecAD:Param(name,typ,idx)
@@ -660,7 +574,7 @@ end
 
 function Image:__call(x,y,c,extra)
     local shape = ad.scalar
-    if Adjacency:is(x) and y == nil and c == nil then
+    if false and y == nil and c == nil then
         shape = ad.Shape:fromkeys(x)
         x,y,c = y or 0,c or 0,extra
     end
@@ -1358,12 +1272,9 @@ function ProblemSpecAD:createfunctionset(name,...)
     local ut = self.P:UnknownType()
     local W,H = ut.metamethods.W,ut.metamethods.H
     
-    dprint("function set for: ",name)
-    dprint("bound")
+    dprint("function for: ",name)
     local boundary = createfunction(self,name,exps,true,W,H)
-    dprint("interior")
-    local interior = boundary -- we don't currently use interior only
-    self.P:Function(name,{W,H},boundary,interior)
+    self.P:Function(name,boundary)
 end
 
 local getpair = terralib.memoize(function(x,y) return {x = x, y = y} end)
