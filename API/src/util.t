@@ -354,6 +354,7 @@ util.positionForValidLane = macro(function(pd,mapMemberName,pw,ph)
 		 @pw < pd.parameters.[mapMemberName]:W() and @ph < pd.parameters.[mapMemberName]:H() 
 	end
 end)
+
 local positionForValidLane = util.positionForValidLane
 
 local cd = macro(function(cufunc)
@@ -366,51 +367,8 @@ local cd = macro(function(cufunc)
     end
 end)
 
---TODO FIX THE CUDA DEVICE SYNCS
---TODO 
-local makeGPULauncher = function(compiledKernel, kernelName, header, footer, problemSpec, PlanData)
-	assert(problemSpec)
-	assert(problemSpec:BlockSize())
-	local kernelparams = compiledKernel:gettype().parameters
-	local params = terralib.newlist {}
-	for i = 3,#kernelparams do --skip GPU launcher and PlanData
-	    params:insert(symbol(kernelparams[i]))
-	end
-	local terra GPULauncher(pd : &PlanData, [params])
-		var BLOCK_SIZE : int = [problemSpec:BlockSize()]
-		var launch = terralib.CUDAParams { (pd.parameters.X:W() - 1) / BLOCK_SIZE + 1, (pd.parameters.X:H() - 1) / BLOCK_SIZE + 1, 1, BLOCK_SIZE, BLOCK_SIZE, 1, 0, nil }
-		--var launch = terralib.CUDAParams { (pd.parameters.X:W() - 1) / 32 + 1, (pd.parameters.X:H() - 1) / 32 + 1, 1, 32, 32, 1, 0, nil }
-		C.cudaDeviceSynchronize()
-		[header(pd)]
-		C.cudaDeviceSynchronize()
-		var stream : C.cudaStream_t = nil
-		var timingInfo : TimingInfo 
-		if ([timeIndividualKernels]) then
-			C.cudaEventCreate(&timingInfo.startEvent)
-			C.cudaEventCreate(&timingInfo.endEvent)
-	        C.cudaEventRecord(timingInfo.startEvent, stream)
-			timingInfo.eventName = kernelName
-		end
-		compiledKernel(&launch, @pd, params)
-	    cd(C.cudaGetLastError())
-		
-		if ([timeIndividualKernels]) then
-			cd(C.cudaEventRecord(timingInfo.endEvent, stream))
-			pd.timer.timingInfo:insert(timingInfo)
-		end
-
-		cd(C.cudaDeviceSynchronize())
-		cd(C.cudaGetLastError())
-		[footer(pd)]
-	end
+function util.makeGPUFunctions(problemSpec, PlanData, kernels)
 	
-	return GPULauncher
-end
-
-
-util.makeGPUFunctions = function(problemSpec, PlanData, kernels)
-	local gpu = {}
-	local kernelTemplate = {}
 	local wrappedKernels = {}
 	
 	local data = {}
@@ -418,6 +376,7 @@ util.makeGPUFunctions = function(problemSpec, PlanData, kernels)
 	data.PlanData = PlanData
 	data.imageType = problemSpec:UnknownType(false) -- get non-blocked version
 	
+	local kernelTemplate = {}
 	for k, v in pairs(kernels) do
 		kernelTemplate[k] = v(data)
 	end
@@ -427,10 +386,43 @@ util.makeGPUFunctions = function(problemSpec, PlanData, kernels)
 	    kernelFunctions[k..key] = { kernel = v.kernel , annotations = { {"maxntidx", 16}, {"maxntidy", 16}, {"maxntidz", 1}, {"minctasm",5} } } -- force at least 5 threadblocks to run per SM
 	end
 	local compiledKernels = terralib.cudacompile(kernelFunctions, false)
-	for k, v in pairs(kernelTemplate) do
-		gpu[k] = makeGPULauncher(compiledKernels[k..key], kernelFunctions[k..key].kernel.name, kernelTemplate[k].header, kernelTemplate[k].footer, problemSpec, PlanData)
-	end
 	
+	local function makeGPULauncher(kernelName,compiledKernel)
+        local kernelparams = compiledKernel:gettype().parameters
+        local params = terralib.newlist {}
+        for i = 3,#kernelparams do --skip GPU launcher and PlanData
+            params:insert(symbol(kernelparams[i]))
+        end
+        local terra GPULauncher(pd : &PlanData, [params])
+            var BLOCK_SIZE : int = [problemSpec:BlockSize()]
+            var launch = terralib.CUDAParams { (pd.parameters.X:W() - 1) / BLOCK_SIZE + 1, (pd.parameters.X:H() - 1) / BLOCK_SIZE + 1, 1, BLOCK_SIZE, BLOCK_SIZE, 1, 0, nil }
+            C.cudaDeviceSynchronize()
+            var stream : C.cudaStream_t = nil
+            var timingInfo : TimingInfo 
+            if ([timeIndividualKernels]) then
+                C.cudaEventCreate(&timingInfo.startEvent)
+                C.cudaEventCreate(&timingInfo.endEvent)
+                C.cudaEventRecord(timingInfo.startEvent, stream)
+                timingInfo.eventName = kernelName
+            end
+            compiledKernel(&launch, @pd, params)
+            cd(C.cudaGetLastError())
+        
+            if ([timeIndividualKernels]) then
+                cd(C.cudaEventRecord(timingInfo.endEvent, stream))
+                pd.timer.timingInfo:insert(timingInfo)
+            end
+
+            cd(C.cudaDeviceSynchronize())
+            cd(C.cudaGetLastError())
+        end
+	    return GPULauncher
+    end
+	
+	local gpu = {}
+	for k, v in pairs(kernelTemplate) do
+		gpu[k] = makeGPULauncher(k, compiledKernels[k..key])
+	end
 	
 	return gpu
 end

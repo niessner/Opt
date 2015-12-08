@@ -7,14 +7,6 @@ local positionForValidLane = util.positionForValidLane
 
 local gpuMath = util.gpuMath
 
-local function noHeader(pd)
-	return quote end
-end
-
-local function noFooter(pd)
-	return quote end
-end
-
 opt.BLOCK_SIZE = 16
 local BLOCK_SIZE =  opt.BLOCK_SIZE
 
@@ -110,7 +102,7 @@ return function(problemSpec)
 				util.atomicAdd(pd.scanAlpha, d)
 			end
 		end
-		return { kernel = PCGInit1GPU, header = noHeader, footer = noFooter, mapMemberName = "X" }
+		return { kernel = PCGInit1GPU }
 	end
 	
 	kernels.PCGInit2 = function(data)
@@ -121,7 +113,7 @@ return function(problemSpec)
 				pd.delta(w,h) = 0.0f	--TODO check if we need that
 			end
 		end
-		return { kernel = PCGInit2GPU, header = noHeader, footer = noFooter, mapMemberName = "X" }
+		return { kernel = PCGInit2GPU }
 	end
 	
 	kernels.PCGStep1 = function(data)
@@ -141,7 +133,7 @@ return function(problemSpec)
 				util.atomicAdd(pd.scanAlpha, d)
 			end
 		end
-		return { kernel = PCGStep1GPU, header = noHeader, footer = noFooter, mapMemberName = "X" }
+		return { kernel = PCGStep1GPU }
 	end
 	
 	kernels.PCGStep1_Graph = function(data)
@@ -164,7 +156,7 @@ return function(problemSpec)
 				util.atomicAdd(pd.scanAlpha, d)
 			end
 		end
-		return { kernel = PCGStep1GPU_Graph, header = noHeader, footer = noFooter, mapMemberName = "X" }
+		return { kernel = PCGStep1GPU_Graph }
 	end
 	
 	kernels.PCGStep2 = function(data)
@@ -195,7 +187,7 @@ return function(problemSpec)
 				util.atomicAdd(pd.scanBeta, b)
 			end
 		end
-		return { kernel = PCGStep2GPU, header = noHeader, footer = noFooter, mapMemberName = "X" }
+		return { kernel = PCGStep2GPU }
 	end
 	
 	kernels.PCGStep3 = function(data)
@@ -213,7 +205,7 @@ return function(problemSpec)
 				pd.p(w,h) = pd.z(w,h)+beta*pd.p(w,h)							-- update decent direction
 			end
 		end
-		return { kernel = PCGStep3GPU, header = noHeader, footer = noFooter, mapMemberName = "X" }
+		return { kernel = PCGStep3GPU }
 	end
 	
 	kernels.PCGLinearUpdate = function(data)
@@ -223,7 +215,7 @@ return function(problemSpec)
 				pd.parameters.X(w,h) = pd.parameters.X(w,h) + pd.delta(w,h)
 			end
 		end
-		return { kernel = PCGLinearUpdateGPU, header = noHeader, footer = noFooter, mapMemberName = "X" }
+		return { kernel = PCGLinearUpdateGPU }
 	end
 	
 	
@@ -242,20 +234,7 @@ return function(problemSpec)
 			util.atomicAdd(pd.scratchF, cost)
 			end
 		end
-		local function header(pd)
-		    return quote
-			C.cudaMemset(pd.scratchF, 0, sizeof(float))
-		    end
-		end
-		local function footer(pd)
-		    return quote
-			var f : float
-			C.cudaMemcpy(&f, pd.scratchF, sizeof(float), C.cudaMemcpyDeviceToHost)
-			return f
-		    end
-		end
-		
-		return { kernel = computeCostGPU, header = header, footer = footer, mapMemberName = "X" }
+		return { kernel = computeCostGPU }
 	end
 
 	if util.debugDumpInfo then
@@ -278,7 +257,7 @@ return function(problemSpec)
 			end 
 		end
 
-		return { kernel = dumpJTFAndPreGPU, header = noHeader, footer = noFooter, mapMemberName = "X" }
+		return { kernel = dumpJTFAndPreGPU }
 	end
 
 	kernels.dumpJTJ = function(data)
@@ -292,7 +271,7 @@ return function(problemSpec)
 				[&unknownElement](pd.debugJTJImage)[h*pd.parameters.X:W()+w] = tmp
 			end
 		end
-		return { kernel = dumpJTJGPU, header = noHeader, footer = noFooter, mapMemberName = "X" }
+		return { kernel = dumpJTJGPU }
 	end
 	end
 
@@ -377,6 +356,13 @@ return function(problemSpec)
            pd.nIterations = @[&int](solverparams[0])
 	   pd.lIterations = @[&int](solverparams[1])
 	end
+    local terra computeCost(pd : &PlanData) : float
+        C.cudaMemset(pd.scratchF, 0, sizeof(float))
+        gpu.computeCost(pd)
+        var f : float
+        C.cudaMemcpy(&f, pd.scratchF, sizeof(float), C.cudaMemcpyDeviceToHost)
+        return f
+    end
 
 	local terra step(data_ : &opaque, images : &&opaque, graphSizes : &int32, edgeValues : &&opaque, xs : &&int32, ys : &&int32, params_ : &&opaque, solverparams : &&opaque)
 		var pd = [&PlanData](data_)
@@ -402,7 +388,7 @@ return function(problemSpec)
 		end
 
 		if pd.nIter < pd.nIterations then
-		    var startCost = gpu.computeCost(pd)
+		    var startCost = computeCost(pd)
 			logSolver("iteration %d, cost=%f\n", pd.nIter, startCost)
 
 			C.cudaMemset(pd.scanAlpha, 0, sizeof(float))	--scan in PCGInit1 requires reset
@@ -452,7 +438,7 @@ return function(problemSpec)
 					end
 				end
 			end
-			var finalCost = gpu.computeCost(pd)
+			var finalCost = computeCost(pd)
 			logSolver("final cost=%f\n", finalCost)
 		    pd.timer:evaluate()
 		    pd.timer:cleanup()
