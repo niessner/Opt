@@ -354,6 +354,14 @@ util.getValidUnknown = macro(function(pd,pw,ph)
 		 @pw < pd.parameters.X:W() and @ph < pd.parameters.X:H() 
 	end
 end)
+util.getValidGraphElement = macro(function(pd,graphname,idx)
+	graphname = graphname:asvalue()
+	return quote
+		@idx = blockDim.x * blockIdx.x + threadIdx.x
+	in
+		 @idx < pd.parameters.[graphname].N 
+	end
+end)
 
 local positionForValidLane = util.positionForValidLane
 
@@ -389,9 +397,33 @@ function util.makeGPUFunctions(problemSpec, PlanData, kernels)
         for i = 3,#kernelparams do --skip GPU launcher and PlanData
             params:insert(symbol(kernelparams[i]))
         end
+        local BLOCK_SIZE = problemSpec:BlockSize()
+        local function createLaunchParameters(pd)
+            if not kernelName:match("_Graph$") then
+                return `terralib.CUDAParams { (pd.parameters.X:W() - 1) / BLOCK_SIZE + 1, (pd.parameters.X:H() - 1) / BLOCK_SIZE + 1, 1, 
+                                              BLOCK_SIZE, BLOCK_SIZE, 1, 
+                                              0, nil }
+            else
+                return quote
+                    var N = 0
+                    escape
+                        for i,gf in ipairs(problemSpec.functions.cost.graphfunctions) do
+                            emit quote
+                                if N < pd.[name].N then
+                                    N = pd.[name].N
+                                end
+                            end
+                        end
+                    end
+                in 
+                    terralib.CUDAParams { (N - 1) / (BLOCK_SIZE*BLOCK_SIZE) + 1, 1, 1, 
+                                          BLOCK_SIZE, 1, 1, 
+                                          0, nil }
+                end
+            end
+        end
         local terra GPULauncher(pd : &PlanData, [params])
-            var BLOCK_SIZE : int = [problemSpec:BlockSize()]
-            var launch = terralib.CUDAParams { (pd.parameters.X:W() - 1) / BLOCK_SIZE + 1, (pd.parameters.X:H() - 1) / BLOCK_SIZE + 1, 1, BLOCK_SIZE, BLOCK_SIZE, 1, 0, nil }
+            var launch = [ createLaunchParameters(pd) ]
             C.cudaDeviceSynchronize()
             var stream : C.cudaStream_t = nil
             var timingInfo : TimingInfo 
