@@ -428,7 +428,7 @@ return function(problemSpec)
 
                 C.cudaMemset(pd.scanAlpha, 0, sizeof(float))
 				gpu.PCGStep1(pd)
-				if false	--graph or not...
+				if false then	--graph or not...
 					PCGStep1GPU_Graph(pd)
 				end
 				
