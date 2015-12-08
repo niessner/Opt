@@ -541,7 +541,7 @@ end
 function ProblemSpec:Graph(name, idx, ...)
     self:Stage "inputs"
     local GraphType = terralib.types.newstruct(name)
-    GraphType.entries:insert { {"N",int32} }
+    GraphType.entries:insert ( {"N",int32} )
     
     local mm = GraphType.metamethods
     mm.idx = idx -- the index into the graph size table
@@ -549,7 +549,8 @@ function ProblemSpec:Graph(name, idx, ...)
     for i = 1, select("#",...),4 do
         local name,W,H,idx = select(i,...) --TODO: we don't bother to track the dimensions of these things now
         assert(todim(W) and todim(H),"Expected dimensions")
-        GraphType.entries:insert { {name .. "_x", &int32},{name .. "_y", &int32} } 
+        GraphType.entries:insert ( {name .. "_x", &int32} )
+	GraphType.entries:insert ( {name .. "_y", &int32} )
         mm.elements:insert( { name = name, idx = assert(tonumber(idx),"expected a numeric index") } )
     end
     
