@@ -417,7 +417,7 @@ end
 function ProblemSpec:Graph(name, idx, ...)
     self:Stage "inputs"
     local GraphType = terralib.types.newstruct(name)
-    GraphType.entrines:insert { {"N",int32} }
+    GraphType.entries:insert { {"N",int32} }
     
     local mm = GraphType.metamethods
     mm.idx = idx -- the index into the graph size table

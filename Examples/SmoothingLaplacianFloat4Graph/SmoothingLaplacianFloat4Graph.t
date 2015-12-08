@@ -5,7 +5,7 @@ local W,H = opt.Dim("W",0), opt.Dim("H",1)
 
 local X = adP:Image("X", opt.float4,W,H,0)
 local A = adP:Image("A", opt.float4,W,H,1)
-local G = adP:Adjacency("G", {W,H}, {W,H}, 0)
+local G = adP:Graph("G", 0, "v0", W, H, 0, "v1", W, H, 1)
 P:Stencil(2)
 
 local C = terralib.includecstring [[
@@ -25,50 +25,28 @@ local terra inBounds(i : int32, j : int32, xImage : P:UnknownType()) : bool
 	return i >= 0 and i < xImage:W() and j >= 0 and j < xImage:H()
 end
 
-local terra laplacianCost(x : unknownElement, ni : int32, nj : int32, ngi : int32, ngj : int32, xImage : P:UnknownType()) : unknownElement
-	
-	var res : unknownElement = 0.0f
-	
-	if inBounds(ngi,ngj,xImage) then
-		res = x - xImage(ni,nj)
-	end
 
-	return res	
+local terra laplacianCost(idx : int32, self : P:ParameterType()) : unknownElement	
+    var x0 = self.X(self.G.v0_x[idx], self.G.v0_y[idx])
+    var x1 = self.X(self.G.v1_x[idx], self.G.v1_y[idx])
+    return x0 - x1
 end
 
 local terra cost(i : int32, j : int32, gi : int32, gj : int32, self : P:ParameterType()) : float
-	
-	var x = self.X(i, j)
-	var a = self.A(i, j)
-	
-	var v2 = x - a
+	var v2 = self.X(i, j) - self.A(i, j)
 	var e_fit = w_fit * v2 * v2	
-
 	
-	var laplacian : unknownElement = 0.0f
-	for adj in self.G:neighbors(i,j) do
---	    if (i == 0)
---	    res = res + 1.0f
---	    IO.printf("Adjacency!\n");
-	    var l_n = x - self.X(adj.x,adj.y)
-	    laplacian = laplacian + (l_n*l_n)
-	end
+	var res : float = e_fit(0) + e_fit(1) + e_fit(2) + e_fit(3)
 		
-	var e_reg = w_reg*laplacian
+	return res
+end
 
-	var res : float = 
-		e_fit(0) + e_fit(1) + e_fit(2) + e_fit(3) +
-		e_reg(0) + e_reg(1) + e_reg(2) + e_reg(3)
+local terra cost_graph(idx : int32, self : P:ParameterType()) : float
+	var l0 = laplacianCost(idx, self)		
+	var e_reg = w_reg*l0*l0
 	
---[[	res = 0.0f
-	if (i==0) then
-	    res = [float](self.G.rowpointer[2])
-	end
-		
-		]]--
-	--if gi == 0 and gj == 0 or gi == 10 and gj == 10 then
-	--	printf("cost=%f (%d|%d); x=%f\n", e_reg(0), int(gi), int(gj), x(0)) 
-	--end
+	var res : float = e_reg(0) + e_reg(1) + e_reg(2) + e_reg(3)
+	
 	return res
 end
 
@@ -78,23 +56,15 @@ local terra gradient(i : int32, j : int32, gi : int32, gj : int32, self : P:Para
 	
 	var x = self.X(i, j)
 	var a = self.A(i, j)
+	return w_fit*2.0f * (x - a)
+end
+
+local terra gradient_graph(idx : int32, self : P:ParameterType()) : unknownElement
+        var l_n = laplacianCost(idx, self)
+        var laplacian = 2.0f*l_n
 	
-	var e_fit = w_fit*2.0f * (x - a)
-	
-	
-	var laplacian : unknownElement = 0.0f
-	for adj in self.G:neighbors(i,j) do
-		var l_n = x - self.X(adj.x,adj.y)
-		laplacian = laplacian + 2.0f*l_n
-	end
-	
-	var e_reg = 2.0f*w_reg*laplacian
-	
-	--if gi == 0 and gj == 0 or gi == 10 and gj == 10 then
-	--	printf("cost=%f (%d|%d); x=%f\n", e_reg(0), int(gi), int(gj), x(0)) 
-	--end
-	
-	return e_fit + e_reg
+	return 2.0f*w_reg*laplacian
+
 end
 
 -- eval 2*JtF == \nabla(F); eval diag(2*(Jt)^2) == pre-conditioner
@@ -105,26 +75,42 @@ local terra evalJTF(i : int32, j : int32, gi : int32, gj : int32, self : P:Param
 	var pre : float = 1.0f
 	return gradient, pre
 end
+
+local terra evalJTF_graph(idx : int32, self : P:ParameterType())
 	
--- eval 2*JtJ (note that we keep the '2' to make it consistent with the gradient
-local terra applyJTJ(i : int32, j : int32, gi : int32, gj : int32, self : P:ParameterType(), pImage : P:UnknownType()) : unknownElement
- 
-	var p = pImage(i, j)
-	--fit
-	var e_fit = w_fit*2.0f*p
+	var gradient : unknownElement = gradient_graph(idx, self)
 	
-	--reg
-	var laplacian : unknownElement = 0.0f
-	for adj in self.G:neighbors(i,j) do
-		var l_n = p - pImage(adj.x,adj.y)
-		laplacian = laplacian + 2.0f*l_n
-	end
-	var e_reg = 2.0f*w_reg*laplacian
-	
-	return e_fit + e_reg
+	var pre : float = 1.0f
+	return gradient, pre
 end
 
 
+-- eval 2*JtJ (note that we keep the '2' to make it consistent with the gradient
+local terra applyJTJ(i : int32, j : int32, gi : int32, gj : int32, self : P:ParameterType(), pImage : P:UnknownType()) : unknownElement 
+    return w_fit*2.0f*pImage(i,j)
+end
+
+local terra applyJTJ_graph(idx : int32, self : P:ParameterType(), pImage : P:UnknownType()) : {unknownElement, int32, int32, int32, int32, float, float}
+    var w0,h0 = self.G.v0_x[idx], self.G.v0_y[idx]
+    var w1,h1 = self.G.v1_x[idx], self.G.v1_y[idx]
+    
+    var p0 = pImage(w0,h0)
+    var p1 = pImage(w1,h1)
+
+    -- (1*p0) + (-1*p1)
+    var l_n = p0 - p1
+    var e_reg = 2.0f*w_reg*l_n
+
+    --[[
+    atomicAdd(self.Ap_X(w0,h0), 1.0 *  e_reg)
+    atomicAdd(self.Ap_X(w1,h1), -1.0 * e_reg)
+
+    var d = util.Dot(self.p(w0,h0), 1.0 * e_reg)
+    d = d + util.Dot(self.p(w1,h1), -1.0 * e_reg)
+    --]]
+    return e_reg, w0, h0, w1, h1, 1.0f, -1.0f 
+end
+--[[
 -- same functions, but expressed in math language
 local IP = adP:Image("P",opt.float4,W,H,-1)
 local x,x_n = X(0,0),X(G)
@@ -136,17 +122,17 @@ math_cost = math_cost:sum()
 
 local math_grad = w_fit*2.0*(x - a) + 2*w_reg*sum(2*(x - x_n))
 local math_jtj = w_fit*2.0*p + 2*w_reg*sum(2*(p - p_n))
-
+]]
 if false then
     adP:createfunctionset("cost",math_cost)
     adP:createfunctionset("gradient",math_grad)
     adP:createfunctionset("evalJTF",math_grad,ad.toexp(1.0))
     adP:createfunctionset("applyJTJ",math_jtj)
 else 
-    P:Function("cost", {W,H}, cost)
-    P:Function("gradient", {W,H}, gradient)
-    P:Function("evalJTF", {W,H}, evalJTF)
-    P:Function("applyJTJ", {W,H}, applyJTJ)
+    P:Function("cost", cost, G, cost_graph)
+    P:Function("gradient", gradient, G, gradient_graph)
+    P:Function("evalJTF", evalJTF, G, evalJTF_graph)
+    P:Function("applyJTJ", applyJTJ, G, applyJTJ_graph)
 end
 
 return P
