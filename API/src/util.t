@@ -346,12 +346,12 @@ end
 
 
 
-util.positionForValidLane = macro(function(pd,mapMemberName,pw,ph)
-	mapMemberName = mapMemberName:asvalue()
+
+util.getValidUnknown = macro(function(pd,pw,ph)
 	return quote
 		@pw,@ph = blockDim.x * blockIdx.x + threadIdx.x, blockDim.y * blockIdx.y + threadIdx.y
 	in
-		 @pw < pd.parameters.[mapMemberName]:W() and @ph < pd.parameters.[mapMemberName]:H() 
+		 @pw < pd.parameters.X:W() and @ph < pd.parameters.X:H() 
 	end
 end)
 

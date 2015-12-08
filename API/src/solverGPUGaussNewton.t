@@ -3,7 +3,8 @@ local util = require("util")
 local dbg = require("dbg")
 local C = util.C
 local Timer = util.Timer
-local positionForValidLane = util.positionForValidLane
+
+local getValidUnknown = util.getValidUnknown
 
 local gpuMath = util.gpuMath
 
@@ -78,7 +79,7 @@ return function(problemSpec)
 		local terra PCGInit1GPU(pd : data.PlanData)
 			var d = 0.0f -- init for out of bounds lanes
 			var w : int, h : int
-			if positionForValidLane(pd, "X", &w, &h) then
+			if getValidUnknown(pd, &w, &h) then
 				-- residuum = J^T x -F - A x delta_0  => J^T x -F, since A x x_0 == 0
 								
 				var residuum : unknownElement = 0.0f
@@ -108,7 +109,7 @@ return function(problemSpec)
 	kernels.PCGInit2 = function(data)
 		local terra PCGInit2GPU(pd : data.PlanData)
 			var w : int, h : int
-			if positionForValidLane(pd, "X", &w, &h) and (not [problemSpec:EvalExclude(w,h,w,h,`pd.parameters)]) then
+			if getValidUnknown(pd, &w, &h) and (not [problemSpec:EvalExclude(w,h,w,h,`pd.parameters)]) then
 				pd.rDotzOld(w,h) = pd.scanAlpha[0]
 				pd.delta(w,h) = 0.0f	--TODO check if we need that
 			end
@@ -120,7 +121,7 @@ return function(problemSpec)
 		local terra PCGStep1GPU(pd : data.PlanData)
 			var d = 0.0f
 			var w : int, h : int
-			if positionForValidLane(pd, "X", &w, &h) and (not [problemSpec:EvalExclude(w,h,w,h,`pd.parameters)]) then
+			if getValidUnknown(pd, &w, &h) and (not [problemSpec:EvalExclude(w,h,w,h,`pd.parameters)]) then
 				var tmp : unknownElement = 0.0f
 				 -- A x p_k  => J^T x J x p_k 
 				tmp = data.problemSpec.functions.applyJTJ.unknownfunction(w, h, w, h, pd.parameters, pd.p)
@@ -140,7 +141,7 @@ return function(problemSpec)
 		local terra PCGStep1GPU_Graph(pd : data.PlanData)
 			var d = 0.0f
 			--var w : int, h : int
-			--if positionForValidLane(pd, "X", &w, &h) and (not [problemSpec:EvalExclude(w,h,w,h,`pd.parameters)]) then
+			--if getValidUnknown(pd, &w, &h) and (not [problemSpec:EvalExclude(w,h,w,h,`pd.parameters)]) then
 				--var tmp : unknownElement = 0.0f
 				-- A x p_k  => J^T x J x p_k 
 				--tmp = data.problemSpec.functions.applyJTJ_Graph.unknownfunction(w, h, w, h, pd.parameters, pd.p)
@@ -163,7 +164,7 @@ return function(problemSpec)
 		local terra PCGStep2GPU(pd : data.PlanData)
 			var b = 0.0f 
 			var w : int, h : int
-			if positionForValidLane(pd, "X", &w, &h)  and (not [problemSpec:EvalExclude(w,h,w,h,`pd.parameters)]) then
+			if getValidUnknown(pd, &w, &h)  and (not [problemSpec:EvalExclude(w,h,w,h,`pd.parameters)]) then
 				-- sum over block results to compute denominator of alpha
 				var dotProduct : float = pd.scanAlpha[0]
 				var alpha = 0.0f
@@ -193,7 +194,7 @@ return function(problemSpec)
 	kernels.PCGStep3 = function(data)
 		local terra PCGStep3GPU(pd : data.PlanData)			
 			var w : int, h : int
-			if positionForValidLane(pd, "X", &w, &h) and (not [problemSpec:EvalExclude(w,h,w,h,`pd.parameters)]) then
+			if getValidUnknown(pd, &w, &h) and (not [problemSpec:EvalExclude(w,h,w,h,`pd.parameters)]) then
 				var rDotzNew : float =  pd.scanBeta[0]						-- get new nominator
 				var rDotzOld : float = pd.rDotzOld(w,h)						-- get old denominator
 
@@ -211,7 +212,7 @@ return function(problemSpec)
 	kernels.PCGLinearUpdate = function(data)
 		local terra PCGLinearUpdateGPU(pd : data.PlanData)
 			var w : int, h : int
-			if positionForValidLane(pd, "X", &w, &h) and (not [problemSpec:EvalExclude(w,h,w,h,`pd.parameters)]) then
+			if getValidUnknown(pd, &w, &h) and (not [problemSpec:EvalExclude(w,h,w,h,`pd.parameters)]) then
 				pd.parameters.X(w,h) = pd.parameters.X(w,h) + pd.delta(w,h)
 			end
 		end
@@ -224,7 +225,7 @@ return function(problemSpec)
 			
 			var cost : float = 0.0f
 			var w : int, h : int
-			if util.positionForValidLane(pd, "X", &w, &h)  and (not [problemSpec:EvalExclude(w,h,w,h,`pd.parameters)]) then
+			if util.getValidUnknown(pd, &w, &h)  and (not [problemSpec:EvalExclude(w,h,w,h,`pd.parameters)]) then
 				var params = pd.parameters				
 				cost = cost + [float](data.problemSpec.functions.cost.unknownfunction(w, h, w, h, params))
 			end
@@ -241,7 +242,7 @@ return function(problemSpec)
 	kernels.dumpCostJTFAndPre = function(data)
 		local terra dumpJTFAndPreGPU(pd : data.PlanData)
 			var w : int, h : int
-			if positionForValidLane(pd, "X", &w, &h) then
+			if getValidUnknown(pd, &w, &h) then
 				-- residuum = J^T x -F - A x delta_0  => J^T x -F, since A x x_0 == 0
 				
 				var residuum : unknownElement = 0.0f
@@ -264,7 +265,7 @@ return function(problemSpec)
 		local terra dumpJTJGPU(pd : data.PlanData)
 			var d = 0.0f
 			var w : int, h : int
-			if positionForValidLane(pd, "X", &w, &h) then
+			if getValidUnknown(pd, &w, &h) then
 				var tmp : unknownElement = 0.0f
 				 -- A x p_k  => J^T x J x p_k 
 				tmp = data.problemSpec.functions.applyJTJ.unknownfunction(w, h, w, h, pd.parameters, pd.p)
