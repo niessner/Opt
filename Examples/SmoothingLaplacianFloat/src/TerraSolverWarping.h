@@ -18,7 +18,7 @@ public:
 		uint strides[] = { width * sizeof(float), width * sizeof(float) };
 		uint elemsizes[] = { sizeof(float), sizeof(float) };
 		uint dims[] = { width, height };
-		m_plan = Opt_ProblemPlan(m_optimizerState, m_problem, dims, elemsizes, strides, nullptr, nullptr, nullptr);
+		m_plan = Opt_ProblemPlan(m_optimizerState, m_problem, dims, elemsizes, strides);
 
 		assert(m_optimizerState);
 		assert(m_problem);
@@ -46,7 +46,7 @@ public:
 
 		//Opt_ProblemInit(m_optimizerState, m_plan, data, NULL, problemParams, solverParams);
 		//while (Opt_ProblemStep(m_optimizerState, m_plan, data, NULL, problemParams, NULL));
-		Opt_ProblemSolve(m_optimizerState, m_plan, data, NULL, problemParams, solverParams);
+		Opt_ProblemSolve(m_optimizerState, m_plan, data, nullptr, nullptr, nullptr, nullptr, problemParams, solverParams);
 	}
 
 private:

@@ -27,8 +27,8 @@ public:
 		m_warpingSolver	= new CUDAWarpingSolver(m_image.getWidth(), m_image.getHeight());
 		m_patchSolver = new CUDAPatchSolverWarping(m_image.getWidth(), m_image.getHeight());
 
-		m_terraSolverFloat4 = new TerraSolverWarpingFloat4(m_image.getWidth(), m_image.getHeight(), "smoothingLaplacianFloat4AD.t", "gaussNewtonGPU");
-		m_terraBlockSolverFloat4 = new TerraSolverWarpingFloat4(m_image.getWidth(), m_image.getHeight(), "smoothingLaplacianFloat4AD.t", "gaussNewtonBlockGPU");
+		m_terraSolverFloat4 = new TerraSolverWarpingFloat4(m_image.getWidth(), m_image.getHeight(), "smoothingLaplacianFloat4.t", "gaussNewtonGPU");
+		//m_terraBlockSolverFloat4 = new TerraSolverWarpingFloat4(m_image.getWidth(), m_image.getHeight(), "smoothingLaplacianFloat4AD.t", "gaussNewtonBlockGPU");
 		
 	}
 
@@ -70,7 +70,7 @@ public:
 		SAFE_DELETE(m_warpingSolver);
 		SAFE_DELETE(m_patchSolver);
 		SAFE_DELETE(m_terraSolverFloat4);
-		SAFE_DELETE(m_terraBlockSolverFloat4);
+		//SAFE_DELETE(m_terraBlockSolverFloat4);
 	}
 
 	ColorImageR32G32B32A32* solve()
@@ -97,10 +97,10 @@ public:
 		m_terraSolverFloat4->solve(d_imageFloat4, d_targetFloat4, nonLinearIter, linearIter, patchIter, weightFit, weightReg);
 		copyResultToCPUFromFloat4();
 
-		std::cout << "\n\nTERRA_BLOCK" << std::endl;
-		resetGPUMemory();
-		m_terraBlockSolverFloat4->solve(d_imageFloat4, d_targetFloat4, nonLinearIter, linearIter, patchIter, weightFit, weightReg);
-		copyResultToCPUFromFloat4();		
+		//std::cout << "\n\nTERRA_BLOCK" << std::endl;
+		//resetGPUMemory();
+		//m_terraBlockSolverFloat4->solve(d_imageFloat4, d_targetFloat4, nonLinearIter, linearIter, patchIter, weightFit, weightReg);
+		//copyResultToCPUFromFloat4();
 
 		return &m_result;
 	}
