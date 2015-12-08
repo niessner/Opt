@@ -20,7 +20,7 @@ local BLOCK_SIZE =  opt.BLOCK_SIZE
 
 local FLOAT_EPSILON = `0.000001f 
 -- GAUSS NEWTON (non-block version)
-return function(problemSpec, vars)
+return function(problemSpec)
 
 	local unknownElement = problemSpec:UnknownType().metamethods.typ
 	local unknownType = problemSpec:UnknownType()
@@ -93,11 +93,7 @@ return function(problemSpec, vars)
 				var pre : unknownElement = 0.0f	
 				if (not [problemSpec:EvalExclude(w,h,w,h,`pd.parameters)]) then 
 								
-					if true or isBlockOnBoundary(w, h, pd.parameters.X:W(), pd.parameters.X:H()) then
-						residuum, pre = data.problemSpec.functions.evalJTF.boundary(w, h, w, h, pd.parameters)
-					else 
-						--residuum, pre = data.problemSpec.functions.evalJTF.interior(w, h, w, h, pd.parameters)
-					end
+					residuum, pre = data.problemSpec.functions.evalJTF.unknownfunction(w, h, w, h, pd.parameters)
 					residuum = -residuum
 					pd.r(w, h) = residuum
 				end
@@ -135,11 +131,7 @@ return function(problemSpec, vars)
 			if positionForValidLane(pd, "X", &w, &h) and (not [problemSpec:EvalExclude(w,h,w,h,`pd.parameters)]) then
 				var tmp : unknownElement = 0.0f
 				 -- A x p_k  => J^T x J x p_k 
-				if true or isBlockOnBoundary(w, h, pd.parameters.X:W(), pd.parameters.X:H()) then
-					tmp = data.problemSpec.functions.applyJTJ.boundary(w, h, w, h, pd.parameters, pd.p)
-				else 
-					tmp = data.problemSpec.functions.applyJTJ.interior(w, h, w, h, pd.parameters, pd.p)
-				end
+				tmp = data.problemSpec.functions.applyJTJ.unknownfunction(w, h, w, h, pd.parameters, pd.p)
 				pd.Ap_X(w, h) = tmp								  -- store for next kernel call
 				--d = pd.p(w, h)*tmp					              -- x-th term of denominator of alpha
 				d = util.Dot(pd.p(w,h),tmp)
@@ -157,23 +149,23 @@ return function(problemSpec, vars)
 			var d = 0.0f
 			var w : int, h : int
 			if positionForValidLane(pd, "X", &w, &h) and (not [problemSpec:EvalExclude(w,h,w,h,`pd.parameters)]) then
-				var tmp : unknownElement = 0.0f
+				--var tmp : unknownElement = 0.0f
+				-- A x p_k  => J^T x J x p_k 
+				--tmp = data.problemSpec.functions.applyJTJ_Graph.unknownfunction(w, h, w, h, pd.parameters, pd.p)
 				
-				 -- A x p_k  => J^T x J x p_k 
-				if true or isBlockOnBoundary(w, h, pd.parameters.X:W(), pd.parameters.X:H()) then
-					tmp = data.problemSpec.functions.applyJTJ_graph.boundary(w, h, w, h, pd.parameters, pd.p)
-				else 
-					tmp = data.problemSpec.functions.applyJTJ_graph.interior(w, h, w, h, pd.parameters, pd.p)
-				end
-				--this kernel also writes the result to pd.Ap_X(w, h)
-				d = tmp	--util.Dot(pd.p(w,h),tmp) is computed in the kernel
+				var w0, h0, w1, h1, d0, d1 = data.problemSpec.functions.applyJTJ_Graph.unknownfunction(w, h, w, h, pd.parameters, pd.p)
+				
+				atomicAdd(self.Ap_X(w0,h0), d0)		-- scatter store
+				atomicAdd(self.Ap_X(w1,h1), d1)		-- scatter store
+				
+				d = util.Dot(self.p(w0,h0), d0) + util.Dot(self.p(w1,h1), d0)
 			end
 			d = util.warpReduce(d)
 			if (util.laneid() == 0) then
 				util.atomicAdd(pd.scanAlpha, d)
 			end
 		end
-		return { kernel = PCGStep1GPU_Graph, header = noHeader, footer = noFooter, mapMemberName = "R" }	--TODO MATTHIAS map over the residuals of the graph
+		return { kernel = PCGStep1GPU_Graph, header = noHeader, footer = noFooter, mapMemberName = "X" }
 	end
 	
 	kernels.PCGStep2 = function(data)
@@ -243,7 +235,7 @@ return function(problemSpec, vars)
 			var w : int, h : int
 			if util.positionForValidLane(pd, "X", &w, &h)  and (not [problemSpec:EvalExclude(w,h,w,h,`pd.parameters)]) then
 				var params = pd.parameters				
-				cost = cost + [float](data.problemSpec.functions.cost.boundary(w, h, w, h, params))
+				cost = cost + [float](data.problemSpec.functions.cost.unknownfunction(w, h, w, h, params))
 			end
 
 			cost = util.warpReduce(cost)
@@ -278,8 +270,8 @@ return function(problemSpec, vars)
 				var pre : unknownElement = 0.0f
 				var cost : float = 0.0f
 
-				cost = data.problemSpec.functions.cost.boundary(w, h, w, h, pd.parameters)
-				residuum, pre = data.problemSpec.functions.evalJTF.boundary(w, h, w, h, pd.parameters)
+				cost = data.problemSpec.functions.cost.unknownfunction(w, h, w, h, pd.parameters)
+				residuum, pre = data.problemSpec.functions.evalJTF.unknownfunction(w, h, w, h, pd.parameters)
 
 				pd.debugCostImage[h*pd.parameters.X:W()+w] = cost
 				[&unknownElement](pd.debugJTFImage)[h*pd.parameters.X:W()+w]  = residuum
@@ -297,7 +289,7 @@ return function(problemSpec, vars)
 			if positionForValidLane(pd, "X", &w, &h) then
 				var tmp : unknownElement = 0.0f
 				 -- A x p_k  => J^T x J x p_k 
-				tmp = data.problemSpec.functions.applyJTJ.boundary(w, h, w, h, pd.parameters, pd.p)
+				tmp = data.problemSpec.functions.applyJTJ.unknownfunction(w, h, w, h, pd.parameters, pd.p)
 				[&unknownElement](pd.debugJTJImage)[h*pd.parameters.X:W()+w] = tmp
 			end
 		end
@@ -305,7 +297,7 @@ return function(problemSpec, vars)
 	end
 	end
 
-	local gpu = util.makeGPUFunctions(problemSpec, vars, PlanData, kernels)
+	local gpu = util.makeGPUFunctions(problemSpec, PlanData, kernels)
 
 	---------------------------------------DEBUGGING FUNCTIONS------------------------------------------
 
@@ -339,10 +331,10 @@ return function(problemSpec, vars)
 	---------------------------------------END DEBUGGING FUNCTIONS------------------------------------------
 
 	
-	local terra init(data_ : &opaque, images : &&opaque, edgeValues : &&opaque, params_ : &&opaque, solverparams : &&opaque)
+	local terra init(data_ : &opaque, images : &&opaque, graphSizes : &int32, edgeValues : &&opaque, xs : &&int32, ys : &&int32, params_ : &&opaque, solverparams : &&opaque)
 	   var pd = [&PlanData](data_)
 	   pd.timer:init()
-	   pd.parameters = [util.getParameters(problemSpec, images, edgeValues,params_)]
+	   pd.parameters = [util.getParameters(problemSpec, images, graphSizes,edgeValues,xs,ys,params_)]
 
 	   pd.nIter = 0
 	   
@@ -387,9 +379,9 @@ return function(problemSpec, vars)
 	   pd.lIterations = @[&int](solverparams[1])
 	end
 
-	local terra step(data_ : &opaque, images : &&opaque, edgeValues : &&opaque, params_ : &&opaque, solverparams : &&opaque)
+	local terra step(data_ : &opaque, images : &&opaque, graphSizes : &int32, edgeValues : &&opaque, xs : &&int32, ys : &&int32, params_ : &&opaque, solverparams : &&opaque)
 		var pd = [&PlanData](data_)
-		pd.parameters = [util.getParameters(problemSpec, images, edgeValues,params_)]
+		pd.parameters = [util.getParameters(problemSpec, images, graphSizes,edgeValues,xs,ys,params_)]
 		escape 
 	    	if util.debugDumpInfo then
 	    		emit quote
@@ -440,9 +432,7 @@ return function(problemSpec, vars)
 
                 C.cudaMemset(pd.scanAlpha, 0, sizeof(float))
 				gpu.PCGStep1(pd)
-				if --HAVE GRAPH TODO MATTHIAS
-					gpu.PCGStep1GPU_Graph(pd)
-				end
+
 				C.cudaMemset(pd.scanBeta, 0, sizeof(float))
 				gpu.PCGStep2(pd)
 				gpu.PCGStep3(pd)
