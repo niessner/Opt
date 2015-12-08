@@ -340,6 +340,21 @@ newImage = terralib.memoize(function(typ, W, H, elemsize, stride)
 	terra Image:inbounds(x : int32, y : int32)
 	    return x >= 0 and y >= 0 and x < W.size and y < H.size
 	end
+	if ad.isterravectortype(typ) then
+	    terra Image:atomicAdd(x : int32, y : int32, v : typ)
+	        escape
+	            for i = 0,typ.metamethods.N - 1 do
+	                emit quote
+	                    util.atomicAdd( &(@[&typ](self.data + y*stride + x*elemsize))(i) ,v(i))
+	                end
+	            end
+	        end
+	    end
+	else
+	    terra Image:atomicAdd(x : int32, y : int32, v : typ)
+	        util.atomicAdd([&typ](self.data + y*stride + x*elemsize),v)
+	    end
+	end
 	Image.methods.get = macro(function(self,x,y,gx,gy)
 		if not gx then
 		    gx,gy = x,y
