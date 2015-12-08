@@ -211,6 +211,28 @@ return function(problemSpec)
         util.atomicAdd(pd.scratchF, cost)
         end
     end
+	
+	terra kernels.computeCost_Graph(pd : PlanData)			
+        var cost : float = 0.0f
+		
+		var tIdx = 0 	
+        escape 
+			for i,applyJTJ in ipairs(problemSpec.functions.applyJTJ.graphfunctions) do
+				emit quote d = d + applyJTJ.implementation(tIdx, pd.parameters, pd.p, pd.Ap_X) end
+			end
+		end
+			
+        var w : int, h : int
+        if util.getValidUnknown(pd, &w, &h)  and (not [problemSpec:EvalExclude(w,h,w,h,`pd.parameters)]) then
+            var params = pd.parameters				
+            cost = cost + [float](problemSpec.functions.cost.unknownfunction(w, h, w, h, params))
+        end
+
+        cost = util.warpReduce(cost)
+        if (util.laneid() == 0) then
+        util.atomicAdd(pd.scratchF, cost)
+        end
+    end
 
 	if util.debugDumpInfo then
 	    terra kernels.dumpCostJTFAndPre(pd : PlanData)
