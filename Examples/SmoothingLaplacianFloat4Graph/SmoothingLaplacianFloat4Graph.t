@@ -90,7 +90,7 @@ local terra applyJTJ(i : int32, j : int32, gi : int32, gj : int32, self : P:Para
     return w_fit*2.0f*pImage(i,j)
 end
 
-local terra applyJTJ_graph(idx : int32, self : P:ParameterType(), pImage : P:UnknownType()) : unknownElement
+local terra applyJTJ_graph(idx : int32, self : P:ParameterType(), pImage : P:UnknownType(), Ap_X : P:UnknownType()) : float
     var w0,h0 = self.G.v0_x[idx], self.G.v0_y[idx]
     var w1,h1 = self.G.v1_x[idx], self.G.v1_y[idx]
     
@@ -103,16 +103,19 @@ local terra applyJTJ_graph(idx : int32, self : P:ParameterType(), pImage : P:Unk
 
 	var c0 = 1.0 *  e_reg
 	var c1 = -1.0f * e_reg
+	
+
+	Ap_X:atomicAdd(w0, h0, c0)
+    Ap_X:atomicAdd(w1, h1, c1)
 	--[[
     util.atomicAdd(w0, h0, c0)
 	util.atomicAdd(w0, h1, c1)
-	self.Ap_X:atomicAdd(w0, h0, c0)
-    self.Ap_X:atomicAdd(w1, h1, c1)
+
 	]]
 
-    var d = util.Dot(self.p(w0,h0), c0)
-    d = d + util.Dot(self.p(w1,h1), c1)					
-
+   -- var d = util.Dot(self.p(w0,h0), c0)
+   -- d = d + util.Dot(self.p(w1,h1), c1)					
+	var d = 0.0f
     return d 
 end
 --[[
