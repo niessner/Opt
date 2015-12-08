@@ -400,9 +400,7 @@ function util.makeGPUFunctions(problemSpec, PlanData, kernels)
         local BLOCK_SIZE = problemSpec:BlockSize()
         local function createLaunchParameters(pd)
             if not kernelName:match("_Graph$") then
-                return `terralib.CUDAParams { (pd.parameters.X:W() - 1) / BLOCK_SIZE + 1, (pd.parameters.X:H() - 1) / BLOCK_SIZE + 1, 1, 
-                                              BLOCK_SIZE, BLOCK_SIZE, 1, 
-                                              0, nil }
+                return {`pd.parameters.X:W(),`pd.parameters.X:H(),BLOCK_SIZE,BLOCK_SIZE}
             else
                 return quote
                     var N = 0
@@ -416,14 +414,19 @@ function util.makeGPUFunctions(problemSpec, PlanData, kernels)
                         end
                     end
                 in 
-                    terralib.CUDAParams { (N - 1) / (BLOCK_SIZE*BLOCK_SIZE) + 1, 1, 1, 
-                                          BLOCK_SIZE, 1, 1, 
-                                          0, nil }
+                    N,1,BLOCK_SIZE*BLOCK_SIZE,1
                 end
             end
         end
         local terra GPULauncher(pd : &PlanData, [params])
-            var launch = [ createLaunchParameters(pd) ]
+            var xdim,ydim,xblock,yblock = [ createLaunchParameters(pd) ]
+            if xdim == 0 then -- early out for 0-sized kernels
+                C.printf("skipping %s\n",kernelName)
+                return 0
+            end
+            var launch = terralib.CUDAParams { (xdim - 1) / xblock + 1, (ydim - 1) / yblock + 1, 1, 
+                                                xblock, yblock, 1, 
+                                                0, nil }
             C.cudaDeviceSynchronize()
             var stream : C.cudaStream_t = nil
             var timingInfo : TimingInfo 
