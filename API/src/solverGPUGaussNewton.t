@@ -153,12 +153,8 @@ return function(problemSpec)
 				-- A x p_k  => J^T x J x p_k 
 				--tmp = data.problemSpec.functions.applyJTJ_Graph.unknownfunction(w, h, w, h, pd.parameters, pd.p)
 				
-				var w0, h0, w1, h1, d0, d1 = data.problemSpec.functions.applyJTJ_Graph.unknownfunction(w, h, w, h, pd.parameters, pd.p)
+				d = data.problemSpec.functions.applyJTJ_Graph.unknownfunction(w, h, w, h, pd.parameters, pd.p)
 				
-				atomicAdd(self.Ap_X(w0,h0), d0)		-- scatter store
-				atomicAdd(self.Ap_X(w1,h1), d1)		-- scatter store
-				
-				d = util.Dot(self.p(w0,h0), d0) + util.Dot(self.p(w1,h1), d0)
 			end
 			d = util.warpReduce(d)
 			if (util.laneid() == 0) then
@@ -432,7 +428,7 @@ return function(problemSpec)
 
                 C.cudaMemset(pd.scanAlpha, 0, sizeof(float))
 				gpu.PCGStep1(pd)
-				if true	--graph or not...
+				if false	--graph or not...
 					PCGStep1GPU_Graph(pd)
 				end
 				

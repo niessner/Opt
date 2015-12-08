@@ -90,7 +90,7 @@ local terra applyJTJ(i : int32, j : int32, gi : int32, gj : int32, self : P:Para
     return w_fit*2.0f*pImage(i,j)
 end
 
-local terra applyJTJ_graph(idx : int32, self : P:ParameterType(), pImage : P:UnknownType()) : {unknownElement, int32, int32, int32, int32, float, float}
+local terra applyJTJ_graph(idx : int32, self : P:ParameterType(), pImage : P:UnknownType()) : unknownElement
     var w0,h0 = self.G.v0_x[idx], self.G.v0_y[idx]
     var w1,h1 = self.G.v1_x[idx], self.G.v1_y[idx]
     
@@ -101,14 +101,19 @@ local terra applyJTJ_graph(idx : int32, self : P:ParameterType(), pImage : P:Unk
     var l_n = p0 - p1
     var e_reg = 2.0f*w_reg*l_n
 
-    --[[
-    atomicAdd(self.Ap_X(w0,h0), 1.0 *  e_reg)
-    atomicAdd(self.Ap_X(w1,h1), -1.0 * e_reg)
+	var c0 = 1.0 *  e_reg
+	var c1 = -1.0f * e_reg
+	--[[
+    util.atomicAdd(w0, h0, c0)
+	util.atomicAdd(w0, h1, c1)
+	self.Ap_X:atomicAdd(w0, h0, c0)
+    self.Ap_X:atomicAdd(w1, h1, c1)
+	--]]
 
-    var d = util.Dot(self.p(w0,h0), 1.0 * e_reg)
-    d = d + util.Dot(self.p(w1,h1), -1.0 * e_reg)
-    --]]
-    return e_reg, w0, h0, w1, h1, 1.0f, -1.0f 
+    var d = util.Dot(self.p(w0,h0), c0)
+    d = d + util.Dot(self.p(w1,h1), c1)					
+
+    return d 
 end
 --[[
 -- same functions, but expressed in math language
