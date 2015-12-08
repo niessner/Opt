@@ -144,6 +144,30 @@ return function(problemSpec)
 		return { kernel = PCGStep1GPU, header = noHeader, footer = noFooter, mapMemberName = "X" }
 	end
 	
+	kernels.PCGStep1_Graph = function(data)
+		local terra PCGStep1GPU(pd : data.PlanData)
+			var d = 0.0f
+			var w : int, h : int
+			if positionForValidLane(pd, "X", &w, &h) and (not [problemSpec:EvalExclude(w,h,w,h,`pd.parameters)]) then
+				--var tmp : unknownElement = 0.0f
+				-- A x p_k  => J^T x J x p_k 
+				--tmp = data.problemSpec.functions.applyJTJ_Graph.unknownfunction(w, h, w, h, pd.parameters, pd.p)
+				
+				var w0, h0, w1, h1, d0, d1 = data.problemSpec.functions.applyJTJ_Graph.unknownfunction(w, h, w, h, pd.parameters, pd.p)
+				
+				atomicAdd(self.Ap_X(w0,h0), d0)		-- scatter store
+				atomicAdd(self.Ap_X(w1,h1), d1)		-- scatter store
+				
+				d = util.Dot(self.p(w0,h0), d0) + util.Dot(self.p(w1,h1), d0)
+			end
+			d = util.warpReduce(d)
+			if (util.laneid() == 0) then
+				util.atomicAdd(pd.scanAlpha, d)
+			end
+		end
+		return { kernel = PCGStep1GPU_Graph, header = noHeader, footer = noFooter, mapMemberName = "X" }
+	end
+	
 	kernels.PCGStep2 = function(data)
 		local terra PCGStep2GPU(pd : data.PlanData)
 			var b = 0.0f 
@@ -408,7 +432,10 @@ return function(problemSpec)
 
                 C.cudaMemset(pd.scanAlpha, 0, sizeof(float))
 				gpu.PCGStep1(pd)
-
+				if true	--graph or not...
+					PCGStep1GPU_Graph(pd)
+				end
+				
 				C.cudaMemset(pd.scanBeta, 0, sizeof(float))
 				gpu.PCGStep2(pd)
 				gpu.PCGStep3(pd)
