@@ -34,7 +34,7 @@ TEST = test/test
 TESTMLIB = testMLib/testMLib
 
 EXECUTABLES = $(EXAMPLE) $(TEST) $(TESTMLIB)
-all:	$(TESTMLIB)
+all:	build/Opt.h
 
 build/Opt.h build/libOpt.so:	src/createwrapper.t src/o.t
 	(cd build; $(TERRA) ../src/createwrapper.t Opt ../src/o.t)

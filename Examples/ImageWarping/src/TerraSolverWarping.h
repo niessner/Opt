@@ -34,7 +34,7 @@ public:
 			sizeof(float)
 		};
 		uint32_t dims[] = { width, height };
-		m_plan = Opt_ProblemPlan(m_optimizerState, m_problem, dims, elemsizes, strides, nullptr, nullptr, nullptr);
+		m_plan = Opt_ProblemPlan(m_optimizerState, m_problem, dims, elemsizes, strides);
 
 		m_width = width;
 		m_height = height;
@@ -84,7 +84,7 @@ public:
 
 		//Opt_ProblemInit(m_optimizerState, m_plan, data, NULL, problemParams, (void**)&numIter);
 		//while (Opt_ProblemStep(m_optimizerState, m_plan, data, NULL, problemParams, NULL));
-		Opt_ProblemSolve(m_optimizerState, m_plan, data, NULL, problemParams, solverParams);
+		Opt_ProblemSolve(m_optimizerState, m_plan, data, NULL, NULL, NULL, NULL, problemParams, solverParams);
 	}
 
 private:
