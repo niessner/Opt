@@ -74,8 +74,8 @@ return function(problemSpec)
 	end
 	
 
-	local kernels = {}
-	terra kernels.PCGInit1(pd : PlanData)
+    local kernels = {}
+    terra kernels.PCGInit1(pd : PlanData)
         var d = 0.0f -- init for out of bounds lanes
         var w : int, h : int
         if getValidUnknown(pd, &w, &h) then
@@ -97,6 +97,28 @@ return function(problemSpec)
             --d = residuum*p			-- x-th term of nominator for computing alpha and denominator for computing beta
             d = util.Dot(residuum,p) 
         end 
+        d = util.warpReduce(d)	
+        if (util.laneid() == 0) then
+            util.atomicAdd(pd.scanAlpha, d)
+        end
+    end
+    
+    terra kernels.PCGInit1_Graph(pd : PlanData)
+        var d = 0.0f -- init for out of bounds lanes
+            -- residuum = J^T x -F - A x delta_0  => J^T x -F, since A x x_0 == 0
+
+	var tIdx = 0 	
+	escape 
+	    for i,func in ipairs(problemSpec.functions.evalJTF.graphfunctions) do
+		local name,implementation = func.graph.name,func.implementation
+		emit quote 
+		    if util.getValidGraphElement(pd,[name],&tIdx) then
+			d = d + implementation(tIdx, pd.parameters, pd.p, pd.r, pd.preconditioner)
+		    end 
+		end
+	    end
+        end
+        
         d = util.warpReduce(d)	
         if (util.laneid() == 0) then
             util.atomicAdd(pd.scanAlpha, d)
