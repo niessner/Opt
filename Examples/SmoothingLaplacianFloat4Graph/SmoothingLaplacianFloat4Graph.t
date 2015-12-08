@@ -76,12 +76,35 @@ local terra evalJTF(i : int32, j : int32, gi : int32, gj : int32, self : P:Param
 	return gradient, pre
 end
 
-local terra evalJTF_graph(idx : int32, self : P:ParameterType())
+
+local terra evalJTF_graph(idx : int32, self : P:ParameterType(), p : P:UnknownType(), r : P:UnknownType(), preconditioner : P:UnknownType())
 	
-	var gradient : unknownElement = gradient_graph(idx, self)
+	var w0,h0 = self.G.v0_x[idx], self.G.v0_y[idx]
+    var w1,h1 = self.G.v1_x[idx], self.G.v1_y[idx]
+	
+	--var gradient : unknownElement = gradient_graph(idx, self)
+	var lap = laplacianCost(idx, self)
+	var c0 = ( 1.0f)*lap
+	var c1 = (-1.0f)*lap
 	
 	var pre : float = 1.0f
-	return gradient, pre
+	--return gradient, pre
+	
+	--write results
+	var _residuum0 = -c0
+	var _residuum1 = -c1
+	r:atomicAdd(w0, h0, _residuum0)
+	r:atomicAdd(w1, h1, _residuum1)
+	
+	var _pre0 = pre
+	var _pre1 = pre
+	preconditioner:atomicAdd(w0, h0, _pre0)
+	preconditioner:atomicAdd(w1, h1, _pre1)
+	
+	var _p0 = _pre0*_residuum0
+	var _p1 = _pre1*_residuum1
+	p:atomicAdd(w0, h0, _p0)
+	p:atomicAdd(w1, h1, _p1)
 end
 
 
