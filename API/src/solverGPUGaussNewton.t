@@ -75,172 +75,145 @@ return function(problemSpec)
 	
 
 	local kernels = {}
-	kernels.PCGInit1 = function(data)
-		local terra PCGInit1GPU(pd : data.PlanData)
-			var d = 0.0f -- init for out of bounds lanes
-			var w : int, h : int
-			if getValidUnknown(pd, &w, &h) then
-				-- residuum = J^T x -F - A x delta_0  => J^T x -F, since A x x_0 == 0
-								
-				var residuum : unknownElement = 0.0f
-				var pre : unknownElement = 0.0f	
-				if (not [problemSpec:EvalExclude(w,h,w,h,`pd.parameters)]) then 
-								
-					residuum, pre = data.problemSpec.functions.evalJTF.unknownfunction(w, h, w, h, pd.parameters)
-					residuum = -residuum
-					pd.r(w, h) = residuum
-				end
-				
-				pd.preconditioner(w, h) = pre
-				var p = pre*residuum	-- apply pre-conditioner M^-1			   
-				pd.p(w, h) = p
-			
-				--d = residuum*p			-- x-th term of nominator for computing alpha and denominator for computing beta
-				d = util.Dot(residuum,p) 
-			end 
-			d = util.warpReduce(d)	
-			if (util.laneid() == 0) then
-				util.atomicAdd(pd.scanAlpha, d)
-			end
-		end
-		return { kernel = PCGInit1GPU }
-	end
+	terra kernels.PCGInit1(pd : PlanData)
+        var d = 0.0f -- init for out of bounds lanes
+        var w : int, h : int
+        if getValidUnknown(pd, &w, &h) then
+            -- residuum = J^T x -F - A x delta_0  => J^T x -F, since A x x_0 == 0
+                            
+            var residuum : unknownElement = 0.0f
+            var pre : unknownElement = 0.0f	
+            if (not [problemSpec:EvalExclude(w,h,w,h,`pd.parameters)]) then 
+                            
+                residuum, pre = problemSpec.functions.evalJTF.unknownfunction(w, h, w, h, pd.parameters)
+                residuum = -residuum
+                pd.r(w, h) = residuum
+            end
+            
+            pd.preconditioner(w, h) = pre
+            var p = pre*residuum	-- apply pre-conditioner M^-1			   
+            pd.p(w, h) = p
+        
+            --d = residuum*p			-- x-th term of nominator for computing alpha and denominator for computing beta
+            d = util.Dot(residuum,p) 
+        end 
+        d = util.warpReduce(d)	
+        if (util.laneid() == 0) then
+            util.atomicAdd(pd.scanAlpha, d)
+        end
+    end
 	
-	kernels.PCGInit2 = function(data)
-		local terra PCGInit2GPU(pd : data.PlanData)
-			var w : int, h : int
-			if getValidUnknown(pd, &w, &h) and (not [problemSpec:EvalExclude(w,h,w,h,`pd.parameters)]) then
-				pd.rDotzOld(w,h) = pd.scanAlpha[0]
-				pd.delta(w,h) = 0.0f	--TODO check if we need that
-			end
-		end
-		return { kernel = PCGInit2GPU }
-	end
+    terra kernels.PCGInit2(pd : PlanData)
+        var w : int, h : int
+        if getValidUnknown(pd, &w, &h) and (not [problemSpec:EvalExclude(w,h,w,h,`pd.parameters)]) then
+            pd.rDotzOld(w,h) = pd.scanAlpha[0]
+            pd.delta(w,h) = 0.0f	--TODO check if we need that
+        end
+    end
 	
-	kernels.PCGStep1 = function(data)
-		local terra PCGStep1GPU(pd : data.PlanData)
-			var d = 0.0f
-			var w : int, h : int
-			if getValidUnknown(pd, &w, &h) and (not [problemSpec:EvalExclude(w,h,w,h,`pd.parameters)]) then
-				var tmp : unknownElement = 0.0f
-				 -- A x p_k  => J^T x J x p_k 
-				tmp = data.problemSpec.functions.applyJTJ.unknownfunction(w, h, w, h, pd.parameters, pd.p)
-				pd.Ap_X(w, h) = tmp								  -- store for next kernel call
-				--d = pd.p(w, h)*tmp					              -- x-th term of denominator of alpha
-				d = util.Dot(pd.p(w,h),tmp)
-			end
-			d = util.warpReduce(d)
-			if (util.laneid() == 0) then
-				util.atomicAdd(pd.scanAlpha, d)
-			end
-		end
-		return { kernel = PCGStep1GPU }
-	end
+    terra kernels.PCGStep1(pd : PlanData)
+        var d = 0.0f
+        var w : int, h : int
+        if getValidUnknown(pd, &w, &h) and (not [problemSpec:EvalExclude(w,h,w,h,`pd.parameters)]) then
+            var tmp : unknownElement = 0.0f
+             -- A x p_k  => J^T x J x p_k 
+            tmp = problemSpec.functions.applyJTJ.unknownfunction(w, h, w, h, pd.parameters, pd.p)
+            pd.Ap_X(w, h) = tmp								  -- store for next kernel call
+            --d = pd.p(w, h)*tmp					              -- x-th term of denominator of alpha
+            d = util.Dot(pd.p(w,h),tmp)
+        end
+        d = util.warpReduce(d)
+        if (util.laneid() == 0) then
+            util.atomicAdd(pd.scanAlpha, d)
+        end
+    end
 	
-	kernels.PCGStep1_Graph = function(data)
-		local terra PCGStep1GPU_Graph(pd : data.PlanData)
-			var d = 0.0f
-			--var w : int, h : int
-			--if getValidUnknown(pd, &w, &h) and (not [problemSpec:EvalExclude(w,h,w,h,`pd.parameters)]) then
-				--var tmp : unknownElement = 0.0f
-				-- A x p_k  => J^T x J x p_k 
-				--tmp = data.problemSpec.functions.applyJTJ_Graph.unknownfunction(w, h, w, h, pd.parameters, pd.p)
-			var tIdx = 0 	
-				escape 
-					for i,applyJTJ in ipairs(data.problemSpec.functions.applyJTJ.graphfunctions) do
-						emit quote d = d + applyJTJ.implementation(tIdx, pd.parameters, pd.p, pd.Ap_X) end
-					end
-				end
-			--end
-			d = util.warpReduce(d)
-			if (util.laneid() == 0) then
-				util.atomicAdd(pd.scanAlpha, d)
-			end
-		end
-		return { kernel = PCGStep1GPU_Graph }
-	end
+	terra kernels.PCGStep1_Graph(pd : PlanData)
+        var d = 0.0f
+        --var w : int, h : int
+        --if getValidUnknown(pd, &w, &h) and (not [problemSpec:EvalExclude(w,h,w,h,`pd.parameters)]) then
+            --var tmp : unknownElement = 0.0f
+            -- A x p_k  => J^T x J x p_k 
+            --tmp = problemSpec.functions.applyJTJ_Graph.unknownfunction(w, h, w, h, pd.parameters, pd.p)
+        var tIdx = 0 	
+            escape 
+                for i,applyJTJ in ipairs(problemSpec.functions.applyJTJ.graphfunctions) do
+                    emit quote d = d + applyJTJ.implementation(tIdx, pd.parameters, pd.p, pd.Ap_X) end
+                end
+            end
+        --end
+        d = util.warpReduce(d)
+        if (util.laneid() == 0) then
+            util.atomicAdd(pd.scanAlpha, d)
+        end
+    end
 	
-	kernels.PCGStep2 = function(data)
-		local terra PCGStep2GPU(pd : data.PlanData)
-			var b = 0.0f 
-			var w : int, h : int
-			if getValidUnknown(pd, &w, &h)  and (not [problemSpec:EvalExclude(w,h,w,h,`pd.parameters)]) then
-				-- sum over block results to compute denominator of alpha
-				var dotProduct : float = pd.scanAlpha[0]
-				var alpha = 0.0f
-				
-				-- update step size alpha
-				if dotProduct > FLOAT_EPSILON then alpha = pd.rDotzOld(w, h)/dotProduct end 
-			
-				pd.delta(w, h) = pd.delta(w, h)+alpha*pd.p(w,h)		-- do a decent step
-				
-				var r = pd.r(w,h)-alpha*pd.Ap_X(w,h)				-- update residuum
-				pd.r(w,h) = r										-- store for next kernel call
-			
-				var z = pd.preconditioner(w,h)*r					-- apply pre-conditioner M^-1
-				pd.z(w,h) = z;										-- save for next kernel call
-				
-				--b = z*r;											-- compute x-th term of the nominator of beta
-				b = util.Dot(z,r)
-			end
-			b = util.warpReduce(b)
-			if (util.laneid() == 0) then
-				util.atomicAdd(pd.scanBeta, b)
-			end
-		end
-		return { kernel = PCGStep2GPU }
-	end
+	terra kernels.PCGStep2(pd : PlanData)
+        var b = 0.0f 
+        var w : int, h : int
+        if getValidUnknown(pd, &w, &h)  and (not [problemSpec:EvalExclude(w,h,w,h,`pd.parameters)]) then
+            -- sum over block results to compute denominator of alpha
+            var dotProduct : float = pd.scanAlpha[0]
+            var alpha = 0.0f
+            
+            -- update step size alpha
+            if dotProduct > FLOAT_EPSILON then alpha = pd.rDotzOld(w, h)/dotProduct end 
+        
+            pd.delta(w, h) = pd.delta(w, h)+alpha*pd.p(w,h)		-- do a decent step
+            
+            var r = pd.r(w,h)-alpha*pd.Ap_X(w,h)				-- update residuum
+            pd.r(w,h) = r										-- store for next kernel call
+        
+            var z = pd.preconditioner(w,h)*r					-- apply pre-conditioner M^-1
+            pd.z(w,h) = z;										-- save for next kernel call
+            
+            --b = z*r;											-- compute x-th term of the nominator of beta
+            b = util.Dot(z,r)
+        end
+        b = util.warpReduce(b)
+        if (util.laneid() == 0) then
+            util.atomicAdd(pd.scanBeta, b)
+        end
+    end
 	
-	kernels.PCGStep3 = function(data)
-		local terra PCGStep3GPU(pd : data.PlanData)			
-			var w : int, h : int
-			if getValidUnknown(pd, &w, &h) and (not [problemSpec:EvalExclude(w,h,w,h,`pd.parameters)]) then
-				var rDotzNew : float =  pd.scanBeta[0]						-- get new nominator
-				var rDotzOld : float = pd.rDotzOld(w,h)						-- get old denominator
+    terra kernels.PCGStep3(pd : PlanData)			
+        var w : int, h : int
+        if getValidUnknown(pd, &w, &h) and (not [problemSpec:EvalExclude(w,h,w,h,`pd.parameters)]) then
+            var rDotzNew : float =  pd.scanBeta[0]						-- get new nominator
+            var rDotzOld : float = pd.rDotzOld(w,h)						-- get old denominator
 
-				var beta : float = 0.0f			
-						
-				if rDotzOld > FLOAT_EPSILON then beta = rDotzNew/rDotzOld end	-- update step size beta
-			
-				pd.rDotzOld(w,h) = rDotzNew										-- save new rDotz for next iteration
-				pd.p(w,h) = pd.z(w,h)+beta*pd.p(w,h)							-- update decent direction
-			end
-		end
-		return { kernel = PCGStep3GPU }
-	end
+            var beta : float = 0.0f			
+                    
+            if rDotzOld > FLOAT_EPSILON then beta = rDotzNew/rDotzOld end	-- update step size beta
+        
+            pd.rDotzOld(w,h) = rDotzNew										-- save new rDotz for next iteration
+            pd.p(w,h) = pd.z(w,h)+beta*pd.p(w,h)							-- update decent direction
+        end
+    end
 	
-	kernels.PCGLinearUpdate = function(data)
-		local terra PCGLinearUpdateGPU(pd : data.PlanData)
-			var w : int, h : int
-			if getValidUnknown(pd, &w, &h) and (not [problemSpec:EvalExclude(w,h,w,h,`pd.parameters)]) then
-				pd.parameters.X(w,h) = pd.parameters.X(w,h) + pd.delta(w,h)
-			end
-		end
-		return { kernel = PCGLinearUpdateGPU }
-	end
+	terra kernels.PCGLinearUpdate(pd : PlanData)
+        var w : int, h : int
+        if getValidUnknown(pd, &w, &h) and (not [problemSpec:EvalExclude(w,h,w,h,`pd.parameters)]) then
+            pd.parameters.X(w,h) = pd.parameters.X(w,h) + pd.delta(w,h)
+        end
+    end	
 	
-	
-	kernels.computeCost = function(data)
-		local terra computeCostGPU(pd : data.PlanData)
-			
-			var cost : float = 0.0f
-			var w : int, h : int
-			if util.getValidUnknown(pd, &w, &h)  and (not [problemSpec:EvalExclude(w,h,w,h,`pd.parameters)]) then
-				var params = pd.parameters				
-				cost = cost + [float](data.problemSpec.functions.cost.unknownfunction(w, h, w, h, params))
-			end
+	terra kernels.computeCost(pd : PlanData)			
+        var cost : float = 0.0f
+        var w : int, h : int
+        if util.getValidUnknown(pd, &w, &h)  and (not [problemSpec:EvalExclude(w,h,w,h,`pd.parameters)]) then
+            var params = pd.parameters				
+            cost = cost + [float](problemSpec.functions.cost.unknownfunction(w, h, w, h, params))
+        end
 
-			cost = util.warpReduce(cost)
-			if (util.laneid() == 0) then
-			util.atomicAdd(pd.scratchF, cost)
-			end
-		end
-		return { kernel = computeCostGPU }
-	end
+        cost = util.warpReduce(cost)
+        if (util.laneid() == 0) then
+        util.atomicAdd(pd.scratchF, cost)
+        end
+    end
 
 	if util.debugDumpInfo then
-	kernels.dumpCostJTFAndPre = function(data)
-		local terra dumpJTFAndPreGPU(pd : data.PlanData)
+	    terra kernels.dumpCostJTFAndPre(pd : PlanData)
 			var w : int, h : int
 			if getValidUnknown(pd, &w, &h) then
 				-- residuum = J^T x -F - A x delta_0  => J^T x -F, since A x x_0 == 0
@@ -249,33 +222,27 @@ return function(problemSpec)
 				var pre : unknownElement = 0.0f
 				var cost : float = 0.0f
 
-				cost = data.problemSpec.functions.cost.unknownfunction(w, h, w, h, pd.parameters)
-				residuum, pre = data.problemSpec.functions.evalJTF.unknownfunction(w, h, w, h, pd.parameters)
+				cost = problemSpec.functions.cost.unknownfunction(w, h, w, h, pd.parameters)
+				residuum, pre = problemSpec.functions.evalJTF.unknownfunction(w, h, w, h, pd.parameters)
 
 				pd.debugCostImage[h*pd.parameters.X:W()+w] = cost
 				[&unknownElement](pd.debugJTFImage)[h*pd.parameters.X:W()+w]  = residuum
 				[&unknownElement](pd.debugPreImage)[h*pd.parameters.X:W()+w]  = pre
 			end 
 		end
-
-		return { kernel = dumpJTFAndPreGPU }
 	end
 
-	kernels.dumpJTJ = function(data)
-		local terra dumpJTJGPU(pd : data.PlanData)
-			var d = 0.0f
-			var w : int, h : int
-			if getValidUnknown(pd, &w, &h) then
-				var tmp : unknownElement = 0.0f
-				 -- A x p_k  => J^T x J x p_k 
-				tmp = data.problemSpec.functions.applyJTJ.unknownfunction(w, h, w, h, pd.parameters, pd.p)
-				[&unknownElement](pd.debugJTJImage)[h*pd.parameters.X:W()+w] = tmp
-			end
-		end
-		return { kernel = dumpJTJGPU }
-	end
-	end
-
+	terra kernels.dumpJTJ(pd : PlanData)
+        var d = 0.0f
+        var w : int, h : int
+        if getValidUnknown(pd, &w, &h) then
+            var tmp : unknownElement = 0.0f
+             -- A x p_k  => J^T x J x p_k 
+            tmp = problemSpec.functions.applyJTJ.unknownfunction(w, h, w, h, pd.parameters, pd.p)
+            [&unknownElement](pd.debugJTJImage)[h*pd.parameters.X:W()+w] = tmp
+        end
+    end
+    
 	local gpu = util.makeGPUFunctions(problemSpec, PlanData, kernels)
 
 	---------------------------------------DEBUGGING FUNCTIONS------------------------------------------

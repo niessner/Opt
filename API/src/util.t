@@ -376,14 +376,10 @@ function util.makeGPUFunctions(problemSpec, PlanData, kernels)
 	data.PlanData = PlanData
 	data.imageType = problemSpec:UnknownType(false) -- get non-blocked version
 	
-	local kernelTemplate = {}
-	for k, v in pairs(kernels) do
-		kernelTemplate[k] = v(data)
-	end
 	local kernelFunctions = {}
 	local key = "_"..tostring(os.time())
-	for k,v in pairs(kernelTemplate) do
-	    kernelFunctions[k..key] = { kernel = v.kernel , annotations = { {"maxntidx", 16}, {"maxntidy", 16}, {"maxntidz", 1}, {"minctasm",5} } } -- force at least 5 threadblocks to run per SM
+	for k,v in pairs(kernels) do
+	    kernelFunctions[k..key] = { kernel = v , annotations = { {"maxntidx", 16}, {"maxntidy", 16}, {"maxntidz", 1}, {"minctasm",5} } } -- force at least 5 threadblocks to run per SM
 	end
 	local compiledKernels = terralib.cudacompile(kernelFunctions, false)
 	
@@ -420,7 +416,7 @@ function util.makeGPUFunctions(problemSpec, PlanData, kernels)
     end
 	
 	local gpu = {}
-	for k, v in pairs(kernelTemplate) do
+	for k, v in pairs(kernels) do
 		gpu[k] = makeGPULauncher(k, compiledKernels[k..key])
 	end
 	
