@@ -39,7 +39,7 @@ return function(problemSpec, vars)
 		delta : problemSpec:UnknownType()	--current linear update to be computed -> num vars
 		r : problemSpec:UnknownType()		--residuals -> num vars	--TODO this needs to be a 'residual type'
 		z : problemSpec:UnknownType()		--preconditioned residuals -> num vars	--TODO this needs to be a 'residual type'
-		p : problemSpec:UnknownType()		--decent direction -> num vars
+		p : problemSpec:UnknownType()		--descent direction -> num vars
 		Ap_X : problemSpec:UnknownType()	--cache values for next kernel call after A = J^T x J x p -> num vars
 		preconditioner : problemSpec:UnknownType() --pre-conditioner for linear system -> num vars
 		--rDotzOld : problemSpec:UnknownType()	--Old nominator (denominator) of alpha (beta) -> num vars	

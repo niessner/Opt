@@ -39,15 +39,14 @@ return function(problemSpec, vars)
 		delta : problemSpec:UnknownType()	--current linear update to be computed -> num vars
 		r : problemSpec:UnknownType()		--residuals -> num vars	--TODO this needs to be a 'residual type'
 		z : problemSpec:UnknownType()		--preconditioned residuals -> num vars	--TODO this needs to be a 'residual type'
-		p : problemSpec:UnknownType()		--decent direction -> num vars
+		p : problemSpec:UnknownType()		--descent direction -> num vars
 		Ap_X : problemSpec:UnknownType()	--cache values for next kernel call after A = J^T x J x p -> num vars
 		preconditioner : problemSpec:UnknownType() --pre-conditioner for linear system -> num vars
 		--rDotzOld : problemSpec:UnknownType()	--Old nominator (denominator) of alpha (beta) -> num vars	
 		rDotzOld : problemSpec:InternalImage(float, unknownType.metamethods.W, unknownType.metamethods.H, false)	--Old nominator (denominator) of alpha (beta) -> num vars	
-		intermediateJP : &float				--intermediate storage for the split (JT(JP))-compute -> num residuals	--TODO this needs to be a 'residual type'
 		
-		scanAlpha : &float		-- tmp variable for alpha scan
-		scanBeta : &float		-- tmp variable for alpha scan
+		scanAlpha : &float					-- tmp variable for alpha scan
+		scanBeta : &float					-- tmp variable for alpha scan
 		
 		timer : Timer
 		nIter : int				--current non-linear iter counter
@@ -129,33 +128,7 @@ return function(problemSpec, vars)
 		return { kernel = PCGInit2GPU, header = noHeader, footer = noFooter, mapMemberName = "X" }
 	end
 	
-	kernels.PCGStep1_Part0 = function(data)	--applies J to p; maps over residuals
-		local terra PCGStep1GPU(pd : data.PlanData)
-			var d = 0.0f
-			var w : int, h : int
-			if positionForValidLane(pd, "X", &w, &h) and (not [problemSpec:EvalExclude(w,h,w,h,`pd.parameters)]) then
-				var tmp : unknownElement = 0.0f
-				 -- J x p_k 
-				if true or isBlockOnBoundary(w, h, pd.parameters.X:W(), pd.parameters.X:H()) then
-					tmp = data.problemSpec.functions.applyJ.boundary(w, h, w, h, pd.parameters, pd.p)	--todo we need to implement applyJ
-				else 
-					tmp = data.problemSpec.functions.applyJ.interior(w, h, w, h, pd.parameters, pd.p)	--todo we need to implement applyJ
-				end
-				pd.intermediateJP() = --TODO MATTHIAS
-				
-				--pd.Ap_X(w, h) = tmp								  -- store for next kernel call
-				----d = pd.p(w, h)*tmp					              -- x-th term of denominator of alpha
-				--d = util.Dot(pd.p(w,h),tmp)
-			end
-			--d = util.warpReduce(d)
-			--if (util.laneid() == 0) then
-			--	util.atomicAdd(pd.scanAlpha, d)
-			--end
-		end
-		return { kernel = PCGStep1_Part0GPU, header = noHeader, footer = noFooter, mapMemberName = "X" }	--TODO MATTHIAS change mapping over pd.intermediateJP
-	end
-	
-	kernels.PCGStep1_Part1 = function(data)	--applies Jt to Jp which we have previously stored; maps over variables
+	kernels.PCGStep1 = function(data)
 		local terra PCGStep1GPU(pd : data.PlanData)
 			var d = 0.0f
 			var w : int, h : int
@@ -163,9 +136,9 @@ return function(problemSpec, vars)
 				var tmp : unknownElement = 0.0f
 				 -- A x p_k  => J^T x J x p_k 
 				if true or isBlockOnBoundary(w, h, pd.parameters.X:W(), pd.parameters.X:H()) then
-					tmp = data.problemSpec.functions.applyJT.boundary(w, h, w, h, pd.parameters, pd.intermediateJP)	--todo we need to implement applyJT
+					tmp = data.problemSpec.functions.applyJTJ.boundary(w, h, w, h, pd.parameters, pd.p)
 				else 
-					tmp = data.problemSpec.functions.applyJT.interior(w, h, w, h, pd.parameters, pd.intermediateJP)	--todo we need to implement applyJT
+					tmp = data.problemSpec.functions.applyJTJ.interior(w, h, w, h, pd.parameters, pd.p)
 				end
 				pd.Ap_X(w, h) = tmp								  -- store for next kernel call
 				--d = pd.p(w, h)*tmp					              -- x-th term of denominator of alpha
@@ -176,7 +149,31 @@ return function(problemSpec, vars)
 				util.atomicAdd(pd.scanAlpha, d)
 			end
 		end
-		return { kernel = PCGStep1_Part1GPU, header = noHeader, footer = noFooter, mapMemberName = "X" }
+		return { kernel = PCGStep1GPU, header = noHeader, footer = noFooter, mapMemberName = "X" }
+	end
+	
+	kernels.PCGStep1_Graph = function(data)
+		local terra PCGStep1GPU(pd : data.PlanData)
+			var d = 0.0f
+			var w : int, h : int
+			if positionForValidLane(pd, "X", &w, &h) and (not [problemSpec:EvalExclude(w,h,w,h,`pd.parameters)]) then
+				var tmp : unknownElement = 0.0f
+				
+				 -- A x p_k  => J^T x J x p_k 
+				if true or isBlockOnBoundary(w, h, pd.parameters.X:W(), pd.parameters.X:H()) then
+					tmp = data.problemSpec.functions.applyJTJ_graph.boundary(w, h, w, h, pd.parameters, pd.p)
+				else 
+					tmp = data.problemSpec.functions.applyJTJ_graph.interior(w, h, w, h, pd.parameters, pd.p)
+				end
+				--this kernel also writes the result to pd.Ap_X(w, h)
+				d = tmp	--util.Dot(pd.p(w,h),tmp) is computed in the kernel
+			end
+			d = util.warpReduce(d)
+			if (util.laneid() == 0) then
+				util.atomicAdd(pd.scanAlpha, d)
+			end
+		end
+		return { kernel = PCGStep1GPU_Graph, header = noHeader, footer = noFooter, mapMemberName = "R" }	--TODO MATTHIAS map over the residuals of the graph
 	end
 	
 	kernels.PCGStep2 = function(data)
@@ -443,7 +440,9 @@ return function(problemSpec, vars)
 
                 C.cudaMemset(pd.scanAlpha, 0, sizeof(float))
 				gpu.PCGStep1(pd)
-
+				if --HAVE GRAPH TODO MATTHIAS
+					gpu.PCGStep1GPU_Graph(pd)
+				end
 				C.cudaMemset(pd.scanBeta, 0, sizeof(float))
 				gpu.PCGStep2(pd)
 				gpu.PCGStep3(pd)
