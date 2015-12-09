@@ -1273,7 +1273,7 @@ local function stencilforexpression(exp)
         end
         return stencil
     end
-    exp:rename(function(a)
+    exp:visit(function(a)
         if "ImageAccess" == a.kind then
             stencil = math.max(stencil,math.max(math.abs(a.x),math.abs(a.y))) 
         elseif "BoundsAccess" == a.kind then--bounds calculation
@@ -1298,7 +1298,7 @@ local getpair = terralib.memoize(function(x,y) return {x = x, y = y} end)
 local function unknowns(exp)
     local seenunknown = {}
     local unknownvars = terralib.newlist()
-    exp:rename(function(a)
+    exp:visit(function(a)
         local v = ad.v[a]
         if ImageAccess:is(a) and a.image.name == "X" and not seenunknown[a] then -- assume image X is unknown
             unknownvars:insert(v)
