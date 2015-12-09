@@ -411,7 +411,7 @@ function util.makeGPUFunctions(problemSpec, PlanData, kernels)
                     var N = 0
                     escape
                         for i,gf in ipairs(problemSpec.functions.cost.graphfunctions) do
-                            local name = gf.graph.name
+                            local name = gf.graphname
                             emit quote
                                 if N < pd.parameters.[name].N then
                                     N = pd.parameters.[name].N
@@ -427,7 +427,6 @@ function util.makeGPUFunctions(problemSpec, PlanData, kernels)
         local terra GPULauncher(pd : &PlanData, [params])
             var xdim,ydim,xblock,yblock = [ createLaunchParameters(pd) ]
             if xdim == 0 then -- early out for 0-sized kernels
-                C.printf("skipping %s\n",kernelName)
                 return 0
             end
             var launch = terralib.CUDAParams { (xdim - 1) / xblock + 1, (ydim - 1) / yblock + 1, 1, 

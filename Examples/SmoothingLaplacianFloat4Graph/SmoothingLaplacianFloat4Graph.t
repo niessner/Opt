@@ -139,29 +139,33 @@ local terra applyJTJ_graph(idx : int32, self : P:ParameterType(), pImage : P:Unk
 	return d 
 
 end
---[[
+
 -- same functions, but expressed in math language
 local IP = adP:Image("P",opt.float4,W,H,-1)
-local x,x_n = X(0,0),X(G)
-local a = A(0,0)
-local p,p_n = IP(0,0), IP(G)
-local sum = ad.reduce
-local math_cost = w_fit * (x - a) ^ 2 + w_reg * sum((x - x_n)^2)
-math_cost = math_cost:sum()
+local x,a= X(0,0),A(0,0)
+local p = IP(0,0)
 
-local math_grad = w_fit*2.0*(x - a) + 2*w_reg*sum(2*(x - x_n))
-local math_jtj = w_fit*2.0*p + 2*w_reg*sum(2*(p - p_n))
-]]
+local math_cost = w_fit * (x - a) ^ 2 
+local math_cost_graph = w_reg*(X(G.v0) - X(G.v1))^2
+math_cost,math_cost_graph = math_cost:sum(),math_cost_graph:sum()
+
+local L = terralib.newlist 
 if false then
-    adP:createfunctionset("cost",math_cost)
-    adP:createfunctionset("gradient",math_grad)
-    adP:createfunctionset("evalJTF",math_grad,ad.toexp(1.0))
-    adP:createfunctionset("applyJTJ",math_jtj)
+    adP:createfunctionset("cost",{math_cost},L{ { graph = G, results = L{math_cost_graph}, scatters = L{} } })
+    --adP:createfunctionset("gradient",math_grad)
+    --adP:createfunctionset("evalJTF",math_grad,ad.toexp(1.0))
+    --adP:createfunctionset("applyJTJ",math_jtj)
+      
+    --P:Function("cost", cost, "G", cost_graph)
+    P:Function("gradient", gradient, "G", gradient_graph)
+    P:Function("evalJTF", evalJTF, "G", evalJTF_graph)
+    P:Function("applyJTJ", applyJTJ, "G", applyJTJ_graph)
+    
 else 
-    P:Function("cost", cost, G, cost_graph)
-    P:Function("gradient", gradient, G, gradient_graph)
-    P:Function("evalJTF", evalJTF, G, evalJTF_graph)
-    P:Function("applyJTJ", applyJTJ, G, applyJTJ_graph)
+    P:Function("cost", cost, "G", cost_graph)
+    P:Function("gradient", gradient, "G", gradient_graph)
+    P:Function("evalJTF", evalJTF, "G", evalJTF_graph)
+    P:Function("applyJTJ", applyJTJ, "G", applyJTJ_graph)
 end
 
 return P

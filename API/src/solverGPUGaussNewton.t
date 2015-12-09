@@ -107,7 +107,7 @@ return function(problemSpec)
 		var tIdx = 0 	
 		escape 
 	    	for i,func in ipairs(problemSpec.functions.evalJTF.graphfunctions) do
-				local name,implementation = func.graph.name,func.implementation
+				local name,implementation = func.graphname,func.implementation
 				emit quote 
 	    			if util.getValidGraphElement(pd,[name],&tIdx) then
 						implementation(tIdx, pd.parameters, pd.p, pd.r, pd.preconditioner)
@@ -161,7 +161,7 @@ return function(problemSpec)
 		var tIdx = 0 	
         escape 
 			for i,func in ipairs(problemSpec.functions.applyJTJ.graphfunctions) do
-				local name,implementation = func.graph.name,func.implementation
+				local name,implementation = func.graphname,func.implementation
 				emit quote 
 				    if util.getValidGraphElement(pd,[name],&tIdx) then
 				        d = d + implementation(tIdx, pd.parameters, pd.p, pd.Ap_X)
@@ -246,7 +246,7 @@ return function(problemSpec)
 		var tIdx = 0 	
         escape 
 			for i,func in ipairs(problemSpec.functions.cost.graphfunctions) do
-				local name,implementation = func.graph.name,func.implementation
+				local name,implementation = func.graphname,func.implementation
 				emit quote 
 				    if util.getValidGraphElement(pd,[name],&tIdx) then
 				        cost = cost + implementation(tIdx, pd.parameters)
