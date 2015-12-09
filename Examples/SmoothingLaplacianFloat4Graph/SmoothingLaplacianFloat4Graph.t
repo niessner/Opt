@@ -60,10 +60,8 @@ local terra gradient(i : int32, j : int32, gi : int32, gj : int32, self : P:Para
 end
 
 local terra gradient_graph(idx : int32, self : P:ParameterType()) : unknownElement
-        var l_n = laplacianCost(idx, self)
-        var laplacian = 2.0f*l_n
-	
-	return 2.0f*w_reg*laplacian
+        var l_n = laplacianCost(idx, self)	
+	return 2.0f*w_reg*l_n
 
 end
 
@@ -83,13 +81,16 @@ local terra evalJTF_graph(idx : int32, self : P:ParameterType(), p : P:UnknownTy
     var w1,h1 = self.G.v1_x[idx], self.G.v1_y[idx]
 	
 	--var gradient : unknownElement = gradient_graph(idx, self)
-	var lap = laplacianCost(idx, self)
+	-- is there a 2?
+	var lap = 2.0*laplacianCost(idx, self)
 	var c0 = ( 1.0f)*lap
 	var c1 = (-1.0f)*lap
 	
 	var pre : float = 1.0f
 	--return gradient, pre
 	
+
+
 	--write results
 	var _residuum0 = -c0
 	var _residuum1 = -c1
@@ -98,8 +99,8 @@ local terra evalJTF_graph(idx : int32, self : P:ParameterType(), p : P:UnknownTy
 	
 	var _pre0 = pre
 	var _pre1 = pre
-	preconditioner:atomicAdd(w0, h0, _pre0)
-	preconditioner:atomicAdd(w1, h1, _pre1)
+	--preconditioner:atomicAdd(w0, h0, _pre0)
+	--preconditioner:atomicAdd(w1, h1, _pre1)
 	
 	var _p0 = _pre0*_residuum0
 	var _p1 = _pre1*_residuum1

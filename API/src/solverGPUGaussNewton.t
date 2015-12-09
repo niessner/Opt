@@ -434,6 +434,37 @@ return function(problemSpec)
 				    C.cudaMemcpy(&temp, pd.scanAlpha, sizeof(float), C.cudaMemcpyDeviceToHost)
 				    C.printf("ScanAlpha (Init): %f\n", temp);
 
+
+				    --[[
+				    var r0 : float
+				    var r1 : float
+				    var r2 : float
+				    var r3 : float
+				    C.cudaMemcpy(&r0, ([&float](pd.r.data)) + 0, sizeof(float), C.cudaMemcpyDeviceToHost)
+				    C.cudaMemcpy(&r1, ([&float](pd.r.data)) + 1, sizeof(float), C.cudaMemcpyDeviceToHost)
+				    C.cudaMemcpy(&r2, ([&float](pd.r.data)) + 2, sizeof(float), C.cudaMemcpyDeviceToHost)
+				    C.cudaMemcpy(&r3, ([&float](pd.r.data)) + 3, sizeof(float), C.cudaMemcpyDeviceToHost)
+				    C.printf("Residuum 0: %f, %f, %f, %f\n", r0, r1, r2, r3);
+
+				    C.cudaMemcpy(&r0, ([&float](pd.r.data)) + 4, sizeof(float), C.cudaMemcpyDeviceToHost)
+				    C.cudaMemcpy(&r1, ([&float](pd.r.data)) + 5, sizeof(float), C.cudaMemcpyDeviceToHost)
+				    C.cudaMemcpy(&r2, ([&float](pd.r.data)) + 6, sizeof(float), C.cudaMemcpyDeviceToHost)
+				    C.cudaMemcpy(&r3, ([&float](pd.r.data)) + 7, sizeof(float), C.cudaMemcpyDeviceToHost)
+				    C.printf("Residuum 1: %f, %f, %f, %f\n", r0, r1, r2, r3);
+
+
+				    C.cudaMemcpy(&r0, ([&float](pd.preconditioner.data)) + 0, sizeof(float), C.cudaMemcpyDeviceToHost)
+				    C.cudaMemcpy(&r1, ([&float](pd.preconditioner.data)) + 1, sizeof(float), C.cudaMemcpyDeviceToHost)
+				    C.cudaMemcpy(&r2, ([&float](pd.preconditioner.data)) + 2, sizeof(float), C.cudaMemcpyDeviceToHost)
+				    C.cudaMemcpy(&r3, ([&float](pd.preconditioner.data)) + 3, sizeof(float), C.cudaMemcpyDeviceToHost)
+				    C.printf("Preconditioner 0: %f, %f, %f, %f\n", r0, r1, r2, r3);
+
+				    C.cudaMemcpy(&r0, ([&float](pd.preconditioner.data)) + 4, sizeof(float), C.cudaMemcpyDeviceToHost)
+				    C.cudaMemcpy(&r1, ([&float](pd.preconditioner.data)) + 5, sizeof(float), C.cudaMemcpyDeviceToHost)
+				    C.cudaMemcpy(&r2, ([&float](pd.preconditioner.data)) + 6, sizeof(float), C.cudaMemcpyDeviceToHost)
+				    C.cudaMemcpy(&r3, ([&float](pd.preconditioner.data)) + 7, sizeof(float), C.cudaMemcpyDeviceToHost)
+				    C.printf("Preconditioner 1: %f, %f, %f, %f\n", r0, r1, r2, r3);
+--]]
 				end
 			    end
 
