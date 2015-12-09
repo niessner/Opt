@@ -500,6 +500,16 @@ end
 
 ad = require("ad")
 
+
+local Index = ad.newclass("Index")
+local Offset = Index:Variant("Offset") -- an local pixel relative index in an image
+local GraphElement = Index:Variant("GraphElement") -- an index looked up from a graph node
+
+function Offset:__tostring() return ("%d_%d"):format(self.x,self.y) end
+Offset.get = terralib.memoize(function(self,x,y) assert(type(x) == "number" and type(y) == "number") return Offset:new { x = x, y = y } end)
+function GraphElement:__tostring() return ("%s_%s"):format(tostring(self.graph), self.element) end
+GraphElement.get = terralib.memoize(function(self,g,e) return GraphElement:new { graph = g, element = e } end)
+
 local VarDef = ad.newclass("VarDef") -- meta-data attached to each ad variable about what actual value it is
 local ImageAccess = VarDef:Variant("ImageAccess") -- access into one particular image
 local BoundsAccess = VarDef:Variant("BoundsAccess") -- query about the bounds of an image
@@ -507,7 +517,8 @@ local IndexValue = VarDef:Variant("IndexValue") -- query of the numeric index
 local ParamValue = VarDef:Variant("ParamValue") -- get one of the global parameter values
 
 function ImageAccess:__tostring()
-    local r = ("%s_%s_%s_%s"):format(self.image.name,self.x,self.y,self.channel)
+    print("HI")
+    local r = ("%s_%s_%s"):format(self.image.name,tostring(self.index),self.channel)
     if self:shape() ~= ad.scalar then
         r = r .. ("_%s"):format(tostring(self:shape()))
     end
@@ -517,8 +528,9 @@ function BoundsAccess:__tostring() return ("bounds_%d_%d_%d_%d"):format(self.x,s
 function IndexValue:__tostring() return ({[0] = "i","j","k"})[self.dim._index] end
 function ParamValue:__tostring() return "param_"..self.name end
 
-ImageAccess.get = terralib.memoize(function(self,im,shape,x,y,channel)
-    return ImageAccess:new { image = im, x = x, y = y, channel = channel, _shape = shape}
+ImageAccess.get = terralib.memoize(function(self,im,shape,index,channel)
+    assert(Index:is(index))
+    return ImageAccess:new { image = im, index = index , channel = channel, _shape = shape}
 end)
 
 BoundsAccess.get = terralib.memoize(function(self,x,y,sx,sy)
@@ -597,11 +609,11 @@ function Image:__call(x,y,c,extra)
     x,y,c = assert(tonumber(x)),assert(tonumber(y)),tonumber(c)
     assert(not c or c < self.N, "channel outside of range")
     if self.N == 1 or c then
-        return ad.v[ImageAccess:get(self,shape,x,y,c or 0)]
+        return ad.v[ImageAccess:get(self,shape,Offset:get(x,y),c or 0)]
     else
         local r = {}
         for i = 1,self.N do
-            r[i] = ad.v[ImageAccess:get(self,shape,x,y,i-1)]
+            r[i] = ad.v[ImageAccess:get(self,shape,Offset:get(x,y),i-1)]
         end
         return ad.Vector(unpack(r))
     end
@@ -615,7 +627,8 @@ function BoundsAccess:shift(x,y)
 end
 function BoundsAccess:type() return bool end --implementing AD's API for keys
 function ImageAccess:shift(x,y)
-    return ImageAccess:get(self.image,self:shape(),self.x + x, self.y + y,self.channel)
+    assert(Offset:is(self.index), "cannot shift graph accesses!")
+    return ImageAccess:get(self.image,self:shape(),Offset:get(self.index.x + x, self.index.y + y),self.channel)
 end
 function IndexValue:shift(x,y)
     local v = {[0] = x,y}
@@ -732,7 +745,7 @@ local function createfunction(problemspec,name,exps,usebounds,W,H)
             local a = e:key()
             if "ImageAccess" == a.kind then
                 if not a.image.type:isarithmetic() then
-                    local loadvec = imageload(ImageAccess:get(a.image,a:shape(),a.x,a.y,0))
+                    local loadvec = imageload(ImageAccess:get(a.image,a:shape(),a.index,0))
                     loadvec.count = (loadvec.count or 0) + 1
                     return IRNode:create { kind = "vectorextract", children = terralib.newlist { loadvec }, channel = a.channel, type = e:type(), shape = a:shape() }  
                 else
@@ -1124,25 +1137,27 @@ local function createfunction(problemspec,name,exps,usebounds,W,H)
         elseif "load" == ir.kind then
             local a = ir.value
             local im = imageref(a.image)
-            if conditioncoversload(ir.condition,a.x,a.y) then
-               return `im(mi+[a.x],mj+[a.y])
+            assert(Offset:is(a.index),"NYI - graphs")
+            if conditioncoversload(ir.condition,a.index.x,a.index.y) then
+               return `im(mi+[a.index.x],mj+[a.index.y])
             else
-               return `im:get(mi+[a.x],mj+[a.y],mi+[a.x],mj+[a.y])
+               return `im:get(mi+[a.index.x],mj+[a.index.y],mi+[a.index.x],mj+[a.index.y])
             end
         elseif "vectorload" == ir.kind then
             local a = ir.value
             local im = imageref(a.image)
-            local s = symbol(("%s_%s_%s"):format(a.image.name,a.x,a.y))
+            assert(Offset:is(a.index),"NYI - graphs")
+            local s = symbol(("%s_%s"):format(a.image.name,tostring(a.index)))
             
-            if conditioncoversload(ir.condition,a.x,a.y) then
+            if conditioncoversload(ir.condition,a.index.x,a.index.y) then
                 statements:insert(quote
-                    var [s] : a.image.type = im(mi+[a.x],mj+[a.y])
+                    var [s] : a.image.type = im(mi+[a.index.x],mj+[a.index.y])
                 end)
             else 
                 statements:insert(quote
                     var [s] : a.image.type = 0.f
-                    if opt.InBoundsCalc(mi+[a.x],mj+[a.y],[W.size],[H.size],0,0) then
-                        [s] = im(mi+[a.x],mj+[a.y])
+                    if opt.InBoundsCalc(mi+[a.index.x],mj+[a.index.y],[W.size],[H.size],0,0) then
+                        [s] = im(mi+[a.index.x],mj+[a.index.y])
                     end
                 end)
             end
@@ -1275,7 +1290,8 @@ local function stencilforexpression(exp)
     end
     exp:visit(function(a)
         if "ImageAccess" == a.kind then
-            stencil = math.max(stencil,math.max(math.abs(a.x),math.abs(a.y))) 
+            assert(Offset:is(a.index), "stencils not defined for graph image access")
+            stencil = math.max(stencil,math.max(math.abs(a.index.x),math.abs(a.index.y))) 
         elseif "BoundsAccess" == a.kind then--bounds calculation
             stencil = math.max(stencil,math.max(math.abs(a.x)+a.sx,math.abs(a.y)+a.sy))
         end
@@ -1292,8 +1308,6 @@ function ProblemSpecAD:createfunctionset(name,...)
     local boundary = createfunction(self,name,exps,true,W,H)
     self.P:Function(name,boundary)
 end
-
-local getpair = terralib.memoize(function(x,y) return {x = x, y = y} end)
 
 local function unknowns(exp)
     local seenunknown = {}
@@ -1320,8 +1334,9 @@ local function residualsincludingX00(unknownsupport,channel)
     assert(channel)
     local r = terralib.newlist()
     for i,u in ipairs(unknownsupport) do
+        assert(Offset:is(u.index),"unexpected graph access")
         if u.channel == channel then
-            r:insert(getpair(-u.x,-u.y))
+            r:insert(Offset:get(-u.index.x,-u.index.y))
         end
     end
     return r
@@ -1370,9 +1385,9 @@ local function createjtj(Fs,unknown,P)
                 lprintf(1,"instance:\ndr%d_%d%d/dx00[%d] = %s",rn,r.x,r.y,channel,tostring(drdx00))
                 local unknowns = unknownsforresidual(r,unknownsupport)
                 for _,u in ipairs(unknowns) do
-                    local drdx_u = rexp:d(unknown(u.x,u.y,u.channel))
+                    local drdx_u = rexp:d(unknown(u.index.x,u.index.y,u.channel))
                     local exp = drdx00*drdx_u
-                    lprintf(2,"term:\ndr%d_%d%d/dx%d%d[%d] = %s",rn,r.x,r.y,u.x,u.y,u.channel,tostring(drdx_u))
+                    lprintf(2,"term:\ndr%d_%d%d/dx%d%d[%d] = %s",rn,r.x,r.y,u.index.x,u.index.y,u.channel,tostring(drdx_u))
                     if not columns[u] then
                         columns[u] = 0
                         nonzerounknowns:insert(u)
@@ -1381,7 +1396,7 @@ local function createjtj(Fs,unknown,P)
                 end
             end
             for _,u in ipairs(nonzerounknowns) do
-                P_hat[channel+1] = P_hat[channel+1] + P(u.x,u.y,u.channel) * columns[u]
+                P_hat[channel+1] = P_hat[channel+1] + P(u.index.x,u.index.y,u.channel) * columns[u]
             end
         end
     end
@@ -1459,7 +1474,7 @@ local function creategradient(unknown,costexp)
     local gradientsgathered = createzerolist(unknown.N)
     for i,u in ipairs(unknownvars) do
         local a = u:key()
-        local shift = shiftexp(gradient[i],-a.x,-a.y)
+        local shift = shiftexp(gradient[i],-a.index.x,-a.index.y)
         gradientsgathered[a.channel+1] = gradientsgathered[a.channel+1] + shift
     end
     dprint("grad gather")
