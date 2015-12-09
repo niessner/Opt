@@ -157,27 +157,19 @@ return function(problemSpec)
     end
 	
 	terra kernels.PCGStep1_Graph(pd : PlanData)
+		var d = 0.0f
 		var tIdx = 0 	
         escape 
 			for i,func in ipairs(problemSpec.functions.applyJTJ.graphfunctions) do
 				local name,implementation = func.graph.name,func.implementation
 				emit quote 
 				    if util.getValidGraphElement(pd,[name],&tIdx) then
-				        implementation(tIdx, pd.parameters, pd.p, pd.Ap_X)
+				        d = d + implementation(tIdx, pd.parameters, pd.p, pd.Ap_X)
 				    end 
 				end
 			end
 		end
-    end
-
-    terra kernels.PCGStep1_Finish(pd : PlanData)
-		var d = 0.0f
-        var w : int, h : int
-        if getValidUnknown(pd, &w, &h) and (not [problemSpec:EvalExclude(w,h,w,h,`pd.parameters)]) then	
-            d = util.Dot(pd.p(w,h),pd.Ap_X(w, h))
-        end
-		
-        d = util.warpReduce(d)
+		d = util.warpReduce(d)
         if (util.laneid() == 0) then
             util.atomicAdd(pd.scanAlpha, d)
         end
@@ -492,9 +484,7 @@ return function(problemSpec)
 				gpu.PCGStep1(pd)
 
 				if isGraph then
-					C.cudaMemset(pd.scanAlpha, 0, sizeof(float))	--TODO: don't write to scanAlpha in the previous kernel if it is a graph
 					gpu.PCGStep1_Graph(pd)	
-					gpu.PCGStep1_Finish(pd)	
 				end
 				
 				C.cudaMemset(pd.scanBeta, 0, sizeof(float))

@@ -110,6 +110,7 @@ local terra evalJTF_graph(idx : int32, self : P:ParameterType(), p : P:UnknownTy
 end
 
 
+
 -- eval 2*JtJ (note that we keep the '2' to make it consistent with the gradient
 local terra applyJTJ(i : int32, j : int32, gi : int32, gj : int32, self : P:ParameterType(), pImage : P:UnknownType()) : unknownElement 
     return w_fit*2.0f*pImage(i,j)
@@ -132,6 +133,11 @@ local terra applyJTJ_graph(idx : int32, self : P:ParameterType(), pImage : P:Unk
 
 	Ap_X:atomicAdd(w0, h0, c0)
     Ap_X:atomicAdd(w1, h1, c1)
+    
+    var d = 0.0f
+	d = d + opt.Dot(pImage(w0,h0), c0)
+	d = d + opt.Dot(pImage(w1,h1), c1)					
+	return d 
 
 end
 --[[
