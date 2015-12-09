@@ -104,26 +104,32 @@ return function(problemSpec)
     end
     
     terra kernels.PCGInit1_Graph(pd : PlanData)
-        var d = 0.0f -- init for out of bounds lanes
-            -- residuum = J^T x -F - A x delta_0  => J^T x -F, since A x x_0 == 0
+		var tIdx = 0 	
+		escape 
+	    	for i,func in ipairs(problemSpec.functions.evalJTF.graphfunctions) do
+				local name,implementation = func.graph.name,func.implementation
+				emit quote 
+	    			if util.getValidGraphElement(pd,[name],&tIdx) then
+						implementation(tIdx, pd.parameters, pd.p, pd.r, pd.preconditioner)
+	    			end 
+				end
+    		end
+    	end
+    end
 
-	var tIdx = 0 	
-	escape 
-	    for i,func in ipairs(problemSpec.functions.evalJTF.graphfunctions) do
-		local name,implementation = func.graph.name,func.implementation
-		emit quote 
-		    if util.getValidGraphElement(pd,[name],&tIdx) then
-			d = d + implementation(tIdx, pd.parameters, pd.p, pd.r, pd.preconditioner)
-		    end 
-		end
-	    end
+    terra kernels.PCGInit1_Finish(pd : PlanData)
+    	var d = 0.0f -- init for out of bounds lanes
+        var w : int, h : int
+        if getValidUnknown(pd, &w, &h) then
+        	var residuum = pd.r(w, h)
+        	d = util.Dot(residuum, residuum * pd.preconditioner(w, h))
         end
-        
-        d = util.warpReduce(d)	
+
+		d = util.warpReduce(d)	
         if (util.laneid() == 0) then
             util.atomicAdd(pd.scanAlpha, d)
         end
-    end
+	end
 	
     terra kernels.PCGInit2(pd : PlanData)
         var w : int, h : int
@@ -151,24 +157,32 @@ return function(problemSpec)
     end
 	
 	terra kernels.PCGStep1_Graph(pd : PlanData)
-        var d = 0.0f
 		var tIdx = 0 	
         escape 
 			for i,func in ipairs(problemSpec.functions.applyJTJ.graphfunctions) do
 				local name,implementation = func.graph.name,func.implementation
 				emit quote 
 				    if util.getValidGraphElement(pd,[name],&tIdx) then
-				        d = d + implementation(tIdx, pd.parameters, pd.p, pd.Ap_X)
+				        implementation(tIdx, pd.parameters, pd.p, pd.Ap_X)
 				    end 
 				end
 			end
 		end
+    end
+
+    terra kernels.PCGStep1_Finish(pd : PlanData)
+		var d = 0.0f
+        var w : int, h : int
+        if getValidUnknown(pd, &w, &h) and (not [problemSpec:EvalExclude(w,h,w,h,`pd.parameters)]) then	
+            d = util.Dot(pd.p(w,h),pd.Ap_X(w, h))
+        end
 		
         d = util.warpReduce(d)
         if (util.laneid() == 0) then
             util.atomicAdd(pd.scanAlpha, d)
         end
     end
+
 	
 	terra kernels.PCGStep2(pd : PlanData)
         var b = 0.0f 
@@ -405,7 +419,12 @@ return function(problemSpec)
 
 			C.cudaMemset(pd.scanAlpha, 0, sizeof(float))	--scan in PCGInit1 requires reset
 			gpu.PCGInit1(pd)
-			gpu.PCGInit1_Graph(pd)			
+			var isGraph = true
+			if isGraph then
+				C.cudaMemset(pd.scanAlpha, 0, sizeof(float))	--TODO: don't write to scanAlpha in the previous kernel if it is a graph
+				gpu.PCGInit1_Graph(pd)	
+				gpu.PCGInit1_Finish(pd)	
+			end
 			gpu.PCGInit2(pd)
 			
 			escape
@@ -440,7 +459,12 @@ return function(problemSpec)
 
                 C.cudaMemset(pd.scanAlpha, 0, sizeof(float))
 				gpu.PCGStep1(pd)
-				gpu.PCGStep1_Graph(pd)
+
+				if isGraph then
+					C.cudaMemset(pd.scanAlpha, 0, sizeof(float))	--TODO: don't write to scanAlpha in the previous kernel if it is a graph
+					gpu.PCGStep1_Graph(pd)	
+					gpu.PCGStep1_Finish(pd)	
+				end
 				
 				C.cudaMemset(pd.scanBeta, 0, sizeof(float))
 				gpu.PCGStep2(pd)
