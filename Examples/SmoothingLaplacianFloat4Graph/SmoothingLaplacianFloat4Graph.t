@@ -60,9 +60,8 @@ local terra gradient(i : int32, j : int32, gi : int32, gj : int32, self : P:Para
 end
 
 local terra gradient_graph(idx : int32, self : P:ParameterType()) : unknownElement
-        var l_n = laplacianCost(idx, self)	
+    var l_n = laplacianCost(idx, self)	
 	return 2.0f*w_reg*l_n
-
 end
 
 -- eval 2*JtF == \nabla(F); eval diag(2*(Jt)^2) == pre-conditioner
@@ -133,7 +132,7 @@ local terra applyJTJ_graph(idx : int32, self : P:ParameterType(), pImage : P:Unk
 
 	Ap_X:atomicAdd(w0, h0, c0)
     Ap_X:atomicAdd(w1, h1, c1)
-    
+
     var d = 0.0f
 	d = d + opt.Dot(pImage(w0,h0), c0)
 	d = d + opt.Dot(pImage(w1,h1), c1)					
