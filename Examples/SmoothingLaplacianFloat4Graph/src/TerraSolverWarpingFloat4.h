@@ -38,20 +38,6 @@ public:
 
 		for (int y = 0; y < (int)height; ++y) {
 			for (int x = 0; x < (int)width; ++x) {
-				if (x > 0) {
-					headX.push_back(x);
-					headY.push_back(y);
-
-					tailX.push_back(x - 1);
-					tailY.push_back(y);
-				}
-				if (y > 0) {
-					headX.push_back(x);
-					headY.push_back(y);
-
-					tailX.push_back(x);
-					tailY.push_back(y - 1);
-				}
 				if (x < (int)width - 1) {
 					headX.push_back(x);
 					headY.push_back(y);
