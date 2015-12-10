@@ -21,11 +21,6 @@ local w_reg = 1.0
 
 local unknownElement = P:UnknownType().metamethods.typ
 
-local terra inBounds(i : int32, j : int32, xImage : P:UnknownType()) : bool
-	return i >= 0 and i < xImage:W() and j >= 0 and j < xImage:H()
-end
-
-
 local terra laplacianCost(idx : int32, self : P:ParameterType()) : unknownElement	
     var x0 = self.X(self.G.v0_x[idx], self.G.v0_y[idx])
     var x1 = self.X(self.G.v1_x[idx], self.G.v1_y[idx])
@@ -107,8 +102,6 @@ local terra evalJTF_graph(idx : int32, self : P:ParameterType(), p : P:UnknownTy
 	p:atomicAdd(w1, h1, _p1)
 	
 end
-
-
 
 -- eval 2*JtJ (note that we keep the '2' to make it consistent with the gradient
 local terra applyJTJ(i : int32, j : int32, gi : int32, gj : int32, self : P:ParameterType(), pImage : P:UnknownType()) : unknownElement 
