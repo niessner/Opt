@@ -350,8 +350,14 @@ newImage = terralib.memoize(function(typ, W, H, elemsize, stride)
 	            end
 	        end
 	    end
+	    terra Image:atomicAddChannel(x : int32, y : int32, c : int32, v : typ.metamethods.type)
+	        util.atomicAdd(&(@[&typ](self.data + y*stride + x*elemsize))(c),v)
+	    end
 	else
 	    terra Image:atomicAdd(x : int32, y : int32, v : typ)
+	        util.atomicAdd([&typ](self.data + y*stride + x*elemsize),v)
+	    end
+	    terra Image:atomicAddChannel(x : int32, y : int32, v : typ, c : int32) 
 	        util.atomicAdd([&typ](self.data + y*stride + x*elemsize),v)
 	    end
 	end
@@ -1305,9 +1311,8 @@ local function createfunction(problemspec,name,usebounds,W,H,ndims,results,scatt
     for i,s in ipairs(scatters) do
         local image,exp = imageref(s.image),scatterexpressions[i]
         local gr = graphref(s.index)
-        scatterstatements:insert quote
-            image:atomicAdd(gr, exp)
-        end
+        local stmt = s.channel and (`image:atomicAddChannel(gr, s.channel, exp)) or (`image:atomicAdd(gr, exp))
+        scatterstatements:insert(stmt)
     end
 
     local terra generatedfn([dimarguments], [P], [extraimages])
@@ -1443,7 +1448,7 @@ local function lprintf(ident,fmt,...)
     return print(str) 
 end
 
-local function createjtj(residuals,unknown,P)
+local function createjtjcentered(residuals,unknown,P)
     local P_hat = createzerolist(unknown.N)
     for rn,residual in ipairs(residuals.unknown) do
         local F,unknownsupport = residual.expression,residual.unknownaccesses
@@ -1483,6 +1488,53 @@ local function createjtj(residuals,unknown,P)
     P_hat = ad.polysimplify(P_hat)
     dprint("JTJ[poly] = ", ad.tostrings(P_hat))
     return conformtounknown(P_hat,unknown)
+end
+
+local function NewGraphFunctionSpec(graph, results, scatters)
+    return { graph = graph, results = results, scatters = scatters }
+end
+local function NewScatter(im,idx,channel,exp) 
+    return { image = im, index = idx, channel = channel, expression = exp }
+end
+
+local function createjtjgraph(residuals,P,Ap_X)
+    local jtjgraph = terralib.newlist()
+    for graph,terms in pairs(residuals.graphs) do
+        local result = ad.toexp(0)
+        local scatters = terralib.newlist() 
+        local scattermap = {}
+        local function addscatter(u,exp)
+            local s = scattermap[u]
+            if not s then
+                s =  NewScatter(Ap_X,u.index,u.channel,ad.toexp(0))
+                scattermap[u] = s
+                scatters:insert(s)
+            end
+            s.expression = s.expression + exp
+        end
+        for i,term in ipairs(terms) do
+            local F,unknownsupport = term.expression,term.unknownaccesses
+            local unknownvars = unknownsupport:map(function(x) return ad.v[x] end)
+            local partials = F:gradient(unknownvars)
+            local Jp = ad.toexp(0)
+            for i,partial in ipairs(partials) do
+                local u = unknownsupport[i]
+                assert(GraphElement:is(u.index))
+                Jp = Jp + partial*P(u.index,u.channel)
+            end
+            for i,partial in ipairs(partials) do
+                local u = unknownsupport[i]
+                local jtjp = 2*Jp*partial
+                result = result + P(u.index,u.channel)*jtjp
+                addscatter(u,jtjp)
+            end
+        end
+        jtjgraph:insert(NewGraphFunctionSpec(graph,terralib.newlist { result },scatters)) 
+    end
+    return jtjgraph
+end
+local function createjtj(residuals,unknown,P,Ap_X)
+    return createjtjcentered(residuals,unknown,P),createjtjgraph(residuals,P,Ap_X)
 end
 
 local function createjtf(problemSpec,residuals,unknown,P)
@@ -1558,13 +1610,6 @@ local function creategradient(unknown,costexp)
     return conformtounknown(gradientsgathered,unknown)
 end
 
-local function NewGraphFunctionSpec(graph, results, scatters)
-    return { graph = graph, results = results, scatters = scatters }
-end
-local function NewScatter(im,idx,exp) 
-    return { image = im, index = idx, expression = exp }
-end
-
 local function createcost(residuals)
     local function sumsquared(terms)
         terms = terms:map("expression")
@@ -1594,10 +1639,11 @@ function ProblemSpecAD:Cost(costexp)
     
     -- Not updated for graphs yet:    
     local P = self:Image("P",unknown.type,unknown.W,unknown.H,-1)
-    local jtjexp = createjtj(residuals,unknown,P)
+    local Ap_X = self:Image("P",unknown.type,unknown.W,unknown.H,-2)
+    local jtjexp,jtjgraph = createjtj(residuals,unknown,P,Ap_X)
     self.P:Stencil(stencilforexpression(jtjexp))
     
-    self:createfunctionset("applyJTJ",terralib.newlist{jtjexp},{})
+    self:createfunctionset("applyJTJ",terralib.newlist{jtjexp},jtjgraph)
     --gradient with pre-conditioning
     local gradient,preconditioner = createjtf(self,residuals,unknown,P)	--includes the 2.0
     self:createfunctionset("evalJTF",terralib.newlist{gradient,preconditioner},{})

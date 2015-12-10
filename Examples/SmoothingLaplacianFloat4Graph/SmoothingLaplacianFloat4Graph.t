@@ -175,7 +175,7 @@ if true then
 
     --adP:createfunctionset("cost",{math_cost},L{ { graph = G, results = L{math_cost_graph}, scatters = L{} } })
     adP:createfunctionset("evalJTF", math_jtf, L{ { graph = G, results = L {}, scatters = math_jtf_scatters } })
-    adP:createfunctionset("applyJTJ",{math_jtj},L{ { graph = G, results = L{math_jtj_graph}, scatters = math_jtj_scatters } })
+    --adP:createfunctionset("applyJTJ",{math_jtj},L{ { graph = G, results = L{math_jtj_graph}, scatters = math_jtj_scatters } })
     
 else 
 
