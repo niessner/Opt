@@ -1297,7 +1297,16 @@ local function createfunction(problemspec,name,usebounds,W,H,ndims,results,scatt
     else
         dimarguments = {i}
     end
-    
+        
+    local scatterstatements = terralib.newlist()
+    for i,s in ipairs(scatters) do
+        local image,exp = imageref(s.image),scatterexpressions[i]
+        local gr = graphref(s.index)
+        scatterstatements:insert quote
+            image:atomicAdd(gr, exp)
+        end
+    end
+
     local terra generatedfn([dimarguments], [P], [extraimages])
         escape
             if ndims == 1 then
@@ -1309,15 +1318,7 @@ local function createfunction(problemspec,name,usebounds,W,H,ndims,results,scatt
         var [mi],[mj] = [i],[j]
         [declarations]
         [statements]
-        escape
-            for i,s in ipairs(scatters) do
-                local image,exp = imageref(s.image),scatterexpressions[i]
-                local gr = graphref(s.index)
-                emit quote
-                    image:atomicAdd(gr.x[i], gr.y[i], exp)
-                end
-            end
-        end
+        [scatterstatements]
         return [resultexpressions]
     end
     generatedfn:setname(name)
