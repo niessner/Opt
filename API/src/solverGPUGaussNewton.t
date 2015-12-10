@@ -110,7 +110,7 @@ return function(problemSpec)
 				local name,implementation = func.graphname,func.implementation
 				emit quote 
 	    			if util.getValidGraphElement(pd,[name],&tIdx) then
-						implementation(tIdx, pd.parameters, pd.p, pd.r, pd.preconditioner)
+						implementation(tIdx, pd.parameters, pd.p, pd.r)
 	    			end 
 				end
     		end

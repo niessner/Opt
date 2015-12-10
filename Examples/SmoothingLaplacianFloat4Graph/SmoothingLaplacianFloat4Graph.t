@@ -74,7 +74,7 @@ local terra evalJTF(i : int32, j : int32, gi : int32, gj : int32, self : P:Param
 end
 
 
-local terra evalJTF_graph(idx : int32, self : P:ParameterType(), p : P:UnknownType(), r : P:UnknownType(), preconditioner : P:UnknownType())
+local terra evalJTF_graph(idx : int32, self : P:ParameterType(), p : P:UnknownType(), r : P:UnknownType())
 	
 	var w0,h0 = self.G.v0_x[idx], self.G.v0_y[idx]
     var w1,h1 = self.G.v1_x[idx], self.G.v1_y[idx]
@@ -143,7 +143,7 @@ end
 -- same functions, but expressed in math language
 local IP = adP:Image("P",opt.float4,W,H,-1)
 local Ap_X = adP:Image("Ap_X",opt.float4,W,H,-2)
-
+local r = Ap_X
 
 
 local L = terralib.newlist
@@ -163,16 +163,18 @@ local math_jtj_scatters = L { S(Ap_X,G.v0,c), S(Ap_X,G.v1,-c) }
 
 local math_jtj = w_fit*2*IP(0,0)
 
-if true then
-    adP:createfunctionset("cost",{math_cost},L{ { graph = G, results = L{math_cost_graph}, scatters = L{} } })
-    --P:Function("cost", cost, "G", cost_graph)
-    
-    --adP:createfunctionset("evalJTF",math_grad,ad.toexp(1.0))
-      
-    P:Function("evalJTF", evalJTF, "G", evalJTF_graph)
+-- jtf
+local x0,x1 = X(G.v0),X(G.v1)
+local gradient = w_fit*2.0*(x - a)
+local math_jtf = L { gradient, ad.toexp(1) }
+local lap = w_reg*2*(x0 - x1)
+local math_jtf_scatters = L { S(IP,G.v0,-lap), S(IP,G.v1,lap), S(r,G.v0,-lap), S(r,G.v1,lap) }
 
+if true then
+
+    adP:createfunctionset("cost",{math_cost},L{ { graph = G, results = L{math_cost_graph}, scatters = L{} } })
+    adP:createfunctionset("evalJTF", math_jtf, L{ { graph = G, results = L {}, scatters = math_jtf_scatters } })
     adP:createfunctionset("applyJTJ",{math_jtj},L{ { graph = G, results = L{math_jtj_graph}, scatters = math_jtj_scatters } })
-    --P:Function("applyJTJ", applyJTJ, "G", applyJTJ_graph)
     
 else 
     P:Function("cost", cost, "G", cost_graph)
