@@ -358,6 +358,9 @@ function ExpVector:sum()
     end
     return s
 end
+function ExpVector:dot(rhs)
+    return (self*rhs):sum()
+end
 
 -- generates variable names
 local v = {} 
