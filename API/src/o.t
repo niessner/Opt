@@ -351,14 +351,16 @@ newImage = terralib.memoize(function(typ, W, H, elemsize, stride)
 	        end
 	    end
 	    terra Image:atomicAddChannel(x : int32, y : int32, c : int32, v : typ.metamethods.type)
-	        util.atomicAdd(&(@[&typ](self.data + y*stride + x*elemsize))(c),v)
+	        var addr = &(@[&typ](self.data + y*stride + x*elemsize))(c)
+	        util.atomicAdd(addr,v)
 	    end
 	else
 	    terra Image:atomicAdd(x : int32, y : int32, v : typ)
 	        util.atomicAdd([&typ](self.data + y*stride + x*elemsize),v)
 	    end
-	    terra Image:atomicAddChannel(x : int32, y : int32, v : typ, c : int32) 
-	        util.atomicAdd([&typ](self.data + y*stride + x*elemsize),v)
+	    terra Image:atomicAddChannel(x : int32, y : int32, c : int32, v : typ) 
+	        var addr = [&typ](self.data + y*stride + x*elemsize)
+	        util.atomicAdd(addr,v)
 	    end
 	end
 	Image.methods.get = macro(function(self,x,y,gx,gy)
