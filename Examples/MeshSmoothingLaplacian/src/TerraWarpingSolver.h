@@ -42,8 +42,8 @@ public:
 		d_headY = createDeviceBuffer(yCoords);
 		d_tailY = createDeviceBuffer(yCoords);
 
-		int* h_offsets = (int*)malloc(sizeof(int)*vertexCount);
-		cutilSafeCall(cudaMemcpy(h_offsets, d_offsets, sizeof(int)*vertexCount, cudaMemcpyDeviceToHost));
+		int* h_offsets = (int*)malloc(sizeof(int)*(vertexCount+1));
+		cutilSafeCall(cudaMemcpy(h_offsets, d_offsets, sizeof(int)*(vertexCount+1), cudaMemcpyDeviceToHost));
 
 		int* h_xCoords = (int*)malloc(sizeof(int)*(edgeCount+1));
 		cutilSafeCall(cudaMemcpy(h_xCoords, d_xCoords, sizeof(int)*(edgeCount), cudaMemcpyDeviceToHost));

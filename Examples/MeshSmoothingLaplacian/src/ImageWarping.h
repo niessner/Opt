@@ -1,5 +1,8 @@
 #pragma once
 
+#define RUN_CUDA 0
+#define RUN_TERRA 1
+
 #include "mLibInclude.h"
 
 #include <cuda_runtime.h>
@@ -27,7 +30,6 @@ class ImageWarping
 			cutilSafeCall(cudaMalloc(&d_neighbourOffset, sizeof(int)*(N+1)));
 		
 			resetGPUMemory();
-
 			m_warpingSolver	= new CUDAWarpingSolver(N);
 			m_terraWarpingSolver = new TerraWarpingSolver(N, 2*E, d_neighbourIdx, d_neighbourOffset, "MeshSmoothingLaplacian.t", "gaussNewtonGPU");
 		}
@@ -36,7 +38,6 @@ class ImageWarping
 		{
 			unsigned int N = (unsigned int)m_result.n_vertices();
 			unsigned int E = (unsigned int)m_result.n_edges();
-
 			float3* h_vertexPosFloat3 = new float3[N];
 			int*	h_numNeighbours   = new int[N];
 			int*	h_neighbourIdx	  = new int[2*E];
@@ -102,16 +103,20 @@ class ImageWarping
 		
 			unsigned int nonLinearIter = 1;
 			unsigned int linearIter = 1;
-			/*
-			std::cout << "CUDA" << std::endl;
-			resetGPUMemory();
-			m_warpingSolver->solveGN(d_vertexPosFloat3, d_numNeighbours, d_neighbourIdx, d_neighbourOffset, d_vertexPosTargetFloat3, nonLinearIter, linearIter, weightFit, weightReg);
-			copyResultToCPUFromFloat3();
-			*/
-			std::cout << "TERRA" << std::endl;
-			resetGPUMemory();
-			m_terraWarpingSolver->solve(d_vertexPosFloat3, d_vertexPosTargetFloat3, nonLinearIter, linearIter, 1, weightFit, weightReg);
-			copyResultToCPUFromFloat3();
+			
+#			if RUN_CUDA
+				std::cout << "CUDA" << std::endl;
+				resetGPUMemory();
+				m_warpingSolver->solveGN(d_vertexPosFloat3, d_numNeighbours, d_neighbourIdx, d_neighbourOffset, d_vertexPosTargetFloat3, nonLinearIter, linearIter, weightFit, weightReg);
+				copyResultToCPUFromFloat3();
+#			endif
+
+#			if RUN_TERRA
+				std::cout << "TERRA" << std::endl;
+				resetGPUMemory();
+				m_terraWarpingSolver->solve(d_vertexPosFloat3, d_vertexPosTargetFloat3, nonLinearIter, linearIter, 1, weightFit, weightReg);
+				copyResultToCPUFromFloat3();
+#			endif
 			
 			
 			return &m_result;
