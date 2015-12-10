@@ -1537,7 +1537,7 @@ local function createjtj(residuals,unknown,P,Ap_X)
     return createjtjcentered(residuals,unknown,P),createjtjgraph(residuals,P,Ap_X)
 end
 
-local function createjtf(problemSpec,residuals,unknown,P)
+local function createjtfcentered(problemSpec,residuals,unknown,P)
    local F_hat = createzerolist(unknown.N) --gradient
    local P_hat = createzerolist(unknown.N) --preconditioner
     
@@ -1577,8 +1577,45 @@ local function createjtf(problemSpec,residuals,unknown,P)
 	    F_hat[i] = ad.polysimplify(2.0*F_hat[i])
 	end
 	dprint("JTF =", ad.tostrings({F_hat[1], F_hat[2], F_hat[3]}))
-    return conformtounknown(F_hat,unknown), conformtounknown(P_hat,unknown)
+    return terralib.newlist{conformtounknown(F_hat,unknown), conformtounknown(P_hat,unknown) }
+end
 
+local function createjtfgraph(residuals,P,R)
+    local jtjgraph = terralib.newlist()
+    for graph,terms in pairs(residuals.graphs) do
+        local scatters = terralib.newlist() 
+        local scattermap = {}
+        local function addscatter(u,exp)
+            local s = scattermap[u]
+            if not s then
+                s =  NewScatter(R,u.index,u.channel,ad.toexp(0))
+                scattermap[u] = s
+                scatters:insert(s)
+            end
+            s.expression = s.expression + exp
+        end
+        for i,term in ipairs(terms) do
+            local F,unknownsupport = term.expression,term.unknownaccesses
+            local unknownvars = unknownsupport:map(function(x) return ad.v[x] end)
+            local partials = F:gradient(unknownvars)
+            local Jp = ad.toexp(0)
+            for i,partial in ipairs(partials) do
+                local u = unknownsupport[i]
+                assert(GraphElement:is(u.index))
+                addscatter(u,-2.0*partial*F)
+            end
+        end
+        -- hack in the preconditioner values for now
+        for i = 1,#scatters do
+            local s = scatters[i]
+            scatters:insert(NewScatter(P,s.index,s.channel,s.expression))
+        end
+        jtjgraph:insert(NewGraphFunctionSpec(graph,terralib.newlist {},scatters))
+    end
+    return jtjgraph
+end
+local function createjtf(problemSpec,residuals,unknown,P,R)
+    return createjtfcentered(problemSpec,residuals,unknown,P), createjtfgraph(residuals,P,R)
 end
 
 local lastTime = nil
@@ -1639,16 +1676,18 @@ function ProblemSpecAD:Cost(costexp)
     
     -- Not updated for graphs yet:    
     local P = self:Image("P",unknown.type,unknown.W,unknown.H,-1)
-    local Ap_X = self:Image("P",unknown.type,unknown.W,unknown.H,-2)
+    local Ap_X = self:Image("Ap_X",unknown.type,unknown.W,unknown.H,-2)
+    local R = self:Image("R",unknown.type,unknown.W,unknown.H,-2)
     local jtjexp,jtjgraph = createjtj(residuals,unknown,P,Ap_X)
     self.P:Stencil(stencilforexpression(jtjexp))
     
-    self:createfunctionset("applyJTJ",terralib.newlist{jtjexp},jtjgraph)
-    --gradient with pre-conditioning
-    local gradient,preconditioner = createjtf(self,residuals,unknown,P)	--includes the 2.0
-    self:createfunctionset("evalJTF",terralib.newlist{gradient,preconditioner},{})
+    local jtfcentered,jtfgraph = createjtf(self,residuals,unknown,P,R) --includes the 2.0
+    self.P:Stencil(stencilforexpression(jtfcentered[1]))
     
     self:createfunctionset("cost",terralib.newlist{centeredcost},graphcost)
+    self:createfunctionset("applyJTJ",terralib.newlist{jtjexp},jtjgraph)
+    --gradient with pre-conditioning
+    self:createfunctionset("evalJTF",jtfcentered,jtfgraph)
     
     if self.excludeexp then
         self:createfunctionset("exclude",terralib.newlist{self.excludeexp},{})

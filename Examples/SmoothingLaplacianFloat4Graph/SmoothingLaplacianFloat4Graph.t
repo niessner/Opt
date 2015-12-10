@@ -6,15 +6,27 @@ local W,H = opt.Dim("W",0), opt.Dim("H",1)
 local X = adP:Image("X", opt.float4,W,H,0)
 local A = adP:Image("A", opt.float4,W,H,1)
 local G = adP:Graph("G", 0, "v0", W, H, 0, "v1", W, H, 1)
+-- TODO: this should be factored into a parameter
+local w_fit = 0.1
+local w_reg = 1.0
+
+useAD = true
+useHandwrittenMath = false
+
+if useAD then
+    -- realcost
+    local w_fit_rt, w_reg_rt = math.sqrt(w_fit),math.sqrt(w_reg)
+    local cost = ad.sumsquared(w_fit_rt*(X(0,0) - A(0,0)), 
+                               w_reg_rt*(X(G.v0) - X(G.v1)))
+    return adP:Cost(cost)
+end
+
 P:Stencil(2)
 
 local C = terralib.includecstring [[
 #include <math.h>
 ]]
 
--- TODO: this should be factored into a parameter
-local w_fit = 0.1
-local w_reg = 1.0
 
 -- same functions, but expressed in math language
 local IP = adP:Image("P",opt.float4,W,H,-1)
@@ -44,18 +56,6 @@ local gradient = w_fit*2.0*(x - a)
 local math_jtf = L { gradient, ad.toexp(1) }
 local lap = w_reg*2*(x0 - x1)
 local math_jtf_scatters = L { S(IP,G.v0,-lap), S(IP,G.v1,lap), S(r,G.v0,-lap), S(r,G.v1,lap) }
-
-
--- realcost
-local w_fit_rt = math.sqrt(w_fit)
-local w_reg_rt = math.sqrt(w_reg)
-
-local cost = ad.sumsquared(w_fit_rt*(x - a), 
-                           w_reg_rt*(X(G.v0) - X(G.v1)))
-adP:Cost(cost)
-
-
-
 
 local unknownElement = P:UnknownType().metamethods.typ
 
@@ -171,16 +171,15 @@ local terra applyJTJ_graph(idx : int32, self : P:ParameterType(), pImage : P:Unk
 
 end
 
-if true then
+if useHandwrittenMath then
 
-    --adP:createfunctionset("cost",{math_cost},L{ { graph = G, results = L{math_cost_graph}, scatters = L{} } })
+    adP:createfunctionset("cost",{math_cost},L{ { graph = G, results = L{math_cost_graph}, scatters = L{} } })
     adP:createfunctionset("evalJTF", math_jtf, L{ { graph = G, results = L {}, scatters = math_jtf_scatters } })
-    --adP:createfunctionset("applyJTJ",{math_jtj},L{ { graph = G, results = L{math_jtj_graph}, scatters = math_jtj_scatters } })
+    adP:createfunctionset("applyJTJ",{math_jtj},L{ { graph = G, results = L{math_jtj_graph}, scatters = math_jtj_scatters } })
     
 else 
 
     P:Function("cost", cost, "G", cost_graph)
-    P:Function("gradient", gradient, "G", gradient_graph)
     P:Function("evalJTF", evalJTF, "G", evalJTF_graph)
     P:Function("applyJTJ", applyJTJ, "G", applyJTJ_graph)
 end
