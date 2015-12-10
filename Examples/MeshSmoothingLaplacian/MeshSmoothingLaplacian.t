@@ -68,7 +68,7 @@ local terra evalJTF(i : int32, j : int32, gi : int32, gj : int32, self : P:Param
 end
 
 
-local terra evalJTF_graph(idx : int32, self : P:ParameterType(), p : P:UnknownType(), r : P:UnknownType(), preconditioner : P:UnknownType())
+local terra evalJTF_graph(idx : int32, self : P:ParameterType(), p : P:UnknownType(), r : P:UnknownType())
 	
 	var w0,h0 = self.G.v0_x[idx], self.G.v0_y[idx]
     var w1,h1 = self.G.v1_x[idx], self.G.v1_y[idx]
