@@ -151,7 +151,6 @@ void Initialization(SolverInput& input, SolverState& state, SolverParameters& pa
 	    cutilSafeCall(        cudaMemcpy(&temp, state.d_scanAlpha, sizeof(float), cudaMemcpyDeviceToHost) );
 	    printf("ScanAlpha (Init): %f\n", temp);
 	#endif
-		
 }
 
 /////////////////////////////////////////////////////////////////////////
@@ -265,13 +264,13 @@ void PCGIteration(SolverInput& input, SolverState& state, SolverParameters& para
 		cutilSafeCall(cudaDeviceSynchronize());
 		cutilCheckMsg(__FUNCTION__);
 	#endif
-        #if DEBUG_PRINT_SOLVER_INFO 
+    #if DEBUG_PRINT_SOLVER_INFO 
 	    float temp;
 	    cutilSafeCall( cudaMemcpy(&temp, state.d_scanAlpha, sizeof(float), cudaMemcpyDeviceToHost) );
 	    printf("ScanAlpha (Step): %f\n", temp);
 	    cutilSafeCall( cudaMemcpy(&temp, state.d_scanBeta, sizeof(float), cudaMemcpyDeviceToHost) );
 	    printf("ScanBeta (Step): %f\n", temp);
-         #endif
+    #endif
 
 
 }
