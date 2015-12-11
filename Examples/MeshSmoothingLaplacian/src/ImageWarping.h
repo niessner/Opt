@@ -31,7 +31,8 @@ class ImageWarping
 		
 			resetGPUMemory();
 			m_warpingSolver	= new CUDAWarpingSolver(N);
-			m_terraWarpingSolver = new TerraWarpingSolver(N, 2*E, d_neighbourIdx, d_neighbourOffset, "MeshSmoothingLaplacian.t", "gaussNewtonGPU");
+			//m_terraWarpingSolver = new TerraWarpingSolver(N, 2 * E, d_neighbourIdx, d_neighbourOffset, "MeshSmoothingLaplacian.t", "gaussNewtonGPU");
+			m_terraWarpingSolver = new TerraWarpingSolver(N, 2 * E, d_neighbourIdx, d_neighbourOffset, "MeshSmoothingLaplacianAD.t", "gaussNewtonGPU");
 		}
 
 		void resetGPUMemory()
