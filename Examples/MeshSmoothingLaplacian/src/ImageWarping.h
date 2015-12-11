@@ -1,6 +1,6 @@
 #pragma once
 
-#define RUN_CUDA 0
+#define RUN_CUDA 1
 #define RUN_TERRA 1
 
 #include "mLibInclude.h"
@@ -101,8 +101,8 @@ class ImageWarping
 			float weightFit = 50.0f;
 			float weightReg = 100.0f;
 		
-			unsigned int nonLinearIter = 1;
-			unsigned int linearIter = 1;
+			unsigned int nonLinearIter = 10;
+			unsigned int linearIter = 10;
 			
 #			if RUN_CUDA
 				std::cout << "CUDA" << std::endl;
