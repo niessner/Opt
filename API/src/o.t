@@ -19,7 +19,7 @@ end
 
 -- constants
 local verboseSolver = true
-local verboseAD = true
+local verboseAD = false
 
 local function newclass(name)
     local mt = { __name = name }
@@ -350,9 +350,17 @@ newImage = terralib.memoize(function(typ, W, H, elemsize, stride)
 	            end
 	        end
 	    end
+	    terra Image:atomicAddChannel(x : int32, y : int32, c : int32, v : typ.metamethods.type)
+	        var addr = &(@[&typ](self.data + y*stride + x*elemsize))(c)
+	        util.atomicAdd(addr,v)
+	    end
 	else
 	    terra Image:atomicAdd(x : int32, y : int32, v : typ)
 	        util.atomicAdd([&typ](self.data + y*stride + x*elemsize),v)
+	    end
+	    terra Image:atomicAddChannel(x : int32, y : int32, c : int32, v : typ) 
+	        var addr = [&typ](self.data + y*stride + x*elemsize)
+	        util.atomicAdd(addr,v)
 	    end
 	end
 	Image.methods.get = macro(function(self,x,y,gx,gy)
@@ -544,16 +552,19 @@ function ImageAccess:shape() return self._shape end -- implementing AD's API for
 function Dim:index() return ad.v[IndexValue:get(self)] end
 
 local SumOfSquares = newclass("SumOfSquares")
-function SumOfSquares:__toadexp()
-    local sum = 0
-    for i,t in ipairs(self.terms) do
-        sum = sum + t*t
-    end
-    return sum
-end
 function ad.sumsquared(...)
-    local exp = terralib.newlist {...}
-    exp = exp:map(function(x) return assert(ad.toexp(x), "expected an ad expression") end)
+    local exp = terralib.newlist {}
+    for i = 1, select("#",...) do
+        local e = select(i,...)
+        if ad.ExpVector:is(e) then
+            for i,t in ipairs(e:expressions()) do
+                t = assert(ad.toexp(t), "expected an ad expression")
+                exp:insert(t)
+            end
+        else
+            exp:insert((assert(ad.toexp(e), "expected an ad expression")))
+        end
+    end
     return SumOfSquares:new { terms = exp }
 end
 local ProblemSpecAD = newclass("ProblemSpecAD")
@@ -1302,9 +1313,8 @@ local function createfunction(problemspec,name,usebounds,W,H,ndims,results,scatt
     for i,s in ipairs(scatters) do
         local image,exp = imageref(s.image),scatterexpressions[i]
         local gr = graphref(s.index)
-        scatterstatements:insert quote
-            image:atomicAdd(gr, exp)
-        end
+        local stmt = s.channel and (`image:atomicAddChannel(gr, s.channel, exp)) or (`image:atomicAdd(gr, exp))
+        scatterstatements:insert(stmt)
     end
 
     local terra generatedfn([dimarguments], [P], [extraimages])
@@ -1343,7 +1353,6 @@ local function stencilforexpression(exp)
         elseif "BoundsAccess" == a.kind then--bounds calculation
             stencil = math.max(stencil,math.max(math.abs(a.x)+a.sx,math.abs(a.y)+a.sy))
         end
-        return ad.v[a]
     end)
     return stencil
 end
@@ -1363,23 +1372,43 @@ function ProblemSpecAD:createfunctionset(name,results,graphfunctions)
     self.P:Function(name,centered,unpack(args))
 end
 
-local function unknowns(exp)
-    local seenunknown = {}
-    local unknownvars = terralib.newlist()
-    exp:visit(function(a)
-        local v = ad.v[a]
-        if ImageAccess:is(a) and a.image.name == "X" and not seenunknown[a] then -- assume image X is unknown
-            unknownvars:insert(v)
-            seenunknown[a] = true
+-- the result is a data structure
+-- { unknown = {<entry>}, graphs = { <graphobj> -> <entry> } }, where each entry is:
+-- { expression = <ad-exp>, unknownaccess = [<ImagAccess>] }
+
+local function classifyresiduals(Rs)
+    local result = { unknown = terralib.newlist {}, graphs = {} }
+    local function unknownaccesses(exp)
+        local classification
+        local seenunknown = {}
+        local unknownaccesses = terralib.newlist()
+        exp:visit(function(a)
+            if ImageAccess:is(a) then -- assume image X is unknown
+                if a.image.name == "X" and not seenunknown[a] then
+                    unknownaccesses:insert(a)
+                    seenunknown[a] = true
+                end
+                local aclass = Offset:is(a.index) and "centered" or a.index.graph
+                assert(nil == classification or aclass == classification, "residual contains image reads from multiple domains")
+                classification = aclass
+            end
+        end)
+        local entry = { expression = exp, unknownaccesses = unknownaccesses }
+        assert(classification, "residual does not contain an unknown term?")
+        if classification == "centered" then
+            result.unknown:insert(entry)
+        else
+            local list = result.graphs[classification] or terralib.newlist()
+            list:insert(entry)
+            result.graphs[classification] = list
         end
-        return v
-    end)
-    return unknownvars
+    end
+    for i,r in ipairs(Rs) do
+        unknownaccesses(r)
+    end
+    return result
 end
 
-local function unknownaccesses(exp)
-	return unknowns(exp):map("key")
-end
 --given that the residual at (0,0) uses the variables in 'unknownsupport',
 --what is the set of residuals will use variable X(0,0).
 --this amounts to taking each variable in unknown support and asking which residual is it
@@ -1421,12 +1450,12 @@ local function lprintf(ident,fmt,...)
     return print(str) 
 end
 
-local function createjtj(Fs,unknown,P)
+local function createjtjcentered(residuals,unknown,P)
     local P_hat = createzerolist(unknown.N)
-	for rn,F in ipairs(Fs) do
+    for rn,residual in ipairs(residuals.unknown) do
+        local F,unknownsupport = residual.expression,residual.unknownaccesses
         lprintf(0,"\n\n\n\n\n##################################################")
         lprintf(0,"r%d = %s",rn,F)
-        local unknownsupport = unknownaccesses(F)
         for channel = 0, unknown.N-1 do
             local x = unknown(0,0,channel)
             local residuals = residualsincludingX00(unknownsupport,channel)
@@ -1463,14 +1492,61 @@ local function createjtj(Fs,unknown,P)
     return conformtounknown(P_hat,unknown)
 end
 
-local function createjtf(problemSpec,Fs,unknown,P)
+local function NewGraphFunctionSpec(graph, results, scatters)
+    return { graph = graph, results = results, scatters = scatters }
+end
+local function NewScatter(im,idx,channel,exp) 
+    return { image = im, index = idx, channel = channel, expression = exp }
+end
+
+local function createjtjgraph(residuals,P,Ap_X)
+    local jtjgraph = terralib.newlist()
+    for graph,terms in pairs(residuals.graphs) do
+        local result = ad.toexp(0)
+        local scatters = terralib.newlist() 
+        local scattermap = {}
+        local function addscatter(u,exp)
+            local s = scattermap[u]
+            if not s then
+                s =  NewScatter(Ap_X,u.index,u.channel,ad.toexp(0))
+                scattermap[u] = s
+                scatters:insert(s)
+            end
+            s.expression = s.expression + exp
+        end
+        for i,term in ipairs(terms) do
+            local F,unknownsupport = term.expression,term.unknownaccesses
+            local unknownvars = unknownsupport:map(function(x) return ad.v[x] end)
+            local partials = F:gradient(unknownvars)
+            local Jp = ad.toexp(0)
+            for i,partial in ipairs(partials) do
+                local u = unknownsupport[i]
+                assert(GraphElement:is(u.index))
+                Jp = Jp + partial*P(u.index,u.channel)
+            end
+            for i,partial in ipairs(partials) do
+                local u = unknownsupport[i]
+                local jtjp = 2*Jp*partial
+                result = result + P(u.index,u.channel)*jtjp
+                addscatter(u,jtjp)
+            end
+        end
+        jtjgraph:insert(NewGraphFunctionSpec(graph,terralib.newlist { result },scatters)) 
+    end
+    return jtjgraph
+end
+local function createjtj(residuals,unknown,P,Ap_X)
+    return createjtjcentered(residuals,unknown,P),createjtjgraph(residuals,P,Ap_X)
+end
+
+local function createjtfcentered(problemSpec,residuals,unknown,P)
    local F_hat = createzerolist(unknown.N) --gradient
    local P_hat = createzerolist(unknown.N) --preconditioner
-	
-	for ridx,F in ipairs(Fs) do
-	    lprintf(0,"-------------")
-	    lprintf(1,"R[%d] = %s",ridx,tostring(F))
-        local unknownsupport = unknownaccesses(F)
+    
+    for ridx,residual in ipairs(residuals.unknown) do
+        local F, unknownsupport = residual.expression,residual.unknownaccesses
+        lprintf(0,"-------------")
+        lprintf(1,"R[%d] = %s",ridx,tostring(F))
         for channel = 0, unknown.N-1 do
             local x = unknown(0,0,channel)
             local residuals = residualsincludingX00(unknownsupport,channel)
@@ -1503,8 +1579,45 @@ local function createjtf(problemSpec,Fs,unknown,P)
 	    F_hat[i] = ad.polysimplify(2.0*F_hat[i])
 	end
 	dprint("JTF =", ad.tostrings({F_hat[1], F_hat[2], F_hat[3]}))
-    return conformtounknown(F_hat,unknown), conformtounknown(P_hat,unknown)
+    return terralib.newlist{conformtounknown(F_hat,unknown), conformtounknown(P_hat,unknown) }
+end
 
+local function createjtfgraph(residuals,P,R)
+    local jtjgraph = terralib.newlist()
+    for graph,terms in pairs(residuals.graphs) do
+        local scatters = terralib.newlist() 
+        local scattermap = {}
+        local function addscatter(u,exp)
+            local s = scattermap[u]
+            if not s then
+                s =  NewScatter(R,u.index,u.channel,ad.toexp(0))
+                scattermap[u] = s
+                scatters:insert(s)
+            end
+            s.expression = s.expression + exp
+        end
+        for i,term in ipairs(terms) do
+            local F,unknownsupport = term.expression,term.unknownaccesses
+            local unknownvars = unknownsupport:map(function(x) return ad.v[x] end)
+            local partials = F:gradient(unknownvars)
+            local Jp = ad.toexp(0)
+            for i,partial in ipairs(partials) do
+                local u = unknownsupport[i]
+                assert(GraphElement:is(u.index))
+                addscatter(u,-2.0*partial*F)
+            end
+        end
+        -- hack in the preconditioner values for now
+        for i = 1,#scatters do
+            local s = scatters[i]
+            scatters:insert(NewScatter(P,s.index,s.channel,s.expression))
+        end
+        jtjgraph:insert(NewGraphFunctionSpec(graph,terralib.newlist {},scatters))
+    end
+    return jtjgraph
+end
+local function createjtf(problemSpec,residuals,unknown,P,R)
+    return createjtfcentered(problemSpec,residuals,unknown,P), createjtfgraph(residuals,P,R)
 end
 
 local lastTime = nil
@@ -1536,39 +1649,48 @@ local function creategradient(unknown,costexp)
     return conformtounknown(gradientsgathered,unknown)
 end
 
-function ProblemSpecAD:Cost(costexp_,jtjexp)
-    local costexp = assert(ad.toexp(costexp_))
+local function createcost(residuals)
+    local function sumsquared(terms)
+        terms = terms:map("expression")
+        local sum = ad.toexp(0)
+        for i,t in ipairs(terms) do
+            sum = sum + t*t
+        end
+        return sum
+    end
+    local graphwork = terralib.newlist()
+    for graph,terms in pairs(residuals.graphs) do
+        graphwork:insert( NewGraphFunctionSpec(graph,terralib.newlist { sumsquared(terms) }, terralib.newlist()) )
+    end
+    return sumsquared(residuals.unknown), graphwork
+end
+
+function ProblemSpecAD:Cost(costexp)
     local unknown = assert(self.nametoimage.X, "unknown image X is not defined")
     
+    assert(SumOfSquares:is(costexp),"expected a sum of squares object")
     
-    dprint("cost expression")
-    dprint(ad.tostrings({assert(costexp)}))
+    local residuals = classifyresiduals(costexp.terms)
     
-    local gradient = creategradient(unknown,costexp)
+    local centeredcost,graphcost = createcost(residuals)
     
-    self.P:Stencil(stencilforexpression(costexp))
-    self.P:Stencil(stencilforexpression(gradient))
+    self.P:Stencil(stencilforexpression(centeredcost))
     
-    if SumOfSquares:is(costexp_) then
-        local P = self:Image("P",unknown.type,unknown.W,unknown.H,-1)
-        local jtjorig = createjtj(costexp_.terms,unknown,P)
-        if not jtjexp then
-            jtjexp = jtjorig	-- includes the 2.0
-            dprint("jtjexp")
-            dprint(jtjexp)
-        end
-        self.P:Stencil(stencilforexpression(jtjexp))
-        self:createfunctionset("applyJTJ",terralib.newlist{jtjexp},{})
-		--gradient with pre-conditioning
-        local gradient,preconditioner = createjtf(self,costexp_.terms,unknown,P)	--includes the 2.0
-		self:createfunctionset("evalJTF",terralib.newlist{gradient,preconditioner},{})
-		
-		--print("Gradient: ", removeboundaries(gradient))
-		--print("Preconditioner: ", removeboundaries(preconditioner))
-    end
+    -- Not updated for graphs yet:    
+    local P = self:Image("P",unknown.type,unknown.W,unknown.H,-1)
+    local Ap_X = self:Image("Ap_X",unknown.type,unknown.W,unknown.H,-2)
+    local R = self:Image("R",unknown.type,unknown.W,unknown.H,-2)
+    local jtjexp,jtjgraph = createjtj(residuals,unknown,P,Ap_X)
+    self.P:Stencil(stencilforexpression(jtjexp))
     
-    self:createfunctionset("cost",terralib.newlist{costexp},{})
-    self:createfunctionset("gradient",terralib.newlist{gradient},{})
+    local jtfcentered,jtfgraph = createjtf(self,residuals,unknown,P,R) --includes the 2.0
+    self.P:Stencil(stencilforexpression(jtfcentered[1]))
+    
+    self:createfunctionset("cost",terralib.newlist{centeredcost},graphcost)
+    self:createfunctionset("applyJTJ",terralib.newlist{jtjexp},jtjgraph)
+    --gradient with pre-conditioning
+    self:createfunctionset("evalJTF",jtfcentered,jtfgraph)
+    
     if self.excludeexp then
         self:createfunctionset("exclude",terralib.newlist{self.excludeexp},{})
     end
@@ -1579,6 +1701,7 @@ function ProblemSpecAD:Cost(costexp_,jtjexp)
     end
     return self.P
 end
+
 function ProblemSpecAD:Exclude(exp)
     self.excludeexp = assert(ad.toexp(exp), "expected a AD expression")
 end

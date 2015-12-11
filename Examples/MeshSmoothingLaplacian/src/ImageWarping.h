@@ -31,7 +31,8 @@ class ImageWarping
 		
 			resetGPUMemory();
 			m_warpingSolver	= new CUDAWarpingSolver(N);
-			m_terraWarpingSolver = new TerraWarpingSolver(N, 2*E, d_neighbourIdx, d_neighbourOffset, "MeshSmoothingLaplacian.t", "gaussNewtonGPU");
+			//m_terraWarpingSolver = new TerraWarpingSolver(N, 2 * E, d_neighbourIdx, d_neighbourOffset, "MeshSmoothingLaplacian.t", "gaussNewtonGPU");
+			m_terraWarpingSolver = new TerraWarpingSolver(N, 2 * E, d_neighbourIdx, d_neighbourOffset, "MeshSmoothingLaplacianAD.t", "gaussNewtonGPU");
 		}
 
 		void resetGPUMemory()
@@ -101,8 +102,8 @@ class ImageWarping
 			float weightFit = 50.0f;
 			float weightReg = 100.0f;
 		
-			unsigned int nonLinearIter = 1;
-			unsigned int linearIter = 1;
+			unsigned int nonLinearIter = 10;
+			unsigned int linearIter = 10;
 			
 #			if RUN_CUDA
 				std::cout << "CUDA" << std::endl;

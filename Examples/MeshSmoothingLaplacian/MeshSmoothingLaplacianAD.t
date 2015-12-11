@@ -1,24 +1,39 @@
 local IO = terralib.includec("stdio.h")
 local adP = ad.ProblemSpec()
 local P = adP.P
-P:Stencil(2)
 local W,H = opt.Dim("W",0), opt.Dim("H",1)
 
-local X = adP:Image("X", opt.float4,W,H,0)
-local A = adP:Image("A", opt.float4,W,H,1)
+local X = adP:Image("X", opt.float3,W,H,0)
+local A = adP:Image("A", opt.float3,W,H,1)
 local G = adP:Graph("G", 0, "v0", W, H, 0, "v1", W, H, 1)
+P:Stencil(2)
+
+local C = terralib.includecstring [[
+#include <math.h>
+]]
+
+--local w_fit = P:Param("w_fit", float, 0)
+--local w_reg = P:Param("w_reg", float, 1)
+
 -- TODO: this should be factored into a parameter
-local w_fit = 0.1
-local w_reg = 1.0
+--local w_fit = 50.0
+--local w_reg = 100.0
+
+local w_fit = adP:Param("w_fit", float, 0)
+local w_reg = adP:Param("w_reg", float, 1)
+
+
+print(w_fit)
+print(w_reg)
 
 useAD = true
 useHandwrittenMath = false
 
 if useAD then
     -- realcost
-    local w_fit_rt, w_reg_rt = math.sqrt(w_fit),math.sqrt(w_reg)
+    local w_fit_rt, w_reg_rt = ad.sqrt(w_fit),ad.sqrt(w_reg)
     local cost = ad.sumsquared(w_fit_rt*(X(0,0) - A(0,0)), 
-                               w_reg_rt*(X(G.v0) - X(G.v1)),
+                               --w_reg_rt*(X(G.v0) - X(G.v1)),
                                w_reg_rt*(X(G.v1) - X(G.v0)))
     return adP:Cost(cost)
 end
