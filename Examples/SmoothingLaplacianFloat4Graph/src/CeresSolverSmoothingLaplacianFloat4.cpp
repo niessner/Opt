@@ -196,7 +196,7 @@ void CeresSolverSmoothingLaplacianFloat4::solve(const ColorImageR32G32B32A32 &im
 
     for (int c = 0; c < 4; c++)
     {
-        for (auto &p : result)
+        for (const auto &p : result)
         {
             p.value[c] = variables[getVarIndex(p.x, p.y, c)];
         }
