@@ -40,7 +40,7 @@ Plan* Optimizer::planProblem(int width, int height, const std::vector<uint32_t>&
         stride.push_back(width * elemsize[i]);
     }
     fprintf(stderr, "Opt_ProblemPlan(%ld, %ld)\n", dims[0], dims[1]);
-    Plan * plan = Opt_ProblemPlan(m_optimizerState, m_problem, dims, (uint32_t*)elemsize.data(), stride.data(), NULL, NULL, NULL);
+    Plan * plan = Opt_ProblemPlan(m_optimizerState, m_problem, dims, (uint32_t*)elemsize.data(), stride.data());
     if (plan == nullptr)
     {
         fprintf(stderr, "Opt_ProblemPlan failed\n");
@@ -58,6 +58,5 @@ struct IterStruct {
 void Optimizer::solve(Plan* plan, std::vector<void*> images, void* params) {
     unsigned int nIter[] = { 1, 10, 8 };
     IterStruct iterStruct(&nIter[0], &nIter[1], &nIter[2]);
-    Opt_ProblemInit(m_optimizerState, plan, images.data(), NULL, (void**)params, (void**)&iterStruct);
-    while (Opt_ProblemStep(m_optimizerState, plan, images.data(), NULL, (void**)params, (void**)&iterStruct));
+    Opt_ProblemSolve(m_optimizerState, plan, images.data(), NULL, NULL, NULL, NULL, (void**)params, (void**)&iterStruct);
 }

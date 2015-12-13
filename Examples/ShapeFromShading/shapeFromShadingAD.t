@@ -196,5 +196,5 @@ if USE_TEMPORAL_CONSTRAINT then
 	--TODO: Implement
 end
 
-local cost = ad.sumsquared(w_g*E_g_h, w_g*E_g_v, w_s*E_s, w_p*E_p, w_r*E_r_h, w_r*E_r_v, w_r*E_r_d)
+local cost = ad.sumsquared(w_g*E_g_h, w_g*E_g_v, w_s*E_s, w_p*E_p)
 return P:Cost(cost)

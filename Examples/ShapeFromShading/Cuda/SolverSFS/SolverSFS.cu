@@ -164,7 +164,6 @@ void Initialization(PatchSolverInput& input, SolverState& state, PatchSolverPara
 	const unsigned int N = input.N;
 
 	const int blocksPerGrid = (N + THREADS_PER_BLOCK - 1) / THREADS_PER_BLOCK;
-	const int shmem_size = sizeof(float)*THREADS_PER_BLOCK;
 
 	if (blocksPerGrid > THREADS_PER_BLOCK)
 	{
@@ -173,7 +172,7 @@ void Initialization(PatchSolverInput& input, SolverState& state, PatchSolverPara
 	}
     cutilSafeCall(cudaMemset(state.d_scanAlpha, 0, sizeof(float)));
     timer.startEvent("PCGInit_Kernel1");
-	PCGInit_Kernel1 << <blocksPerGrid, THREADS_PER_BLOCK, shmem_size >> >(input, state, parameters);
+	PCGInit_Kernel1 << <blocksPerGrid, THREADS_PER_BLOCK >> >(input, state, parameters);
     timer.endEvent();
 	#ifdef _DEBUG
 		cutilSafeCall(cudaDeviceSynchronize());
@@ -186,7 +185,7 @@ void Initialization(PatchSolverInput& input, SolverState& state, PatchSolverPara
 	#endif
 
 	timer.startEvent("PCGInit_Kernel2");
-	PCGInit_Kernel2 << <blocksPerGrid, THREADS_PER_BLOCK, shmem_size >> >(N, state);
+	PCGInit_Kernel2 << <blocksPerGrid, THREADS_PER_BLOCK >> >(N, state);
 	timer.endEvent();
 	#ifdef _DEBUG
 		cutilSafeCall(cudaDeviceSynchronize());
@@ -279,7 +278,6 @@ void PCGIteration(PatchSolverInput& input, SolverState& state, PatchSolverParame
 
 	// Do PCG step
 	const int blocksPerGrid = (N + THREADS_PER_BLOCK - 1) / THREADS_PER_BLOCK;
-	const int shmem_size = sizeof(float)*THREADS_PER_BLOCK;
 
 	if (blocksPerGrid > THREADS_PER_BLOCK)
 	{
@@ -288,7 +286,7 @@ void PCGIteration(PatchSolverInput& input, SolverState& state, PatchSolverParame
 	}
     cutilSafeCall(cudaMemset(state.d_scanAlpha, 0, sizeof(float)));
     timer.startEvent("PCGStep_Kernel1");
-    PCGStep_Kernel1 << <blocksPerGrid, THREADS_PER_BLOCK, shmem_size >> >(input, state, parameters);
+    PCGStep_Kernel1 << <blocksPerGrid, THREADS_PER_BLOCK>> >(input, state, parameters);
     timer.endEvent();
 	#ifdef _DEBUG
 		cutilSafeCall(cudaDeviceSynchronize());
@@ -302,7 +300,7 @@ void PCGIteration(PatchSolverInput& input, SolverState& state, PatchSolverParame
     
     cutilSafeCall(cudaMemset(state.d_scanBeta, 0, sizeof(float)));
 	timer.startEvent("PCGStep_Kernel2");
-	PCGStep_Kernel2 << <blocksPerGrid, THREADS_PER_BLOCK, shmem_size >> >(input, state);
+	PCGStep_Kernel2 << <blocksPerGrid, THREADS_PER_BLOCK>> >(input, state);
 	timer.endEvent();
 	#ifdef _DEBUG
 		cutilSafeCall(cudaDeviceSynchronize());
@@ -315,7 +313,7 @@ void PCGIteration(PatchSolverInput& input, SolverState& state, PatchSolverParame
 	#endif
 
 	timer.startEvent("PCGStep_Kernel3");
-	PCGStep_Kernel3 << <blocksPerGrid, THREADS_PER_BLOCK, shmem_size >> >(input, state);
+	PCGStep_Kernel3 << <blocksPerGrid, THREADS_PER_BLOCK>> >(input, state);
 	timer.endEvent();
 	#ifdef _DEBUG
 		cutilSafeCall(cudaDeviceSynchronize());

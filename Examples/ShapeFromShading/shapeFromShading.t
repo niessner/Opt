@@ -1082,10 +1082,10 @@ local terra applyJTJ(i : int32, j : int32, gi : int32, gj : int32, self : P:Para
 	return 2.0*JTJ
 end
 
-P:Function("cost", {W,H}, cost)
-P:Function("evalJTF", {W,H}, evalJTF)
-P:Function("gradient", {W,H}, gradient)
-P:Function("applyJTJ", {W,H}, applyJTJ)
+P:Function("cost",      cost)
+P:Function("evalJTF",   evalJTF)
+P:Function("gradient",  gradient)
+P:Function("applyJTJ",  applyJTJ)
 
 
 return P
