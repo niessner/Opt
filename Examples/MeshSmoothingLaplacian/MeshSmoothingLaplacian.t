@@ -46,23 +46,10 @@ local terra cost_graph(idx : int32, self : P:ParameterType()) : float
 end
 
 -- eval 2*JtF == \nabla(F); eval diag(2*(Jt)^2) == pre-conditioner
-local terra gradient(i : int32, j : int32, gi : int32, gj : int32, self : P:ParameterType()) : unknownElement
-	
+local terra evalJTF(i : int32, j : int32, gi : int32, gj : int32, self : P:ParameterType())
 	var x = self.X(i, j)
 	var a = self.A(i, j)
-	return w_fit*2.0f * (x - a)
-end
-
-local terra gradient_graph(idx : int32, self : P:ParameterType()) : unknownElement
-    var l_n = laplacianCost(idx, self)	
-	return 2.0f*w_reg*l_n
-end
-
--- eval 2*JtF == \nabla(F); eval diag(2*(Jt)^2) == pre-conditioner
-local terra evalJTF(i : int32, j : int32, gi : int32, gj : int32, self : P:ParameterType())
-	
-	var gradient : unknownElement = gradient(i, j, gi, gj, self)
-	
+	var gradient = w_fit*2.0f * (x - a)	
 	var pre : float = 1.0f
 	return gradient, pre
 end
@@ -75,7 +62,7 @@ local terra evalJTF_graph(idx : int32, self : P:ParameterType(), p : P:UnknownTy
 	
 	--var gradient : unknownElement = gradient_graph(idx, self)
 	-- is there a 2?
-	var lap = 2.0*laplacianCost(idx, self)
+	var lap = 2.0*w_reg*laplacianCost(idx, self)
 	var c0 = ( 1.0f)*lap
 	var c1 = (-1.0f)*lap
 	
@@ -148,13 +135,11 @@ if false then
     --adP:createfunctionset("applyJTJ",math_jtj)
       
     --P:Function("cost", cost, "G", cost_graph)
-    P:Function("gradient", gradient, "G", gradient_graph)
     P:Function("evalJTF", evalJTF, "G", evalJTF_graph)
     P:Function("applyJTJ", applyJTJ, "G", applyJTJ_graph)
     
 else 
     P:Function("cost", 		cost, "G", cost_graph)
-    P:Function("gradient", 	gradient, "G", gradient_graph)
     P:Function("evalJTF", 	evalJTF, "G", evalJTF_graph)
     P:Function("applyJTJ", 	applyJTJ, "G", applyJTJ_graph)
 end

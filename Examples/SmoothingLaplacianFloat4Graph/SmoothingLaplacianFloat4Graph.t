@@ -99,7 +99,7 @@ local terra evalJTF_graph(idx : int32, self : P:ParameterType(), p : P:UnknownTy
     var w1,h1 = self.G.v1_x[idx], self.G.v1_y[idx]
 	
 	-- is there a 2?
-	var lap = 2.0*2.0*laplacianCost(idx, self)
+	var lap = 2.0*2.0*w_reg*laplacianCost(idx, self)
 	var c0 = ( 1.0f)*lap
 	var c1 = (-1.0f)*lap
 	
