@@ -13,16 +13,16 @@ SimpleBuffer::SimpleBuffer(std::string filename, bool onGPU) {
     int datatype;
     fread(&datatype,        sizeof(int), 1, fileHandle);
     m_dataType = DataType(datatype);
-    int elementSize = datatypeToSize(m_dataType);
+    size_t elementSize = datatypeToSize(m_dataType);
 
-    int size = elementSize*m_channelCount*(m_width*m_height);
+    size_t size = elementSize*m_channelCount*(m_width*m_height);
     void* ptr = malloc(size);
-    fread(ptr, sizeof(float)*m_channelCount, (m_width*m_height), fileHandle);
+    fread(ptr, elementSize*m_channelCount, (m_width*m_height), fileHandle);
     
     fclose(fileHandle);
     if (m_onGPU) {
         cudaMalloc(&m_data, size);
-        cudaMemcpy(m_data, ptr, size, cudaMemcpyDeviceToHost);
+        cudaMemcpy(m_data, ptr, size, cudaMemcpyHostToDevice);
         free(ptr);
     } else {
         m_data = ptr;
@@ -62,9 +62,9 @@ void SimpleBuffer::save(std::string filename) {
     fwrite(&m_channelCount, sizeof(int), 1, fileHandle);
     fwrite(&datatype, sizeof(int), 1, fileHandle);
 
-    int elementSize = datatypeToSize(m_dataType);
+    size_t elementSize = datatypeToSize(m_dataType);
 
-    int size = elementSize*m_channelCount*(m_width*m_height);
+    size_t size = elementSize*m_channelCount*(m_width*m_height);
     void* ptr;
     if (m_onGPU) {
         ptr = malloc(size);
@@ -73,7 +73,7 @@ void SimpleBuffer::save(std::string filename) {
         ptr = m_data;
     }
 
-    fwrite(ptr, sizeof(float)*m_channelCount, (m_width*m_height), fileHandle);
+    fwrite(ptr, elementSize*m_channelCount, (m_width*m_height), fileHandle);
     fclose(fileHandle);
     if (m_onGPU) {
         free(ptr);

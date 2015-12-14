@@ -4,7 +4,7 @@
     <CudaCompile Include="src\PatchSolverWarping.cu">
       <Filter>CUDAPatchSolver</Filter>
     </CudaCompile>
-    <CudaCompile Include="src\WarpingSolver.cu">
+    <CudaCompile Include="src\SFSSolver.cu">
       <Filter>CUDASolver</Filter>
     </CudaCompile>
   </ItemGroup>
@@ -13,23 +13,20 @@
     <ClCompile Include="src\CUDAPatchSolverWarping.cpp">
       <Filter>CUDAPatchSolver</Filter>
     </ClCompile>
-    <ClCompile Include="src\CUDAWarpingSolver.cpp">
-      <Filter>CUDASolver</Filter>
-    </ClCompile>
     <ClCompile Include="src\mLibSource.cpp">
       <Filter>mLib</Filter>
     </ClCompile>
     <ClCompile Include="src\SimpleBuffer.cpp">
       <Filter>Util</Filter>
     </ClCompile>
+    <ClCompile Include="src\CUDAImageSolver.cpp">
+      <Filter>CUDASolver</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="src\main.h" />
     <ClInclude Include="src\CUDAPatchSolverWarping.h">
       <Filter>CUDAPatchSolver</Filter>
-    </ClInclude>
-    <ClInclude Include="src\CUDAWarpingSolver.h">
-      <Filter>CUDASolver</Filter>
     </ClInclude>
     <ClInclude Include="src\ImageSolver.h" />
     <ClInclude Include="src\mLibInclude.h">
@@ -46,18 +43,6 @@
     </ClInclude>
     <ClInclude Include="src\PatchSolverWarpingUtil.h">
       <Filter>CUDAPatchSolver</Filter>
-    </ClInclude>
-    <ClInclude Include="src\WarpingSolverEquations.h">
-      <Filter>CUDASolver</Filter>
-    </ClInclude>
-    <ClInclude Include="src\WarpingSolverParameters.h">
-      <Filter>CUDASolver</Filter>
-    </ClInclude>
-    <ClInclude Include="src\WarpingSolverState.h">
-      <Filter>CUDASolver</Filter>
-    </ClInclude>
-    <ClInclude Include="src\WarpingSolverUtil.h">
-      <Filter>CUDASolver</Filter>
     </ClInclude>
     <ClInclude Include="src\SolverUtil.h">
       <Filter>Util</Filter>
@@ -81,7 +66,31 @@
     <ClInclude Include="src\cudaUtil.h">
       <Filter>Util</Filter>
     </ClInclude>
-    <ClInclude Include="src\SolverInput.h" />
+    <ClInclude Include="src\SFSSolverInput.h" />
+    <ClInclude Include="src\CUDAImageSolver.h">
+      <Filter>CUDASolver</Filter>
+    </ClInclude>
+    <ClInclude Include="src\CameraParams.h">
+      <Filter>Util</Filter>
+    </ClInclude>
+    <ClInclude Include="src\SFSSolverState.h">
+      <Filter>CUDASolver</Filter>
+    </ClInclude>
+    <ClInclude Include="src\SFSSolverEquations.h">
+      <Filter>CUDASolver</Filter>
+    </ClInclude>
+    <ClInclude Include="src\SFSSolverUtil.h">
+      <Filter>CUDASolver</Filter>
+    </ClInclude>
+    <ClInclude Include="src\SFSSolverParameters.h">
+      <Filter>CUDASolver</Filter>
+    </ClInclude>
+    <ClInclude Include="src\SFSSolverTerms.h">
+      <Filter>Util</Filter>
+    </ClInclude>
+    <ClInclude Include="src\ConvergenceAnalysis.h">
+      <Filter>Util</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <Filter Include="CUDAPatchSolver">
@@ -104,7 +113,10 @@
     </Filter>
   </ItemGroup>
   <ItemGroup>
-    <None Include="SmoothingLaplacianFloat4Graph.t">
+    <None Include="shapeFromShadingAD.t">
+      <Filter>Terra</Filter>
+    </None>
+    <None Include="shapeFromShading.t">
       <Filter>Terra</Filter>
     </None>
   </ItemGroup>

@@ -15,16 +15,18 @@ protected:
     DataType    m_dataType;
     void*       m_data;
 
+public:
     SimpleBuffer(std::string filename, bool onGPU);
     SimpleBuffer(const SimpleBuffer& other, bool onGPU);
-
-public:
 
     int width() const {
         return m_width;
     }
     int height() const {
         return m_height;
+    }
+    void* data() const {
+        return m_data;
     }
 
     void save(std::string filename);

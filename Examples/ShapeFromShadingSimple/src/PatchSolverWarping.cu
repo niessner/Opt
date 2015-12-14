@@ -1,6 +1,6 @@
 #include <iostream>
 
-#include "WarpingSolverParameters.h"
+#include "SFSSolverParameters.h"
 #include "PatchSolverWarpingState.h"
 #include "PatchSolverWarpingUtil.h"
 #include "PatchSolverWarpingEquations.h"

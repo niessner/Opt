@@ -122,17 +122,19 @@
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClCompile Include="src\CUDAPatchSolverWarping.cpp" />
-    <ClCompile Include="src\CUDAWarpingSolver.cpp" />
+    <ClCompile Include="src\CUDAImageSolver.cpp" />
     <ClCompile Include="src\main.cpp" />
     <ClCompile Include="src\mLibSource.cpp" />
     <ClCompile Include="src\SimpleBuffer.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="Opt.h" />
+    <ClInclude Include="src\CameraParams.h" />
+    <ClInclude Include="src\ConvergenceAnalysis.h" />
     <ClInclude Include="src\CUDAPatchSolverWarping.h" />
     <ClInclude Include="src\CUDATimer.h" />
     <ClInclude Include="src\cudaUtil.h" />
-    <ClInclude Include="src\CUDAWarpingSolver.h" />
+    <ClInclude Include="src\CUDAImageSolver.h" />
     <ClInclude Include="src\cuda_SimpleMatrixUtil.h" />
     <ClInclude Include="src\ImageSolver.h" />
     <ClInclude Include="src\PatchSolverWarpingParameters.h" />
@@ -140,13 +142,14 @@
     <ClInclude Include="src\PatchSolverWarpingState.h" />
     <ClInclude Include="src\PatchSolverWarpingUtil.h" />
     <ClInclude Include="src\OptImageSolver.h" />
+    <ClInclude Include="src\SFSSolverParameters.h" />
     <ClInclude Include="src\SimpleBuffer.h" />
-    <ClInclude Include="src\SolverInput.h" />
+    <ClInclude Include="src\SFSSolverInput.h" />
+    <ClInclude Include="src\SFSSolverEquations.h" />
+    <ClInclude Include="src\SFSSolverUtil.h" />
+    <ClInclude Include="src\SFSSolverTerms.h" />
     <ClInclude Include="src\TerraSolverParameters.h" />
-    <ClInclude Include="src\WarpingSolverEquations.h" />
-    <ClInclude Include="src\WarpingSolverParameters.h" />
-    <ClInclude Include="src\WarpingSolverState.h" />
-    <ClInclude Include="src\WarpingSolverUtil.h" />
+    <ClInclude Include="src\SFSSolverState.h" />
     <ClInclude Include="src\main.h" />
     <ClInclude Include="src\mLibInclude.h" />
     <ClInclude Include="src\SolverUtil.h" />
@@ -160,10 +163,11 @@
   </ItemGroup>
   <ItemGroup>
     <CudaCompile Include="src\PatchSolverWarping.cu" />
-    <CudaCompile Include="src\WarpingSolver.cu" />
+    <CudaCompile Include="src\SFSSolver.cu" />
   </ItemGroup>
   <ItemGroup>
-    <None Include="SmoothingLaplacianFloat4Graph.t" />
+    <None Include="shapeFromShading.t" />
+    <None Include="shapeFromShadingAD.t" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">
