@@ -381,7 +381,6 @@ extern "C" void solveSFSStub(SolverInput& input, SolverState& state, SolverParam
 		Initialization(input, state, parameters, timer);
 
 		for (unsigned int linIter = 0; linIter < parameters.nLinIterations; linIter++) {
-            printf("Iteration %d\n", linIter);
 			PCGIteration(input, state, parameters, timer);
             parameters.weightShading += parameters.weightShadingIncrement;
             if (ca != NULL) 

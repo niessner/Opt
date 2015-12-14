@@ -4,25 +4,12 @@
 
 #include "cutil.h"
 
+
 extern "C" {
 #include "Opt.h"
 }
 
-template <class type> type* createDeviceBuffer(const std::vector<type>& v) {
-	type* d_ptr;
-	cutilSafeCall(cudaMalloc(&d_ptr, sizeof(type)*v.size()));
-
-	cutilSafeCall(cudaMemcpy(d_ptr, v.data(), sizeof(type)*v.size(), cudaMemcpyHostToDevice));
-	return d_ptr;
-}
-
 class OptImageSolver {
-
-	int* d_headX;
-	int* d_headY;
-	int* d_tailX;
-	int* d_tailY;
-	int edgeCount;
 
 public:
 	OptImageSolver(unsigned int width, unsigned int height, const std::string& terraFile, const std::string& optName) : m_optimizerState(nullptr), m_problem(nullptr), m_plan(nullptr)
@@ -30,46 +17,23 @@ public:
 		m_optimizerState = Opt_NewState();
 		m_problem = Opt_ProblemDefine(m_optimizerState, terraFile.c_str(), optName.c_str(), NULL);
 
+        std::vector<uint32_t> elemsize;
+        for (int i = 0; i < 4; ++i) {
+            elemsize.push_back(sizeof(float));
+        }
+        for (int i = 0; i < 2; ++i) {
+            elemsize.push_back(sizeof(char));
+        }
 
-		std::vector<int> headX;
-		std::vector<int> headY;
-		std::vector<int> tailX;
-		std::vector<int> tailY;
+        std::vector<uint32_t> stride;
+        for (int i = 0; i < elemsize.size(); ++i)
+        {
+            stride.push_back(width * elemsize[i]);
+        }
 
-		for (int y = 0; y < (int)height; ++y) {
-			for (int x = 0; x < (int)width; ++x) {
-				if (x < (int)width - 1) {
-					headX.push_back(x);
-					headY.push_back(y);
-
-					tailX.push_back(x + 1);
-					tailY.push_back(y);
-				}
-				if (y < (int)height - 1) {
-					headX.push_back(x);
-					headY.push_back(y);
-
-					tailX.push_back(x);
-					tailY.push_back(y + 1);
-				}
-			}
-		}
-
-		edgeCount = (int)tailX.size();
-
-		d_headX = createDeviceBuffer(headX);
-		d_headY = createDeviceBuffer(headY);
-
-		d_tailX = createDeviceBuffer(tailX);
-		d_tailY = createDeviceBuffer(tailY);
-
-
-		uint32_t stride = width * sizeof(float4);
-		uint32_t strides[] = { stride, stride };
-		uint32_t elemsizes[] = { sizeof(float4), sizeof(float4) };
 		uint32_t dims[] = { width, height };
 
-		m_plan = Opt_ProblemPlan(m_optimizerState, m_problem, dims, elemsizes, strides);
+        m_plan = Opt_ProblemPlan(m_optimizerState, m_problem, dims, elemsize.data(), stride.data());
 
 		assert(m_optimizerState);
 		assert(m_problem);
@@ -78,12 +42,6 @@ public:
 
 	~OptImageSolver()
 	{
-		cutilSafeCall(cudaFree(d_headX));
-		cutilSafeCall(cudaFree(d_headY));
-		cutilSafeCall(cudaFree(d_tailX));
-		cutilSafeCall(cudaFree(d_tailY));
-
-
 		if (m_plan) {
 			Opt_PlanFree(m_optimizerState, m_plan);
 		}
@@ -94,23 +52,29 @@ public:
 
 	}
 
-	void solve(float4* d_unknown, float4* d_target, unsigned int nNonLinearIterations, unsigned int nLinearIterations, unsigned int nBlockIterations, float weightFit, float weightReg)
+    struct IterStruct {
+        unsigned int* nIter;
+        unsigned int* lIter;
+        unsigned int* pIter;
+        IterStruct(unsigned int* n, unsigned int* l, unsigned int* p) : nIter(n), lIter(l), pIter(p) {}
+    };
+
+    void solve(std::shared_ptr<SimpleBuffer> result, const SFSSolverInput& rawSolverInput)
 	{
+        std::vector<void*> images;
+        images.push_back(result->data());
+        images.push_back(rawSolverInput.targetDepth->data());
+        images.push_back(rawSolverInput.targetIntensity->data());
+        images.push_back(rawSolverInput.previousDepth->data());
+        images.push_back(rawSolverInput.maskEdgeMap->data()); // row
+        images.push_back(((unsigned char*)rawSolverInput.maskEdgeMap->data()) + (result->width() * result->height())); // col
 
-		void* data[] = { d_unknown, d_target };
-		void* solverParams[] = { &nNonLinearIterations, &nLinearIterations, &nBlockIterations };
+        unsigned int nIter[] = { rawSolverInput.parameters.nNonLinearIterations, rawSolverInput.parameters.nLinIterations, rawSolverInput.parameters.nPatchIterations };
+        IterStruct iterStruct(&nIter[0], &nIter[1], &nIter[2]);
 
-		float weightFitSqrt = sqrt(weightFit);
-		float weightRegSqrt = sqrt(weightReg);
-		void* problemParams[] = { &weightFitSqrt, &weightRegSqrt };
+        TerraSolverParameterPointers indirectParameters(rawSolverInput.parameters);
 
-
-		//Opt_ProblemInit(m_optimizerState, m_plan, data, NULL, problemParams, (void**)&solverParams);
-		//while (Opt_ProblemStep(m_optimizerState, m_plan, data, NULL, problemParams, NULL));
-		int32_t* xCoords[] = { d_headX, d_tailX };
-		int32_t* yCoords[] = { d_headY, d_tailY };
-		int32_t edgeCounts[] = { edgeCount };
-		Opt_ProblemSolve(m_optimizerState, m_plan, data, edgeCounts, NULL, xCoords, yCoords, problemParams, solverParams);
+        Opt_ProblemSolve(m_optimizerState, m_plan, images.data(), NULL, NULL, NULL, NULL, (void**)&indirectParameters, (void**)&iterStruct);
 	}
 
 private:
