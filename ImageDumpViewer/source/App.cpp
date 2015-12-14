@@ -195,32 +195,79 @@ static void compareCUDAAndTerraNonBlock(RenderDevice* rd, const String& director
     shared_ptr<Texture> costCUDA = Texture::getTextureByName(directory + "cost" + cuda);
     shared_ptr<Texture> costTerra = Texture::getTextureByName(directory + "cost" + terra);
 
+    shared_ptr<Texture> preCUDA = Texture::getTextureByName(directory + "Pre" + cuda);
+    shared_ptr<Texture> preTerra = Texture::getTextureByName(directory + "Pre" + terra);
 
-    static shared_ptr<Texture> preDiff = Texture::singleChannelDifference(rd,
-        Texture::getTextureByName(directory + "Pre" + cuda),
-        Texture::getTextureByName(directory + "Pre" + terra));
+    
 
     shared_ptr<Texture> jtjCUDA = Texture::getTextureByName(directory + "JTJ" + cuda);
     shared_ptr<Texture> jtjTerra = Texture::getTextureByName(directory + "JTJ" + terra);
 
     static shared_ptr<Texture> jtfDiff = differenceImage(rd, "JTF Difference", jtfCUDA, jtfTerra);
     static shared_ptr<Texture> costDiff = Texture::singleChannelDifference(rd, costCUDA, costTerra);
+    static shared_ptr<Texture> preDiff = Texture::singleChannelDifference(rd, preCUDA, preTerra);
     static shared_ptr<Texture> jtjDiff = differenceImage(rd, "JTJ Difference", jtjCUDA, jtjTerra);
+    
 
 
     highPrecisionCompare("Cost", costCUDA, costTerra);
     highPrecisionCompare("JTF", jtfCUDA, jtfTerra);
     highPrecisionCompare("JTJ", jtjCUDA, jtjTerra);
+    highPrecisionCompare("Pre", preCUDA, preTerra);
 
     jtfDiff->visualization.documentGamma = 2.2f;
     costDiff->visualization.documentGamma = 2.2f;
     jtjDiff->visualization.documentGamma = 2.2f;
+    preDiff->visualization.documentGamma = 2.2f;
 
     static shared_ptr<Texture> jtjQ = quotientImage(rd, "JTJ Quotient", jtjCUDA, jtjTerra);
     static shared_ptr<Texture> jtfQ = quotientImage(rd, "JTF Quotient", jtfCUDA, jtfTerra);
     static shared_ptr<Texture> costQ = quotientImage(rd, "Cost Quotient", costCUDA, costTerra);
+    static shared_ptr<Texture> preQ = quotientImage(rd, "Pre Quotient", preCUDA, preTerra);
 }
 
+
+static void compareOptAndCudaNonBlock(RenderDevice* rd, const String& directory) {
+    String opt = "_optAD.imagedump";
+    String cuda = "_nonblock_cuda.imagedump";
+
+    shared_ptr<Texture> jtfOpt = Texture::getTextureByName(directory + "JTF" + opt);
+    shared_ptr<Texture> jtfCUDA = Texture::getTextureByName(directory + "JTF" + cuda);
+
+
+    shared_ptr<Texture> costOpt = Texture::getTextureByName(directory + "cost" + opt);
+    shared_ptr<Texture> costCUDA = Texture::getTextureByName(directory + "cost" + cuda);
+
+
+    shared_ptr<Texture> preOpt = Texture::getTextureByName(directory + "Pre" + opt);
+    shared_ptr<Texture> preCUDA = Texture::getTextureByName(directory + "Pre" + cuda);
+
+
+    shared_ptr<Texture> jtjOpt = Texture::getTextureByName(directory + "JTJ" + opt);
+    shared_ptr<Texture> jtjCUDA = Texture::getTextureByName(directory + "JTJ" + cuda);
+
+
+    static shared_ptr<Texture> costDiff = Texture::singleChannelDifference(rd, costOpt, costCUDA);
+    static shared_ptr<Texture> jtfDiff = Texture::singleChannelDifference(rd, jtfOpt, jtfCUDA);
+    static shared_ptr<Texture> jtjDiff = Texture::singleChannelDifference(rd, jtjOpt, jtjCUDA);
+    static shared_ptr<Texture> preDiff = Texture::singleChannelDifference(rd, preOpt, preCUDA);
+
+
+    highPrecisionCompare("Cost", costOpt, costCUDA);
+    highPrecisionCompare("JTF", jtfOpt, jtfCUDA);
+    highPrecisionCompare("JTJ", jtjOpt, jtjCUDA);
+    highPrecisionCompare("Pre", preOpt, preCUDA);
+
+    jtfDiff->visualization.documentGamma = 2.2f;
+    costDiff->visualization.documentGamma = 2.2f;
+    jtjDiff->visualization.documentGamma = 2.2f;
+    preDiff->visualization.documentGamma = 2.2f;
+
+    static shared_ptr<Texture> jtjQ = quotientImage(rd, "JTJ Quotient", jtjOpt, jtjCUDA);
+    static shared_ptr<Texture> jtfQ = quotientImage(rd, "JTF Quotient", jtfOpt, jtfCUDA);
+    static shared_ptr<Texture> costQ = quotientImage(rd, "Cost Quotient", costOpt, costCUDA);
+    static shared_ptr<Texture> preQ = quotientImage(rd, "Pre Quotient", preOpt, preCUDA);
+}
 
 
 static void compareOptAndTerraNonBlock(RenderDevice* rd, const String& directory) {
@@ -235,9 +282,9 @@ static void compareOptAndTerraNonBlock(RenderDevice* rd, const String& directory
     shared_ptr<Texture> costTerra = Texture::getTextureByName(directory + "cost" + terra);
 
 
-    static shared_ptr<Texture> preDiff = Texture::singleChannelDifference(rd,
-        Texture::getTextureByName(directory + "Pre" + opt),
-        Texture::getTextureByName(directory + "Pre" + terra));
+    shared_ptr<Texture> preOpt = Texture::getTextureByName(directory + "Pre" + opt);
+    shared_ptr<Texture> preTerra = Texture::getTextureByName(directory + "Pre" + terra);
+    
 
     shared_ptr<Texture> jtjOpt = Texture::getTextureByName(directory + "JTJ" + opt);
     shared_ptr<Texture> jtjTerra = Texture::getTextureByName(directory + "JTJ" + terra);
@@ -246,19 +293,23 @@ static void compareOptAndTerraNonBlock(RenderDevice* rd, const String& directory
     static shared_ptr<Texture> costDiff = Texture::singleChannelDifference(rd, costOpt, costTerra);
     static shared_ptr<Texture> jtfDiff = Texture::singleChannelDifference(rd, jtfOpt, jtfTerra);
     static shared_ptr<Texture> jtjDiff = Texture::singleChannelDifference(rd, jtjOpt, jtjTerra);
+    static shared_ptr<Texture> preDiff = Texture::singleChannelDifference(rd, preOpt, preTerra);
 
 
     highPrecisionCompare("Cost", costOpt, costTerra);
     highPrecisionCompare("JTF", jtfOpt, jtfTerra);
     highPrecisionCompare("JTJ", jtjOpt, jtjTerra);
+    highPrecisionCompare("Pre", preOpt, preTerra);
 
     jtfDiff->visualization.documentGamma = 2.2f;
     costDiff->visualization.documentGamma = 2.2f;
     jtjDiff->visualization.documentGamma = 2.2f;
+    preDiff->visualization.documentGamma = 2.2f;
 
     static shared_ptr<Texture> jtjQ = quotientImage(rd, "JTJ Quotient", jtjOpt, jtjTerra);
     static shared_ptr<Texture> jtfQ = quotientImage(rd, "JTF Quotient", jtfOpt, jtfTerra);
     static shared_ptr<Texture> costQ = quotientImage(rd, "Cost Quotient", costOpt, costTerra);
+    static shared_ptr<Texture> preQ = quotientImage(rd, "Pre Quotient", preOpt, preTerra);
 }
 
 
@@ -293,9 +344,11 @@ void App::onInit() {
     RenderDevice* rd = RenderDevice::current;
     //compareCUDABlockAndNonBlock(rd, directory);
 
-    compareCUDAAndTerraNonBlock(rd, directory);
+    //compareCUDAAndTerraNonBlock(rd, directory);
 
     //compareOptAndTerraNonBlock(rd, directory);
+
+    compareOptAndCudaNonBlock(rd, directory);
 
     dynamic_pointer_cast<DefaultRenderer>(m_renderer)->setOrderIndependentTransparency(false);
 }
