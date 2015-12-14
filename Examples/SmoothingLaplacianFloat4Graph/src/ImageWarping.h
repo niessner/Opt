@@ -8,6 +8,7 @@
 #include "CUDAWarpingSolver.h"
 
 #include "TerraSolverWarpingFloat4.h"
+#include "CeresSolverSmoothingLaplacianFloat4.h"
 
 class ImageWarping {
 public:
@@ -24,8 +25,8 @@ public:
 		resetGPUMemory();
 
 		
-		m_warpingSolver	= new CUDAWarpingSolver(m_image.getWidth(), m_image.getHeight());
-		m_terraSolverFloat4 = new TerraSolverWarpingFloat4(m_image.getWidth(), m_image.getHeight(), "smoothingLaplacianFloat4Graph.t", "gaussNewtonGPU");
+		m_warpingSolver	    = new CUDAWarpingSolver(m_image.getWidth(), m_image.getHeight());
+		m_terraSolverFloat4 = new TerraSolverWarpingFloat4(m_image.getWidth(), m_image.getHeight(), "smoothingLaplacianFloat4AD.t", "gaussNewtonGPU");
 		/*		m_terraBlockSolverFloat4 = new TerraSolverWarpingFloat4(m_image.getWidth(), m_image.getHeight(), "smoothingLaplacianFloat4AD.t", "gaussNewtonBlockGPU");*/
 		
 	}
@@ -92,6 +93,13 @@ public:
 		m_terraSolverFloat4->solve(d_imageFloat4, d_targetFloat4, nonLinearIter, linearIter, patchIter, weightFit, weightReg);
 		copyResultToCPUFromFloat4();
 		
+#ifdef USE_CERES
+        std::cout << "\n\nCERES" << std::endl;
+        CeresSolverSmoothingLaplacianFloat4 *ceres = new CeresSolverSmoothingLaplacianFloat4();
+        ceres->solve(m_image, weightFit, weightReg, m_result);
+#endif
+
+
 		return &m_result;
 	}
 

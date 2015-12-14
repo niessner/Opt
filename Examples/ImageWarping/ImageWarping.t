@@ -568,10 +568,10 @@ local terra applyJTJ(i : int32, j : int32, gi : int32, gj : int32, self : P:Para
 	return make_float3(b(0), b(1), bA)
 end
 
-P:Function("cost", {W,H}, cost)
-P:Function("gradient", {W,H}, gradient)
-P:Function("evalJTF", {W,H}, evalJTF)
-P:Function("evalJTFNumeric", {W,H}, evalJTFNumeric)
-P:Function("applyJTJ", {W,H}, applyJTJ)
+P:Function("cost", cost)
+P:Function("gradient", gradient)
+P:Function("evalJTF", evalJTF)
+P:Function("evalJTFNumeric", evalJTFNumeric)
+P:Function("applyJTJ", applyJTJ)
 
 return P

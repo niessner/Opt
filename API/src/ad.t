@@ -358,6 +358,9 @@ function ExpVector:sum()
     end
     return s
 end
+function ExpVector:dot(rhs)
+    return (self*rhs):sum()
+end
 
 -- generates variable names
 local v = {} 
@@ -540,6 +543,21 @@ function Exp:rename(vars)
         return r
     end
     return visitcached(self)
+end
+
+function Exp:visit(fn) -- cheaper way to find all the variable keys when you are not modifying them
+    local visited = {}
+    local function visit(self)
+        if visited[self] then return end
+        visited[self] = true
+        if self.kind == "Var" then
+            fn(self:key())
+        end
+        for i,c in ipairs(self:children()) do
+            visit(c)
+        end
+    end
+    visit(self)
 end
 
 local function countuses(es)

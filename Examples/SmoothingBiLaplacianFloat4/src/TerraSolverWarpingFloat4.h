@@ -20,7 +20,7 @@ public:
 		uint32_t strides[] = { width * sizeof(float4), width * sizeof(float4) };
 		uint32_t elemsizes[] = { sizeof(float4), sizeof(float4) };
 		uint32_t dims[] = { width, height };
-		m_plan = Opt_ProblemPlan(m_optimizerState, m_problem, dims, elemsizes, strides, nullptr, nullptr, nullptr);
+		m_plan = Opt_ProblemPlan(m_optimizerState, m_problem, dims, elemsizes, strides);
 
 		assert(m_optimizerState);
 		assert(m_problem);
@@ -52,7 +52,7 @@ public:
 
 		//Opt_ProblemInit(m_optimizerState, m_plan, data, NULL, problemParams, (void**)&solverParams);
 		//while (Opt_ProblemStep(m_optimizerState, m_plan, data, NULL, problemParams, NULL));
-		Opt_ProblemSolve(m_optimizerState, m_plan, data, NULL, problemParams, solverParams);
+		Opt_ProblemSolve(m_optimizerState, m_plan, data, nullptr, nullptr, nullptr, nullptr, problemParams, solverParams);
 	}
 
 private:

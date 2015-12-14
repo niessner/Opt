@@ -279,6 +279,7 @@ void CUDAPatchSolverSFS::solveSFS(float* d_targetDepth, float* d_depthMapRefined
             TerraSolverParameters tParams;
             
             constructTerraInput(m_patchSolverState.d_x, m_solverInput, parameters, deltaTransform.ptr(), images, tParams, solveCount, OPT_CPU == 1 ? true : false);
+            //tParams.save("default.SFSSolverParameters");
             TerraSolverParameterPointers indirectParameters(tParams);
             s_optimizerAD->solve(plan, images, &indirectParameters);
             ++solveCount;
@@ -295,6 +296,7 @@ void CUDAPatchSolverSFS::solveSFS(float* d_targetDepth, float* d_depthMapRefined
             std::vector<void*> images;
             TerraSolverParameters tParams;
             constructTerraInput(m_patchSolverState.d_x, m_solverInput, parameters, deltaTransform.ptr(), images, tParams, solveCount, OPT_CPU == 1 ? true : false);
+            //tParams.save("default.SFSSolverParameters");
             TerraSolverParameterPointers indirectParameters(tParams);
             s_optimizerNoAD->solve(plan, images, &indirectParameters);
             ++solveCount;

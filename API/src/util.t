@@ -1,11 +1,16 @@
 
 local timeIndividualKernels = true
+-- For saving intermediate buffers to file
 local debugDumpInfo = false
+-- For printing a bunch of junk during the solve
+local debugPrintSolverInfo = false
+
 
 local S = require("std")
 
 local util = {}
 util.debugDumpInfo = debugDumpInfo
+util.debugPrintSolverInfo = debugPrintSolverInfo
 
 util.C = terralib.includecstring [[
 #include <stdio.h>
@@ -323,13 +328,18 @@ local function noFooter(pd)
 	return quote end
 end
 
-util.getParameters = function(ProblemSpec, images, edgeValues, paramValues)
+util.getParameters = function(ProblemSpec, images, graphSizes, edgeValues, xs, ys, paramValues)
 	local inits = terralib.newlist()
 	for _, entry in ipairs(ProblemSpec.parameters) do
 		if entry.kind == "image" then
 			inits:insert(`entry.type { data = [&uint8](images[entry.idx])})
-		elseif entry.kind == "adjacency" then
-			inits:insert(`entry.obj)
+		elseif entry.kind == "graph" then
+		    local graphinits = terralib.newlist { `graphSizes[entry.idx] }
+		    for i,e in ipairs(entry.type.metamethods.elements) do
+		        graphinits:insert( `xs[e.idx] )
+		        graphinits:insert( `ys[e.idx] )
+		    end
+			inits:insert(`entry.type { graphinits } )
 		elseif entry.kind == "edgevalues" then
 			inits:insert(`entry.type { data = [&entry.type.metamethods.type](edgeValues[entry.idx]) })
 		elseif entry.kind == "param" then
@@ -341,14 +351,23 @@ end
 
 
 
-util.positionForValidLane = macro(function(pd,mapMemberName,pw,ph)
-	mapMemberName = mapMemberName:asvalue()
+
+util.getValidUnknown = macro(function(pd,pw,ph)
 	return quote
 		@pw,@ph = blockDim.x * blockIdx.x + threadIdx.x, blockDim.y * blockIdx.y + threadIdx.y
 	in
-		 @pw < pd.parameters.[mapMemberName]:W() and @ph < pd.parameters.[mapMemberName]:H() 
+		 @pw < pd.parameters.X:W() and @ph < pd.parameters.X:H() 
 	end
 end)
+util.getValidGraphElement = macro(function(pd,graphname,idx)
+	graphname = graphname:asvalue()
+	return quote
+		@idx = blockDim.x * blockIdx.x + threadIdx.x
+	in
+		 @idx < pd.parameters.[graphname].N 
+	end
+end)
+
 local positionForValidLane = util.positionForValidLane
 
 local cd = macro(function(cufunc)
@@ -361,51 +380,8 @@ local cd = macro(function(cufunc)
     end
 end)
 
---TODO FIX THE CUDA DEVICE SYNCS
---TODO 
-local makeGPULauncher = function(compiledKernel, kernelName, header, footer, problemSpec, PlanData)
-	assert(problemSpec)
-	assert(problemSpec:BlockSize())
-	local kernelparams = compiledKernel:gettype().parameters
-	local params = terralib.newlist {}
-	for i = 3,#kernelparams do --skip GPU launcher and PlanData
-	    params:insert(symbol(kernelparams[i]))
-	end
-	local terra GPULauncher(pd : &PlanData, [params])
-		var BLOCK_SIZE : int = [problemSpec:BlockSize()]
-		var launch = terralib.CUDAParams { (pd.parameters.X:W() - 1) / BLOCK_SIZE + 1, (pd.parameters.X:H() - 1) / BLOCK_SIZE + 1, 1, BLOCK_SIZE, BLOCK_SIZE, 1, 0, nil }
-		--var launch = terralib.CUDAParams { (pd.parameters.X:W() - 1) / 32 + 1, (pd.parameters.X:H() - 1) / 32 + 1, 1, 32, 32, 1, 0, nil }
-		C.cudaDeviceSynchronize()
-		[header(pd)]
-		C.cudaDeviceSynchronize()
-		var stream : C.cudaStream_t = nil
-		var timingInfo : TimingInfo 
-		if ([timeIndividualKernels]) then
-			C.cudaEventCreate(&timingInfo.startEvent)
-			C.cudaEventCreate(&timingInfo.endEvent)
-	        C.cudaEventRecord(timingInfo.startEvent, stream)
-			timingInfo.eventName = kernelName
-		end
-		compiledKernel(&launch, @pd, params)
-	    cd(C.cudaGetLastError())
-		
-		if ([timeIndividualKernels]) then
-			cd(C.cudaEventRecord(timingInfo.endEvent, stream))
-			pd.timer.timingInfo:insert(timingInfo)
-		end
-
-		cd(C.cudaDeviceSynchronize())
-		cd(C.cudaGetLastError())
-		[footer(pd)]
-	end
+function util.makeGPUFunctions(problemSpec, PlanData, kernels)
 	
-	return GPULauncher
-end
-
-
-util.makeGPUFunctions = function(problemSpec, vars, PlanData, kernels)
-	local gpu = {}
-	local kernelTemplate = {}
 	local wrappedKernels = {}
 	
 	local data = {}
@@ -413,19 +389,76 @@ util.makeGPUFunctions = function(problemSpec, vars, PlanData, kernels)
 	data.PlanData = PlanData
 	data.imageType = problemSpec:UnknownType(false) -- get non-blocked version
 	
-	for k, v in pairs(kernels) do
-		kernelTemplate[k] = v(data)
-	end
 	local kernelFunctions = {}
 	local key = "_"..tostring(os.time())
-	for k,v in pairs(kernelTemplate) do
-	    kernelFunctions[k..key] = { kernel = v.kernel , annotations = { {"maxntidx", 16}, {"maxntidy", 16}, {"maxntidz", 1}, {"minctasm",5} } } -- force at least 5 threadblocks to run per SM
+	for k,v in pairs(kernels) do
+	    kernelFunctions[k..key] = { kernel = v , annotations = { {"maxntidx", 16}, {"maxntidy", 16}, {"maxntidz", 1}, {"minctasm",5} } } -- force at least 5 threadblocks to run per SM
 	end
 	local compiledKernels = terralib.cudacompile(kernelFunctions, false)
-	for k, v in pairs(kernelTemplate) do
-		gpu[k] = makeGPULauncher(compiledKernels[k..key], kernelFunctions[k..key].kernel.name, kernelTemplate[k].header, kernelTemplate[k].footer, problemSpec, PlanData)
-	end
 	
+	local function makeGPULauncher(kernelName,compiledKernel)
+        local kernelparams = compiledKernel:gettype().parameters
+        local params = terralib.newlist {}
+        for i = 3,#kernelparams do --skip GPU launcher and PlanData
+            params:insert(symbol(kernelparams[i]))
+        end
+        local BLOCK_SIZE = problemSpec:BlockSize()
+        local function createLaunchParameters(pd)
+            if not kernelName:match("_Graph$") then
+                return {`pd.parameters.X:W(),`pd.parameters.X:H(),BLOCK_SIZE,BLOCK_SIZE}
+            else
+                return quote
+                    var N = 0
+                    escape
+                        for i,gf in ipairs(problemSpec.functions.cost.graphfunctions) do
+                            local name = gf.graphname
+                            emit quote
+                                if N < pd.parameters.[name].N then
+                                    N = pd.parameters.[name].N
+                                end
+                            end
+                        end
+                    end
+                in 
+                    N,1,BLOCK_SIZE*BLOCK_SIZE,1
+                end
+            end
+        end
+        local terra GPULauncher(pd : &PlanData, [params])
+            var xdim,ydim,xblock,yblock = [ createLaunchParameters(pd) ]
+            if xdim == 0 then -- early out for 0-sized kernels
+                return 0
+            end
+            var launch = terralib.CUDAParams { (xdim - 1) / xblock + 1, (ydim - 1) / yblock + 1, 1, 
+                                                xblock, yblock, 1, 
+                                                0, nil }
+            C.cudaDeviceSynchronize()
+            var stream : C.cudaStream_t = nil
+            var timingInfo : TimingInfo 
+            if ([timeIndividualKernels]) then
+                C.cudaEventCreate(&timingInfo.startEvent)
+                C.cudaEventCreate(&timingInfo.endEvent)
+                C.cudaEventRecord(timingInfo.startEvent, stream)
+                timingInfo.eventName = kernelName
+            end
+            compiledKernel(&launch, @pd, params)
+            cd(C.cudaGetLastError())
+        
+            if ([timeIndividualKernels]) then
+                cd(C.cudaEventRecord(timingInfo.endEvent, stream))
+                pd.timer.timingInfo:insert(timingInfo)
+            end
+
+            cd(C.cudaDeviceSynchronize())
+            cd(C.cudaGetLastError())
+        end
+	    return GPULauncher
+    end
+	
+	local gpu = {}
+	for k, v in pairs(kernels) do
+		gpu[k] = makeGPULauncher(k, compiledKernels[k..key])
+	end
 	
 	return gpu
 end

@@ -29,7 +29,7 @@ public:
 
 
 		m_terraSolver = new TerraSolverPoissonImageEditing(m_image.getWidth(), m_image.getHeight(), "PoissonImageEditingAD.t", "gaussNewtonGPU");
-		m_terraBlockSolver = new TerraSolverPoissonImageEditing(m_image.getWidth(), m_image.getHeight(), "PoissonImageEditingAD.t", "gaussNewtonBlockGPU");
+		//m_terraBlockSolver = new TerraSolverPoissonImageEditing(m_image.getWidth(), m_image.getHeight(), "PoissonImageEditingAD.t", "gaussNewtonBlockGPU");
 	}
 
 	void resetGPUMemory()
@@ -71,7 +71,7 @@ public:
 		SAFE_DELETE(m_warpingSolverPatch);
 
 		SAFE_DELETE(m_terraSolver);
-		SAFE_DELETE(m_terraBlockSolver);
+		//SAFE_DELETE(m_terraBlockSolver);
 	}
 
 	ColorImageR32G32B32A32* solve()
@@ -103,10 +103,10 @@ public:
 		copyResultToCPU();
 
 
-		std::cout << "\n\nTERRA_BLOCK" << std::endl;
-		resetGPUMemory();
-		m_terraBlockSolver->solve(d_image, d_target, d_mask, nonLinearIter, linearIter,  patchIter, weightFit, weightReg );
-		copyResultToCPU();
+		//std::cout << "\n\nTERRA_BLOCK" << std::endl;
+		//resetGPUMemory();
+		//m_terraBlockSolver->solve(d_image, d_target, d_mask, nonLinearIter, linearIter,  patchIter, weightFit, weightReg );
+		//copyResultToCPU();
 
 		return &m_result;
 	}
@@ -131,5 +131,5 @@ private:
 	CUDAWarpingSolver*	    m_warpingSolver;
 	CUDAPatchSolverWarping* m_warpingSolverPatch;
 	TerraSolverPoissonImageEditing* m_terraSolver;
-	TerraSolverPoissonImageEditing* m_terraBlockSolver;
+	//TerraSolverPoissonImageEditing* m_terraBlockSolver;
 };

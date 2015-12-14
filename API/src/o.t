@@ -19,7 +19,7 @@ end
 
 -- constants
 local verboseSolver = true
-local verboseAD = true
+local verboseAD = false
 
 local function newclass(name)
     local mt = { __name = name }
@@ -122,40 +122,8 @@ local problems = {}
 -- allocates the plan
 
 local function compilePlan(problemSpec, kind, params)
-	local vars = {
-		costFunctionType = problemSpec.functions.cost.boundary:gettype()
-	}
-
-	if kind == "gradientDescentCPU" then
-        return solversCPU.gradientDescentCPU(problemSpec, vars)
-	elseif kind == "gradientDescentGPU" then
-		return solversGPU.gradientDescentGPU(problemSpec, vars)
-	elseif kind == "conjugateGradientCPU" then
-		return solversCPU.conjugateGradientCPU(problemSpec, vars)
-	elseif kind == "linearizedConjugateGradientCPU" then
-		return solversCPU.linearizedConjugateGradientCPU(problemSpec, vars)
-	elseif kind == "linearizedConjugateGradientGPU" then
-		return solversGPU.linearizedConjugateGradientGPU(problemSpec, vars)
-	elseif kind == "lbfgsCPU" then
-		return solversCPU.lbfgsCPU(problemSpec, vars)
-	elseif kind == "vlbfgsCPU" then
-		return solversCPU.vlbfgsCPU(problemSpec, vars)
-	elseif kind == "vlbfgsGPU" then
-		return solversGPU.vlbfgsGPU(problemSpec, vars)
-	elseif kind == "bidirectionalVLBFGSCPU" then
-		return solversCPU.bidirectionalVLBFGSCPU(problemSpec, vars)
-	elseif kind == "adaDeltaGPU" then
-		return solversGPU.adaDeltaGPU(problemSpec, vars)
-	elseif kind == "conjugateGradientGPU" then
-		return solversGPU.conjugateGradientGPU(problemSpec, vars)
-	elseif kind == "gaussNewtonGPU" then
-		return solversGPU.gaussNewtonGPU(problemSpec, vars)
-	elseif kind == "gaussNewtonBlockGPU" then
-		return solversGPU.gaussNewtonBlockGPU(problemSpec, vars)
-	end
-	
-	error("unknown kind: "..kind)
-    
+    assert(kind == "gaussNewtonGPU","expected solver kind to be gaussNewtonGPU")
+    return solversGPU.gaussNewtonGPU(problemSpec)
 end
 
 struct opt.GradientDescentPlanParams {
@@ -163,8 +131,8 @@ struct opt.GradientDescentPlanParams {
 }
 
 struct opt.Plan(S.Object) {
-    init : {&opaque,&&opaque,&&opaque,&&opaque,&&opaque} -> {}
-    step : {&opaque,&&opaque,&&opaque,&&opaque,&&opaque} -> int
+    init : {&opaque,&&opaque,&int32,&&opaque,&&int32,&&int32,&&opaque,&&opaque} -> {}
+    step : {&opaque,&&opaque,&int32,&&opaque,&&int32,&&int32,&&opaque,&&opaque} -> int
     data : &opaque
 } 
 
@@ -192,7 +160,7 @@ function opt.ProblemSpec()
     local BlockedProblemParameters = terralib.types.newstruct("BlockedProblemParameters")
 	local problemSpec = ProblemSpec:new { 
 	                         shouldblock = opt.problemkind:match("Block") or false,
-                             parameters = terralib.newlist(),-- listing of each parameter, {name = <string>, kind = <image|adjacency|edgevalue>, idx = <number>, type = <thetypeusedtostoreit>, obj = <theobject for adj> }
+                             parameters = terralib.newlist(),-- listing of each parameter, {name = <string>, kind = <image|graph|edgevalue>, idx = <number>, type = <thetypeusedtostoreit> }
                              names = {}, -- name -> index in parameters list
                              ProblemParameters = terralib.types.newstruct("ProblemParameters"),
                              BlockedProblemParameters = BlockedProblemParameters,
@@ -267,8 +235,8 @@ function ProblemSpec:BlockedTypeForImageEntry(p)
 	return self:BlockedTypeForImage(mm.W,mm.H,mm.typ)
 end
 
-function ProblemSpec:newparameter(name,kind,idx,typ,obj)
-    self.parameters:insert { name = self:toname(name), kind = kind, idx = idx, type = typ, obj = obj }
+function ProblemSpec:newparameter(name,kind,idx,typ)
+    self.parameters:insert { name = self:toname(name), kind = kind, idx = idx, type = typ }
 	self.ProblemParameters.entries:insert { name, typ }
 end
 
@@ -298,12 +266,18 @@ function ProblemSpec:TypeOf(name,blocked)
 	return blocked and self:BlockedTypeForImageEntry(p) or p.type
 end
 
-function ProblemSpec:Function(name,dimensions,boundary,interior)
+function ProblemSpec:Function(name,unknownfunction, ...)
     self:Stage "functions"
-    interior = interior or boundary
-    interior:gettype() -- check this typechecks
-    self.functions[name] = { name = name, dimensions = dimensions, boundary = boundary, interior = interior }
+    unknownfunction:gettype() -- check this typechecks
+    local graphfunctions = terralib.newlist()
+    for i = 1,select("#",...),2 do
+        local graphname, implementation =  select(i,...)
+        implementation:gettype()
+        graphfunctions:insert { graphname = graphname, implementation = implementation }
+    end
+    self.functions[name] = { name = name, unknownfunction = unknownfunction, graphfunctions = graphfunctions }
 end
+
 function ProblemSpec:Param(name,typ,idx)
     self:Stage "inputs"
     self:newparameter(name,"param",idx,typ)
@@ -366,6 +340,29 @@ newImage = terralib.memoize(function(typ, W, H, elemsize, stride)
 	terra Image:inbounds(x : int32, y : int32)
 	    return x >= 0 and y >= 0 and x < W.size and y < H.size
 	end
+	if ad.isterravectortype(typ) then
+	    terra Image:atomicAdd(x : int32, y : int32, v : typ)
+	        escape
+	            for i = 0,typ.metamethods.N - 1 do
+	                emit quote
+	                    util.atomicAdd( &(@[&typ](self.data + y*stride + x*elemsize))(i) ,v(i))
+	                end
+	            end
+	        end
+	    end
+	    terra Image:atomicAddChannel(x : int32, y : int32, c : int32, v : typ.metamethods.type)
+	        var addr = &(@[&typ](self.data + y*stride + x*elemsize))(c)
+	        util.atomicAdd(addr,v)
+	    end
+	else
+	    terra Image:atomicAdd(x : int32, y : int32, v : typ)
+	        util.atomicAdd([&typ](self.data + y*stride + x*elemsize),v)
+	    end
+	    terra Image:atomicAddChannel(x : int32, y : int32, c : int32, v : typ) 
+	        var addr = [&typ](self.data + y*stride + x*elemsize)
+	        util.atomicAdd(addr,v)
+	    end
+	end
 	Image.methods.get = macro(function(self,x,y,gx,gy)
 		if not gx then
 		    gx,gy = x,y
@@ -421,7 +418,7 @@ function ProblemSpec:Image(name,typ,W,H,idx)
     local elemsize = assert(tonumber(opt.elemsizes[idx]))
     local stride = assert(tonumber(opt.strides[idx]))
     local r = newImage(typ, assert(todim(W)), assert(todim(H)), elemsize, stride)
-    self:newparameter(name,"image",idx,r,nil)
+    self:newparameter(name,"image",idx,r)
 end
 
 
@@ -440,81 +437,23 @@ function ProblemSpec:InternalImage(typ,W,H,blocked)
 	end
 end
 
-
-local newAdjacency = terralib.memoize(function(w0,h0,w1,h1)
-    local struct Adj {
-        rowpointer : &int32 --size: w0*h0+1
-        x : &int32 --size is number of total edges in graph
-        y : &int32
-    }
-    local struct AdjEntry {
-        x : int32
-        y : int32
-    }
-    function Adj.metamethods.__typename()
-	  return string.format("Adj( {%s,%s}, {%s,%s} )",w0.name, h0.name,w1.name,h1.name)
-	end
-    local mm = Adj.metamethods
-    terra Adj:count(i : int32, j : int32)
-        var idx = j*w0.size + i
-        return self.rowpointer[idx+1] - self.rowpointer[idx]
-    end
-    terra Adj:W0() return w0.size end
-    terra Adj:H0() return h0.size end
-    terra Adj:W1() return w1.size end
-    terra Adj:H1() return h1.size end
-    local struct AdjIter {
-        adj : &Adj
-        idx : int32
-    }
-    terra Adj:neighbors(i : int32, j : int32)
-        return AdjIter { self, j*self:W0() + i }
-    end
-    AdjIter.metamethods.__for = function(syms,iter,body)
-        return syms, quote
-            var it = iter
-            for i = it.adj.rowpointer[it.idx], it.adj.rowpointer[it.idx+1] do
-                var [syms[1]] : AdjEntry = AdjEntry { it.adj.x[i], it.adj.y[i] }
-                body
-            end
-        end
-    end
-    mm.fromDim = {w0,h0}
-    mm.toDim = {w1,h1}
-    mm.entry = AdjEntry
-    return Adj
-end)
-
-
-function ProblemSpec:Adjacency(name,fromDim,toDim,idx)
+function ProblemSpec:Graph(name, idx, ...)
     self:Stage "inputs"
-    local w0,h0,w1,h1 = assert(todim(fromDim[1])),assert(todim(fromDim[2])),assert(todim(toDim[1])),assert(todim(toDim[2]))
-    local Adj = newAdjacency(w0,h0,w1,h1)
-    local obj = terralib.new(Adj,{assert(opt.rowindexes[idx]),assert(opt.xs[idx]),assert(opt.ys[idx])})
-    self:newparameter(name,"adjacency",idx,Adj,obj)
-end
-
-local newEdgeValues = terralib.memoize(function(typ,adj)
-     assert(terralib.types.istype(typ))
-     local struct EdgeValues {
-        data : &typ
-     }
-	 EdgeValues.metamethods.type = typ
-     terra EdgeValues:get(a : adj.metamethods.entry) : &typ
-        return self.data + a.y*[adj.metamethods.toDim[1].size] + a.x
-     end
-     EdgeValues.metamethods.__apply = macro(function(self, a)
-	    return `@self:get(a)
-	 end)
-	 return EdgeValues
-end)
-
-function ProblemSpec:EdgeValues(name,typ,adjName, idx)
-    self:Stage "inputs"
-    local param = self.parameters[assert(self.names[adjName],"unknown adjacency")]
-    assert(param.kind == "adjacency", "expected the name of an adjacency")
-    local ev = newEdgeValues(typ, param.type)
-    self:newparameter(name,"edgevalues",idx,ev,nil)
+    local GraphType = terralib.types.newstruct(name)
+    GraphType.entries:insert ( {"N",int32} )
+    
+    local mm = GraphType.metamethods
+    mm.idx = idx -- the index into the graph size table
+    mm.elements = terralib.newlist()
+    for i = 1, select("#",...),4 do
+        local name,W,H,idx = select(i,...) --TODO: we don't bother to track the dimensions of these things now
+        assert(todim(W) and todim(H),"Expected dimensions")
+        GraphType.entries:insert ( {name .. "_x", &int32} )
+        GraphType.entries:insert ( {name .. "_y", &int32} )
+        mm.elements:insert( { name = name, idx = assert(tonumber(idx),"expected a numeric index") } )
+    end
+    
+    self:newparameter(name, "graph", idx, GraphType)
 end
 
 local allPlans = terralib.newlist()
@@ -529,11 +468,10 @@ function opt.problemSpecFromFile(filename)
    return file()
 end
 
-local function problemPlan(id, dimensions, elemsizes, strides, rowindexes, xs, ys, pplan)
+local function problemPlan(id, dimensions, elemsizes, strides, pplan)
     local success,p = xpcall(function() 
 		local problemmetadata = assert(problems[id])
         opt.dimensions,opt.elemsizes,opt.strides = dimensions,elemsizes,strides
-        opt.rowindexes,opt.xs,opt.ys = rowindexes,xs,ys
         opt.math = problemmetadata.kind:match("GPU") and util.gpuMath or util.cpuMath
         opt.problemkind = problemmetadata.kind
 		
@@ -545,9 +483,9 @@ local function problemPlan(id, dimensions, elemsizes, strides, rowindexes, xs, y
     end,function(err) errorPrint(debug.traceback(err,2)) end)
 end
 
-terra opt.ProblemPlan(problem : &opt.Problem, dimensions : &uint32, elemsizes : &uint32, strides : &uint32, rowindexes : &&int32, xs : &&int32, ys : &&int32) : &opt.Plan
+terra opt.ProblemPlan(problem : &opt.Problem, dimensions : &uint32, elemsizes : &uint32, strides : &uint32) : &opt.Plan
 	var p : &opt.Plan = nil 
-	problemPlan(int(int64(problem)),dimensions,elemsizes,strides,rowindexes,xs,ys,&p)
+	problemPlan(int(int64(problem)),dimensions,elemsizes,strides,&p)
 	return p
 end 
 
@@ -556,19 +494,29 @@ terra opt.PlanFree(plan : &opt.Plan)
     plan:delete()
 end
 
-terra opt.ProblemInit(plan : &opt.Plan, images : &&opaque, edgevalues : &&opaque, params : &&opaque, solverparams : &&opaque) 
-    return plan.init(plan.data, images, edgevalues, params, solverparams)
+terra opt.ProblemInit(plan : &opt.Plan, images : &&opaque, graphsizes : &int32, edgevalues : &&opaque, xs : &&int32, ys : &&int32, params : &&opaque, solverparams : &&opaque) 
+    return plan.init(plan.data, images, graphsizes, edgevalues, xs, ys, params, solverparams)
 end
-terra opt.ProblemStep(plan : &opt.Plan, images : &&opaque, edgevalues : &&opaque, params : &&opaque, solverparams : &&opaque) : int
-    return plan.step(plan.data, images, edgevalues, params, solverparams)
+terra opt.ProblemStep(plan : &opt.Plan, images : &&opaque, graphsizes : &int32, edgevalues : &&opaque, xs : &&int32, ys : &&int32, params : &&opaque, solverparams : &&opaque) : int
+    return plan.step(plan.data, images, graphsizes, edgevalues, xs, ys, params, solverparams)
 end
-terra opt.ProblemSolve(plan : &opt.Plan, images : &&opaque, edgevalues : &&opaque, params : &&opaque, solverparams : &&opaque)
-   opt.ProblemInit(plan, images, edgevalues, params, solverparams)
-   while opt.ProblemStep(plan, images, edgevalues, params, solverparams) ~= 0 do end
+terra opt.ProblemSolve(plan : &opt.Plan, images : &&opaque, graphsizes : &int32, edgevalues : &&opaque, xs : &&int32, ys : &&int32, params : &&opaque, solverparams : &&opaque)
+   opt.ProblemInit(plan, images, graphsizes, edgevalues, xs, ys, params, solverparams)
+   while opt.ProblemStep(plan, images, graphsizes, edgevalues, xs, ys, params, solverparams) ~= 0 do end
 end
 
 
 ad = require("ad")
+
+
+local Index = ad.newclass("Index")
+local Offset = Index:Variant("Offset") -- an local pixel relative index in an image
+local GraphElement = Index:Variant("GraphElement") -- an index looked up from a graph node
+
+function Offset:__tostring() return ("%d_%d"):format(self.x,self.y) end
+Offset.get = terralib.memoize(function(self,x,y) assert(type(x) == "number" and type(y) == "number") return Offset:new { x = x, y = y } end)
+function GraphElement:__tostring() return ("%s_%s"):format(tostring(self.graph), self.element) end
+GraphElement.get = terralib.memoize(function(self,g,e) return GraphElement:new { graph = g, element = e } end)
 
 local VarDef = ad.newclass("VarDef") -- meta-data attached to each ad variable about what actual value it is
 local ImageAccess = VarDef:Variant("ImageAccess") -- access into one particular image
@@ -577,7 +525,7 @@ local IndexValue = VarDef:Variant("IndexValue") -- query of the numeric index
 local ParamValue = VarDef:Variant("ParamValue") -- get one of the global parameter values
 
 function ImageAccess:__tostring()
-    local r = ("%s_%s_%s_%s"):format(self.image.name,self.x,self.y,self.channel)
+    local r = ("%s_%s_%s"):format(self.image.name,tostring(self.index),self.channel)
     if self:shape() ~= ad.scalar then
         r = r .. ("_%s"):format(tostring(self:shape()))
     end
@@ -587,8 +535,9 @@ function BoundsAccess:__tostring() return ("bounds_%d_%d_%d_%d"):format(self.x,s
 function IndexValue:__tostring() return ({[0] = "i","j","k"})[self.dim._index] end
 function ParamValue:__tostring() return "param_"..self.name end
 
-ImageAccess.get = terralib.memoize(function(self,im,shape,x,y,channel)
-    return ImageAccess:new { image = im, x = x, y = y, channel = channel, _shape = shape}
+ImageAccess.get = terralib.memoize(function(self,im,shape,index,channel)
+    assert(Index:is(index))
+    return ImageAccess:new { image = im, index = index , channel = channel, _shape = shape}
 end)
 
 BoundsAccess.get = terralib.memoize(function(self,x,y,sx,sy)
@@ -603,16 +552,19 @@ function ImageAccess:shape() return self._shape end -- implementing AD's API for
 function Dim:index() return ad.v[IndexValue:get(self)] end
 
 local SumOfSquares = newclass("SumOfSquares")
-function SumOfSquares:__toadexp()
-    local sum = 0
-    for i,t in ipairs(self.terms) do
-        sum = sum + t*t
-    end
-    return sum
-end
 function ad.sumsquared(...)
-    local exp = terralib.newlist {...}
-    exp = exp:map(function(x) return assert(ad.toexp(x), "expected an ad expression") end)
+    local exp = terralib.newlist {}
+    for i = 1, select("#",...) do
+        local e = select(i,...)
+        if ad.ExpVector:is(e) then
+            for i,t in ipairs(e:expressions()) do
+                t = assert(ad.toexp(t), "expected an ad expression")
+                exp:insert(t)
+            end
+        else
+            exp:insert((assert(ad.toexp(e), "expected an ad expression")))
+        end
+    end
     return SumOfSquares:new { terms = exp }
 end
 local ProblemSpecAD = newclass("ProblemSpecAD")
@@ -645,12 +597,17 @@ function ProblemSpecAD:Image(name,typ,W,H,idx)
     return r
 end
 
-local Adjacency = newclass("Adjacency")
-function Adjacency:__tostring() return "<" .. self.name .. ">" end
+local Graph = newclass("Graph")
+function Graph:__tostring() return self.name end
 
-function ProblemSpecAD:Adjacency(name,fromdim,todim,idx)
-    self.P:Adjacency(name,fromdim,todim,idx)
-    return Adjacency:new { name = tostring(name) }
+function ProblemSpecAD:Graph(name,idx,...)
+    self.P:Graph(name,idx,...)
+    local g = Graph:new { name = tostring(name) }
+    for i = 1, select("#",...),4 do
+        local name,W,H,idx = select(i,...)
+        g[name] = GraphElement:get(g,name)
+    end
+    return g
 end
 
 function ProblemSpecAD:Param(name,typ,idx)
@@ -658,20 +615,23 @@ function ProblemSpecAD:Param(name,typ,idx)
     return ad.v[ParamValue:new { name = name, type = typ }]
 end
 
-function Image:__call(x,y,c,extra)
-    local shape = ad.scalar
-    if Adjacency:is(x) and y == nil and c == nil then
-        shape = ad.Shape:fromkeys(x)
-        x,y,c = y or 0,c or 0,extra
+function Image:__call(x,y,c)
+    local index
+    if GraphElement:is(x) then
+        index = x
+        assert(not c,"extra argument?")
+        c = y
+    else
+        index = Offset:get(assert(tonumber(x)),assert(tonumber(y)))
     end
-    x,y,c = assert(tonumber(x)),assert(tonumber(y)),tonumber(c)
+    c = tonumber(c)
     assert(not c or c < self.N, "channel outside of range")
     if self.N == 1 or c then
-        return ad.v[ImageAccess:get(self,shape,x,y,c or 0)]
+        return ad.v[ImageAccess:get(self,ad.scalar,index,c or 0)]
     else
         local r = {}
         for i = 1,self.N do
-            r[i] = ad.v[ImageAccess:get(self,shape,x,y,i-1)]
+            r[i] = ad.v[ImageAccess:get(self,ad.scalar,index,i-1)]
         end
         return ad.Vector(unpack(r))
     end
@@ -685,7 +645,8 @@ function BoundsAccess:shift(x,y)
 end
 function BoundsAccess:type() return bool end --implementing AD's API for keys
 function ImageAccess:shift(x,y)
-    return ImageAccess:get(self.image,self:shape(),self.x + x, self.y + y,self.channel)
+    assert(Offset:is(self.index), "cannot shift graph accesses!")
+    return ImageAccess:get(self.image,self:shape(),Offset:get(self.index.x + x, self.index.y + y),self.channel)
 end
 function IndexValue:shift(x,y)
     local v = {[0] = x,y}
@@ -762,8 +723,8 @@ function Condition:Union(rhs)
     return Condition:create(r)
 end
 
-local function createfunction(problemspec,name,exps,usebounds,W,H)
-    exps = removeboundaries(exps)
+local function createfunction(problemspec,name,usebounds,W,H,ndims,results,scatters)
+    results = removeboundaries(results)
     
     local imageload = terralib.memoize(function(image)
         return IRNode:create { kind = "vectorload", value = image, type = image.image.type, shape = image:shape() }
@@ -802,7 +763,7 @@ local function createfunction(problemspec,name,exps,usebounds,W,H)
             local a = e:key()
             if "ImageAccess" == a.kind then
                 if not a.image.type:isarithmetic() then
-                    local loadvec = imageload(ImageAccess:get(a.image,a:shape(),a.x,a.y,0))
+                    local loadvec = imageload(ImageAccess:get(a.image,a:shape(),a.index,0))
                     loadvec.count = (loadvec.count or 0) + 1
                     return IRNode:create { kind = "vectorextract", children = terralib.newlist { loadvec }, channel = a.channel, type = e:type(), shape = a:shape() }  
                 else
@@ -847,7 +808,10 @@ local function createfunction(problemspec,name,exps,usebounds,W,H)
         end
     end)
     
-    local irroots = exps:map(irmap)
+    local irroots = results:map(irmap)
+    for i,s in ipairs(scatters) do
+        irroots:insert(irmap(s.expression))
+    end
     
     local function  linearizedorder(irroots)
         local visited = {}
@@ -1168,18 +1132,21 @@ local function createfunction(problemspec,name,exps,usebounds,W,H)
         return false
     end
     
-    local function createexp(ir)
-        local function imageref(image)
-            if image.idx >= 0 then
-                return `P.[image.name]
-            else
-                if not extraimages[-image.idx] then
-                    local imtype = problemspec.P:InternalImage(image.type,image.W,image.H)
-                    extraimages[-image.idx] = symbol(imtype,image.name)
-                end
-                return extraimages[-image.idx]
+    local function imageref(image)
+        if image.idx >= 0 then
+            return `P.[image.name]
+        else
+            if not extraimages[-image.idx] then
+                local imtype = problemspec.P:InternalImage(image.type,image.W,image.H)
+                extraimages[-image.idx] = symbol(imtype,image.name)
             end
+            return extraimages[-image.idx]
         end
+    end
+    local function graphref(ge)
+        return {`P.[ge.graph.name].[ge.element.."_x"][i],`P.[ge.graph.name].[ge.element.."_y"][i]}
+    end
+    local function createexp(ir)        
         if "const" == ir.kind then
             return `float(ir.value)
         elseif "intrinsic" == ir.kind then
@@ -1194,26 +1161,37 @@ local function createfunction(problemspec,name,exps,usebounds,W,H)
         elseif "load" == ir.kind then
             local a = ir.value
             local im = imageref(a.image)
-            if conditioncoversload(ir.condition,a.x,a.y) then
-               return `im(mi+[a.x],mj+[a.y])
+            if Offset:is(a.index) then
+                if conditioncoversload(ir.condition,a.index.x,a.index.y) then
+                   return `im(mi+[a.index.x],mj+[a.index.y])
+                else
+                   return `im:get(mi+[a.index.x],mj+[a.index.y],mi+[a.index.x],mj+[a.index.y])
+                end
             else
-               return `im:get(mi+[a.x],mj+[a.y],mi+[a.x],mj+[a.y])
+                local gr = graphref(a.index)
+                return `im(gr)
             end
         elseif "vectorload" == ir.kind then
             local a = ir.value
             local im = imageref(a.image)
-            local s = symbol(("%s_%s_%s"):format(a.image.name,a.x,a.y))
-            
-            if conditioncoversload(ir.condition,a.x,a.y) then
+            local s = symbol(("%s_%s"):format(a.image.name,tostring(a.index)))
+            if Offset:is(a.index) then
+                if conditioncoversload(ir.condition,a.index.x,a.index.y) then
+                    statements:insert(quote
+                        var [s] : a.image.type = im(mi+[a.index.x],mj+[a.index.y])
+                    end)
+                else 
+                    statements:insert(quote
+                        var [s] : a.image.type = 0.f
+                        if opt.InBoundsCalc(mi+[a.index.x],mj+[a.index.y],[W.size],[H.size],0,0) then
+                            [s] = im(mi+[a.index.x],mj+[a.index.y])
+                        end
+                    end)
+                end
+            else
+                local gr = graphref(a.index)
                 statements:insert(quote
-                    var [s] : a.image.type = im(mi+[a.x],mj+[a.y])
-                end)
-            else 
-                statements:insert(quote
-                    var [s] : a.image.type = 0.f
-                    if opt.InBoundsCalc(mi+[a.x],mj+[a.y],[W.size],[H.size],0,0) then
-                        [s] = im(mi+[a.x],mj+[a.y])
-                    end
+                    var [s] : a.image.type = im(gr)
                 end)
             end
             return s
@@ -1321,12 +1299,37 @@ local function createfunction(problemspec,name,exps,usebounds,W,H)
     emitshapechange(currentshape,ad.scalar) -- also blanks condition
     assert(#statementstack == 1)
     
-    local results = irroots:map(emit)
-    local terra generatedfn([i], [j], [gi], [gj], [P], [extraimages])
+    local expressions = irroots:map(emit)
+    local resultexpressions,scatterexpressions = {unpack(expressions,1,#results)},{unpack(expressions,#results+1)}
+    
+    local dimarguments
+    if ndims == 2 then
+        dimarguments = {i,j,gi,gj}
+    else
+        dimarguments = {i}
+    end
+        
+    local scatterstatements = terralib.newlist()
+    for i,s in ipairs(scatters) do
+        local image,exp = imageref(s.image),scatterexpressions[i]
+        local gr = graphref(s.index)
+        local stmt = s.channel and (`image:atomicAddChannel(gr, s.channel, exp)) or (`image:atomicAdd(gr, exp))
+        scatterstatements:insert(stmt)
+    end
+
+    local terra generatedfn([dimarguments], [P], [extraimages])
+        escape
+            if ndims == 1 then
+                emit quote
+                  var[j],[gi],[gj] = 0,0,0
+                end
+            end
+        end
         var [mi],[mj] = [i],[j]
         [declarations]
         [statements]
-        return [results]
+        [scatterstatements]
+        return [resultexpressions]
     end
     generatedfn:setname(name)
     if verboseAD then
@@ -1343,48 +1346,69 @@ local function stencilforexpression(exp)
         end
         return stencil
     end
-    exp:rename(function(a)
+    exp:visit(function(a)
         if "ImageAccess" == a.kind then
-            stencil = math.max(stencil,math.max(math.abs(a.x),math.abs(a.y))) 
+            assert(Offset:is(a.index), "stencils not defined for graph image access")
+            stencil = math.max(stencil,math.max(math.abs(a.index.x),math.abs(a.index.y))) 
         elseif "BoundsAccess" == a.kind then--bounds calculation
             stencil = math.max(stencil,math.max(math.abs(a.x)+a.sx,math.abs(a.y)+a.sy))
         end
-        return ad.v[a]
     end)
     return stencil
 end
-function ProblemSpecAD:createfunctionset(name,...)
-    local exps = terralib.newlist {...}
+local noscatters = terralib.newlist()
+function ProblemSpecAD:createfunctionset(name,results,graphfunctions)
+    results,graphfunctions = terralib.newlist(results), terralib.newlist(graphfunctions)
     local ut = self.P:UnknownType()
     local W,H = ut.metamethods.W,ut.metamethods.H
-    
-    dprint("function set for: ",name)
-    dprint("bound")
-    local boundary = createfunction(self,name,exps,true,W,H)
-    dprint("interior")
-    local interior = boundary -- we don't currently use interior only
-    self.P:Function(name,{W,H},boundary,interior)
+    dprint("function for: ",name)
+    local centered = createfunction(self,name,true,W,H,2,results,noscatters)
+    local args = terralib.newlist()
+    for i,g in ipairs(graphfunctions) do
+        local gf = createfunction(self,("%s_graph%d"):format(name,i),true,W,H,1,g.results,g.scatters)
+        args:insert(g.graph.name)
+        args:insert(gf)
+    end
+    self.P:Function(name,centered,unpack(args))
 end
 
-local getpair = terralib.memoize(function(x,y) return {x = x, y = y} end)
+-- the result is a data structure
+-- { unknown = {<entry>}, graphs = { <graphobj> -> <entry> } }, where each entry is:
+-- { expression = <ad-exp>, unknownaccess = [<ImagAccess>] }
 
-local function unknowns(exp)
-    local seenunknown = {}
-    local unknownvars = terralib.newlist()
-    exp:rename(function(a)
-        local v = ad.v[a]
-        if ImageAccess:is(a) and a.image.name == "X" and not seenunknown[a] then -- assume image X is unknown
-            unknownvars:insert(v)
-            seenunknown[a] = true
+local function classifyresiduals(Rs)
+    local result = { unknown = terralib.newlist {}, graphs = {} }
+    local function unknownaccesses(exp)
+        local classification
+        local seenunknown = {}
+        local unknownaccesses = terralib.newlist()
+        exp:visit(function(a)
+            if ImageAccess:is(a) then -- assume image X is unknown
+                if a.image.name == "X" and not seenunknown[a] then
+                    unknownaccesses:insert(a)
+                    seenunknown[a] = true
+                end
+                local aclass = Offset:is(a.index) and "centered" or a.index.graph
+                assert(nil == classification or aclass == classification, "residual contains image reads from multiple domains")
+                classification = aclass
+            end
+        end)
+        local entry = { expression = exp, unknownaccesses = unknownaccesses }
+        assert(classification, "residual does not contain an unknown term?")
+        if classification == "centered" then
+            result.unknown:insert(entry)
+        else
+            local list = result.graphs[classification] or terralib.newlist()
+            list:insert(entry)
+            result.graphs[classification] = list
         end
-        return v
-    end)
-    return unknownvars
+    end
+    for i,r in ipairs(Rs) do
+        unknownaccesses(r)
+    end
+    return result
 end
 
-local function unknownaccesses(exp)
-	return unknowns(exp):map("key")
-end
 --given that the residual at (0,0) uses the variables in 'unknownsupport',
 --what is the set of residuals will use variable X(0,0).
 --this amounts to taking each variable in unknown support and asking which residual is it
@@ -1393,8 +1417,9 @@ local function residualsincludingX00(unknownsupport,channel)
     assert(channel)
     local r = terralib.newlist()
     for i,u in ipairs(unknownsupport) do
+        assert(Offset:is(u.index),"unexpected graph access")
         if u.channel == channel then
-            r:insert(getpair(-u.x,-u.y))
+            r:insert(Offset:get(-u.index.x,-u.index.y))
         end
     end
     return r
@@ -1425,12 +1450,12 @@ local function lprintf(ident,fmt,...)
     return print(str) 
 end
 
-local function createjtj(Fs,unknown,P)
+local function createjtjcentered(residuals,unknown,P)
     local P_hat = createzerolist(unknown.N)
-	for rn,F in ipairs(Fs) do
+    for rn,residual in ipairs(residuals.unknown) do
+        local F,unknownsupport = residual.expression,residual.unknownaccesses
         lprintf(0,"\n\n\n\n\n##################################################")
         lprintf(0,"r%d = %s",rn,F)
-        local unknownsupport = unknownaccesses(F)
         for channel = 0, unknown.N-1 do
             local x = unknown(0,0,channel)
             local residuals = residualsincludingX00(unknownsupport,channel)
@@ -1443,9 +1468,9 @@ local function createjtj(Fs,unknown,P)
                 lprintf(1,"instance:\ndr%d_%d%d/dx00[%d] = %s",rn,r.x,r.y,channel,tostring(drdx00))
                 local unknowns = unknownsforresidual(r,unknownsupport)
                 for _,u in ipairs(unknowns) do
-                    local drdx_u = rexp:d(unknown(u.x,u.y,u.channel))
+                    local drdx_u = rexp:d(unknown(u.index.x,u.index.y,u.channel))
                     local exp = drdx00*drdx_u
-                    lprintf(2,"term:\ndr%d_%d%d/dx%d%d[%d] = %s",rn,r.x,r.y,u.x,u.y,u.channel,tostring(drdx_u))
+                    lprintf(2,"term:\ndr%d_%d%d/dx%d%d[%d] = %s",rn,r.x,r.y,u.index.x,u.index.y,u.channel,tostring(drdx_u))
                     if not columns[u] then
                         columns[u] = 0
                         nonzerounknowns:insert(u)
@@ -1454,7 +1479,7 @@ local function createjtj(Fs,unknown,P)
                 end
             end
             for _,u in ipairs(nonzerounknowns) do
-                P_hat[channel+1] = P_hat[channel+1] + P(u.x,u.y,u.channel) * columns[u]
+                P_hat[channel+1] = P_hat[channel+1] + P(u.index.x,u.index.y,u.channel) * columns[u]
             end
         end
     end
@@ -1467,14 +1492,61 @@ local function createjtj(Fs,unknown,P)
     return conformtounknown(P_hat,unknown)
 end
 
-local function createjtf(problemSpec,Fs,unknown,P)
+local function NewGraphFunctionSpec(graph, results, scatters)
+    return { graph = graph, results = results, scatters = scatters }
+end
+local function NewScatter(im,idx,channel,exp) 
+    return { image = im, index = idx, channel = channel, expression = exp }
+end
+
+local function createjtjgraph(residuals,P,Ap_X)
+    local jtjgraph = terralib.newlist()
+    for graph,terms in pairs(residuals.graphs) do
+        local result = ad.toexp(0)
+        local scatters = terralib.newlist() 
+        local scattermap = {}
+        local function addscatter(u,exp)
+            local s = scattermap[u]
+            if not s then
+                s =  NewScatter(Ap_X,u.index,u.channel,ad.toexp(0))
+                scattermap[u] = s
+                scatters:insert(s)
+            end
+            s.expression = s.expression + exp
+        end
+        for i,term in ipairs(terms) do
+            local F,unknownsupport = term.expression,term.unknownaccesses
+            local unknownvars = unknownsupport:map(function(x) return ad.v[x] end)
+            local partials = F:gradient(unknownvars)
+            local Jp = ad.toexp(0)
+            for i,partial in ipairs(partials) do
+                local u = unknownsupport[i]
+                assert(GraphElement:is(u.index))
+                Jp = Jp + partial*P(u.index,u.channel)
+            end
+            for i,partial in ipairs(partials) do
+                local u = unknownsupport[i]
+                local jtjp = 2*Jp*partial
+                result = result + P(u.index,u.channel)*jtjp
+                addscatter(u,jtjp)
+            end
+        end
+        jtjgraph:insert(NewGraphFunctionSpec(graph,terralib.newlist { result },scatters)) 
+    end
+    return jtjgraph
+end
+local function createjtj(residuals,unknown,P,Ap_X)
+    return createjtjcentered(residuals,unknown,P),createjtjgraph(residuals,P,Ap_X)
+end
+
+local function createjtfcentered(problemSpec,residuals,unknown,P)
    local F_hat = createzerolist(unknown.N) --gradient
    local P_hat = createzerolist(unknown.N) --preconditioner
-	
-	for ridx,F in ipairs(Fs) do
-	    lprintf(0,"-------------")
-	    lprintf(1,"R[%d] = %s",ridx,tostring(F))
-        local unknownsupport = unknownaccesses(F)
+    
+    for ridx,residual in ipairs(residuals.unknown) do
+        local F, unknownsupport = residual.expression,residual.unknownaccesses
+        lprintf(0,"-------------")
+        lprintf(1,"R[%d] = %s",ridx,tostring(F))
         for channel = 0, unknown.N-1 do
             local x = unknown(0,0,channel)
             local residuals = residualsincludingX00(unknownsupport,channel)
@@ -1507,8 +1579,45 @@ local function createjtf(problemSpec,Fs,unknown,P)
 	    F_hat[i] = ad.polysimplify(2.0*F_hat[i])
 	end
 	dprint("JTF =", ad.tostrings({F_hat[1], F_hat[2], F_hat[3]}))
-    return conformtounknown(F_hat,unknown), conformtounknown(P_hat,unknown)
+    return terralib.newlist{conformtounknown(F_hat,unknown), conformtounknown(P_hat,unknown) }
+end
 
+local function createjtfgraph(residuals,P,R)
+    local jtjgraph = terralib.newlist()
+    for graph,terms in pairs(residuals.graphs) do
+        local scatters = terralib.newlist() 
+        local scattermap = {}
+        local function addscatter(u,exp)
+            local s = scattermap[u]
+            if not s then
+                s =  NewScatter(R,u.index,u.channel,ad.toexp(0))
+                scattermap[u] = s
+                scatters:insert(s)
+            end
+            s.expression = s.expression + exp
+        end
+        for i,term in ipairs(terms) do
+            local F,unknownsupport = term.expression,term.unknownaccesses
+            local unknownvars = unknownsupport:map(function(x) return ad.v[x] end)
+            local partials = F:gradient(unknownvars)
+            local Jp = ad.toexp(0)
+            for i,partial in ipairs(partials) do
+                local u = unknownsupport[i]
+                assert(GraphElement:is(u.index))
+                addscatter(u,-2.0*partial*F)
+            end
+        end
+        -- hack in the preconditioner values for now
+        for i = 1,#scatters do
+            local s = scatters[i]
+            scatters:insert(NewScatter(P,s.index,s.channel,s.expression))
+        end
+        jtjgraph:insert(NewGraphFunctionSpec(graph,terralib.newlist {},scatters))
+    end
+    return jtjgraph
+end
+local function createjtf(problemSpec,residuals,unknown,P,R)
+    return createjtfcentered(problemSpec,residuals,unknown,P), createjtfgraph(residuals,P,R)
 end
 
 local lastTime = nil
@@ -1532,7 +1641,7 @@ local function creategradient(unknown,costexp)
     local gradientsgathered = createzerolist(unknown.N)
     for i,u in ipairs(unknownvars) do
         local a = u:key()
-        local shift = shiftexp(gradient[i],-a.x,-a.y)
+        local shift = shiftexp(gradient[i],-a.index.x,-a.index.y)
         gradientsgathered[a.channel+1] = gradientsgathered[a.channel+1] + shift
     end
     dprint("grad gather")
@@ -1540,41 +1649,50 @@ local function creategradient(unknown,costexp)
     return conformtounknown(gradientsgathered,unknown)
 end
 
-function ProblemSpecAD:Cost(costexp_,jtjexp)
-    local costexp = assert(ad.toexp(costexp_))
+local function createcost(residuals)
+    local function sumsquared(terms)
+        terms = terms:map("expression")
+        local sum = ad.toexp(0)
+        for i,t in ipairs(terms) do
+            sum = sum + t*t
+        end
+        return sum
+    end
+    local graphwork = terralib.newlist()
+    for graph,terms in pairs(residuals.graphs) do
+        graphwork:insert( NewGraphFunctionSpec(graph,terralib.newlist { sumsquared(terms) }, terralib.newlist()) )
+    end
+    return sumsquared(residuals.unknown), graphwork
+end
+
+function ProblemSpecAD:Cost(costexp)
     local unknown = assert(self.nametoimage.X, "unknown image X is not defined")
     
+    assert(SumOfSquares:is(costexp),"expected a sum of squares object")
     
-    dprint("cost expression")
-    dprint(ad.tostrings({assert(costexp)}))
+    local residuals = classifyresiduals(costexp.terms)
     
-    local gradient = creategradient(unknown,costexp)
+    local centeredcost,graphcost = createcost(residuals)
     
-    self.P:Stencil(stencilforexpression(costexp))
-    self.P:Stencil(stencilforexpression(gradient))
+    self.P:Stencil(stencilforexpression(centeredcost))
     
-    if SumOfSquares:is(costexp_) then
-        local P = self:Image("P",unknown.type,unknown.W,unknown.H,-1)
-        local jtjorig = createjtj(costexp_.terms,unknown,P)
-        if not jtjexp then
-            jtjexp = jtjorig	-- includes the 2.0
-            dprint("jtjexp")
-            dprint(jtjexp)
-        end
-        self.P:Stencil(stencilforexpression(jtjexp))
-        self:createfunctionset("applyJTJ",jtjexp)
-		--gradient with pre-conditioning
-        local gradient,preconditioner = createjtf(self,costexp_.terms,unknown,P)	--includes the 2.0
-		self:createfunctionset("evalJTF",gradient,preconditioner)
-		
-		--print("Gradient: ", removeboundaries(gradient))
-		--print("Preconditioner: ", removeboundaries(preconditioner))
-    end
+    -- Not updated for graphs yet:    
+    local P = self:Image("P",unknown.type,unknown.W,unknown.H,-1)
+    local Ap_X = self:Image("Ap_X",unknown.type,unknown.W,unknown.H,-2)
+    local R = self:Image("R",unknown.type,unknown.W,unknown.H,-2)
+    local jtjexp,jtjgraph = createjtj(residuals,unknown,P,Ap_X)
+    self.P:Stencil(stencilforexpression(jtjexp))
     
-    self:createfunctionset("cost",costexp)
-    self:createfunctionset("gradient",gradient)
+    local jtfcentered,jtfgraph = createjtf(self,residuals,unknown,P,R) --includes the 2.0
+    self.P:Stencil(stencilforexpression(jtfcentered[1]))
+    
+    self:createfunctionset("cost",terralib.newlist{centeredcost},graphcost)
+    self:createfunctionset("applyJTJ",terralib.newlist{jtjexp},jtjgraph)
+    --gradient with pre-conditioning
+    self:createfunctionset("evalJTF",jtfcentered,jtfgraph)
+    
     if self.excludeexp then
-        self:createfunctionset("exclude",self.excludeexp)
+        self:createfunctionset("exclude",terralib.newlist{self.excludeexp},{})
     end
     
     if verboseAD then
@@ -1583,6 +1701,7 @@ function ProblemSpecAD:Cost(costexp_,jtjexp)
     end
     return self.P
 end
+
 function ProblemSpecAD:Exclude(exp)
     self.excludeexp = assert(ad.toexp(exp), "expected a AD expression")
 end
@@ -1600,7 +1719,7 @@ util.Dot = macro(function(a,b)
         return `a*b
     end
 end)
-
+opt.Dot = util.Dot
 
 opt.newImage = newImage
 

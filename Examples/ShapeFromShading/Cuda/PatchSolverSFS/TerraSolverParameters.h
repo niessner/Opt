@@ -50,6 +50,12 @@ struct TerraSolverParameters {
     {
         CUDA_SAFE_CALL(cudaMemcpy(lightingCoefficients, d_lightCoeffs, sizeof(float) * 9, cudaMemcpyDeviceToHost));
     }
+
+    void save(const std::string& filename) {
+        FILE* fileHandle = fopen(filename.c_str(), "wb"); //b for binary
+        fwrite(this, sizeof(TerraSolverParameters), 1, fileHandle);
+        fclose(fileHandle);
+    }
 };
 
 struct TerraSolverParameterPointers {

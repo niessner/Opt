@@ -26,6 +26,10 @@ Examples/ShapeFromShading works only on Windows and requires the following:
 
 Make sure mLibExternal/libsWindows/dll64 and OpenNI2\Redist are in your path.
 
+Examples/MeshSmoothingLaplacian works on all platforms, but requires the following:
+1. mLib
+2. mLibExternal
+
 
 ### .imagedump file format ###
 
