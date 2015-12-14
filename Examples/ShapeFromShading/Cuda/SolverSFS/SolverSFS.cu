@@ -26,7 +26,7 @@
 #define WARP_SIZE 32u
 #define WARP_MASK (WARP_SIZE-1u)
 
-
+#define DEBUG_PRINT_INFO 0
 
 
 /*
@@ -178,11 +178,13 @@ void Initialization(PatchSolverInput& input, SolverState& state, PatchSolverPara
 		cutilSafeCall(cudaDeviceSynchronize());
 		cutilCheckMsg(__FUNCTION__);
 
-        float scanAlpha = 0.0f;
-        cutilSafeCall(cudaMemcpy(&scanAlpha, state.d_scanAlpha, sizeof(float), cudaMemcpyDeviceToHost));
-        //printf("ScanAlpha: %f\n", scanAlpha);
         checkEverythingForNan(input, state);
 	#endif
+#   if DEBUG_PRINT_INFO
+        float scanAlpha = 0.0f;
+        cutilSafeCall(cudaMemcpy(&scanAlpha, state.d_scanAlpha, sizeof(float), cudaMemcpyDeviceToHost));
+        printf("ScanAlpha: %f\n", scanAlpha);
+#   endif
 
 	timer.startEvent("PCGInit_Kernel2");
 	PCGInit_Kernel2 << <blocksPerGrid, THREADS_PER_BLOCK >> >(N, state);
@@ -291,12 +293,14 @@ void PCGIteration(PatchSolverInput& input, SolverState& state, PatchSolverParame
 	#ifdef _DEBUG
 		cutilSafeCall(cudaDeviceSynchronize());
 		cutilCheckMsg(__FUNCTION__);
-
-        float scanAlpha = 0.0f;
-        cutilSafeCall(cudaMemcpy(&scanAlpha, state.d_scanAlpha, sizeof(float), cudaMemcpyDeviceToHost));
-        //printf("ScanAlpha: %f\n", scanAlpha);
         checkEverythingForNan(input, state);
 	#endif
+
+#   if DEBUG_PRINT_INFO
+        float scanAlpha = 0.0f;
+        cutilSafeCall(cudaMemcpy(&scanAlpha, state.d_scanAlpha, sizeof(float), cudaMemcpyDeviceToHost));
+        printf("ScanAlpha: %f\n", scanAlpha);
+#   endif
     
     cutilSafeCall(cudaMemset(state.d_scanBeta, 0, sizeof(float)));
 	timer.startEvent("PCGStep_Kernel2");
@@ -305,12 +309,13 @@ void PCGIteration(PatchSolverInput& input, SolverState& state, PatchSolverParame
 	#ifdef _DEBUG
 		cutilSafeCall(cudaDeviceSynchronize());
 		cutilCheckMsg(__FUNCTION__);
-
-        float scanBeta = 0.0f;
-        cutilSafeCall(cudaMemcpy(&scanBeta, state.d_scanBeta, sizeof(float), cudaMemcpyDeviceToHost));
-        //printf("ScanBeta: %f\n", scanBeta);
         checkEverythingForNan(input, state);
 	#endif
+#   if DEBUG_PRINT_INFO
+        float scanBeta = 0.0f;
+        cutilSafeCall(cudaMemcpy(&scanBeta, state.d_scanBeta, sizeof(float), cudaMemcpyDeviceToHost));
+        printf("ScanBeta: %f\n", scanBeta);
+#   endif
 
 	timer.startEvent("PCGStep_Kernel3");
 	PCGStep_Kernel3 << <blocksPerGrid, THREADS_PER_BLOCK>> >(input, state);
