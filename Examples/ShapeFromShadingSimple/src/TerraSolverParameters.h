@@ -1,7 +1,8 @@
 #pragma once
+#include <string>
+#include "cuda_SimpleMatrixUtil.h" 
+#include <stdio.h>
 
-#include "PatchSolverSFSParameters.h"
-#include "../CameraParams.h"
 struct TerraSolverParameters {
     float weightFitting;					// Is initialized by the solver!
 
@@ -30,25 +31,10 @@ struct TerraSolverParameters {
     unsigned int solveCount; // So that the solver can know; used for debugging
 
     TerraSolverParameters() {}
-    TerraSolverParameters(const PatchSolverParameters& p, const CameraParams& cameraParams, float* deltaTransformPtr, float* d_lightCoeffs, unsigned int solveCount) :
-        weightFitting(p.weightFitting),
-        weightRegularizer(p.weightRegularizer),
-        weightPrior(p.weightPrior),
-        weightShading(p.weightShading),
-        weightShadingStart(p.weightShadingStart),
-        weightShadingIncrement(p.weightShadingIncrement),
-        weightBoundary(p.weightBoundary),
-        fx(cameraParams.fx),
-        fy(cameraParams.fy),
-        ux(cameraParams.ux),
-        uy(cameraParams.uy),
-        deltaTransform(deltaTransformPtr),
-        nNonLinearIterations(p.nNonLinearIterations),
-        nLinIterations(p.nLinIterations),
-        nPatchIterations(p.nPatchIterations),
-        solveCount(solveCount)
-    {
-        CUDA_SAFE_CALL(cudaMemcpy(lightingCoefficients, d_lightCoeffs, sizeof(float) * 9, cudaMemcpyDeviceToHost));
+    void load(const std::string& filename) {
+        FILE* fileHandle = fopen(filename.c_str(), "rb"); //b for binary
+        fread(this, sizeof(TerraSolverParameters), 1, fileHandle);
+        fclose(fileHandle);
     }
 
     void save(const std::string& filename) {
