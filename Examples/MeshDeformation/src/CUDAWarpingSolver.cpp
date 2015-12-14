@@ -48,7 +48,18 @@ CUDAWarpingSolver::~CUDAWarpingSolver()
 	cutilSafeCall(cudaFree(m_solverState.d_sumResidual));
 }
 
-void CUDAWarpingSolver::solveGN(float3* d_vertexPosFloat3, float3* d_anglesFloat3, float3* d_vertexPosFloat3Urshape, int* d_numNeighbours, int* d_neighbourIdx, int* d_neighbourOffset, float3* d_vertexPosTargetFloat3, int nonLinearIter, int linearIter, float weightFit, float weightReg)
+void CUDAWarpingSolver::solveGN(
+	float3* d_vertexPosFloat3, 
+	float3* d_anglesFloat3, 
+	float3* d_vertexPosFloat3Urshape, 
+	int* d_numNeighbours, 
+	int* d_neighbourIdx, 
+	int* d_neighbourOffset, 
+	float3* d_vertexPosTargetFloat3, 
+	int nonLinearIter, 
+	int linearIter, 
+	float weightFit, 
+	float weightReg)
 {
 	m_solverState.d_urshape = d_vertexPosFloat3Urshape;
 	m_solverState.d_a = d_anglesFloat3;
