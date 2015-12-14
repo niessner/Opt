@@ -7,10 +7,12 @@
 #ifndef App_h
 #define App_h
 #include <G3D/G3DAll.h>
-
+G3D_DECLARE_ENUM_CLASS(ElementFormat, FLOAT, UCHAR);
 /** Application framework. */
 class App : public GApp {
 protected:
+    
+    
     Array<shared_ptr<Texture> > m_dumpTextures;
 
     /** Called from onInit */

@@ -257,6 +257,7 @@ void CUDAPatchSolverSFS::solveSFS(float* d_targetDepth, float* d_depthMapRefined
                 cutilSafeCall(cudaFree(jtjResult));
                 exit(0);
             }
+            //OptUtil::dumpOptImage(m_solverState.d_x, "default_initialUnknown.imagedump", m_solverInput.width, m_solverInput.height, 1);
             ++step;
             if (GlobalAppState::get().s_useBlockSolver) {
                 patchSolveSFSStub(m_solverInput, m_patchSolverState, parameters, ca);
