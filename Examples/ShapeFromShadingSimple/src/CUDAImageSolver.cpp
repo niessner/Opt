@@ -61,6 +61,10 @@ void CUDAImageSolver::solve(std::shared_ptr<SimpleBuffer>   result, const SFSSol
     cudaMemcpy(solverInput.d_litcoeff, rawSolverInput.parameters.lightingCoefficients, sizeof(float) * 9, cudaMemcpyHostToDevice);
     
     solverInput.deltaTransform = rawSolverInput.parameters.deltaTransform; // transformation to last frame
+    solverInput.calibparams.ux = rawSolverInput.parameters.ux;
+    solverInput.calibparams.uy = rawSolverInput.parameters.uy;
+    solverInput.calibparams.fx = rawSolverInput.parameters.fx;
+    solverInput.calibparams.fy = rawSolverInput.parameters.fy;
 
     SolverParameters parameters;
     parameters.weightFitting = rawSolverInput.parameters.weightFitting;

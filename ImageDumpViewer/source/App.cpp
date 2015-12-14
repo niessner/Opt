@@ -79,26 +79,45 @@ int main(int argc, const char* argv[]) {
 App::App(const GApp::Settings& settings) : GApp(settings) {
 }
 
+static const ImageFormat* imageFormat(ElementFormat elementFormat, int numChannels, int& texelSize) {
+    if (numChannels > 0 && numChannels < 5) {
+        if (elementFormat == ElementFormat::FLOAT) {
+            texelSize = numChannels * sizeof(float);
+            return ImageFormat::floatFormat(numChannels);
+        } else if (elementFormat == ElementFormat::UCHAR) {
+            texelSize = numChannels * sizeof(uint8);
+            switch (numChannels) {
+            case 1:
+                return ImageFormat::R8();
+            case 2:
+                return ImageFormat::RG8();
+            case 3:
+                return ImageFormat::RGB8();
+            case 4:
+                return ImageFormat::RGBA8();
+            }
+        }
+    }
+    alwaysAssertM(false, "Unsupported Image Format");
+}
 
 void App::loadImageDump(const String& filename) {
     BinaryInput bi(filename, G3D_LITTLE_ENDIAN);
     int width   = bi.readInt32();
     int height = bi.readInt32();
     int channels = bi.readInt32();
-    int datatype = bi.readInt32();
-    Array<float> dataArray;
-    dataArray.resize(width*height*channels);
-    for (int i = 0; i < width*height*channels; ++i) {
-        dataArray[i] = bi.readFloat32();
-    }
-    //bi.readFloat32(dataArray, width*height*channels);
-    alwaysAssertM(datatype == 0, "Only float handling currently implemented");
-    shared_ptr<GLPixelTransferBuffer> ptb = GLPixelTransferBuffer::create(width, height, ImageFormat::floatFormat(channels), dataArray.getCArray());
-    shared_ptr<Texture> newTexture = Texture::createEmpty(filename, width, height, ImageFormat::floatFormat(channels));
+    ElementFormat datatype = ElementFormat(bi.readInt32());
+    int texelSize;
+    const ImageFormat* format = imageFormat(datatype, channels, texelSize);
+
+    Array<uint8> dataArray;
+    dataArray.resize(width*height*texelSize);
+    bi.readBytes(dataArray.getCArray(), width*height*texelSize);
+   
+    shared_ptr<GLPixelTransferBuffer> ptb = GLPixelTransferBuffer::create(width, height, format, dataArray.getCArray());
+    shared_ptr<Texture> newTexture = Texture::createEmpty(filename, width, height, format);
     newTexture->update(ptb);
     newTexture->visualization.channels = Texture::Visualization::RasL;
-    newTexture->visualization.max = 2;
-    newTexture->visualization.min = -1;
     m_dumpTextures.append(newTexture);
 
 
@@ -331,7 +350,8 @@ void App::onInit() {
     // developerWindow->videoRecordDialog->setCaptureGui(false);
     developerWindow->cameraControlWindow->moveTo(Point2(developerWindow->cameraControlWindow->rect().x0(), 0));
     
-    String directory = "D:/Projects/DSL/Optimization/Examples/ShapeFromShading/";
+    //String directory = "D:/Projects/DSL/Optimization/Examples/ShapeFromShading/";
+    String directory = "D:/Projects/DSL/Optimization/Examples/ShapeFromShadingSimple/";
 
     Array<String> filenames;
     FileSystem::getFiles(directory+"*.imagedump", filenames);
@@ -348,7 +368,7 @@ void App::onInit() {
 
     //compareOptAndTerraNonBlock(rd, directory);
 
-    compareOptAndCudaNonBlock(rd, directory);
+    //compareOptAndCudaNonBlock(rd, directory);
 
     dynamic_pointer_cast<DefaultRenderer>(m_renderer)->setOrderIndependentTransparency(false);
 }

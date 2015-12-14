@@ -34,7 +34,7 @@ public:
 
 	void resetGPUMemory()
 	{
-        m_result = std::shared_ptr<SimpleBuffer>(new SimpleBuffer(*m_solverInput.targetDepth.get(), true));
+        m_result = std::shared_ptr<SimpleBuffer>(new SimpleBuffer(*m_solverInput.initialUnknown.get(), true));
 	}
 
 	~ImageSolver()
