@@ -19,6 +19,14 @@ protected:
     SimpleBuffer(const SimpleBuffer& other, bool onGPU);
 
 public:
+
+    int width() const {
+        return m_width;
+    }
+    int height() const {
+        return m_height;
+    }
+
     void save(std::string filename);
     ~SimpleBuffer();
 };

@@ -8,53 +8,34 @@
 #include "CUDAWarpingSolver.h"
 
 #include "OptImageSolver.h"
+#include "SolverInput.h"
 
 class ImageSolver {
+private:
+
+    shared_ptr<SimpleBuffer>    m_result;
+    SolverInput                 m_solverInput;
+
+    CUDAWarpingSolver*  m_cudaSolver;
+    OptImageSolver*	    m_optSolver;
+
 public:
-	ImageSolver(const ColorImageR32G32B32A32& image)
+	ImageSolver(const SolverInput& input)
 	{
-		m_image = image;
-
-		cutilSafeCall(cudaMalloc(&d_imageFloat4,	sizeof(float4)*m_image.getWidth()*m_image.getHeight()));
-		cutilSafeCall(cudaMalloc(&d_targetFloat4, sizeof(float4)*m_image.getWidth()*m_image.getHeight()));
-
-		cutilSafeCall(cudaMalloc(&d_imageFloat, sizeof(float)*m_image.getWidth()*m_image.getHeight()));
-		cutilSafeCall(cudaMalloc(&d_targetFloat, sizeof(float)*m_image.getWidth()*m_image.getHeight()));
+        m_solverInput = input;
 
 		resetGPUMemory();
 
 		
-		m_warpingSolver	    = new CUDAWarpingSolver(m_image.getWidth(), m_image.getHeight());
-		m_terraSolverFloat4 = new OptImageSolver(m_image.getWidth(), m_image.getHeight(), "smoothingLaplacianFloat4AD.t", "gaussNewtonGPU");
+        m_cudaSolver = new CUDAWarpingSolver(m_result->width(), m_result->height());
+        m_optSolver = new OptImageSolver(m_result->width(), m_result->height(), "smoothingLaplacianFloat4AD.t", "gaussNewtonGPU");
 		/*		m_terraBlockSolverFloat4 = new OptImageSolver(m_image.getWidth(), m_image.getHeight(), "smoothingLaplacianFloat4AD.t", "gaussNewtonBlockGPU");*/
 		
 	}
 
 	void resetGPUMemory()
 	{
-		float4* h_imageFloat4 = new float4[m_image.getWidth()*m_image.getHeight()];
-		float* h_imageFloat = new float[m_image.getWidth()*m_image.getHeight()];
-
-		for (unsigned int i = 0; i < m_image.getHeight(); i++)
-		{
-			for (unsigned int j = 0; j < m_image.getWidth(); j++)
-			{
-				ml::vec4f v = m_image(j, i);
-				h_imageFloat4[i*m_image.getWidth() + j] = make_float4(v.x, v.y, v.z, 255);
-
-				float avg = h_imageFloat4[i*m_image.getWidth() + j].x + h_imageFloat4[i*m_image.getWidth() + j].y + h_imageFloat4[i*m_image.getWidth() + j].z;
-				h_imageFloat[i*m_image.getWidth() + j] = avg / 3.0f;
-			}
-		}
-
-		cutilSafeCall(cudaMemcpy(d_imageFloat4, h_imageFloat4, sizeof(float4)*m_image.getWidth()*m_image.getHeight(), cudaMemcpyHostToDevice));
-		cutilSafeCall(cudaMemcpy(d_targetFloat4, h_imageFloat4, sizeof(float4)*m_image.getWidth()*m_image.getHeight(), cudaMemcpyHostToDevice));
-
-		cutilSafeCall(cudaMemcpy(d_imageFloat, h_imageFloat, sizeof(float)*m_image.getWidth()*m_image.getHeight(), cudaMemcpyHostToDevice));
-		cutilSafeCall(cudaMemcpy(d_targetFloat, h_imageFloat, sizeof(float)*m_image.getWidth()*m_image.getHeight(), cudaMemcpyHostToDevice));
-
-		delete h_imageFloat4;
-		delete h_imageFloat;
+        m_result = shared_ptr<SimpleBuffer>(new SimpleBuffer(m_solverInput.targetDepth, true));
 	}
 
 	~ImageSolver()
@@ -121,21 +102,4 @@ public:
 
 		delete h_result;
 	}
-
-private:
-
-	ColorImageR32G32B32A32 m_result;
-	ColorImageR32G32B32A32 m_image;
-	
-	float4*	d_imageFloat4;
-	float4* d_targetFloat4;
-	
-	CUDAWarpingSolver*			m_warpingSolver;
-
-	OptImageSolver*	m_terraSolverFloat4; 
-	OptImageSolver*	m_terraBlockSolverFloat4;
-
-
-	float* d_imageFloat;
-	float* d_targetFloat;
 };

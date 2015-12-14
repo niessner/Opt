@@ -1,6 +1,5 @@
 ﻿#pragma once
 
-#include "Resource.h"
 #include "mLibInclude.h"
 
 #ifndef SAFE_DELETE

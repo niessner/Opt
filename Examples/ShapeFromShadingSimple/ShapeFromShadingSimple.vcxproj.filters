@@ -1,3 +1,111 @@
 ﻿<?xml version="1.0" encoding="utf-8"?>
-<Project ToolsVersion="12.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+<Project ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup>
+    <CudaCompile Include="src\PatchSolverWarping.cu">
+      <Filter>CUDAPatchSolver</Filter>
+    </CudaCompile>
+    <CudaCompile Include="src\WarpingSolver.cu">
+      <Filter>CUDASolver</Filter>
+    </CudaCompile>
+  </ItemGroup>
+  <ItemGroup>
+    <ClCompile Include="src\main.cpp" />
+    <ClCompile Include="src\CUDAPatchSolverWarping.cpp">
+      <Filter>CUDAPatchSolver</Filter>
+    </ClCompile>
+    <ClCompile Include="src\CUDAWarpingSolver.cpp">
+      <Filter>CUDASolver</Filter>
+    </ClCompile>
+    <ClCompile Include="src\mLibSource.cpp">
+      <Filter>mLib</Filter>
+    </ClCompile>
+    <ClCompile Include="src\SimpleBuffer.cpp">
+      <Filter>Util</Filter>
+    </ClCompile>
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="src\main.h" />
+    <ClInclude Include="src\CUDAPatchSolverWarping.h">
+      <Filter>CUDAPatchSolver</Filter>
+    </ClInclude>
+    <ClInclude Include="src\CUDAWarpingSolver.h">
+      <Filter>CUDASolver</Filter>
+    </ClInclude>
+    <ClInclude Include="src\ImageSolver.h" />
+    <ClInclude Include="src\mLibInclude.h">
+      <Filter>mLib</Filter>
+    </ClInclude>
+    <ClInclude Include="src\PatchSolverWarpingEquations.h">
+      <Filter>CUDAPatchSolver</Filter>
+    </ClInclude>
+    <ClInclude Include="src\PatchSolverWarpingParameters.h">
+      <Filter>CUDAPatchSolver</Filter>
+    </ClInclude>
+    <ClInclude Include="src\PatchSolverWarpingState.h">
+      <Filter>CUDAPatchSolver</Filter>
+    </ClInclude>
+    <ClInclude Include="src\PatchSolverWarpingUtil.h">
+      <Filter>CUDAPatchSolver</Filter>
+    </ClInclude>
+    <ClInclude Include="src\WarpingSolverEquations.h">
+      <Filter>CUDASolver</Filter>
+    </ClInclude>
+    <ClInclude Include="src\WarpingSolverParameters.h">
+      <Filter>CUDASolver</Filter>
+    </ClInclude>
+    <ClInclude Include="src\WarpingSolverState.h">
+      <Filter>CUDASolver</Filter>
+    </ClInclude>
+    <ClInclude Include="src\WarpingSolverUtil.h">
+      <Filter>CUDASolver</Filter>
+    </ClInclude>
+    <ClInclude Include="src\SolverUtil.h">
+      <Filter>Util</Filter>
+    </ClInclude>
+    <ClInclude Include="src\CUDATimer.h">
+      <Filter>Util</Filter>
+    </ClInclude>
+    <ClInclude Include="Opt.h">
+      <Filter>Opt</Filter>
+    </ClInclude>
+    <ClInclude Include="src\OptImageSolver.h">
+      <Filter>Opt</Filter>
+    </ClInclude>
+    <ClInclude Include="src\SimpleBuffer.h">
+      <Filter>Util</Filter>
+    </ClInclude>
+    <ClInclude Include="src\TerraSolverParameters.h" />
+    <ClInclude Include="src\cuda_SimpleMatrixUtil.h">
+      <Filter>Util</Filter>
+    </ClInclude>
+    <ClInclude Include="src\cudaUtil.h">
+      <Filter>Util</Filter>
+    </ClInclude>
+    <ClInclude Include="src\SolverInput.h" />
+  </ItemGroup>
+  <ItemGroup>
+    <Filter Include="CUDAPatchSolver">
+      <UniqueIdentifier>{9794ad7d-606a-46ee-ad90-3965b6a30d74}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="CUDASolver">
+      <UniqueIdentifier>{7ce91af9-fdb3-4d66-9754-37fab70e588c}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="mLib">
+      <UniqueIdentifier>{4bf5f7ac-f7d2-487e-a769-38f129690a9d}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Terra">
+      <UniqueIdentifier>{39ac182f-acf2-476f-813b-e04429bc36c7}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Util">
+      <UniqueIdentifier>{4dd7fbe3-483c-40a8-974e-02ec8352ad30}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Opt">
+      <UniqueIdentifier>{64b2cd64-34cf-40f6-a5b6-aacba7241a37}</UniqueIdentifier>
+    </Filter>
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="SmoothingLaplacianFloat4Graph.t">
+      <Filter>Terra</Filter>
+    </None>
+  </ItemGroup>
 </Project>

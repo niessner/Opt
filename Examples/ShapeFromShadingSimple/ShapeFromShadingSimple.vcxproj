@@ -14,7 +14,7 @@
     <ProjectGuid>{CA9DD020-FC04-44B1-8741-AFC2A99756D1}</ProjectGuid>
     <Keyword>Win32Proj</Keyword>
     <RootNamespace>DepthWithColor.D3D</RootNamespace>
-    <ProjectName>SmoothingLaplacian</ProjectName>
+    <ProjectName>ShapeFromShadingSimple</ProjectName>
   </PropertyGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'" Label="Configuration">
@@ -121,24 +121,28 @@
     </PreBuildEvent>
   </ItemDefinitionGroup>
   <ItemGroup>
-    <ClCompile Include="src\CeresSolverSmoothingLaplacianFloat4.cpp" />
     <ClCompile Include="src\CUDAPatchSolverWarping.cpp" />
     <ClCompile Include="src\CUDAWarpingSolver.cpp" />
     <ClCompile Include="src\main.cpp" />
     <ClCompile Include="src\mLibSource.cpp" />
+    <ClCompile Include="src\SimpleBuffer.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="Opt.h" />
-    <ClInclude Include="src\CeresSolverSmoothingLaplacianFloat4.h" />
     <ClInclude Include="src\CUDAPatchSolverWarping.h" />
     <ClInclude Include="src\CUDATimer.h" />
+    <ClInclude Include="src\cudaUtil.h" />
     <ClInclude Include="src\CUDAWarpingSolver.h" />
-    <ClInclude Include="src\ImageWarping.h" />
+    <ClInclude Include="src\cuda_SimpleMatrixUtil.h" />
+    <ClInclude Include="src\ImageSolver.h" />
     <ClInclude Include="src\PatchSolverWarpingParameters.h" />
     <ClInclude Include="src\PatchSolverWarpingEquations.h" />
     <ClInclude Include="src\PatchSolverWarpingState.h" />
     <ClInclude Include="src\PatchSolverWarpingUtil.h" />
-    <ClInclude Include="src\TerraSolverWarpingFloat4.h" />
+    <ClInclude Include="src\OptImageSolver.h" />
+    <ClInclude Include="src\SimpleBuffer.h" />
+    <ClInclude Include="src\SolverInput.h" />
+    <ClInclude Include="src\TerraSolverParameters.h" />
     <ClInclude Include="src\WarpingSolverEquations.h" />
     <ClInclude Include="src\WarpingSolverParameters.h" />
     <ClInclude Include="src\WarpingSolverState.h" />
