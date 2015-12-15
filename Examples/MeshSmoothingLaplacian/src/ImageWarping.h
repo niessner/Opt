@@ -1,6 +1,6 @@
 #pragma once
 
-#define RUN_CUDA 0
+#define RUN_CUDA 1
 #define RUN_TERRA 1
 
 #include "mLibInclude.h"
@@ -18,7 +18,8 @@ class ImageWarping
 		ImageWarping(const SimpleMesh* mesh)
 		{
 			m_result = *mesh;
-
+			m_intial = m_result;
+			
 			unsigned int N = (unsigned int)mesh->n_vertices();
 			unsigned int E = (unsigned int)mesh->n_edges();
 
@@ -37,8 +38,8 @@ class ImageWarping
 
 		void resetGPUMemory()
 		{
-			unsigned int N = (unsigned int)m_result.n_vertices();
-			unsigned int E = (unsigned int)m_result.n_edges();
+			unsigned int N = (unsigned int)m_initial.n_vertices();
+			unsigned int E = (unsigned int)m_initial.n_edges();
 			float3* h_vertexPosFloat3 = new float3[N];
 			int*	h_numNeighbours   = new int[N];
 			int*	h_neighbourIdx	  = new int[2*E];
@@ -46,21 +47,21 @@ class ImageWarping
 
 			for (unsigned int i = 0; i < N; i++)
 			{
-				const Vec3f& pt = m_result.point(VertexHandle(i));
+			        const Vec3f& pt = m_initial.point(VertexHandle(i));
 				h_vertexPosFloat3[i] = make_float3(pt[0], pt[1], pt[2]);
 			}
 
 			unsigned int count = 0;
 			unsigned int offset = 0;
 			h_neighbourOffset[0] = 0;
-			for (SimpleMesh::VertexIter v_it = m_result.vertices_begin(); v_it != m_result.vertices_end(); ++v_it)
+			for (SimpleMesh::VertexIter v_it = m_initial.vertices_begin(); v_it != m_initial.vertices_end(); ++v_it)
 			{
 			        VertexHandle c_vh(v_it.handle());
 				//				printf("%d\n", c_vh.idx());
-				unsigned int valance = m_result.valence(c_vh);
+				unsigned int valance = m_initial.valence(c_vh);
 				h_numNeighbours[count] = valance;
 
-				for (SimpleMesh::VertexVertexIter vv_it = m_result.vv_iter(c_vh); vv_it; vv_it++)
+				for (SimpleMesh::VertexVertexIter vv_it = m_initial.vv_iter(c_vh); vv_it; vv_it++)
 				{
 					VertexHandle v_vh(vv_it.handle());
 
@@ -140,6 +141,7 @@ class ImageWarping
 	private:
 
 		SimpleMesh m_result;
+		SimpleMesh m_initial;
 	
 		float3*	d_vertexPosTargetFloat3;
 		float3*	d_vertexPosFloat3;
