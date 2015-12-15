@@ -54,13 +54,6 @@ __inline__ __device__ float evalFDevice(int variableIdx, SolverInput& input, Sol
     const int W = input.width;
     const int H = input.height;
 
-    const float fx = input.calibparams.fx;
-    const float fy = input.calibparams.fy;
-    const float ux = input.calibparams.ux;
-    const float uy = input.calibparams.uy;
-    const float ufx = 1.0f / input.calibparams.fx;
-    const float ufy = 1.0f / input.calibparams.fy;
-
 
     // Common stuff
     const float targetDepth = input.d_targetDepth[variableIdx]; const bool validTarget = IsValidPoint(targetDepth);
