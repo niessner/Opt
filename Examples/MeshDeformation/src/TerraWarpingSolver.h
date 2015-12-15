@@ -8,6 +8,10 @@ extern "C" {
 #include "Opt.h"
 }
 
+struct float6 {
+	float array[6];
+};
+
 template <class type> type* createDeviceBuffer(const std::vector<type>& v) {
 	type* d_ptr;
 	cutilSafeCall(cudaMalloc(&d_ptr, sizeof(type)*v.size()));
@@ -27,7 +31,8 @@ class TerraWarpingSolver {
 	int edgeCount;
 
 public:
-	TerraWarpingSolver(unsigned int vertexCount, unsigned int E, int* d_xCoords, int* d_offsets, const std::string& terraFile, const std::string& optName) : m_optimizerState(nullptr), m_problem(nullptr), m_plan(nullptr)
+	TerraWarpingSolver(unsigned int vertexCount, unsigned int E, int* d_xCoords, int* d_offsets, const std::string& terraFile, const std::string& optName) : 
+		m_optimizerState(nullptr), m_problem(nullptr), m_plan(nullptr)
 	{
 		edgeCount = (int)E;
 		m_optimizerState = Opt_NewState();
@@ -74,6 +79,17 @@ public:
 		assert(m_optimizerState);
 		assert(m_problem);
 		assert(m_plan);
+
+		size_t init_free_byte, init_total_byte;
+		cudaMemGetInfo(&init_free_byte, &init_total_byte);
+		std::cout << init_free_byte / (1024 * 1024) << "MB" << std::endl;
+		size_t size = 32 * 17985000;
+		cudaMalloc(&d_unknowns, size);
+		cudaMemGetInfo(&init_free_byte, &init_total_byte);
+		std::cout << init_free_byte / (1024 * 1024) << "MB" << std::endl;
+
+
+		int a = 5;
 	}
 
 	~TerraWarpingSolver()
@@ -126,4 +142,6 @@ private:
 	OptState*	m_optimizerState;
 	Problem*	m_problem;
 	Plan*		m_plan;
+
+	float6*		d_unknowns;	//float3 (vertices) + float3 (angles)
 };
