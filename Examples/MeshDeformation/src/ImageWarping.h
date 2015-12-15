@@ -1,6 +1,6 @@
 #pragma once
 
-#define RUN_CUDA 0
+#define RUN_CUDA 1
 #define RUN_TERRA 1
 
 #include "mLibInclude.h"
@@ -18,6 +18,7 @@ class ImageWarping
 		ImageWarping(const SimpleMesh* mesh, std::vector<int> constraintsIdx, std::vector<std::vector<float>> constraintsTarget) : m_constraintsIdx(constraintsIdx), m_constraintsTarget(constraintsTarget)
 		{
 			m_result = *mesh;
+			m_initial = m_result;
 
 			unsigned int N = (unsigned int)mesh->n_vertices();
 			unsigned int E = (unsigned int)mesh->n_edges();
@@ -60,8 +61,8 @@ class ImageWarping
 
 		void resetGPUMemory()
 		{
-			unsigned int N = (unsigned int)m_result.n_vertices();
-			unsigned int E = (unsigned int)m_result.n_edges();
+			unsigned int N = (unsigned int)m_initial.n_vertices();
+			unsigned int E = (unsigned int)m_initial.n_edges();
 
 			float3* h_vertexPosFloat3 = new float3[N];
 			int*	h_numNeighbours   = new int[N];
@@ -70,20 +71,20 @@ class ImageWarping
 
 			for (unsigned int i = 0; i < N; i++)
 			{
-				const Vec3f& pt = m_result.point(VertexHandle(i));
+				const Vec3f& pt = m_initial.point(VertexHandle(i));
 				h_vertexPosFloat3[i] = make_float3(pt[0], pt[1], pt[2]);
 			}
 
 			unsigned int count = 0;
 			unsigned int offset = 0;
 			h_neighbourOffset[0] = 0;
-			for (SimpleMesh::VertexIter v_it = m_result.vertices_begin(); v_it != m_result.vertices_end(); ++v_it)
+			for (SimpleMesh::VertexIter v_it = m_initial.vertices_begin(); v_it != m_initial.vertices_end(); ++v_it)
 			{
 			    VertexHandle c_vh(v_it.handle());
-				unsigned int valance = m_result.valence(c_vh);
+				unsigned int valance = m_initial.valence(c_vh);
 				h_numNeighbours[count] = valance;
 
-				for (SimpleMesh::VertexVertexIter vv_it = m_result.vv_iter(c_vh); vv_it; vv_it++)
+				for (SimpleMesh::VertexVertexIter vv_it = m_initial.vv_iter(c_vh); vv_it; vv_it++)
 				{
 					VertexHandle v_vh(vv_it.handle());
 
@@ -139,20 +140,22 @@ class ImageWarping
 		SimpleMesh* solve()
 		{
 			unsigned int numIter = 10;
-			float weightFit = 5.0f;
-			float weightReg = 1.0f;
+			//float weightFit = 5.0f;
+			float weightFit = 1.0f;
+			float weightReg = 0.0f;
 		
 			unsigned int nonLinearIter = 20;
 			unsigned int linearIter = 50;
 			
 #			if RUN_CUDA
 			resetGPUMemory();
-			for (unsigned int i = 0; i < numIter; i++)
+			for (unsigned int i = 1; i < numIter; i++)
 			{
 				std::cout << "//////////// ITERATION" << i << "  (CUDA) ///////////////" << std::endl;
 				setConstraints((float)i/(float)(numIter-1));
 			
 				m_warpingSolver->solveGN(d_vertexPosFloat3, d_anglesFloat3, d_vertexPosFloat3Urshape, d_numNeighbours, d_neighbourIdx, d_neighbourOffset, d_vertexPosTargetFloat3, nonLinearIter, linearIter, weightFit, weightReg);
+				break;
 			}
 			copyResultToCPUFromFloat3();
 #			endif
@@ -160,12 +163,13 @@ class ImageWarping
 
 #			if RUN_TERRA
 			resetGPUMemory();
-			for (unsigned int i = 0; i < numIter; i++)
+			for (unsigned int i = 1; i < numIter; i++)
 			{
 				std::cout << "//////////// ITERATION" << i << "  (TERRA) ///////////////" << std::endl;
 				setConstraints((float)i / (float)(numIter - 1));
 
 				m_terraWarpingSolver->solveGN(d_vertexPosFloat3, d_anglesFloat3, d_vertexPosFloat3Urshape, d_vertexPosTargetFloat3, nonLinearIter, linearIter, weightFit, weightReg);
+				break;
 			}
 			copyResultToCPUFromFloat3();
 #			endif
@@ -190,6 +194,7 @@ class ImageWarping
 	private:
 
 		SimpleMesh m_result;
+		SimpleMesh m_initial;
 	
 		float3* d_anglesFloat3;
 		float3*	d_vertexPosTargetFloat3;
