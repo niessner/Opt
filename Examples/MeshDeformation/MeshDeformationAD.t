@@ -8,17 +8,15 @@ local UrShape = 	adP:Image("UrShape", opt.float3,W,H,1)		--urshape: vertex.xyz
 local Constraints = adP:Image("Constraints", opt.float3,W,H,2)	--constraints
 local G = adP:Graph("G", 0, "v0", W, H, 0, "v1", W, H, 1)
 P:Stencil(2)
+P:UsePreconditioner(false)
 
 local C = terralib.includecstring [[
 #include <math.h>
 ]]
 
 
---local w_fitSqrt = adP:Param("w_fitSqrt", float, 0)
---local w_regSqrt = adP:Param("w_regSqrt", float, 1)
-
-local w_fitSqrt = 1.0
-local w_regSqrt = 1.0
+local w_fitSqrt = adP:Param("w_fitSqrt", float, 0)
+local w_regSqrt = adP:Param("w_regSqrt", float, 1)
 
 
 function evalRot(CosAlpha, CosBeta, CosGamma, SinAlpha, SinBeta, SinGamma)
@@ -39,7 +37,10 @@ function evalR(alpha, beta, gamma)
 end
 	
 function mul(matrix, v)
-	return ad.Vector(matrix(0)*v(0)+matrix(1)*v(1)*matrix(2)*v(2),matrix(3)*v(0)+matrix(4)*v(1)*matrix(5)*v(2),matrix(6)*v(0)+matrix(7)*v(1)*matrix(8)*v(2))
+	return ad.Vector(
+			matrix(0)*v(0)+matrix(1)*v(1)+matrix(2)*v(2),
+			matrix(3)*v(0)+matrix(4)*v(1)+matrix(5)*v(2),
+			matrix(6)*v(0)+matrix(7)*v(1)+matrix(8)*v(2))
 end
 
 local terms = terralib.newlist()
@@ -52,12 +53,14 @@ e_fit = ad.select(ad.greatereq(constraint(0), -999999.9), e_fit, ad.Vector(0.0, 
 terms:insert(w_fitSqrt*e_fit)
 
 --regularization
-local x = ad.Vector(X(G.v0,0), X(G.v0,1), X(G.v0,2))	--vertex-unknown : float3
-local a = ad.Vector(X(G.v0,3), X(G.v0,4), X(G.v0,5))	--rotation(alpha,beta,gamma) : float3
-local R = evalR(a(0), a(1), a(2))						--rotation : float3x3
-local xHat = UrShape(G.v0)								--uv-urshape : float3
+local x0 = X(G.v0)	--float6
+local x1 = X(G.v1)	--float6
+local x = ad.Vector(x0(0), x0(1), x0(2))	--vertex-unknown : float3
+local a = ad.Vector(x0(3), x0(4), x0(5))	--rotation(alpha,beta,gamma) : float3
+local R = evalR(a(0), a(1), a(2))			--rotation : float3x3
+local xHat = UrShape(G.v0)					--uv-urshape : float3
 	
-local n = ad.Vector(X(G.v1,0), X(G.v1,1), X(G.v1,2))
+local n = ad.Vector(x1(0), x1(1), x1(2))
 local ARAPCost = (x - n) - mul(R, (xHat - UrShape(G.v1)))
 
 terms:insert(w_regSqrt*ARAPCost)
