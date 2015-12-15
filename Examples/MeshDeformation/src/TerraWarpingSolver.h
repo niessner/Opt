@@ -12,6 +12,10 @@ struct float6 {
 	float array[6];
 };
 
+extern "C" void convertToFloat6(const float3* src0, const float3* src1, float6* target, unsigned int numVars);
+extern "C" void convertFromFloat6(const float6* source, float3* tar0, float3* tar1, unsigned int numVars);
+
+
 template <class type> type* createDeviceBuffer(const std::vector<type>& v) {
 	type* d_ptr;
 	cutilSafeCall(cudaMalloc(&d_ptr, sizeof(type)*v.size()));
@@ -80,16 +84,9 @@ public:
 		assert(m_problem);
 		assert(m_plan);
 
-		size_t init_free_byte, init_total_byte;
-		cudaMemGetInfo(&init_free_byte, &init_total_byte);
-		std::cout << init_free_byte / (1024 * 1024) << "MB" << std::endl;
-		size_t size = 32 * 17985000;
-		cudaMalloc(&d_unknowns, size);
-		cudaMemGetInfo(&init_free_byte, &init_total_byte);
-		std::cout << init_free_byte / (1024 * 1024) << "MB" << std::endl;
 
-
-		int a = 5;
+		m_numUnknown = vertexCount;
+		cutilSafeCall(cudaMalloc(&d_unknowns, sizeof(float6)*vertexCount));
 	}
 
 	~TerraWarpingSolver()
@@ -107,6 +104,7 @@ public:
 			Opt_ProblemDelete(m_optimizerState, m_problem);
 		}
 
+		cutilSafeCall(cudaFree(d_unknowns));
 	}
 
 	//void solve(float3* d_unknown, float3* d_target, unsigned int nNonLinearIterations, unsigned int nLinearIterations, unsigned int nBlockIterations, float weightFit, float weightReg)
@@ -125,7 +123,9 @@ public:
 	{
 		unsigned int nBlockIterations = 1;	//invalid just as a dummy;
 
-		void* data[] = { d_vertexPosFloat3, d_anglesFloat3, d_vertexPosFloat3Urshape, d_vertexPosTargetFloat3};
+		convertToFloat6(d_vertexPosFloat3, d_anglesFloat3, d_unknowns, m_numUnknown);
+
+		void* data[] = { d_unknowns, d_vertexPosFloat3Urshape, d_vertexPosTargetFloat3};
 		void* solverParams[] = { &nNonLinearIterations, &nLinearIterations, &nBlockIterations };
 
 		float weightFitSqrt = sqrt(weightFit);
@@ -136,6 +136,8 @@ public:
 		int32_t* yCoords[] = { d_headY, d_tailY };
 		int32_t edgeCounts[] = { edgeCount };
 		Opt_ProblemSolve(m_optimizerState, m_plan, data, edgeCounts, NULL, xCoords, yCoords, problemParams, solverParams);
+
+		convertFromFloat6(d_unknowns, d_vertexPosFloat3, d_anglesFloat3, m_numUnknown);
 	}
 
 private:
@@ -143,5 +145,6 @@ private:
 	Problem*	m_problem;
 	Plan*		m_plan;
 
+	unsigned int m_numUnknown;
 	float6*		d_unknowns;	//float3 (vertices) + float3 (angles)
 };
