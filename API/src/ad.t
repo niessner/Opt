@@ -816,10 +816,19 @@ function Apply:partials()
 end
 
 function Var:calcd(v)
-   return self == v and toexp(1) or toexp(0)
+    if self == v then
+        return one
+    end
+    local k = self:key()
+    if type(k) == "table" and type(k.gradient) == "function" then -- allow variables to express external relationships to other variables
+        local gradtable = k:gradient() -- table of (var -> exp) mappings that are the gradient of this variable with respect to all unknowns of interest
+        local r = gradtable[v]
+        if r then return assert(toexp(r),"expected an ad expression") end
+    end
+    return zero
 end
 function Const:calcd(v)
-    return toexp(0)
+    return zero
 end
 function Apply:calcd(v)
     local dargsdv = self.args:map("d",v)
@@ -851,9 +860,19 @@ function Exp:gradient(exps)
     tape[self] = one -- the reverse ad 'seed'
     for i = #postorder,1,-1 do --reverse post order traversal from self to equation roots, all uses come before defs
         local e = postorder[i]
-        local p = e:partials()
-        for j,c in ipairs(e:children()) do
-            tape[c] = tape[c] + tape[e]*p[j]
+        if Var:is(e) then
+            local k = e:key()
+            if type(k) == "table" and type(k.gradient) == "function" then -- handle optional black-box relationship to other variables
+                local gradtable = k:gradient()
+                for v,dv in pairs(gradtable) do
+                    tape[v] = (tape[v] or zero) + tape[e]*dv
+                end
+            end
+        else
+            local p = e:partials()
+            for j,c in ipairs(e:children()) do
+                tape[c] = tape[c] + tape[e]*p[j]
+            end
         end
     end
     return exps:map(function(e) return tape[e] or zero end)
@@ -1193,8 +1212,11 @@ local r = (x + getreduce(y + vx))
 print(r)
 local rr = r:rename(function(x) if x == "y" then return ad.v.x else return ad.v[x] end end)
 print(rr)
-]]
 local x,y,z = ad.v.x, ad.v.y, ad.v.z
 
+local w = ad.v[setmetatable({ gradient = function() return { [x] = y*z } end },{__tostring = function() return "W" end})]
+
+print(unpack((x*w):gradient{x}))
+]]
 
 return ad
