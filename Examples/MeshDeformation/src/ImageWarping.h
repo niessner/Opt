@@ -1,7 +1,7 @@
 #pragma once
 
-#define RUN_CUDA 1
-#define RUN_TERRA 0
+#define RUN_CUDA 0
+#define RUN_TERRA 1
 
 #include "mLibInclude.h"
 
@@ -34,7 +34,7 @@ class ImageWarping
 			resetGPUMemory();
 
 			m_warpingSolver	= new CUDAWarpingSolver(N);
-			m_terraWarpingSolver = new TerraWarpingSolver(N, 2 * E, d_neighbourIdx, d_neighbourOffset, "MeshSmoothingLaplacianAD.t", "gaussNewtonGPU");			
+			m_terraWarpingSolver = new TerraWarpingSolver(N, 2 * E, d_neighbourIdx, d_neighbourOffset, "MeshDeformationAD.t", "gaussNewtonGPU");			
 		}
 
 		void setConstraints(float alpha)
