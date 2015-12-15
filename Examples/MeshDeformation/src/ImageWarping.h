@@ -1,6 +1,6 @@
 #pragma once
 
-#define RUN_CUDA 1
+#define RUN_CUDA 0
 #define RUN_TERRA 1
 
 #include "mLibInclude.h"
@@ -157,7 +157,6 @@ class ImageWarping
 				setConstraints((float)i/(float)(numIter-1));
 			
 				m_warpingSolver->solveGN(d_vertexPosFloat3, d_anglesFloat3, d_vertexPosFloat3Urshape, d_numNeighbours, d_neighbourIdx, d_neighbourOffset, d_vertexPosTargetFloat3, nonLinearIter, linearIter, weightFit, weightReg);
-				break;
 			}
 			copyResultToCPUFromFloat3();
 #			endif
