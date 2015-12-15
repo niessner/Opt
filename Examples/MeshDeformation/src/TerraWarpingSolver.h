@@ -74,8 +74,8 @@ public:
 
 
 		uint32_t stride = vertexCount * sizeof(float3);
-		uint32_t strides[] = { stride, stride };
-		uint32_t elemsizes[] = { sizeof(float3), sizeof(float3) };
+		uint32_t strides[] = { stride*2, stride, stride };
+		uint32_t elemsizes[] = { sizeof(float6), sizeof(float3), sizeof(float3) };
 		uint32_t dims[] = { vertexCount, 1 };
 
 		m_plan = Opt_ProblemPlan(m_optimizerState, m_problem, dims, elemsizes, strides);
