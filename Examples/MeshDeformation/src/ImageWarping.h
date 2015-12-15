@@ -1,10 +1,14 @@
 #pragma once
 
+#define RUN_CUDA 1
+#define RUN_TERRA 0
+
 #include "mLibInclude.h"
 
 #include <cuda_runtime.h>
 #include <cudaUtil.h>
 
+#include "TerraWarpingSolver.h"
 #include "CUDAWarpingSolver.h"
 #include "OpenMesh.h"
 
@@ -30,6 +34,7 @@ class ImageWarping
 			resetGPUMemory();
 
 			m_warpingSolver	= new CUDAWarpingSolver(N);
+			m_terraWarpingSolver = new TerraWarpingSolver(N, 2 * E, d_neighbourIdx, d_neighbourOffset, "MeshSmoothingLaplacianAD.t", "gaussNewtonGPU");			
 		}
 
 		void setConstraints(float alpha)
@@ -128,6 +133,7 @@ class ImageWarping
 			cutilSafeCall(cudaFree(d_neighbourOffset));
 
 			SAFE_DELETE(m_warpingSolver);
+			SAFE_DELETE(m_terraWarpingSolver);
 		}
 
 		SimpleMesh* solve()
@@ -139,6 +145,7 @@ class ImageWarping
 			unsigned int nonLinearIter = 20;
 			unsigned int linearIter = 50;
 			
+#			if RUN_CUDA
 			resetGPUMemory();
 			for (unsigned int i = 0; i < numIter; i++)
 			{
@@ -148,6 +155,20 @@ class ImageWarping
 				m_warpingSolver->solveGN(d_vertexPosFloat3, d_anglesFloat3, d_vertexPosFloat3Urshape, d_numNeighbours, d_neighbourIdx, d_neighbourOffset, d_vertexPosTargetFloat3, nonLinearIter, linearIter, weightFit, weightReg);
 			}
 			copyResultToCPUFromFloat3();
+#			endif
+
+
+#			if RUN_TERRA
+			resetGPUMemory();
+			for (unsigned int i = 0; i < numIter; i++)
+			{
+				std::cout << "//////////// ITERATION" << i << "  (TERRA) ///////////////" << std::endl;
+				setConstraints((float)i / (float)(numIter - 1));
+
+				m_terraWarpingSolver->solveGN(d_vertexPosFloat3, d_anglesFloat3, d_vertexPosFloat3Urshape, d_vertexPosTargetFloat3, nonLinearIter, linearIter, weightFit, weightReg);
+			}
+			copyResultToCPUFromFloat3();
+#			endif
 						
 			return &m_result;
 		}
@@ -178,7 +199,9 @@ class ImageWarping
 		int*	d_neighbourIdx;
 		int* 	d_neighbourOffset;
 
-		CUDAWarpingSolver* m_warpingSolver;
+
+		TerraWarpingSolver* m_terraWarpingSolver;
+		CUDAWarpingSolver*	m_warpingSolver;
 
 		std::vector<int>				m_constraintsIdx;
 		std::vector<std::vector<float>>	m_constraintsTarget;
