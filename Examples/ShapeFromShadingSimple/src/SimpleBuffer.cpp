@@ -5,7 +5,9 @@
 
 
 
-SimpleBuffer::SimpleBuffer(std::string filename, bool onGPU) {
+SimpleBuffer::SimpleBuffer(std::string filename, bool onGPU) :
+    m_onGPU(onGPU)
+{
     FILE* fileHandle = fopen(filename.c_str(), "rb"); //b for binary
     fread(&m_width,         sizeof(int), 1, fileHandle);
     fread(&m_height,        sizeof(int), 1, fileHandle);

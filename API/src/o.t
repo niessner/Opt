@@ -1707,7 +1707,7 @@ function ProblemSpecAD:Exclude(exp)
 end
 
 opt.Vector = ad.TerraVector
-for i = 2,4 do
+for i = 2,6 do
     opt["float"..tostring(i)] = ad.TerraVector(float,i)
 end
 

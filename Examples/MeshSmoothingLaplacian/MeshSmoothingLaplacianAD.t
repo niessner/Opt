@@ -22,10 +22,6 @@ local C = terralib.includecstring [[
 local w_fit = adP:Param("w_fit", float, 0)
 local w_reg = adP:Param("w_reg", float, 1)
 
-
-print(w_fit)
-print(w_reg)
-
 useAD = true
 useHandwrittenMath = false
 
