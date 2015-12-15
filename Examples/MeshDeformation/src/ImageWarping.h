@@ -41,7 +41,7 @@ class ImageWarping
 
 		void setConstraints(float alpha)
 		{
-			unsigned int N = (unsigned int)m_initial.n_vertices();
+			unsigned int N = (unsigned int)m_result.n_vertices();
 			float3* h_vertexPosTargetFloat3 = new float3[N];
 			for (unsigned int i = 0; i < N; i++)
 			{
@@ -50,7 +50,7 @@ class ImageWarping
 
 			for (unsigned int i = 0; i < m_constraintsIdx.size(); i++)
 			{
-				const Vec3f& pt = m_initial.point(VertexHandle(m_constraintsIdx[i]));
+				const Vec3f& pt = m_result.point(VertexHandle(m_constraintsIdx[i]));
 				const Vec3f target = Vec3f(m_constraintsTarget[i][0], m_constraintsTarget[i][1], m_constraintsTarget[i][2]);
 
 				Vec3f z = (1 - alpha)*pt + alpha*target;
@@ -149,6 +149,7 @@ class ImageWarping
 			unsigned int linearIter = 50;
 			
 #			if RUN_CUDA
+			m_result = m_initial;
 			resetGPUMemory();
 			for (unsigned int i = 1; i < numIter; i++)
 			{
@@ -163,6 +164,7 @@ class ImageWarping
 
 
 #			if RUN_TERRA
+			m_result = m_initial;
 			resetGPUMemory();
 			for (unsigned int i = 1; i < numIter; i++)
 			{
