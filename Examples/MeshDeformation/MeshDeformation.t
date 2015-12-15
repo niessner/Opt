@@ -12,8 +12,6 @@ P:Stencil(2)
 local w_fitSqrt = P:Param("w_fitSqrt", float, 0)
 local w_regSqrt = P:Param("w_regSqrt", float, 1)
 
-w_fitSqrt = 1.0
-w_regSqrt = 0.0
 
 local C = terralib.includecstring [[
 #include <math.h>
@@ -77,16 +75,15 @@ local terra cost(i : int32, j : int32, gi : int32, gj : int32, self : P:Paramete
 	
 	--e_fit
 	if c(0) >= -999999.9f then
-		var e_fit : float_3 = make_float3(
-								x(0) - self.Constraints(i,j)(0), 
-								x(1) - self.Constraints(i,j)(1),
-								x(2) - self.Constraints(i,j)(2))
-		
+		var e_fit : float_3 = make_float3(x(0) - c(0), x(1) - c(1),	x(2) - c(2))
+								
 		var tmp = make_float3(
 					e(0) + (self.w_fitSqrt*self.w_fitSqrt) * (e_fit(0)*e_fit(0)), 
 					e(1) + (self.w_fitSqrt*self.w_fitSqrt) * (e_fit(1)*e_fit(1)),
 					e(2) + (self.w_fitSqrt*self.w_fitSqrt) * (e_fit(2)*e_fit(2)))
 		e = tmp
+		
+		
 	end
 	return e(0) + e(1) + e(2)
 end
