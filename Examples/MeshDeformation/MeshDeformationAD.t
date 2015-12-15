@@ -45,7 +45,7 @@ if useAD then
 	local terms = terralib.newlist()
 	
 	--fitting
-	local x_fit = ad.Vector(X(0,0,0), X(0,0,1), X(0,0,1))	--vertex-unknown : float3
+	local x_fit = ad.Vector(X(0,0,0), X(0,0,1), X(0,0,2))	--vertex-unknown : float3
 	local constraint = Constraints(0,0)						--target : float3
 	local e_fit = x_fit - constraint
 	--TODO check that this works; its set to minus infinity...
@@ -59,7 +59,7 @@ if useAD then
 	terms:insert(w_fitSqrt*e_fit(2))
 
 	--regularization
-	local x = ad.Vector(X(G.v0,0), X(G.v0,1), X(G.v0,1))	--vertex-unknown : float3
+	local x = ad.Vector(X(G.v0,0), X(G.v0,1), X(G.v0,2))	--vertex-unknown : float3
 	local a = ad.Vector(X(G.v0,3), X(G.v0,4), X(G.v0,5))	--rotation(alpha,beta,gamma) : float3
 	local R = evalR(a)			-- rotation : float3x3
 	local xHat = UrShape(G.v0)	-- uv-urshape : float3
