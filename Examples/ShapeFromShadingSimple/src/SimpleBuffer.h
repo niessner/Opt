@@ -1,6 +1,7 @@
 #ifndef SimpleBuffer_h
 #define SimpleBuffer_h
 #include <string>
+#include <stdlib.h>
 class SimpleBuffer {
 public:
     enum DataType { FLOAT = 0, UCHAR = 1 };
