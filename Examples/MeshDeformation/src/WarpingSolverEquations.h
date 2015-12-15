@@ -37,7 +37,7 @@ __inline__ __device__ float evalFDevice(unsigned int variableIdx, SolverInput& i
 	}
 
 	//return 0.0f;
-	return e.x + e.y + e.z;
+	//return e.x + e.y + e.z;
 
 	// E_reg
 	float3	 e_reg = make_float3(0.0f, 0.0f, 0.0F);
@@ -53,7 +53,7 @@ __inline__ __device__ float evalFDevice(unsigned int variableIdx, SolverInput& i
 		float3 d = (p - q) - R*(pHat - qHat);
 		e_reg += d*d;
 	}
-	//e += parameters.weightRegularizer*e_reg;
+	e += parameters.weightRegularizer*e_reg;
 	float res = e.x + e.y + e.z;
 	return res;
 }
