@@ -18,7 +18,7 @@ class ImageWarping
 		ImageWarping(const SimpleMesh* mesh)
 		{
 			m_result = *mesh;
-			m_intial = m_result;
+			m_initial = m_result;
 			
 			unsigned int N = (unsigned int)mesh->n_vertices();
 			unsigned int E = (unsigned int)mesh->n_edges();

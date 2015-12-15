@@ -67,6 +67,7 @@ if useAD then
 	local n = ad.Vector(X(G.v1,0), X(G.v1,1), X(G.v1,2))
 	local ARAPCost = (x - n)	-	mul(R, (xHat - UrShape(G.v1)))
 
+	--TODO don't we have vectors?
 	for i = 0,2 do
 		terms:insert(w_regSqrt*ARAPCost(i))
 	end
