@@ -5,8 +5,8 @@
 # Last Edited 11-20-2015
 
 
-foldernames=(SmoothingLaplacianFloat4Graph ImageWarping)
-programnames=(meshsmoothing imagewarping)
+foldernames=(SmoothingLaplacianFloat4Graph ImageWarping ShapeFromShadingSimple)
+programnames=(meshsmoothing imagewarping shapefromshading)
 
 
 for index in ${!foldernames[*]}
