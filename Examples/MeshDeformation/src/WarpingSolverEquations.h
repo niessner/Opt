@@ -148,7 +148,7 @@ __inline__ __device__ float3 applyJTJDevice(unsigned int variableIdx, SolverInpu
 		evalDerivativeRotationMatrix(state.d_a[neighbourIndex], dRAlphaJ, dRBetaJ, dRGammaJ);
 		mat3x3 D_j = -evalDerivativeRotationTimesVector(dRAlphaJ, dRBetaJ, dRGammaJ, pHat - qHat);
 		mat3x1 q = mat3x1(state.d_p[neighbourIndex]);
-		mat3x1 qAngle = mat3x1(state.d_pA[variableIdx]);
+		mat3x1 qAngle = mat3x1(state.d_pA[neighbourIndex]);
 
 		e_reg		+= 2.0f*(p-q);
 		e_reg_angle += D.getTranspose()*D*pAngle;
