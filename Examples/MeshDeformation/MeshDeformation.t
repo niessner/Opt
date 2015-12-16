@@ -376,7 +376,7 @@ local terra evalJTF_graph(idx : int32, self : P:ParameterType(), pImage : P:Unkn
 
 	var c = make_float6(b(0), b(1), b(2), bA(0), bA(1), bA(2))
 
-	-- TODO: is this right?
+	-- TODO: is this right? I'm blindly mimicing the laplacian example here
 	var c0 = ( 1.0f)*c
 	var c1 = (-1.0f)*c
 
@@ -402,33 +402,70 @@ end
 	
 -- eval 2*JtJ (note that we keep the '2' to make it consistent with the gradient
 local terra applyJTJ(i : int32, j : int32, gi : int32, gj : int32, self : P:ParameterType(), pImage : P:UnknownType()) : unknownElement 
-	return 0.0
-    --return w_fit*2.0f*pImage(i,j)
+	
+	var b 	 = make_float3(0.0f, 0.0f, 0.0f)
+	var temp = pImage(i,j)
+	var p 	 = make_float3(temp(0), temp(1), temp(2))
+
+	-- fit/pos
+	var c : float_3 = self.Constraints(i, j)
+	-- TODO: use -inf?
+	if c(0) >  -999999.9f then
+		b = b + (self.w_fitSqrt*self.w_fitSqrt)*p;
+	end
+
+	return make_float6(b(0), b(1), b(2), 0.0f, 0.0f, 0.0f)
 end
 
 local terra applyJTJ_graph(idx : int32, self : P:ParameterType(), pImage : P:UnknownType(), Ap_X : P:UnknownType())
-    --var w0,h0 = self.G.v0_x[idx], self.G.v0_y[idx]
-    --var w1,h1 = self.G.v1_x[idx], self.G.v1_y[idx]
-    --
-    --var p0 = pImage(w0,h0)
-    --var p1 = pImage(w1,h1)
-    --
-    ---- (1*p0) + (-1*p1)
-    --var l_n = p0 - p1
-    --var e_reg = 2.0f*w_reg*l_n
-    --
-	--var c0 = 1.0 *  e_reg
-	--var c1 = -1.0f * e_reg
-	--
-    --
-	--Ap_X:atomicAdd(w0, h0, c0)
-    --Ap_X:atomicAdd(w1, h1, c1)
-    --
-    --var d = 0.0f
-	--d = d + opt.Dot(pImage(w0,h0), c0)
-	--d = d + opt.Dot(pImage(w1,h1), c1)					
-	--return d 
-	return 0.0
+    var w0,h0 = self.G.v0_x[idx], self.G.v0_y[idx]
+    var w1,h1 = self.G.v1_x[idx], self.G.v1_y[idx]
+	
+	var temp : float_6   = pImage(w0,h0)
+	var p  : float_3     = make_float3(temp(0), temp(1), temp(2))
+	var pAngle : float_3 = make_float3(temp(3), temp(4), temp(5))
+
+	temp = self.X(w0,h0)
+	var a : float_3 = make_float3(temp(3), temp(4), temp(5))
+
+	var dRAlpha : float3x3, dRBeta : float3x3, dRGamma : float3x3
+	evalDerivativeRotationMatrix(a, &dRAlpha, &dRBeta, &dRGamma)
+
+	var pHat : float_3 = self.UrShape(w0,h0)
+	var qHat : float_3 = self.UrShape(w1,h1)
+	var D : float3x3 = -evalDerivativeRotationTimesVector(dRAlpha, dRBeta, dRGamma, pHat - qHat)
+
+	temp = self.X(w1,h1)
+	var a_neighbor : float_3 = make_float3(temp(3), temp(4), temp(5))
+
+	var dRAlphaJ : float3x3, dRBetaJ : float3x3, dRGammaJ : float3x3
+	evalDerivativeRotationMatrix(a_neighbor, &dRAlphaJ, &dRBetaJ, &dRGammaJ)
+	var D_j :float3x3 = -evalDerivativeRotationTimesVector(dRAlphaJ, dRBetaJ, dRGammaJ, pHat - qHat)
+
+	temp = pImage(w1,h1)
+	var q  : float_3  = make_float3(temp(0), temp(1), temp(2))
+	var qAngle : float_3 = make_float3(temp(3), temp(4), temp(5))
+
+	var e_reg		= 2.0f*(p-q);
+	var e_reg_angle = mul(matmul(transpose(D),D),pAngle)
+	e_reg		= e_reg + mul(D,pAngle) + mul(D_j,qAngle)
+	e_reg_angle = e_reg_angle + mul(transpose(D),(p - q))
+	
+	var b  = (self.w_regSqrt*self.w_regSqrt)*e_reg
+	var bA = (self.w_regSqrt*self.w_regSqrt)*e_reg_angle
+	var c : float_6 = make_float6(b(0), b(1), b(2), bA(0), bA(1), bA(2))
+
+	-- TODO: Is this right? I just kinda copy-pasted here...
+	var c0 = 1.0  * c
+	var c1 = -1.0 * c
+    
+	Ap_X:atomicAdd(w0, h0, c0)
+    Ap_X:atomicAdd(w1, h1, c1)
+    
+    var d = 0.0f
+	d = d + opt.Dot(pImage(w0,h0), c0)
+	d = d + opt.Dot(pImage(w1,h1), c1)	
+	return d
 end
 
 P:Function("cost", 		cost, "G", cost_graph)
