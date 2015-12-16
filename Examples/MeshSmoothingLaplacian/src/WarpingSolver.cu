@@ -70,10 +70,10 @@ float EvalResidual(SolverInput& input, SolverState& state, SolverParameters& par
 
 	residual = state.getSumResidual();
 
-#ifdef _DEBUG
-	cutilSafeCall(cudaDeviceSynchronize());
-	cutilCheckMsg(__FUNCTION__);
-#endif
+#	ifdef _DEBUG
+		cutilSafeCall(cudaDeviceSynchronize());
+		cutilCheckMsg(__FUNCTION__);
+#	endif
 
 	return residual;
 }

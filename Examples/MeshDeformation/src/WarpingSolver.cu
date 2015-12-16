@@ -21,6 +21,10 @@
 #define EXPORT
 #endif
 
+
+#define WARP_SIZE 32u
+#define WARP_MASK (WARP_SIZE-1u)
+
 /////////////////////////////////////////////////////////////////////////
 // Eval Residual
 /////////////////////////////////////////////////////////////////////////
@@ -99,18 +103,21 @@ __global__ void PCGInit_Kernel1(SolverInput input, SolverState state, SolverPara
 		d = dot(residuum, p) + dot(residuumA, pA);								 // x-th term of nomimator for computing alpha and denominator for computing beta
 	}
 	
-	bucket[threadIdx.x] = d;
-
-	scanPart1(threadIdx.x, blockIdx.x, blockDim.x, state.d_scanAlpha);		// sum over x-th terms to compute nominator and denominator of alpha and beta inside this block
+	d = warpReduce(d);
+    if ((threadIdx.x & WARP_MASK) == 0) {
+        atomicAdd(state.d_scanAlpha, d);
+    }
 }
 
 __global__ void PCGInit_Kernel2(unsigned int N, SolverState state)
 {
 	const unsigned int x = blockIdx.x * blockDim.x + threadIdx.x;
 
-	scanPart2(threadIdx.x, blockDim.x, gridDim.x, state.d_scanAlpha);		// sum over block results to compute nominator and denominator of alpha and beta
-
-	if (x < N) state.d_rDotzOld[x] = bucket[0];								// store result for next kernel call
+	if (x < N) {
+        state.d_rDotzOld[x] = state.d_scanAlpha[0];
+        state.d_delta[x] = make_float3(0.0f, 0.0f, 0.0f);
+        state.d_deltaA[x] = make_float3(0.0f, 0.0f, 0.0f);
+    }
 }
 
 void Initialization(SolverInput& input, SolverState& state, SolverParameters& parameters, CUDATimer& timer)
@@ -125,7 +132,7 @@ void Initialization(SolverInput& input, SolverState& state, SolverParameters& pa
 		std::cout << "Too many variables for this block size. Maximum number of variables for two kernel scan: " << THREADS_PER_BLOCK*THREADS_PER_BLOCK << std::endl;
 		while (1);
 	}
-
+	cutilSafeCall(cudaMemset(state.d_scanAlpha, 0, sizeof(float)));
     timer.startEvent("PCGInit_Kernel1");
 	PCGInit_Kernel1 << <blocksPerGrid, THREADS_PER_BLOCK, shmem_size >> >(input, state, parameters);
     timer.endEvent();
