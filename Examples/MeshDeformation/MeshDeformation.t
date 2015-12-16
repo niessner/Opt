@@ -20,9 +20,12 @@ local C = terralib.includecstring [[
 local float_2 = opt.float2
 local float_3 = opt.float3
 local float_4 = opt.float4
+local float_6 = opt.float6
+local float_9 = opt.float9
 
 --local float2x2 = vector(float, 4)
 local float2x2 = float_4
+local float3x3 = float_9
 
 local terra make_float2(x : float, y : float)
 	var v : float_2
@@ -48,6 +51,22 @@ local terra make_float4(x : float, y : float, z : float, w : float)
 	return v
 end
 
+local terra make_float3x3(	x0 : float, x1 : float, x2 : float, 
+							x3 : float, x4 : float, x5 : float, 
+							x6 : float, x7 : float, x8 : float)
+	var v : float3x3
+	v(0) = x0
+	v(1) = x1
+	v(2) = x2
+	v(3) = x3
+	v(4) = x4
+	v(5) = x5
+	v(6) = x6
+	v(7) = x7
+	v(8) = x8
+	return v
+end
+
 
 --local w_fit = P:Param("w_fit", float, 0)
 --local w_reg = P:Param("w_reg", float, 1)
@@ -64,6 +83,28 @@ local terra laplacianCost(idx : int32, self : P:ParameterType()) : unknownElemen
     return x0 - x1
 end
 
+
+local terra  evalRot(CosAlpha : float, CosBeta  : float, CosGamma : float, SinAlpha : float, SinBeta : float, SinGamma : float)
+	return make_float3x3(
+		CosGamma*CosBeta, 
+		-SinGamma*CosAlpha + CosGamma*SinBeta*SinAlpha, 
+		SinGamma*SinAlpha + CosGamma*SinBeta*CosAlpha,
+		SinGamma*CosBeta,
+		CosGamma*CosAlpha + SinGamma*SinBeta*SinAlpha,
+		-CosGamma*SinAlpha + SinGamma*SinBeta*CosAlpha,
+		-SinBeta,
+		CosBeta*SinAlpha,
+		CosBeta*CosAlpha)
+end
+	
+local terra evalR(a : float_3)
+	return evalRot(opt.math.cos(a(0)), opt.math.cos(a(1)), opt.math.cos(a(2)), opt.math.sin(a(0)), opt.math.sin(a(1)), opt.math.sin(a(2)))
+end
+
+local terra mul(matrix: float_9, v: float_3)
+	return make_float3(matrix(0)*v(0)+matrix(1)*v(1)+matrix(2)*v(2),matrix(3)*v(0)+matrix(4)*v(1)+matrix(5)*v(2),matrix(6)*v(0)+matrix(7)*v(1)+matrix(8)*v(2))
+end
+
 local terra cost(i : int32, j : int32, gi : int32, gj : int32, self : P:ParameterType()) : float
 	
 	var e : float_3  = make_float3(0.0f, 0.0f, 0.0f)
@@ -72,7 +113,7 @@ local terra cost(i : int32, j : int32, gi : int32, gj : int32, self : P:Paramete
 	var xHat : float_3 = self.UrShape(i,j)
 	var a : float_3 = make_float3(self.X(i, j)(3), self.X(i, j)(4), self.X(i, j)(5))
 	var c : float_3 = self.Constraints(i, j)
-	
+
 	--e_fit
 	if c(0) >= -999999.9f then
 		var e_fit : float_3 = make_float3(x(0) - c(0), x(1) - c(1),	x(2) - c(2))
@@ -88,12 +129,22 @@ local terra cost(i : int32, j : int32, gi : int32, gj : int32, self : P:Paramete
 	return e(0) + e(1) + e(2)
 end
 
+
+
 local terra cost_graph(idx : int32, self : P:ParameterType()) : float
-	--var l0 = laplacianCost(idx, self)		
-	--var e_reg = w_reg*l0*l0	
-	--var res : float = e_reg(0) + e_reg(1) + e_reg(2)
-	--return res
-	return 0.0
+	--
+	var temp : float_6 = self.X(self.G.v0_x[idx], self.G.v0_y[idx])
+	var a : float_3 = make_float3(temp(3), temp(4), temp(5))
+	var R : float_9 = evalR(a);
+	var p = make_float3(temp(0), temp(1), temp(2))
+	var pHat : float_3 = self.UrShape(self.G.v0_x[idx], self.G.v1_y[idx])
+	
+	temp = self.X(self.G.v1_x[idx], self.G.v1_y[idx])
+	var q = make_float3(temp(0), temp(1), temp(2))
+	var qHat : float_3 = self.UrShape(self.G.v1_x[idx], self.G.v1_y[idx])
+	var d : float_3 = (p - q) - mul(R,(pHat - qHat))
+	var e_reg = d*d
+	return e_reg(0) + e_reg(1) + e_reg(2)
 end
 
 -- eval 2*JtF == \nabla(F); eval diag(2*(Jt)^2) == pre-conditioner
