@@ -208,11 +208,10 @@ __global__ void PCGStep_Kernel2(SolverInput input, SolverState state)
 		b = dot(z, r) + dot(zA, rA);										// compute x-th term of the nominator of beta
 	}
 
-	__syncthreads();														// Only write if every thread in the block has has read bucket[0]
-
-	bucket[threadIdx.x] = b;
-
-	scanPart1(threadIdx.x, blockIdx.x, blockDim.x, state.d_scanBeta);		// sum over x-th terms to compute nominator of beta inside this block
+	b = warpReduce(b);
+    if ((threadIdx.x & WARP_MASK) == 0) {
+        atomicAdd(state.d_scanBeta, b); // sum over x-th terms to compute denominator of alpha inside this block
+    }
 }
 
 __global__ void PCGStep_Kernel3(SolverInput input, SolverState state)
@@ -220,11 +219,9 @@ __global__ void PCGStep_Kernel3(SolverInput input, SolverState state)
 	const unsigned int N = input.N;
 	const unsigned int x = blockIdx.x * blockDim.x + threadIdx.x;
 
-	scanPart2(threadIdx.x, blockDim.x, gridDim.x, state.d_scanBeta);		// sum over block results to compute nominator of beta
-
 	if (x < N)
 	{
-		const float rDotzNew = bucket[0];										// get new nominator
+		const float rDotzNew = state.d_scanBeta[0];												// get new nominator
 		const float rDotzOld = state.d_rDotzOld[x];								// get old denominator
 
 		float beta = 0.0f;
@@ -259,6 +256,7 @@ void PCGIteration(SolverInput& input, SolverState& state, SolverParameters& para
 		cutilCheckMsg(__FUNCTION__);
 	#endif
 
+	cutilSafeCall(cudaMemset(state.d_scanBeta, 0, sizeof(float)));
 	timer.startEvent("PCGStep_Kernel2");
 	PCGStep_Kernel2 << <blocksPerGrid, THREADS_PER_BLOCK, shmem_size >> >(input, state);
 	timer.endEvent();
