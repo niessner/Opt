@@ -414,13 +414,23 @@ end
 function ProblemSpec:Image(name,typ,W,H,idx)
     self:Stage "inputs"
     typ = assert(tovalidimagetype(typ,"expected a number or an array of numbers"))
-
-    local elemsize = assert(tonumber(opt.elemsizes[idx]))
-    local stride = assert(tonumber(opt.strides[idx]))
-    local r = newImage(typ, assert(todim(W)), assert(todim(H)), elemsize, stride)
+    local r
+    if idx == "alloc" then
+        r = self:ImageType(typ,W,H) -- packed internally stored image
+    else -- image given by user
+        local elemsize = assert(tonumber(opt.elemsizes[idx]))
+        local stride = assert(tonumber(opt.strides[idx]))
+        r = newImage(typ, assert(todim(W)), assert(todim(H)), elemsize, stride)
+    end
     self:newparameter(name,"image",idx,r)
 end
 
+function ProblemSpec:ImageType(typ,W,H)
+    W,H = assert(todim(W)),assert(todim(H))
+    assert(terralib.types.istype(typ))
+    local elemsize = terralib.sizeof(typ)
+    return newImage(typ,W,H,elemsize,elemsize*W.size)
+end
 
 function ProblemSpec:InternalImage(typ,W,H,blocked)
     self:Stage "functions"
@@ -430,10 +440,7 @@ function ProblemSpec:InternalImage(typ,W,H,blocked)
 	if blocked then
 		return self:BlockedTypeForImage(W,H,typ)
 	else
-		W,H = assert(todim(W)),assert(todim(H))
-		assert(terralib.types.istype(typ))
-		local elemsize = terralib.sizeof(typ)
-		return newImage(typ,W,H,elemsize,elemsize*W.size)
+        return self:ImageType(typ,W,H)
 	end
 end
 
@@ -548,6 +555,18 @@ IndexValue.get = terralib.memoize(function(self,dim,shift)
 end)
 
 function ImageAccess:shape() return self._shape end -- implementing AD's API for keys
+local emptygradient = {}
+function ImageAccess:gradient()
+    if self.image.gradientimages then
+        assert(Offset:is(self.index),"NYI - support for graphs")
+        local gt = {}
+        for u,im in pairs(self.image.gradientimages) do
+            gt[u:shift(self.index.x,self.index.y)] = im(self.index.x,self.index.y)
+        end
+        return gt
+    end
+    return emptygradient
+ end
 
 function Dim:index() return ad.v[IndexValue:get(self)] end
 
@@ -570,7 +589,7 @@ end
 local ProblemSpecAD = newclass("ProblemSpecAD")
 
 function ad.ProblemSpec()
-    return ProblemSpecAD:new { P = opt.ProblemSpec(), nametoimage = {} }
+    return ProblemSpecAD:new { P = opt.ProblemSpec(), nametoimage = {}, precomputed = terralib.newlist() }
 end
 function ProblemSpecAD:UsePreconditioner(v)
 	self.P:UsePreconditioner(v)
@@ -587,14 +606,42 @@ function ProblemSpecAD:Image(name,typ,W,H,idx)
     end
     assert(W == 1 or Dim:is(W))
     assert(H == 1 or Dim:is(H))
-    idx = assert(tonumber(idx))
-    if idx >= 0 then
+    assert(type(idx) == "number" or idx == "alloc", "expected an index number") -- alloc indicates that the solver should allocate the image as an intermediate
+    if idx == "alloc" or idx >= 0 then
         self.P:Image(name,typ,W,H,idx)
     end
     local typ,N = tovalidimagetype(typ)
     local r = Image:new { name = tostring(name), W = W, H = H, idx = idx, N = N, type = typ }
     self.nametoimage[name] = r
     return r
+end
+function ProblemSpecAD:Func(name,W,H,exp)
+    exp = assert(ad.toexp(exp),"expected a math expression")
+    local unknowns = terralib.newlist()
+    local seen = {}
+    exp:visit(function(a)
+        if ImageAccess:is(a) and a.image.name == "X" then
+            assert(Offset:is(a.index),"NYI - support for graphs")
+            if not seen[a] then
+                seen[a] = true
+                unknowns:insert(a)
+            end
+        end
+    end)
+    local im = self:Image(name,float,W,H)
+    local gradients = im.expression:gradient(unknowns)
+    local gradientexpressions = {}
+    local gradientimages = {}
+    for i,u in ipairs(unknowns) do
+        gradientexpressions[u] = gradients[i]
+        gradientimages[u] = self:Image(name.."_d_"..tostring(u),float,W,H,"alloc")
+    end
+    
+    im.expression = exp
+    im.gradientexpressions = gradientexpressions
+    im.gradientimages = gradientimages
+    self.precomputed:insert(im)
+    return im
 end
 
 local Graph = newclass("Graph")
@@ -1313,7 +1360,13 @@ local function createfunction(problemspec,name,usebounds,W,H,ndims,results,scatt
     for i,s in ipairs(scatters) do
         local image,exp = imageref(s.image),scatterexpressions[i]
         local gr = graphref(s.index)
-        local stmt = s.channel and (`image:atomicAddChannel(gr, s.channel, exp)) or (`image:atomicAdd(gr, exp))
+        local stmt
+        if s.kind == "add" then
+            stmt = s.channel and (`image:atomicAddChannel(gr, s.channel, exp)) or (`image:atomicAdd(gr, exp))
+        else
+            assert(s.kind == "set" and s.channel == 0)
+            stmt = quote image(gr) = exp end -- NYI - multi-channel images
+        end
         scatterstatements:insert(stmt)
     end
 
@@ -1495,8 +1548,8 @@ end
 local function NewGraphFunctionSpec(graph, results, scatters)
     return { graph = graph, results = results, scatters = scatters }
 end
-local function NewScatter(im,idx,channel,exp) 
-    return { image = im, index = idx, channel = channel, expression = exp }
+local function NewScatter(im,idx,channel,exp, kind) 
+    return { image = im, index = idx, channel = channel, expression = exp, kind = kind or "add" }
 end
 
 local function createjtjgraph(residuals,P,Ap_X)
@@ -1665,6 +1718,22 @@ local function createcost(residuals)
     return sumsquared(residuals.unknown), graphwork
 end
 
+function createprecomputed(self,name,precomputedimages)
+    local scatters = terralib.newlist()
+    for i,im in ipairs(precomputedimages) do
+        local expression = im.expression
+        scatters:insert(NewScatter(im, Offset:get(0,0), 0, im.expression, "set"))
+        for u,gim in pairs(im.gradientimages) do
+            local gradientexpression = im.gradientexpressions[u]
+            scatters:insert(NewScatter(gim, Offset:get(u.index.x,u.index.y), 0, gradientexpression, "set"))
+        end
+    end
+    
+    local ut = self.P:UnknownType()
+    local W,H = ut.metamethods.W,ut.metamethods.H    
+    return createfunction(self,name,true,W,H,2,terralib.newlist(),scatters)
+end
+
 function ProblemSpecAD:Cost(costexp)
     local unknown = assert(self.nametoimage.X, "unknown image X is not defined")
     
@@ -1690,6 +1759,10 @@ function ProblemSpecAD:Cost(costexp)
     self:createfunctionset("applyJTJ",terralib.newlist{jtjexp},jtjgraph)
     --gradient with pre-conditioning
     self:createfunctionset("evalJTF",jtfcentered,jtfgraph)
+    
+    
+    local precomputed = createprecomputed(self,"precompute",self.precomputed)
+    self.P:Function("precompute",precomputed)
     
     if self.excludeexp then
         self:createfunctionset("exclude",terralib.newlist{self.excludeexp},{})

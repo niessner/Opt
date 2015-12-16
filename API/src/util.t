@@ -328,25 +328,35 @@ local function noFooter(pd)
 	return quote end
 end
 
-util.getParameters = function(ProblemSpec, images, graphSizes, edgeValues, xs, ys, paramValues)
-	local inits = terralib.newlist()
+util.initParameters = function(parameters, ProblemSpec, images, graphSizes, edgeValues, xs, ys, paramValues,allocateTemporaries)
+    local stmts = terralib.newlist()
 	for _, entry in ipairs(ProblemSpec.parameters) do
-		if entry.kind == "image" then
-			inits:insert(`entry.type { data = [&uint8](images[entry.idx])})
-		elseif entry.kind == "graph" then
-		    local graphinits = terralib.newlist { `graphSizes[entry.idx] }
-		    for i,e in ipairs(entry.type.metamethods.elements) do
-		        graphinits:insert( `xs[e.idx] )
-		        graphinits:insert( `ys[e.idx] )
+		if entry.kind == "image" and entry.index == "alloc" then
+		    if allocateTemporaries then
+		        stmts:insert quote
+		            parameters.[entry.name]:initGPU()
+		        end
 		    end
-			inits:insert(`entry.type { graphinits } )
-		elseif entry.kind == "edgevalues" then
-			inits:insert(`entry.type { data = [&entry.type.metamethods.type](edgeValues[entry.idx]) })
-		elseif entry.kind == "param" then
-		    inits:insert `@[&entry.type](paramValues[entry.idx])
-		end
+		else
+            local rhs
+            if entry.kind == "image" then
+                rhs = `entry.type { data = [&uint8](images[entry.idx])}
+            elseif entry.kind == "graph" then
+                local graphinits = terralib.newlist { `graphSizes[entry.idx] }
+                for i,e in ipairs(entry.type.metamethods.elements) do
+                    graphinits:insert( `xs[e.idx] )
+                    graphinits:insert( `ys[e.idx] )
+                end
+                rhs = `entry.type { graphinits }
+            elseif entry.kind == "edgevalues" then
+                rhs = `entry.type { data = [&entry.type.metamethods.type](edgeValues[entry.idx]) }
+            elseif entry.kind == "param" then
+                rhs = `@[&entry.type](paramValues[entry.idx])
+            end
+            stmts:insert quote parameters.[entry.name] = rhs end
+        end
 	end
-	return `[ProblemSpec:ParameterType(false)]{ inits }	--don't use the blocked version
+	return stmts
 end
 
 
