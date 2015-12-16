@@ -24,7 +24,6 @@ __inline__ __device__ float evalFDevice(unsigned int variableIdx, SolverInput& i
 		e += parameters.weightFitting*e_fit*e_fit;
 	}
 
-
 	// E_reg
 	float3	 e_reg = make_float3(0.0f, 0.0f, 0.0F);
 	float3x3 R = evalR(state.d_a[variableIdx]);
@@ -68,8 +67,8 @@ __inline__ __device__ float3 evalMinusJTFDevice(unsigned int variableIdx, Solver
 	// fit
 	if (state.d_target[variableIdx].x != MINF)
 	{
-		b   -= parameters.weightFitting * (p - t);
-		pre += parameters.weightFitting * ones;
+		b   -= 2.0f*parameters.weightFitting * (p - t);
+		pre += 2.0f*parameters.weightFitting * ones;
 	}
 	
 	mat3x1 e_reg; e_reg.setZero();
@@ -96,8 +95,8 @@ __inline__ __device__ float3 evalMinusJTFDevice(unsigned int variableIdx, Solver
 		e_reg_angle += D.getTranspose()*((p - q) - R_i*(pHat - qHat));
 		preA		+= P;
 	}
-	b  += -parameters.weightRegularizer*e_reg;
-	bA += -parameters.weightRegularizer*e_reg_angle;
+	b  += -2.0f*parameters.weightRegularizer*e_reg;
+	bA += -2.0f*parameters.weightRegularizer*e_reg_angle;
 	
 	pre  = ones;		// TODO!!!
 	preA.setIdentity(); // TODO!!!
@@ -127,7 +126,7 @@ __inline__ __device__ float3 applyJTJDevice(unsigned int variableIdx, SolverInpu
 	// fit/pos
 	if (state.d_target[variableIdx].x != MINF)
 	{
-		b += parameters.weightFitting*p;
+		b += 2.0f*parameters.weightFitting*p;
 	}
 	
 	// pos/reg
@@ -156,8 +155,8 @@ __inline__ __device__ float3 applyJTJDevice(unsigned int variableIdx, SolverInpu
 		e_reg		+= D*pAngle + D_j*qAngle;
 		e_reg_angle += D.getTranspose()*(p - q);
 	}
-	b  += parameters.weightRegularizer*e_reg;
-	bA += parameters.weightRegularizer*e_reg_angle;
+	b  += 2.0f*parameters.weightRegularizer*e_reg;
+	bA += 2.0f*parameters.weightRegularizer*e_reg_angle;
 
 	outAngle = bA;
 	return b;
