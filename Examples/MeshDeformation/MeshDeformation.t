@@ -23,6 +23,9 @@ local float_4 = opt.float4
 local float_6 = opt.float6
 local float_9 = opt.float9
 
+local sin = opt.math.sin
+local cos = opt.math.cos
+
 --local float2x2 = vector(float, 4)
 local float2x2 = float_4
 local float3x3 = float_9
@@ -110,11 +113,25 @@ local terra  evalRot(CosAlpha : float, CosBeta  : float, CosGamma : float, SinAl
 end
 	
 local terra evalR(a : float_3)
-	return evalRot(opt.math.cos(a(0)), opt.math.cos(a(1)), opt.math.cos(a(2)), opt.math.sin(a(0)), opt.math.sin(a(1)), opt.math.sin(a(2)))
+	return evalRot(cos(a(0)), cos(a(1)), cos(a(2)), sin(a(0)), sin(a(1)), sin(a(2)))
 end
 
-local terra mul(matrix: float_9, v: float_3)
+local terra mul(matrix: float3x3, v: float_3)
 	return make_float3(matrix(0)*v(0)+matrix(1)*v(1)+matrix(2)*v(2),matrix(3)*v(0)+matrix(4)*v(1)+matrix(5)*v(2),matrix(6)*v(0)+matrix(7)*v(1)+matrix(8)*v(2))
+end
+
+local terra mul(A: float3x3, B: float3x3)
+	var result : float3x3
+	escape
+		--https://en.wikipedia.org/wiki/Matrix_multiplication#Matrix_product_.28two_matrices.29
+		for i=0,2 do
+			for j=0,2 do
+				emit `result(i*3+j) = A(i*3+0)*B(0*3+j) + A(i*3+1)*B(1*3+j) + A(i*3+2)*B(2*3+j)
+			end
+		end
+	end
+
+	return result
 end
 
 local terra cost(i : int32, j : int32, gi : int32, gj : int32, self : P:ParameterType()) : float
@@ -163,8 +180,8 @@ end
 
 -- eval 2*JtF == \nabla(F); eval diag(2*(Jt)^2) == pre-conditioner
 local terra evalJTF(i : int32, j : int32, gi : int32, gj : int32, self : P:ParameterType())
-	var b : float = 0.0f
-	var pre : float = 1.0f
+	var b : float_3 = make_float3(0.0f, 0.0f, 0.0f)
+	var pre : float_3 = make_float3(0.0f, 0.0f, 0.0f)
 
 	var ones = make_float3(1.0,1.0,1.0)
 	
@@ -182,22 +199,115 @@ local terra evalJTF(i : int32, j : int32, gi : int32, gj : int32, self : P:Param
 end
 
 local terra transpose(M : float3x3) : float3x3
-	-- TODO implement
-	return make_float3x3(	0.0, 0.0, 0.0,
-							0.0, 0.0, 0.0,
-							0.0, 0.0, 0.0)
+	return make_float3x3(	M(0), M(3), M(6),
+							M(1), M(4), M(7),
+							M(2), M(5), M(8))
 end
 
 local terra evalDerivativeRotationTimesVector(dRAlpha : float3x3, dRBeta : float3x3, dRGamma : float3x3, pMinQ : float_3) : float3x3
-	-- TODO implement
-	return make_float3x3(	0.0, 0.0, 0.0,
-							0.0, 0.0, 0.0,
-							0.0, 0.0, 0.0)
+	var R : float3x3 
+	-- TODO: Is this the right direction (did I screw up row major vs col major)
+	var b : float3 = dRAlpha*d; 
+	R(0*3+0) = b(0) 
+	R(1*3+0) = b(1) 
+	R(2*3+0) = b(2)
+	
+	b = dRBeta *d;
+	R(0*3+1) = b(0)
+	R(1*3+1) = b(1) 
+	R(2*3+1) = b(2)
+	
+	b = dRGamma*d; 
+	R(0*3+2) = b(0) 
+	R(1*3+2) = b(1) 
+	R(2*3+2) = b(2)
+
+	return R;
 end
 
-local terra evalDerivativeRotationMatrix(a : float_3, dRAlpha : float3x3, dRBeta : float3x3, dRGamma : float3x3) : float3x3
-	return make_float3x3(0,0,0,0,0,0,0,0,0)
- -- TODO: Implement
+local terra evalRMat_dAlpha(CosAlpha : float, CosBeta : float, CosGamma : float, SinAlpha : float, SinBeta : float,  SinGamma : float) : float3x3
+	-- TODO: Is this the right direction (did I screw up row major vs col major)
+	float3x3 R;
+	R(0*3+0) = 0.0f;
+	R(0*3+1) = SinGamma*SinAlpha + CosGamma*SinBeta*CosAlpha;
+	R(0*3+2) = SinGamma*CosAlpha - CosGamma*SinBeta*SinAlpha;
+
+	R(1*3+0) = 0.0f;
+	R(1*3+1) = -CosGamma*SinAlpha + SinGamma*SinBeta*CosAlpha;
+	R(1*3+2) = -CosGamma*CosAlpha - SinGamma*SinBeta*SinAlpha;
+
+	R(2*3+0) = 0.0f;
+	R(2*3+1) = CosBeta*CosAlpha;
+	R(2*3+2) = -CosBeta*SinAlpha;
+
+	return R;
+end
+
+local terra evalR_dAlpha(angles : float_3) -- angles = [alpha, beta, gamma]
+	return evalRMat_dAlpha(cos(angles.x), cos(angles.y), cos(angles.z), sin(angles.x), sin(angles.y), sin(angles.z));
+end
+
+-- Rotation Matrix dBeta
+inline __device__ mat3x3 evalRMat_dBeta(float CosAlpha, float CosBeta, float CosGamma, float SinAlpha, float SinBeta, float SinGamma)
+{
+	mat3x3 R;
+	R(0, 0) = -CosGamma*SinBeta;
+	R(0, 1) = CosGamma*CosBeta*SinAlpha;
+	R(0, 2) = CosGamma*CosBeta*CosAlpha;
+
+	R(1, 0) = -SinGamma*SinBeta;
+	R(1, 1) = SinGamma*CosBeta*SinAlpha;
+	R(1, 2) = SinGamma*CosBeta*CosAlpha;
+
+	R(2, 0) = -CosBeta;
+	R(2, 1) = -SinBeta*SinAlpha;
+	R(2, 2) = -SinBeta*CosAlpha;
+
+	return R;
+}
+
+inline __device__ mat3x3 evalR_dBeta(float3 angles) // angles = [alpha, beta, gamma]
+{
+	return evalRMat_dBeta(cos(angles.x), cos(angles.y), cos(angles.z), sin(angles.x), sin(angles.y), sin(angles.z));
+}
+
+// Rotation Matrix dGamma
+inline __device__ mat3x3 evalRMat_dGamma(float CosAlpha, float CosBeta, float CosGamma, float SinAlpha, float SinBeta, float SinGamma)
+{
+	mat3x3 R;
+	R(0, 0) = -SinGamma*CosBeta;
+	R(0, 1) = -CosGamma*CosAlpha - SinGamma*SinBeta*SinAlpha;
+	R(0, 2) = CosGamma*SinAlpha - SinGamma*SinBeta*CosAlpha;
+
+	R(1, 0) = CosGamma*CosBeta;
+	R(1, 1) = -SinGamma*CosAlpha + CosGamma*SinBeta*SinAlpha;
+	R(1, 2) = SinGamma*SinAlpha + CosGamma*SinBeta*CosAlpha;
+
+	R(2, 0) = 0.0f;
+	R(2, 1) = 0.0f;
+	R(2, 2) = 0.0f;
+
+	return R;
+}
+
+inline __device__ mat3x3 evalR_dGamma(float3 angles) // angles = [alpha, beta, gamma]
+{
+	return evalRMat_dGamma(cos(angles.x), cos(angles.y), cos(angles.z), sin(angles.x), sin(angles.y), sin(angles.z));
+}
+
+
+
+local terra evalDerivativeRotationMatrix(angles : float_3, dRAlpha : float3x3, dRBeta : float3x3, dRGamma : float3x3) : float3x3
+	var cosAlpha = cos(angles(0)) 
+	var cosBeta  = cos(angles(1)) 
+	var cosGamma = cos(angles(2))
+	var sinAlpha = sin(angles(0)) 
+	var sinBeta  = sin(angles(1)) 
+	var sinGamma = sin(angles(2))
+
+	dRAlpha = evalRMat_dAlpha(cosAlpha, cosBeta, cosGamma, sinAlpha, sinBeta, sinGamma);
+	dRBeta  = evalRMat_dBeta(cosAlpha, cosBeta, cosGamma, sinAlpha, sinBeta, sinGamma);
+	dRGamma = evalRMat_dGamma(cosAlpha, cosBeta, cosGamma, sinAlpha, sinBeta, sinGamma);
 end
 
 local terra evalJTF_graph(idx : int32, self : P:ParameterType(), pImage : P:UnknownType(), r : P:UnknownType())
@@ -222,16 +332,16 @@ local terra evalJTF_graph(idx : int32, self : P:ParameterType(), pImage : P:Unkn
 	var qHat  : float_3 = self.UrShape(w1,h1)
 	var R_j  : float3x3 = evalR(a_neighbor);
 	var D : float3x3  	= -evalDerivativeRotationTimesVector(dRAlpha, dRBeta, dRGamma, pHat - qHat);
-	var P : float3x3 	= (self.w_fitSqrt*self.w_fitSqrt)*mul(transpose(D),(D));
+	var P : float3x3 	= (self.w_fitSqrt*self.w_fitSqrt)*mul(transpose(D),D);
 	
-	var e_reg		= 2.0f*(p - q) - (R_i+R_j)*(pHat - qHat);
-	var pre			= 2.0f*(self.w_regSqrt*self.w_regSqrt)*ones;
-	var e_reg_angle = transpose(D)*((p - q) - R_i*(pHat - qHat))
-	var preA		= P
+	var e_reg		: float_3 = 2.0f*(p - q) - mul((R_i+R_j),(pHat - qHat));
+	var pre			: float_3 = 2.0f*(self.w_regSqrt*self.w_regSqrt)*ones;
+	var e_reg_angle : float_3 = mul(transpose(D), ((p - q) - mul(R_i,(pHat - qHat))))
+	var preA		: float_3 = P
 	
 	-- TODO: Missing 2?
-	var b  = self.w_regSqrt*self.w_regSqrt*e_reg;
-	var bA = self.w_regSqrt*self.w_regSqrt*e_reg_angle;
+	var b  : float_3 = (self.w_regSqrt*self.w_regSqrt)*e_reg;
+	var bA : float_3 = (self.w_regSqrt*self.w_regSqrt)*e_reg_angle;
 	
 	pre  = ones		-- TODO!!!
 	preA = ones -- TODO!!!
