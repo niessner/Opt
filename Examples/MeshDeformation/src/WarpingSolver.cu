@@ -171,9 +171,10 @@ __global__ void PCGStep_Kernel1(SolverInput input, SolverState state, SolverPara
 		d = dot(state.d_p[x], tmp) + dot(state.d_pA[x], tmpA);									// x-th term of denominator of alpha
 	}
 
-	bucket[threadIdx.x] = d;
-
-	scanPart1(threadIdx.x, blockIdx.x, blockDim.x, state.d_scanAlpha);		// sum over x-th terms to compute denominator of alpha inside this block
+	d = warpReduce(d);
+    if ((threadIdx.x & WARP_MASK) == 0) {
+        atomicAdd(state.d_scanAlpha, d); // sum over x-th terms to compute denominator of alpha inside this block
+    }
 }
 
 __global__ void PCGStep_Kernel2(SolverInput input, SolverState state)
@@ -181,8 +182,7 @@ __global__ void PCGStep_Kernel2(SolverInput input, SolverState state)
 	const unsigned int N = input.N;
 	const unsigned int x = blockIdx.x * blockDim.x + threadIdx.x;
 
-	scanPart2(threadIdx.x, blockDim.x, gridDim.x, state.d_scanAlpha);		// sum over block results to compute denominator of alpha
-	const float dotProduct = bucket[0];
+	const float dotProduct = state.d_scanAlpha[0];
 
 	float b = 0.0f;
 	if (x < N)
@@ -250,6 +250,7 @@ void PCGIteration(SolverInput& input, SolverState& state, SolverParameters& para
 		while (1);
 	}
 
+	cutilSafeCall(cudaMemset(state.d_scanAlpha, 0, sizeof(float)));
     timer.startEvent("PCGStep_Kernel1");
     PCGStep_Kernel1 << <blocksPerGrid, THREADS_PER_BLOCK, shmem_size >> >(input, state, parameters);
     timer.endEvent();
