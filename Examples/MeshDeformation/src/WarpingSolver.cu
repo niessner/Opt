@@ -1,5 +1,8 @@
 #include <iostream>
 
+// Enabled to print a bunch of junk during solving
+#define DEBUG_PRINT_SOLVER_INFO 0
+
 #include "WarpingSolverParameters.h"
 #include "WarpingSolverState.h"
 #include "WarpingSolverUtil.h"
@@ -20,7 +23,6 @@
 #else
 #define EXPORT
 #endif
-
 
 #define WARP_SIZE 32u
 #define WARP_MASK (WARP_SIZE-1u)
@@ -148,6 +150,12 @@ void Initialization(SolverInput& input, SolverState& state, SolverParameters& pa
 		cutilSafeCall(cudaDeviceSynchronize());
 		cutilCheckMsg(__FUNCTION__);
 	#endif
+
+	#if DEBUG_PRINT_SOLVER_INFO 
+	    float temp;
+	    cutilSafeCall(        cudaMemcpy(&temp, state.d_scanAlpha, sizeof(float), cudaMemcpyDeviceToHost) );
+	    printf("ScanAlpha (Init): %f\n", temp);
+	#endif
 }
 
 /////////////////////////////////////////////////////////////////////////
@@ -272,6 +280,13 @@ void PCGIteration(SolverInput& input, SolverState& state, SolverParameters& para
 		cutilSafeCall(cudaDeviceSynchronize());
 		cutilCheckMsg(__FUNCTION__);
 	#endif
+	#if DEBUG_PRINT_SOLVER_INFO 
+	    float temp;
+	    cutilSafeCall( cudaMemcpy(&temp, state.d_scanAlpha, sizeof(float), cudaMemcpyDeviceToHost) );
+	    printf("ScanAlpha (Step): %f\n", temp);
+	    cutilSafeCall( cudaMemcpy(&temp, state.d_scanBeta, sizeof(float), cudaMemcpyDeviceToHost) );
+	    printf("ScanBeta (Step): %f\n", temp);
+    #endif
 }
 
 /////////////////////////////////////////////////////////////////////////
