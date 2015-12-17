@@ -121,6 +121,13 @@ function I(offX, offY)
 	return Im(offX,offY)*0.5 + 0.25*(Im(offX-1,offY)+Im(offX,offY-1))
 end
 
+local function B_I(x,y)
+    return B(x,y) - I(x,y)
+end
+if true then
+    B_I = P:ComputedImage("B_I",W,H, B_I(0,0))
+end
+
 local E_s = 0.0
 local E_p = 0.0
 local E_r_h = 0.0 
@@ -142,8 +149,8 @@ if USE_SHADING_CONSTRAINT then
         local center_tap = ad.select(shading_center_valid, center_tap_noCheck, 0.0)
         local shading_h_valid = ad.greater(D_i(1,-1) + D_i(0,0) + D_i(1,0), 0)
         local shading_v_valid = ad.greater(D_i(-1,1) + D_i(0,0) + D_i(0,1), 0)
-		local E_g_h_noCheck = (B(1,0) - I(1,0))
-        local E_g_v_noCheck = (B(0,1) - I(0,1))
+		local E_g_h_noCheck = B_I(1,0) --(B(1,0) - I(1,0))
+        local E_g_v_noCheck = B_I(0,1) --(B(0,1) - I(0,1))
 
         local E_g_h_someCheck = center_tap - ad.select(shading_h_valid, E_g_h_noCheck, 0.0)
         local E_g_v_someCheck = center_tap - ad.select(shading_v_valid, E_g_v_noCheck, 0.0)

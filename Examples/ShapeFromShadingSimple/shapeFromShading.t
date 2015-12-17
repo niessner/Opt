@@ -802,7 +802,7 @@ local terra evalJTF(i : int32, j : int32, gId_i : int32, gId_j : int32, self : P
 
 	prior_normal_from_previous_depth(self.X(i, j), gId_i, gId_j, self, &normal0, &normal1, &normal2);
 	
-	__syncthreads()
+	--__syncthreads()
 
 	---- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- 
 	----  Initialize linear patch systems
@@ -1076,7 +1076,7 @@ local terra applyJTJ(i : int32, j : int32, gi : int32, gj : int32, self : P:Para
 
 	prior_normal_from_previous_depth(self.X(i, j), gi, gj, self, &normal0, &normal1, &normal2)
 	
-	__syncthreads()
+	--__syncthreads()
 
  	var JTJ: float = applyJTJDeviceLS_SFS_Shared_BSP_Mask_Prior(i, j, gi, gj, W, H, self, pImage, normal0, normal1, normal2)
 	return 2.0*JTJ

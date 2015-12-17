@@ -19,7 +19,7 @@ end
 
 -- constants
 local verboseSolver = true
-local verboseAD = false
+local verboseAD = true
 
 local function newclass(name)
     local mt = { __name = name }
