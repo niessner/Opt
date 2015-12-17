@@ -26,7 +26,7 @@ public:
 
 		
 		m_warpingSolver	    = new CUDAWarpingSolver(m_image.getWidth(), m_image.getHeight());
-		m_terraSolverFloat4 = new TerraSolverWarpingFloat4(m_image.getWidth(), m_image.getHeight(), "smoothingLaplacianFloat4Graph.t", "gaussNewtonGPU");
+		m_terraSolverFloat4 = new TerraSolverWarpingFloat4(m_image.getWidth(), m_image.getHeight(), "smoothingLaplacianFloat4AD.t", "gaussNewtonGPU");
 		/*		m_terraBlockSolverFloat4 = new TerraSolverWarpingFloat4(m_image.getWidth(), m_image.getHeight(), "smoothingLaplacianFloat4AD.t", "gaussNewtonBlockGPU");*/
 		
 	}

@@ -260,6 +260,19 @@ return function(problemSpec)
             util.atomicAdd(pd.scratchF, cost)
         end
     end
+    
+    terra kernels.precomputeImages(pd : PlanData)
+        var w : int, h : int
+        if util.getValidUnknown(pd,&w,&h) then
+            escape
+                if problemSpec.functions.precompute then
+                    emit quote 
+                        problemSpec.functions.precompute.unknownfunction(w,h,w,h,pd.parameters)
+                    end
+                end
+            end
+        end
+    end
 
 	if util.debugDumpInfo then
 	    terra kernels.dumpCostJTFAndPre(pd : PlanData)
@@ -329,8 +342,7 @@ return function(problemSpec)
 	local terra init(data_ : &opaque, images : &&opaque, graphSizes : &int32, edgeValues : &&opaque, xs : &&int32, ys : &&int32, params_ : &&opaque, solverparams : &&opaque)
 	   var pd = [&PlanData](data_)
 	   pd.timer:init()
-	   pd.parameters = [util.getParameters(problemSpec, images, graphSizes,edgeValues,xs,ys,params_)]
-
+       [util.initParameters(`pd.parameters,problemSpec,images, graphSizes,edgeValues,xs,ys,params_,true)]
 	   pd.nIter = 0
 	   
 	   escape 
@@ -384,8 +396,8 @@ return function(problemSpec)
 
 	local terra step(data_ : &opaque, images : &&opaque, graphSizes : &int32, edgeValues : &&opaque, xs : &&int32, ys : &&int32, params_ : &&opaque, solverparams : &&opaque)
 		var pd = [&PlanData](data_)
-		pd.parameters = [util.getParameters(problemSpec, images, graphSizes,edgeValues,xs,ys,params_)]
-		escape 
+		[util.initParameters(`pd.parameters,problemSpec, images, graphSizes,edgeValues,xs,ys,params_,false)]
+        escape 
 	    	if util.debugDumpInfo then
 	    		emit quote
 
@@ -404,7 +416,8 @@ return function(problemSpec)
 	    		end
 	    	end
 		end
-
+		
+        gpu.precomputeImages(pd)    
 		if pd.nIter < pd.nIterations then
 		    var startCost = computeCost(pd)
 			logSolver("iteration %d, cost=%f\n", pd.nIter, startCost)
@@ -505,7 +518,7 @@ return function(problemSpec)
 			        end
 
 			end
-				
+			
 			gpu.PCGLinearUpdate(pd)
 		    pd.nIter = pd.nIter + 1
 		    return 1
