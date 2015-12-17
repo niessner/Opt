@@ -1,6 +1,6 @@
 #pragma once
 
-#define RUN_CUDA 1
+#define RUN_CUDA 0
 #define RUN_TERRA 1
 #define RUN_OPT 1
 
@@ -38,7 +38,7 @@ class ImageWarping
 			m_warpingSolver	= new CUDAWarpingSolver(N);
 			m_terraWarpingSolver = new TerraWarpingSolver(N, 2 * E, d_neighbourIdx, d_neighbourOffset, "MeshDeformation.t", "gaussNewtonGPU");			
 			m_optWarpingSolver = new TerraWarpingSolver(N, 2 * E, d_neighbourIdx, d_neighbourOffset, "MeshDeformationAD.t", "gaussNewtonGPU");
-		}
+		} 
 
 		void setConstraints(float alpha)
 		{
@@ -142,15 +142,17 @@ class ImageWarping
 
 		SimpleMesh* solve()
 		{
-			unsigned int numIter = 10;
+			//unsigned int numIter = 10;
 			//float weightFit = 5.0f;
 			float weightFit = 1.0f;
 			float weightReg = 1.0f;
 		
 			//unsigned int nonLinearIter = 20;
 			//unsigned int linearIter = 50;
-			unsigned int nonLinearIter = 1;
-			unsigned int linearIter = 2;
+
+			unsigned int numIter = 2;
+			unsigned int nonLinearIter = 3;
+			unsigned int linearIter = 3;
 			
 #			if RUN_CUDA
 			m_result = m_initial;
@@ -161,7 +163,6 @@ class ImageWarping
 				setConstraints((float)i/(float)(numIter-1));
 			
 				m_warpingSolver->solveGN(d_vertexPosFloat3, d_anglesFloat3, d_vertexPosFloat3Urshape, d_numNeighbours, d_neighbourIdx, d_neighbourOffset, d_vertexPosTargetFloat3, nonLinearIter, linearIter, weightFit, weightReg);
-				break;
 			}
 			copyResultToCPUFromFloat3();
 #			endif
@@ -176,7 +177,6 @@ class ImageWarping
 				setConstraints((float)i / (float)(numIter - 1));
 
 				m_terraWarpingSolver->solveGN(d_vertexPosFloat3, d_anglesFloat3, d_vertexPosFloat3Urshape, d_vertexPosTargetFloat3, nonLinearIter, linearIter, weightFit, weightReg);
-				break;
 			}
 			copyResultToCPUFromFloat3();
 #			endif
@@ -190,7 +190,6 @@ class ImageWarping
 				setConstraints((float)i / (float)(numIter - 1));
 
 				m_optWarpingSolver->solveGN(d_vertexPosFloat3, d_anglesFloat3, d_vertexPosFloat3Urshape, d_vertexPosTargetFloat3, nonLinearIter, linearIter, weightFit, weightReg);
-				break;
 			}
 			copyResultToCPUFromFloat3();
 #			endif

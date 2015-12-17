@@ -106,12 +106,6 @@ local w_reg = 0.0
 
 local unknownElement = P:UnknownType().metamethods.typ
 
-local terra laplacianCost(idx : int32, self : P:ParameterType()) : unknownElement	
-    var x0 = self.X(self.G.v0_x[idx], self.G.v0_y[idx])
-    var x1 = self.X(self.G.v1_x[idx], self.G.v1_y[idx])
-    return x0 - x1
-end
-
 
 local terra  evalRot(CosAlpha : float, CosBeta  : float, CosGamma : float, SinAlpha : float, SinBeta : float, SinGamma : float)
 	return make_float3x3(
@@ -212,6 +206,8 @@ local terra evalJTF(i : int32, j : int32, gi : int32, gj : int32, self : P:Param
 	end
 	var gradient = make_float6(b(0), b(1), b(2), 0.0f, 0.0f, 0.0f)
 
+	preT = make_float3(1,1,1)	--TODO fix preconditioner
+	
 	pre(0) = preT(0)
 	pre(1) = preT(1)
 	pre(2) = preT(2)
@@ -341,7 +337,7 @@ local terra evalJTF_graph(idx : int32, self : P:ParameterType(), pImage : P:Unkn
 	var a : float_3 = make_float3(temp(3), temp(4), temp(5))
 
 	var pHat : float_3 = self.UrShape(w0,h0)
-	var R_i : float3x3 = evalR(a);
+	var R_i : float3x3 = evalR(a)
 	var dRAlpha : float3x3, dRBeta : float3x3, dRGamma : float3x3
 	evalDerivativeRotationMatrix(a, &dRAlpha, &dRBeta, &dRGamma)
 
@@ -349,18 +345,18 @@ local terra evalJTF_graph(idx : int32, self : P:ParameterType(), pImage : P:Unkn
 	var q : float_3 = make_float3(temp(0), temp(1), temp(2))
 	var a_neighbor : float_3 = make_float3(temp(3), temp(4), temp(5))
 	var qHat  : float_3 = self.UrShape(w1,h1)
-	var R_j  : float3x3 = evalR(a_neighbor);
-	var D : float3x3  	= -evalDerivativeRotationTimesVector(dRAlpha, dRBeta, dRGamma, pHat - qHat);
-	var P : float3x3 	= (self.w_fitSqrt*self.w_fitSqrt)*matmul(transpose(D),D);
+	var R_j  : float3x3 = evalR(a_neighbor)
+	var D : float3x3  	= -evalDerivativeRotationTimesVector(dRAlpha, dRBeta, dRGamma, pHat - qHat)
+	var P : float3x3 	= (self.w_fitSqrt*self.w_fitSqrt)*matmul(transpose(D),D)
 	
-	var e_reg		: float_3 = 2.0f*(p - q) - mul((R_i+R_j),(pHat - qHat));
+	var e_reg		: float_3 = 2.0f*(p - q) - mul((R_i+R_j),(pHat - qHat))
 	var pre			: float_3 = 2.0f*(self.w_regSqrt*self.w_regSqrt)*ones;
 	var e_reg_angle : float_3 = mul(transpose(D), ((p - q) - mul(R_i,(pHat - qHat))))
 	var preA		: float3x3 = P
 	
 	-- TODO: Missing 2?
-	var b  : float_3 = (self.w_regSqrt*self.w_regSqrt)*e_reg;
-	var bA : float_3 = (self.w_regSqrt*self.w_regSqrt)*e_reg_angle;
+	var b  : float_3 = 2.0f*(self.w_regSqrt*self.w_regSqrt)*e_reg
+	var bA : float_3 = 2.0f*(self.w_regSqrt*self.w_regSqrt)*e_reg_angle
 	
 	pre  = ones		-- TODO!!!
 	preA = identity -- TODO!!!
@@ -379,6 +375,30 @@ local terra evalJTF_graph(idx : int32, self : P:ParameterType(), pImage : P:Unkn
 	-- TODO: is this right? I'm blindly mimicing the laplacian example here
 	var c0 = ( 1.0f)*c
 	var c1 = (-1.0f)*c
+	
+	var f_i : float_3 = (p - q) - mul(R_i,(pHat - qHat))
+	do
+		var e_reg		: float_3 = 1.0f*f_i
+		--var pre			: float_3 = 2.0f*(self.w_regSqrt*self.w_regSqrt)*ones
+		var e_reg_angle : float_3 = mul(transpose(D), f_i)
+		--var preA		: float3x3 = P
+	
+		var b  : float_3 = 2.0f*(self.w_regSqrt*self.w_regSqrt)*e_reg;
+		var bA : float_3 = 2.0f*(self.w_regSqrt*self.w_regSqrt)*e_reg_angle;
+		var c = make_float6(b(0), b(1), b(2), bA(0), bA(1), bA(2))
+		c0 = c
+	end
+	do
+		var e_reg		: float_3 = -1.0f*f_i
+		--var pre			: float_3 = 2.0f*(self.w_regSqrt*self.w_regSqrt)*ones
+		var e_reg_angle : float_3 = make_float3(0,0,0)
+		--var preA		: float3x3 = P
+	
+		var b  : float_3 = 2.0f*(self.w_regSqrt*self.w_regSqrt)*e_reg;
+		var bA : float_3 = 2.0f*(self.w_regSqrt*self.w_regSqrt)*e_reg_angle;
+		var c = make_float6(b(0), b(1), b(2), bA(0), bA(1), bA(2))
+		c1 = c
+	end
 
     
 	--write results
@@ -411,7 +431,7 @@ local terra applyJTJ(i : int32, j : int32, gi : int32, gj : int32, self : P:Para
 	var c : float_3 = self.Constraints(i, j)
 	-- TODO: use -inf?
 	if c(0) >  -999999.9f then
-		b = b + (self.w_fitSqrt*self.w_fitSqrt)*p;
+		b = b + 2.0f*(self.w_fitSqrt*self.w_fitSqrt)*p;
 	end
 
 	return make_float6(b(0), b(1), b(2), 0.0f, 0.0f, 0.0f)
@@ -446,18 +466,42 @@ local terra applyJTJ_graph(idx : int32, self : P:ParameterType(), pImage : P:Unk
 	var q  : float_3  = make_float3(temp(0), temp(1), temp(2))
 	var qAngle : float_3 = make_float3(temp(3), temp(4), temp(5))
 
-	var e_reg		= 2.0f*(p-q);
+	var e_reg		= 2.0f*(p-q)
 	var e_reg_angle = mul(matmul(transpose(D),D),pAngle)
 	e_reg		= e_reg + mul(D,pAngle) + mul(D_j,qAngle)
 	e_reg_angle = e_reg_angle + mul(transpose(D),(p - q))
 	
-	var b  = (self.w_regSqrt*self.w_regSqrt)*e_reg
-	var bA = (self.w_regSqrt*self.w_regSqrt)*e_reg_angle
+	var b  = 2.0f*(self.w_regSqrt*self.w_regSqrt)*e_reg
+	var bA = 2.0f*(self.w_regSqrt*self.w_regSqrt)*e_reg_angle
 	var c : float_6 = make_float6(b(0), b(1), b(2), bA(0), bA(1), bA(2))
 
 	-- TODO: Is this right? I just kinda copy-pasted here...
 	var c0 = 1.0  * c
 	var c1 = -1.0 * c
+	
+	do
+		var e_reg = p - q
+		var e_reg_angle = mul(matmul(transpose(D),D),pAngle)
+		e_reg = e_reg + mul(D,pAngle)
+		e_reg_angle = e_reg_angle + mul(transpose(D),(p - q))
+		
+		var b  = 2.0f*(self.w_regSqrt*self.w_regSqrt)*e_reg
+		var bA = 2.0f*(self.w_regSqrt*self.w_regSqrt)*e_reg_angle
+		var c : float_6 = make_float6(b(0), b(1), b(2), bA(0), bA(1), bA(2))
+		c0 = c
+	end
+	
+	do 
+		var e_reg = q - p
+		var e_reg_angle = make_float3(0,0,0)
+		e_reg = e_reg - mul(D,pAngle)
+		--e_reg_angle = e_reg_angle + mul(transpose(D_j),(q - p))
+		
+		var b  = 2.0f*(self.w_regSqrt*self.w_regSqrt)*e_reg
+		var bA = 2.0f*(self.w_regSqrt*self.w_regSqrt)*e_reg_angle
+		var c : float_6 = make_float6(b(0), b(1), b(2), bA(0), bA(1), bA(2))
+		c1 = c
+	end
     
 	Ap_X:atomicAdd(w0, h0, c0)
     Ap_X:atomicAdd(w1, h1, c1)
@@ -472,5 +516,5 @@ P:Function("cost", 		cost, "G", cost_graph)
 P:Function("evalJTF", 	evalJTF, "G", evalJTF_graph)
 P:Function("applyJTJ", 	applyJTJ, "G", applyJTJ_graph)
 
-
 return P
+
