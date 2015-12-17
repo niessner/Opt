@@ -319,7 +319,7 @@ newImage = terralib.memoize(function(typ, W, H, elemsize, stride)
 	  return string.format("Image(%s,%s,%s,%d,%d)",tostring(typ),W.name, H.name,elemsize,stride)
 	end
 
-	if ad.isterravectortype(typ) and typ.metamethods.type == float and (typ.metamethods.N == 4 or typ.metamethods.N == 2) then
+	if util.isvectortype(typ) and typ.metamethods.type == float and (typ.metamethods.N == 4 or typ.metamethods.N == 2) then
 	    -- emit code that will produce special CUDA vector load instructions
 	    local storetype = vector(float,typ.metamethods.N)
 	    terra Image.metamethods.__apply(self : &Image, x : int32, y : int32)
@@ -340,7 +340,7 @@ newImage = terralib.memoize(function(typ, W, H, elemsize, stride)
 	terra Image:inbounds(x : int32, y : int32)
 	    return x >= 0 and y >= 0 and x < W.size and y < H.size
 	end
-	if ad.isterravectortype(typ) then
+	if util.isvectortype(typ) then
 	    terra Image:atomicAdd(x : int32, y : int32, v : typ)
 	        escape
 	            for i = 0,typ.metamethods.N - 1 do
@@ -404,7 +404,7 @@ end
 
 local function tovalidimagetype(typ)
     if not terralib.types.istype(typ) then return nil end
-    if ad.isterravectortype(typ) then
+    if util.isvectortype(typ) then
         return typ, typ.metamethods.N
     elseif typ:isarithmetic() then
         return typ, 1
@@ -822,7 +822,7 @@ local function createfunction(problemspec,name,usebounds,W,H,ndims,results,scatt
     end
     irmap = terralib.memoize(function(e)
         if ad.ExpVector:is(e) then
-            return IRNode:create { kind = "vectorconstruct", children = e.data:map(irmap), type = ad.TerraVector(float,#e.data) }
+            return IRNode:create { kind = "vectorconstruct", children = e.data:map(irmap), type = util.Vector(float,#e.data) }
         elseif "Var" == e.kind then
             local a = e:key()
             if "ImageAccess" == a.kind then
@@ -1264,7 +1264,7 @@ local function createfunction(problemspec,name,usebounds,W,H,ndims,results,scatt
             return `v(ir.channel)
         elseif "vectorconstruct" == ir.kind then
             local exps = ir.children:map(emit)
-            return `[ad.TerraVector(float,#exps)]{ array(exps) }
+            return `[util.Vector(float,#exps)]{ array(exps) }
         elseif "apply" == ir.kind then
             local exps = ir.children:map(emit)
             return ir.generator(exps)
@@ -1513,7 +1513,7 @@ local function unknownsforresidual(r,unknownsupport)
 end
 
 local function conformtounknown(exps,unknown)
-    if ad.isterravectortype(unknown.type) then return ad.Vector(unpack(exps))
+    if util.isvectortype(unknown.type) then return ad.Vector(unpack(exps))
     else return exps[1] end
 end
 
@@ -1806,21 +1806,11 @@ function ProblemSpecAD:Exclude(exp)
     self.excludeexp = assert(ad.toexp(exp), "expected a AD expression")
 end
 
-opt.Vector = ad.TerraVector
 for i = 2,9 do
-    opt["float"..tostring(i)] = ad.TerraVector(float,i)
+    opt["float"..tostring(i)] = util.Vector(float,i)
 end
 
-util.Dot = macro(function(a,b) 
-    local at,bt = a:gettype(),b:gettype()
-    if ad.isterravectortype(at) then
-        return `a:dot(b)
-    else
-        return `a*b
-    end
-end)
 opt.Dot = util.Dot
-
 opt.newImage = newImage
 
 return opt
