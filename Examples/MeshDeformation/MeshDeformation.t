@@ -211,6 +211,10 @@ local terra evalJTF(i : int32, j : int32, gi : int32, gj : int32, self : P:Param
 	pre(0) = preT(0)
 	pre(1) = preT(1)
 	pre(2) = preT(2)
+	pre(3) = 1.0
+	pre(4) = 1.0
+	pre(5) = 1.0
+	
 
 	return gradient, pre
 end
