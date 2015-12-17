@@ -331,7 +331,7 @@ end
 util.initParameters = function(parameters, ProblemSpec, images, graphSizes, edgeValues, xs, ys, paramValues,allocateTemporaries)
     local stmts = terralib.newlist()
 	for _, entry in ipairs(ProblemSpec.parameters) do
-		if entry.kind == "image" and entry.index == "alloc" then
+		if entry.kind == "image" and entry.idx == "alloc" then
 		    if allocateTemporaries then
 		        stmts:insert quote
 		            parameters.[entry.name]:initGPU()

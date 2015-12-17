@@ -558,10 +558,14 @@ function ImageAccess:shape() return self._shape end -- implementing AD's API for
 local emptygradient = {}
 function ImageAccess:gradient()
     if self.image.gradientimages then
+        print("CUSTOM GRADIENT!")
         assert(Offset:is(self.index),"NYI - support for graphs")
         local gt = {}
         for u,im in pairs(self.image.gradientimages) do
-            gt[u:shift(self.index.x,self.index.y)] = im(self.index.x,self.index.y)
+            local k = u:shift(self.index.x,self.index.y)
+            local v = im(self.index.x,self.index.y)
+            print(k,v)
+            gt[k] = v
         end
         return gt
     end
@@ -628,8 +632,8 @@ function ProblemSpecAD:Func(name,W,H,exp)
             end
         end
     end)
-    local im = self:Image(name,float,W,H)
-    local gradients = im.expression:gradient(unknowns)
+    local im = self:Image(name,float,W,H,"alloc")
+    local gradients = exp:gradient(unknowns:map(function(x) return ad.v[x] end))
     local gradientexpressions = {}
     local gradientimages = {}
     for i,u in ipairs(unknowns) do
@@ -1180,7 +1184,7 @@ local function createfunction(problemspec,name,usebounds,W,H,ndims,results,scatt
     end
     
     local function imageref(image)
-        if image.idx >= 0 then
+        if image.idx == "alloc" or image.idx >= 0 then
             return `P.[image.name]
         else
             if not extraimages[-image.idx] then
@@ -1357,15 +1361,19 @@ local function createfunction(problemspec,name,usebounds,W,H,ndims,results,scatt
     end
         
     local scatterstatements = terralib.newlist()
+    local function xypair(index)
+        if Offset:is(index) then return {`mi + index.x, `mj + index.y }
+        else return graphref(index) end
+    end 
     for i,s in ipairs(scatters) do
         local image,exp = imageref(s.image),scatterexpressions[i]
-        local gr = graphref(s.index)
+        local xy = xypair(s.index)
         local stmt
         if s.kind == "add" then
-            stmt = s.channel and (`image:atomicAddChannel(gr, s.channel, exp)) or (`image:atomicAdd(gr, exp))
+            stmt = s.channel and (`image:atomicAddChannel(xy, s.channel, exp)) or (`image:atomicAdd(xy, exp))
         else
             assert(s.kind == "set" and s.channel == 0)
-            stmt = quote image(gr) = exp end -- NYI - multi-channel images
+            stmt = quote image(xy) = exp end -- NYI - multi-channel images
         end
         scatterstatements:insert(stmt)
     end
@@ -1435,11 +1443,21 @@ local function classifyresiduals(Rs)
         local classification
         local seenunknown = {}
         local unknownaccesses = terralib.newlist()
+        local function addunknown(u)
+            if not seenunknown[u] then
+                unknownaccesses:insert(u)
+                seenunknown[u] = true
+            end
+        end
         exp:visit(function(a)
             if ImageAccess:is(a) then -- assume image X is unknown
-                if a.image.name == "X" and not seenunknown[a] then
-                    unknownaccesses:insert(a)
-                    seenunknown[a] = true
+                if a.image.name == "X"then
+                    addunknown(a)
+                elseif a.image.gradientimages then
+                    for u,_ in pairs(a.image.gradientimages) do
+                        assert(Offset:is(a.index),"NYI - precomputed with graphs")
+                        addunknown(u:shift(a.index.x,a.index.y))
+                    end
                 end
                 local aclass = Offset:is(a.index) and "centered" or a.index.graph
                 assert(nil == classification or aclass == classification, "residual contains image reads from multiple domains")
@@ -1768,10 +1786,6 @@ function ProblemSpecAD:Cost(costexp)
         self:createfunctionset("exclude",terralib.newlist{self.excludeexp},{})
     end
     
-    if verboseAD then
-        self.excludeexp = nil
-        terralib.tree.printraw(self)
-    end
     return self.P
 end
 

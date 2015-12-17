@@ -822,7 +822,7 @@ function Var:calcd(v)
     local k = self:key()
     if type(k) == "table" and type(k.gradient) == "function" then -- allow variables to express external relationships to other variables
         local gradtable = k:gradient() -- table of (var -> exp) mappings that are the gradient of this variable with respect to all unknowns of interest
-        local r = gradtable[v]
+        local r = gradtable[v:key()]
         if r then return assert(toexp(r),"expected an ad expression") end
     end
     return zero
@@ -864,7 +864,8 @@ function Exp:gradient(exps)
             local k = e:key()
             if type(k) == "table" and type(k.gradient) == "function" then -- handle optional black-box relationship to other variables
                 local gradtable = k:gradient()
-                for v,dv in pairs(gradtable) do
+                for k,dv in pairs(gradtable) do
+                    local v = ad.v[k]
                     tape[v] = (tape[v] or zero) + tape[e]*dv
                 end
             end
