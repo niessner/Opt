@@ -1,5 +1,5 @@
-local M = require("MeshDeformation")
-local A = require("MeshDeformationAD")
+local M = require("MeshDeformation.t")
+local A = require("MeshDeformationAD.t")
 
 local smallestnormalfloat = `1.1754943508222875081e-38f
 
