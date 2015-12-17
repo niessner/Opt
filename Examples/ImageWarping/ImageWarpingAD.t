@@ -36,8 +36,8 @@ local e_fit = ad.select(ad.eq(m,0.0), x - constraintUV, ad.Vector(0.0, 0.0))
 e_fit = ad.select(ad.greatereq(constraintUV(0), 0.0), e_fit, ad.Vector(0.0, 0.0))
 e_fit = ad.select(ad.greatereq(constraintUV(1), 0.0), e_fit, ad.Vector(0.0, 0.0))
 
-terms:insert(w_fitSqrt*e_fit(0))
-terms:insert(w_fitSqrt*e_fit(1))
+terms:insert(w_fitSqrt*e_fit)
+
 
 
 --regularization
@@ -45,37 +45,15 @@ local a = X(0,0,2)			-- rotation : float
 local R = evalR(a)			-- rotation : float2x2
 local xHat = UrShape(0,0)	-- uv-urshape : float2
 
-local n0 = ad.Vector(X( 1,0,0), X( 1,0,1))
-local n1 = ad.Vector(X(-1,0,0), X(-1,0,1))
-local n2 = ad.Vector(X( 0,1,0), X( 0,1,1))
-local n3 = ad.Vector(X(0,-1,0), X(0,-1,1))
-
-local ARAPCost0 = (x - n0)	-	mul(R, (xHat - UrShape( 1,0)))
-local ARAPCost1 = (x - n1)	-	mul(R, (xHat - UrShape(-1,0)))
-local ARAPCost2 = (x - n2)	-	mul(R, (xHat - UrShape( 0,1)))
-local ARAPCost3 = (x - n3)	-	mul(R, (xHat - UrShape(0,-1)))
-
-
-local ARAPCost0F = ad.select(opt.InBounds(0,0,0,0),	ad.select(opt.InBounds( 1,0,0,0), ARAPCost0, ad.Vector(0.0, 0.0)), ad.Vector(0.0, 0.0))
-local ARAPCost1F = ad.select(opt.InBounds(0,0,0,0),	ad.select(opt.InBounds(-1,0,0,0), ARAPCost1, ad.Vector(0.0, 0.0)), ad.Vector(0.0, 0.0))
-local ARAPCost2F = ad.select(opt.InBounds(0,0,0,0),	ad.select(opt.InBounds( 0,1,0,0), ARAPCost2, ad.Vector(0.0, 0.0)), ad.Vector(0.0, 0.0))	
-local ARAPCost3F = ad.select(opt.InBounds(0,0,0,0),	ad.select(opt.InBounds(0,-1,0,0), ARAPCost3, ad.Vector(0.0, 0.0)), ad.Vector(0.0, 0.0))
-
-local m0 = Mask( 1,0)
-local m1 = Mask(-1,0)
-local m2 = Mask( 0,1)
-local m3 = Mask(0,-1)
-
-ARAPCost0F = ad.select(ad.eq(m0, 0.0), ARAPCost0F, ad.Vector(0.0, 0.0))
-ARAPCost1F = ad.select(ad.eq(m1, 0.0), ARAPCost1F, ad.Vector(0.0, 0.0))
-ARAPCost2F = ad.select(ad.eq(m2, 0.0), ARAPCost2F, ad.Vector(0.0, 0.0))
-ARAPCost3F = ad.select(ad.eq(m3, 0.0), ARAPCost3F, ad.Vector(0.0, 0.0))
-
-for i = 0,1 do
-	terms:insert(w_regSqrt*ARAPCost0F(i))
-	terms:insert(w_regSqrt*ARAPCost1F(i))
-	terms:insert(w_regSqrt*ARAPCost2F(i))
-	terms:insert(w_regSqrt*ARAPCost3F(i))
+local offsets = { {1,0}, {-1,0}, {0,1}, {0, -1} }
+for ii ,o in ipairs(offsets) do
+    local i,j = unpack(o)
+    local n = ad.Vector(X(i,j,0), X(i,j,1))
+    local ARAPCost = (x - n)	-	mul(R, (xHat - UrShape( i,j)))
+    local ARAPCostF = ad.select(opt.InBounds(0,0,0,0),	ad.select(opt.InBounds( i,j,0,0), ARAPCost, ad.Vector(0.0, 0.0)), ad.Vector(0.0, 0.0))
+    local m = Mask(i,j)
+    ARAPCostF = ad.select(ad.eq(m, 0.0), ARAPCostF, ad.Vector(0.0, 0.0))
+    terms:insert(w_regSqrt*ARAPCostF)
 end
 
 local cost = ad.sumsquared(unpack(terms))
