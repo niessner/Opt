@@ -1,7 +1,7 @@
 #include <iostream>
 
 // Enabled to print a bunch of junk during solving
-#define DEBUG_PRINT_SOLVER_INFO 0
+#define DEBUG_PRINT_SOLVER_INFO 1
 
 #include "WarpingSolverParameters.h"
 #include "WarpingSolverState.h"
@@ -70,10 +70,10 @@ float EvalResidual(SolverInput& input, SolverState& state, SolverParameters& par
 
 	residual = state.getSumResidual();
 
-#ifdef _DEBUG
-	cutilSafeCall(cudaDeviceSynchronize());
-	cutilCheckMsg(__FUNCTION__);
-#endif
+#	ifdef _DEBUG
+		cutilSafeCall(cudaDeviceSynchronize());
+		cutilCheckMsg(__FUNCTION__);
+#	endif
 
 	return residual;
 }
@@ -144,7 +144,6 @@ void Initialization(SolverInput& input, SolverState& state, SolverParameters& pa
 		cutilSafeCall(cudaDeviceSynchronize());
 		cutilCheckMsg(__FUNCTION__);
 	#endif
-
 
 	#if DEBUG_PRINT_SOLVER_INFO 
 	    float temp;
