@@ -416,9 +416,9 @@ return function(problemSpec)
 	    		end
 	    	end
 		end
-
+		
+        gpu.precomputeImages(pd)    
 		if pd.nIter < pd.nIterations then
-		    gpu.precomputeImages(pd)
 		    var startCost = computeCost(pd)
 			logSolver("iteration %d, cost=%f\n", pd.nIter, startCost)
 

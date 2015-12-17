@@ -558,13 +558,11 @@ function ImageAccess:shape() return self._shape end -- implementing AD's API for
 local emptygradient = {}
 function ImageAccess:gradient()
     if self.image.gradientimages then
-        print("CUSTOM GRADIENT!")
         assert(Offset:is(self.index),"NYI - support for graphs")
         local gt = {}
         for u,im in pairs(self.image.gradientimages) do
             local k = u:shift(self.index.x,self.index.y)
             local v = im(self.index.x,self.index.y)
-            print(k,v)
             gt[k] = v
         end
         return gt

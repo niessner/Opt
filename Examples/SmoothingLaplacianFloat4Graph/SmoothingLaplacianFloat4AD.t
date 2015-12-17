@@ -11,11 +11,13 @@ local terms = terralib.newlist()
 
 local offsets = { {1,0}, {-1,0}, {0,1}, {0,-1} }
 
+useprecompute = false
+
 for i = 0,3 do
 	for j,o in ipairs(offsets) do
 	    local x,y = unpack(o)
 	    local laplacianCost = X(0,0,i) - X(x,y,i)
-	    if true then
+	    if useprecompute then
 	        local lc = S:Func("laplacian_"..tostring(i).."_"..tostring(j),W,H,laplacianCost)
 	        laplacianCost = lc(0,0)
 	    end
@@ -23,6 +25,10 @@ for i = 0,3 do
 	    terms:insert(w_regSqrt*laplacianCostF)
 	end
 	local fittingCost = X(0,0,i) - A(0,0,i)
+	if false then
+	    local FC = S:Func("fitting_"..tostring(i),W,H,fittingCost)
+	    fittingCost = FC(0,0)
+	end
     terms:insert(w_fitSqrt*fittingCost)
 end
 
