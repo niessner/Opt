@@ -617,7 +617,17 @@ function ProblemSpecAD:Image(name,typ,W,H,idx)
     self.nametoimage[name] = r
     return r
 end
-function ProblemSpecAD:Func(name,W,H,exp)
+
+local ImageVector = newclass("ImageVector") -- wrapper for many images in a vector, just implements the __call methodf for Images Image:
+
+function ProblemSpecAD:ComputedImage(name,W,H,exp)
+    if ad.ExpVector:is(exp) then
+        local imgs = terralib.newlist()
+        for i,e in ipairs(exp:expressions()) do
+            imgs:insert(self:ComputedImage(name.."_"..tostring(i-1),W,H,e))
+        end
+        return ImageVector:new { images = imgs }
+    end
     exp = assert(ad.toexp(exp),"expected a math expression")
     local unknowns = terralib.newlist()
     local seen = {}
@@ -685,6 +695,11 @@ function Image:__call(x,y,c)
         return ad.Vector(unpack(r))
     end
 end
+function ImageVector:__call(x,y,c)
+    local result = self.images:map(function(im) return im(x,y,c) end)
+    return ad.Vector(unpack(result))
+end
+
 function opt.InBounds(x,y,sx,sy)
 	assert(x and y and sx and sy, "InBounds Requires 4 values (x,y,stencil_x,stencil_y)")
     return ad.v[BoundsAccess:get(x,y,sx,sy)]
