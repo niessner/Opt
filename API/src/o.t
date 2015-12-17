@@ -1741,7 +1741,7 @@ function createprecomputed(self,name,precomputedimages)
         scatters:insert(NewScatter(im, Offset:get(0,0), 0, im.expression, "set"))
         for u,gim in pairs(im.gradientimages) do
             local gradientexpression = im.gradientexpressions[u]
-            scatters:insert(NewScatter(gim, Offset:get(u.index.x,u.index.y), 0, gradientexpression, "set"))
+            scatters:insert(NewScatter(gim, Offset:get(0,0), 0, gradientexpression, "set"))
         end
     end
     
