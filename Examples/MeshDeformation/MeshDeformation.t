@@ -405,9 +405,9 @@ end
 -- eval 2*JtJ (note that we keep the '2' to make it consistent with the gradient
 local terra applyJTJ(i : int32, j : int32, gi : int32, gj : int32, self : P:ParameterType(), pImage : P:UnknownType()) : unknownElement 
 	
-	var b 	 = make_float3(0.0f, 0.0f, 0.0f)
-	var temp = pImage(i,j)
-	var p 	 = make_float3(temp(0), temp(1), temp(2))
+	var b 	= make_float3(0.0f, 0.0f, 0.0f)
+	var tmp = pImage(i,j)
+	var p 	= make_float3(tmp(0), tmp(1), tmp(2))
 
 	-- fit/pos
 	var c : float_3 = self.Constraints(i, j)
@@ -423,43 +423,33 @@ local terra applyJTJ_graph(idx : int32, self : P:ParameterType(), pImage : P:Unk
     var w0,h0 = self.G.v0_x[idx], self.G.v0_y[idx]
     var w1,h1 = self.G.v1_x[idx], self.G.v1_y[idx]
 	
-	var temp : float_6   = pImage(w0,h0)
-	var p  : float_3     = make_float3(temp(0), temp(1), temp(2))
-	var pAngle : float_3 = make_float3(temp(3), temp(4), temp(5))
+	var tmp : float_6
+	tmp = pImage(w0,h0)
+	var p : float_3      = make_float3(tmp(0), tmp(1), tmp(2))
+	var pAngle : float_3 = make_float3(tmp(3), tmp(4), tmp(5))
 
-	temp = self.X(w0,h0)
-	var a : float_3 = make_float3(temp(3), temp(4), temp(5))
+	tmp = self.X(w0,h0)
+	var a_i : float_3 = make_float3(tmp(3), tmp(4), tmp(5))
 
 	var dRAlpha : float3x3, dRBeta : float3x3, dRGamma : float3x3
-	evalDerivativeRotationMatrix(a, &dRAlpha, &dRBeta, &dRGamma)
+	evalDerivativeRotationMatrix(a_i, &dRAlpha, &dRBeta, &dRGamma)
 
 	var pHat : float_3 = self.UrShape(w0,h0)
 	var qHat : float_3 = self.UrShape(w1,h1)
 	var D : float3x3 = -evalDerivativeRotationTimesVector(dRAlpha, dRBeta, dRGamma, pHat - qHat)
 
-	temp = self.X(w1,h1)
-	var a_neighbor : float_3 = make_float3(temp(3), temp(4), temp(5))
+	tmp = self.X(w1,h1)
+	var a_j : float_3 = make_float3(tmp(3), tmp(4), tmp(5))
 
 	var dRAlphaJ : float3x3, dRBetaJ : float3x3, dRGammaJ : float3x3
-	evalDerivativeRotationMatrix(a_neighbor, &dRAlphaJ, &dRBetaJ, &dRGammaJ)
+	evalDerivativeRotationMatrix(a_j, &dRAlphaJ, &dRBetaJ, &dRGammaJ)
 	var D_j :float3x3 = -evalDerivativeRotationTimesVector(dRAlphaJ, dRBetaJ, dRGammaJ, pHat - qHat)
 
-	temp = pImage(w1,h1)
-	var q  : float_3  = make_float3(temp(0), temp(1), temp(2))
-	var qAngle : float_3 = make_float3(temp(3), temp(4), temp(5))
-
-	var e_reg		= 2.0f*(p-q)
-	var e_reg_angle = mul(matmul(transpose(D),D),pAngle)
-	e_reg		= e_reg + mul(D,pAngle) + mul(D_j,qAngle)
-	e_reg_angle = e_reg_angle + mul(transpose(D),(p - q))
+	tmp = pImage(w1,h1)
+	var q  : float_3  = make_float3(tmp(0), tmp(1), tmp(2))
 	
-	var b  = 2.0f*(self.w_regSqrt*self.w_regSqrt)*e_reg
-	var bA = 2.0f*(self.w_regSqrt*self.w_regSqrt)*e_reg_angle
-	var c : float_6 = make_float6(b(0), b(1), b(2), bA(0), bA(1), bA(2))
-
-	-- TODO: Is this right? I just kinda copy-pasted here...
-	var c0 = 1.0  * c
-	var c1 = -1.0 * c
+	var c0 : float_6
+	var c1 : float_6
 	
 	do
 		var e_reg = p - q
@@ -477,7 +467,6 @@ local terra applyJTJ_graph(idx : int32, self : P:ParameterType(), pImage : P:Unk
 		var e_reg = q - p
 		var e_reg_angle = make_float3(0,0,0)
 		e_reg = e_reg - mul(D,pAngle)
-		--e_reg_angle = e_reg_angle + mul(transpose(D_j),(q - p))
 		
 		var b  = 2.0f*(self.w_regSqrt*self.w_regSqrt)*e_reg
 		var bA = 2.0f*(self.w_regSqrt*self.w_regSqrt)*e_reg_angle
