@@ -6,7 +6,7 @@ local USE_SHADING_CONSTRAINT 	= true
 local USE_TEMPORAL_CONSTRAINT 	= false
 local USE_PRECONDITIONER 		= false
 
-
+local USE_PRECOMPUTE = true
 local USE_CRAPPY_SHADING_BOUNDARY = true
 
 local FLOAT_EPSILON = 0.000001
@@ -22,6 +22,17 @@ local I 	= P:Image("I",float, W,H,2) -- Target Intensity
 local D_p 	= P:Image("D_p",float, W,H,3) -- Previous Depth
 local edgeMaskR 	= P:Image("edgeMaskR",uint8, W,H,4) -- Edge mask. 
 local edgeMaskC 	= P:Image("edgeMaskC",uint8, W,H,5) -- Edge mask. 
+
+local B_I
+local B_I_dx0
+local B_I_dx1
+local B_I_dx2
+if USE_PRECOMPUTE then
+	B_I = P:Image("B_I", float, W, H, "alloc")
+	B_I_dx0 = P:Image("B_I_dx0", float, W, H, "alloc")
+	B_I_dx1 = P:Image("B_I_dx1", float, W, H, "alloc")
+	B_I_dx2 = P:Image("B_I_dx2", float, W, H, "alloc")
+end	
 
 -- See TerraSolverParameters
 local w_p						= P:Param("w_p",float,0)-- Is initialized by the solver!
@@ -253,9 +264,7 @@ local terra prior_normal_from_previous_depth(d : float, gidx : int32, gidy : int
 	return 
 end
 
-
-
-local terra calShading2depthGrad(i : int, j : int, posx : int, posy: int, self : P:ParameterType()) : float4
+local terra calShading2depthGradHelper(i : int, j : int, posx : int, posy: int, self : P:ParameterType()) : float4
 	var f_x : float = self.f_x
 	var f_y : float = self.f_y
 	var u_x : float = self.u_x
@@ -380,6 +389,23 @@ local terra calShading2depthGrad(i : int, j : int, posx : int, posy: int, self :
 	else
 		return vector(0.0f, 0.0f, 0.0f, 0.0f);
 	end
+end
+
+local terra calShading2depthGrad(i : int, j : int, posx : int, posy: int, self : P:ParameterType()) : float4
+	escape
+		if USE_PRECOMPUTE then
+			emit quote
+				return make_float4(	self.B_I_dx0(i,j),
+									self.B_I_dx1(i,j),
+									self.B_I_dx2(i,j),
+									self.B_I(i,j)) 
+			end
+		else
+			emit quote
+				return calShading2depthGradHelper(i,j, posx, posy, self)
+			end
+		end
+    end
 end
 
 
@@ -1082,10 +1108,21 @@ local terra applyJTJ(i : int32, j : int32, gi : int32, gj : int32, self : P:Para
 	return 2.0*JTJ
 end
 
-P:Function("cost",      cost)
-P:Function("evalJTF",   evalJTF)
-P:Function("gradient",  gradient)
-P:Function("applyJTJ",  applyJTJ)
+local terra precompute(i : int32, j : int32, gi : int32, gj : int32, self : P:ParameterType())
+	var temp = calShading2depthGradHelper(i, j, gi, gj, self)
+	self.B_I_dx0(i,j) 	= temp[0]
+	self.B_I_dx1(i,j) 	= temp[1]
+	self.B_I_dx2(i,j) 	= temp[2]
+	self.B_I(i,j) 		= temp[3]
+end
+
+P:Function("cost",       cost)
+P:Function("evalJTF",    evalJTF)
+P:Function("gradient",   gradient)
+P:Function("applyJTJ",   applyJTJ)
+if USE_PRECOMPUTE then
+	P:Function("precompute", precompute)
+end
 
 
 return P
