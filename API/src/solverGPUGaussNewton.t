@@ -11,16 +11,14 @@ local gpuMath = util.gpuMath
 opt.BLOCK_SIZE = 16
 local BLOCK_SIZE =  opt.BLOCK_SIZE
 
-local isGraph = true	--TODO CHECK THIS EVERYWHERE
-
 local FLOAT_EPSILON = `0.000001f 
 -- GAUSS NEWTON (non-block version)
 return function(problemSpec)
 
 	local unknownElement = problemSpec:UnknownType().metamethods.typ
 	local unknownType = problemSpec:UnknownType()
-
-	local struct PlanData(S.Object) {
+    local isGraph = #problemSpec.functions.cost.graphfunctions > 0
+    local struct PlanData(S.Object) {
 		plan : opt.Plan
 		parameters : problemSpec:ParameterType(false)	--get the non-blocked version
 		scratchF : &float
@@ -117,7 +115,7 @@ return function(problemSpec)
 				local name,implementation = func.graphname,func.implementation
 				emit quote 
 	    			if util.getValidGraphElement(pd,[name],&tIdx) then
-						implementation(tIdx, pd.parameters, pd.p, pd.r, pd.preconditioner)
+						implementation(tIdx, pd.parameters, pd.r, pd.preconditioner)
 	    			end 
 				end
     		end
