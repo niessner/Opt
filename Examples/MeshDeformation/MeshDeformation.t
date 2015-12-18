@@ -333,77 +333,55 @@ local terra evalJTF_graph(idx : int32, self : P:ParameterType(), pImage : P:Unkn
 	var w0,h0 = self.G.v0_x[idx], self.G.v0_y[idx]
     var w1,h1 = self.G.v1_x[idx], self.G.v1_y[idx]
 	
-	var ones = make_float3(1.0,1.0,1.0)
-	var identity = make_float3x3_diag(1.0, 1.0, 1.0)
+	var tmp : float_6
 
-	var temp : float_6 = self.X(w0,h0)
-	var p : float_3 = make_float3(temp(0), temp(1), temp(2))
-	var a : float_3 = make_float3(temp(3), temp(4), temp(5))
 
+	tmp = self.X(w0,h0)
+	var p : float_3 = make_float3(tmp(0), tmp(1), tmp(2))
+	var a_i : float_3 = make_float3(tmp(3), tmp(4), tmp(5))
 	var pHat : float_3 = self.UrShape(w0,h0)
-	var R_i : float3x3 = evalR(a)
+	var R_i : float3x3 = evalR(a_i)
+	
 	var dRAlpha : float3x3, dRBeta : float3x3, dRGamma : float3x3
-	evalDerivativeRotationMatrix(a, &dRAlpha, &dRBeta, &dRGamma)
+	evalDerivativeRotationMatrix(a_i, &dRAlpha, &dRBeta, &dRGamma)
 
-	temp = self.X(w1,h1)
-	var q : float_3 = make_float3(temp(0), temp(1), temp(2))
-	var a_neighbor : float_3 = make_float3(temp(3), temp(4), temp(5))
+	tmp = self.X(w1,h1)
+	var q : float_3 = make_float3(tmp(0), tmp(1), tmp(2))
+	var a_j : float_3 = make_float3(tmp(3), tmp(4), tmp(5))
 	var qHat  : float_3 = self.UrShape(w1,h1)
-	var R_j  : float3x3 = evalR(a_neighbor)
-	var D : float3x3  	= -evalDerivativeRotationTimesVector(dRAlpha, dRBeta, dRGamma, pHat - qHat)
-	var P : float3x3 	= (self.w_fitSqrt*self.w_fitSqrt)*matmul(transpose(D),D)
+	var R_j  : float3x3 = evalR(a_j)
 	
-	var e_reg		: float_3 = 2.0f*(p - q) - mul((R_i+R_j),(pHat - qHat))
-	var pre			: float_3 = 2.0f*(self.w_regSqrt*self.w_regSqrt)*ones;
-	var e_reg_angle : float_3 = mul(transpose(D), ((p - q) - mul(R_i,(pHat - qHat))))
-	var preA		: float3x3 = P
-	
-	-- TODO: Missing 2?
-	var b  : float_3 = 2.0f*(self.w_regSqrt*self.w_regSqrt)*e_reg
-	var bA : float_3 = 2.0f*(self.w_regSqrt*self.w_regSqrt)*e_reg_angle
-	
-	pre  = ones		-- TODO!!!
-	preA = identity -- TODO!!!
-	
-	-- TODO: Preconditioner
-	--[[
-	if (fabs(pre(0)) > FLOAT_EPSILON && fabs(pre(1)) > FLOAT_EPSILON && fabs(pre(2)) > FLOAT_EPSILON) { pre(0) = 1.0f/pre(0);  pre(1) = 1.0f/pre(1);  pre(2) = 1.0f/pre(2); } else { pre = ones; }
-	state.d_precondioner[variableIdx] = make_float3(pre(0), pre(1), pre(2));
-
-	if (preA.det() > FLOAT_EPSILON) { preA = preA.getInverse(); } else { preA.setIdentity(); }
-	state.d_precondionerA[variableIdx] = make_float3(preA(0, 0), preA(1, 1), preA(2, 2));
-	]]
-
-	var c = make_float6(b(0), b(1), b(2), bA(0), bA(1), bA(2))
-
-	-- TODO: is this right? I'm blindly mimicing the laplacian example here
-	var c0 = ( 1.0f)*c
-	var c1 = (-1.0f)*c
-	
+	var D_i : float3x3 = -evalDerivativeRotationTimesVector(dRAlpha, dRBeta, dRGamma, pHat - qHat)
 	var f_i : float_3 = (p - q) - mul(R_i,(pHat - qHat))
+	
+	var c0 : float_6
+	var c1 : float_6
+	
+	--1st part of the residual (d/d_i)
 	do
 		var e_reg		: float_3 = 1.0f*f_i
-		--var pre			: float_3 = 2.0f*(self.w_regSqrt*self.w_regSqrt)*ones
-		var e_reg_angle : float_3 = mul(transpose(D), f_i)
-		--var preA		: float3x3 = P
+		var e_reg_angle : float_3 = mul(transpose(D_i), f_i)
 	
 		var b  : float_3 = 2.0f*(self.w_regSqrt*self.w_regSqrt)*e_reg;
 		var bA : float_3 = 2.0f*(self.w_regSqrt*self.w_regSqrt)*e_reg_angle;
 		var c = make_float6(b(0), b(1), b(2), bA(0), bA(1), bA(2))
 		c0 = c
 	end
+	--1st part of the residual (d/d_j)
 	do
 		var e_reg		: float_3 = -1.0f*f_i
-		--var pre			: float_3 = 2.0f*(self.w_regSqrt*self.w_regSqrt)*ones
 		var e_reg_angle : float_3 = make_float3(0,0,0)
-		--var preA		: float3x3 = P
 	
 		var b  : float_3 = 2.0f*(self.w_regSqrt*self.w_regSqrt)*e_reg;
 		var bA : float_3 = 2.0f*(self.w_regSqrt*self.w_regSqrt)*e_reg_angle;
 		var c = make_float6(b(0), b(1), b(2), bA(0), bA(1), bA(2))
 		c1 = c
 	end
-
+	
+	var ones = make_float3(1.0,1.0,1.0)
+	var identity = make_float3x3_diag(1.0, 1.0, 1.0)
+	var pre  = ones		-- TODO!!!
+	var preA = identity -- TODO!!!
     
 	--write results
 	var _residuum0 = -c0

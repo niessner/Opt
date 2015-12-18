@@ -1,7 +1,7 @@
 #include <iostream>
 
 // Enabled to print a bunch of junk during solving
-#define DEBUG_PRINT_SOLVER_INFO 1
+#define DEBUG_PRINT_SOLVER_INFO 0
 
 #include "WarpingSolverParameters.h"
 #include "WarpingSolverState.h"
@@ -341,8 +341,9 @@ extern "C" void ImageWarpiungSolveGNStub(SolverInput& input, SolverState& state,
 
         timer.nextIteration();
 	}
-    timer.evaluate();
 
 	float residual = EvalResidual(input, state, parameters, timer);
 	printf("final cost: %f\n", residual);
+
+    timer.evaluate();
 }
