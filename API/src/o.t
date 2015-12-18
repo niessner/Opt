@@ -1623,7 +1623,7 @@ local function createjtj(residuals,unknown,P,Ap_X)
     return createjtjcentered(residuals,unknown,P),createjtjgraph(residuals,P,Ap_X)
 end
 
-local function createjtfcentered(problemSpec,residuals,unknown,P)
+local function createjtfcentered(problemSpec,residuals,unknown)
    local F_hat = createzerolist(unknown.N) --gradient
    local P_hat = createzerolist(unknown.N) --preconditioner
     
@@ -1657,8 +1657,7 @@ local function createjtfcentered(problemSpec,residuals,unknown,P)
 		    P_hat[i] = ad.toexp(1.0)
 	    else
 		    P_hat[i] = 2.0*P_hat[i]
-		    P_hat[i] = ad.select(ad.greater(P_hat[i],.0001), 1.0/P_hat[i], 1.0)
-	        P_hat[i] = ad.polysimplify(P_hat[i])
+		    P_hat[i] = ad.polysimplify(P_hat[i])
 	    end
 	    F_hat[i] = ad.polysimplify(2.0*F_hat[i])
 	end
@@ -1666,16 +1665,16 @@ local function createjtfcentered(problemSpec,residuals,unknown,P)
     return terralib.newlist{conformtounknown(F_hat,unknown), conformtounknown(P_hat,unknown) }
 end
 
-local function createjtfgraph(residuals,P,R)
+local function createjtfgraph(residuals,R,Pre)
     local jtjgraph = terralib.newlist()
     for graph,terms in pairs(residuals.graphs) do
         local scatters = terralib.newlist() 
-        local scattermap = {}
-        local function addscatter(u,exp)
-            local s = scattermap[u]
+        local scattermap = { [R] = {}, [Pre] = {}}
+        local function addscatter(im,u,exp)
+            local s = scattermap[im][u]
             if not s then
-                s =  NewScatter(R,u.index,u.channel,ad.toexp(0))
-                scattermap[u] = s
+                s =  NewScatter(im,u.index,u.channel,ad.toexp(0))
+                scattermap[im][u] = s
                 scatters:insert(s)
             end
             s.expression = s.expression + exp
@@ -1688,20 +1687,16 @@ local function createjtfgraph(residuals,P,R)
             for i,partial in ipairs(partials) do
                 local u = unknownsupport[i]
                 assert(GraphElement:is(u.index))
-                addscatter(u,-2.0*partial*F)
+                addscatter(R,u,-2.0*partial*F)
+                addscatter(Pre,u,partial*partial)
             end
-        end
-        -- hack in the preconditioner values for now
-        for i = 1,#scatters do
-            local s = scatters[i]
-            scatters:insert(NewScatter(P,s.index,s.channel,s.expression))
         end
         jtjgraph:insert(NewGraphFunctionSpec(graph,terralib.newlist {},scatters))
     end
     return jtjgraph
 end
-local function createjtf(problemSpec,residuals,unknown,P,R)
-    return createjtfcentered(problemSpec,residuals,unknown,P), createjtfgraph(residuals,P,R)
+local function createjtf(problemSpec,residuals,unknown,R,Pre)
+    return createjtfcentered(problemSpec,residuals,unknown), createjtfgraph(residuals,R,Pre)
 end
 
 local lastTime = nil
@@ -1779,11 +1774,12 @@ function ProblemSpecAD:Cost(costexp)
     -- Not updated for graphs yet:    
     local P = self:Image("P",unknown.type,unknown.W,unknown.H,-1)
     local Ap_X = self:Image("Ap_X",unknown.type,unknown.W,unknown.H,-2)
-    local R = self:Image("R",unknown.type,unknown.W,unknown.H,-2)
     local jtjexp,jtjgraph = createjtj(residuals,unknown,P,Ap_X)
     self.P:Stencil(stencilforexpression(jtjexp))
     
-    local jtfcentered,jtfgraph = createjtf(self,residuals,unknown,P,R) --includes the 2.0
+    local R = self:Image("R",unknown.type,unknown.W,unknown.H,-1)
+    local Pre = self:Image("Pre",unknown.type,unknown.W,unknown.H,-2)
+    local jtfcentered,jtfgraph = createjtf(self,residuals,unknown,R,Pre) --includes the 2.0
     self.P:Stencil(stencilforexpression(jtfcentered[1]))
     
     self:createfunctionset("cost",terralib.newlist{centeredcost},graphcost)
