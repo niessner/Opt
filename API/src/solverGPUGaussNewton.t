@@ -131,9 +131,9 @@ return function(problemSpec)
         	var residuum = pd.r(w, h)
 			var pre = pd.preconditioner(w, h)
 			pre = 1.0 / pre
-			if w == 5 then
-				printf("%f %f %f %f %f %f\n", pre(0), pre(1), pre(2), pre(3), pre(4), pre(5))
-			end
+			--if w == 5 then
+			--	printf("%f %f %f %f %f %f\n", pre(0), pre(1), pre(2), pre(3), pre(4), pre(5))
+			--end
 
 			var p = pre*residuum	-- apply pre-conditioner M^-1			   
 			pd.p(w, h) = p
@@ -526,15 +526,15 @@ return function(problemSpec)
 
 				escape
 				    if util.debugPrintSolverInfo then
-					emit quote
-					var temp : float
-					C.cudaMemcpy(&temp, pd.scanAlpha, sizeof(float), C.cudaMemcpyDeviceToHost)
-					C.printf("ScanAlpha (Step): %f\n", temp);
-					C.cudaMemcpy(&temp, pd.scanBeta, sizeof(float), C.cudaMemcpyDeviceToHost)
-					C.printf("ScanBeta (Step): %f\n", temp);		
-					end
+						emit quote
+							var temp : float
+							C.cudaMemcpy(&temp, pd.scanAlpha, sizeof(float), C.cudaMemcpyDeviceToHost)
+							C.printf("ScanAlpha (Step): %f\n", temp);
+							C.cudaMemcpy(&temp, pd.scanBeta, sizeof(float), C.cudaMemcpyDeviceToHost)
+							C.printf("ScanBeta (Step): %f\n", temp);		
+						end
 				    end
-			        end
+		        end
 
 			end
 			
@@ -546,7 +546,6 @@ return function(problemSpec)
 				if util.debugDumpInfo then
 		    		emit quote
 						dbg.imageWriteFromCudaPrefix([&float](pd.parameters.X.data), pd.parameters.X:W(), pd.parameters.X:H(), sizeof([unknownElement]) / 4, "result")
-
 					end
 				end
 			end
