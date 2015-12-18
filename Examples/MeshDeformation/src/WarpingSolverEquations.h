@@ -91,22 +91,38 @@ __inline__ __device__ float3 evalMinusJTFDevice(unsigned int variableIdx, Solver
 		mat3x3 P	= parameters.weightRegularizer*D.getTranspose()*D;
 		
 		e_reg		+= 2.0f*(p - q) - (R_i+R_j)*(pHat - qHat);
-		pre			+= 2.0f*parameters.weightRegularizer*ones;
+		pre			+= 2.0f*(2.0f*parameters.weightRegularizer*ones);
 		e_reg_angle += D.getTranspose()*((p - q) - R_i*(pHat - qHat));
 		preA		+= 2.0f*P;
 	}
 	b  += -2.0f*parameters.weightRegularizer*e_reg;
 	bA += -2.0f*parameters.weightRegularizer*e_reg_angle;
 	
-	pre  = ones;		
-	preA.setIdentity(); 
+	//preA = 2.0f*preA;
+
+	//pre = 0.5f*pre;
+	//preA = preA;
+
+	//pre  = ones;		
+	//preA.setIdentity(); 
 	
 	// pre-conditioner
-	//if (fabs(pre(0)) > FLOAT_EPSILON && fabs(pre(1)) > FLOAT_EPSILON && fabs(pre(2)) > FLOAT_EPSILON) { pre(0) = 1.0f/pre(0);  pre(1) = 1.0f/pre(1);  pre(2) = 1.0f/pre(2); } else { pre = ones; }
+	if (fabs(pre(0)) > FLOAT_EPSILON && fabs(pre(1)) > FLOAT_EPSILON && fabs(pre(2)) > FLOAT_EPSILON) { pre(0) = 1.0f/pre(0);  pre(1) = 1.0f/pre(1);  pre(2) = 1.0f/pre(2); } else { pre = ones; }
 	state.d_precondioner[variableIdx] = make_float3(pre(0), pre(1), pre(2));
 
 	//if (preA.det() > FLOAT_EPSILON) { preA = preA.getInverse(); } else { preA.setIdentity(); }
+	//state.d_precondionerA[variableIdx] = make_float3(preA(0, 0), preA(1, 1), preA(2, 2));
+	if (preA(0, 0) > FLOAT_EPSILON) {
+		preA(0, 0) = 1.0f / preA(0, 0); 
+		preA(1, 1) = 1.0f / preA(1, 1);
+		preA(2, 2) = 1.0f / preA(2, 2);
+	}
+	else { preA.setIdentity(); }
 	state.d_precondionerA[variableIdx] = make_float3(preA(0, 0), preA(1, 1), preA(2, 2));
+		
+	if (variableIdx == 5) {
+		printf("%f %f %f %f %f %f\n", pre(0), pre(1), pre(2), preA(0, 0), preA(1, 1), preA(2, 2));
+	}
 
 	outAngle = bA;
 	return b;

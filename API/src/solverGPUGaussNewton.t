@@ -11,6 +11,8 @@ local gpuMath = util.gpuMath
 opt.BLOCK_SIZE = 16
 local BLOCK_SIZE =  opt.BLOCK_SIZE
 
+local isGraph = true	--TODO CHECK THIS EVERYWHERE
+
 local FLOAT_EPSILON = `0.000001f 
 -- GAUSS NEWTON (non-block version)
 return function(problemSpec)
@@ -91,16 +93,21 @@ return function(problemSpec)
             end
             
             pd.preconditioner(w, h) = pre
-            var p = pre*residuum	-- apply pre-conditioner M^-1			   
-            pd.p(w, h) = p
-        
-            --d = residuum*p			-- x-th term of nominator for computing alpha and denominator for computing beta
-            d = util.Dot(residuum,p) 
+			
+			if not isGraph then
+				var p = pre*residuum	-- apply pre-conditioner M^-1			   
+				pd.p(w, h) = p
+				
+				--d = residuum*p			-- x-th term of nominator for computing alpha and denominator for computing beta
+				d = util.Dot(residuum,p) 
+			end
         end 
-        d = util.warpReduce(d)	
-        if (util.laneid() == 0) then
-            util.atomicAdd(pd.scanAlpha, d)
-        end
+		if not isGraph then
+			d = util.warpReduce(d)	
+			if (util.laneid() == 0) then
+				util.atomicAdd(pd.scanAlpha, d)
+			end
+		end
     end
     
     terra kernels.PCGInit1_Graph(pd : PlanData)
@@ -110,19 +117,27 @@ return function(problemSpec)
 				local name,implementation = func.graphname,func.implementation
 				emit quote 
 	    			if util.getValidGraphElement(pd,[name],&tIdx) then
-						implementation(tIdx, pd.parameters, pd.p, pd.r)
+						implementation(tIdx, pd.parameters, pd.p, pd.r, pd.preconditioner)
 	    			end 
 				end
     		end
     	end
     end
 
-    terra kernels.PCGInit1_Finish(pd : PlanData)
+    terra kernels.PCGInit1_Finish(pd : PlanData)	--only called for graphs
     	var d = 0.0f -- init for out of bounds lanes
         var w : int, h : int
         if getValidUnknown(pd, &w, &h) then
         	var residuum = pd.r(w, h)
-        	d = util.Dot(residuum, residuum * pd.preconditioner(w, h))
+			var pre = pd.preconditioner(w, h)
+			pre = 1.0 / pre
+			if w == 5 then
+				printf("%f %f %f %f %f %f\n", pre(0), pre(1), pre(2), pre(3), pre(4), pre(5))
+			end
+
+			var p = pre*residuum	-- apply pre-conditioner M^-1			   
+			pd.p(w, h) = p
+        	d = util.Dot(residuum, p)
         end
 
 		d = util.warpReduce(d)	
@@ -192,7 +207,12 @@ return function(problemSpec)
             var r = pd.r(w,h)-alpha*pd.Ap_X(w,h)				-- update residuum
             pd.r(w,h) = r										-- store for next kernel call
         
-            var z = pd.preconditioner(w,h)*r					-- apply pre-conditioner M^-1
+			var pre = pd.preconditioner(w,h)
+			if isGraph then
+				pre = 1.0f / pre
+			end
+			
+            var z = pre*r								-- apply pre-conditioner M^-1
             pd.z(w,h) = z;										-- save for next kernel call
             
             --b = z*r;											-- compute x-th term of the nominator of beta
@@ -424,7 +444,6 @@ return function(problemSpec)
 
 			C.cudaMemset(pd.scanAlpha, 0, sizeof(float))	--scan in PCGInit1 requires reset
 			gpu.PCGInit1(pd)
-			var isGraph = true
 			if isGraph then
 				C.cudaMemset(pd.scanAlpha, 0, sizeof(float))	--TODO: don't write to scanAlpha in the previous kernel if it is a graph
 				gpu.PCGInit1_Graph(pd)	

@@ -3,7 +3,7 @@ local timeIndividualKernels = true
 -- For saving intermediate buffers to file
 local debugDumpInfo = false
 -- For printing a bunch of junk during the solve
-local debugPrintSolverInfo = false
+local debugPrintSolverInfo = true
 
 
 local S = require("std")

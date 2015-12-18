@@ -201,14 +201,22 @@ local terra evalJTF(i : int32, j : int32, gi : int32, gj : int32, self : P:Param
 	end
 	var gradient = make_float6(b(0), b(1), b(2), 0.0f, 0.0f, 0.0f)
 
-	preT = make_float3(1,1,1)	--TODO fix preconditioner
-	
-	pre(0) = preT(0)
-	pre(1) = preT(1)
-	pre(2) = preT(2)
-	pre(3) = 1.0
-	pre(4) = 1.0
-    pre(5) = 1.0
+	if P.usepreconditioner then	
+		pre(0) = preT(0)
+		pre(1) = preT(1)
+		pre(2) = preT(2)
+		pre(3) = 0.0
+		pre(4) = 0.0
+		pre(5) = 0.0
+	else
+		preT = make_float3(1,1,1)
+		pre(0) = preT(0)
+		pre(1) = preT(1)
+		pre(2) = preT(2)
+		pre(3) = 1.0
+		pre(4) = 1.0
+		pre(5) = 1.0
+	end
 	
 	return gradient, pre
 end
@@ -367,7 +375,7 @@ local terra evalJTF_graph(idx : int32, self : P:ParameterType(), pImage : P:Unkn
 		var c = make_float6(b(0), b(1), b(2), bA(0), bA(1), bA(2))
 		c0 = c
 		
-		var pre : float_3 = 2.0f*ones
+		var pre : float_3 = 2.0f*(self.w_regSqrt*self.w_regSqrt)*ones
 		var preA : float3x3 = 2.0f*(self.w_regSqrt*self.w_regSqrt)*matmul(transpose(D_i),D_i)
 		pre0 = make_float6(pre(0), pre(1), pre(2), preA(0), preA(4), preA(8))
 	end
@@ -381,7 +389,7 @@ local terra evalJTF_graph(idx : int32, self : P:ParameterType(), pImage : P:Unkn
 		var c = make_float6(b(0), b(1), b(2), bA(0), bA(1), bA(2))
 		c1 = c
 		
-		var pre : float_3 = 2.0f*ones
+		var pre : float_3 = 2.0f*(self.w_regSqrt*self.w_regSqrt)*ones
 		pre1 = make_float6(pre(0), pre(1), pre(2), 0, 0, 0)
 	end
 	
@@ -414,19 +422,23 @@ local terra evalJTF_graph(idx : int32, self : P:ParameterType(), pImage : P:Unkn
 	r:atomicAdd(w0, h0, _residuum0)
 	r:atomicAdd(w1, h1, _residuum1)
 	
-	var pre  = ones		-- TODO!!!
-	var preA = identity -- TODO!!!
-	pre0 = make_float6(pre(0), pre(1), pre(2), preA(0), preA(4), preA(8))
-	pre1 = pre0
+	--var pre  = ones		-- TODO!!!
+	--var preA = identity -- TODO!!!
+	--pre0 = make_float6(pre(0), pre(1), pre(2), preA(0), preA(4), preA(8))
+	--pre1 = pre0
 	-- TODO: Preconditioner
 	--preconditioner:atomicAdd(w0, h0, pre0)
 	--preconditioner:atomicAdd(w1, h1, pre1)
 	
-	var _p0 = pre0*_residuum0
-	var _p1 = pre1*_residuum1
-	pImage:atomicAdd(w0, h0, _p0)
-	pImage:atomicAdd(w1, h1, _p1)
+	--var _p0 = pre0*_residuum0
+	--var _p1 = pre1*_residuum1
+	--pImage:atomicAdd(w0, h0, _p0)
+	--pImage:atomicAdd(w1, h1, _p1)
 	
+	if P.usepreconditioner then	
+		preconditioner:atomicAdd(w0, h0, pre0)
+		preconditioner:atomicAdd(w1, h1, pre1)
+	end
 end
 	
 -- eval 2*JtJ (note that we keep the '2' to make it consistent with the gradient
