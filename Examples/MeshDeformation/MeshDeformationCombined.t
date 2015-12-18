@@ -40,8 +40,7 @@ end
 
 A.functions.evalJTF.graphfunctions[1].implementation = terra(idx : int32, self : A:ParameterType(), pImage : A:UnknownType(), r : A:UnknownType())
 	--[A.functions.evalJTF.graphfunctions[1].implementation](idx, self, pImage, r)	--auto-diff
-	[M.functions.evalJTF.graphfunctions[1].implementation](idx,@[&M:ParameterType()](&self), pImage, r)  
-
+	[M.functions.evalJTF.graphfunctions[1].implementation](idx,@[&M:ParameterType()](&self), pImage, r) 
 end
 
 

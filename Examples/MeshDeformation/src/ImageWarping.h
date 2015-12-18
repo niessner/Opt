@@ -2,7 +2,7 @@
 
 #define RUN_CUDA 0
 #define RUN_TERRA 1
-#define RUN_OPT 1
+#define RUN_OPT 0
 
 #include "mLibInclude.h"
 
@@ -36,7 +36,7 @@ class ImageWarping
 			resetGPUMemory();
 
 			m_warpingSolver	= new CUDAWarpingSolver(N);
-			m_terraWarpingSolver = new TerraWarpingSolver(N, 2 * E, d_neighbourIdx, d_neighbourOffset, "MeshDeformationCombined.t", "gaussNewtonGPU");			
+			m_terraWarpingSolver = new TerraWarpingSolver(N, 2 * E, d_neighbourIdx, d_neighbourOffset, "MeshDeformation.t", "gaussNewtonGPU");			
 			m_optWarpingSolver = new TerraWarpingSolver(N, 2 * E, d_neighbourIdx, d_neighbourOffset, "MeshDeformationAD.t", "gaussNewtonGPU");
 		} 
 
@@ -142,17 +142,18 @@ class ImageWarping
 
 		SimpleMesh* solve()
 		{
-			//unsigned int numIter = 10;
+			
 			//float weightFit = 5.0f;
 			float weightFit = 1.0f;
 			float weightReg = 1.0f;
 		
-			//unsigned int nonLinearIter = 20;
-			//unsigned int linearIter = 50;
+			unsigned int numIter = 10;
+			unsigned int nonLinearIter = 20;
+			unsigned int linearIter = 50;
 
-			unsigned int numIter = 2;
-			unsigned int nonLinearIter = 3;
-			unsigned int linearIter = 3;
+			//unsigned int numIter = 2;
+			//unsigned int nonLinearIter = 3;
+			//unsigned int linearIter = 3;
 			
 #			if RUN_CUDA
 			m_result = m_initial;
