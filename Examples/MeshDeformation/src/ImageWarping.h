@@ -2,7 +2,7 @@
 
 #define RUN_CUDA 1
 #define RUN_TERRA 1
-#define RUN_OPT 1
+#define RUN_OPT 0
 
 #include "mLibInclude.h"
 
@@ -37,7 +37,7 @@ class ImageWarping
 
 			m_warpingSolver	= new CUDAWarpingSolver(N);
 			m_terraWarpingSolver = new TerraWarpingSolver(N, 2 * E, d_neighbourIdx, d_neighbourOffset, "MeshDeformation.t", "gaussNewtonGPU");			
-			m_optWarpingSolver = new TerraWarpingSolver(N, 2 * E, d_neighbourIdx, d_neighbourOffset, "MeshDeformationAD.t", "gaussNewtonGPU");
+			m_optWarpingSolver = new TerraWarpingSolver(N, 2 * E, d_neighbourIdx, d_neighbourOffset, "MeshDeformation.t", "gaussNewtonGPU");		//TODO Make this .ad again
 		} 
 
 		void setConstraints(float alpha)

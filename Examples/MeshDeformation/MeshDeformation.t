@@ -8,6 +8,7 @@ local UrShape = 	adP:Image("UrShape", opt.float3,W,H,1)		--urshape: vertex.xyz
 local Constraints = adP:Image("Constraints", opt.float3,W,H,2)	--constraints
 local G = adP:Graph("G", 0, "v0", W, H, 0, "v1", W, H, 1)
 P:Stencil(2)
+P:UsePreconditioner(true)
 
 local w_fitSqrt = P:Param("w_fitSqrt", float, 0)
 local w_regSqrt = P:Param("w_regSqrt", float, 1)
@@ -97,12 +98,6 @@ local terra make_float3x3_diag(x0 : float, x1 : float, x2 : float)
 end
 
 
---local w_fit = P:Param("w_fit", float, 0)
---local w_reg = P:Param("w_reg", float, 1)
-
--- TODO: this should be factored into a parameter
-local w_fit = 1.0
-local w_reg = 0.0
 
 local unknownElement = P:UnknownType().metamethods.typ
 
@@ -213,9 +208,8 @@ local terra evalJTF(i : int32, j : int32, gi : int32, gj : int32, self : P:Param
 	pre(2) = preT(2)
 	pre(3) = 1.0
 	pre(4) = 1.0
-	pre(5) = 1.0
+    pre(5) = 1.0
 	
-
 	return gradient, pre
 end
 
@@ -328,7 +322,10 @@ local terra evalDerivativeRotationMatrix(angles : float_3, dRAlpha : &float3x3, 
 	@dRGamma = evalRMat_dGamma(cosAlpha, cosBeta, cosGamma, sinAlpha, sinBeta, sinGamma);
 end
 
-local terra evalJTF_graph(idx : int32, self : P:ParameterType(), pImage : P:UnknownType(), r : P:UnknownType())
+local terra evalJTF_graph(idx : int32, self : P:ParameterType(), pImage : P:UnknownType(), r : P:UnknownType(), preconditioner : P:UnknownType())
+	
+	var ones = make_float3(1.0,1.0,1.0)
+	var identity = make_float3x3_diag(1.0, 1.0, 1.0)
 	
 	var w0,h0 = self.G.v0_x[idx], self.G.v0_y[idx]
     var w1,h1 = self.G.v1_x[idx], self.G.v1_y[idx]
@@ -357,6 +354,9 @@ local terra evalJTF_graph(idx : int32, self : P:ParameterType(), pImage : P:Unkn
 	var c0 : float_6
 	var c1 : float_6
 	
+	var pre0 : float_6
+	var pre1 : float_6
+	
 	--1st part of the residual (d/d_i)
 	do
 		var e_reg		: float_3 = 1.0f*f_i
@@ -366,6 +366,10 @@ local terra evalJTF_graph(idx : int32, self : P:ParameterType(), pImage : P:Unkn
 		var bA : float_3 = 2.0f*(self.w_regSqrt*self.w_regSqrt)*e_reg_angle;
 		var c = make_float6(b(0), b(1), b(2), bA(0), bA(1), bA(2))
 		c0 = c
+		
+		var pre : float_3 = 2.0f*ones
+		var preA : float3x3 = 2.0f*(self.w_regSqrt*self.w_regSqrt)*matmul(transpose(D_i),D_i)
+		pre0 = make_float6(pre(0), pre(1), pre(2), preA(0), preA(4), preA(8))
 	end
 	--1st part of the residual (d/d_j)
 	do
@@ -376,12 +380,33 @@ local terra evalJTF_graph(idx : int32, self : P:ParameterType(), pImage : P:Unkn
 		var bA : float_3 = 2.0f*(self.w_regSqrt*self.w_regSqrt)*e_reg_angle;
 		var c = make_float6(b(0), b(1), b(2), bA(0), bA(1), bA(2))
 		c1 = c
+		
+		var pre : float_3 = 2.0f*ones
+		pre1 = make_float6(pre(0), pre(1), pre(2), 0, 0, 0)
 	end
 	
-	var ones = make_float3(1.0,1.0,1.0)
-	var identity = make_float3x3_diag(1.0, 1.0, 1.0)
-	var pre  = ones		-- TODO!!!
-	var preA = identity -- TODO!!!
+	
+	--[[
+	if P.usepreconditioner then		--pre-conditioner
+		
+		if pre(0) > 0.0001 then -- and pre(1) > 0.0001 then
+			pre = make_float6(1.0f / pre(0), 1.0f / pre(1), 1.0f / pre(2), 1.0f / pre(3), 1.0f / pre(4), 1.0f / pre(5))
+		else 
+			pre = make_float6(1.0f, 1.0f, 1.0f, 1.0f, 1.0f, 1.0)
+		end
+		
+		if preA > 0.0001 then
+			preA = 1.0 / preA
+		else 
+			preA = 1.0
+		end
+		
+	else
+		pre = make_float2(1.0f, 1.0f)
+		preA = 1.0f
+	end
+	--]]
+
     
 	--write results
 	var _residuum0 = -c0
@@ -389,14 +414,16 @@ local terra evalJTF_graph(idx : int32, self : P:ParameterType(), pImage : P:Unkn
 	r:atomicAdd(w0, h0, _residuum0)
 	r:atomicAdd(w1, h1, _residuum1)
 	
-	var _pre0 = make_float6(pre(0), pre(1), pre(2), preA(0), preA(4), preA(8))
-	var _pre1 = _pre0
+	var pre  = ones		-- TODO!!!
+	var preA = identity -- TODO!!!
+	pre0 = make_float6(pre(0), pre(1), pre(2), preA(0), preA(4), preA(8))
+	pre1 = pre0
 	-- TODO: Preconditioner
-	--preconditioner:atomicAdd(w0, h0, _pre0)
-	--preconditioner:atomicAdd(w1, h1, _pre1)
+	--preconditioner:atomicAdd(w0, h0, pre0)
+	--preconditioner:atomicAdd(w1, h1, pre1)
 	
-	var _p0 = _pre0*_residuum0
-	var _p1 = _pre1*_residuum1
+	var _p0 = pre0*_residuum0
+	var _p1 = pre1*_residuum1
 	pImage:atomicAdd(w0, h0, _p0)
 	pImage:atomicAdd(w1, h1, _p1)
 	
