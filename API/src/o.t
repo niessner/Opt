@@ -286,7 +286,7 @@ end
 function ProblemSpec:EvalExclude(...)
     local args = {...}
     if self.functions.exclude then
-        return `bool(self.functions.exclude.boundary(args))
+        return `bool(self.functions.exclude.unknownfunction(args))
     else
         return `false
     end
