@@ -391,49 +391,13 @@ local terra evalJTF_graph(idx : int32, self : P:ParameterType(), r : P:UnknownTy
 		
 		var pre : float_3 = 2.0f*(self.w_regSqrt*self.w_regSqrt)*ones
 		pre1 = make_float6(pre(0), pre(1), pre(2), 0, 0, 0)
-	end
-	
-	
-	--[[
-	if P.usepreconditioner then		--pre-conditioner
-		
-		if pre(0) > 0.0001 then -- and pre(1) > 0.0001 then
-			pre = make_float6(1.0f / pre(0), 1.0f / pre(1), 1.0f / pre(2), 1.0f / pre(3), 1.0f / pre(4), 1.0f / pre(5))
-		else 
-			pre = make_float6(1.0f, 1.0f, 1.0f, 1.0f, 1.0f, 1.0)
-		end
-		
-		if preA > 0.0001 then
-			preA = 1.0 / preA
-		else 
-			preA = 1.0
-		end
-		
-	else
-		pre = make_float2(1.0f, 1.0f)
-		preA = 1.0f
-	end
-	--]]
-
+	end	
     
 	--write results
 	var _residuum0 = -c0
 	var _residuum1 = -c1
 	r:atomicAdd(w0, h0, _residuum0)
 	r:atomicAdd(w1, h1, _residuum1)
-	
-	--var pre  = ones		-- TODO!!!
-	--var preA = identity -- TODO!!!
-	--pre0 = make_float6(pre(0), pre(1), pre(2), preA(0), preA(4), preA(8))
-	--pre1 = pre0
-	-- TODO: Preconditioner
-	--preconditioner:atomicAdd(w0, h0, pre0)
-	--preconditioner:atomicAdd(w1, h1, pre1)
-	
-	--var _p0 = pre0*_residuum0
-	--var _p1 = pre1*_residuum1
-	--pImage:atomicAdd(w0, h0, _p0)
-	--pImage:atomicAdd(w1, h1, _p1)
 	
 	if P.usepreconditioner then	
 		preconditioner:atomicAdd(w0, h0, pre0)
