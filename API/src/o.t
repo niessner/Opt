@@ -1386,7 +1386,9 @@ local function createfunction(problemspec,name,usebounds,W,H,ndims,results,scatt
             stmt = s.channel and (`image:atomicAddChannel(xy, s.channel, exp)) or (`image:atomicAdd(xy, exp))
         else
             assert(s.kind == "set" and s.channel == 0)
-            stmt = quote image(xy) = exp end -- NYI - multi-channel images
+            stmt = quote 
+                image(xy) = exp
+            end -- NYI - multi-channel images
         end
         scatterstatements:insert(stmt)
     end
@@ -1478,7 +1480,10 @@ local function classifyresiduals(Rs)
             end
         end)
         local entry = { expression = exp, unknownaccesses = unknownaccesses }
-        assert(classification, "residual does not contain an unknown term?")
+        if not classification then
+            classification = "centered"
+        end
+        --assert(classification, "residual does not contain an unknown term?")
         if classification == "centered" then
             result.unknown:insert(entry)
         else
@@ -1747,10 +1752,11 @@ end
 function createprecomputed(self,name,precomputedimages)
     local scatters = terralib.newlist()
     for i,im in ipairs(precomputedimages) do
-        local expression = im.expression
+        local expression = ad.polysimplify(im.expression)
         scatters:insert(NewScatter(im, Offset:get(0,0), 0, im.expression, "set"))
         for u,gim in pairs(im.gradientimages) do
             local gradientexpression = im.gradientexpressions[u]
+            gradientexpression = ad.polysimplify(gradientexpression)
             scatters:insert(NewScatter(gim, Offset:get(0,0), 0, gradientexpression, "set"))
         end
     end
