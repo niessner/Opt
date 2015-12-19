@@ -2,6 +2,7 @@
 
 #define RUN_CUDA 1
 #define RUN_TERRA 1
+#define RUN_OPT 1
 
 #include "mLibInclude.h"
 
@@ -33,7 +34,7 @@ public:
 		resetGPUMemory();
 		m_warpingSolver = new CUDAWarpingSolver(N);
 		m_terraWarpingSolver = new TerraWarpingSolver(N, 2 * E, d_neighbourIdx, d_neighbourOffset, "MeshSmoothingLaplacian.t", "gaussNewtonGPU");
-		//m_terraWarpingSolver = new TerraWarpingSolver(N, 2 * E, d_neighbourIdx, d_neighbourOffset, "MeshSmoothingLaplacianAD.t", "gaussNewtonGPU");
+		m_optWarpingSolver = new TerraWarpingSolver(N, 2 * E, d_neighbourIdx, d_neighbourOffset, "MeshSmoothingLaplacianAD.t", "gaussNewtonGPU");
 	}
 
 	void resetGPUMemory()
@@ -106,19 +107,26 @@ public:
 		unsigned int nonLinearIter = 10;
 		unsigned int linearIter = 10;
 
-#			if RUN_CUDA
-		std::cout << "CUDA" << std::endl;
+#		if RUN_CUDA
+		std::cout << "=========CUDA========" << std::endl;
 		resetGPUMemory();
 		m_warpingSolver->solveGN(d_vertexPosFloat3, d_numNeighbours, d_neighbourIdx, d_neighbourOffset, d_vertexPosTargetFloat3, nonLinearIter, linearIter, weightFit, weightReg);
 		copyResultToCPUFromFloat3();
 #			endif
 
-#			if RUN_TERRA
-		std::cout << "TERRA" << std::endl;
+#		if RUN_TERRA
+		std::cout << "=========TERRA=======" << std::endl;
 		resetGPUMemory();
 		m_terraWarpingSolver->solve(d_vertexPosFloat3, d_vertexPosTargetFloat3, nonLinearIter, linearIter, 1, weightFit, weightReg);
 		copyResultToCPUFromFloat3();
-#			endif
+#		endif
+
+#		if RUN_OPT
+		std::cout << "=========OPT=========" << std::endl;
+		resetGPUMemory();
+		m_optWarpingSolver->solve(d_vertexPosFloat3, d_vertexPosTargetFloat3, nonLinearIter, linearIter, 1, weightFit, weightReg);
+		copyResultToCPUFromFloat3();
+#		endif
 
 
 		return &m_result;
@@ -149,6 +157,7 @@ private:
 	int*	d_neighbourIdx;
 	int* 	d_neighbourOffset;
 
+	TerraWarpingSolver* m_optWarpingSolver;
 	TerraWarpingSolver* m_terraWarpingSolver;
 	CUDAWarpingSolver* m_warpingSolver;
 };

@@ -99,11 +99,9 @@ public:
 		void* data[] = {d_unknown, d_target};
 		void* solverParams[] = { &nNonLinearIterations, &nLinearIterations, &nBlockIterations };
 
-		/*float weightFitSqrt = sqrt(weightFit);
+		float weightFitSqrt = sqrt(weightFit);
 		float weightRegSqrt = sqrt(weightReg);
-		void* problemParams[] = { &weightFitSqrt, &weightRegSqrt };*/
-		void* problemParams[] = { &weightFit, &weightReg };
-
+		void* problemParams[] = { &weightFitSqrt, &weightRegSqrt };
 
 		int32_t* xCoords[] = { d_headX, d_tailX };
 		int32_t* yCoords[] = { d_headY, d_tailY };
