@@ -8,7 +8,7 @@ P:Image("T", opt.float4,W,H,1)
 P:Image("M", float, W,H,2)
 
 P:Stencil(1)
-P:UsePreconditioner(false)
+P:UsePreconditioner(false)	--TODO needs to be implemented
 
 local C = terralib.includecstring [[
 #include <math.h>
