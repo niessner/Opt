@@ -97,11 +97,7 @@ __inline__ __device__ float3 evalMinusJTFDevice(unsigned int variableIdx, Solver
 	}
 	b  += -2.0f*parameters.weightRegularizer*e_reg;
 	bA += -2.0f*parameters.weightRegularizer*e_reg_angle;
-	
-	//preA = 2.0f*preA;
 
-	//pre = 0.5f*pre;
-	//preA = preA;
 
 	//pre  = ones;		
 	//preA.setIdentity(); 
@@ -117,12 +113,13 @@ __inline__ __device__ float3 evalMinusJTFDevice(unsigned int variableIdx, Solver
 		preA(1, 1) = 1.0f / preA(1, 1);
 		preA(2, 2) = 1.0f / preA(2, 2);
 	}
-	else { preA.setIdentity(); }
+	else { 
+		preA(0, 0) = 1.0f;
+		preA(1, 1) = 1.0f;
+		preA(2, 2) = 1.0f;
+	}
 	state.d_precondionerA[variableIdx] = make_float3(preA(0, 0), preA(1, 1), preA(2, 2));
 		
-	if (variableIdx == 5) {
-		printf("%f %f %f %f %f %f\n", pre(0), pre(1), pre(2), preA(0, 0), preA(1, 1), preA(2, 2));
-	}
 
 	outAngle = bA;
 	return b;

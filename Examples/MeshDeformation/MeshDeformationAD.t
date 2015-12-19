@@ -8,7 +8,7 @@ local UrShape = 	adP:Image("UrShape", opt.float3,W,H,1)		--urshape: vertex.xyz
 local Constraints = adP:Image("Constraints", opt.float3,W,H,2)	--constraints
 local G = adP:Graph("G", 0, "v0", W, H, 0, "v1", W, H, 1)
 P:Stencil(2)
-P:UsePreconditioner(false)
+P:UsePreconditioner(true)
 
 local C = terralib.includecstring [[
 #include <math.h>

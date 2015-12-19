@@ -145,7 +145,7 @@ end
 if USE_SHADING_CONSTRAINT then
     if USE_CRAPPY_SHADING_BOUNDARY then
         local shading_center_valid = ad.greater(D_i(-1,0) + D_i(0,0) + D_i(0,-1), 0)
-        local center_tap_noCheck = B(0,0) - I(0,0)
+        local center_tap_noCheck = B_I(0,0)
         local center_tap = ad.select(shading_center_valid, center_tap_noCheck, 0.0)
         local shading_h_valid = ad.greater(D_i(1,-1) + D_i(0,0) + D_i(1,0), 0)
         local shading_v_valid = ad.greater(D_i(-1,1) + D_i(0,0) + D_i(0,1), 0)

@@ -1688,7 +1688,7 @@ local function createjtfgraph(residuals,R,Pre)
                 local u = unknownsupport[i]
                 assert(GraphElement:is(u.index))
                 addscatter(R,u,-2.0*partial*F)
-                addscatter(Pre,u,partial*partial)
+                addscatter(Pre,u,2.0*partial*partial)
             end
         end
         jtjgraph:insert(NewGraphFunctionSpec(graph,terralib.newlist {},scatters))

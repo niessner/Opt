@@ -73,6 +73,14 @@ return function(problemSpec)
 		return false
 	end
 	
+	local guardedInvert = macro(function(p)
+	    local pt = p:gettype()
+	    if util.isvectortype(pt) then
+	        return `terralib.select(p(0) > FLOAT_EPSILON, 1.f/ p, p)
+	    else
+	        return `terralib.select(p > FLOAT_EPSILON, 1.f / p, p)
+	    end
+	end)
 
     local kernels = {}
     terra kernels.PCGInit1(pd : PlanData)
@@ -88,17 +96,23 @@ return function(problemSpec)
                 residuum, pre = problemSpec.functions.evalJTF.unknownfunction(w, h, w, h, pd.parameters)
                 residuum = -residuum
                 pd.r(w, h) = residuum
-            end
-            
-            pd.preconditioner(w, h) = pre
-			
+				
+				if not problemSpec.usepreconditioner then
+					pre = 1.0f
+				end
+            end        
+            	
 			if not isGraph then
+				pre = guardedInvert(pre)
 				var p = pre*residuum	-- apply pre-conditioner M^-1			   
 				pd.p(w, h) = p
 				
-				--d = residuum*p			-- x-th term of nominator for computing alpha and denominator for computing beta
+				--d = residuum*p		-- x-th term of nominator for computing alpha and denominator for computing beta
 				d = util.Dot(residuum,p) 
 			end
+			
+			pd.preconditioner(w, h) = pre
+			
         end 
 		if not isGraph then
 			d = util.warpReduce(d)	
@@ -126,13 +140,15 @@ return function(problemSpec)
     	var d = 0.0f -- init for out of bounds lanes
         var w : int, h : int
         if getValidUnknown(pd, &w, &h) then
-        	var residuum = pd.r(w, h)
+        	var residuum = pd.r(w, h)			
 			var pre = pd.preconditioner(w, h)
-			pre = 1.0 / pre
-			--if w == 5 then
-			--	printf("%f %f %f %f %f %f\n", pre(0), pre(1), pre(2), pre(3), pre(4), pre(5))
-			--end
-
+			
+			pre = guardedInvert(pre)
+			
+			if not problemSpec.usepreconditioner then
+				pre = 1.0f
+			end
+			
 			var p = pre*residuum	-- apply pre-conditioner M^-1			   
 			pd.p(w, h) = p
         	d = util.Dot(residuum, p)
@@ -206,11 +222,15 @@ return function(problemSpec)
             pd.r(w,h) = r										-- store for next kernel call
         
 			var pre = pd.preconditioner(w,h)
-			if isGraph then
-				pre = 1.0f / pre
+			if not problemSpec.usepreconditioner then
+				pre = 1.0f
 			end
 			
-            var z = pre*r								-- apply pre-conditioner M^-1
+			if isGraph then
+				pre = guardedInvert(pre)
+			end
+			
+            var z = pre*r										-- apply pre-conditioner M^-1
             pd.z(w,h) = z;										-- save for next kernel call
             
             --b = z*r;											-- compute x-th term of the nominator of beta
@@ -524,15 +544,15 @@ return function(problemSpec)
 
 				escape
 				    if util.debugPrintSolverInfo then
-						emit quote
-							var temp : float
-							C.cudaMemcpy(&temp, pd.scanAlpha, sizeof(float), C.cudaMemcpyDeviceToHost)
-							C.printf("ScanAlpha (Step): %f\n", temp);
-							C.cudaMemcpy(&temp, pd.scanBeta, sizeof(float), C.cudaMemcpyDeviceToHost)
-							C.printf("ScanBeta (Step): %f\n", temp);		
-						end
+					emit quote
+					var temp : float
+					C.cudaMemcpy(&temp, pd.scanAlpha, sizeof(float), C.cudaMemcpyDeviceToHost)
+					C.printf("ScanAlpha (Step): %f\n", temp);
+					C.cudaMemcpy(&temp, pd.scanBeta, sizeof(float), C.cudaMemcpyDeviceToHost)
+					C.printf("ScanBeta (Step): %f\n", temp);		
+					end
 				    end
-		        end
+			        end
 
 			end
 			
@@ -544,6 +564,7 @@ return function(problemSpec)
 				if util.debugDumpInfo then
 		    		emit quote
 						dbg.imageWriteFromCudaPrefix([&float](pd.parameters.X.data), pd.parameters.X:W(), pd.parameters.X:H(), sizeof([unknownElement]) / 4, "result")
+
 					end
 				end
 			end

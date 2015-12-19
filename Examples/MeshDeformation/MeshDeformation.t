@@ -330,7 +330,7 @@ local terra evalDerivativeRotationMatrix(angles : float_3, dRAlpha : &float3x3, 
 	@dRGamma = evalRMat_dGamma(cosAlpha, cosBeta, cosGamma, sinAlpha, sinBeta, sinGamma);
 end
 
-local terra evalJTF_graph(idx : int32, self : P:ParameterType(), pImage : P:UnknownType(), r : P:UnknownType(), preconditioner : P:UnknownType())
+local terra evalJTF_graph(idx : int32, self : P:ParameterType(), r : P:UnknownType(), preconditioner : P:UnknownType())
 	
 	var ones = make_float3(1.0,1.0,1.0)
 	var identity = make_float3x3_diag(1.0, 1.0, 1.0)
