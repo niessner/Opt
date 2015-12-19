@@ -73,6 +73,14 @@ return function(problemSpec)
 		return false
 	end
 	
+	local guardedInvert = macro(function(p)
+	    local pt = p:gettype()
+	    if util.isvectortype(pt) then
+	        return `terralib.select(p(0) > FLOAT_EPSILON, 1.f/ p, p)
+	    else
+	        return `terralib.select(p > FLOAT_EPSILON, 1.f / p, p)
+	    end
+	end)
 
     local kernels = {}
     terra kernels.PCGInit1(pd : PlanData)
@@ -95,12 +103,7 @@ return function(problemSpec)
             end        
             	
 			if not isGraph then
-				if pre(0) > FLOAT_EPSILON then
-					pre = 1.0 / pre
-				else 
-					pre = 1.0
-				end
-							
+				pre = guardedInvert(pre)
 				var p = pre*residuum	-- apply pre-conditioner M^-1			   
 				pd.p(w, h) = p
 				
@@ -140,11 +143,7 @@ return function(problemSpec)
         	var residuum = pd.r(w, h)			
 			var pre = pd.preconditioner(w, h)
 			
-			if pre(0) > FLOAT_EPSILON then
-				pre = 1.0 / pre
-			else 
-				pre = 1.0
-			end
+			pre = guardedInvert(pre)
 			
 			if not problemSpec.usepreconditioner then
 				pre = 1.0f
@@ -228,11 +227,7 @@ return function(problemSpec)
 			end
 			
 			if isGraph then
-				if pre(0) > FLOAT_EPSILON then
-					pre = 1.0 / pre
-				else 
-					pre = 1.0
-				end
+				pre = guardedInvert(pre)
 			end
 			
             var z = pre*r										-- apply pre-conditioner M^-1
