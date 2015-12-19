@@ -10,4 +10,6 @@
 #define USE_TEMPORAL_CONSTRAINT 0
 #define USE_PRECONDITIONER 0
 
+#define USE_PRECOMPUTE 1
+
 #endif

@@ -33,7 +33,8 @@ __inline__ __device__ float colMask(int posy, int posx, SolverInput &input) {
 }
 
 
-__inline__ __device__ float4 calShading2depthGrad(SolverState& state, int posx, int posy, SolverInput &input)
+
+__inline__ __device__ float4 calShading2depthGradCompute(SolverState& state, int posx, int posy, SolverInput &input)
 {
     const int W = input.width;
     const float d0 = readX(state, posy, posx - 1, W);
@@ -43,6 +44,23 @@ __inline__ __device__ float4 calShading2depthGrad(SolverState& state, int posx, 
     return calShading2depthGradHelper(d0, d1, d2, posx, posy, input);
 }
 
+__inline__ __device__ float4 calShading2depthGrad(SolverState& state, int x, int y, SolverInput &inp)
+{
+#if USE_PRECOMPUTE
+    return make_float4(state.B_I_dx0[y*inp.width+x],state.B_I_dx1[y*inp.width+x],state.B_I_dx2[y*inp.width+x],state.B_I[y*inp.width+x]);
+#else
+    return calShading2depthGradCompute(state, x, y, inp);
+#endif
+}
+
+
+/*
+#if USE_PRECOMPUTE
+    #define calShading2depthGrad(state, x, y, inp) make_float4(state.B_I_dx0[y*inp.width+x],state.B_I_dx1[y*inp.width+x],state.B_I_dx2[y*inp.width+x],state.B_I[y*inp.width+x])
+#else
+    #define calShading2depthGrad calShading2depthGradCompute
+#endif
+*/
 
 ////////////////////////////////////////
 // evalF
