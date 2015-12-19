@@ -7,6 +7,7 @@ local X = adP:Image("X", opt.float3,W,H,0)
 local A = adP:Image("A", opt.float3,W,H,1)
 local G = adP:Graph("G", 0, "v0", W, H, 0, "v1", W, H, 1)
 P:Stencil(2)
+P:UsePreconditioner(true)
 
 local C = terralib.includecstring [[
 #include <math.h>
@@ -47,25 +48,23 @@ local terra evalJTF(i : int32, j : int32, gi : int32, gj : int32, self : P:Param
 	var a = self.A(i, j)
 	var gradient = self.w_fitSqrt*self.w_fitSqrt*2.0f * (x - a)	
 	var pre : float = 1.0f
+	if P.usepreconditioner then
+		pre = self.w_fitSqrt*self.w_fitSqrt*2.0f
+	end
 	return gradient, pre
 end
 
 
-local terra evalJTF_graph(idx : int32, self : P:ParameterType(), p : P:UnknownType(), r : P:UnknownType())
+local terra evalJTF_graph(idx : int32, self : P:ParameterType(), r : P:UnknownType(), preconditioner : P:UnknownType())
 	
 	var w0,h0 = self.G.v0_x[idx], self.G.v0_y[idx]
     var w1,h1 = self.G.v1_x[idx], self.G.v1_y[idx]
 	
-	--var gradient : unknownElement = gradient_graph(idx, self)
-	-- is there a 2?
-	var lap = 2.0*self.w_regSqrt*self.w_regSqrt*laplacianCost(idx, self)
+
+	var lap = 2.0f*self.w_regSqrt*self.w_regSqrt*laplacianCost(idx, self)
 	var c0 = ( 1.0f)*lap
 	var c1 = (-1.0f)*lap
 	
-	var pre : float = 1.0f
-	--return gradient, pre
-	
-
 
 	--write results
 	var _residuum0 = -c0
@@ -73,15 +72,11 @@ local terra evalJTF_graph(idx : int32, self : P:ParameterType(), p : P:UnknownTy
 	r:atomicAdd(w0, h0, _residuum0)
 	r:atomicAdd(w1, h1, _residuum1)
 	
-	var _pre0 = pre
-	var _pre1 = pre
-	--preconditioner:atomicAdd(w0, h0, _pre0)
-	--preconditioner:atomicAdd(w1, h1, _pre1)
-	
-	var _p0 = _pre0*_residuum0
-	var _p1 = _pre1*_residuum1
-	p:atomicAdd(w0, h0, _p0)
-	p:atomicAdd(w1, h1, _p1)
+	if P.usepreconditioner then
+		var pre = 2.0f*(self.w_regSqrt*self.w_regSqrt)
+		preconditioner:atomicAdd(w0, h0, pre)
+		preconditioner:atomicAdd(w1, h1, pre)
+	end
 	
 end
 	
