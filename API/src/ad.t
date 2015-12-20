@@ -291,6 +291,8 @@ local function simplify(op,config,args)
     elseif op.name == "powc" then
         if x:type() == bool then
             return x
+        elseif Apply:is(x) and x.op.name == "sqrt" and config.c == 2 then
+            return x.args[1]
         end
     elseif op.name == "select" then
         if Const:is(x) then
