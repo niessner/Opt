@@ -1,7 +1,7 @@
 local USE_MASK_REFINE 			= true
 
-local USE_DEPTH_CONSTRAINT 		= true
-local USE_REGULARIZATION 		= true
+local USE_DEPTH_CONSTRAINT 		= false
+local USE_REGULARIZATION 		= false
 local USE_SHADING_CONSTRAINT 	= true
 local USE_TEMPORAL_CONSTRAINT 	= false
 local USE_PRECONDITIONER 		= false
@@ -122,11 +122,14 @@ function I(offX, offY)
 end
 
 local function B_I(x,y)
-    return B(x,y) - I(x,y)
+    local bi = B(x,y) - I(x,y)
+    local valid = ad.greater(D_i(x-1,y) + D_i(x,y) + D_i(x,y-1), 0)
+    return ad.select(opt.InBounds(0,0,1,1)*valid,bi,0)
 end
 if true then
     B_I = P:ComputedImage("B_I",W,H, B_I(0,0))
 end
+
 
 local E_s = 0.0
 local E_p = 0.0
@@ -143,46 +146,32 @@ if USE_DEPTH_CONSTRAINT then
 end 
 
 if USE_SHADING_CONSTRAINT then
-    if USE_CRAPPY_SHADING_BOUNDARY then
-        local shading_center_valid = ad.greater(D_i(-1,0) + D_i(0,0) + D_i(0,-1), 0)
-        local center_tap_noCheck = B_I(0,0)
-        local center_tap = ad.select(shading_center_valid, center_tap_noCheck, 0.0)
-        local shading_h_valid = ad.greater(D_i(1,-1) + D_i(0,0) + D_i(1,0), 0)
-        local shading_v_valid = ad.greater(D_i(-1,1) + D_i(0,0) + D_i(0,1), 0)
-		local E_g_h_noCheck = B_I(1,0) --(B(1,0) - I(1,0))
+        local center_tap = B_I(0,0)
+        local E_g_h_noCheck = B_I(1,0) --(B(1,0) - I(1,0))
         local E_g_v_noCheck = B_I(0,1) --(B(0,1) - I(0,1))
 
-        local E_g_h_someCheck = center_tap - ad.select(shading_h_valid, E_g_h_noCheck, 0.0)
-        local E_g_v_someCheck = center_tap - ad.select(shading_v_valid, E_g_v_noCheck, 0.0)
+        local E_g_h_someCheck = center_tap - E_g_h_noCheck
+        local E_g_v_someCheck = center_tap - E_g_v_noCheck
+        
         if USE_MASK_REFINE then
 		    E_g_h_someCheck = E_g_h_someCheck * edgeMaskR(0,0)
 		    E_g_v_someCheck = E_g_v_someCheck * edgeMaskC(0,0)
 	    end
 	    E_g_h = ad.select(opt.InBounds(0,0,1,1), E_g_h_someCheck, 0.0) 
 	    E_g_v = ad.select(opt.InBounds(0,0,1,1), E_g_v_someCheck, 0.0) 
-        
-    else
-	    local shading_h_valid = ad.greater(D_i(-1,0) + D_i(0,0) + D_i(1,0) + D_i(0,-1) + D_i(1,-1), 0)
-	
-	    local E_g_h_noCheck = B(0,0) - B(1,0) - (I(0,0) - I(1,0))
-	    if USE_MASK_REFINE then
-		    E_g_h_noCheck = E_g_h_noCheck * edgeMaskR(0,0)
-	    end
-	    E_g_h = ad.select(opt.InBounds(0,0,1,1), ad.select(shading_h_valid, E_g_h_noCheck, 0.0), 0.0) 
-
-	    local shading_v_valid = ad.greater(D_i(0,-1) + D_i(0,0) + D_i(0,1) + D_i(-1,0) + D_i(-1,1), 0)
-	
-	    local E_g_v_noCheck = B(0,0) - B(0,1) - (I(0,0) - I(0,1))
-	    if USE_MASK_REFINE then
-		    E_g_v_noCheck = E_g_v_noCheck * edgeMaskC(0,0)
-	    end
-	    E_g_v = ad.select(opt.InBounds(0,0,1,1), ad.select(shading_v_valid, E_g_v_noCheck, 0.0), 0.0) 
-	end
 end
 
+local function allpositive(a,...)
+    local r = ad.greater(a,0)
+    for i = 1,select("#",...) do
+        local e = select(i,...)
+        r = ad.and_(r,ad.greater(e,0))
+    end
+    return r
+end
 
 if USE_REGULARIZATION then
-	local cross_valid = ad.greater(D_i(0,0) + D_i(0,-1) + D_i(0,1) + D_i(-1,0) + D_i(1,0), 0)
+	local cross_valid = allpositive(D_i(0,0), D_i(0,-1) , D_i(0,1) , D_i(-1,0) , D_i(1,0))
 
 	local E_s_noCheck = sqMagnitude(plus(times(4.0,p(0,0)), times(-1.0, plus(p(-1,0), plus(p(0,-1), plus(p(1,0), p(0,1)))))))
 	--local E_s_noCheck = p(0,0)[1] --sqMagnitude(times(4.0,p(0,0)))
@@ -204,4 +193,8 @@ if USE_TEMPORAL_CONSTRAINT then
 end
 
 local cost = ad.sumsquared(w_g*E_g_h, w_g*E_g_v, w_s*E_s, w_p*E_p)
+
+P:Exclude(ad.not_(ad.greater(D_i(0,0),0)))
+
 return P:Cost(cost)
+

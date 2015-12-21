@@ -19,7 +19,7 @@ end
 
 -- constants
 local verboseSolver = true
-local verboseAD = false
+local verboseAD = true
 
 local function newclass(name)
     local mt = { __name = name }
@@ -1188,7 +1188,9 @@ local function createfunction(problemspec,name,usebounds,W,H,ndims,results,scatt
         for i,ir in ipairs(condition.members) do
             assert(ir.type == bool)
             if ir.kind == "intrinsic" and ir.value.kind == "BoundsAccess" then
-                if x == ir.value.x and y == ir.value.y then
+                local bx,by,sx,sy = ir.value.x,ir.value.y,ir.value.sx,ir.value.sy
+                local minx,maxx,miny,maxy = bx - sx, bx + sx,by - sy, by + sy
+                if minx <= x and x <= maxx and miny <= y and y <= maxy then
                     return true
                 end
             end
@@ -1540,7 +1542,7 @@ local function lprintf(ident,fmt,...)
 end
 
 local function createjtjcentered(residuals,unknown,P)
-    local P_hat = createzerolist(unknown.N)
+    local P_hat_c = {}
     for rn,residual in ipairs(residuals.unknown) do
         local F,unknownsupport = residual.expression,residual.unknownaccesses
         lprintf(0,"\n\n\n\n\n##################################################")
@@ -1553,30 +1555,37 @@ local function createjtjcentered(residuals,unknown,P)
         
             for _,r in ipairs(residuals) do
                 local rexp = shiftexp(F,r.x,r.y)
-                local drdx00 = rexp:d(x)
+                local condition,drdx00 = ad.splitcondition(rexp:d(x))
+                if not P_hat_c[condition] then
+                    P_hat_c[condition] = createzerolist(unknown.N)
+                end
                 lprintf(1,"instance:\ndr%d_%d%d/dx00[%d] = %s",rn,r.x,r.y,channel,tostring(drdx00))
                 local unknowns = unknownsforresidual(r,unknownsupport)
                 for _,u in ipairs(unknowns) do
-                    local drdx_u = rexp:d(unknown(u.index.x,u.index.y,u.channel))
+                    local condition2, drdx_u = ad.splitcondition(rexp:d(unknown(u.index.x,u.index.y,u.channel)))
+                    assert(condition == condition2, "conditions on two gradeitns don't match?")
                     local exp = drdx00*drdx_u
                     lprintf(2,"term:\ndr%d_%d%d/dx%d%d[%d] = %s",rn,r.x,r.y,u.index.x,u.index.y,u.channel,tostring(drdx_u))
                     if not columns[u] then
                         columns[u] = 0
                         nonzerounknowns:insert(u)
                     end
-                    columns[u] = columns[u] + exp
+                    P_hat_c[condition][channel+1] = P_hat_c[condition][channel+1] + P(u.index.x,u.index.y,u.channel)*exp
                 end
             end
-            for _,u in ipairs(nonzerounknowns) do
-                P_hat[channel+1] = P_hat[channel+1] + P(u.index.x,u.index.y,u.channel) * columns[u]
-            end
+        end
+    end
+    local P_hat = createzerolist(unknown.N)
+    for k,v in pairs(P_hat_c) do
+        for i = 1,unknown.N do
+            P_hat[i] = P_hat[i] + k*v[i]
         end
     end
     for i,p in ipairs(P_hat) do
         P_hat[i] = 2.0 * p
     end
     dprint("JTJ[nopoly] = ", ad.tostrings(P_hat))
-    P_hat = ad.polysimplify(P_hat)
+    --P_hat = ad.polysimplify(P_hat)
     dprint("JTJ[poly] = ", ad.tostrings(P_hat))
     return conformtounknown(P_hat,unknown)
 end
