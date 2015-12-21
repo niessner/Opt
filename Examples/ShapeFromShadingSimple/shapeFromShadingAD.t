@@ -2,7 +2,7 @@ local USE_MASK_REFINE 			= true
 
 local USE_DEPTH_CONSTRAINT 		= true
 local USE_REGULARIZATION 		= true
-local USE_SHADING_CONSTRAINT 	= true
+local USE_SHADING_CONSTRAINT 	= false
 local USE_TEMPORAL_CONSTRAINT 	= false
 local USE_PRECONDITIONER 		= false
 
@@ -158,8 +158,10 @@ if USE_SHADING_CONSTRAINT then
 		    E_g_h_someCheck = E_g_h_someCheck * edgeMaskR(0,0)
 		    E_g_v_someCheck = E_g_v_someCheck * edgeMaskC(0,0)
 	    end
-	    E_g_h = ad.select(opt.InBounds(0,0,1,1), E_g_h_someCheck, 0.0) 
-	    E_g_v = ad.select(opt.InBounds(0,0,1,1), E_g_v_someCheck, 0.0) 
+	    E_g_h = ad.select(opt.InBounds(0,0,1,1), E_g_h_someCheck, 0.0)
+		E_g_v = ad.select(opt.InBounds(0,0,1,1), E_g_v_someCheck, 0.0)
+	    --E_g_h = center_tap_noCheck - E_g_h_noCheck 
+	    --E_g_v = center_tap_noCheck - E_g_v_noCheck 
         
     else
 	    local shading_h_valid = ad.greater(D_i(-1,0) + D_i(0,0) + D_i(1,0) + D_i(0,-1) + D_i(1,-1), 0)
@@ -203,5 +205,7 @@ if USE_TEMPORAL_CONSTRAINT then
 	--TODO: Implement
 end
 
-local cost = ad.sumsquared(w_g*E_g_h, w_g*E_g_v, w_s*E_s, w_p*E_p)
+local cost = ad.sumsquared(w_s*E_s, w_p*E_p)
+--local cost = ad.sumsquared(w_g*E_g_h, w_g*E_g_v, w_s*E_s, w_p*E_p)
+--local cost = ad.sumsquared(w_g*E_g_h, w_g*E_g_v)
 return P:Cost(cost)

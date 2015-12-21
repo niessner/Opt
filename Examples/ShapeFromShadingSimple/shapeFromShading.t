@@ -2,12 +2,13 @@ local USE_MASK_REFINE 			= true
 
 local USE_DEPTH_CONSTRAINT 		= true
 local USE_REGULARIZATION 		= true
-local USE_SHADING_CONSTRAINT 	= true
+local USE_SHADING_CONSTRAINT 	= false
 local USE_TEMPORAL_CONSTRAINT 	= false
 local USE_PRECONDITIONER 		= false
 
 local USE_PRECOMPUTE = true
 local USE_CRAPPY_SHADING_BOUNDARY = true
+local USE_PROPER_REGULARIZATION_BOUNDARY  = true
 
 local FLOAT_EPSILON = 0.000001
 local DEPTH_DISCONTINUITY_THRE = 0.01
@@ -851,6 +852,8 @@ local terra add_mul_inp_grad_ls_bsp(self : P:ParameterType(), pImage : P:Unknown
 end
 
 local terra est_lap_3d_bsp_imp(pImage : P:UnknownType(), i :int, j : int, w0 : float, w1 : float, uf_x : float, uf_y : float)
+	
+	
 	var d  : float = pImage(i,   j)
 	var d0 : float = pImage(i-1, j)
 	var d1 : float = pImage(i+1, j)
@@ -862,6 +865,39 @@ local terra est_lap_3d_bsp_imp(pImage : P:UnknownType(), i :int, j : int, w0 : f
 	var z : float = ( d * 4 - d0 - d1 - d2 - d3);
 	return vector(x,y,z);
 end
+
+local terra est_lap_3d_bsp_imp_with_guard(self : P:ParameterType(), pImage : P:UnknownType(), i :int, j : int, w0 : float, w1 : float, uf_x : float, uf_y : float, b_valid : &bool)
+	
+	var retval_0 = 0.0f
+	var retval_1 = 0.0f
+	var retval_2 = 0.0f	
+	var d  : float = self.X(i,j)
+	var d0 : float = self.X(i-1,j)
+	var d1 : float = self.X(i+1,j)
+	var d2 : float = self.X(i,j-1)
+	var d3 : float = self.X(i,j+1)
+
+	if IsValidPoint(d) and IsValidPoint(d0) and IsValidPoint(d1) and IsValidPoint(d2) and IsValidPoint(d3)
+		and opt.math.abs(d-d0) < [float](DEPTH_DISCONTINUITY_THRE) 
+		and opt.math.abs(d-d1) < [float](DEPTH_DISCONTINUITY_THRE) 
+		and opt.math.abs(d-d2) < [float](DEPTH_DISCONTINUITY_THRE) 
+		and opt.math.abs(d-d3) < [float](DEPTH_DISCONTINUITY_THRE) then	
+		var p  : float = pImage(i,   j)
+		var p0 : float = pImage(i-1, j)
+		var p1 : float = pImage(i+1, j)
+		var p2 : float = pImage(i,   j-1)
+		var p3 : float = pImage(i,   j+1)
+		
+		retval_0 = ( p * 4 * w0 - p0 * (w0 - uf_x) - p1 * (w0 + uf_x)	- p2 * w0 - p3 * w0);
+		retval_1 = ( p * 4 * w1 - p0 * w1 - p1 * w1 - p2 * (w1 - uf_y) - p3 * (w1 + uf_y));
+		retval_2 = ( p * 4 - p0 - p1 - p2 - p3);
+	else
+		@b_valid = false
+	end
+	return vector(retval_0,retval_1,retval_2);
+end
+
+
 
 -- eval 2*JtF == \nabla(F); eval diag(2*(Jt)^2) == pre-conditioner
 local terra gradient(i : int32, j : int32, gId_i : int32, gId_j : int32, self : P:ParameterType())
@@ -1022,36 +1058,72 @@ local terra applyJTJDeviceLS_SFS_Shared_BSP_Mask_Prior(i : int, j : int, posx : 
 			-- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- /
 				
 			if [USE_REGULARIZATION] then
+
 				sum = 0.0f
 				val0 = (posx - u_x)/f_x
 				val1 = (posy - u_y)/f_y
-				
-				var lapval : float3 = est_lap_3d_bsp_imp(pImage,i,j,val0,val1,uf_x,uf_y)			
-				sum = sum + lapval[0]*val0*(4.0f)
-				sum = sum + lapval[1]*val1*(4.0f)
-				sum = sum + lapval[2]*(4.0f)
-							
-				lapval = est_lap_3d_bsp_imp(pImage,i-1,j,val0-uf_x,val1,uf_x,uf_y)
-				sum = sum - lapval[0]*val0
-				sum = sum - lapval[1]*val1
-				sum = sum - lapval[2]
-							
-				lapval = est_lap_3d_bsp_imp(pImage,i+1,j,val0+uf_x,val1,uf_x,uf_y)
-				sum = sum - lapval[0]*val0
-				sum = sum - lapval[1]*val1
-				sum = sum - lapval[2]
-							
-				lapval = est_lap_3d_bsp_imp(pImage,i,j-1,val0,val1-uf_y,uf_x,uf_y)
-				sum = sum - lapval[0]*val0
-				sum = sum - lapval[1]*val1
-				sum = sum - lapval[2]
-							
-				lapval = est_lap_3d_bsp_imp(pImage,i,j+1,val0,val1+uf_y,uf_x,uf_y)
-				sum = sum - lapval[0]*val0
-				sum = sum - lapval[1]*val1
-				sum = sum - lapval[2]
 
-				b = b + sum*self.w_s
+				if [USE_PROPER_REGULARIZATION_BOUNDARY] then 
+
+					var b_valid = true
+
+					var lapval : float3 = est_lap_3d_bsp_imp_with_guard(self,pImage,i,j,val0,val1,uf_x,uf_y, &b_valid)			
+					sum = sum + lapval[0]*val0*(4.0f)
+					sum = sum + lapval[1]*val1*(4.0f)
+					sum = sum + lapval[2]*(4.0f)
+
+					lapval = est_lap_3d_bsp_imp_with_guard(self, pImage,i-1,j,val0-uf_x,val1,uf_x,uf_y, &b_valid)
+					sum = sum - lapval[0]*val0
+					sum = sum - lapval[1]*val1
+					sum = sum - lapval[2]
+								
+					lapval = est_lap_3d_bsp_imp_with_guard(self, pImage,i+1,j,val0+uf_x,val1,uf_x,uf_y, &b_valid)
+					sum = sum - lapval[0]*val0
+					sum = sum - lapval[1]*val1
+					sum = sum - lapval[2]
+								
+					lapval = est_lap_3d_bsp_imp_with_guard(self, pImage,i,j-1,val0,val1-uf_y,uf_x,uf_y, &b_valid)
+					sum = sum - lapval[0]*val0
+					sum = sum - lapval[1]*val1
+					sum = sum - lapval[2]
+							
+					lapval = est_lap_3d_bsp_imp_with_guard(self, pImage,i,j+1,val0,val1+uf_y,uf_x,uf_y, &b_valid)
+					sum = sum - lapval[0]*val0
+					sum = sum - lapval[1]*val1
+					sum = sum - lapval[2]
+
+					-- always add
+					b = b + sum*self.w_s
+				else
+					var lapval : float3 = est_lap_3d_bsp_imp(pImage,i,j,val0,val1,uf_x,uf_y)			
+					sum = sum + lapval[0]*val0*(4.0f)
+					sum = sum + lapval[1]*val1*(4.0f)
+					sum = sum + lapval[2]*(4.0f)
+								
+					lapval = est_lap_3d_bsp_imp(pImage,i-1,j,val0-uf_x,val1,uf_x,uf_y)
+					sum = sum - lapval[0]*val0
+					sum = sum - lapval[1]*val1
+					sum = sum - lapval[2]
+								
+					lapval = est_lap_3d_bsp_imp(pImage,i+1,j,val0+uf_x,val1,uf_x,uf_y)
+					sum = sum - lapval[0]*val0
+					sum = sum - lapval[1]*val1
+					sum = sum - lapval[2]
+								
+					lapval = est_lap_3d_bsp_imp(pImage,i,j-1,val0,val1-uf_y,uf_x,uf_y)
+					sum = sum - lapval[0]*val0
+					sum = sum - lapval[1]*val1
+					sum = sum - lapval[2]
+								
+					lapval = est_lap_3d_bsp_imp(pImage,i,j+1,val0,val1+uf_y,uf_x,uf_y)
+					sum = sum - lapval[0]*val0
+					sum = sum - lapval[1]*val1
+					sum = sum - lapval[2]
+
+					b = b + sum*self.w_s
+				end
+
+				
 			end
 
 			-- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- 
