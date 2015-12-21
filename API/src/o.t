@@ -1587,7 +1587,7 @@ local function createjtjcentered(residuals,unknown,P)
         P_hat[i] = 2.0 * p
     end
     dprint("JTJ[nopoly] = ", ad.tostrings(P_hat))
-    --P_hat = ad.polysimplify(P_hat)
+    P_hat = ad.polysimplify(P_hat)
     dprint("JTJ[poly] = ", ad.tostrings(P_hat))
     return conformtounknown(P_hat,unknown)
 end

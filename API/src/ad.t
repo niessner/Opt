@@ -1006,19 +1006,21 @@ function ad.polysimplify(exps)
             end
         end
         -- find maximum uses
-        local maxuse,power,maxkey = 0
+        local maxuse,benefit,power,maxkey = 0,0
         local keys = orderedexpressionkeys(uses)
         for _,k in ipairs(keys) do
             local u = uses[k]
-            if u > maxuse then
-                maxuse,maxkey,power = u,k,minpower[k]
+            local b = bool == k:type() and 10*u or u
+            if b > benefit then
+                maxuse,maxkey,power,benefit = u,k,minpower[k],b
             end
         end
         local keys = orderedexpressionkeys(neguses)
         for _,k in ipairs(keys) do
             local u = neguses[k]
-            if u > maxuse then
-                maxuse,maxkey,power = u,k,maxnegpower[k]
+            local b = bool == k:type() and 10*u or u
+            if b > benefit then
+                maxuse,maxkey,power,benefit = u,k,maxnegpower[k],b
             end
         end
         if maxuse < 2 then
