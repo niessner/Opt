@@ -1543,6 +1543,7 @@ end
 
 local function createjtjcentered(residuals,unknown,P)
     local P_hat_c = {}
+    local conditions = terralib.newlist()
     for rn,residual in ipairs(residuals.unknown) do
         local F,unknownsupport = residual.expression,residual.unknownaccesses
         lprintf(0,"\n\n\n\n\n##################################################")
@@ -1557,6 +1558,7 @@ local function createjtjcentered(residuals,unknown,P)
                 local rexp = shiftexp(F,r.x,r.y)
                 local condition,drdx00 = ad.splitcondition(rexp:d(x))
                 if not P_hat_c[condition] then
+                    conditions:insert(condition)
                     P_hat_c[condition] = createzerolist(unknown.N)
                 end
                 lprintf(1,"instance:\ndr%d_%d%d/dx00[%d] = %s",rn,r.x,r.y,channel,tostring(drdx00))
@@ -1576,9 +1578,9 @@ local function createjtjcentered(residuals,unknown,P)
         end
     end
     local P_hat = createzerolist(unknown.N)
-    for k,v in pairs(P_hat_c) do
+    for _,c in ipairs(conditions) do
         for i = 1,unknown.N do
-            P_hat[i] = P_hat[i] + k*v[i]
+            P_hat[i] = P_hat[i] + c*P_hat_c[c][i]
         end
     end
     for i,p in ipairs(P_hat) do
