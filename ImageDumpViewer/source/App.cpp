@@ -309,21 +309,21 @@ static void compareOptAndTerraNonBlock(RenderDevice* rd, const String& directory
     shared_ptr<Texture> jtjTerra = Texture::getTextureByName(directory + "JTJ" + terra);
 
 
-    static shared_ptr<Texture> costDiff = Texture::singleChannelDifference(rd, costOpt, costTerra);
-    static shared_ptr<Texture> jtfDiff = Texture::singleChannelDifference(rd, jtfOpt, jtfTerra);
-    static shared_ptr<Texture> jtjDiff = Texture::singleChannelDifference(rd, jtjOpt, jtjTerra);
-    static shared_ptr<Texture> preDiff = Texture::singleChannelDifference(rd, preOpt, preTerra);
+    static shared_ptr<Texture> costDiff = differenceImage(rd, "Cost Diff", costOpt, costTerra);
+    static shared_ptr<Texture> jtfDiff  = differenceImage(rd, "JTF Diff", jtfOpt, jtfTerra);
+    static shared_ptr<Texture> jtjDiff  = differenceImage(rd, "JTJ Diff", jtjOpt, jtjTerra);
+    static shared_ptr<Texture> preDiff  = differenceImage(rd, "Pre Diff", preOpt, preTerra);
 
 
-    highPrecisionCompare("Cost", costOpt, costTerra);
-    highPrecisionCompare("JTF", jtfOpt, jtfTerra);
-    highPrecisionCompare("JTJ", jtjOpt, jtjTerra);
-    highPrecisionCompare("Pre", preOpt, preTerra);
+    //    highPrecisionCompare("Cost", costOpt, costTerra);
+    //highPrecisionCompare("JTF", jtfOpt, jtfTerra);
+    //highPrecisionCompare("JTJ", jtjOpt, jtjTerra);
+    //highPrecisionCompare("Pre", preOpt, preTerra);
 
-    jtfDiff->visualization.documentGamma = 2.2f;
+    /*jtfDiff->visualization.documentGamma = 2.2f;
     costDiff->visualization.documentGamma = 2.2f;
     jtjDiff->visualization.documentGamma = 2.2f;
-    preDiff->visualization.documentGamma = 2.2f;
+    preDiff->visualization.documentGamma = 2.2f;*/
 
     static shared_ptr<Texture> jtjQ = quotientImage(rd, "JTJ Quotient", jtjOpt, jtjTerra);
     static shared_ptr<Texture> jtfQ = quotientImage(rd, "JTF Quotient", jtfOpt, jtfTerra);
@@ -351,7 +351,8 @@ void App::onInit() {
     developerWindow->cameraControlWindow->moveTo(Point2(developerWindow->cameraControlWindow->rect().x0(), 0));
     
     //String directory = "D:/Projects/DSL/Optimization/Examples/ShapeFromShading/";
-    String directory = "D:/Projects/DSL/Optimization/Examples/ShapeFromShadingSimple/";
+    //String directory = "D:/Projects/DSL/Optimization/Examples/ShapeFromShadingSimple/";
+    String directory = "/Users/michaelmara/OptDSL/Opt/Examples/ShapeFromShadingSimple/";
 
     Array<String> filenames;
     FileSystem::getFiles(directory+"*.imagedump", filenames);
@@ -366,7 +367,7 @@ void App::onInit() {
 
     //compareCUDAAndTerraNonBlock(rd, directory);
 
-    //compareOptAndTerraNonBlock(rd, directory);
+    compareOptAndTerraNonBlock(rd, directory);
 
     //compareOptAndCudaNonBlock(rd, directory);
 
