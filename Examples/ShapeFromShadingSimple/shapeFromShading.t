@@ -2,7 +2,7 @@ local USE_MASK_REFINE 			= true
 
 local USE_DEPTH_CONSTRAINT 		= true
 local USE_REGULARIZATION 		= true
-local USE_SHADING_CONSTRAINT 	= false
+local USE_SHADING_CONSTRAINT 	= true
 local USE_TEMPORAL_CONSTRAINT 	= false
 local USE_PRECONDITIONER 		= false
 
@@ -767,8 +767,8 @@ local terra evalMinusJTFDeviceLS_SFS_Shared_Mask_Prior(i : int, j : int, posx : 
 
 			if [USE_DEPTH_CONSTRAINT]	then
 				--position term 			
-				p = p + self.w_r --position constraint			
-				b = b - ((XC - targetDepth) * self.w_r);
+				p = p + self.w_p --position constraint			
+				b = b - ((XC - targetDepth) * self.w_p);
 			end
 
 
