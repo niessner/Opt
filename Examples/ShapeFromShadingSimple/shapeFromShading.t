@@ -757,7 +757,7 @@ local terra evalMinusJTFDeviceLS_SFS_Shared_Mask_Prior(i : int, j : int, posx : 
 				sum = sum + lapval[1]*val1;
 				sum = sum + lapval[2]
 					
-				if b_valid then
+				if [USE_PROPER_REGULARIZATION_BOUNDARY] or b_valid then
 					b = b + sum* self.w_s					
 					tmpval = (val0 * val0 + val1 * val1 + 1)*(16+4);						
 					p = p + tmpval * self.w_s --smoothness
