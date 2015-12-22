@@ -33,6 +33,7 @@ if USE_PRECOMPUTE then
 	B_I_dx0 = P:Image("B_I_dx0", float, W, H, "alloc")
 	B_I_dx1 = P:Image("B_I_dx1", float, W, H, "alloc")
 	B_I_dx2 = P:Image("B_I_dx2", float, W, H, "alloc")
+	pguard = P:Image("pguard", float, W, H, "alloc")
 end	
 
 -- See TerraSolverParameters
@@ -878,17 +879,8 @@ local terra est_lap_3d_bsp_imp_with_guard(self : P:ParameterType(), pImage : P:U
 	var retval_0 = 0.0f
 	var retval_1 = 0.0f
 	var retval_2 = 0.0f	
-	var d  : float = self.X(i,j)
-	var d0 : float = self.X(i-1,j)
-	var d1 : float = self.X(i+1,j)
-	var d2 : float = self.X(i,j-1)
-	var d3 : float = self.X(i,j+1)
-
-	if IsValidPoint(d) and IsValidPoint(d0) and IsValidPoint(d1) and IsValidPoint(d2) and IsValidPoint(d3)
-		and opt.math.abs(d-d0) < [float](DEPTH_DISCONTINUITY_THRE) 
-		and opt.math.abs(d-d1) < [float](DEPTH_DISCONTINUITY_THRE) 
-		and opt.math.abs(d-d2) < [float](DEPTH_DISCONTINUITY_THRE) 
-		and opt.math.abs(d-d3) < [float](DEPTH_DISCONTINUITY_THRE) then	
+	
+	if self.pguard:get(i,j) == 1.f then	
 		var p  : float = pImage(i,   j)
 		var p0 : float = pImage(i-1, j)
 		var p1 : float = pImage(i+1, j)
@@ -1193,6 +1185,16 @@ local terra precompute(i : int32, j : int32, gi : int32, gj : int32, self : P:Pa
 	self.B_I_dx1(i,j) 	= temp[1]
 	self.B_I_dx2(i,j) 	= temp[2]
 	self.B_I(i,j) 		= temp[3]
+	var d  : float = self.X(i,j)
+	var d0 : float = self.X(i-1,j)
+	var d1 : float = self.X(i+1,j)
+	var d2 : float = self.X(i,j-1)
+	var d3 : float = self.X(i,j+1)
+	self.pguard(i,j) = terralib.select(IsValidPoint(d) and IsValidPoint(d0) and IsValidPoint(d1) and IsValidPoint(d2) and IsValidPoint(d3)
+		and opt.math.abs(d-d0) < [float](DEPTH_DISCONTINUITY_THRE) 
+		and opt.math.abs(d-d1) < [float](DEPTH_DISCONTINUITY_THRE) 
+		and opt.math.abs(d-d2) < [float](DEPTH_DISCONTINUITY_THRE) 
+		and opt.math.abs(d-d3) < [float](DEPTH_DISCONTINUITY_THRE),1.f,0.f)
 end
 
 P:Function("cost",       cost)

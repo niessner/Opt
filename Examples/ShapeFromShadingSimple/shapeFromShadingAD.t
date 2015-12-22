@@ -192,7 +192,11 @@ if USE_REGULARIZATION then
                                     ad.and_(ad.less(ad.abs(d - X(1,0)), DEPTH_DISCONTINUITY_THRE), 
                                         ad.and_(opt.InBounds(0,0,1,1), cross_valid)
                         ))))
-                        
+    if true then
+        local guard = P:ComputedImage("E_s_guard", W, H, E_s_guard)                        
+	    E_s_guard = ad.eq(guard(0,0),1)
+	end
+	
 	E_s = ad.select(E_s_guard,E_s_noCheck,0)
 end
 
