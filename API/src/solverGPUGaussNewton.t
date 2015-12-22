@@ -52,8 +52,6 @@ return function(problemSpec)
 	local terra isBlockOnBoundary(gi : int, gj : int, width : uint, height : uint) : bool
 		-- TODO meta program the bad based on the block size and stencil;
 		-- TODO assert padX > stencil
-		
-		
 		var padX : int
 		var padY : int
 		escape
@@ -435,6 +433,15 @@ return function(problemSpec)
 	local terra step(data_ : &opaque, images : &&opaque, graphSizes : &int32, edgeValues : &&opaque, xs : &&int32, ys : &&int32, params_ : &&opaque, solverparams : &&opaque)
 		var pd = [&PlanData](data_)
 		[util.initParameters(`pd.parameters,problemSpec, images, graphSizes,edgeValues,xs,ys,params_,false)]
+        
+        var suffix = "optNoAD"
+
+        --[[ Hack for debugging SFS
+        var solveCount = ([&&uint32](params_))[39][0]
+        var isAD : bool = (solveCount == 1)
+        if isAD then
+        	suffix = "optAD"
+        end--]]
         escape 
 	    	if util.debugDumpInfo then
 	    		emit quote
@@ -445,9 +452,9 @@ return function(problemSpec)
 		    			C.printf("dumpingCostJTFAndPre\n")
 		    			gpu.dumpCostJTFAndPre(pd)
 		    			C.printf("saving\n")
-		    			dbg.imageWriteFromCudaPrefix(pd.debugCostImage, pd.parameters.X:W(), pd.parameters.X:H(), 1, "cost")
-		    			dbg.imageWriteFromCudaPrefix(pd.debugJTFImage, pd.parameters.X:W(), pd.parameters.X:H(), sizeof([unknownElement]) / 4, "JTF")
-		    			dbg.imageWriteFromCudaPrefix(pd.debugPreImage, pd.parameters.X:W(), pd.parameters.X:H(), sizeof([unknownElement]) / 4, "Pre")
+		    			dbg.imageWriteFromCudaPrefixSuffix(pd.debugCostImage, pd.parameters.X:W(), pd.parameters.X:H(), 1, "cost", suffix)
+		    			dbg.imageWriteFromCudaPrefixSuffix(pd.debugJTFImage, pd.parameters.X:W(), pd.parameters.X:H(), sizeof([unknownElement]) / 4, "JTF", suffix)
+		    			dbg.imageWriteFromCudaPrefixSuffix(pd.debugPreImage, pd.parameters.X:W(), pd.parameters.X:H(), sizeof([unknownElement]) / 4, "Pre", suffix)
 		    		end
 
 
@@ -520,7 +527,7 @@ return function(problemSpec)
 			    			C.printf("dumpingJTJ\n")
 			    			gpu.dumpJTJ(pd)
 			    			C.printf("saving\n")
-			    			dbg.imageWriteFromCudaPrefix(pd.debugJTJImage, pd.parameters.X:W(), pd.parameters.X:H(), sizeof([unknownElement]) / 4, "JTJ")
+			    			dbg.imageWriteFromCudaPrefixSuffix(pd.debugJTJImage, pd.parameters.X:W(), pd.parameters.X:H(), sizeof([unknownElement]) / 4, "JTJ", suffix)
 			    			return 0
 			    		end
 		    		end
@@ -563,7 +570,7 @@ return function(problemSpec)
 			escape
 				if util.debugDumpInfo then
 		    		emit quote
-						dbg.imageWriteFromCudaPrefix([&float](pd.parameters.X.data), pd.parameters.X:W(), pd.parameters.X:H(), sizeof([unknownElement]) / 4, "result")
+						dbg.imageWriteFromCudaPrefixSuffix([&float](pd.parameters.X.data), pd.parameters.X:W(), pd.parameters.X:H(), sizeof([unknownElement]) / 4, "result", suffix)
 
 					end
 				end

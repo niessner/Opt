@@ -135,6 +135,7 @@ if USE_DEPTH_CONSTRAINT then
 end 
 
 if USE_SHADING_CONSTRAINT then
+	if USE_CRAPPY_SHADING_BOUNDARY then
         local center_tap = B_I(0,0)
         local E_g_h_noCheck = B_I(1,0) --(B(1,0) - I(1,0))
         local E_g_v_noCheck = B_I(0,1) --(B(0,1) - I(0,1))
