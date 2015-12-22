@@ -1,7 +1,10 @@
 #include "SimpleBuffer.h"
 
+#include <string.h>
 #include <cuda_runtime.h>
 #include <stdio.h>
+
+//using std::memcpy;
 
 
 

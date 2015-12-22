@@ -19,7 +19,7 @@ end
 
 -- constants
 local verboseSolver = true
-local verboseAD = false
+local verboseAD = true
 
 local function newclass(name)
     local mt = { __name = name }
@@ -286,7 +286,7 @@ end
 function ProblemSpec:EvalExclude(...)
     local args = {...}
     if self.functions.exclude then
-        return `bool(self.functions.exclude.boundary(args))
+        return `bool(self.functions.exclude.unknownfunction(args))
     else
         return `false
     end
@@ -561,8 +561,9 @@ function ImageAccess:gradient()
         assert(Offset:is(self.index),"NYI - support for graphs")
         local gt = {}
         for u,im in pairs(self.image.gradientimages) do
+            local exp = self.image.gradientexpressions[u]
             local k = u:shift(self.index.x,self.index.y)
-            local v = im(self.index.x,self.index.y)
+            local v = ad.Const:is(exp) and exp or im(self.index.x,self.index.y)
             gt[k] = v
         end
         return gt
@@ -1188,7 +1189,9 @@ local function createfunction(problemspec,name,usebounds,W,H,ndims,results,scatt
         for i,ir in ipairs(condition.members) do
             assert(ir.type == bool)
             if ir.kind == "intrinsic" and ir.value.kind == "BoundsAccess" then
-                if x == ir.value.x and y == ir.value.y then
+                local bx,by,sx,sy = ir.value.x,ir.value.y,ir.value.sx,ir.value.sy
+                local minx,maxx,miny,maxy = bx - sx, bx + sx,by - sy, by + sy
+                if minx <= x and x <= maxx and miny <= y and y <= maxy then
                     return true
                 end
             end
@@ -1386,7 +1389,9 @@ local function createfunction(problemspec,name,usebounds,W,H,ndims,results,scatt
             stmt = s.channel and (`image:atomicAddChannel(xy, s.channel, exp)) or (`image:atomicAdd(xy, exp))
         else
             assert(s.kind == "set" and s.channel == 0)
-            stmt = quote image(xy) = exp end -- NYI - multi-channel images
+            stmt = quote 
+                image(xy) = exp
+            end -- NYI - multi-channel images
         end
         scatterstatements:insert(stmt)
     end
@@ -1478,7 +1483,10 @@ local function classifyresiduals(Rs)
             end
         end)
         local entry = { expression = exp, unknownaccesses = unknownaccesses }
-        assert(classification, "residual does not contain an unknown term?")
+        if not classification then
+            classification = "centered"
+        end
+        --assert(classification, "residual does not contain an unknown term?")
         if classification == "centered" then
             result.unknown:insert(entry)
         else
@@ -1535,7 +1543,8 @@ local function lprintf(ident,fmt,...)
 end
 
 local function createjtjcentered(residuals,unknown,P)
-    local P_hat = createzerolist(unknown.N)
+    local P_hat_c = {}
+    local conditions = terralib.newlist()
     for rn,residual in ipairs(residuals.unknown) do
         local F,unknownsupport = residual.expression,residual.unknownaccesses
         lprintf(0,"\n\n\n\n\n##################################################")
@@ -1548,23 +1557,31 @@ local function createjtjcentered(residuals,unknown,P)
         
             for _,r in ipairs(residuals) do
                 local rexp = shiftexp(F,r.x,r.y)
-                local drdx00 = rexp:d(x)
+                local condition,drdx00 = ad.splitcondition(rexp:d(x))
+                if not P_hat_c[condition] then
+                    conditions:insert(condition)
+                    P_hat_c[condition] = createzerolist(unknown.N)
+                end
                 lprintf(1,"instance:\ndr%d_%d%d/dx00[%d] = %s",rn,r.x,r.y,channel,tostring(drdx00))
                 local unknowns = unknownsforresidual(r,unknownsupport)
                 for _,u in ipairs(unknowns) do
-                    local drdx_u = rexp:d(unknown(u.index.x,u.index.y,u.channel))
+                    local condition2, drdx_u = ad.splitcondition(rexp:d(unknown(u.index.x,u.index.y,u.channel)))
+                    assert(condition == condition2, "conditions on two gradeitns don't match?")
                     local exp = drdx00*drdx_u
                     lprintf(2,"term:\ndr%d_%d%d/dx%d%d[%d] = %s",rn,r.x,r.y,u.index.x,u.index.y,u.channel,tostring(drdx_u))
                     if not columns[u] then
                         columns[u] = 0
                         nonzerounknowns:insert(u)
                     end
-                    columns[u] = columns[u] + exp
+                    P_hat_c[condition][channel+1] = P_hat_c[condition][channel+1] + P(u.index.x,u.index.y,u.channel)*exp
                 end
             end
-            for _,u in ipairs(nonzerounknowns) do
-                P_hat[channel+1] = P_hat[channel+1] + P(u.index.x,u.index.y,u.channel) * columns[u]
-            end
+        end
+    end
+    local P_hat = createzerolist(unknown.N)
+    for _,c in ipairs(conditions) do
+        for i = 1,unknown.N do
+            P_hat[i] = P_hat[i] + c*P_hat_c[c][i]
         end
     end
     for i,p in ipairs(P_hat) do
@@ -1747,11 +1764,14 @@ end
 function createprecomputed(self,name,precomputedimages)
     local scatters = terralib.newlist()
     for i,im in ipairs(precomputedimages) do
-        local expression = im.expression
+        local expression = ad.polysimplify(im.expression)
         scatters:insert(NewScatter(im, Offset:get(0,0), 0, im.expression, "set"))
         for u,gim in pairs(im.gradientimages) do
             local gradientexpression = im.gradientexpressions[u]
-            scatters:insert(NewScatter(gim, Offset:get(0,0), 0, gradientexpression, "set"))
+            gradientexpression = ad.polysimplify(gradientexpression)
+            if not ad.Const:is(gradientexpression) then
+                scatters:insert(NewScatter(gim, Offset:get(0,0), 0, gradientexpression, "set"))
+            end
         end
     end
     

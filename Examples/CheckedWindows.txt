@@ -1,0 +1,5 @@
+on 12/18/2015 (Matthias)
+ImageWarping -> OK
+MeshDeformation -> OK
+MeshSmoothingLaplacian -> OK
+PoissonImageEditing -> OK
