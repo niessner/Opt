@@ -436,7 +436,8 @@ return function(problemSpec)
         
         var suffix = "optNoAD"
 
-        --[[ Hack for debugging SFS
+        --Hack for debugging SFS
+        --[[
         var solveCount = ([&&uint32](params_))[39][0]
         var isAD : bool = (solveCount == 1)
         if isAD then

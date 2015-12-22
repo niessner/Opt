@@ -1,7 +1,7 @@
 
 local timeIndividualKernels = true
 -- For saving intermediate buffers to file
-local debugDumpInfo = true
+local debugDumpInfo = false
 -- For printing a bunch of junk during the solve
 local debugPrintSolverInfo = false
 

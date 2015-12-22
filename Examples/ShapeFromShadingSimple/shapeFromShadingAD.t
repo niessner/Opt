@@ -120,7 +120,9 @@ if true then
 end
 
 
-local E_s = 0.0
+local E_s_x = 0.0
+local E_s_y = 0.0
+local E_s_z = 0.0
 local E_p = 0.0
 local E_r_h = 0.0 
 local E_r_v = 0.0 
@@ -182,7 +184,7 @@ end
 
 if USE_REGULARIZATION then
 	local cross_valid = allpositive(D_i(0,0), D_i(0,-1) , D_i(0,1) , D_i(-1,0) , D_i(1,0))
-	local E_s_noCheck = sqMagnitude( 4.0*p(0,0) - (p(-1,0) + p(0,-1) + p(1,0) + p(0,1)) )
+	local E_s_noCheck = 4.0*p(0,0) - (p(-1,0) + p(0,-1) + p(1,0) + p(0,1)) 
 	
 	local d = X(0,0)
 
@@ -195,14 +197,16 @@ if USE_REGULARIZATION then
                         
 	--local E_s_guard = P:ComputedImage("guard",W,H,E_s_guard)
     --E_s = ad.select(ad.eq(E_s_guard(0,0),1), E_s_noCheck, 0)
-    E_s = ad.select(E_s_guard,E_s_noCheck,0)
+    E_s_x = ad.select(E_s_guard,E_s_noCheck[0],0)
+    E_s_y = ad.select(E_s_guard,E_s_noCheck[1],0)
+    E_s_z = ad.select(E_s_guard,E_s_noCheck[2],0)
 end
 
 if USE_TEMPORAL_CONSTRAINT then
 	--TODO: Implement
 end
 
-local cost = ad.sumsquared(w_g*E_g_h, w_g*E_g_v, w_s*E_s, w_p*E_p)
+local cost = ad.sumsquared(w_g*E_g_h, w_g*E_g_v, w_s*E_s_x, w_s*E_s_y, w_s*E_s_z, w_p*E_p)
 
 P:Exclude(ad.not_(ad.greater(D_i(0,0),0)))
 

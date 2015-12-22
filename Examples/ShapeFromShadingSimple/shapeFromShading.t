@@ -458,7 +458,11 @@ local terra cost(i : int32, j : int32, gi : int32, gj : int32, self : P:Paramete
 	var W = self.X:W()
 	var H = self.X:H()
 
-	var E_s : float = 0.0f
+	var E_s_x : float = 0.0f
+	var E_s_y : float = 0.0f
+	var E_s_z : float = 0.0f
+
+
 	var E_p : float = 0.0f
 	var E_r_h : float = 0.0f 
 	var E_r_v : float = 0.0f 
@@ -535,7 +539,10 @@ local terra cost(i : int32, j : int32, gi : int32, gj : int32, self : P:Paramete
 			opt.math.abs(d - self.X(i,j-1)) < [float](DEPTH_DISCONTINUITY_THRE) then
          
                 --E_s = p(i,j,gi,gj,self)[0] --sqMagnitude(4.0*p(i,j,gi,gj,self))
-				E_s = sqMagnitude(4.0f*p(i,j,gi,gj,self) - (p(i-1,j,gi-1,gj, self) + p(i,j-1,gi,gj-1, self) + p(i+1, j,gi+1,gj, self) + p(i,j+1,gi,gj+1, self)))
+				var E_s = (4.0f*p(i,j,gi,gj,self) - (p(i-1,j,gi-1,gj, self) + p(i,j-1,gi,gj-1, self) + p(i+1, j,gi+1,gj, self) + p(i,j+1,gi,gj+1, self)))
+				E_s_x = E_s[0]
+				E_s_y = E_s[1]
+				E_s_z = E_s[2]
 		end
 	end
 
@@ -559,7 +566,7 @@ local terra cost(i : int32, j : int32, gi : int32, gj : int32, self : P:Paramete
 		E_r_d = dot(n_p, p(i,j,gi,gj,self) - p(i-1,j-1,gi-1,gj-1,self))
 	end
 
-	var cost : float = self.w_s*E_s*E_s + self.w_p*E_p*E_p + self.w_g*E_g_h*E_g_h + self.w_g*E_g_v*E_g_v + self.w_r*E_r_h*E_r_h + self.w_r*E_r_v*E_r_v + self.w_r*E_r_d*E_r_d 
+	var cost : float = self.w_s*E_s_x*E_s_x + self.w_s*E_s_y*E_s_y + self.w_s*E_s_z*E_s_z + self.w_p*E_p*E_p + self.w_g*E_g_h*E_g_h + self.w_g*E_g_v*E_g_v + self.w_r*E_r_h*E_r_h + self.w_r*E_r_v*E_r_v + self.w_r*E_r_d*E_r_d 
 	--[[
     if gi>1 and gi<(W - 5) and gj>1 and gj<(H - 5) then
         cost = [float](self.edgeMaskC(i,j))
