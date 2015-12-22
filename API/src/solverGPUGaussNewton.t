@@ -42,6 +42,7 @@ return function(problemSpec)
 		scanBeta : &float					-- tmp variable for alpha scan
 		
 		timer : Timer
+		endSolver : util.TimerEvent
 		nIter : int				--current non-linear iter counter
 		nIterations : int		--non-linear iterations
 		lIterations : int		--linear iterations
@@ -378,6 +379,7 @@ return function(problemSpec)
 	local terra init(data_ : &opaque, images : &&opaque, graphSizes : &int32, edgeValues : &&opaque, xs : &&int32, ys : &&int32, params_ : &&opaque, solverparams : &&opaque)
 	   var pd = [&PlanData](data_)
 	   pd.timer:init()
+	   pd.timer:startEvent("overall",nil,&pd.endSolver)
        [util.initParameters(`pd.parameters,problemSpec,images, graphSizes,edgeValues,xs,ys,params_,true)]
 	   pd.nIter = 0
 	   
@@ -578,6 +580,7 @@ return function(problemSpec)
 			end
 			var finalCost = computeCost(pd)
 			logSolver("final cost=%f\n", finalCost)
+		    pd.timer:endEvent(nil,pd.endSolver)
 		    pd.timer:evaluate()
 		    pd.timer:cleanup()
 		    return 0
