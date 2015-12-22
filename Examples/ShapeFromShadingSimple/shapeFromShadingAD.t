@@ -2,7 +2,7 @@ local USE_MASK_REFINE 			= true
 
 local USE_DEPTH_CONSTRAINT 		= true
 local USE_REGULARIZATION 		= true
-local USE_SHADING_CONSTRAINT 	= false
+local USE_SHADING_CONSTRAINT 	= true
 local USE_TEMPORAL_CONSTRAINT 	= false
 local USE_PRECONDITIONER 		= false
 
@@ -174,7 +174,7 @@ if USE_REGULARIZATION then
                         
 	--local E_s_guard = P:ComputedImage("guard",W,H,E_s_guard)
     --E_s = ad.select(ad.eq(E_s_guard(0,0),1), E_s_noCheck, 0)
-    
+    E_s = ad.select(E_s_guard,E_s_noCheck,0)
 end
 
 if USE_TEMPORAL_CONSTRAINT then
