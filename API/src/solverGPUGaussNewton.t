@@ -576,6 +576,35 @@ return function(problemSpec)
 		end
 	end
 
+    --[[
+    local paramprints = {}
+    local paramnames_str = ''
+    local pdsym = symbol(&PlanData)
+    for _,pair in ipairs(problemSpec.ProblemParameters.entries) do
+        local name,typ = unpack(pair)
+        if typ:isstruct() and typ.metamethods.is_an_image_type then
+            table.insert(paramprints,quote
+                pdsym.parameters.[name]:debugprint()
+            end)
+            paramnames_str=paramnames_str..' '..name
+        end
+    end
+    terra PlanData:debugprint()
+        C.printf(["printing image structs...\n"..
+                  "delta r z p Ap_X preconditioner rDotzOld"..paramnames_str..
+                  "\n"])
+        self.delta:debugprint()
+        self.r:debugprint()
+        self.z:debugprint()
+        self.p:debugprint()
+        self.Ap_X:debugprint()
+        self.preconditioner:debugprint()
+        self.rDotzOld:debugprint()
+        var [pdsym] = self
+        [paramprints]
+    end
+    --]]
+
 	local terra makePlan() : &opt.Plan
 		var pd = PlanData.alloc()
 		pd.plan.data = pd

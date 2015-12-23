@@ -418,17 +418,22 @@ end
 util.initParameters = function(parameters, ProblemSpec, images, graphSizes, edgeValues, xs, ys, paramValues,allocateTemporaries)
     local stmts = terralib.newlist()
 	for _, entry in ipairs(ProblemSpec.parameters) do
-		if entry.kind == "image" and entry.idx == "alloc" then
-		    if allocateTemporaries then
-		        stmts:insert quote
-		            parameters.[entry.name]:initGPU()
-		        end
-		    end
+		if entry.kind == "image" then
+            if entry.idx == "alloc" then
+    		    if allocateTemporaries then
+    		        stmts:insert quote
+    		            parameters.[entry.name]:initGPU()
+    		        end
+    		    end
+            else
+                stmts:insert quote
+                    parameters.[entry.name]:initFromGPUptr(
+                        [&uint8](images[entry.idx]))
+                end
+            end
 		else
             local rhs
-            if entry.kind == "image" then
-                rhs = `entry.type { data = [&uint8](images[entry.idx])}
-            elseif entry.kind == "graph" then
+            if entry.kind == "graph" then
                 local graphinits = terralib.newlist { `graphSizes[entry.idx] }
                 for i,e in ipairs(entry.type.metamethods.elements) do
                     graphinits:insert( `xs[e.idx] )
@@ -471,7 +476,7 @@ local cd = macro(function(cufunc)
     return quote
         var r = cufunc
         if r ~= 0 then  
-            C.printf("Cuda reported error %d\n",r)
+            C.printf("Cuda reported error %d: %s\n",r, C.cudaGetErrorString(r))
             return r
         end
     end

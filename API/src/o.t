@@ -19,7 +19,7 @@ end
 
 -- constants
 local verboseSolver = true
-local verboseAD = true
+local verboseAD = false
 
 local function newclass(name)
     local mt = { __name = name }
@@ -312,26 +312,116 @@ opt.InBoundsCalc = macro(function(x,y,W,H,sx,sy)
 end)
 	
 newImage = terralib.memoize(function(typ, W, H, elemsize, stride)
+    local use_bindless_texture = true
+    -- NOTE: only use textures for float, vector(2, float), vector(4, float)
+    if not (util.isvectortype(typ) and typ.metamethods.type == float and
+                (typ.metamethods.N == 4 or typ.metamethods.N == 2)
+           ) and typ ~= float
+    then
+        use_bindless_texture = false
+    end
+
+
+    local cd = macro(function(apicall) return quote
+        var r = apicall
+        if r ~= 0 then  
+            C.printf("Cuda reported error %d: %s\n",r, C.cudaGetErrorString(r))
+            return r
+        end
+    end end)
+
+    local nvec = util.isvectortype(typ) and typ.metamethods.N or 1
+    local wrapBindlessTexture, tex_read
+    if use_bindless_texture then
+        local name = "Image("..tostring(typ)..','..W.size..','..H.size..
+                          ','..elemsize..','..stride..')'
+        terra wrapBindlessTexture(data : &uint8) : C.cudaTextureObject_t
+            -- Description of Texture Resource
+            var res_desc : C.cudaResourceDesc
+                C.memset(&res_desc, 0, sizeof(C.cudaResourceDesc))
+            res_desc.resType                = C.cudaResourceTypeLinear
+            res_desc.res.linear.devPtr      = data
+            -- encode the fact we have vectors here...
+            res_desc.res.linear.desc.f      = C.cudaChannelFormatKindFloat
+            res_desc.res.linear.desc.x      = 32  -- bits per channel
+            if nvec > 1 then
+                res_desc.res.linear.desc.y  = 32
+            end
+            if nvec == 4 then
+                res_desc.res.linear.desc.z  = 32
+                res_desc.res.linear.desc.w  = 32
+            end
+            res_desc.res.linear.sizeInBytes = stride * H.size
+
+            var tex_desc : C.cudaTextureDesc
+                C.memset(&tex_desc, 0, sizeof(C.cudaTextureDesc));
+            tex_desc.readMode = C.cudaReadModeElementType
+
+            -- cudaTextureObject_t should be uint64
+            var tex : C.cudaTextureObject_t = 0;
+            cd(C.cudaCreateTextureObject(&tex, &res_desc, &tex_desc, nil))
+
+            return tex
+        end
+
+        local vprintf = terralib.externfunction("cudart:vprintf",
+                                                {&int8,&int8} -> int)
+        -- texture base address is assumed to be aligned to a 16-byte boundary
+        terra tex_read(tex : C.cudaTextureObject_t, idx : int32)
+            --if blockIdx.x == 0 and blockIdx.y == 0 and
+            --   threadIdx.x == 5 and threadIdx.y == 5
+            --then
+            --    vprintf([name..' tex %lu\n'],[&int8](&tex))
+            --end
+            var read = terralib.asm([tuple(float,float,float,float)],
+                "tex.1d.v4.f32.s32  {$0,$1,$2,$3}, [$4,{$5}];",
+                "=f,=f,=f,=f,l,r",false, tex, idx)
+            return escape if nvec == 1 then
+                emit `read._0
+            else
+                emit `@[&vector(float,nvec)](&read)
+            end end
+        end
+    end
+
 	local struct Image {
-		data : &uint8
+		data : &uint8;
+        tex  : C.cudaTextureObject_t;
 	}
 	function Image.metamethods.__typename()
 	  return string.format("Image(%s,%s,%s,%d,%d)",tostring(typ),W.name, H.name,elemsize,stride)
 	end
 
+    terra Image:debugprint()
+        C.printf(['  %p %lu '..tostring(typ)..'\n'], self.data, self.tex)
+    end
+
 	if util.isvectortype(typ) and typ.metamethods.type == float and (typ.metamethods.N == 4 or typ.metamethods.N == 2) then
 	    -- emit code that will produce special CUDA vector load instructions
 	    local storetype = vector(float,typ.metamethods.N)
-	    terra Image.metamethods.__apply(self : &Image, x : int32, y : int32)
+        if use_bindless_texture then
+          terra Image.metamethods.__apply(self : &Image, x : int32, y : int32)
+            var a = tex_read(self.tex, y*[stride/elemsize] + x)
+            return @[&typ](&a)
+          end
+        else
+          terra Image.metamethods.__apply(self : &Image, x : int32, y : int32)
             var a = @[&storetype](self.data + y*stride + x*elemsize)
             return @[&typ](&a)
+          end
         end
         terra Image.metamethods.__update(self : &Image, x : int32, y : int32, v : typ)
             @[&storetype](self.data + y*stride + x*elemsize) = @[&storetype](&v)
         end
-	else	
-        terra Image.metamethods.__apply(self : &Image, x : int32, y : int32)
-            return @[&typ](self.data + y*stride + x*elemsize)
+	else
+        if use_bindless_texture then
+          terra Image.metamethods.__apply(self : &Image, x : int32, y : int32)
+            return tex_read(self.tex, y*[stride/elemsize] + x)
+          end
+        else
+          terra Image.metamethods.__apply(self : &Image, x : int32, y : int32)
+              return @[&typ](self.data + y*stride + x*elemsize)
+          end
         end
         terra Image.metamethods.__update(self : &Image, x : int32, y : int32, v : typ)
             @[&typ](self.data + y*stride + x*elemsize) = v
@@ -390,9 +480,20 @@ newImage = terralib.memoize(function(typ, W, H, elemsize, stride)
 	terra Image:initGPU()
 		var cudaError = C.cudaMalloc([&&opaque](&(self.data)), stride*H.size)
 		cudaError = C.cudaMemset([&opaque](self.data), 0, stride*H.size)
+
+        escape if use_bindless_texture then emit quote
+            self.tex = wrapBindlessTexture(self.data)
+        end end end
 	end
+    terra Image:initFromGPUptr( ptr : &uint8 )
+        self.data = ptr
+        escape if use_bindless_texture then emit quote
+            self.tex = wrapBindlessTexture(self.data)
+        end end end
+    end
 	local mm = Image.metamethods
 	mm.typ,mm.W,mm.H,mm.elemsize,mm.stride = typ,W,H,elemsize,stride
+    mm.is_an_image_type = true
 	return Image
 end)
 
