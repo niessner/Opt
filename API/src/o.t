@@ -371,7 +371,7 @@ newImage = terralib.memoize(function(typ, W, H, elemsize, stride)
             return escape if nvec == 1 then
                 emit `read._0
             else
-                emit `@[&vector(float,nvec)](&read)
+                emit `@[&typ](&read)
             end end
         end
     end
@@ -393,8 +393,7 @@ newImage = terralib.memoize(function(typ, W, H, elemsize, stride)
 	    local storetype = vector(float,typ.metamethods.N)
         if use_bindless_texture then
           terra Image.metamethods.__apply(self : &Image, x : int32, y : int32)
-            var a = tex_read(self.tex, y*[stride/elemsize] + x)
-            return @[&typ](&a)
+            return tex_read(self.tex, y*[stride/elemsize] + x)
           end
         else
           terra Image.metamethods.__apply(self : &Image, x : int32, y : int32)
