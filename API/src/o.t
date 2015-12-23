@@ -797,7 +797,11 @@ function Image:__call(x,y,c)
     end
 end
 function ImageVector:__call(x,y,c)
-    local result = self.images:map(function(im) return im(x,y,c) end)
+    if c then
+        assert(c < #self.images, "channel outside of range")
+        return self.images[c+1](x,y)
+    end
+    local result = self.images:map(function(im) return im(x,y) end)
     return ad.Vector(unpack(result))
 end
 
