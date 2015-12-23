@@ -434,9 +434,9 @@ util.initParameters = function(parameters, ProblemSpec, images, graphSizes, edge
     		        end
     		    end
             else
+                local function_name = allocateTemporaries and "initFromGPUptr" or "setGPUptr"
                 stmts:insert quote
-                    parameters.[entry.name]:initFromGPUptr(
-                        [&uint8](images[entry.idx]))
+                    parameters.[entry.name]:[function_name]([&uint8](images[entry.idx]))
                 end
             end
 		else

@@ -321,7 +321,6 @@ newImage = terralib.memoize(function(typ, W, H, elemsize, stride)
         use_bindless_texture = false
     end
 
-
     local cd = macro(function(apicall) return quote
         var r = apicall
         if r ~= 0 then  
@@ -364,15 +363,8 @@ newImage = terralib.memoize(function(typ, W, H, elemsize, stride)
             return tex
         end
 
-        local vprintf = terralib.externfunction("cudart:vprintf",
-                                                {&int8,&int8} -> int)
         -- texture base address is assumed to be aligned to a 16-byte boundary
         terra tex_read(tex : C.cudaTextureObject_t, idx : int32)
-            --if blockIdx.x == 0 and blockIdx.y == 0 and
-            --   threadIdx.x == 5 and threadIdx.y == 5
-            --then
-            --    vprintf([name..' tex %lu\n'],[&int8](&tex))
-            --end
             var read = terralib.asm([tuple(float,float,float,float)],
                 "tex.1d.v4.f32.s32  {$0,$1,$2,$3}, [$4,{$5}];",
                 "=f,=f,=f,=f,l,r",false, tex, idx)
@@ -478,22 +470,30 @@ newImage = terralib.memoize(function(typ, W, H, elemsize, stride)
 		end
 	end
 	terra Image:initGPU()
-		var cudaError = C.cudaMalloc([&&opaque](&(self.data)), stride*H.size)
-		cudaError = C.cudaMemset([&opaque](self.data), 0, stride*H.size)
-
-        escape if use_bindless_texture then emit quote
-            self.tex = wrapBindlessTexture(self.data)
-        end end end
-	end
+        var data : &uint8
+        C.cudaMalloc([&&opaque](&data), stride*H.size)
+        C.cudaMemset([&opaque](data), 0, stride*H.size)
+        self:initFromGPUptr(data)
+    end
     terra Image:initFromGPUptr( ptr : &uint8 )
-        self.data = ptr
-        escape if use_bindless_texture then emit quote
-            self.tex = wrapBindlessTexture(self.data)
-        end end end
+        self.data = nil
+        self:setGPUptr(ptr)
+    end
+    if use_bindless_texture then
+        terra Image:setGPUptr(ptr : &uint8)
+            if self.data ~= ptr then
+                if self.data ~= nil then
+                    cd(C.cudaDestroyTextureObject(self.tex))
+                end
+                self.tex = wrapBindlessTexture(ptr)
+            end
+            self.data = ptr
+        end
+    else
+        terra Image:setGPUptr(ptr : &uint8) self.data = ptr end
     end
 	local mm = Image.metamethods
 	mm.typ,mm.W,mm.H,mm.elemsize,mm.stride = typ,W,H,elemsize,stride
-    mm.is_an_image_type = true
 	return Image
 end)
 
