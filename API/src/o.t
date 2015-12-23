@@ -662,8 +662,9 @@ function ImageAccess:gradient()
         assert(Offset:is(self.index),"NYI - support for graphs")
         local gt = {}
         for u,im in pairs(self.image.gradientimages) do
+            local exp = self.image.gradientexpressions[u]
             local k = u:shift(self.index.x,self.index.y)
-            local v = im(self.index.x,self.index.y)
+            local v = ad.Const:is(exp) and exp or im(self.index.x,self.index.y)
             gt[k] = v
         end
         return gt
@@ -1869,7 +1870,9 @@ function createprecomputed(self,name,precomputedimages)
         for u,gim in pairs(im.gradientimages) do
             local gradientexpression = im.gradientexpressions[u]
             gradientexpression = ad.polysimplify(gradientexpression)
-            scatters:insert(NewScatter(gim, Offset:get(0,0), 0, gradientexpression, "set"))
+            if not ad.Const:is(gradientexpression) then
+                scatters:insert(NewScatter(gim, Offset:get(0,0), 0, gradientexpression, "set"))
+            end
         end
     end
     

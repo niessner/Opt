@@ -19,12 +19,14 @@ terra dbg.imageWriteFromCuda(imPtr : &float, width : int, height : int, channelC
    C.free(ptr)
 end
 
-terra dbg.imageWriteFromCudaPrefix(imPtr : &float, width : int, height : int, channelCount : int, prefix : rawstring)
+terra dbg.imageWriteFromCudaPrefixSuffix(imPtr : &float, width : int, height : int, channelCount : int, prefix : rawstring, suffix : rawstring)
    var buffer : int8[128]
-   --var suffix = "AD"
-   var suffix = "optNoAD"
    C.sprintf(buffer, "%s_%s.imagedump", prefix, suffix)
    dbg.imageWriteFromCuda(imPtr, width, height, channelCount, buffer)
+end
+
+terra dbg.imageWriteFromCudaPrefix(imPtr : &float, width : int, height : int, channelCount : int, prefix : rawstring)
+   dbg.imageWriteFromCudaPrefixSuffix(imPtr, width, height, channelCount, prefix, "optNoAD")
 end
 
 terra dbg.assert(condition : bool, msg : rawstring)

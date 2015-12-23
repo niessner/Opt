@@ -1,7 +1,7 @@
 local USE_MASK_REFINE 			= true
 
-local USE_DEPTH_CONSTRAINT 		= false
-local USE_REGULARIZATION 		= false
+local USE_DEPTH_CONSTRAINT 		= true
+local USE_REGULARIZATION 		= true
 local USE_SHADING_CONSTRAINT 	= true
 local USE_TEMPORAL_CONSTRAINT 	= false
 local USE_PRECONDITIONER 		= false
@@ -67,17 +67,7 @@ local posY = H:index()
 
 
 function sqMagnitude(point) 
-	return 
-point[1]*point[1] + point[2]*point[2] + 
-point[3]*point[3]
-end
-
-function times(number,point)
-	return {number*point[1], number*point[2], number*point[3]}
-end
-
-function plus(p0,p1)
-	return {p0[1]+p1[1], p0[2]+p1[2], p0[3]+p1[3]}
+	return (point*point):sum()
 end
 
 -- equation 8
@@ -85,8 +75,7 @@ function p(offX,offY)
     local d = X(offX,offY)
     local i = offX + posX
     local j = offY + posY
-    local point = {((i-u_x)/f_x)*d, ((j-u_y)/f_y)*d, d}
-    return point
+    return ad.Vector(((i-u_x)/f_x)*d, ((j-u_y)/f_y)*d, d)
 end
 
 -- equation 10
@@ -100,14 +89,14 @@ function normalAt(offX, offY)
     local n_z = (n_x * (u_x - i) / f_x) + (n_y * (u_y - j) / f_y) - (X(offX-1, offY)*X(offX, offY-1) / (f_x*f_y))
     local sqLength = n_x*n_x + n_y*n_y + n_z*n_z
     local inverseMagnitude = ad.select(ad.greater(sqLength, 0.0), 1.0/ad.sqrt(sqLength), 1.0)
-    return times(inverseMagnitude, {n_x, n_y, n_z})
+    return inverseMagnitude * ad.Vector(n_x, n_y, n_z)
 end
 
 function B(offX, offY)
 	local normal = normalAt(offX, offY)
-	local n_x = normal[1]
-	local n_y = normal[2]
-	local n_z = normal[3]
+	local n_x = normal[0]
+	local n_y = normal[1]
+	local n_z = normal[2]
 
 	local lighting = L[1] +
 					 L[2]*n_y + L[3]*n_z + L[4]*n_x  +
@@ -146,6 +135,7 @@ if USE_DEPTH_CONSTRAINT then
 end 
 
 if USE_SHADING_CONSTRAINT then
+	if USE_CRAPPY_SHADING_BOUNDARY then
         local center_tap = B_I(0,0)
         local E_g_h_noCheck = B_I(1,0) --(B(1,0) - I(1,0))
         local E_g_v_noCheck = B_I(0,1) --(B(0,1) - I(0,1))
@@ -157,8 +147,28 @@ if USE_SHADING_CONSTRAINT then
 		    E_g_h_someCheck = E_g_h_someCheck * edgeMaskR(0,0)
 		    E_g_v_someCheck = E_g_v_someCheck * edgeMaskC(0,0)
 	    end
-	    E_g_h = ad.select(opt.InBounds(0,0,1,1), E_g_h_someCheck, 0.0) 
-	    E_g_v = ad.select(opt.InBounds(0,0,1,1), E_g_v_someCheck, 0.0) 
+	    E_g_h = ad.select(opt.InBounds(0,0,1,1), E_g_h_someCheck, 0.0)
+		E_g_v = ad.select(opt.InBounds(0,0,1,1), E_g_v_someCheck, 0.0)
+	    --E_g_h = center_tap_noCheck - E_g_h_noCheck 
+	    --E_g_v = center_tap_noCheck - E_g_v_noCheck 
+        
+    else
+	    local shading_h_valid = ad.greater(D_i(-1,0) + D_i(0,0) + D_i(1,0) + D_i(0,-1) + D_i(1,-1), 0)
+	
+	    local E_g_h_noCheck = B(0,0) - B(1,0) - (I(0,0) - I(1,0))
+	    if USE_MASK_REFINE then
+		    E_g_h_noCheck = E_g_h_noCheck * edgeMaskR(0,0)
+	    end
+	    E_g_h = ad.select(opt.InBounds(0,0,1,1), ad.select(shading_h_valid, E_g_h_noCheck, 0.0), 0.0) 
+
+	    local shading_v_valid = ad.greater(D_i(0,-1) + D_i(0,0) + D_i(0,1) + D_i(-1,0) + D_i(-1,1), 0)
+	
+	    local E_g_v_noCheck = B(0,0) - B(0,1) - (I(0,0) - I(0,1))
+	    if USE_MASK_REFINE then
+		    E_g_v_noCheck = E_g_v_noCheck * edgeMaskC(0,0)
+	    end
+	    E_g_v = ad.select(opt.InBounds(0,0,1,1), ad.select(shading_v_valid, E_g_v_noCheck, 0.0), 0.0) 
+	end
 end
 
 local function allpositive(a,...)
@@ -172,10 +182,9 @@ end
 
 if USE_REGULARIZATION then
 	local cross_valid = allpositive(D_i(0,0), D_i(0,-1) , D_i(0,1) , D_i(-1,0) , D_i(1,0))
-
-	local E_s_noCheck = sqMagnitude(plus(times(4.0,p(0,0)), times(-1.0, plus(p(-1,0), plus(p(0,-1), plus(p(1,0), p(0,1)))))))
-	--local E_s_noCheck = p(0,0)[1] --sqMagnitude(times(4.0,p(0,0)))
-    local d = X(0,0)
+	local E_s_noCheck = 4.0*p(0,0) - (p(-1,0) + p(0,-1) + p(1,0) + p(0,1)) 
+	
+	local d = X(0,0)
 
 	local E_s_guard =   ad.and_(ad.less(ad.abs(d - X(0,-1)), DEPTH_DISCONTINUITY_THRE), 
                             ad.and_(ad.less(ad.abs(d - X(0,1)), DEPTH_DISCONTINUITY_THRE), 
@@ -183,9 +192,12 @@ if USE_REGULARIZATION then
                                     ad.and_(ad.less(ad.abs(d - X(1,0)), DEPTH_DISCONTINUITY_THRE), 
                                         ad.and_(opt.InBounds(0,0,1,1), cross_valid)
                         ))))
-
-	E_s = ad.select(E_s_guard, E_s_noCheck, 0)
-
+    if true then
+        local guard = P:ComputedImage("E_s_guard", W, H, E_s_guard)                        
+	    E_s_guard = ad.eq(guard(0,0),1)
+	end
+	
+	E_s = ad.select(E_s_guard,E_s_noCheck,0)
 end
 
 if USE_TEMPORAL_CONSTRAINT then
