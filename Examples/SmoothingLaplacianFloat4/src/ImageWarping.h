@@ -27,7 +27,7 @@ public:
 		m_warpingSolver	= new CUDAWarpingSolver(m_image.getWidth(), m_image.getHeight());
 		m_patchSolver = new CUDAPatchSolverWarping(m_image.getWidth(), m_image.getHeight());
 
-		m_terraSolverFloat4 = new TerraSolverWarpingFloat4(m_image.getWidth(), m_image.getHeight(), "smoothingLaplacianFloat4.t", "gaussNewtonGPU");
+		m_terraSolverFloat4 = new TerraSolverWarpingFloat4(m_image.getWidth(), m_image.getHeight(), "smoothingLaplacianFloat4AD.t", "gaussNewtonGPU");
 		//m_terraBlockSolverFloat4 = new TerraSolverWarpingFloat4(m_image.getWidth(), m_image.getHeight(), "smoothingLaplacianFloat4AD.t", "gaussNewtonBlockGPU");
 		
 	}
@@ -109,7 +109,7 @@ public:
 
 	void copyResultToCPUFromFloat4() {
 		m_result = ColorImageR32G32B32A32(m_image.getWidth(), m_image.getHeight());
-		cutilSafeCall(cudaMemcpy(m_result.getPointer(), d_imageFloat4, sizeof(float4)*m_image.getWidth()*m_image.getHeight(), cudaMemcpyDeviceToHost));
+		cutilSafeCall(cudaMemcpy(m_result.getData(), d_imageFloat4, sizeof(float4)*m_image.getWidth()*m_image.getHeight(), cudaMemcpyDeviceToHost));
 	}
 
 	void copyResultToCPUFromFloat() {
@@ -119,7 +119,7 @@ public:
 		m_result = ColorImageR32G32B32A32(m_image.getWidth(), m_image.getHeight());
 		for (unsigned int i = 0; i < m_image.getWidth()*m_image.getHeight(); i++) {
 			float v = h_result[i];
-			m_result.getPointer()[i] = vec4f(v,v,v, 1.0f);
+			m_result.getData()[i] = vec4f(v,v,v, 1.0f);
 		}
 
 		delete h_result;

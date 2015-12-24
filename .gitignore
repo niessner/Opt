@@ -6,9 +6,15 @@ API/build/*
 */*/*/*.d
 */*/*/*.o
 
+Examples/ImageWarping/output.png
+Examples/ShapeFromShadingSimple/sfsOutput.imagedump
+
 API/testMLib/testMLib
 Examples/ImageWarping/imagewarping
 Examples/SmoothingLaplacianFloat4Graph/meshsmoothing
+Examples/ShapeFromShadingSimple/shapefromshading
+
+
 /Examples/SmoothingLaplacianFloat4Graph/x64/Debug/src/*.deps
 /Examples/SmoothingLaplacianFloat4Graph/x64/Debug/*.idb
 /Examples/SmoothingLaplacianFloat4Graph/x64/Debug/*.pdb

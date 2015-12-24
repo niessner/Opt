@@ -286,7 +286,7 @@ end
 function ProblemSpec:EvalExclude(...)
     local args = {...}
     if self.functions.exclude then
-        return `bool(self.functions.exclude.boundary(args))
+        return `bool(self.functions.exclude.unknownfunction(args))
     else
         return `false
     end
@@ -312,26 +312,107 @@ opt.InBoundsCalc = macro(function(x,y,W,H,sx,sy)
 end)
 	
 newImage = terralib.memoize(function(typ, W, H, elemsize, stride)
+    local use_bindless_texture = true
+    -- NOTE: only use textures for float, vector(2, float), vector(4, float)
+    if not (util.isvectortype(typ) and typ.metamethods.type == float and
+                (typ.metamethods.N == 4 or typ.metamethods.N == 2)
+           ) and typ ~= float
+    then
+        use_bindless_texture = false
+    end
+
+    local cd = macro(function(apicall) return quote
+        var r = apicall
+        if r ~= 0 then  
+            C.printf("Cuda reported error %d: %s\n",r, C.cudaGetErrorString(r))
+            return r
+        end
+    end end)
+
+    local nvec = util.isvectortype(typ) and typ.metamethods.N or 1
+    local wrapBindlessTexture, tex_read
+    if use_bindless_texture then
+        local name = "Image("..tostring(typ)..','..W.size..','..H.size..
+                          ','..elemsize..','..stride..')'
+        terra wrapBindlessTexture(data : &uint8) : C.cudaTextureObject_t
+            -- Description of Texture Resource
+            var res_desc : C.cudaResourceDesc
+                C.memset(&res_desc, 0, sizeof(C.cudaResourceDesc))
+            res_desc.resType                = C.cudaResourceTypeLinear
+            res_desc.res.linear.devPtr      = data
+            -- encode the fact we have vectors here...
+            res_desc.res.linear.desc.f      = C.cudaChannelFormatKindFloat
+            res_desc.res.linear.desc.x      = 32  -- bits per channel
+            if nvec > 1 then
+                res_desc.res.linear.desc.y  = 32
+            end
+            if nvec == 4 then
+                res_desc.res.linear.desc.z  = 32
+                res_desc.res.linear.desc.w  = 32
+            end
+            res_desc.res.linear.sizeInBytes = stride * H.size
+
+            var tex_desc : C.cudaTextureDesc
+                C.memset(&tex_desc, 0, sizeof(C.cudaTextureDesc));
+            tex_desc.readMode = C.cudaReadModeElementType
+
+            -- cudaTextureObject_t should be uint64
+            var tex : C.cudaTextureObject_t = 0;
+            cd(C.cudaCreateTextureObject(&tex, &res_desc, &tex_desc, nil))
+
+            return tex
+        end
+
+        -- texture base address is assumed to be aligned to a 16-byte boundary
+        terra tex_read(tex : C.cudaTextureObject_t, idx : int32)
+            var read = terralib.asm([tuple(float,float,float,float)],
+                "tex.1d.v4.f32.s32  {$0,$1,$2,$3}, [$4,{$5}];",
+                "=f,=f,=f,=f,l,r",false, tex, idx)
+            return escape if nvec == 1 then
+                emit `read._0
+            else
+                emit `@[&typ](&read)
+            end end
+        end
+    end
+
 	local struct Image {
-		data : &uint8
+		data : &uint8;
+        tex  : C.cudaTextureObject_t;
 	}
 	function Image.metamethods.__typename()
 	  return string.format("Image(%s,%s,%s,%d,%d)",tostring(typ),W.name, H.name,elemsize,stride)
 	end
 
+    terra Image:debugprint()
+        C.printf(['  %p %lu '..tostring(typ)..'\n'], self.data, self.tex)
+    end
+
 	if util.isvectortype(typ) and typ.metamethods.type == float and (typ.metamethods.N == 4 or typ.metamethods.N == 2) then
 	    -- emit code that will produce special CUDA vector load instructions
 	    local storetype = vector(float,typ.metamethods.N)
-	    terra Image.metamethods.__apply(self : &Image, x : int32, y : int32)
+        if use_bindless_texture then
+          terra Image.metamethods.__apply(self : &Image, x : int32, y : int32)
+            return tex_read(self.tex, y*[stride/elemsize] + x)
+          end
+        else
+          terra Image.metamethods.__apply(self : &Image, x : int32, y : int32)
             var a = @[&storetype](self.data + y*stride + x*elemsize)
             return @[&typ](&a)
+          end
         end
         terra Image.metamethods.__update(self : &Image, x : int32, y : int32, v : typ)
             @[&storetype](self.data + y*stride + x*elemsize) = @[&storetype](&v)
         end
-	else	
-        terra Image.metamethods.__apply(self : &Image, x : int32, y : int32)
-            return @[&typ](self.data + y*stride + x*elemsize)
+	else
+        if use_bindless_texture then
+          terra Image.metamethods.__apply(self : &Image, x : int32, y : int32)
+            return tex_read(self.tex, y*[stride/elemsize] + x)
+          end
+        else
+          terra Image.metamethods.__apply(self : &Image, x : int32, y : int32)
+              return @[&typ](self.data + y*stride + x*elemsize)
+          end
         end
         terra Image.metamethods.__update(self : &Image, x : int32, y : int32, v : typ)
             @[&typ](self.data + y*stride + x*elemsize) = v
@@ -388,9 +469,28 @@ newImage = terralib.memoize(function(typ, W, H, elemsize, stride)
 		end
 	end
 	terra Image:initGPU()
-		var cudaError = C.cudaMalloc([&&opaque](&(self.data)), stride*H.size)
-		cudaError = C.cudaMemset([&opaque](self.data), 0, stride*H.size)
-	end
+        var data : &uint8
+        C.cudaMalloc([&&opaque](&data), stride*H.size)
+        C.cudaMemset([&opaque](data), 0, stride*H.size)
+        self:initFromGPUptr(data)
+    end
+    terra Image:initFromGPUptr( ptr : &uint8 )
+        self.data = nil
+        self:setGPUptr(ptr)
+    end
+    if use_bindless_texture then
+        terra Image:setGPUptr(ptr : &uint8)
+            if self.data ~= ptr then
+                if self.data ~= nil then
+                    cd(C.cudaDestroyTextureObject(self.tex))
+                end
+                self.tex = wrapBindlessTexture(ptr)
+            end
+            self.data = ptr
+        end
+    else
+        terra Image:setGPUptr(ptr : &uint8) self.data = ptr end
+    end
 	local mm = Image.metamethods
 	mm.typ,mm.W,mm.H,mm.elemsize,mm.stride = typ,W,H,elemsize,stride
 	return Image
@@ -561,8 +661,9 @@ function ImageAccess:gradient()
         assert(Offset:is(self.index),"NYI - support for graphs")
         local gt = {}
         for u,im in pairs(self.image.gradientimages) do
+            local exp = self.image.gradientexpressions[u]
             local k = u:shift(self.index.x,self.index.y)
-            local v = im(self.index.x,self.index.y)
+            local v = ad.Const:is(exp) and exp or im(self.index.x,self.index.y)
             gt[k] = v
         end
         return gt
@@ -696,7 +797,11 @@ function Image:__call(x,y,c)
     end
 end
 function ImageVector:__call(x,y,c)
-    local result = self.images:map(function(im) return im(x,y,c) end)
+    if c then
+        assert(c < #self.images, "channel outside of range")
+        return self.images[c+1](x,y)
+    end
+    local result = self.images:map(function(im) return im(x,y) end)
     return ad.Vector(unpack(result))
 end
 
@@ -1188,7 +1293,9 @@ local function createfunction(problemspec,name,usebounds,W,H,ndims,results,scatt
         for i,ir in ipairs(condition.members) do
             assert(ir.type == bool)
             if ir.kind == "intrinsic" and ir.value.kind == "BoundsAccess" then
-                if x == ir.value.x and y == ir.value.y then
+                local bx,by,sx,sy = ir.value.x,ir.value.y,ir.value.sx,ir.value.sy
+                local minx,maxx,miny,maxy = bx - sx, bx + sx,by - sy, by + sy
+                if minx <= x and x <= maxx and miny <= y and y <= maxy then
                     return true
                 end
             end
@@ -1386,7 +1493,9 @@ local function createfunction(problemspec,name,usebounds,W,H,ndims,results,scatt
             stmt = s.channel and (`image:atomicAddChannel(xy, s.channel, exp)) or (`image:atomicAdd(xy, exp))
         else
             assert(s.kind == "set" and s.channel == 0)
-            stmt = quote image(xy) = exp end -- NYI - multi-channel images
+            stmt = quote 
+                image(xy) = exp
+            end -- NYI - multi-channel images
         end
         scatterstatements:insert(stmt)
     end
@@ -1478,7 +1587,10 @@ local function classifyresiduals(Rs)
             end
         end)
         local entry = { expression = exp, unknownaccesses = unknownaccesses }
-        assert(classification, "residual does not contain an unknown term?")
+        if not classification then
+            classification = "centered"
+        end
+        --assert(classification, "residual does not contain an unknown term?")
         if classification == "centered" then
             result.unknown:insert(entry)
         else
@@ -1535,7 +1647,8 @@ local function lprintf(ident,fmt,...)
 end
 
 local function createjtjcentered(residuals,unknown,P)
-    local P_hat = createzerolist(unknown.N)
+    local P_hat_c = {}
+    local conditions = terralib.newlist()
     for rn,residual in ipairs(residuals.unknown) do
         local F,unknownsupport = residual.expression,residual.unknownaccesses
         lprintf(0,"\n\n\n\n\n##################################################")
@@ -1548,23 +1661,31 @@ local function createjtjcentered(residuals,unknown,P)
         
             for _,r in ipairs(residuals) do
                 local rexp = shiftexp(F,r.x,r.y)
-                local drdx00 = rexp:d(x)
+                local condition,drdx00 = ad.splitcondition(rexp:d(x))
+                if not P_hat_c[condition] then
+                    conditions:insert(condition)
+                    P_hat_c[condition] = createzerolist(unknown.N)
+                end
                 lprintf(1,"instance:\ndr%d_%d%d/dx00[%d] = %s",rn,r.x,r.y,channel,tostring(drdx00))
                 local unknowns = unknownsforresidual(r,unknownsupport)
                 for _,u in ipairs(unknowns) do
-                    local drdx_u = rexp:d(unknown(u.index.x,u.index.y,u.channel))
+                    local condition2, drdx_u = ad.splitcondition(rexp:d(unknown(u.index.x,u.index.y,u.channel)))
+                    assert(condition == condition2, "conditions on two gradeitns don't match?")
                     local exp = drdx00*drdx_u
                     lprintf(2,"term:\ndr%d_%d%d/dx%d%d[%d] = %s",rn,r.x,r.y,u.index.x,u.index.y,u.channel,tostring(drdx_u))
                     if not columns[u] then
                         columns[u] = 0
                         nonzerounknowns:insert(u)
                     end
-                    columns[u] = columns[u] + exp
+                    P_hat_c[condition][channel+1] = P_hat_c[condition][channel+1] + P(u.index.x,u.index.y,u.channel)*exp
                 end
             end
-            for _,u in ipairs(nonzerounknowns) do
-                P_hat[channel+1] = P_hat[channel+1] + P(u.index.x,u.index.y,u.channel) * columns[u]
-            end
+        end
+    end
+    local P_hat = createzerolist(unknown.N)
+    for _,c in ipairs(conditions) do
+        for i = 1,unknown.N do
+            P_hat[i] = P_hat[i] + c*P_hat_c[c][i]
         end
     end
     for i,p in ipairs(P_hat) do
@@ -1747,11 +1868,14 @@ end
 function createprecomputed(self,name,precomputedimages)
     local scatters = terralib.newlist()
     for i,im in ipairs(precomputedimages) do
-        local expression = im.expression
+        local expression = ad.polysimplify(im.expression)
         scatters:insert(NewScatter(im, Offset:get(0,0), 0, im.expression, "set"))
         for u,gim in pairs(im.gradientimages) do
             local gradientexpression = im.gradientexpressions[u]
-            scatters:insert(NewScatter(gim, Offset:get(0,0), 0, gradientexpression, "set"))
+            gradientexpression = ad.polysimplify(gradientexpression)
+            if not ad.Const:is(gradientexpression) then
+                scatters:insert(NewScatter(gim, Offset:get(0,0), 0, gradientexpression, "set"))
+            end
         end
     end
     

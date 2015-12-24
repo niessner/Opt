@@ -33,7 +33,8 @@ __inline__ __device__ float colMask(int posy, int posx, SolverInput &input) {
 }
 
 
-__inline__ __device__ float4 calShading2depthGrad(SolverState& state, int posx, int posy, SolverInput &input)
+
+__inline__ __device__ float4 calShading2depthGradCompute(SolverState& state, int posx, int posy, SolverInput &input)
 {
     const int W = input.width;
     const float d0 = readX(state, posy, posx - 1, W);
@@ -43,6 +44,23 @@ __inline__ __device__ float4 calShading2depthGrad(SolverState& state, int posx, 
     return calShading2depthGradHelper(d0, d1, d2, posx, posy, input);
 }
 
+__inline__ __device__ float4 calShading2depthGrad(SolverState& state, int x, int y, SolverInput &inp)
+{
+#if USE_PRECOMPUTE
+    return make_float4(state.B_I_dx0[y*inp.width+x],state.B_I_dx1[y*inp.width+x],state.B_I_dx2[y*inp.width+x],state.B_I[y*inp.width+x]);
+#else
+    return calShading2depthGradCompute(state, x, y, inp);
+#endif
+}
+
+
+/*
+#if USE_PRECOMPUTE
+    #define calShading2depthGrad(state, x, y, inp) make_float4(state.B_I_dx0[y*inp.width+x],state.B_I_dx1[y*inp.width+x],state.B_I_dx2[y*inp.width+x],state.B_I[y*inp.width+x])
+#else
+    #define calShading2depthGrad calShading2depthGradCompute
+#endif
+*/
 
 ////////////////////////////////////////
 // evalF
@@ -62,7 +80,7 @@ __inline__ __device__ float evalFDevice(int variableIdx, SolverInput& input, Sol
 
     float cost = 0.0f;
 
-    float E_s = 0.0f;
+    float3 E_s = make_float3(0.0f, 0.0f, 0.0f);
     float E_p = 0.0f;
     float E_r_h = 0.0f;
     float E_r_v = 0.0f;
@@ -105,7 +123,7 @@ __inline__ __device__ float evalFDevice(int variableIdx, SolverInput& input, Sol
                 && abs(d - d2)<DEPTH_DISCONTINUITY_THRE
                 && abs(d - d3)<DEPTH_DISCONTINUITY_THRE)
             {
-                E_s = sqMagnitude(4.0f*point(d, posx, posy, input) - (point(d1, posx + 1, posy, input) + point(d0, posx - 1, posy, input) + point(d3, posx, posy + 1, input) + point(d2, posx, posy - 1, input)));
+                E_s = 4.0f*point(d, posx, posy, input) - (point(d1, posx + 1, posy, input) + point(d0, posx - 1, posy, input) + point(d3, posx, posy + 1, input) + point(d2, posx, posy - 1, input));
             }
 #           endif
 
@@ -124,7 +142,7 @@ __inline__ __device__ float evalFDevice(int variableIdx, SolverInput& input, Sol
 #           if USE_TEMPORAL_CONSTRAINT
             // TODO: implement
 #           endif
-            cost = (parameters.weightRegularizer   * E_s*E_s) + // This is usually on the order of 1/10,000,000
+            cost = (parameters.weightRegularizer   * sqMagnitude(E_s)) + // This is usually on the order of 1/10,000,000
                 (parameters.weightFitting       * E_p*E_p) + // 
                 (parameters.weightShading       * (E_g_h*E_g_h + E_g_v*E_g_v)) +
                 (parameters.weightPrior * (E_r_h*E_r_h + E_r_v*E_r_v + E_r_d*E_r_d));
@@ -185,6 +203,37 @@ __device__ inline float3 est_lap_init_3d_imp(SolverState& state, int posx, int p
     return retval;
 }
 
+
+__device__ inline float3 est_lap_3d_bsp_imp_with_guard(SolverState& state, int posx, int posy, float w0, float w1, const float &ufx, const float &ufy, const int W)
+{
+    float3 retval = make_float3(0.0f, 0.0f, 0.0f);
+    
+    const float d =  readX(state, posy, posx,     W);
+    const float d0 = readX(state, posy, posx - 1, W);
+    const float d1 = readX(state, posy, posx + 1, W);
+    const float d2 = readX(state, posy - 1, posx, W);
+    const float d3 = readX(state, posy + 1, posx, W);
+
+   
+    if (IsValidPoint(d) && IsValidPoint(d0) && IsValidPoint(d1) && IsValidPoint(d2) && IsValidPoint(d3)
+        && abs(d-d0) < DEPTH_DISCONTINUITY_THRE 
+        && abs(d-d1) < DEPTH_DISCONTINUITY_THRE 
+        && abs(d-d2) < DEPTH_DISCONTINUITY_THRE 
+        && abs(d-d3) < DEPTH_DISCONTINUITY_THRE) {
+        const float p = readP(posy, posx, state, W);
+        const float p0 = readP(posy, posx - 1, state, W);
+        const float p1 = readP(posy, posx + 1, state, W);
+        const float p2 = readP(posy - 1, posx, state, W);
+        const float p3 = readP(posy + 1, posx, state, W);
+        
+        retval.x = ( p * 4 * w0 - p0 * (w0 - ufx) - p1 * (w0 + ufx)   - p2 * w0 - p3 * w0);
+        retval.y = ( p * 4 * w1 - p0 * w1 - p1 * w1 - p2 * (w1 - ufy) - p3 * (w1 + ufy));
+        retval.z = ( p * 4 - p0 - p1 - p2 - p3);
+    } //else { @b_valid = false }
+
+    return retval;
+
+}
 
 
 __device__ inline float3 est_lap_3d_bsp_imp(SolverState& state, int posx, int posy, float w0, float w1, const float &ufx, const float &ufy, const int W)
@@ -303,28 +352,28 @@ __inline__ __device__ float evalMinusJTFDevice(unsigned int variableIdx, SolverI
             b += sum * parameters.weightShading;
             p += tmpval * parameters.weightShading;//shading constraint
 #               else
-            tmpval = 0.0f;
-            tmpval = val0 * val0 * 2;
-            tmpval += (val0 - val1) * (val0 - val1);
-            tmpval += (val0 - val2) * (val0 - val2);
-            tmpval += val1 * val1 * 3;
-            tmpval += val2 * val2 * 3;
-            p += tmpval * parameters.weightShading;//shading constraint
+                    tmpval = 0.0f;
+                    tmpval = val0 * val0 * 2;
+                    tmpval += (val0 - val1) * (val0 - val1);
+                    tmpval += (val0 - val2) * (val0 - val2);
+                    tmpval += val1 * val1 * 3;
+                    tmpval += val2 * val2 * 3;
+                    p += tmpval * parameters.weightShading;//shading constraint
 
 
-            sum = 0.0f;
-            sum += val0*calShading2depthGrad(state, posx, posy - 1, input).w;
-            sum += val1 * calShading2depthGrad(state, posx + 1, posy - 1, input).w;
-            sum += val0 * calShading2depthGrad(state, posx - 1, posy, input).w;
-            sum += (-val0 + val1 - val0 - val0 + val2 - val0) * calShading2depthGrad(state, posx, posy, input).w;
-            sum += (val0 - val1 - val1 - val1 - val1) * calShading2depthGrad(state, posx + 1, posy, input).w;
-            sum += val1 * calShading2depthGrad(state, posx + 2, posy, input).w;
-            sum += val2 * calShading2depthGrad(state, posx - 1, posy + 1, input).w;
-            sum += (-val2 - val2 + val0 - val2 - val2) * calShading2depthGrad(state, posx, posy + 1, input).w;
-            sum += (val2 + val1) * calShading2depthGrad(state, posx + 1, posy + 1, input).w;
-            sum += val2  * calShading2depthGrad(state, posx, posy + 2, input).w;
+                    sum = 0.0f;
+                    sum += val0*calShading2depthGrad(state, posx, posy - 1, input).w;
+                    sum += val1 * calShading2depthGrad(state, posx + 1, posy - 1, input).w;
+                    sum += val0 * calShading2depthGrad(state, posx - 1, posy, input).w;
+                    sum += (-val0 + val1 - val0 - val0 + val2 - val0) * calShading2depthGrad(state, posx, posy, input).w;
+                    sum += (val0 - val1 - val1 - val1 - val1) * calShading2depthGrad(state, posx + 1, posy, input).w;
+                    sum += val1 * calShading2depthGrad(state, posx + 2, posy, input).w;
+                    sum += val2 * calShading2depthGrad(state, posx - 1, posy + 1, input).w;
+                    sum += (-val2 - val2 + val0 - val2 - val2) * calShading2depthGrad(state, posx, posy + 1, input).w;
+                    sum += (val2 + val1) * calShading2depthGrad(state, posx + 1, posy + 1, input).w;
+                    sum += val2  * calShading2depthGrad(state, posx, posy + 2, input).w;
 
-            b += sum * parameters.weightShading;
+                    b += sum * parameters.weightShading;
 #               endif	
 #           endif
 
@@ -364,9 +413,11 @@ __inline__ __device__ float evalMinusJTFDevice(unsigned int variableIdx, SolverI
             sum += lapval.x*val0;
             sum += lapval.y*val1;
             sum += lapval.z;
-
+#if USE_PROPER_REGULARIZATION_BOUNDARY
             if (b_valid)
+#endif
             {
+
                 b += sum*parameters.weightRegularizer;
                 tmpval = (val0 * val0 + val1 * val1 + 1)*(16 + 4);
                 p += tmpval *parameters.weightRegularizer;//smoothness
@@ -586,31 +637,57 @@ __inline__ __device__ float applyJTJDevice(unsigned int variableIdx, SolverInput
             sum = 0;
             val0 = (posx - ux) / fx;
             val1 = (posy - uy) / fy;
+#           if USE_PROPER_REGULARIZATION_BOUNDARY
+                float3 lapval = est_lap_3d_bsp_imp_with_guard(state, posx, posy, val0, val1, ufx, ufy, W);
+                sum += lapval.x*val0*(4.0f);
+                sum += lapval.y*val1*(4.0f);
+                sum += lapval.z*(4.0f);
+                
+                lapval = est_lap_3d_bsp_imp_with_guard(state, posx - 1, posy, val0 - ufx, val1, ufx, ufy, W);
+                sum -= lapval.x*val0;
+                sum -= lapval.y*val1;
+                sum -= lapval.z;
 
-            float3 lapval = est_lap_3d_bsp_imp(state, posx, posy, val0, val1, ufx, ufy, W);
-            sum += lapval.x*val0*(4.0f);
-            sum += lapval.y*val1*(4.0f);
-            sum += lapval.z*(4.0f);
-            
-            lapval = est_lap_3d_bsp_imp(state, posx - 1, posy, val0 - ufx, val1, ufx, ufy, W);
-            sum -= lapval.x*val0;
-            sum -= lapval.y*val1;
-            sum -= lapval.z;
+                lapval = est_lap_3d_bsp_imp_with_guard(state, posx + 1, posy, val0 + ufx, val1, ufx, ufy, W);
+                sum -= lapval.x*val0;
+                sum -= lapval.y*val1;
+                sum -= lapval.z;
 
-            lapval = est_lap_3d_bsp_imp(state, posx + 1, posy, val0 + ufx, val1, ufx, ufy, W);
-            sum -= lapval.x*val0;
-            sum -= lapval.y*val1;
-            sum -= lapval.z;
+                lapval = est_lap_3d_bsp_imp_with_guard(state, posx, posy - 1, val0, val1 - ufy, ufx, ufy, W);
+                sum -= lapval.x*val0;
+                sum -= lapval.y*val1;
+                sum -= lapval.z;
 
-            lapval = est_lap_3d_bsp_imp(state, posx, posy - 1, val0, val1 - ufy, ufx, ufy, W);
-            sum -= lapval.x*val0;
-            sum -= lapval.y*val1;
-            sum -= lapval.z;
+                lapval = est_lap_3d_bsp_imp_with_guard(state, posx, posy + 1, val0, val1 + ufy, ufx, ufy, W);
+                sum -= lapval.x*val0;
+                sum -= lapval.y*val1;
+                sum -= lapval.z;
+#           else
+                float3 lapval = est_lap_3d_bsp_imp(state, posx, posy, val0, val1, ufx, ufy, W);
+                sum += lapval.x*val0*(4.0f);
+                sum += lapval.y*val1*(4.0f);
+                sum += lapval.z*(4.0f);
+                
+                lapval = est_lap_3d_bsp_imp(state, posx - 1, posy, val0 - ufx, val1, ufx, ufy, W);
+                sum -= lapval.x*val0;
+                sum -= lapval.y*val1;
+                sum -= lapval.z;
 
-            lapval = est_lap_3d_bsp_imp(state, posx, posy + 1, val0, val1 + ufy, ufx, ufy, W);
-            sum -= lapval.x*val0;
-            sum -= lapval.y*val1;
-            sum -= lapval.z;
+                lapval = est_lap_3d_bsp_imp(state, posx + 1, posy, val0 + ufx, val1, ufx, ufy, W);
+                sum -= lapval.x*val0;
+                sum -= lapval.y*val1;
+                sum -= lapval.z;
+
+                lapval = est_lap_3d_bsp_imp(state, posx, posy - 1, val0, val1 - ufy, ufx, ufy, W);
+                sum -= lapval.x*val0;
+                sum -= lapval.y*val1;
+                sum -= lapval.z;
+
+                lapval = est_lap_3d_bsp_imp(state, posx, posy + 1, val0, val1 + ufy, ufx, ufy, W);
+                sum -= lapval.x*val0;
+                sum -= lapval.y*val1;
+                sum -= lapval.z;
+#           endif
 
             //sum = readP(posy + 1, posx + 2, state, W);
             b += sum*parameters.weightRegularizer;

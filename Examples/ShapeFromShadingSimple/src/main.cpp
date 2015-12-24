@@ -10,7 +10,9 @@ int main(int argc, const char * argv[])
         inputFilenamePrefix = std::string(argv[1]);
 	}
     SFSSolverInput solverInput;
+    
     solverInput.load(inputFilenamePrefix);
+    solverInput.parameters.nNonLinearIterations = 10;
 	
     ImageSolver solver(solverInput);
 	printf("Solving\n");

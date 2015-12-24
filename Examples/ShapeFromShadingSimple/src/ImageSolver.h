@@ -54,10 +54,12 @@ public:
         m_cudaSolver->solve(m_result, m_solverInput);
 		
 
+	m_solverInput.parameters.solveCount = 0;
 		std::cout << "\n\nTERRA" << std::endl;
 		resetGPUMemory();
         m_terraSolver->solve(m_result, m_solverInput);
 
+	m_solverInput.parameters.solveCount = 1;
         std::cout << "\n\nOPT" << std::endl;
         resetGPUMemory();
         m_optSolver->solve(m_result, m_solverInput);

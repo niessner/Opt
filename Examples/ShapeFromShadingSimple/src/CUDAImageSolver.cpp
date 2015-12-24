@@ -26,6 +26,12 @@ CUDAImageSolver::CUDAImageSolver(unsigned int imageWidth, unsigned int imageHeig
 	cutilSafeCall(cudaMalloc(&m_solverState.d_rDotzOld,		sizeof(float)*N));
     cutilSafeCall(cudaMalloc(&m_solverState.d_preconditioner, unknownStorageSize));
 	cutilSafeCall(cudaMalloc(&m_solverState.d_sumResidual,	sizeof(float)));
+
+    // Solver-specific intermediates
+    cutilSafeCall(cudaMalloc(&m_solverState.B_I    , sizeof(float)*N));
+    cutilSafeCall(cudaMalloc(&m_solverState.B_I_dx0, sizeof(float)*N));
+    cutilSafeCall(cudaMalloc(&m_solverState.B_I_dx1, sizeof(float)*N));
+    cutilSafeCall(cudaMalloc(&m_solverState.B_I_dx2, sizeof(float)*N));
 }
 
 CUDAImageSolver::~CUDAImageSolver()
@@ -41,6 +47,12 @@ CUDAImageSolver::~CUDAImageSolver()
 	cutilSafeCall(cudaFree(m_solverState.d_rDotzOld));
     cutilSafeCall(cudaFree(m_solverState.d_preconditioner));
 	cutilSafeCall(cudaFree(m_solverState.d_sumResidual));
+
+    // Solver-specific intermediates
+    cutilSafeCall(cudaFree(m_solverState.B_I    ));
+    cutilSafeCall(cudaFree(m_solverState.B_I_dx0));
+    cutilSafeCall(cudaFree(m_solverState.B_I_dx1));
+    cutilSafeCall(cudaFree(m_solverState.B_I_dx2));
 }
 
 void CUDAImageSolver::solve(std::shared_ptr<SimpleBuffer>   result, const SFSSolverInput& rawSolverInput)

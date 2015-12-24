@@ -291,6 +291,8 @@ local function simplify(op,config,args)
     elseif op.name == "powc" then
         if x:type() == bool then
             return x
+        elseif Apply:is(x) and x.op.name == "sqrt" and config.c == 2 then
+            return x.args[1]
         end
     elseif op.name == "select" then
         if Const:is(x) then
@@ -931,7 +933,7 @@ ad.greatereq:define(function(x,y) return `x >= y end,0,0)
 
 function ad.not_:propagatetype(args) return bool, {bool} end
 ad.not_:define(function(x) return `not x end, 0)
-ad.materialize:define(function(x) return x end,1) -- preserved across math optimizations
+ad.identity:define(function(x) return x end,1) -- preserved across math optimizations
 
 
 setmetatable(ad,nil) -- remove special metatable that generates new blank ops
@@ -1004,26 +1006,26 @@ function ad.polysimplify(exps)
             end
         end
         -- find maximum uses
-        local maxuse,power,maxkey = 0
-        
+        local maxuse,benefit,power,maxkey = 0,0
         local keys = orderedexpressionkeys(uses)
         for _,k in ipairs(keys) do
             local u = uses[k]
-            if u > maxuse then
-                maxuse,maxkey,power = u,k,minpower[k]
+            local b = bool == k:type() and 10*u or u
+            if b > benefit then
+                maxuse,maxkey,power,benefit = u,k,minpower[k],b
             end
         end
         local keys = orderedexpressionkeys(neguses)
         for _,k in ipairs(keys) do
             local u = neguses[k]
-            if u > maxuse then
-                maxuse,maxkey,power = u,k,maxnegpower[k]
+            local b = bool == k:type() and 10*u or u
+            if b > benefit then
+                maxuse,maxkey,power,benefit = u,k,maxnegpower[k],b
             end
         end
         if maxuse < 2 then
             return createsum(terms,c) -- no benefit, so stop here
         end
-        --print("FACTORING",maxuse,power,maxkey)
         --partition terms
         local used,notused = terralib.newlist(),terralib.newlist()
         for i,t in ipairs(terms) do
@@ -1065,7 +1067,22 @@ function ad.polysimplify(exps)
     end
     return terralib.islist(exps) and exps:map(dosimplify) or dosimplify(exps)
 end
-
+-- generate two terms, one boolean-only term and one float only term
+function ad.splitcondition(exp)
+    if Apply:is(exp) and exp.op.name == "prod" then
+        local cond,exp_ = one,one
+        for i,e in ipairs(exp:children()) do
+            if e:type() == bool then
+                cond = cond * e
+            else
+                exp_ = exp_ * e
+            end
+        end
+        return cond,exp_ * exp.config.c
+    else
+        return one,exp
+    end
+end
 --[[
 
 

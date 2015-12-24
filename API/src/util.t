@@ -285,28 +285,36 @@ struct util.TimingInfo {
 }
 local TimingInfo = util.TimingInfo
 
+util.TimerEvent = C.cudaEvent_t
+
 struct util.Timer {
 	timingInfo : &Array(TimingInfo)
-	currentIteration : int
 }
 local Timer = util.Timer
 
 terra Timer:init() 
 	self.timingInfo = [Array(TimingInfo)].alloc():init()
-	self.currentIteration = 0
 end
 
 terra Timer:cleanup()
 	self.timingInfo:delete()
 end 
 
-terra Timer:nextIteration() 
-	self.currentIteration = self.currentIteration + 1
-end
-
 terra Timer:reset() 
 	self.timingInfo:fastclear()
-	self.currentIteration = 0
+end
+
+terra Timer:startEvent(name : rawstring,  stream : C.cudaStream_t, endEvent : &C.cudaEvent_t)
+    var timingInfo : TimingInfo
+    timingInfo.eventName = name
+    C.cudaEventCreate(&timingInfo.startEvent)
+    C.cudaEventCreate(&timingInfo.endEvent)
+    C.cudaEventRecord(timingInfo.startEvent, stream)
+    self.timingInfo:insert(timingInfo)
+    @endEvent = timingInfo.endEvent
+end
+terra Timer:endEvent(stream : C.cudaStream_t, endEvent : C.cudaEvent_t)
+    C.cudaEventRecord(endEvent, stream)
 end
 
 terra Timer:evaluate()
@@ -317,7 +325,7 @@ terra Timer:evaluate()
 			var eventInfo = self.timingInfo(i);
 			C.cudaEventSynchronize(eventInfo.endEvent)
 	    	C.cudaEventElapsedTime(&eventInfo.duration, eventInfo.startEvent, eventInfo.endEvent);
-	    	var index = aggregateTimingNames:indexof(eventInfo.eventName)
+	    	var index =  aggregateTimingNames:indexof(eventInfo.eventName)
 	    	if index < 0 then
 	    		aggregateTimingNames:insert(eventInfo.eventName)
 	    		aggregateTimingInfo:insert({eventInfo.duration, 1})
@@ -418,17 +426,22 @@ end
 util.initParameters = function(parameters, ProblemSpec, images, graphSizes, edgeValues, xs, ys, paramValues,allocateTemporaries)
     local stmts = terralib.newlist()
 	for _, entry in ipairs(ProblemSpec.parameters) do
-		if entry.kind == "image" and entry.idx == "alloc" then
-		    if allocateTemporaries then
-		        stmts:insert quote
-		            parameters.[entry.name]:initGPU()
-		        end
-		    end
+		if entry.kind == "image" then
+            if entry.idx == "alloc" then
+    		    if allocateTemporaries then
+    		        stmts:insert quote
+    		            parameters.[entry.name]:initGPU()
+    		        end
+    		    end
+            else
+                local function_name = allocateTemporaries and "initFromGPUptr" or "setGPUptr"
+                stmts:insert quote
+                    parameters.[entry.name]:[function_name]([&uint8](images[entry.idx]))
+                end
+            end
 		else
             local rhs
-            if entry.kind == "image" then
-                rhs = `entry.type { data = [&uint8](images[entry.idx])}
-            elseif entry.kind == "graph" then
+            if entry.kind == "graph" then
                 local graphinits = terralib.newlist { `graphSizes[entry.idx] }
                 for i,e in ipairs(entry.type.metamethods.elements) do
                     graphinits:insert( `xs[e.idx] )
@@ -471,7 +484,7 @@ local cd = macro(function(cufunc)
     return quote
         var r = cufunc
         if r ~= 0 then  
-            C.printf("Cuda reported error %d\n",r)
+            C.printf("Cuda reported error %d: %s\n",r, C.cudaGetErrorString(r))
             return r
         end
     end
@@ -489,7 +502,7 @@ function util.makeGPUFunctions(problemSpec, PlanData, kernels)
 	local kernelFunctions = {}
 	local key = "_"..tostring(os.time())
 	for k,v in pairs(kernels) do
-	    kernelFunctions[k..key] = { kernel = v , annotations = { {"maxntidx", 16}, {"maxntidy", 16}, {"maxntidz", 1}, {"minctasm",5} } } -- force at least 5 threadblocks to run per SM
+	    kernelFunctions[k..key] = { kernel = v , annotations = { {"maxntidx", 16}, {"maxntidy", 16}, {"maxntidz", 1}, {"minctasm",1} } } -- force at least 5 threadblocks to run per SM
 	end
 	local compiledKernels = terralib.cudacompile(kernelFunctions, false)
 	
@@ -529,24 +542,21 @@ function util.makeGPUFunctions(problemSpec, PlanData, kernels)
             var launch = terralib.CUDAParams { (xdim - 1) / xblock + 1, (ydim - 1) / yblock + 1, 1, 
                                                 xblock, yblock, 1, 
                                                 0, nil }
-            C.cudaDeviceSynchronize()
+            --C.cudaDeviceSynchronize()
             var stream : C.cudaStream_t = nil
-            var timingInfo : TimingInfo 
+            var endEvent : C.cudaEvent_t 
             if ([timeIndividualKernels]) then
-                C.cudaEventCreate(&timingInfo.startEvent)
-                C.cudaEventCreate(&timingInfo.endEvent)
-                C.cudaEventRecord(timingInfo.startEvent, stream)
-                timingInfo.eventName = kernelName
+                pd.timer:startEvent(kernelName,nil,&endEvent)
             end
             compiledKernel(&launch, @pd, params)
-            cd(C.cudaGetLastError())
-        
+            
+            --cd(C.cudaGetLastError())
+            
             if ([timeIndividualKernels]) then
-                cd(C.cudaEventRecord(timingInfo.endEvent, stream))
-                pd.timer.timingInfo:insert(timingInfo)
+                pd.timer:endEvent(nil,endEvent)
             end
 
-            cd(C.cudaDeviceSynchronize())
+            --cd(C.cudaDeviceSynchronize())
             cd(C.cudaGetLastError())
         end
 	    return GPULauncher
