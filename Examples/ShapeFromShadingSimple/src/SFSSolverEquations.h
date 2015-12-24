@@ -413,7 +413,7 @@ __inline__ __device__ float evalMinusJTFDevice(unsigned int variableIdx, SolverI
             sum += lapval.x*val0;
             sum += lapval.y*val1;
             sum += lapval.z;
-#if USE_PROPER_REGULARIZATION_BOUNDARY
+#if (USE_PROPER_REGULARIZATION_BOUNDARY == 0)
             if (b_valid)
 #endif
             {
