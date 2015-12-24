@@ -8,11 +8,13 @@
 #include "CUDAWarpingSolver.h"
 #include "CUDAPatchSolverWarping.h"
 #include "TerraSolverWarping.h"
+#include "CeresSolverImageWarping.h"
 
 
 static bool useCUDA = true;
 static bool useTerra = true;
 static bool useAD = true;
+static bool useCeres = true;
 
 class ImageWarping {
 public:
@@ -37,6 +39,8 @@ public:
 		if (useAD)
 		  m_warpingSolverTerraAD = new TerraSolverWarping(m_image.getWidth(), m_image.getHeight(), "ImageWarpingAD.t", "gaussNewtonGPU");
 
+        if (useCeres)
+            m_warpingSolverCeres = new CeresSolverWarping(m_image.getWidth(), m_image.getHeight());
 
 	}
 
@@ -173,6 +177,34 @@ public:
 		  copyResultToCPU();
 		}
 
+        if (useCeres) {
+            resetGPU();
+
+            const int pixelCount = m_image.getWidth()*m_image.getHeight();
+            
+            float2* h_warpField = new float2[pixelCount];
+            float* h_warpAngles = new float[pixelCount];
+
+            float2* h_urshape = new float2[pixelCount];
+            float*  h_mask = new float[pixelCount];
+            float2* h_constraints = new float2[pixelCount];
+
+            cutilSafeCall(cudaMemcpy(h_urshape, d_urshape, sizeof(float2) * pixelCount, cudaMemcpyDeviceToHost));
+            cutilSafeCall(cudaMemcpy(h_mask, d_mask, sizeof(float) * pixelCount, cudaMemcpyDeviceToHost));
+            cutilSafeCall(cudaMemcpy(h_constraints, d_constraints, sizeof(float2) * pixelCount, cudaMemcpyDeviceToHost));
+
+            std::cout << std::endl << std::endl;
+
+            for (unsigned int i = 0; i < numIter; i++)	{
+                std::cout << "//////////// ITERATION" << i << "  (CERES) ///////////////" << std::endl;
+                setConstraintImage((float)i / (float)20);
+                cutilSafeCall(cudaMemcpy(h_constraints, d_constraints, sizeof(float2) * pixelCount, cudaMemcpyDeviceToHost));
+
+                m_warpingSolverCeres->solve(h_warpField, h_warpAngles, h_urshape, h_constraints, h_mask, weightFit, weightReg);
+                std::cout << std::endl;
+            }
+        }
+
 		return &m_result;
 	}
 
@@ -266,4 +298,5 @@ private:
 
 	TerraSolverWarping*		m_warpingSolverTerra;
 
+    CeresSolverWarping*		m_warpingSolverCeres;
 };
