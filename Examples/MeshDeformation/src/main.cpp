@@ -40,7 +40,8 @@ int main(int argc, const char * argv[])
 		std::cout << "out.off" << std::endl;
 		exit(1);
 	}
-
+#ifdef _WIN32
 	getchar();
+#endif
 	return 0;
 }
