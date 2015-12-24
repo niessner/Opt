@@ -2,6 +2,8 @@
 
 #include "main.h"
 
+#ifdef USE_CERES
+
 #include <cuda_runtime.h>
 
 #include "CeresSolverImageWarping.h"
@@ -224,3 +226,5 @@ void CeresSolverWarping::solve(float2* h_x_float, float* h_a_float, float2* h_ur
 
     cout << summary.FullReport() << endl;
 }
+
+#endif
