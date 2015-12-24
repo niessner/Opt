@@ -494,10 +494,7 @@ function util.makeGPUFunctions(problemSpec, PlanData, kernels)
 	
 	local wrappedKernels = {}
 	
-	local data = {}
-	data.problemSpec = problemSpec
-	data.PlanData = PlanData
-	data.imageType = problemSpec:UnknownType(false) -- get non-blocked version
+	local imageType = problemSpec:UnknownType(false) -- get non-blocked version
 	
 	local kernelFunctions = {}
 	local key = "_"..tostring(os.time())
@@ -515,7 +512,11 @@ function util.makeGPUFunctions(problemSpec, PlanData, kernels)
         local BLOCK_SIZE = problemSpec:BlockSize()
         local function createLaunchParameters(pd)
             if not kernelName:match("_Graph$") then
-                return {`pd.parameters.X:W(),`pd.parameters.X:H(),BLOCK_SIZE,BLOCK_SIZE}
+                if imageType.metamethods.H.size == 1 then -- this image isn't really 2D, so don't waste most of the block
+                    return {`pd.parameters.X:W(), 1, BLOCK_SIZE*BLOCK_SIZE, 1 }
+                else
+                    return {`pd.parameters.X:W(),`pd.parameters.X:H(),BLOCK_SIZE,BLOCK_SIZE}
+                end
             else
                 return quote
                     var N = 0

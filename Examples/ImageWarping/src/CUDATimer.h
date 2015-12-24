@@ -10,17 +10,16 @@ struct TimingInfo {
     std::string eventName;
 };
 
-/** Copied wholesale from mLib, so nvcc doesn't choke. Then modified, since nvcc doesn't seem to support C++11 on Michael's computer */
-
+/** Copied wholesale from mLib, so nvcc doesn't choke. */
 template<class T>
 int findFirstIndex(const std::vector<T> &collection, const T &value)
 {
-
-
-    for (int i = 0; i < collection.size(); ++i)
+    int index = 0;
+    for (const auto &element : collection)
     {
-        if (collection[i] == value)
-            return i;
+        if (element == value)
+            return index;
+        index++;
     }
     return -1;
 }
@@ -29,7 +28,14 @@ struct CUDATimer {
     std::vector<TimingInfo> timingEvents;
     int currentIteration;
 
-    CUDATimer() : currentIteration(0) {}
+    CUDATimer() : currentIteration(0) {
+        TimingInfo timingInfo;
+        cudaEventCreate(&timingInfo.startEvent);
+        cudaEventCreate(&timingInfo.endEvent);
+        cudaEventRecord(timingInfo.startEvent);
+        timingInfo.eventName = "overall";
+        timingEvents.push_back(timingInfo);
+    }
     void nextIteration() {
         ++currentIteration;
     }
@@ -54,6 +60,7 @@ struct CUDATimer {
     }
 
     void evaluate() {
+        cudaEventRecord(timingEvents[0].endEvent);
         std::vector<std::string> aggregateTimingNames;
         std::vector<float> aggregateTimes;
         std::vector<int> aggregateCounts;
