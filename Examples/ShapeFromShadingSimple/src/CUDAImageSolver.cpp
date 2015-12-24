@@ -1,6 +1,8 @@
 #include "CUDAImageSolver.h"
 #include "ConvergenceAnalysis.h"
 
+#define DEBUG_DUMP_INFO 0
+
 
 extern "C" void solveSFSStub(SolverInput& input, SolverState& state, SolverParameters& parameters, ConvergenceAnalysis<float>* ca);
 extern "C" void solveSFSEvalCurrentCostJTFPreAndJTJStub(SolverInput& input, SolverState& state, SolverParameters& parameters, float* costResult, float* jtfResult, float* preResult, float* jtjResult);
@@ -90,6 +92,18 @@ void CUDAImageSolver::solve(std::shared_ptr<SimpleBuffer>   result, const SFSSol
     parameters.nLinIterations = rawSolverInput.parameters.nLinIterations;
     parameters.nPatchIterations = rawSolverInput.parameters.nPatchIterations;
 	
+#if DEBUG_DUMP_INFO
+    std::shared_ptr<SimpleBuffer> cost = std::shared_ptr<SimpleBuffer>(new SimpleBuffer(*result, true));
+    std::shared_ptr<SimpleBuffer> jtf  = std::shared_ptr<SimpleBuffer>(new SimpleBuffer(*result, true));
+    std::shared_ptr<SimpleBuffer> pre  = std::shared_ptr<SimpleBuffer>(new SimpleBuffer(*result, true));
+    std::shared_ptr<SimpleBuffer> jtj  = std::shared_ptr<SimpleBuffer>(new SimpleBuffer(*result, true)); 
+    solveSFSEvalCurrentCostJTFPreAndJTJStub(solverInput, m_solverState, parameters, (float*)cost->data(), (float*)jtf->data(), (float*)pre->data(), (float*)jtj->data());
+    cost->save("cost_nonblock_cuda.imagedump");
+    jtf->save("JTF_nonblock_cuda.imagedump");
+    pre->save("Pre_nonblock_cuda.imagedump");
+    jtj->save("JTJ_nonblock_cuda.imagedump");
+
+#endif
     ConvergenceAnalysis<float>* ca = NULL;
     solveSFSStub(solverInput, m_solverState, parameters, ca);
 }
