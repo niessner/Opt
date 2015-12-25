@@ -1,5 +1,5 @@
 
-
+local USE_J = false
 local W,H = opt.Dim("W",0), opt.Dim("H",1)
 local S = ad.ProblemSpec()
 S:UsePreconditioner(true)
@@ -53,6 +53,9 @@ for ii ,o in ipairs(offsets) do
     local ARAPCostF = ad.select(opt.InBounds(0,0,0,0),	ad.select(opt.InBounds( i,j,0,0), ARAPCost, ad.Vector(0.0, 0.0)), ad.Vector(0.0, 0.0))
     local m = Mask(i,j)
     ARAPCostF = ad.select(ad.eq(m, 0.0), ARAPCostF, ad.Vector(0.0, 0.0))
+    if USE_J then
+        ARAPCostF = S:ComputedImage("ARAPCostF"..tostring(ii),W,H,ARAPCostF)(0,0)
+    end
     terms:insert(w_regSqrt*ARAPCostF)
 end
 
