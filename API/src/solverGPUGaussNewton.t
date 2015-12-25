@@ -114,9 +114,6 @@ return function(problemSpec)
 				
 				--d = residuum*p		-- x-th term of nominator for computing alpha and denominator for computing beta
 				d = util.Dot(residuum,p) 
-				
-				if d ~= 0.0f then printf("pre\t %f %f %f %f %f\n", d, pre(0), pre(1), pre(2), pre(3), pre(4)) end
-				if d ~= 0.0f then printf("p\t %f %f %f %f %f\n", d, p(0), p(1), p(2), p(3), p(4)) end
 			end
 			
 			pd.preconditioner(w, h) = pre

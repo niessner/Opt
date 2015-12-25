@@ -63,7 +63,7 @@ local xHat = UrShape(G.v0)					--uv-urshape : float3
 local n = ad.Vector(x1(0), x1(1), x1(2))
 local ARAPCost = (x - n) - mul(R, (xHat - UrShape(G.v1)))
 
---terms:insert(w_regSqrt*ARAPCost)
+terms:insert(w_regSqrt*ARAPCost)
 
 local cost = ad.sumsquared(unpack(terms))
 return adP:Cost(cost)
