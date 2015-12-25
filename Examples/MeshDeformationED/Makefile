@@ -46,7 +46,7 @@ all:	meshdeformation
 %.o:	%.cu
 	$(NVCC) $(NVCCFLAGS) $< -c -o $@
 
-meshdeformation: src/LandMark.o src/LandMarkSet.o src/TerraWarpingSolver.o src/CUDAWarpingSolver.o src/mLibSource.o src/main.o src/WarpingSolver.o
+meshdeformation: src/LandMark.o src/LandMarkSet.o src/TerraSolver.o src/mLibSource.o src/main.o
 	$(LINK) $^ -o $@ $(LFLAGS)
 
 clean:
