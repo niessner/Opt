@@ -75,7 +75,12 @@ return function(problemSpec)
 	local guardedInvert = macro(function(p)
 	    local pt = p:gettype()
 	    if util.isvectortype(pt) then
-	        return `terralib.select(p(0) > FLOAT_EPSILON, 1.f/ p, p)
+	        return quote
+	                    var invp = p
+	                    for i = 0, invp:size() do
+	                        invp(i) = terralib.select(invp(i) > FLOAT_EPSILON, 1.f / invp(i),invp(i))
+	                    end
+	               in invp end
 	    else
 	        return `terralib.select(p > FLOAT_EPSILON, 1.f / p, p)
 	    end
