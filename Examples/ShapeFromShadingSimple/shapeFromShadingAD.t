@@ -7,7 +7,8 @@ local USE_TEMPORAL_CONSTRAINT 	= false
 local USE_PRECONDITIONER 		= false
 
 local USE_CRAPPY_SHADING_BOUNDARY = true
-local USE_PRECOMPUTE = true
+local USE_J = false
+local USE_PRECOMPUTE = true and not USE_J
 
 local DEPTH_DISCONTINUITY_THRE = 0.01
 
@@ -203,6 +204,13 @@ end
 
 if USE_TEMPORAL_CONSTRAINT then
 	--TODO: Implement
+end
+
+if USE_J then
+    E_g_h = P:ComputedImage("E_g_h", W,H, E_g_h)(0,0)
+    E_g_v = P:ComputedImage("E_g_v", W,H, E_g_v)(0,0)
+    E_s = P:ComputedImage("E_s", W,H, E_s)(0,0)
+    E_p = P:ComputedImage("E_p", W,H, E_p)(0,0)
 end
 
 local cost = ad.sumsquared(w_g*E_g_h, w_g*E_g_v, w_s*E_s, w_p*E_p)
