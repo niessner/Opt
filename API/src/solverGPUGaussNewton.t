@@ -100,14 +100,18 @@ return function(problemSpec)
 					pre = 1.0f
 				end
             end        
-            	
+            
 			if not isGraph then
+				
 				pre = guardedInvert(pre)
 				var p = pre*residuum	-- apply pre-conditioner M^-1			   
 				pd.p(w, h) = p
 				
 				--d = residuum*p		-- x-th term of nominator for computing alpha and denominator for computing beta
 				d = util.Dot(residuum,p) 
+				
+				if d ~= 0.0f then printf("pre\t %f %f %f %f %f\n", d, pre(0), pre(1), pre(2), pre(3), pre(4)) end
+				if d ~= 0.0f then printf("p\t %f %f %f %f %f\n", d, p(0), p(1), p(2), p(3), p(4)) end
 			end
 			
 			pd.preconditioner(w, h) = pre
@@ -115,7 +119,7 @@ return function(problemSpec)
         end 
 		if not isGraph then
 			d = util.warpReduce(d)	
-			if (util.laneid() == 0) then
+			if (util.laneid() == 0) then				
 				util.atomicAdd(pd.scanAlpha, d)
 			end
 		end

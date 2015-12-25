@@ -1926,7 +1926,7 @@ function ProblemSpecAD:Exclude(exp)
     self.excludeexp = assert(ad.toexp(exp), "expected a AD expression")
 end
 
-for i = 2,9 do
+for i = 2,12 do
     opt["float"..tostring(i)] = util.Vector(float,i)
 end
 
