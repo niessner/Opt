@@ -35,7 +35,7 @@ class TerraWarpingSolver {
 	int edgeCount;
 
 public:
-	TerraWarpingSolver(unsigned int vertexCount, unsigned int E, int* d_xCoords, int* d_offsets, const std::string& terraFile, const std::string& optName) : 
+	TerraWarpingSolver(unsigned int vertexCount, unsigned int E, const int* d_xCoords, const int* d_offsets, const std::string& terraFile, const std::string& optName) : 
 		m_optimizerState(nullptr), m_problem(nullptr), m_plan(nullptr)
 	{
 		edgeCount = (int)E;

@@ -145,7 +145,7 @@ class ImageWarping
 			
 			//float weightFit = 5.0f;
 			float weightFit = 3.0f;
-			float weightReg = 4.0f;
+			float weightReg = 0.000001f;
 		
 			//unsigned int numIter = 10;
 			//unsigned int nonLinearIter = 20;

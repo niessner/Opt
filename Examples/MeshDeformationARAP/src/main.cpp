@@ -27,7 +27,7 @@ int main(int argc, const char * argv[])
 	if (!OpenMesh::IO::read_mesh(*mesh, filename))
 	{
 	        std::cerr << "Error -> File: " << __FILE__ << " Line: " << __LINE__ << " Function: " << __FUNCTION__ << std::endl;
-		std::cout << "bunny.off" << std::endl;
+		std::cout << filename << std::endl;
 		exit(1);
 	}
 
