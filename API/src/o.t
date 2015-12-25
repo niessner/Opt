@@ -1662,22 +1662,22 @@ local function createjtjcentered(residuals,unknown,P)
             for _,r in ipairs(residuals) do
                 local rexp = shiftexp(F,r.x,r.y)
                 local condition,drdx00 = ad.splitcondition(rexp:d(x))
-                if not P_hat_c[condition] then
-                    conditions:insert(condition)
-                    P_hat_c[condition] = createzerolist(unknown.N)
-                end
                 lprintf(1,"instance:\ndr%d_%d%d/dx00[%d] = %s",rn,r.x,r.y,channel,tostring(drdx00))
                 local unknowns = unknownsforresidual(r,unknownsupport)
                 for _,u in ipairs(unknowns) do
                     local condition2, drdx_u = ad.splitcondition(rexp:d(unknown(u.index.x,u.index.y,u.channel)))
-                    assert(condition == condition2, "conditions on two gradeitns don't match?")
                     local exp = drdx00*drdx_u
                     lprintf(2,"term:\ndr%d_%d%d/dx%d%d[%d] = %s",rn,r.x,r.y,u.index.x,u.index.y,u.channel,tostring(drdx_u))
                     if not columns[u] then
                         columns[u] = 0
                         nonzerounknowns:insert(u)
                     end
-                    P_hat_c[condition][channel+1] = P_hat_c[condition][channel+1] + P(u.index.x,u.index.y,u.channel)*exp
+                    local conditionmerged = condition*condition2
+                    if not P_hat_c[conditionmerged] then
+                        conditions:insert(conditionmerged)
+                        P_hat_c[conditionmerged] = createzerolist(unknown.N)
+                    end
+                    P_hat_c[conditionmerged][channel+1] = P_hat_c[conditionmerged][channel+1] + P(u.index.x,u.index.y,u.channel)*exp
                 end
             end
         end
