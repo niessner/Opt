@@ -313,6 +313,7 @@ end)
 	
 newImage = terralib.memoize(function(typ, W, H, elemsize, stride)
     local use_bindless_texture = true
+    local use_pitched_memory = true
     -- NOTE: only use textures for float, vector(2, float), vector(4, float)
     if not (util.isvectortype(typ) and typ.metamethods.type == float and
                 (typ.metamethods.N == 4 or typ.metamethods.N == 2)
@@ -332,13 +333,24 @@ newImage = terralib.memoize(function(typ, W, H, elemsize, stride)
     local nvec = util.isvectortype(typ) and typ.metamethods.N or 1
     local wrapBindlessTexture, tex_read
     if use_bindless_texture then
+        -- check alignment
+        if stride % 128 ~= 0 then
+            print("*****\n*****\n Bad Stride Alignment "..stride..
+                  "\n*****\n*****")
+            print("using fallback...")
+            use_pitched_memory = false
+        end
+
         local name = "Image("..tostring(typ)..','..W.size..','..H.size..
                           ','..elemsize..','..stride..')'
         terra wrapBindlessTexture(data : &uint8) : C.cudaTextureObject_t
+
             -- Description of Texture Resource
             var res_desc : C.cudaResourceDesc
                 C.memset(&res_desc, 0, sizeof(C.cudaResourceDesc))
-            res_desc.resType                = C.cudaResourceTypeLinear
+
+            -- The following fields are in the same place for both
+            -- the linear and pitch2D variant layouts
             res_desc.res.linear.devPtr      = data
             -- encode the fact we have vectors here...
             res_desc.res.linear.desc.f      = C.cudaChannelFormatKindFloat
@@ -350,11 +362,32 @@ newImage = terralib.memoize(function(typ, W, H, elemsize, stride)
                 res_desc.res.linear.desc.z  = 32
                 res_desc.res.linear.desc.w  = 32
             end
-            res_desc.res.linear.sizeInBytes = stride * H.size
+
+            -- fill out differing data for linear vs pitch2D variants
+            escape if use_pitched_memory then emit quote
+                res_desc.resType                  = C.cudaResourceTypePitch2D
+                res_desc.res.pitch2D.width        = W.size
+                res_desc.res.pitch2D.height       = H.size
+                res_desc.res.pitch2D.pitchInBytes = stride
+
+                if [uint64](data) % 128 ~= 0 then
+                    C.printf(["*****\n*****\n"..
+                              " Bad Texture Start Alignment %lu"..
+                              "\n*****\n*****\n"], [uint64](data))
+                end
+            end else emit quote
+                res_desc.resType                = C.cudaResourceTypeLinear
+                res_desc.res.linear.sizeInBytes = stride * H.size
+            end end end
 
             var tex_desc : C.cudaTextureDesc
-                C.memset(&tex_desc, 0, sizeof(C.cudaTextureDesc));
-            tex_desc.readMode = C.cudaReadModeElementType
+                C.memset(&tex_desc, 0, sizeof(C.cudaTextureDesc))
+            -- out of bounds accesses are set to 0:
+            --tex_desc.addressMode[0] = C.cudaAddressModeBorder
+            --tex_desc.addressMode[1] = C.cudaAddressModeBorder
+            ---- just read the entry:
+            --tex_desc.filterMode     = C.cudaFilterModePoint
+            tex_desc.readMode       = C.cudaReadModeElementType
 
             -- cudaTextureObject_t should be uint64
             var tex : C.cudaTextureObject_t = 0;
@@ -364,15 +397,29 @@ newImage = terralib.memoize(function(typ, W, H, elemsize, stride)
         end
 
         -- texture base address is assumed to be aligned to a 16-byte boundary
-        terra tex_read(tex : C.cudaTextureObject_t, idx : int32)
-            var read = terralib.asm([tuple(float,float,float,float)],
-                "tex.1d.v4.f32.s32  {$0,$1,$2,$3}, [$4,{$5}];",
-                "=f,=f,=f,=f,l,r",false, tex, idx)
-            return escape if nvec == 1 then
-                emit `read._0
-            else
-                emit `@[&typ](&read)
-            end end
+        if use_pitched_memory then
+            terra tex_read(tex : C.cudaTextureObject_t, x : int32, y : int32)
+                var read = terralib.asm([tuple(float,float,float,float)],
+                    "tex.2d.v4.f32.s32  {$0,$1,$2,$3}, [$4,{$5,$6}];",
+                    "=f,=f,=f,=f,l,r,r",false, tex, x,y)
+                return escape if nvec == 1 then
+                    emit `read._0
+                else
+                    emit `@[&typ](&read)
+                end end
+            end
+        else
+            terra tex_read(tex : C.cudaTextureObject_t, x : int32, y : int32)
+                var idx  = y * [stride/elemsize] + x
+                var read = terralib.asm([tuple(float,float,float,float)],
+                    "tex.1d.v4.f32.s32  {$0,$1,$2,$3}, [$4,{$5}];",
+                    "=f,=f,=f,=f,l,r",false, tex, idx)
+                return escape if nvec == 1 then
+                    emit `read._0
+                else
+                    emit `@[&typ](&read)
+                end end
+            end
         end
     end
 
@@ -393,7 +440,7 @@ newImage = terralib.memoize(function(typ, W, H, elemsize, stride)
 	    local storetype = vector(float,typ.metamethods.N)
         if use_bindless_texture then
           terra Image.metamethods.__apply(self : &Image, x : int32, y : int32)
-            return tex_read(self.tex, y*[stride/elemsize] + x)
+            return tex_read(self.tex, x, y)
           end
         else
           terra Image.metamethods.__apply(self : &Image, x : int32, y : int32)
@@ -407,7 +454,7 @@ newImage = terralib.memoize(function(typ, W, H, elemsize, stride)
 	else
         if use_bindless_texture then
           terra Image.metamethods.__apply(self : &Image, x : int32, y : int32)
-            return tex_read(self.tex, y*[stride/elemsize] + x)
+            return tex_read(self.tex, x, y)
           end
         else
           terra Image.metamethods.__apply(self : &Image, x : int32, y : int32)
@@ -444,17 +491,27 @@ newImage = terralib.memoize(function(typ, W, H, elemsize, stride)
 	        util.atomicAdd(addr,v)
 	    end
 	end
-	Image.methods.get = macro(function(self,x,y,gx,gy)
-		if not gx then
-		    gx,gy = x,y
-		end
-		return quote
-            var v : typ = 0.f
-            if opt.InBoundsCalc(gx,gy,W.size,H.size,0,0) then
+    if use_bindless_texture and use_pitched_memory then
+        Image.methods.get = macro(function(self,x,y,gx,gy)
+            -- ignore gx, gy cause assuming no patch solver
+            return quote
+                var v : typ = 0.f
                 v = self(x,y)
-            end
-        in v end
-	end)
+            in v end
+        end)
+    else
+    	Image.methods.get = macro(function(self,x,y,gx,gy)
+    		if not gx then
+    		    gx,gy = x,y
+    		end
+    		return quote
+                var v : typ = 0.f
+                if opt.InBoundsCalc(gx,gy,W.size,H.size,0,0) then
+                    v = self(x,y)
+                end
+            in v end
+    	end)
+    end
 	--terra Image:get(x : int32, y : int32) : typ return self:get(x,y,x,y) end
 	terra Image:H() return H.size end
 	terra Image:W() return W.size end
@@ -1662,22 +1719,22 @@ local function createjtjcentered(residuals,unknown,P)
             for _,r in ipairs(residuals) do
                 local rexp = shiftexp(F,r.x,r.y)
                 local condition,drdx00 = ad.splitcondition(rexp:d(x))
-                if not P_hat_c[condition] then
-                    conditions:insert(condition)
-                    P_hat_c[condition] = createzerolist(unknown.N)
-                end
                 lprintf(1,"instance:\ndr%d_%d%d/dx00[%d] = %s",rn,r.x,r.y,channel,tostring(drdx00))
                 local unknowns = unknownsforresidual(r,unknownsupport)
                 for _,u in ipairs(unknowns) do
                     local condition2, drdx_u = ad.splitcondition(rexp:d(unknown(u.index.x,u.index.y,u.channel)))
-                    assert(condition == condition2, "conditions on two gradeitns don't match?")
                     local exp = drdx00*drdx_u
                     lprintf(2,"term:\ndr%d_%d%d/dx%d%d[%d] = %s",rn,r.x,r.y,u.index.x,u.index.y,u.channel,tostring(drdx_u))
                     if not columns[u] then
                         columns[u] = 0
                         nonzerounknowns:insert(u)
                     end
-                    P_hat_c[condition][channel+1] = P_hat_c[condition][channel+1] + P(u.index.x,u.index.y,u.channel)*exp
+                    local conditionmerged = condition*condition2
+                    if not P_hat_c[conditionmerged] then
+                        conditions:insert(conditionmerged)
+                        P_hat_c[conditionmerged] = createzerolist(unknown.N)
+                    end
+                    P_hat_c[conditionmerged][channel+1] = P_hat_c[conditionmerged][channel+1] + P(u.index.x,u.index.y,u.channel)*exp
                 end
             end
         end

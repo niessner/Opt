@@ -406,7 +406,6 @@ extern "C" void solveSFSStub(SolverInput& input, SolverState& state, SolverParam
 {
     CUDATimer timer;
 
-    timer.reset();
     parameters.weightShading = parameters.weightShadingStart;
 
 	for (unsigned int nIter = 0; nIter < parameters.nNonLinearIterations; nIter++)
@@ -430,11 +429,10 @@ extern "C" void solveSFSStub(SolverInput& input, SolverState& state, SolverParam
         timer.nextIteration();
 
 	}
-    timer.evaluate();
-
     Precompute(input, state, parameters, timer);
 	float residual = EvalResidual(input, state, parameters, timer);
 	printf("final cost: %f\n", residual);
+    timer.evaluate();
 }
 
 __global__ void PCGStep_Kernel_SaveInitialCostJTFAndPre(SolverInput input, SolverState state, SolverParameters parameters,
@@ -471,7 +469,6 @@ void NonPatchSaveInitialCostJTFAndPreAndJTJ(SolverInput& input, SolverState& sta
 {
     const unsigned int N = input.N; // Number of block variables
     CUDATimer timer;
-    timer.reset();
     Precompute(input, state, parameters, timer);
 
     cutilSafeCall(cudaDeviceSynchronize());

@@ -12,7 +12,7 @@ int main(int argc, const char * argv[])
     SFSSolverInput solverInput;
     
     solverInput.load(inputFilenamePrefix);
-    solverInput.parameters.nNonLinearIterations = 10;
+    solverInput.parameters.nNonLinearIterations = 6;
 	
     ImageSolver solver(solverInput);
 	printf("Solving\n");

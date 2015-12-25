@@ -7,6 +7,8 @@ local USE_TEMPORAL_CONSTRAINT 	= false
 local USE_PRECONDITIONER 		= false
 
 local USE_CRAPPY_SHADING_BOUNDARY = true
+local USE_J = false
+local USE_PRECOMPUTE = true and not USE_J
 
 local DEPTH_DISCONTINUITY_THRE = 0.01
 
@@ -115,7 +117,7 @@ local function B_I(x,y)
     local valid = ad.greater(D_i(x-1,y) + D_i(x,y) + D_i(x,y-1), 0)
     return ad.select(opt.InBounds(0,0,1,1)*valid,bi,0)
 end
-if true then
+if USE_PRECOMPUTE then
     B_I = P:ComputedImage("B_I",W,H, B_I(0,0))
 end
 
@@ -192,7 +194,7 @@ if USE_REGULARIZATION then
                                     ad.and_(ad.less(ad.abs(d - X(1,0)), DEPTH_DISCONTINUITY_THRE), 
                                         ad.and_(opt.InBounds(0,0,1,1), cross_valid)
                         ))))
-    if true then
+    if USE_PRECOMPUTE then
         local guard = P:ComputedImage("E_s_guard", W, H, E_s_guard)                        
 	    E_s_guard = ad.eq(guard(0,0),1)
 	end
@@ -202,6 +204,13 @@ end
 
 if USE_TEMPORAL_CONSTRAINT then
 	--TODO: Implement
+end
+
+if USE_J then
+    E_g_h = P:ComputedImage("E_g_h", W,H, E_g_h)(0,0)
+    E_g_v = P:ComputedImage("E_g_v", W,H, E_g_v)(0,0)
+    E_s = P:ComputedImage("E_s", W,H, E_s)(0,0)
+    E_p = P:ComputedImage("E_p", W,H, E_p)(0,0)
 end
 
 local cost = ad.sumsquared(w_g*E_g_h, w_g*E_g_v, w_s*E_s, w_p*E_p)
