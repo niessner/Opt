@@ -19,8 +19,6 @@ using ceres::Solver;
 using ceres::Solve;
 using namespace std;
 
-const int kStride = 4;
-
 //--fitting
 //local constraintUV = Constraints(0, 0)	--float2
 //
@@ -152,6 +150,14 @@ void CeresSolverWarping::solve(float2* h_x_float, float* h_a_float, float2* h_ur
         return y * m_width + x;
     };
 
+    const int pixelCount = m_width * m_height;
+    for (int i = 0; i < pixelCount; i++)
+    {
+        h_x_double[i].x = h_x_float[i].x;
+        h_x_double[i].y = h_x_float[i].y;
+        h_a_double[i] = h_a_float[i];
+    }
+
     // add all fit constraints
     //if (mask(i, j) == 0 && constaints(i, j).u >= 0 && constaints(i, j).v >= 0)
     //    fit = (x(i, j) - constraints(i, j)) * w_fitSqrt
@@ -202,9 +208,11 @@ void CeresSolverWarping::solve(float2* h_x_float, float* h_a_float, float2* h_ur
     options.minimizer_progress_to_stdout = true;
     //options.linear_solver_type = ceres::LinearSolverType::SPARSE_NORMAL_CHOLESKY;
     options.linear_solver_type = ceres::LinearSolverType::CGNR;
+    options.max_num_iterations = 10000;
     //options.linear_solver_type = ceres::LinearSolverType::SPARSE_SCHUR;
     //options.linear_solver_type = ceres::LinearSolverType::ITERATIVE_SCHUR;
 
+    //options.min_lm_diagonal = 1.0f;
     //options.min_lm_diagonal = options.max_lm_diagonal;
     //options.max_lm_diagonal = 10000000.0;
 
@@ -225,6 +233,13 @@ void CeresSolverWarping::solve(float2* h_x_float, float* h_a_float, float2* h_ur
     cout << "Cost*2 end: " << cost * 2 << endl;
 
     cout << summary.FullReport() << endl;
+
+    for (int i = 0; i < pixelCount; i++)
+    {
+        h_x_float[i].x = h_x_double[i].x;
+        h_x_float[i].y = h_x_double[i].y;
+        h_a_float[i] = h_a_double[i];
+    }
 }
 
 #endif

@@ -121,8 +121,8 @@ public:
 		float weightReg = 0.01f;
 
 		unsigned int numIter = 2;
-		unsigned int nonLinearIter = 3;
-		unsigned int linearIter = 3;
+		unsigned int nonLinearIter = 30;
+		unsigned int linearIter = 30;
 		unsigned int patchIter = 32;
 
 		//unsigned int numIter = 20;
@@ -192,6 +192,8 @@ public:
             cutilSafeCall(cudaMemcpy(h_urshape, d_urshape, sizeof(float2) * pixelCount, cudaMemcpyDeviceToHost));
             cutilSafeCall(cudaMemcpy(h_mask, d_mask, sizeof(float) * pixelCount, cudaMemcpyDeviceToHost));
             cutilSafeCall(cudaMemcpy(h_constraints, d_constraints, sizeof(float2) * pixelCount, cudaMemcpyDeviceToHost));
+            cutilSafeCall(cudaMemcpy(h_warpField, d_warpField, sizeof(float2) * pixelCount, cudaMemcpyDeviceToHost));
+            cutilSafeCall(cudaMemcpy(h_warpAngles, d_warpAngles, sizeof(float) * pixelCount, cudaMemcpyDeviceToHost));
 
             std::cout << std::endl << std::endl;
 
@@ -203,6 +205,15 @@ public:
                 m_warpingSolverCeres->solve(h_warpField, h_warpAngles, h_urshape, h_constraints, h_mask, weightFit, weightReg);
                 std::cout << std::endl;
             }
+
+            cutilSafeCall(cudaMemcpy(d_warpField, h_warpField, sizeof(float2) * pixelCount, cudaMemcpyHostToDevice));
+            cutilSafeCall(cudaMemcpy(d_warpAngles, h_warpAngles, sizeof(float) * pixelCount, cudaMemcpyHostToDevice));
+            copyResultToCPU();
+
+            std::cout << "testing CERES cost function by calling AD..." << std::endl;
+
+            m_warpingSolverTerraAD->solve(d_warpField, d_warpAngles, d_urshape, d_constraints, d_mask, nonLinearIter, linearIter, patchIter, weightFit, weightReg);
+            std::cout << std::endl;
         }
 
 		return &m_result;
