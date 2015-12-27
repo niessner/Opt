@@ -8,12 +8,15 @@ extern "C" {
 #include "Opt.h"
 }
 
-struct float6 {
-	float array[6];
+struct float9 {
+	float array[9];
+};
+struct float12 {
+	float array[12];
 };
 
-extern "C" void convertToFloat6(const float3* src0, const float3* src1, float6* target, unsigned int numVars);
-extern "C" void convertFromFloat6(const float6* source, float3* tar0, float3* tar1, unsigned int numVars);
+extern "C" void convertToFloat12(const float3* src0, const float9* src1, float12* target, unsigned int numVars);
+extern "C" void convertFromFloat12(const float12* source, float3* tar0, float9* tar1, unsigned int numVars);
 
 
 template <class type> type* createDeviceBuffer(const std::vector<type>& v) {
@@ -24,7 +27,7 @@ template <class type> type* createDeviceBuffer(const std::vector<type>& v) {
 	return d_ptr;
 }
 
-class TerraWarpingSolver {
+class TerraSolver {
 
 	int* d_headX;
 	int* d_headY;
@@ -35,7 +38,7 @@ class TerraWarpingSolver {
 	int edgeCount;
 
 public:
-	TerraWarpingSolver(unsigned int vertexCount, unsigned int E, int* d_xCoords, int* d_offsets, const std::string& terraFile, const std::string& optName) : 
+	TerraSolver(unsigned int vertexCount, unsigned int E, const int* d_xCoords, const int* d_offsets, const std::string& terraFile, const std::string& optName) : 
 		m_optimizerState(nullptr), m_problem(nullptr), m_plan(nullptr)
 	{
 		edgeCount = (int)E;
@@ -74,8 +77,8 @@ public:
 
 
 		uint32_t stride = vertexCount * sizeof(float3);
-		uint32_t strides[] = { stride*2, stride, stride };
-		uint32_t elemsizes[] = { sizeof(float6), sizeof(float3), sizeof(float3) };
+		uint32_t strides[] = { stride*4, stride, stride };
+		uint32_t elemsizes[] = { sizeof(float12), sizeof(float3), sizeof(float3) };
 		uint32_t dims[] = { vertexCount, 1 };
 
 		m_plan = Opt_ProblemPlan(m_optimizerState, m_problem, dims, elemsizes, strides);
@@ -86,10 +89,10 @@ public:
 
 
 		m_numUnknown = vertexCount;
-		cutilSafeCall(cudaMalloc(&d_unknowns, sizeof(float6)*vertexCount));
+		cutilSafeCall(cudaMalloc(&d_unknowns, sizeof(float12)*vertexCount));
 	}
 
-	~TerraWarpingSolver()
+	~TerraSolver()
 	{
 		cutilSafeCall(cudaFree(d_headX));
 		cutilSafeCall(cudaFree(d_headY));
@@ -110,34 +113,33 @@ public:
 	//void solve(float3* d_unknown, float3* d_target, unsigned int nNonLinearIterations, unsigned int nLinearIterations, unsigned int nBlockIterations, float weightFit, float weightReg)
 	void solveGN(
 		float3* d_vertexPosFloat3,
-		float3* d_anglesFloat3,
+		float9* d_rotsFloat9,
 		float3* d_vertexPosFloat3Urshape,
-		//int* d_numNeighbours,
-		//int* d_neighbourIdx,
-		//int* d_neighbourOffset,
 		float3* d_vertexPosTargetFloat3,
 		unsigned int nNonLinearIterations,
 		unsigned int nLinearIterations,
 		float weightFit,
-		float weightReg)
+		float weightReg,
+		float weightRot)
 	{
 		unsigned int nBlockIterations = 1;	//invalid just as a dummy;
 
-		convertToFloat6(d_vertexPosFloat3, d_anglesFloat3, d_unknowns, m_numUnknown);
+		convertToFloat12(d_vertexPosFloat3, d_rotsFloat9, d_unknowns, m_numUnknown);
 
 		void* data[] = { d_unknowns, d_vertexPosFloat3Urshape, d_vertexPosTargetFloat3};
 		void* solverParams[] = { &nNonLinearIterations, &nLinearIterations, &nBlockIterations };
 
 		float weightFitSqrt = sqrt(weightFit);
 		float weightRegSqrt = sqrt(weightReg);
-		void* problemParams[] = { &weightFitSqrt, &weightRegSqrt };
+		float weightRotSqrt = sqrt(weightRot);
+		void* problemParams[] = { &weightFitSqrt, &weightRegSqrt, &weightRotSqrt };
 
 		int32_t* xCoords[] = { d_headX, d_tailX };
 		int32_t* yCoords[] = { d_headY, d_tailY };
 		int32_t edgeCounts[] = { edgeCount };
 		Opt_ProblemSolve(m_optimizerState, m_plan, data, edgeCounts, NULL, xCoords, yCoords, problemParams, solverParams);
 
-		convertFromFloat6(d_unknowns, d_vertexPosFloat3, d_anglesFloat3, m_numUnknown);
+		convertFromFloat12(d_unknowns, d_vertexPosFloat3, d_rotsFloat9, m_numUnknown);
 	}
 
 private:
@@ -146,5 +148,5 @@ private:
 	Plan*		m_plan;
 
 	unsigned int m_numUnknown;
-	float6*		d_unknowns;	//float3 (vertices) + float3 (angles)
+	float12*		d_unknowns;	//float3 (vertices) + float3 (angles)
 };

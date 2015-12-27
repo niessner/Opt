@@ -75,7 +75,12 @@ return function(problemSpec)
 	local guardedInvert = macro(function(p)
 	    local pt = p:gettype()
 	    if util.isvectortype(pt) then
-	        return `terralib.select(p(0) > FLOAT_EPSILON, 1.f/ p, p)
+	        return quote
+	                    var invp = p
+	                    for i = 0, invp:size() do
+	                        invp(i) = terralib.select(invp(i) > FLOAT_EPSILON, 1.f / invp(i),invp(i))
+	                    end
+	               in invp end
 	    else
 	        return `terralib.select(p > FLOAT_EPSILON, 1.f / p, p)
 	    end
@@ -100,8 +105,9 @@ return function(problemSpec)
 					pre = 1.0f
 				end
             end        
-            	
+            
 			if not isGraph then
+				
 				pre = guardedInvert(pre)
 				var p = pre*residuum	-- apply pre-conditioner M^-1			   
 				pd.p(w, h) = p
@@ -115,7 +121,7 @@ return function(problemSpec)
         end 
 		if not isGraph then
 			d = util.warpReduce(d)	
-			if (util.laneid() == 0) then
+			if (util.laneid() == 0) then				
 				util.atomicAdd(pd.scanAlpha, d)
 			end
 		end
