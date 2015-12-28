@@ -19,7 +19,7 @@ end
 
 -- constants
 local verboseSolver = true
-local verboseAD = false
+local verboseAD = true
 
 local function newclass(name)
     local mt = { __name = name }
@@ -494,10 +494,7 @@ newImage = terralib.memoize(function(typ, W, H, elemsize, stride)
     if use_bindless_texture and use_pitched_memory then
         Image.methods.get = macro(function(self,x,y,gx,gy)
             -- ignore gx, gy cause assuming no patch solver
-            return quote
-                var v : typ = 0.f
-                v = self(x,y)
-            in v end
+            return `self(x,y)
         end)
     else
     	Image.methods.get = macro(function(self,x,y,gx,gy)
@@ -512,7 +509,17 @@ newImage = terralib.memoize(function(typ, W, H, elemsize, stride)
             in v end
     	end)
     end
-	--terra Image:get(x : int32, y : int32) : typ return self:get(x,y,x,y) end
+    local terra lerp(v0 : typ, v1 : typ, t : float)
+        return (1.f - t)*v0 + t*v1
+    end
+    terra Image:sample(x : float, y : float)
+        var x0 : int, x1 : int = opt.math.floor(x),opt.math.ceil(x)
+        var y0 : int, y1 : int = opt.math.floor(y),opt.math.ceil(y)
+        var xn,yn = x - x0,y - y0
+        var u = lerp(self:get(x0,y0),self:get(x1,y0),xn)
+        var b = lerp(self:get(x0,y1),self:get(x1,y1),xn)
+        return lerp(u,b,yn)
+    end
 	terra Image:H() return H.size end
 	terra Image:W() return W.size end
 	terra Image:elemsize() return elemsize end
@@ -776,6 +783,8 @@ function ProblemSpecAD:Image(name,typ,W,H,idx)
     return r
 end
 
+function Image:__tostring() return self.name end
+
 local ImageVector = newclass("ImageVector") -- wrapper for many images in a vector, just implements the __call methodf for Images Image:
 
 function ProblemSpecAD:ComputedImage(name,W,H,exp)
@@ -953,9 +962,11 @@ local function createfunction(problemspec,name,usebounds,W,H,ndims,results,scatt
     results = removeboundaries(results)
     
     local imageload = terralib.memoize(function(image)
-        return IRNode:create { kind = "vectorload", value = image, type = image.image.type, shape = image:shape() }
+        return IRNode:create { kind = "vectorload", value = image, type = image.image.type, shape = image:shape(), count = 0 }
     end)
-    
+    local imagesample = terralib.memoize(function(image, shape, x, y)
+        return IRNode:create { kind = "sampleimage", image = image, type = image.type, shape = shape, count = 0, children = terralib.newlist {x,y} }
+    end)
     local irmap
     
     local function tofloat(ir,exp)
@@ -990,7 +1001,7 @@ local function createfunction(problemspec,name,usebounds,W,H,ndims,results,scatt
             if "ImageAccess" == a.kind then
                 if not a.image.type:isarithmetic() then
                     local loadvec = imageload(ImageAccess:get(a.image,a:shape(),a.index,0))
-                    loadvec.count = (loadvec.count or 0) + 1
+                    loadvec.count = loadvec.count + 1
                     return IRNode:create { kind = "vectorextract", children = terralib.newlist { loadvec }, channel = a.channel, type = e:type(), shape = a:shape() }  
                 else
                     return IRNode:create { kind = "load", value = a, type = e:type(), shape = a:shape() }
@@ -1011,6 +1022,14 @@ local function createfunction(problemspec,name,usebounds,W,H,ndims,results,scatt
                 return varuse
             end
             local children = e:children():map(irmap)
+            if e.op.name:match("^sampleimage") then
+                local sm = imagesample(e.op.imagebeingsampled,e:shape(),children[1],children[2])
+                sm.count = sm.count + 1
+                if not util.isvectortype(sm.image.type) then
+                    return sm
+                end
+                return IRNode:create { kind = "vectorextract", children = terralib.newlist { sm }, channel = e.config.c, type = e:type(), shape = e:shape() }
+            end
             local fn,gen = opt.math[e.op.name]
             if fn then
                 function gen(args)
@@ -1148,7 +1167,7 @@ local function createfunction(problemspec,name,usebounds,W,H,ndims,results,scatt
         
         local function registersreleased(ir)
             if ir.kind == "const" then return 0
-            elseif ir.kind == "vectorload" then return ir.count
+            elseif ir.kind == "vectorload" or ir.kind == "sampleimage" then return ir.count
             elseif ir.kind == "vectorextract" then return 0
             elseif ir.kind == "varuse" then return 0
             elseif ir.kind == "vardecl" then return 1
@@ -1157,7 +1176,8 @@ local function createfunction(problemspec,name,usebounds,W,H,ndims,results,scatt
         end
         local function registersliveonuse(ir)
             if ir.kind == "const" then return 0
-            elseif ir.kind == "vectorload" then return 0 
+            elseif ir.kind == "vectorload" then return 0
+            elseif ir.kind == "sampleimage" then return util.isvectortype(ir.type) and 0 or 1
             elseif ir.kind == "vectorextract" then return 1
             elseif ir.kind == "varuse" then return 1
             elseif ir.kind == "reduce" then return 0
@@ -1429,6 +1449,10 @@ local function createfunction(problemspec,name,usebounds,W,H,ndims,results,scatt
         elseif "vectorconstruct" == ir.kind then
             local exps = ir.children:map(emit)
             return `[util.Vector(float,#exps)]{ array(exps) }
+        elseif "sampleimage" == ir.kind then
+            local im = imageref(ir.image)
+            local exps = ir.children:map(emit)
+            return `im:sample(exps)
         elseif "apply" == ir.kind then
             local exps = ir.children:map(emit)
             return ir.generator(exps)
@@ -1981,6 +2005,42 @@ end
 
 function ProblemSpecAD:Exclude(exp)
     self.excludeexp = assert(ad.toexp(exp), "expected a AD expression")
+end
+
+local SampledImage = ad.newclass("SampledImage")
+function SampledImage:__call(x,y,c)
+    if c or self.op.imagebeingsampled.N == 1 then
+        assert(not c or c < self.op.imagebeingsampled.N, "index out of bounds")
+        return self.op(c or 0,x,y)
+    else
+        local r = {}
+        for i = 0,self.op.imagebeingsampled.N - 1 do
+            r[i+1] = self.op(i,x,y)
+        end
+        return ad.Vector(unpack(r))
+    end
+end
+local function tosampledimage(im)
+    if Image:is(im) then
+        return ad.sampledimage(im)
+    end
+    return SampledImage:is(im) and im or nil
+end
+function ad.sampledimage(image,imagedx,imagedy)
+    if imagedx then
+        imagedx = assert(tosampledimage(imagedx), "expected an image or a sampled image as a derivative")
+        imagedy = assert(tosampledimage(imagedy), "expected an image or a sampled image as a derivative")
+    end
+    local op = ad.newop("sampleimage_"..image.name)
+    op.imagebeingsampled = image --not the best place to store this but other ways are more cumbersome
+    op.config = { "c" }
+    function op:generate(exp,args) error("sample image is not implemented directly") end
+    function op:getpartials(exp)
+        assert(imagedx and imagedy, "image derivatives are not defined for this image and cannot be used in autodiff")
+        local x,y = unpack(exp:children())
+        return terralib.newlist { imagedx(x,y,exp.config.c), imagedy(x,y,exp.config.c) }
+    end
+    return SampledImage:new { op = op }
 end
 
 for i = 2,12 do

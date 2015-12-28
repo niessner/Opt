@@ -1084,6 +1084,10 @@ function ad.splitcondition(exp)
         return one,exp
     end
 end
+
+function ad.newop(name)
+    return Op:new { name = name }
+end
 --[[
 
 

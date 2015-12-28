@@ -5,7 +5,7 @@
 # Last Edited 11-20-2015
 
 
-foldernames=(SmoothingLaplacianFloat4Graph ImageWarping ShapeFromShadingSimple MeshDeformation)
+foldernames=(SmoothingLaplacianFloat4Graph ImageWarping ShapeFromShadingSimple MeshDeformationARAP)
 programnames=(meshsmoothing imagewarping shapefromshading meshdeformation)
 
 
