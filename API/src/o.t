@@ -1080,6 +1080,8 @@ local function createfunction(problemspec,name,usebounds,W,H,ndims,results,scatt
     
     -- tighten the conditions under which ir nodes execute
     local linearized = linearizedorder(irroots)
+    
+    local use_conditionalization = true
     for i = #linearized,1,-1 do
         local ir = linearized[i]
         if not ir.condition then
@@ -1096,7 +1098,9 @@ local function createfunction(problemspec,name,usebounds,W,H,ndims,results,scatt
                 end
             end
         end
-        if ir.children then applyconditiontolist(ir.condition,ir.children) end
+        if use_conditionalization then
+            if ir.children then applyconditiontolist(ir.condition,ir.children) end
+        end
         if ir.kind == "reduce" then applyconditiontolist(Condition:create {}, ir.condition.members) end
     end
     

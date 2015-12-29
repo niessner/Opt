@@ -945,8 +945,10 @@ function ad.reduce(x)
     end
     return getreduce(x)
 end
-local use_condition_factoring = false
+local use_condition_factoring = true
+local use_polysimplify = true
 function ad.polysimplify(exps)
+    if not use_polysimplify then return exps end
     local function sumtoterms(sum)
         assert(Apply:is(sum) and sum.op.name == "sum")
         local terms = terralib.newlist()

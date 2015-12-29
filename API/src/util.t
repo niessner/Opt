@@ -319,6 +319,11 @@ terra Timer:endEvent(stream : C.cudaStream_t, endEvent : C.cudaEvent_t)
     C.cudaEventRecord(endEvent, stream)
 end
 
+terra isprefix(pre : rawstring, str : rawstring) : bool
+    if @pre == 0 then return true end
+    if @str ~= @pre then return false end
+    return isprefix(pre+1,str+1)
+end
 terra Timer:evaluate()
 	if ([timeIndividualKernels]) then
 		var aggregateTimingInfo = [Array(tuple(float,int))].salloc():init()
@@ -345,6 +350,14 @@ terra Timer:evaluate()
 			C.printf(" %-20s |   %4d   | %8.3fms| %7.4fms\n", aggregateTimingNames(i), aggregateTimingInfo(i)._1, aggregateTimingInfo(i)._0, aggregateTimingInfo(i)._0/aggregateTimingInfo(i)._1)
 	    end
 	    C.printf(		"--------------------------------------------------------\n")
+            C.printf("TIMING ")
+            for i = 0, aggregateTimingNames:size() do
+		var n = aggregateTimingNames(i)
+                if isprefix("PCGInit1",n) or isprefix("PCGStep1",n) or isprefix("overall",n) then
+                    C.printf("%f ",aggregateTimingInfo(i)._0)
+                end
+            end
+            C.printf("\n")
 	end
     
 end
