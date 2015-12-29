@@ -945,6 +945,7 @@ function ad.reduce(x)
     end
     return getreduce(x)
 end
+local use_condition_factoring = false
 function ad.polysimplify(exps)
     local function sumtoterms(sum)
         assert(Apply:is(sum) and sum.op.name == "sum")
@@ -1007,7 +1008,7 @@ function ad.polysimplify(exps)
         end
         -- find maximum uses
         local maxuse,benefit,power,maxkey = 0,0
-        local boolbonus = 10
+        local boolbonus = use_condition_factoring and 10 or 1
         local keys = orderedexpressionkeys(uses)
         for _,k in ipairs(keys) do
             local u = uses[k]
@@ -1070,7 +1071,7 @@ function ad.polysimplify(exps)
 end
 -- generate two terms, one boolean-only term and one float only term
 function ad.splitcondition(exp)
-    if Apply:is(exp) and exp.op.name == "prod" then
+    if use_condition_factoring and Apply:is(exp) and exp.op.name == "prod" then
         local cond,exp_ = one,one
         for i,e in ipairs(exp:children()) do
             if e:type() == bool then
