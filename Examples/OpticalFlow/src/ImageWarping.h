@@ -53,7 +53,7 @@ public:
 		float weightFit = 1.0f;
 		float weightReg = 1.0f;
 
-		unsigned int numRelaxIter = 10;
+		unsigned int numRelaxIter = 50;
 		unsigned int nonLinearIter = 10;
 		unsigned int linearIter = 30;
 

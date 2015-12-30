@@ -25,8 +25,11 @@ void renderFlowVecotors(ColorImageR8G8B8A8& image, const BaseImage<float2>& flow
 int main(int argc, const char * argv[]) {
 
 
-	const std::string srcFile = "eval-data/Mequon/frame07.png";
-	const std::string tarFile = "eval-data/Mequon/frame08.png";
+	//const std::string srcFile = "eval-data/Mequon/frame07.png";
+	//const std::string tarFile = "eval-data/Mequon/frame10.png";
+
+	const std::string srcFile = "other-data/Beanbags/frame07.png";
+	const std::string tarFile = "other-data/Beanbags/frame08.png";
 
 	ColorImageR8G8B8A8 imageSrc = LodePNG::load(srcFile);
 	ColorImageR8G8B8A8 imageTar = LodePNG::load(tarFile);
