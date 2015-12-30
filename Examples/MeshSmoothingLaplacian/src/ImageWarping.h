@@ -97,6 +97,7 @@ public:
 
 		SAFE_DELETE(m_warpingSolver);
 		SAFE_DELETE(m_terraWarpingSolver);
+		SAFE_DELETE(m_optWarpingSolver);
 	}
 
 	SimpleMesh* solve()

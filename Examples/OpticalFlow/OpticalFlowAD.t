@@ -3,11 +3,11 @@ local S = ad.ProblemSpec()
 
 local X = S:Image("X", opt.float2,W,H,0)
 
-local I = S:Image("I",opt.float3,W,H,1)
+local I = S:Image("I",opt.float,W,H,1)
 
-local I_hat_im = S:Image("I_hat",opt.float3,W,H,2)
-local I_hat_dx = S:Image("I_hat_dx",opt.float3,W,H,3)
-local I_hat_dy = S:Image("I_hat_dy",opt.float3,W,H,4)
+local I_hat_im = S:Image("I_hat",opt.float,W,H,2)
+local I_hat_dx = S:Image("I_hat_dx",opt.float,W,H,3)
+local I_hat_dy = S:Image("I_hat_dy",opt.float,W,H,4)
 local I_hat = ad.sampledimage(I_hat_im,I_hat_dx,I_hat_dy)
 
 local i,j = W:index(),H:index()
