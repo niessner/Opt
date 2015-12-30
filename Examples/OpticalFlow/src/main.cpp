@@ -4,7 +4,7 @@
 
 
 void renderFlowVecotors(ColorImageR8G8B8A8& image, const BaseImage<float2>& flowVectors) {
-	const unsigned int skip = 20;	//only every n-th pixel
+	const unsigned int skip = 5;	//only every n-th pixel
 	const float lengthRed = 5.0f;
 	
 	for (unsigned int j = 1; j < image.getHeight() - 1; j += skip) {

@@ -18,11 +18,9 @@ local C = terralib.includecstring [[
 #include <math.h>
 ]]
 
---local w_fitSqrt = S:Param("w_fit", float, 0)
---local w_regSqrt = S:Param("w_reg", float, 1)
+local w_fitSqrt = S:Param("w_fit", float, 0)
+local w_regSqrt = S:Param("w_reg", float, 1)
 
-local w_fitSqrt = 1.0
-local w_regSqrt = 1.0
 
 
 local terms = terralib.newlist()
@@ -42,13 +40,15 @@ end
 --]]
 
 
+
 local offsets = { {1,0}, {-1,0}, {0,1}, {0,-1} }
 for ii,o in ipairs(offsets) do
     local nx,ny = unpack(o)
     local l = X(0,0) - X(nx,ny)
 	local e_reg = w_regSqrt*l
-   -- terms:insert(e_reg)
+    terms:insert(e_reg)
 end
+
 
 
 return S:Cost(ad.sumsquared(unpack(terms)))

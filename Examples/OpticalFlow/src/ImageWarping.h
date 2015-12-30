@@ -12,9 +12,12 @@ class ImageWarping {
 public:
 	ImageWarping(const ColorImageR32& sourceImage, const ColorImageR32& targetImage) {
 
-		const unsigned int numLevels = 1;
-		//const float sigmas[5] = { 1.0f, 2.0f, 3.0f, 4.0f, 5.0f };
-		const float sigmas[numLevels] = { 4.0f };
+		const unsigned int numLevels = 5;
+		const float sigmas[5] = { 1.0f, 2.0f, 3.0f, 4.0f, 5.0f };
+
+		//const unsigned int numLevels = 1;
+		//const float sigmas[numLevels] = { 4.0f };
+
 		m_levels.resize(numLevels);
 		for (unsigned int i = 0; i < numLevels; i++) {
 			ColorImageR32 targetFiltered = targetImage;
@@ -50,9 +53,9 @@ public:
 		float weightFit = 1.0f;
 		float weightReg = 1.0f;
 
+		unsigned int numRelaxIter = 10;
 		unsigned int nonLinearIter = 10;
 		unsigned int linearIter = 30;
-		unsigned int patchIter = 32;
 
 		//unsigned int numIter = 20;
 		//unsigned int nonLinearIter = 32;
@@ -69,9 +72,13 @@ public:
 			}
 			
 			HierarchyLevel& level = m_levels[i];
-			std::cout << "//////////// ITERATION (on hierarchy level " << i << " )  (DSL AD) ///////////////" << std::endl;
-			m_solverOpt->solve(level.d_flowVectors, level.d_source, level.d_target, level.d_targetDU, level.d_targetDV, nonLinearIter, linearIter, patchIter, weightFit, weightReg);
-			std::cout << std::endl;
+			for (unsigned int k = 0; k < numRelaxIter; k++)  {
+				weightFit += 1.0f;
+				std::cout << "//////////// ITERATION " << k << " (on hierarchy level " << i << " )  (DSL AD) ///////////////" << std::endl;
+				m_solverOpt->solve(level.d_flowVectors, level.d_source, level.d_target, level.d_targetDU, level.d_targetDV, nonLinearIter, linearIter, 1, weightFit, weightReg);
+				std::cout << std::endl;
+			}
+
 			
 		}
 		//copyResultToCPU();
@@ -113,7 +120,7 @@ private:
 			initFlowVectors.setPixels(make_float2(0.0f, 0.0f));
 
 			CUDA_SAFE_CALL(cudaMemcpy(d_source, source.getData(), sizeof(float)*m_width*m_height, cudaMemcpyHostToDevice));
-			CUDA_SAFE_CALL(cudaMemcpy(d_target, source.getData(), sizeof(float)*m_width*m_height, cudaMemcpyHostToDevice));
+			CUDA_SAFE_CALL(cudaMemcpy(d_target, target.getData(), sizeof(float)*m_width*m_height, cudaMemcpyHostToDevice));
 			CUDA_SAFE_CALL(cudaMemcpy(d_targetDU, targetDU.getData(), sizeof(float)*m_width*m_height, cudaMemcpyHostToDevice));
 			CUDA_SAFE_CALL(cudaMemcpy(d_targetDV, targetDV.getData(), sizeof(float)*m_width*m_height, cudaMemcpyHostToDevice));
 			CUDA_SAFE_CALL(cudaMemcpy(d_flowVectors, initFlowVectors.getData(), sizeof(float2)*m_width*m_height, cudaMemcpyHostToDevice));
