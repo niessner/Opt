@@ -34,7 +34,7 @@ SimpleBuffer::SimpleBuffer(std::string filename, bool onGPU, bool clampInfinity)
 	  if (fPtr[i] > 0) {
 	    fPtr[i] = std::numeric_limits<float>::max();
 	  } else {
-	    fPtr[i] = std::numeric_limits<float>::lowest();
+	    fPtr[i] = -10000.0f;//std::numeric_limits<float>::lowest();
 	  }
 	}
       }
