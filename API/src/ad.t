@@ -1,6 +1,11 @@
 local ad = {}
 local C = terralib.includec("math.h")
 
+local use_simplify = true
+local use_condition_factoring = true
+local use_polysimplify = true
+local use_backward_ad = true
+
 local function newclass(name)
     local mt = { __name = name, variants = terralib.newlist() }
     mt.__index = mt
@@ -193,8 +198,9 @@ local function orderedexpressionkeys(tbl)
     return keys
 end
 
-
 local function simplify(op,config,args)
+    if not use_simplify then return newapply(op,config,args) end
+    
     if allconst(args) then
         local r = op:propagateconstant(args:map("v"))
         if r then return r end
@@ -767,38 +773,45 @@ function Reduce:calcd(v) return self.args[1]:d(v) end
 local reducepartials = terralib.newlist { one }
 function Reduce:partials() return reducepartials end
 --calc d(thisexpress)/d(exps[1]) ... d(thisexpress)/d(exps[#exps]) (i.e. the gradient of this expression with relation to the inputs) 
-function Exp:gradient(exps)
-    exps = terralib.islist(exps) and exps or terralib.newlist(exps)
-    -- reverse mode ad, work backward from this expression, accumulate stuff.
-    local tape = {} -- mapping from exp -> current accumulated derivative
-    local postorder = terralib.newlist()
-    local function visit(e)
-        if tape[e] then return end
-        tape[e] = zero
-        for i,c in ipairs(e:children()) do visit(c) end
-        postorder:insert(e)
-    end
-    visit(self)
-    tape[self] = one -- the reverse ad 'seed'
-    for i = #postorder,1,-1 do --reverse post order traversal from self to equation roots, all uses come before defs
-        local e = postorder[i]
-        if Var:is(e) then
-            local k = e:key()
-            if type(k) == "table" and type(k.gradient) == "function" then -- handle optional black-box relationship to other variables
-                local gradtable = k:gradient()
-                for k,dv in pairs(gradtable) do
-                    local v = ad.v[k]
-                    tape[v] = (tape[v] or zero) + tape[e]*dv
+
+if use_backward_ad then
+    function Exp:gradient(exps)
+        exps = terralib.islist(exps) and exps or terralib.newlist(exps)
+        -- reverse mode ad, work backward from this expression, accumulate stuff.
+        local tape = {} -- mapping from exp -> current accumulated derivative
+        local postorder = terralib.newlist()
+        local function visit(e)
+            if tape[e] then return end
+            tape[e] = zero
+            for i,c in ipairs(e:children()) do visit(c) end
+            postorder:insert(e)
+        end
+        visit(self)
+        tape[self] = one -- the reverse ad 'seed'
+        for i = #postorder,1,-1 do --reverse post order traversal from self to equation roots, all uses come before defs
+            local e = postorder[i]
+            if Var:is(e) then
+                local k = e:key()
+                if type(k) == "table" and type(k.gradient) == "function" then -- handle optional black-box relationship to other variables
+                    local gradtable = k:gradient()
+                    for k,dv in pairs(gradtable) do
+                        local v = ad.v[k]
+                        tape[v] = (tape[v] or zero) + tape[e]*dv
+                    end
+                end
+            else
+                local p = e:partials()
+                for j,c in ipairs(e:children()) do
+                    tape[c] = tape[c] + tape[e]*p[j]
                 end
             end
-        else
-            local p = e:partials()
-            for j,c in ipairs(e:children()) do
-                tape[c] = tape[c] + tape[e]*p[j]
-            end
         end
+        return exps:map(function(e) return tape[e] or zero end)
     end
-    return exps:map(function(e) return tape[e] or zero end)
+else
+    function Exp:gradient(exps)
+        return exps:map(function(v) return self:d(v) end)
+    end
 end
 
 function ad.sum:generate(exp,args)
@@ -911,7 +924,7 @@ ad.select:define(function(x,y,z)
             r = z
         end
     in r end
-end,0,ad.select(x,1,0),ad.select(x,0,1))
+end,0,x,ad.not_(x))
 
 ad.abs:define(function(x) return `terralib.select(x >= 0,x,-x) end, ad.select(ad.greatereq(x, 0),1,-1))
 
@@ -946,6 +959,7 @@ function ad.reduce(x)
     return getreduce(x)
 end
 function ad.polysimplify(exps)
+    if not use_polysimplify then return exps end
     local function sumtoterms(sum)
         assert(Apply:is(sum) and sum.op.name == "sum")
         local terms = terralib.newlist()
@@ -1007,7 +1021,7 @@ function ad.polysimplify(exps)
         end
         -- find maximum uses
         local maxuse,benefit,power,maxkey = 0,0
-        local boolbonus = 10
+        local boolbonus = use_condition_factoring and 10 or 1
         local keys = orderedexpressionkeys(uses)
         for _,k in ipairs(keys) do
             local u = uses[k]
@@ -1070,7 +1084,7 @@ function ad.polysimplify(exps)
 end
 -- generate two terms, one boolean-only term and one float only term
 function ad.splitcondition(exp)
-    if Apply:is(exp) and exp.op.name == "prod" then
+    if use_condition_factoring and Apply:is(exp) and exp.op.name == "prod" then
         local cond,exp_ = one,one
         for i,e in ipairs(exp:children()) do
             if e:type() == bool then

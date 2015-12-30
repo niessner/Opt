@@ -20,6 +20,7 @@ struct SFSSolverInput {
         previousDepth   = std::shared_ptr<SimpleBuffer>(new SimpleBuffer(filenamePrefix + "_previousDepth.imagedump",   onGPU));
         initialUnknown = std::shared_ptr<SimpleBuffer>(new SimpleBuffer(filenamePrefix + "_initialUnknown.imagedump", onGPU));
         maskEdgeMap     = std::shared_ptr<SimpleBuffer>(new SimpleBuffer(filenamePrefix + "_maskEdgeMap.imagedump",     onGPU));
+	
         parameters.load(filenamePrefix + ".SFSSolverParameters");
     }
 

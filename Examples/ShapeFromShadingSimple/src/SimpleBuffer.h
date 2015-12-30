@@ -17,7 +17,7 @@ protected:
     void*       m_data;
 
 public:
-    SimpleBuffer(std::string filename, bool onGPU);
+    SimpleBuffer(std::string filename, bool onGPU, bool clampInfinity = true);
     SimpleBuffer(const SimpleBuffer& other, bool onGPU);
 
     int width() const {
