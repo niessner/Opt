@@ -9,6 +9,13 @@ local solversGPU = require("solversGPU")
 
 local C = util.C
 
+local use_bindless_texture = true
+local use_pitched_memory = true
+local use_split_sums = true
+local use_condition_scheduling = true
+local use_register_minimization = true
+local use_conditionalization = true
+
 if false then
     local fileHandle = C.fopen("crap.txt", 'w')
     C._close(1)
@@ -19,7 +26,7 @@ end
 
 -- constants
 local verboseSolver = true
-local verboseAD = true
+local verboseAD = false
 
 local function newclass(name)
     local mt = { __name = name }
@@ -312,8 +319,6 @@ opt.InBoundsCalc = macro(function(x,y,W,H,sx,sy)
 end)
 	
 newImage = terralib.memoize(function(typ, W, H, elemsize, stride)
-    local use_bindless_texture = true
-    local use_pitched_memory = true
     -- NOTE: only use textures for float, vector(2, float), vector(4, float)
     if not (util.isvectortype(typ) and typ.metamethods.type == float and
                 (typ.metamethods.N == 4 or typ.metamethods.N == 2)
@@ -1012,7 +1017,7 @@ local function createfunction(problemspec,name,usebounds,W,H,ndims,results,scatt
         elseif "Const" == e.kind then
             return IRNode:create { kind = "const", value = e.v, type = e:type() }
         elseif "Apply" == e.kind then
-            if (e.op.name == "sum") and #e:children() > 2 then
+            if use_split_sums and (e.op.name == "sum") and #e:children() > 2 then
                 local vardecl = IRNode:create { kind = "vardecl", constant = e.config.c, type = float, shape = e:shape() }
                 local children = terralib.newlist { vardecl }
                 local varuse = IRNode:create { kind = "varuse", children = children, type = float, shape = e:shape() }
@@ -1081,7 +1086,6 @@ local function createfunction(problemspec,name,usebounds,W,H,ndims,results,scatt
     -- tighten the conditions under which ir nodes execute
     local linearized = linearizedorder(irroots)
     
-    local use_conditionalization = true
     for i = #linearized,1,-1 do
         local ir = linearized[i]
         if not ir.condition then
@@ -1248,8 +1252,14 @@ local function createfunction(problemspec,name,usebounds,W,H,ndims,results,scatt
         end
 
         local function cost(idx,ir)
-            local c =  { shapecost(currentshape,ir.shape), conditioncost(currentcondition,ir.condition), vardeclcost(ir), costspeculate(1,ir) }
-            --print("cost",idx,unpack(c))
+            local c =  { shapecost(currentshape,ir.shape) }
+            if use_condition_scheduling then
+                table.insert(c, conditioncost(currentcondition,ir.condition))
+            end
+            if use_register_minimization then
+                table.insert(c, vardeclcost(ir))
+                table.insert(c, costspeculate(1,ir))
+            end
             return c
         end
         
@@ -1547,6 +1557,9 @@ local function createfunction(problemspec,name,usebounds,W,H,ndims,results,scatt
             local exp = assert(createexp(ir),"nil exp")
             statements:insert(quote
                 [r] = exp
+                --[[if [name == "precompute"] and mi == 10 and mj == 40 then
+                    printf("%d,%d: k_%s: %s = %f\n",mi,mj,name,[tostring(r)],float(r))
+                end]]
             end)
         end
         emitted[ir] = r
