@@ -36,7 +36,7 @@ endif
 
 LINK = clang++
 
-all:	imagewarping
+all:	opticalflow
 
 
 %.o:	%.cpp
@@ -45,11 +45,11 @@ all:	imagewarping
 %.o:	%.cu
 	$(NVCC) $(NVCCFLAGS) $< -c -o $@
 
-imagewarping:	src/CUDAPatchSolverWarping.o	src/CUDAWarpingSolver.o	src/mLibSource.o src/main.o src/PatchSolverWarping.o src/TerraSolverWarping.o	src/WarpingSolver.o
+opticalflow:	src/mLibSource.o src/main.o src/TerraSolverWarping.o 
 	$(LINK) $^ -o $@ $(LFLAGS)
 
 clean:
 	rm -rf */*.o */*.d
-	rm -rf imagewarping
+	rm -rf opticalflow
 
 -include $(wildcard */*.d)
