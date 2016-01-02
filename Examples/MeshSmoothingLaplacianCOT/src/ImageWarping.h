@@ -1,6 +1,5 @@
 #pragma once
 
-#define RUN_TERRA 0	//NOT IMPLEMENTED
 #define RUN_OPT 1
 
 #include "mLibInclude.h"
@@ -37,8 +36,9 @@ public:
 		cutilSafeCall(cudaMalloc(&d_neighbourOffset, sizeof(int)*(N + 1)));
 
 		resetGPUMemory();
-		m_terraWarpingSolver = new TerraWarpingSolver(N, 2 * E, d_neighbourIdx, d_neighbourOffset, "MeshSmoothingLaplacian.t", "gaussNewtonGPU");
+		std::cout << "compiling... ";
 		m_optWarpingSolver = new TerraWarpingSolver(N, 2 * E, d_neighbourIdx, d_neighbourOffset, "MeshSmoothingLaplacianAD.t", "gaussNewtonGPU");
+		std::cout << " done!" << std::endl;
 	}
 
 	void resetGPUMemory()
@@ -123,7 +123,6 @@ public:
 		cutilSafeCall(cudaFree(d_neighbourIdx));
 		cutilSafeCall(cudaFree(d_neighbourOffset));
 
-		SAFE_DELETE(m_terraWarpingSolver);
 		SAFE_DELETE(m_optWarpingSolver);
 	}
 
@@ -135,13 +134,6 @@ public:
 		unsigned int nonLinearIter = 10;
 		unsigned int linearIter = 200;
 
-
-#		if RUN_TERRA
-		std::cout << "=========TERRA=======" << std::endl;
-		resetGPUMemory();
-		m_terraWarpingSolver->solve(d_vertexPosFloat3, d_vertexPosTargetFloat3, nonLinearIter, linearIter, 1, weightFit, weightReg);
-		copyResultToCPUFromFloat3();
-#		endif
 
 #		if RUN_OPT
 		std::cout << "=========OPT=========" << std::endl;
@@ -183,5 +175,4 @@ private:
 	int* 	d_neighbourOffset;
 
 	TerraWarpingSolver* m_optWarpingSolver;
-	TerraWarpingSolver* m_terraWarpingSolver;
 };
