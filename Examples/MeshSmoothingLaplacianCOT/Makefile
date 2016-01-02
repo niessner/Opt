@@ -46,7 +46,7 @@ all:	meshsmoothing
 %.o:	%.cu
 	$(NVCC) $(NVCCFLAGS) $< -c -o $@
 
-meshsmoothing:	src/CUDAWarpingSolver.o	src/mLibSource.o src/main.o src/WarpingSolver.o
+meshsmoothing:	src/mLibSource.o src/main.o 
 	$(LINK) $^ -o $@ $(LFLAGS)
 
 clean:
