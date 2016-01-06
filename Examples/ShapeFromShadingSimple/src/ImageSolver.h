@@ -8,6 +8,7 @@
 #include "CUDAImageSolver.h"
 
 #include "OptImageSolver.h"
+#include "CeresImageSolver.h"
 #include "SFSSolverInput.h"
 
 class ImageSolver {
@@ -19,6 +20,7 @@ private:
     CUDAImageSolver*  m_cudaSolver;
     OptImageSolver*	  m_terraSolver;
     OptImageSolver*	  m_optSolver;
+    CeresImageSolver* m_ceresSolver;
 
 public:
 	ImageSolver(const SFSSolverInput& input)
@@ -47,24 +49,31 @@ public:
 	}
 
     std::shared_ptr<SimpleBuffer> solve()
-	{
-				
-		std::cout << "CUDA" << std::endl;
-		resetGPUMemory();
-        m_cudaSolver->solve(m_result, m_solverInput);
-		
+    {
 
-	m_solverInput.parameters.solveCount = 0;
-		std::cout << "\n\nTERRA" << std::endl;
-		resetGPUMemory();
+        std::cout << "CUDA" << std::endl;
+        resetGPUMemory();
+        m_cudaSolver->solve(m_result, m_solverInput);
+
+
+        m_solverInput.parameters.solveCount = 0;
+        std::cout << "\n\nTERRA" << std::endl;
+        resetGPUMemory();
         m_terraSolver->solve(m_result, m_solverInput);
 
-	m_solverInput.parameters.solveCount = 1;
+        m_solverInput.parameters.solveCount = 1;
         std::cout << "\n\nOPT" << std::endl;
         resetGPUMemory();
         m_optSolver->solve(m_result, m_solverInput);
 
-		return m_result;
-	}
+#ifdef USE_CERES
+        m_solverInput.parameters.solveCount = 2;
+        std::cout << "\n\nCERES" << std::endl;
+        m_result = std::shared_ptr<SimpleBuffer>(new SimpleBuffer(*m_solverInput.initialUnknown.get(), false));
+        m_ceresSolver->solve(m_result, m_solverInput);
+#endif
+
+        return m_result;
+    }
 
 };

@@ -4,6 +4,9 @@
 
 #ifdef USE_CERES
 
+const bool performanceTest = true;
+//const int linearIterationMin = 100;
+
 #include <cuda_runtime.h>
 
 #include "CeresSolverImageWarping.h"
@@ -205,9 +208,10 @@ void CeresSolverWarping::solve(float2* h_x_float, float* h_a_float, float2* h_ur
     Solver::Options options;
     Solver::Summary summary;
 
-    options.minimizer_progress_to_stdout = true;
+    options.minimizer_progress_to_stdout = !performanceTest;
     //options.linear_solver_type = ceres::LinearSolverType::SPARSE_NORMAL_CHOLESKY;
     options.linear_solver_type = ceres::LinearSolverType::CGNR;
+    //options.min_linear_solver_iterations = linearIterationMin;
     options.max_num_iterations = 10000;
     //options.linear_solver_type = ceres::LinearSolverType::SPARSE_SCHUR;
     //options.linear_solver_type = ceres::LinearSolverType::ITERATIVE_SCHUR;
@@ -225,8 +229,22 @@ void CeresSolverWarping::solve(float2* h_x_float, float* h_a_float, float2* h_ur
         Solve(options, &problem, &summary);
         elapsedTime = timer.getElapsedTimeMS();
     }
+    
+    cout << "Solver used: " << summary.linear_solver_type_used << endl;
+    cout << "Minimizer iters: " << summary.iterations.size() << endl;
+    cout << "Total time: " << elapsedTime << "ms" << endl;
 
-    cout << "Done, " << elapsedTime << "ms" << endl;
+    double iterationTotalTime = 0.0;
+    int totalLinearItereations = 0;
+    for (auto &i : summary.iterations)
+    {
+        iterationTotalTime += i.iteration_time_in_seconds;
+        totalLinearItereations += i.linear_solver_iterations;
+        cout << "Iteration: " << i.linear_solver_iterations << " " << i.iteration_time_in_seconds * 1000.0 << "ms" << endl;
+    }
+
+    cout << "Total iteration time: " << iterationTotalTime << endl;
+    cout << "Cost per linear solver iteration: " << iterationTotalTime * 1000.0 / totalLinearItereations << "ms" << endl;
 
     double cost = -1.0;
     problem.Evaluate(Problem::EvaluateOptions(), &cost, nullptr, nullptr, nullptr);

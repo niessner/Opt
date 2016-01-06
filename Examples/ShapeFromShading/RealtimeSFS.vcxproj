@@ -50,8 +50,8 @@
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
     <LinkIncremental>false</LinkIncremental>
     <ExecutablePath>$(DXSDK_DIR)Utilities\bin\x64;$(DXSDK_DIR)Utilities\bin\x86;$(ExecutablePath)</ExecutablePath>
-    <IncludePath>$(IncludePath);$(DXSDK_DIR)Include;$(KINECTSDK10_DIR)\inc;$(CUDA_INC_PATH);$(KINECTSDK20_DIR)\inc;$(OPENNI2_INCLUDE64);Include\FreeImage\Source;Include\mLib;.\;..\..\..\..\mLibExternal\include</IncludePath>
-    <LibraryPath>$(LibraryPath);$(DXSDK_DIR)Lib\x64;$(KINECTSDK10_DIR)\lib\amd64;$(CUDA_LIB_PATH);$(KINECTSDK20_DIR)\lib\x64;$(OPENNI2_LIB64);Libs;..\..\..\mLibExternal\libsWindows\lib64</LibraryPath>
+    <IncludePath>$(IncludePath);$(DXSDK_DIR)Include;$(KINECTSDK10_DIR)\inc;$(CUDA_INC_PATH);$(KINECTSDK20_DIR)\inc;$(OPENNI2_INCLUDE64);Include\FreeImage\Source;Include\mLib;.\;..\..\..\..\mLibExternal\include;../../../../mLibExternal/libsWindows/ceres-windows\ceres-solver\include\;../../../../mLibExternal/libsWindows/ceres-windows\glog\src\windows;../../../../mLibExternal/libsWindows/ceres-windows\win\include</IncludePath>
+    <LibraryPath>$(LibraryPath);$(DXSDK_DIR)Lib\x64;$(KINECTSDK10_DIR)\lib\amd64;$(CUDA_LIB_PATH);$(KINECTSDK20_DIR)\lib\x64;$(OPENNI2_LIB64);Libs;..\..\..\mLibExternal\libsWindows\lib64;..\..\..\..\mLibExternal\libsWindows\lib64</LibraryPath>
   </PropertyGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
     <ClCompile>
@@ -96,12 +96,12 @@
       <IntrinsicFunctions>true</IntrinsicFunctions>
       <FloatingPointModel>Fast</FloatingPointModel>
       <ExceptionHandling>Sync</ExceptionHandling>
-      <PreprocessorDefinitions>WIN32;NDEBUG;_WINDOWS;D3DXFX_LARGEADDRESS_HANDLE;_CRT_SECURE_NO_WARNINGS;NOMINMAX;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <PreprocessorDefinitions>GLOG_NO_ABBREVIATED_SEVERITIES;USE_CERES;WIN32;NDEBUG;_WINDOWS;D3DXFX_LARGEADDRESS_HANDLE;_CRT_SECURE_NO_WARNINGS;NOMINMAX;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <AdditionalIncludeDirectories>DXUT\Optional;DXUT\Core;..\Eigen_3.2.0\;$(SolutionDir)\cutil\inc;..\opencv\include\;$(KINECTSDK20_DIR)\lib;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <PrecompiledHeader>Use</PrecompiledHeader>
     </ClCompile>
     <Link>
-      <AdditionalDependencies>Opt.lib;Kinect10.lib;d3d11.lib;d3dcompiler.lib;d3dx11.lib;d3dx9.lib;dxerr.lib;dxguid.lib;winmm.lib;comctl32.lib;Shlwapi.lib;cudart.lib;cublas.lib;FreeImage.lib;zlib64.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalDependencies>libglog_static.lib;ceres.lib;Opt.lib;Kinect10.lib;d3d11.lib;d3dcompiler.lib;d3dx11.lib;d3dx9.lib;dxerr.lib;dxguid.lib;winmm.lib;comctl32.lib;Shlwapi.lib;cudart.lib;cublas.lib;FreeImage.lib;zlib64.lib;%(AdditionalDependencies)</AdditionalDependencies>
       <GenerateDebugInformation>true</GenerateDebugInformation>
       <EnableCOMDATFolding>true</EnableCOMDATFolding>
       <SubSystem>Console</SubSystem>
@@ -140,6 +140,7 @@
     <ClCompile Include="Cuda\CUDASolverSHLighting.cpp" />
     <ClCompile Include="Cuda\PatchSolverSFS\CUDAPatchSolverSFS.cpp" />
     <ClCompile Include="Cuda\PatchSolverSFS\Optimizer.cpp" />
+    <ClCompile Include="Cuda\PatchSolverSFS\SolverSFSCeres.cpp" />
     <ClCompile Include="DumpOptImage.cpp" />
     <ClCompile Include="DX11CustomRenderTarget.cpp" />
     <ClCompile Include="DX11RGBDRenderer.cpp" />
@@ -222,6 +223,7 @@
     <ClInclude Include="Cuda\PatchSolverSFS\PatchSolverSFSParameters.h" />
     <ClInclude Include="Cuda\PatchSolverSFS\PatchSolverSFSState.h" />
     <ClInclude Include="Cuda\PatchSolverSFS\PatchSolverSFSUtil.h" />
+    <ClInclude Include="Cuda\PatchSolverSFS\SolverSFSCeres.h" />
     <ClInclude Include="Cuda\PatchSolverSFS\SolverTerms.h" />
     <ClInclude Include="Cuda\PatchSolverSFS\TerraSolverParameters.h" />
     <ClInclude Include="Cuda\SolverSFS\SolverSFSState.h" />
