@@ -9,8 +9,8 @@ class CeresImageSolver {
 public:
     CeresImageSolver(unsigned int _width, unsigned int _height)
 	{
-        width = _width;
-        height = _height;
+        width = (int)_width;
+        height = (int)_height;
 	}
 
 	struct IterStruct {
@@ -27,7 +27,7 @@ public:
         return y * width + x;
     }
 
-    unsigned int width, height;
+    int width, height;
     float *Xfloat;
     float *D_i;
     float *Im;
@@ -53,3 +53,12 @@ public:
 
     float L[9];
 };
+
+#ifndef USE_CERES
+
+inline void CeresImageSolver::solve(std::shared_ptr<SimpleBuffer> result, const SFSSolverInput& rawSolverInput)
+{
+
+}
+
+#endif

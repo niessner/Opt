@@ -1,6 +1,8 @@
 
 #include "mLibInclude.h"
 
+#ifdef USE_CERES
+
 #include <cuda_runtime.h>
 #include <cudaUtil.h>
 
@@ -115,7 +117,7 @@ float III(const CeresImageSolver &solver, int posX, int posY, int offX, int offY
     float Im00 = solver.Im[solver.getPixel(posX + offX, posY + offY)];
     float Im10 = solver.Im[solver.getPixel(posX + offX - 1, posY + offY)];
     float Im01 = solver.Im[solver.getPixel(posX + offX, posY + offY - 1)];
-    return Im00 * 0.5f + 0.25 * (Im10 + Im01);
+    return Im00 * 0.5f + 0.25f * (Im10 + Im01);
 }
 
 // BOUNDS CHECK!!!
@@ -366,6 +368,8 @@ void CeresImageSolver::solve(std::shared_ptr<SimpleBuffer> result, const SFSSolv
 
     for (int i = 0; i < pixelCount; i++)
     {
-        Xfloat[i] = Xdouble[i];
+        Xfloat[i] = (float)Xdouble[i];
     }
 }
+
+#endif
