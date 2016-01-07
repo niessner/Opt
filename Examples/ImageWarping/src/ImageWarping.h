@@ -11,9 +11,9 @@
 #include "CeresSolverImageWarping.h"
 
 
-static bool useCUDA = true;
-static bool useTerra = true;
-static bool useAD = true;
+static bool useCUDA = false;
+static bool useTerra = false;
+static bool useAD = false;
 static bool useCeres = true;
 
 class ImageWarping {
@@ -120,9 +120,9 @@ public:
 		float weightFit = 100.0f;
 		float weightReg = 0.01f;
 
-		unsigned int numIter = 2;
-		unsigned int nonLinearIter = 30;
-		unsigned int linearIter = 30;
+		unsigned int numIter = 20;
+		unsigned int nonLinearIter = 25;
+		unsigned int linearIter = 25;
 		unsigned int patchIter = 32;
 
 		//unsigned int numIter = 20;
@@ -134,7 +134,7 @@ public:
 		  resetGPU();
 		  for (unsigned int i = 0; i < numIter; i++)	{
 		    std::cout << "//////////// ITERATION"  << i << "  (CUDA) ///////////////" << std::endl;
-		    setConstraintImage((float)i / (float)20);
+            setConstraintImage((float)i / (float)numIter);
 
 		    m_warpingSolver->solveGN(d_urshape, d_warpField, d_warpAngles, d_constraints, d_mask, nonLinearIter, linearIter, weightFit, weightReg);
 		    
@@ -150,7 +150,7 @@ public:
 		  
 		  for (unsigned int i = 0; i < numIter; i++)	{
 		    std::cout << "//////////// ITERATION"  << i << "  (TERRA) ///////////////" << std::endl;
-		    setConstraintImage((float)i / (float)20);
+            setConstraintImage((float)i / (float)numIter);
 		    
 		    m_warpingSolverTerra->solve(d_warpField, d_warpAngles, d_urshape, d_constraints, d_mask, nonLinearIter, linearIter, patchIter, weightFit, weightReg);
 
@@ -167,7 +167,7 @@ public:
 		
 		  for (unsigned int i = 0; i < numIter; i++)	{
 		    std::cout << "//////////// ITERATION" << i << "  (DSL AD) ///////////////" << std::endl;
-		    setConstraintImage((float)i / (float)20);
+            setConstraintImage((float)i / (float)numIter);
 
 			
 		    m_warpingSolverTerraAD->solve(d_warpField, d_warpAngles, d_urshape, d_constraints, d_mask, nonLinearIter, linearIter, patchIter, weightFit, weightReg);
@@ -189,6 +189,8 @@ public:
             float*  h_mask = new float[pixelCount];
             float2* h_constraints = new float2[pixelCount];
 
+            float totalCeresTimeMS = 0.0f;
+
             cutilSafeCall(cudaMemcpy(h_urshape, d_urshape, sizeof(float2) * pixelCount, cudaMemcpyDeviceToHost));
             cutilSafeCall(cudaMemcpy(h_mask, d_mask, sizeof(float) * pixelCount, cudaMemcpyDeviceToHost));
             cutilSafeCall(cudaMemcpy(h_constraints, d_constraints, sizeof(float2) * pixelCount, cudaMemcpyDeviceToHost));
@@ -199,10 +201,10 @@ public:
 
             for (unsigned int i = 0; i < numIter; i++)	{
                 std::cout << "//////////// ITERATION" << i << "  (CERES) ///////////////" << std::endl;
-                setConstraintImage((float)i / (float)20);
+                setConstraintImage((float)i / (float)numIter);
                 cutilSafeCall(cudaMemcpy(h_constraints, d_constraints, sizeof(float2) * pixelCount, cudaMemcpyDeviceToHost));
 
-                m_warpingSolverCeres->solve(h_warpField, h_warpAngles, h_urshape, h_constraints, h_mask, weightFit, weightReg);
+                totalCeresTimeMS = m_warpingSolverCeres->solve(h_warpField, h_warpAngles, h_urshape, h_constraints, h_mask, weightFit, weightReg);
                 std::cout << std::endl;
             }
 
@@ -210,9 +212,11 @@ public:
             cutilSafeCall(cudaMemcpy(d_warpAngles, h_warpAngles, sizeof(float) * pixelCount, cudaMemcpyHostToDevice));
             copyResultToCPU();
 
+            std::cout << "Ceres time for final iteration: " << totalCeresTimeMS << "ms" << std::endl;
+
             std::cout << "testing CERES cost function by calling AD..." << std::endl;
 
-            m_warpingSolverTerraAD->solve(d_warpField, d_warpAngles, d_urshape, d_constraints, d_mask, nonLinearIter, linearIter, patchIter, weightFit, weightReg);
+            //m_warpingSolverTerraAD->solve(d_warpField, d_warpAngles, d_urshape, d_constraints, d_mask, nonLinearIter, linearIter, patchIter, weightFit, weightReg);
             std::cout << std::endl;
         }
 

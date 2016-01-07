@@ -142,7 +142,7 @@ struct RegTerm
     float weight;
 };
 
-void CeresSolverWarping::solve(float2* h_x_float, float* h_a_float, float2* h_urshape, float2* h_constraints, float* h_mask, float weightFit, float weightReg)
+float CeresSolverWarping::solve(float2* h_x_float, float* h_a_float, float2* h_urshape, float2* h_constraints, float* h_mask, float weightFit, float weightReg)
 {
     float weightFitSqrt = sqrt(weightFit);
     float weightRegSqrt = sqrt(weightReg);
@@ -209,12 +209,21 @@ void CeresSolverWarping::solve(float2* h_x_float, float* h_a_float, float2* h_ur
     Solver::Summary summary;
 
     options.minimizer_progress_to_stdout = !performanceTest;
-    //options.linear_solver_type = ceres::LinearSolverType::SPARSE_NORMAL_CHOLESKY;
-    options.linear_solver_type = ceres::LinearSolverType::CGNR;
+
+    //faster methods
+    options.num_threads = 1;
+    options.num_linear_solver_threads = 1;
+    options.linear_solver_type = ceres::LinearSolverType::SPARSE_NORMAL_CHOLESKY; //7.2s
+    //options.linear_solver_type = ceres::LinearSolverType::SPARSE_SCHUR; //10.0s
+    
+    //slower methods
+    //options.linear_solver_type = ceres::LinearSolverType::ITERATIVE_SCHUR; //40.6s
+    //options.linear_solver_type = ceres::LinearSolverType::CGNR; //46.9s
+    
     //options.min_linear_solver_iterations = linearIterationMin;
     options.max_num_iterations = 10000;
-    //options.linear_solver_type = ceres::LinearSolverType::SPARSE_SCHUR;
-    //options.linear_solver_type = ceres::LinearSolverType::ITERATIVE_SCHUR;
+    options.function_tolerance = 0.2;
+    options.gradient_tolerance = 1e-4 * options.function_tolerance;
 
     //options.min_lm_diagonal = 1.0f;
     //options.min_lm_diagonal = options.max_lm_diagonal;
@@ -258,6 +267,8 @@ void CeresSolverWarping::solve(float2* h_x_float, float* h_a_float, float2* h_ur
         h_x_float[i].y = h_x_double[i].y;
         h_a_float[i] = h_a_double[i];
     }
+
+    return (float)(summary.total_time_in_seconds * 1000.0);
 }
 
 #endif
