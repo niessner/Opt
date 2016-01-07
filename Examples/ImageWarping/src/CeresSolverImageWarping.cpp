@@ -3,8 +3,7 @@
 #include "main.h"
 
 #ifdef USE_CERES
-#error
-const bool performanceTest = true;
+const bool performanceTest = false;
 //const int linearIterationMin = 100;
 
 #include <cuda_runtime.h>
@@ -211,8 +210,8 @@ float CeresSolverWarping::solve(float2* h_x_float, float* h_a_float, float2* h_u
     options.minimizer_progress_to_stdout = !performanceTest;
 
     //faster methods
-    options.num_threads = 1;
-    options.num_linear_solver_threads = 1;
+    options.num_threads = 8;
+    options.num_linear_solver_threads = 8;
     options.linear_solver_type = ceres::LinearSolverType::SPARSE_NORMAL_CHOLESKY; //7.2s
     //options.linear_solver_type = ceres::LinearSolverType::SPARSE_SCHUR; //10.0s
     
@@ -222,7 +221,7 @@ float CeresSolverWarping::solve(float2* h_x_float, float* h_a_float, float2* h_u
     
     //options.min_linear_solver_iterations = linearIterationMin;
     options.max_num_iterations = 10000;
-    options.function_tolerance = 0.2;
+    options.function_tolerance = 0.4;
     options.gradient_tolerance = 1e-4 * options.function_tolerance;
 
     //options.min_lm_diagonal = 1.0f;

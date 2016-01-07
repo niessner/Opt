@@ -12,7 +12,7 @@
 
 
 static bool useCUDA = true;
-static bool useTerra = false;
+static bool useTerra = true;
 static bool useAD = true;
 static bool useCeres = false;
 
@@ -124,7 +124,7 @@ public:
 		float weightFit = 100.0f;
 		float weightReg = 0.01f;
 
-		unsigned int numIter = 5;
+		unsigned int numIter = 20;
 		unsigned int nonLinearIter = 25;
 		unsigned int linearIter = 25;
 		unsigned int patchIter = 32;

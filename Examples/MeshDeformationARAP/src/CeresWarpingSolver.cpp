@@ -5,7 +5,7 @@
 
 #ifdef USE_CERES
 
-const bool performanceTest = false;
+const bool performanceTest = true;
 //const int linearIterationMin = 100;
 
 #include <cuda_runtime.h>
