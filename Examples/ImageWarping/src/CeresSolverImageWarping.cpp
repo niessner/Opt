@@ -3,7 +3,7 @@
 #include "main.h"
 
 #ifdef USE_CERES
-
+#error
 const bool performanceTest = true;
 //const int linearIterationMin = 100;
 

@@ -10,4 +10,4 @@
 #define SAFE_DELETE_ARRAY(p) { if (p) { delete[] (p);   (p)=NULL; } }
 #endif
 
-#define USE_CERES
+//#define USE_CERES

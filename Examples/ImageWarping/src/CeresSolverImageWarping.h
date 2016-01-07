@@ -33,9 +33,8 @@ private:
     double* h_a_double;
 	int m_width, m_height;
 };
-
 #ifndef USE_CERES
-inline void CeresSolverWarping::solve(float2* h_x_float, float* h_a_float, float2* h_urshape, float2* h_constraints, float* h_mask, float weightFit, float weightReg)
+inline float CeresSolverWarping::solve(float2* h_x_float, float* h_a_float, float2* h_urshape, float2* h_constraints, float* h_mask, float weightFit, float weightReg)
 {
 
 }

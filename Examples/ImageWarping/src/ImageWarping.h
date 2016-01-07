@@ -11,10 +11,10 @@
 #include "CeresSolverImageWarping.h"
 
 
-static bool useCUDA = false;
+static bool useCUDA = true;
 static bool useTerra = false;
-static bool useAD = false;
-static bool useCeres = true;
+static bool useAD = true;
+static bool useCeres = false;
 
 class ImageWarping {
 public:
@@ -120,7 +120,7 @@ public:
 		float weightFit = 100.0f;
 		float weightReg = 0.01f;
 
-		unsigned int numIter = 20;
+		unsigned int numIter = 5;
 		unsigned int nonLinearIter = 25;
 		unsigned int linearIter = 25;
 		unsigned int patchIter = 32;
