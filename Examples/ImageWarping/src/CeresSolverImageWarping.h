@@ -36,6 +36,6 @@ private:
 #ifndef USE_CERES
 inline float CeresSolverWarping::solve(float2* h_x_float, float* h_a_float, float2* h_urshape, float2* h_constraints, float* h_mask, float weightFit, float weightReg)
 {
-
+    return 0.0f;
 }
 #endif
