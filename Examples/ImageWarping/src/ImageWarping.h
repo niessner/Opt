@@ -49,12 +49,12 @@ public:
 		float2* h_urshape = new float2[m_image.getWidth()*m_image.getHeight()];
 		float*  h_mask = new float[m_image.getWidth()*m_image.getHeight()];
 
-		for (unsigned int i = 0; i < m_image.getHeight(); i++)
+		for (unsigned int y = 0; y < m_image.getHeight(); y++)
 		{
-			for (unsigned int j = 0; j < m_image.getWidth(); j++)
+			for (unsigned int x = 0; x < m_image.getWidth(); x++)
 			{
-				h_urshape[i*m_image.getWidth() + j] = make_float2((float)i, (float)j);
-				h_mask[i*m_image.getWidth() + j] = m_imageMask(i, j);
+				h_urshape[y*m_image.getWidth() + x] = make_float2((float)x, (float)y);
+				h_mask[y*m_image.getWidth() + x] = m_imageMask(x, y);
 			}
 		}
 
@@ -72,26 +72,26 @@ public:
 	{
 		float2* h_constraints = new float2[m_image.getWidth()*m_image.getHeight()];
         printf("m_constraints.size() = %d\n", m_constraints.size());
-		for (unsigned int i = 0; i < m_image.getHeight(); i++)
-		{
-			for (unsigned int j = 0; j < m_image.getWidth(); j++)
-			{
-				h_constraints[i*m_image.getWidth() + j] = make_float2(-1, -1);
+        for (unsigned int y = 0; y < m_image.getHeight(); y++)
+        {
+            for (unsigned int x = 0; x < m_image.getWidth(); x++)
+            {
+				h_constraints[y*m_image.getWidth() + x] = make_float2(-1, -1);
 			}
 		}
 
         for (unsigned int k = 0; k < m_constraints.size(); k++)
         {
-            int i = m_constraints[k][0];
-            int j = m_constraints[k][1];
+            int x = m_constraints[k][0];
+            int y = m_constraints[k][1];
             
-            if (m_imageMask(j, i) == 0)
+            if (m_imageMask(x, y) == 0)
             {
-                float y = (1.0f - alpha)*(float)i + alpha*(float)m_constraints[k][2];
-                float x = (1.0f - alpha)*(float)j + alpha*(float)m_constraints[k][3];
+                float newX = (1.0f - alpha)*(float)x + alpha*(float)m_constraints[k][2];
+                float newY = (1.0f - alpha)*(float)y + alpha*(float)m_constraints[k][3];
 
 
-                h_constraints[i*m_image.getWidth() + j] = make_float2(y, x);
+                h_constraints[y*m_image.getWidth() + x] = make_float2(newX, newY);
             }
         }
 
@@ -235,23 +235,23 @@ public:
 		cutilSafeCall(cudaMemcpy(h_warpField, d_warpField, sizeof(float2)*m_image.getWidth()*m_image.getHeight(), cudaMemcpyDeviceToHost));
 
 		unsigned int c = 3;
-		for (unsigned int i = 0; i < m_image.getHeight(); i++)
+		for (unsigned int y = 0; y < m_image.getHeight(); y++)
 		{
-			for (unsigned int j = 0; j < m_image.getWidth(); j++)
+			for (unsigned int x = 0; x < m_image.getWidth(); x++)
 			{
-				if (i + 1 < m_image.getHeight() && j + 1 < m_image.getWidth())
+				if (y + 1 < m_image.getHeight() && x + 1 < m_image.getWidth())
 				{
-					if (m_imageMask(i, j) == 0)
+					if (m_imageMask(x, y) == 0)
 					{
-						float2 pos00 = h_warpField[i*m_image.getWidth() + j];
-						float2 pos01 = h_warpField[i*m_image.getWidth() + (j + 1)];
-						float2 pos10 = h_warpField[(i + 1)*m_image.getWidth() + j];
-						float2 pos11 = h_warpField[(i + 1)*m_image.getWidth() + (j + 1)];
+						float2 pos00 = h_warpField[y*m_image.getWidth() + x];
+						float2 pos01 = h_warpField[y*m_image.getWidth() + (x + 1)];
+						float2 pos10 = h_warpField[(y + 1)*m_image.getWidth() + x];
+						float2 pos11 = h_warpField[(y + 1)*m_image.getWidth() + (x + 1)];
 
-						float v00 = m_image(i, j);
-						float v01 = m_image(i, (j + 1));
-						float v10 = m_image((i + 1), j);
-						float v11 = m_image((i + 1), (j + 1));
+						float v00 = m_image(x, y);
+						float v01 = m_image(x, (y + 1));
+						float v10 = m_image((x + 1), y);
+						float v11 = m_image((x + 1), (y + 1));
 
 						for (unsigned int g = 0; g < c; g++)
 						{
@@ -260,10 +260,10 @@ public:
 								float alpha = (float)g / (float)c;
 								float beta = (float)h / (float)c;
 
-								bool valid00 = (m_imageMask(i, j) == 0);
-								bool valid01 = (m_imageMask(i, j+1) == 0);
-								bool valid10 = (m_imageMask(i+1, j) == 0);
-								bool valid11 = (m_imageMask(i+1, j+1) == 0);
+								bool valid00 = (m_imageMask(x,   y) == 0);
+								bool valid01 = (m_imageMask(x,   y+1) == 0);
+								bool valid10 = (m_imageMask(x+1, y) == 0);
+								bool valid11 = (m_imageMask(x+1, y+1) == 0);
 
 								if (valid00 && valid01 && valid10 && valid11)
 								{
@@ -275,17 +275,17 @@ public:
 									float v1 = (1 - alpha)*v10 + alpha* v11;
 									float v = (1 - beta)*v0 + beta * v1;
 
-									unsigned int x = (unsigned int)(pos.x + 0.5f);
-									unsigned int y = (unsigned int)(pos.y + 0.5f);
-									if (x < m_result.getHeight() && y < m_result.getWidth()) m_result(x, y) = v;
+									unsigned int newX = (unsigned int)(pos.x + 0.5f);
+                                    unsigned int newY = (unsigned int)(pos.y + 0.5f);
+									if (newX < m_result.getHeight() && newY < m_result.getWidth()) m_result(newX, newY) = v;
 								}
 								else
 								{
 									float2 pos = pos00;
 									float v = v00;
-									unsigned int x = (unsigned int)(pos.x + 0.5f);
-									unsigned int y = (unsigned int)(pos.y + 0.5f);
-									if (x < m_result.getHeight() && y < m_result.getWidth()) m_result(x, y) = v;
+                                    unsigned int newX = (unsigned int)(pos.x + 0.5f);
+                                    unsigned int newY = (unsigned int)(pos.y + 0.5f);
+                                    if (newX < m_result.getHeight() && newY < m_result.getWidth()) m_result(newX, newY) = v;
 								}
 							}
 						}

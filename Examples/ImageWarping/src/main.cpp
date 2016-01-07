@@ -40,7 +40,7 @@ int main(int argc, const char * argv[]) {
 
 
 	// PILLAR
-	
+    
 	const std::string inputImage = "bend2.png";
 	const std::string inputImageMask = "bendMask.png";
 	std::vector<std::vector<int>> constraints; constraints.resize(3);
@@ -56,7 +56,8 @@ int main(int argc, const char * argv[]) {
 	const std::string inputImageMask = "catmask.png";
 	std::vector<std::vector<int>> constraints;
 	loadConstraints(constraints, "cat.constraints");
-	*/
+    */
+	
 
 	
 	ColorImageR8G8B8A8 image = LodePNG::load(inputImage);
@@ -85,7 +86,7 @@ int main(int argc, const char * argv[]) {
 		{
 			if (y == 0 || x == 0 || y == (image.getHeight() - 1) || x == (image.getWidth() - 1))
 			{
-				std::vector<int> v; v.push_back(y); v.push_back(x); v.push_back(y); v.push_back(x);
+				std::vector<int> v; v.push_back(x); v.push_back(y); v.push_back(x); v.push_back(y);
 				constraints.push_back(v);
 			}
 		}
@@ -102,15 +103,15 @@ int main(int argc, const char * argv[]) {
 	
 			for (unsigned int k = 0; k < constraints.size(); k++)
 			{
-				if (constraints[k][2] == y && constraints[k][3] == x) 
+				if (constraints[k][2] == x && constraints[k][3] == y) 
 				{
-                    if (imageR32Mask(constraints[k][1], constraints[k][0]) == 0)
+                    if (imageR32Mask(constraints[k][0], constraints[k][1]) == 0)
 					{
 						out(x, y) = vec4uc(255, 0, 0, 255);
 					}
 				}
 		
-				if (constraints[k][0] == y && constraints[k][1] == x)
+				if (constraints[k][0] == x && constraints[k][1] == y)
 				{
 					if (imageR32Mask(x, y) == 0)
 					{
