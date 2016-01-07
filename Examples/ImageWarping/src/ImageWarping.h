@@ -11,8 +11,8 @@
 #include "CeresSolverImageWarping.h"
 
 
-static bool useCUDA = true;
-static bool useTerra = true;
+static bool useCUDA = false;
+static bool useTerra = false;
 static bool useAD = true;
 static bool useCeres = false;
 
@@ -71,7 +71,7 @@ public:
 	void setConstraintImage(float alpha)
 	{
 		float2* h_constraints = new float2[m_image.getWidth()*m_image.getHeight()];
-        printf("m_constraints.size() = %d\n", m_constraints.size());
+        //printf("m_constraints.size() = %d\n", m_constraints.size());
         for (unsigned int y = 0; y < m_image.getHeight(); y++)
         {
             for (unsigned int x = 0; x < m_image.getWidth(); x++)
@@ -125,8 +125,8 @@ public:
 		float weightReg = 0.01f;
 
 		unsigned int numIter = 20;
-		unsigned int nonLinearIter = 25;
-		unsigned int linearIter = 25;
+		unsigned int nonLinearIter = 2;
+		unsigned int linearIter = 200;
 		unsigned int patchIter = 32;
 
 		//unsigned int numIter = 20;
@@ -277,7 +277,7 @@ public:
 
 									unsigned int newX = (unsigned int)(pos.x + 0.5f);
                                     unsigned int newY = (unsigned int)(pos.y + 0.5f);
-									if (newX < m_result.getHeight() && newY < m_result.getWidth()) m_result(newX, newY) = v;
+                                    if (newX < m_result.getWidth() && newY < m_result.getHeight()) m_result(newX, newY) = v;
 								}
 								else
 								{
@@ -285,7 +285,7 @@ public:
 									float v = v00;
                                     unsigned int newX = (unsigned int)(pos.x + 0.5f);
                                     unsigned int newY = (unsigned int)(pos.y + 0.5f);
-                                    if (newX < m_result.getHeight() && newY < m_result.getWidth()) m_result(newX, newY) = v;
+                                    if (newX < m_result.getWidth() && newY < m_result.getHeight()) m_result(newX, newY) = v;
 								}
 							}
 						}
