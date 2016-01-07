@@ -14,6 +14,7 @@
 
 __inline__ __device__ float evalFDevice(unsigned int variableIdx, SolverInput& input, SolverState& state, SolverParameters& parameters)
 {
+
 	float3 e = make_float3(0.0f, 0.0f, 0.0f);
 
 	// E_fit
@@ -37,8 +38,10 @@ __inline__ __device__ float evalFDevice(unsigned int variableIdx, SolverInput& i
 		float3 d = (p - q) - R*(pHat - qHat);
 		e_reg += d*d;
 	}
+	
 	e += parameters.weightRegularizer*e_reg;
-	float res = e.x + e.y;
+	
+	float res = e.x + e.y + e.z;
 	return res;
 }
 
@@ -64,8 +67,8 @@ __inline__ __device__ float3 evalMinusJTFDevice(unsigned int variableIdx, Solver
 	// fit
 	if (state.d_target[variableIdx].x != MINF)
 	{
-		b   -= parameters.weightFitting * (p - t);
-		pre += parameters.weightFitting * ones;
+		b   -= 2.0f*parameters.weightFitting * (p - t);
+		pre += 2.0f*parameters.weightFitting * ones;
 	}
 	
 	mat3x1 e_reg; e_reg.setZero();
@@ -88,22 +91,35 @@ __inline__ __device__ float3 evalMinusJTFDevice(unsigned int variableIdx, Solver
 		mat3x3 P	= parameters.weightRegularizer*D.getTranspose()*D;
 		
 		e_reg		+= 2.0f*(p - q) - (R_i+R_j)*(pHat - qHat);
-		pre			+= 2.0f*parameters.weightRegularizer*ones;
+		pre			+= 2.0f*(2.0f*parameters.weightRegularizer*ones);
 		e_reg_angle += D.getTranspose()*((p - q) - R_i*(pHat - qHat));
-		preA		+= P;
+		preA		+= 2.0f*P;
 	}
-	b  += -parameters.weightRegularizer*e_reg;
-	bA += -parameters.weightRegularizer*e_reg_angle;
+	b  += -2.0f*parameters.weightRegularizer*e_reg;
+	bA += -2.0f*parameters.weightRegularizer*e_reg_angle;
+
+
+	//pre  = ones;		
+	//preA.setIdentity(); 
 	
-	pre  = ones;		// TODO!!!
-	preA.setIdentity(); // TODO!!!
-	
-	// Preconditioner
+	// pre-conditioner
 	if (fabs(pre(0)) > FLOAT_EPSILON && fabs(pre(1)) > FLOAT_EPSILON && fabs(pre(2)) > FLOAT_EPSILON) { pre(0) = 1.0f/pre(0);  pre(1) = 1.0f/pre(1);  pre(2) = 1.0f/pre(2); } else { pre = ones; }
 	state.d_precondioner[variableIdx] = make_float3(pre(0), pre(1), pre(2));
 
-	if (preA.det() > FLOAT_EPSILON) { preA = preA.getInverse(); } else { preA.setIdentity(); }
+	//if (preA.det() > FLOAT_EPSILON) { preA = preA.getInverse(); } else { preA.setIdentity(); }
+	//state.d_precondionerA[variableIdx] = make_float3(preA(0, 0), preA(1, 1), preA(2, 2));
+	if (preA(0, 0) > FLOAT_EPSILON) {
+		preA(0, 0) = 1.0f / preA(0, 0); 
+		preA(1, 1) = 1.0f / preA(1, 1);
+		preA(2, 2) = 1.0f / preA(2, 2);
+	}
+	else { 
+		preA(0, 0) = 1.0f;
+		preA(1, 1) = 1.0f;
+		preA(2, 2) = 1.0f;
+	}
 	state.d_precondionerA[variableIdx] = make_float3(preA(0, 0), preA(1, 1), preA(2, 2));
+		
 
 	outAngle = bA;
 	return b;
@@ -123,7 +139,7 @@ __inline__ __device__ float3 applyJTJDevice(unsigned int variableIdx, SolverInpu
 	// fit/pos
 	if (state.d_target[variableIdx].x != MINF)
 	{
-		b += parameters.weightFitting*p;
+		b += 2.0f*parameters.weightFitting*p;
 	}
 	
 	// pos/reg
@@ -145,15 +161,15 @@ __inline__ __device__ float3 applyJTJDevice(unsigned int variableIdx, SolverInpu
 		evalDerivativeRotationMatrix(state.d_a[neighbourIndex], dRAlphaJ, dRBetaJ, dRGammaJ);
 		mat3x3 D_j = -evalDerivativeRotationTimesVector(dRAlphaJ, dRBetaJ, dRGammaJ, pHat - qHat);
 		mat3x1 q = mat3x1(state.d_p[neighbourIndex]);
-		mat3x1 qAngle = mat3x1(state.d_pA[variableIdx]);
+		mat3x1 qAngle = mat3x1(state.d_pA[neighbourIndex]);
 
 		e_reg		+= 2.0f*(p-q);
 		e_reg_angle += D.getTranspose()*D*pAngle;
 		e_reg		+= D*pAngle + D_j*qAngle;
 		e_reg_angle += D.getTranspose()*(p - q);
 	}
-	b  += parameters.weightRegularizer*e_reg;
-	bA += parameters.weightRegularizer*e_reg_angle;
+	b  += 2.0f*parameters.weightRegularizer*e_reg;
+	bA += 2.0f*parameters.weightRegularizer*e_reg_angle;
 
 	outAngle = bA;
 	return b;

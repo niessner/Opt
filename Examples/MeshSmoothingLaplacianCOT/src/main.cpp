@@ -1,28 +1,16 @@
 ﻿#include "main.h"
 #include "ImageWarping.h"
 #include "OpenMesh.h"
-#include "LandMarkSet.h"
 
 int main(int argc, const char * argv[])
 {
-	std::string filename = "raptor_simplify2k.off";
-	if (argc >= 2) {
-		filename = argv[1];
-	}
-
-	// Load Constraints
-	LandMarkSet markersMesh;
-	markersMesh.loadFromFile("raptor_simplify2k_target.mrk");
-
-	std::vector<int>				constraintsIdx;
-	std::vector<std::vector<float>> constraintsTarget;
-
-	for (unsigned int i = 0; i < markersMesh.size(); i++)
-	{
-		constraintsIdx.push_back(markersMesh[i].getVertexIndex());
-		constraintsTarget.push_back(markersMesh[i].getPosition());
-	}
-
+	// Bunny
+  std::string filename = "bunny.off";
+  if (argc >= 2) {
+    filename = argv[1];
+  }
+  
+  
 	SimpleMesh* mesh = new SimpleMesh();
 	if (!OpenMesh::IO::read_mesh(*mesh, filename))
 	{
@@ -31,7 +19,7 @@ int main(int argc, const char * argv[])
 		exit(1);
 	}
 
-	ImageWarping warping(mesh, constraintsIdx, constraintsTarget);
+	ImageWarping warping(mesh);
 	SimpleMesh* res = warping.solve();
 
 	if (!OpenMesh::IO::write_mesh(*res, "out.off"))

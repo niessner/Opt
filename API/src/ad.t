@@ -1,6 +1,11 @@
 local ad = {}
 local C = terralib.includec("math.h")
 
+local use_simplify = true
+local use_condition_factoring = true
+local use_polysimplify = true
+local use_backward_ad = true
+
 local function newclass(name)
     local mt = { __name = name, variants = terralib.newlist() }
     mt.__index = mt
@@ -193,8 +198,9 @@ local function orderedexpressionkeys(tbl)
     return keys
 end
 
-
 local function simplify(op,config,args)
+    if not use_simplify then return newapply(op,config,args) end
+    
     if allconst(args) then
         local r = op:propagateconstant(args:map("v"))
         if r then return r end
@@ -291,6 +297,8 @@ local function simplify(op,config,args)
     elseif op.name == "powc" then
         if x:type() == bool then
             return x
+        elseif Apply:is(x) and x.op.name == "sqrt" and config.c == 2 then
+            return x.args[1]
         end
     elseif op.name == "select" then
         if Const:is(x) then
@@ -711,86 +719,6 @@ function Exp:__tostring()
     return expstostring(terralib.newlist{self})
 end
 
-local Vectors = {}
-function ad.isterravectortype(t) return Vectors[t] end
-ad.TerraVector = terralib.memoize(function(typ,N)
-    N = assert(tonumber(N),"expected a number")
-    local ops = { "__sub","__add","__mul","__div" }
-    local struct VecType { 
-        data : typ[N]
-    }
-    Vectors[VecType] = true
-    VecType.metamethods.type, VecType.metamethods.N = typ,N
-    VecType.metamethods.__typename = function(self) return ("%s_%d"):format(tostring(self.metamethods.type),self.metamethods.N) end
-    for i, op in ipairs(ops) do
-        local i = symbol("i")
-        local function template(ae,be)
-            return quote
-                var c : VecType
-                for [i] = 0,N do
-                    c.data[i] = operator(op,ae,be)
-                end
-                return c
-            end
-        end
-        local terra doop(a : VecType, b : VecType) [template(`a.data[i],`b.data[i])]  end
-        terra doop(a : typ, b : VecType) [template(`a,`b.data[i])]  end
-        terra doop(a : VecType, b : typ) [template(`a.data[i],`b)]  end
-       VecType.metamethods[op] = doop
-    end
-    terra VecType.metamethods.__unm(self : VecType)
-        var c : VecType
-        for i = 0,N do
-            c.data[i] = -self.data[i]
-        end
-        return c
-    end
-    terra VecType:abs()
-       var c : VecType
-       for i = 0,N do
-	  -- TODO: use opt.abs
-	  if self.data[i] < 0 then
-	     c.data[i] = -self.data[i]
-	  else
-	     c.data[i] = self.data[i]
-	  end
-       end
-       return c
-    end
-    terra VecType:sum()
-       var c : typ = 0
-       for i = 0,N do
-	  c = c + self.data[i]
-       end
-       return c
-    end
-    terra VecType:dot(b : VecType)
-        var c : typ = 0
-        for i = 0,N do
-            c = c + self.data[i]*b.data[i]
-        end
-        return c
-    end
-	terra VecType:size()
-        return N
-    end
-    terra VecType.methods.FromConstant(x : typ)
-        var c : VecType
-        for i = 0,N do
-            c.data[i] = x
-        end
-        return c
-    end
-    VecType.metamethods.__apply = macro(function(self,idx) return `self.data[idx] end)
-    VecType.metamethods.__cast = function(from,to,exp)
-        if from:isarithmetic() and to == VecType then
-            return `VecType.FromConstant(exp)
-        end
-        error(("unknown vector conversion %s to %s"):format(tostring(from),tostring(to)))
-    end
-    return VecType
-end)
-
 function Exp:d(v)
     assert(Var:is(v))
     self.derivs = self.derivs or {}
@@ -816,10 +744,19 @@ function Apply:partials()
 end
 
 function Var:calcd(v)
-   return self == v and toexp(1) or toexp(0)
+    if self == v then
+        return one
+    end
+    local k = self:key()
+    if type(k) == "table" and type(k.gradient) == "function" then -- allow variables to express external relationships to other variables
+        local gradtable = k:gradient() -- table of (var -> exp) mappings that are the gradient of this variable with respect to all unknowns of interest
+        local r = gradtable[v:key()]
+        if r then return assert(toexp(r),"expected an ad expression") end
+    end
+    return zero
 end
 function Const:calcd(v)
-    return toexp(0)
+    return zero
 end
 function Apply:calcd(v)
     local dargsdv = self.args:map("d",v)
@@ -836,27 +773,45 @@ function Reduce:calcd(v) return self.args[1]:d(v) end
 local reducepartials = terralib.newlist { one }
 function Reduce:partials() return reducepartials end
 --calc d(thisexpress)/d(exps[1]) ... d(thisexpress)/d(exps[#exps]) (i.e. the gradient of this expression with relation to the inputs) 
-function Exp:gradient(exps)
-    exps = terralib.islist(exps) and exps or terralib.newlist(exps)
-    -- reverse mode ad, work backward from this expression, accumulate stuff.
-    local tape = {} -- mapping from exp -> current accumulated derivative
-    local postorder = terralib.newlist()
-    local function visit(e)
-        if tape[e] then return end
-        tape[e] = zero
-        for i,c in ipairs(e:children()) do visit(c) end
-        postorder:insert(e)
-    end
-    visit(self)
-    tape[self] = one -- the reverse ad 'seed'
-    for i = #postorder,1,-1 do --reverse post order traversal from self to equation roots, all uses come before defs
-        local e = postorder[i]
-        local p = e:partials()
-        for j,c in ipairs(e:children()) do
-            tape[c] = tape[c] + tape[e]*p[j]
+
+if use_backward_ad then
+    function Exp:gradient(exps)
+        exps = terralib.islist(exps) and exps or terralib.newlist(exps)
+        -- reverse mode ad, work backward from this expression, accumulate stuff.
+        local tape = {} -- mapping from exp -> current accumulated derivative
+        local postorder = terralib.newlist()
+        local function visit(e)
+            if tape[e] then return end
+            tape[e] = zero
+            for i,c in ipairs(e:children()) do visit(c) end
+            postorder:insert(e)
         end
+        visit(self)
+        tape[self] = one -- the reverse ad 'seed'
+        for i = #postorder,1,-1 do --reverse post order traversal from self to equation roots, all uses come before defs
+            local e = postorder[i]
+            if Var:is(e) then
+                local k = e:key()
+                if type(k) == "table" and type(k.gradient) == "function" then -- handle optional black-box relationship to other variables
+                    local gradtable = k:gradient()
+                    for k,dv in pairs(gradtable) do
+                        local v = ad.v[k]
+                        tape[v] = (tape[v] or zero) + tape[e]*dv
+                    end
+                end
+            else
+                local p = e:partials()
+                for j,c in ipairs(e:children()) do
+                    tape[c] = tape[c] + tape[e]*p[j]
+                end
+            end
+        end
+        return exps:map(function(e) return tape[e] or zero end)
     end
-    return exps:map(function(e) return tape[e] or zero end)
+else
+    function Exp:gradient(exps)
+        return exps:map(function(v) return self:d(v) end)
+    end
 end
 
 function ad.sum:generate(exp,args)
@@ -969,7 +924,7 @@ ad.select:define(function(x,y,z)
             r = z
         end
     in r end
-end,0,ad.select(x,1,0),ad.select(x,0,1))
+end,0,x,ad.not_(x))
 
 ad.abs:define(function(x) return `terralib.select(x >= 0,x,-x) end, ad.select(ad.greatereq(x, 0),1,-1))
 
@@ -991,7 +946,7 @@ ad.greatereq:define(function(x,y) return `x >= y end,0,0)
 
 function ad.not_:propagatetype(args) return bool, {bool} end
 ad.not_:define(function(x) return `not x end, 0)
-ad.materialize:define(function(x) return x end,1) -- preserved across math optimizations
+ad.identity:define(function(x) return x end,1) -- preserved across math optimizations
 
 
 setmetatable(ad,nil) -- remove special metatable that generates new blank ops
@@ -1004,6 +959,7 @@ function ad.reduce(x)
     return getreduce(x)
 end
 function ad.polysimplify(exps)
+    if not use_polysimplify then return exps end
     local function sumtoterms(sum)
         assert(Apply:is(sum) and sum.op.name == "sum")
         local terms = terralib.newlist()
@@ -1064,26 +1020,27 @@ function ad.polysimplify(exps)
             end
         end
         -- find maximum uses
-        local maxuse,power,maxkey = 0
-        
+        local maxuse,benefit,power,maxkey = 0,0
+        local boolbonus = use_condition_factoring and 10 or 1
         local keys = orderedexpressionkeys(uses)
         for _,k in ipairs(keys) do
             local u = uses[k]
-            if u > maxuse then
-                maxuse,maxkey,power = u,k,minpower[k]
+            local b = bool == k:type() and boolbonus*u or u
+            if b > benefit then
+                maxuse,maxkey,power,benefit = u,k,minpower[k],b
             end
         end
         local keys = orderedexpressionkeys(neguses)
         for _,k in ipairs(keys) do
             local u = neguses[k]
-            if u > maxuse then
-                maxuse,maxkey,power = u,k,maxnegpower[k]
+            local b = bool == k:type() and boolbonus*u or u
+            if b > benefit then
+                maxuse,maxkey,power,benefit = u,k,maxnegpower[k],b
             end
         end
         if maxuse < 2 then
             return createsum(terms,c) -- no benefit, so stop here
         end
-        --print("FACTORING",maxuse,power,maxkey)
         --partition terms
         local used,notused = terralib.newlist(),terralib.newlist()
         for i,t in ipairs(terms) do
@@ -1125,7 +1082,26 @@ function ad.polysimplify(exps)
     end
     return terralib.islist(exps) and exps:map(dosimplify) or dosimplify(exps)
 end
+-- generate two terms, one boolean-only term and one float only term
+function ad.splitcondition(exp)
+    if use_condition_factoring and Apply:is(exp) and exp.op.name == "prod" then
+        local cond,exp_ = one,one
+        for i,e in ipairs(exp:children()) do
+            if e:type() == bool then
+                cond = cond * e
+            else
+                exp_ = exp_ * e
+            end
+        end
+        return cond,exp_ * exp.config.c
+    else
+        return one,exp
+    end
+end
 
+function ad.newop(name)
+    return Op:new { name = name }
+end
 --[[
 
 
@@ -1193,8 +1169,11 @@ local r = (x + getreduce(y + vx))
 print(r)
 local rr = r:rename(function(x) if x == "y" then return ad.v.x else return ad.v[x] end end)
 print(rr)
-]]
 local x,y,z = ad.v.x, ad.v.y, ad.v.z
 
+local w = ad.v[setmetatable({ gradient = function() return { [x] = y*z } end },{__tostring = function() return "W" end})]
+
+print(unpack((x*w):gradient{x}))
+]]
 
 return ad

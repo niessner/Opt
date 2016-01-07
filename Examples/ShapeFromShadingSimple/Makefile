@@ -42,7 +42,7 @@ endif
 
 LINK = clang++
 
-all:	meshsmoothing
+all:	shapefromshading
 
 
 %.o:	%.cpp
@@ -51,11 +51,11 @@ all:	meshsmoothing
 %.o:	%.cu
 	$(NVCC) $(NVCCFLAGS) $< -c -o $@
 
-meshsmoothing:	src/CUDAWarpingSolver.o	src/mLibSource.o src/main.o src/WarpingSolver.o src/CeresSolverSmoothingLaplacianFloat4.o
+shapefromshading:	src/CUDAImageSolver.o	src/CUDAPatchSolverWarping.o src/mLibSource.o src/main.o src/SFSSolver.o src/PatchSolverWarping.o src/SimpleBuffer.o
 	$(LINK) $^ -o $@ $(LFLAGS)
 
 clean:
 	rm -rf */*.o */*.d
-	rm -rf meshsmoothing
+	rm -rf shapefromshading
 
 -include $(wildcard */*.d)

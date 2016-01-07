@@ -2,11 +2,9 @@
 #include "ImageWarping.h"
 
 int main(int argc, const char * argv[])
-{
-
-        
-        // MONA
-	std::string inputImage = "MonaSource1.png";
+{    
+    std::string inputImage = "MonaSource1.png";
+    //std::string inputImage = "test2.png";
 	if (argc >= 2) {
 	  inputImage = std::string(argv[1]);
 	}

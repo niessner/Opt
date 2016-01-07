@@ -34,7 +34,7 @@ local Ap_X = adP:Image("Ap_X",opt.float4,W,H,-2)
 local r = Ap_X
 
 local L = terralib.newlist
-local function S(im,idx,exp) return { image = im, index = idx, expression = exp } end
+local function S(im,idx,exp) return { image = im, index = idx, expression = exp, kind = "add" } end
 
 -- cost
 local x,a= X(0,0),A(0,0)

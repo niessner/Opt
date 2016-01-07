@@ -69,6 +69,8 @@ __inline__ __device__ float4 evalMinusJTFDevice(unsigned int variableIdx, Solver
 	if (validN3){ float4 q = state.d_x[get1DIdx(n3_i, n3_j, input.width, input.height)]; float4 tq = state.d_target[get1DIdx(n3_i, n3_j, input.width, input.height)]; e_reg += (p - q) - (t - tq); pre += make_float4(1.0f, 1.0f, 1.0f, 1.0f); }
 	b += -e_reg;
 
+	pre = make_float4(1.0f, 1.0f, 1.0f, 1.0f);
+
 	// Preconditioner
 	if (pre.x > FLOAT_EPSILON) pre = 1.0f / pre;
 	else					   pre = make_float4(1.0f, 1.0f, 1.0f, 1.0f);

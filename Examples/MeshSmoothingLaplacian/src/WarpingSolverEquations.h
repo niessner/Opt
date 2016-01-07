@@ -67,7 +67,7 @@ __inline__ __device__ float3 evalMinusJTFDevice(unsigned int variableIdx, Solver
 	}
 	b += -2.0f*parameters.weightRegularizer*e_reg;
 
-	pre = make_float3(1.0f, 1.0f, 1.0f); // TODO!!!
+	//pre = make_float3(1.0f, 1.0f, 1.0f);
 
 	// Preconditioner
 	if (pre.x > FLOAT_EPSILON) pre = 1.0f / pre;

@@ -31,9 +31,8 @@ struct RegConstraint {
         return true;
     }
 
-    static RegCostFunction* Create(int var0, int var1, float weight,
-        vector<double>& values,
-        vector<double*>& parameterBlocks) {
+    static RegCostFunction* Create(int var0, int var1, float weight, vector<double>& values, vector<double*>& parameterBlocks)
+    {
         auto constraint = new RegConstraint(var0, var1, weight);
         auto costFunction = new RegCostFunction(constraint);
 
@@ -71,7 +70,8 @@ struct FitConstraint {
 
     static FitCostFunction* Create(int pixel, float value, float weight,
         vector<double>& values,
-        vector<double*>& parameterBlocks) {
+        vector<double*>& parameterBlocks)
+    {
         auto constraint = new FitConstraint(pixel, value, weight);
         auto costFunction = new FitCostFunction(constraint);
 
@@ -127,7 +127,7 @@ void CeresSolverSmoothingLaplacianFloat4::solve(const ColorImageR32G32B32A32 &im
     _height = image.getHeight();
 
     weightFit = sqrt(weightFit);
-    weightReg = sqrt(weightReg);
+    weightReg = sqrt(2.0f * weightReg);
 
     auto getVarIndex = [=](int x, int y, int c)
     {
@@ -155,7 +155,7 @@ void CeresSolverSmoothingLaplacianFloat4::solve(const ColorImageR32G32B32A32 &im
     {
         vector<double*> parameterBlocks;
         auto costFunction = RegConstraint::Create(e.x, e.y, weightReg, variables, parameterBlocks);
-        problem.AddResidualBlock(costFunction, NULL, parameterBlocks);
+        problem.AddResidualBlock(costFunction, nullptr, parameterBlocks);
     }
 
     // add all fit constraints
@@ -165,7 +165,7 @@ void CeresSolverSmoothingLaplacianFloat4::solve(const ColorImageR32G32B32A32 &im
         {
             vector<double*> parameterBlocks;
             auto costFunction = FitConstraint::Create(getVarIndex(p.x, p.y, c), p.value[c], weightFit, variables, parameterBlocks);
-            problem.AddResidualBlock(costFunction, NULL, parameterBlocks);
+            problem.AddResidualBlock(costFunction, nullptr, parameterBlocks);
         }
     }
 
@@ -183,6 +183,9 @@ void CeresSolverSmoothingLaplacianFloat4::solve(const ColorImageR32G32B32A32 &im
     //options.min_lm_diagonal = options.max_lm_diagonal;
     //options.max_lm_diagonal = 10000000.0;
 
+    //problem.Evaluate(Problem::EvaluateOptions(), &cost, nullptr, nullptr, nullptr);
+    //cout << "Cost*2 start: " << cost << endl;
+
     double elapsedTime;
     {
         ml::Timer timer;
@@ -191,6 +194,10 @@ void CeresSolverSmoothingLaplacianFloat4::solve(const ColorImageR32G32B32A32 &im
     }
 
     cout << "Done, " << elapsedTime << "ms" << endl;
+
+    double cost = -1.0;
+    problem.Evaluate(Problem::EvaluateOptions(), &cost, nullptr, nullptr, nullptr);
+    cout << "Cost*2 end: " << cost * 2 << endl;
 
     cout << summary.FullReport() << endl;
 
@@ -201,6 +208,8 @@ void CeresSolverSmoothingLaplacianFloat4::solve(const ColorImageR32G32B32A32 &im
             p.value[c] = variables[getVarIndex(p.x, p.y, c)];
         }
     }
+
+    //cout << "CERES result (0, 0): " << result(0, 0) << endl;
 }
 
 #endif

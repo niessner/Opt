@@ -55,6 +55,13 @@ struct SolverState
     float*	d_preconditioner;
 
     float*	d_sumResidual;
+
+    // Precompute buffers
+    float* B_I;
+    float* B_I_dx0;
+    float* B_I_dx1;
+    float* B_I_dx2;
+
 };
 
 #endif

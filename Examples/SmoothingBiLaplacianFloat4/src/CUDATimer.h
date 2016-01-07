@@ -28,7 +28,14 @@ struct CUDATimer {
     std::vector<TimingInfo> timingEvents;
     int currentIteration;
 
-    CUDATimer() : currentIteration(0) {}
+    CUDATimer() : currentIteration(0) {
+        TimingInfo timingInfo;
+        cudaEventCreate(&timingInfo.startEvent);
+        cudaEventCreate(&timingInfo.endEvent);
+        cudaEventRecord(timingInfo.startEvent);
+        timingInfo.eventName = "overall";
+        timingEvents.push_back(timingInfo);
+    }
     void nextIteration() {
         ++currentIteration;
     }
@@ -53,6 +60,7 @@ struct CUDATimer {
     }
 
     void evaluate() {
+        cudaEventRecord(timingEvents[0].endEvent);
         std::vector<std::string> aggregateTimingNames;
         std::vector<float> aggregateTimes;
         std::vector<int> aggregateCounts;

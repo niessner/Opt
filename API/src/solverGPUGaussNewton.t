@@ -17,8 +17,8 @@ return function(problemSpec)
 
 	local unknownElement = problemSpec:UnknownType().metamethods.typ
 	local unknownType = problemSpec:UnknownType()
-
-	local struct PlanData(S.Object) {
+    local isGraph = #problemSpec.functions.cost.graphfunctions > 0
+    local struct PlanData(S.Object) {
 		plan : opt.Plan
 		parameters : problemSpec:ParameterType(false)	--get the non-blocked version
 		scratchF : &float
@@ -42,6 +42,7 @@ return function(problemSpec)
 		scanBeta : &float					-- tmp variable for alpha scan
 		
 		timer : Timer
+		endSolver : util.TimerEvent
 		nIter : int				--current non-linear iter counter
 		nIterations : int		--non-linear iterations
 		lIterations : int		--linear iterations
@@ -52,8 +53,6 @@ return function(problemSpec)
 	local terra isBlockOnBoundary(gi : int, gj : int, width : uint, height : uint) : bool
 		-- TODO meta program the bad based on the block size and stencil;
 		-- TODO assert padX > stencil
-		
-		
 		var padX : int
 		var padY : int
 		escape
@@ -73,6 +72,19 @@ return function(problemSpec)
 		return false
 	end
 	
+	local guardedInvert = macro(function(p)
+	    local pt = p:gettype()
+	    if util.isvectortype(pt) then
+	        return quote
+	                    var invp = p
+	                    for i = 0, invp:size() do
+	                        invp(i) = terralib.select(invp(i) > FLOAT_EPSILON, 1.f / invp(i),invp(i))
+	                    end
+	               in invp end
+	    else
+	        return `terralib.select(p > FLOAT_EPSILON, 1.f / p, p)
+	    end
+	end)
 
     local kernels = {}
     terra kernels.PCGInit1(pd : PlanData)
@@ -88,19 +100,31 @@ return function(problemSpec)
                 residuum, pre = problemSpec.functions.evalJTF.unknownfunction(w, h, w, h, pd.parameters)
                 residuum = -residuum
                 pd.r(w, h) = residuum
-            end
+				
+				if not problemSpec.usepreconditioner then
+					pre = 1.0f
+				end
+            end        
             
-            pd.preconditioner(w, h) = pre
-            var p = pre*residuum	-- apply pre-conditioner M^-1			   
-            pd.p(w, h) = p
-        
-            --d = residuum*p			-- x-th term of nominator for computing alpha and denominator for computing beta
-            d = util.Dot(residuum,p) 
+			if not isGraph then
+				
+				pre = guardedInvert(pre)
+				var p = pre*residuum	-- apply pre-conditioner M^-1			   
+				pd.p(w, h) = p
+				
+				--d = residuum*p		-- x-th term of nominator for computing alpha and denominator for computing beta
+				d = util.Dot(residuum,p) 
+			end
+			
+			pd.preconditioner(w, h) = pre
+			
         end 
-        d = util.warpReduce(d)	
-        if (util.laneid() == 0) then
-            util.atomicAdd(pd.scanAlpha, d)
-        end
+		if not isGraph then
+			d = util.warpReduce(d)	
+			if (util.laneid() == 0) then				
+				util.atomicAdd(pd.scanAlpha, d)
+			end
+		end
     end
     
     terra kernels.PCGInit1_Graph(pd : PlanData)
@@ -110,19 +134,29 @@ return function(problemSpec)
 				local name,implementation = func.graphname,func.implementation
 				emit quote 
 	    			if util.getValidGraphElement(pd,[name],&tIdx) then
-						implementation(tIdx, pd.parameters, pd.p, pd.r)
+						implementation(tIdx, pd.parameters, pd.r, pd.preconditioner)
 	    			end 
 				end
     		end
     	end
     end
 
-    terra kernels.PCGInit1_Finish(pd : PlanData)
+    terra kernels.PCGInit1_Finish(pd : PlanData)	--only called for graphs
     	var d = 0.0f -- init for out of bounds lanes
         var w : int, h : int
         if getValidUnknown(pd, &w, &h) then
-        	var residuum = pd.r(w, h)
-        	d = util.Dot(residuum, residuum * pd.preconditioner(w, h))
+        	var residuum = pd.r(w, h)			
+			var pre = pd.preconditioner(w, h)
+			
+			pre = guardedInvert(pre)
+			
+			if not problemSpec.usepreconditioner then
+				pre = 1.0f
+			end
+			
+			var p = pre*residuum	-- apply pre-conditioner M^-1			   
+			pd.p(w, h) = p
+        	d = util.Dot(residuum, p)
         end
 
 		d = util.warpReduce(d)	
@@ -192,7 +226,16 @@ return function(problemSpec)
             var r = pd.r(w,h)-alpha*pd.Ap_X(w,h)				-- update residuum
             pd.r(w,h) = r										-- store for next kernel call
         
-            var z = pd.preconditioner(w,h)*r					-- apply pre-conditioner M^-1
+			var pre = pd.preconditioner(w,h)
+			if not problemSpec.usepreconditioner then
+				pre = 1.0f
+			end
+			
+			if isGraph then
+				pre = guardedInvert(pre)
+			end
+			
+            var z = pre*r										-- apply pre-conditioner M^-1
             pd.z(w,h) = z;										-- save for next kernel call
             
             --b = z*r;											-- compute x-th term of the nominator of beta
@@ -258,6 +301,19 @@ return function(problemSpec)
         cost = util.warpReduce(cost)
         if (util.laneid() == 0) then
             util.atomicAdd(pd.scratchF, cost)
+        end
+    end
+    
+    terra kernels.precomputeImages(pd : PlanData)
+        var w : int, h : int
+        if util.getValidUnknown(pd,&w,&h) then
+            escape
+                if problemSpec.functions.precompute then
+                    emit quote 
+                        problemSpec.functions.precompute.unknownfunction(w,h,w,h,pd.parameters)
+                    end
+                end
+            end
         end
     end
 
@@ -329,8 +385,8 @@ return function(problemSpec)
 	local terra init(data_ : &opaque, images : &&opaque, graphSizes : &int32, edgeValues : &&opaque, xs : &&int32, ys : &&int32, params_ : &&opaque, solverparams : &&opaque)
 	   var pd = [&PlanData](data_)
 	   pd.timer:init()
-	   pd.parameters = [util.getParameters(problemSpec, images, graphSizes,edgeValues,xs,ys,params_)]
-
+	   pd.timer:startEvent("overall",nil,&pd.endSolver)
+       [util.initParameters(`pd.parameters,problemSpec,images, graphSizes,edgeValues,xs,ys,params_,true)]
 	   pd.nIter = 0
 	   
 	   escape 
@@ -384,8 +440,18 @@ return function(problemSpec)
 
 	local terra step(data_ : &opaque, images : &&opaque, graphSizes : &int32, edgeValues : &&opaque, xs : &&int32, ys : &&int32, params_ : &&opaque, solverparams : &&opaque)
 		var pd = [&PlanData](data_)
-		pd.parameters = [util.getParameters(problemSpec, images, graphSizes,edgeValues,xs,ys,params_)]
-		escape 
+		[util.initParameters(`pd.parameters,problemSpec, images, graphSizes,edgeValues,xs,ys,params_,false)]
+        
+        var suffix = "optNoAD"
+
+        --Hack for debugging SFS
+        --[[
+        var solveCount = ([&&uint32](params_))[39][0]
+        var isAD : bool = (solveCount == 1)
+        if isAD then
+        	suffix = "optAD"
+        end--]]
+        escape 
 	    	if util.debugDumpInfo then
 	    		emit quote
 
@@ -395,23 +461,23 @@ return function(problemSpec)
 		    			C.printf("dumpingCostJTFAndPre\n")
 		    			gpu.dumpCostJTFAndPre(pd)
 		    			C.printf("saving\n")
-		    			dbg.imageWriteFromCudaPrefix(pd.debugCostImage, pd.parameters.X:W(), pd.parameters.X:H(), 1, "cost")
-		    			dbg.imageWriteFromCudaPrefix(pd.debugJTFImage, pd.parameters.X:W(), pd.parameters.X:H(), sizeof([unknownElement]) / 4, "JTF")
-		    			dbg.imageWriteFromCudaPrefix(pd.debugPreImage, pd.parameters.X:W(), pd.parameters.X:H(), sizeof([unknownElement]) / 4, "Pre")
+		    			dbg.imageWriteFromCudaPrefixSuffix(pd.debugCostImage, pd.parameters.X:W(), pd.parameters.X:H(), 1, "cost", suffix)
+		    			dbg.imageWriteFromCudaPrefixSuffix(pd.debugJTFImage, pd.parameters.X:W(), pd.parameters.X:H(), sizeof([unknownElement]) / 4, "JTF", suffix)
+		    			dbg.imageWriteFromCudaPrefixSuffix(pd.debugPreImage, pd.parameters.X:W(), pd.parameters.X:H(), sizeof([unknownElement]) / 4, "Pre", suffix)
 		    		end
 
 
 	    		end
 	    	end
 		end
-
+		
+        gpu.precomputeImages(pd)    
 		if pd.nIter < pd.nIterations then
 		    var startCost = computeCost(pd)
 			logSolver("iteration %d, cost=%f\n", pd.nIter, startCost)
 
 			C.cudaMemset(pd.scanAlpha, 0, sizeof(float))	--scan in PCGInit1 requires reset
 			gpu.PCGInit1(pd)
-			var isGraph = true
 			if isGraph then
 				C.cudaMemset(pd.scanAlpha, 0, sizeof(float))	--TODO: don't write to scanAlpha in the previous kernel if it is a graph
 				gpu.PCGInit1_Graph(pd)	
@@ -470,7 +536,7 @@ return function(problemSpec)
 			    			C.printf("dumpingJTJ\n")
 			    			gpu.dumpJTJ(pd)
 			    			C.printf("saving\n")
-			    			dbg.imageWriteFromCudaPrefix(pd.debugJTJImage, pd.parameters.X:W(), pd.parameters.X:H(), sizeof([unknownElement]) / 4, "JTJ")
+			    			dbg.imageWriteFromCudaPrefixSuffix(pd.debugJTJImage, pd.parameters.X:W(), pd.parameters.X:H(), sizeof([unknownElement]) / 4, "JTJ", suffix)
 			    			return 0
 			    		end
 		    		end
@@ -505,7 +571,7 @@ return function(problemSpec)
 			        end
 
 			end
-				
+			
 			gpu.PCGLinearUpdate(pd)
 		    pd.nIter = pd.nIter + 1
 		    return 1
@@ -513,18 +579,48 @@ return function(problemSpec)
 			escape
 				if util.debugDumpInfo then
 		    		emit quote
-						dbg.imageWriteFromCudaPrefix([&float](pd.parameters.X.data), pd.parameters.X:W(), pd.parameters.X:H(), sizeof([unknownElement]) / 4, "result")
+						dbg.imageWriteFromCudaPrefixSuffix([&float](pd.parameters.X.data), pd.parameters.X:W(), pd.parameters.X:H(), sizeof([unknownElement]) / 4, "result", suffix)
 
 					end
 				end
 			end
 			var finalCost = computeCost(pd)
 			logSolver("final cost=%f\n", finalCost)
+		    pd.timer:endEvent(nil,pd.endSolver)
 		    pd.timer:evaluate()
 		    pd.timer:cleanup()
 		    return 0
 		end
 	end
+
+    --[[
+    local paramprints = {}
+    local paramnames_str = ''
+    local pdsym = symbol(&PlanData)
+    for _,pair in ipairs(problemSpec.ProblemParameters.entries) do
+        local name,typ = unpack(pair)
+        if typ:isstruct() and typ.metamethods.is_an_image_type then
+            table.insert(paramprints,quote
+                pdsym.parameters.[name]:debugprint()
+            end)
+            paramnames_str=paramnames_str..' '..name
+        end
+    end
+    terra PlanData:debugprint()
+        C.printf(["printing image structs...\n"..
+                  "delta r z p Ap_X preconditioner rDotzOld"..paramnames_str..
+                  "\n"])
+        self.delta:debugprint()
+        self.r:debugprint()
+        self.z:debugprint()
+        self.p:debugprint()
+        self.Ap_X:debugprint()
+        self.preconditioner:debugprint()
+        self.rDotzOld:debugprint()
+        var [pdsym] = self
+        [paramprints]
+    end
+    --]]
 
 	local terra makePlan() : &opt.Plan
 		var pd = PlanData.alloc()

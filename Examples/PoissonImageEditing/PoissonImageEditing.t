@@ -1,11 +1,14 @@
 local IO = terralib.includec("stdio.h")
-local P = opt.ProblemSpec()
+local adP = ad.ProblemSpec()
+local P = adP.P
 local W,H = opt.Dim("W",0), opt.Dim("H",1)
 
 P:Image("X", opt.float4,W,H,0)
 P:Image("T", opt.float4,W,H,1)
 P:Image("M", float, W,H,2)
+
 P:Stencil(1)
+P:UsePreconditioner(false)	--TODO needs to be implemented (in this file)
 
 local C = terralib.includecstring [[
 #include <math.h>
@@ -123,10 +126,9 @@ local terra applyJTJ(i : int32, j : int32, gi : int32, gj : int32, self : P:Para
 	return res
 end
 
-
-P:Function("cost", {W,H}, cost)
-P:Function("gradient", {W,H}, gradient)
-P:Function("evalJTF", {W,H}, evalJTF)
-P:Function("applyJTJ", {W,H}, applyJTJ)
+P:Function("cost", cost)
+P:Function("gradient", gradient)
+P:Function("evalJTF", evalJTF)
+P:Function("applyJTJ", applyJTJ)
 
 return P

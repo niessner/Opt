@@ -309,26 +309,27 @@ static void compareOptAndTerraNonBlock(RenderDevice* rd, const String& directory
     shared_ptr<Texture> jtjTerra = Texture::getTextureByName(directory + "JTJ" + terra);
 
 
-    static shared_ptr<Texture> costDiff = Texture::singleChannelDifference(rd, costOpt, costTerra);
-    static shared_ptr<Texture> jtfDiff = Texture::singleChannelDifference(rd, jtfOpt, jtfTerra);
-    static shared_ptr<Texture> jtjDiff = Texture::singleChannelDifference(rd, jtjOpt, jtjTerra);
-    static shared_ptr<Texture> preDiff = Texture::singleChannelDifference(rd, preOpt, preTerra);
+    static shared_ptr<Texture> costDiff = differenceImage(rd, "Cost Diff (O-T)", costOpt, costTerra);
+    static shared_ptr<Texture> jtfDiff  = differenceImage(rd, "JTF Diff (O-T)", jtfOpt, jtfTerra);
+    static shared_ptr<Texture> jtjDiff  = differenceImage(rd, "JTJ Diff (O-T)", jtjOpt, jtjTerra);
+    static shared_ptr<Texture> preDiff  = differenceImage(rd, "Pre Diff (O-T)", preOpt, preTerra);
 
+    debugPrintf("Opt vs Terra\n");
 
     highPrecisionCompare("Cost", costOpt, costTerra);
     highPrecisionCompare("JTF", jtfOpt, jtfTerra);
     highPrecisionCompare("JTJ", jtjOpt, jtjTerra);
     highPrecisionCompare("Pre", preOpt, preTerra);
 
-    jtfDiff->visualization.documentGamma = 2.2f;
+    /*jtfDiff->visualization.documentGamma = 2.2f;
     costDiff->visualization.documentGamma = 2.2f;
     jtjDiff->visualization.documentGamma = 2.2f;
-    preDiff->visualization.documentGamma = 2.2f;
+    preDiff->visualization.documentGamma = 2.2f;*/
 
-    static shared_ptr<Texture> jtjQ = quotientImage(rd, "JTJ Quotient", jtjOpt, jtjTerra);
-    static shared_ptr<Texture> jtfQ = quotientImage(rd, "JTF Quotient", jtfOpt, jtfTerra);
-    static shared_ptr<Texture> costQ = quotientImage(rd, "Cost Quotient", costOpt, costTerra);
-    static shared_ptr<Texture> preQ = quotientImage(rd, "Pre Quotient", preOpt, preTerra);
+    static shared_ptr<Texture> jtjQ = quotientImage(rd, "JTJ Quotient (O-T)", jtjOpt, jtjTerra);
+    static shared_ptr<Texture> jtfQ = quotientImage(rd, "JTF Quotient (O-T)", jtfOpt, jtfTerra);
+    static shared_ptr<Texture> costQ = quotientImage(rd, "Cost Quotient (O-T)", costOpt, costTerra);
+    static shared_ptr<Texture> preQ = quotientImage(rd, "Pre Quotient (O-T)", preOpt, preTerra);
 }
 
 
@@ -351,7 +352,8 @@ void App::onInit() {
     developerWindow->cameraControlWindow->moveTo(Point2(developerWindow->cameraControlWindow->rect().x0(), 0));
     
     //String directory = "D:/Projects/DSL/Optimization/Examples/ShapeFromShading/";
-    String directory = "D:/Projects/DSL/Optimization/Examples/ShapeFromShadingSimple/";
+    //String directory = "D:/Projects/DSL/Optimization/Examples/ShapeFromShadingSimple/";
+    String directory = "/Users/michaelmara/OptDSL/Opt/Examples/ShapeFromShadingSimple/";
 
     Array<String> filenames;
     FileSystem::getFiles(directory+"*.imagedump", filenames);
@@ -364,9 +366,9 @@ void App::onInit() {
     RenderDevice* rd = RenderDevice::current;
     //compareCUDABlockAndNonBlock(rd, directory);
 
-    //compareCUDAAndTerraNonBlock(rd, directory);
+    compareCUDAAndTerraNonBlock(rd, directory);
 
-    //compareOptAndTerraNonBlock(rd, directory);
+    compareOptAndTerraNonBlock(rd, directory);
 
     //compareOptAndCudaNonBlock(rd, directory);
 

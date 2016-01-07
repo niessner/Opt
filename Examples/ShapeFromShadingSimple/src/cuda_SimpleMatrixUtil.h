@@ -3,9 +3,6 @@
 #ifndef _CUDA_SIMPLE_MATRIX_UTIL_
 #define _CUDA_SIMPLE_MATRIX_UTIL_
 
-#define MINF __int_as_float(0xff800000)
-#define INF  __int_as_float(0x7f800000)
-
 #include <iostream>
 #include "cudaUtil.h"
 
@@ -1294,36 +1291,6 @@ class matNxM
 				}
 				printf("\n");
 			}
-		}
-
-		inline __device__ bool checkMINF() const
-		{
-			__CONDITIONAL_UNROLL__
-			for(unsigned int i = 0; i<N; i++)
-			{
-				__CONDITIONAL_UNROLL__
-				for(unsigned int j = 0; j<M; j++)
-				{
-					if((*this)(i, j) == MINF) return true;
-				}
-			}
-
-			return false;
-		}
-
-		inline __device__ bool checkINF() const
-		{
-			__CONDITIONAL_UNROLL__
-			for(unsigned int i = 0; i<N; i++)
-			{
-				__CONDITIONAL_UNROLL__
-				for(unsigned int j = 0; j<M; j++)
-				{
-					if((*this)(i, j) == INF) return true;
-				}
-			}
-
-			return false;
 		}
 
 		inline __device__ bool checkQNAN() const

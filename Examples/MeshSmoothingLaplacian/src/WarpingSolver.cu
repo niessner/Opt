@@ -70,10 +70,10 @@ float EvalResidual(SolverInput& input, SolverState& state, SolverParameters& par
 
 	residual = state.getSumResidual();
 
-#ifdef _DEBUG
-	cutilSafeCall(cudaDeviceSynchronize());
-	cutilCheckMsg(__FUNCTION__);
-#endif
+#	ifdef _DEBUG
+		cutilSafeCall(cudaDeviceSynchronize());
+		cutilCheckMsg(__FUNCTION__);
+#	endif
 
 	return residual;
 }
@@ -144,7 +144,6 @@ void Initialization(SolverInput& input, SolverState& state, SolverParameters& pa
 		cutilSafeCall(cudaDeviceSynchronize());
 		cutilCheckMsg(__FUNCTION__);
 	#endif
-
 
 	#if DEBUG_PRINT_SOLVER_INFO 
 	    float temp;
@@ -324,8 +323,11 @@ extern "C" void ImageWarpiungSolveGNStub(SolverInput& input, SolverState& state,
 
         timer.nextIteration();
 	}
-    timer.evaluate();
+
 
 	float residual = EvalResidual(input, state, parameters, timer);
 	printf("final cost: %f\n", residual);
+
+    timer.evaluate();
+
 }

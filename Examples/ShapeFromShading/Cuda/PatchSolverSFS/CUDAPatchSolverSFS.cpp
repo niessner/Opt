@@ -7,6 +7,7 @@
 #include "../../GlobalAppState.h"
 #include "../../Optimizer.h"
 #include "../../DumpOptImage.h"
+#include "SolverSFSCeres.h"
 
 extern "C" void copyFloatMapFill(float* d_output, float* d_input, unsigned int width, unsigned int height);
 
@@ -91,7 +92,7 @@ CUDAPatchSolverSFS::~CUDAPatchSolverSFS()
 }
 
 
-enum SolveMode {TERRA_NO_AD, TERRA_AD, CUDA};
+enum SolveMode {TERRA_NO_AD, TERRA_AD, CUDA, CERES};
 
 
 static void constructTerraInput(void* d_x, const PatchSolverInput& solverInput, const PatchSolverParameters& parameters, float* deltaTransformPtr, std::vector<void*>& images, TerraSolverParameters& tParams, unsigned int solveCount, bool optCPU) {
@@ -211,6 +212,9 @@ void CUDAPatchSolverSFS::solveSFS(float* d_targetDepth, float* d_depthMapRefined
 
     ConvergenceAnalysis<float>* ca = GlobalAppState::get().s_convergenceAnalysisIsRunning && GlobalAppState::get().s_playData ? &GlobalAppState::get().s_convergenceAnalysis : NULL;
     SolveMode mode = (GlobalAppState::get().s_optimizer == 0) ? CUDA : ((GlobalAppState::get().s_optimizer == 1) ? SolveMode::TERRA_AD : SolveMode::TERRA_NO_AD);
+
+    if (GlobalAppState::get().s_optimizer == 3) mode = CERES;
+
     std::vector<uint32_t> elemsize;
     for (int i = 0; i < 4; ++i) {
         elemsize.push_back(sizeof(float));
@@ -300,6 +304,24 @@ void CUDAPatchSolverSFS::solveSFS(float* d_targetDepth, float* d_depthMapRefined
             //tParams.save("default.SFSSolverParameters");
             TerraSolverParameterPointers indirectParameters(tParams);
             s_optimizerNoAD->solve(plan, images, &indirectParameters);
+            ++solveCount;
+        }
+        break;
+    case CERES:
+        {
+            static unsigned int solveCount = 0;
+
+            CeresSolverSFS solver;
+
+            //m_solverInput.width, m_solverInput.height, elemsize
+            //Plan* plan = maybeInitOptimizerAndPlan(true, "shapeFromShadingAD.t", "gradientDescentCPU", m_solverInput.width, m_solverInput.height, elemsize);
+
+            std::vector<void*> images;
+            TerraSolverParameters tParams;
+            constructTerraInput(m_patchSolverState.d_x, m_solverInput, parameters, deltaTransform.ptr(), images, tParams, solveCount, true);
+            
+            TerraSolverParameterPointers indirectParameters(tParams);
+            solver.solve(m_solverInput.width, m_solverInput.height, elemsize, images, indirectParameters);
             ++solveCount;
         }
         break;

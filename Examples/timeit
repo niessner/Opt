@@ -1,0 +1,5 @@
+#!/bin/bash
+(cd ImageWarping; ./imagewarping 2>&1 | egrep "(TIMING|final)" | tail -n 2 | sed s/TIMING/ImageWarping/g);
+(cd MeshDeformationARAP; ./meshdeformation 2>&1 | egrep "(TIMING|final)" | tail -n 2 | sed s/TIMING/MeshDeformation/g);
+(cd ShapeFromShadingSimple; ./shapefromshading 2>&1 | egrep "(TIMING|final)" | tail -n 2 | sed s/TIMING/ShapeFromShading/g);
+
