@@ -71,27 +71,31 @@ public:
 	void setConstraintImage(float alpha)
 	{
 		float2* h_constraints = new float2[m_image.getWidth()*m_image.getHeight()];
+        printf("m_constraints.size() = %d\n", m_constraints.size());
 		for (unsigned int i = 0; i < m_image.getHeight(); i++)
 		{
 			for (unsigned int j = 0; j < m_image.getWidth(); j++)
 			{
 				h_constraints[i*m_image.getWidth() + j] = make_float2(-1, -1);
-				for (unsigned int k = 0; k < m_constraints.size(); k++)
-				{
-					if (m_constraints[k][0] == i && m_constraints[k][1] == j)
-					{
-						if (m_imageMask(i, j) == 0)
-						{
-							float y = (1.0f - alpha)*(float)i + alpha*(float)m_constraints[k][2];
-							float x = (1.0f - alpha)*(float)j + alpha*(float)m_constraints[k][3];
-
-
-							h_constraints[i*m_image.getWidth() + j] =  make_float2(y, x);
-						}
-					}
-				}
 			}
 		}
+
+        for (unsigned int k = 0; k < m_constraints.size(); k++)
+        {
+            int i = m_constraints[k][0];
+            int j = m_constraints[k][1];
+            
+            if (m_imageMask(j, i) == 0)
+            {
+                float y = (1.0f - alpha)*(float)i + alpha*(float)m_constraints[k][2];
+                float x = (1.0f - alpha)*(float)j + alpha*(float)m_constraints[k][3];
+
+
+                h_constraints[i*m_image.getWidth() + j] = make_float2(y, x);
+            }
+        }
+
+
 
 		cutilSafeCall(cudaMemcpy(d_constraints, h_constraints, sizeof(float2)*m_image.getWidth()*m_image.getHeight(), cudaMemcpyHostToDevice));
 		delete h_constraints;
