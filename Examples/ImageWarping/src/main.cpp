@@ -40,26 +40,23 @@ int main(int argc, const char * argv[]) {
 
 
 	// PILLAR
-    
+    /*
 	const std::string inputImage = "bend2.png";
 	const std::string inputImageMask = "bendMask.png";
 	std::vector<std::vector<int>> constraints; constraints.resize(3);
 	constraints[0].push_back(48); constraints[0].push_back(61); constraints[0].push_back(144); constraints[0].push_back(69);
 	constraints[1].push_back(64); constraints[1].push_back(61); constraints[1].push_back(154); constraints[1].push_back(82);
 	constraints[2].push_back(80); constraints[2].push_back(61); constraints[2].push_back(165); constraints[2].push_back(92);
-	
+	*/
 
 
 	// CAT
-    /*
 	const std::string inputImage = "cartooncat.png";
 	const std::string inputImageMask = "catmask.png";
 	std::vector<std::vector<int>> constraints;
 	loadConstraints(constraints, "cat.constraints");
-    */
-	
+    
 
-	
 	ColorImageR8G8B8A8 image = LodePNG::load(inputImage);
 	ColorImageR32 imageR32(image.getWidth(), image.getHeight());
 	//printf("width %d, height %d\n", image.getWidth(), image.getHeight());
