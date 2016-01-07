@@ -138,8 +138,9 @@ __global__ void PCGStepPatch_Kernel_SFS_BSP_Mask_Prior(PatchSolverInput input, P
 	//////////////////////////////////////////////////////////////////////////////////////////
 	// Initialize linear patch systems
 	//////////////////////////////////////////////////////////////////////////////////////////
-
+#if USE_ACCURATE_PATCH_SOLVING
     fillPatchBorderPWithJTF(P, patchID_x, patchID_y, tId_i, tId_j, gId_i, gId_j, W, H, state, input, parameters);
+#endif
 
 	float d = 0.0f;
 	if(isInsideImage(gId_i, gId_j, W, H))
@@ -288,9 +289,9 @@ __global__ void PCGStepPatch_Kernel_SaveInitialCostJTFAndPreAndJTJ(PatchSolverIn
 
 
     int resultIndex = gId_i*W + gId_j;
-
+#if USE_ACCURATE_PATCH_SOLVING
     fillPatchBorderPWithJTF(P, patchID_x, patchID_y, tId_i, tId_j, gId_i, gId_j, W, H, state, input, parameters);
-
+#endif
     //////////////////////////////////////////////////////////////////////////////////////////
     // Initialize linear patch systems
     //////////////////////////////////////////////////////////////////////////////////////////
