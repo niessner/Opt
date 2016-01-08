@@ -121,7 +121,6 @@ return function(problemSpec, vars)
 				end
 			end
 			pd.iter = pd.iter + 1
-			pd.timer:nextIteration()
 	        return 1
 	    end
 	    

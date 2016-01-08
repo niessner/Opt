@@ -21,6 +21,11 @@
 #define EXPORT
 #endif
 
+#define WARP_SIZE 32u
+#define WARP_MASK (WARP_SIZE-1u)
+
+#define DEBUG_PRINT_INFO 0
+
 
 // For the naming scheme of the variables see:
 // http://en.wikipedia.org/wiki/Conjugate_gradient_method
@@ -101,18 +106,19 @@ __global__ void PCGInit_Kernel1(SolverInput input, SolverState state, SolverPara
 		d = dot(residuum, p) + residuumA * pA;								 // x-th term of nomimator for computing alpha and denominator for computing beta
 	}
 
-	bucket[threadIdx.x] = d;
-
-	scanPart1(threadIdx.x, blockIdx.x, blockDim.x, state.d_scanAlpha);		// sum over x-th terms to compute nominator and denominator of alpha and beta inside this block
+    d = warpReduce(d);
+    if ((threadIdx.x & WARP_MASK) == 0) {
+        atomicAdd(state.d_scanAlpha, d);
+    }
 }
 
 __global__ void PCGInit_Kernel2(unsigned int N, SolverState state)
 {
 	const unsigned int x = blockIdx.x * blockDim.x + threadIdx.x;
-
-	scanPart2(threadIdx.x, blockDim.x, gridDim.x, state.d_scanAlpha);		// sum over block results to compute nominator and denominator of alpha and beta
-
-	if (x < N) state.d_rDotzOld[x] = bucket[0];								// store result for next kernel call
+    if (x < N) {
+        state.d_rDotzOld[x] = state.d_scanAlpha[0];
+        state.d_delta[x] = make_float2(0.0f, 0.0f);
+    }
 }
 
 void Initialization(SolverInput& input, SolverState& state, SolverParameters& parameters, CUDATimer& timer)
@@ -120,24 +126,24 @@ void Initialization(SolverInput& input, SolverState& state, SolverParameters& pa
 	const unsigned int N = input.N;
 
 	const int blocksPerGrid = (N + THREADS_PER_BLOCK - 1) / THREADS_PER_BLOCK;
-	const int shmem_size = sizeof(float)*THREADS_PER_BLOCK;
 
-	if (blocksPerGrid > THREADS_PER_BLOCK)
-	{
-		std::cout << "Too many variables for this block size. Maximum number of variables for two kernel scan: " << THREADS_PER_BLOCK*THREADS_PER_BLOCK << std::endl;
-		while (1);
-	}
-
+	
+    cutilSafeCall(cudaMemset(state.d_scanAlpha, 0, sizeof(float)));
     timer.startEvent("PCGInit_Kernel1");
-	PCGInit_Kernel1 << <blocksPerGrid, THREADS_PER_BLOCK, shmem_size >> >(input, state, parameters);
+	PCGInit_Kernel1 << <blocksPerGrid, THREADS_PER_BLOCK >> >(input, state, parameters);
     timer.endEvent();
 	#ifdef _DEBUG
 		cutilSafeCall(cudaDeviceSynchronize());
 		cutilCheckMsg(__FUNCTION__);
 	#endif
+#   if DEBUG_PRINT_INFO
+        float scanAlpha = 0.0f;
+        cutilSafeCall(cudaMemcpy(&scanAlpha, state.d_scanAlpha, sizeof(float), cudaMemcpyDeviceToHost));
+        printf("ScanAlpha: %f\n", scanAlpha);
+#   endif
 
 	timer.startEvent("PCGInit_Kernel2");
-	PCGInit_Kernel2 << <blocksPerGrid, THREADS_PER_BLOCK, shmem_size >> >(N, state);
+	PCGInit_Kernel2 << <blocksPerGrid, THREADS_PER_BLOCK >> >(N, state);
 	timer.endEvent();
 	#ifdef _DEBUG
 		cutilSafeCall(cudaDeviceSynchronize());
@@ -166,9 +172,10 @@ __global__ void PCGStep_Kernel1(SolverInput input, SolverState state, SolverPara
 		d = dot(state.d_p[x], tmp) + state.d_pA[x] * tmpA;							// x-th term of denominator of alpha
 	}
 
-	bucket[threadIdx.x] = d;
-
-	scanPart1(threadIdx.x, blockIdx.x, blockDim.x, state.d_scanAlpha);		// sum over x-th terms to compute denominator of alpha inside this block
+    d = warpReduce(d);
+    if ((threadIdx.x & WARP_MASK) == 0) {
+        atomicAdd(state.d_scanAlpha, d); // sum over x-th terms to compute denominator of alpha inside this block
+    }
 }
 
 __global__ void PCGStep_Kernel2(SolverInput input, SolverState state)
@@ -176,8 +183,7 @@ __global__ void PCGStep_Kernel2(SolverInput input, SolverState state)
 	const unsigned int N = input.N;
 	const unsigned int x = blockIdx.x * blockDim.x + threadIdx.x;
 
-	scanPart2(threadIdx.x, blockDim.x, gridDim.x, state.d_scanAlpha);		// sum over block results to compute denominator of alpha
-	const float dotProduct = bucket[0];
+    const float dotProduct = state.d_scanAlpha[0];
 
 	float b = 0.0f;
 	if (x < N)
@@ -203,11 +209,10 @@ __global__ void PCGStep_Kernel2(SolverInput input, SolverState state)
 		b = dot(z, r) + zA * rA;										// compute x-th term of the nominator of beta
 	}
 
-	__syncthreads();														// Only write if every thread in the block has has read bucket[0]
-
-	bucket[threadIdx.x] = b;
-
-	scanPart1(threadIdx.x, blockIdx.x, blockDim.x, state.d_scanBeta);		// sum over x-th terms to compute nominator of beta inside this block
+    b = warpReduce(b);
+    if ((threadIdx.x & WARP_MASK) == 0) {
+        atomicAdd(state.d_scanBeta, b); // sum over x-th terms to compute denominator of alpha inside this block
+    }
 }
 
 __global__ void PCGStep_Kernel3(SolverInput input, SolverState state)
@@ -215,11 +220,10 @@ __global__ void PCGStep_Kernel3(SolverInput input, SolverState state)
 	const unsigned int N = input.N;
 	const unsigned int x = blockIdx.x * blockDim.x + threadIdx.x;
 
-	scanPart2(threadIdx.x, blockDim.x, gridDim.x, state.d_scanBeta);		// sum over block results to compute nominator of beta
 
 	if (x < N)
 	{
-		const float rDotzNew = bucket[0];										// get new nominator
+        const float rDotzNew = state.d_scanBeta[0];											// get new nominator
 		const float rDotzOld = state.d_rDotzOld[x];								// get old denominator
 
 		float beta = 0.0f;
@@ -237,32 +241,38 @@ void PCGIteration(SolverInput& input, SolverState& state, SolverParameters& para
 
 	// Do PCG step
 	const int blocksPerGrid = (N + THREADS_PER_BLOCK - 1) / THREADS_PER_BLOCK;
-	const int shmem_size = sizeof(float)*THREADS_PER_BLOCK;
 
-	if (blocksPerGrid > THREADS_PER_BLOCK)
-	{
-		std::cout << "Too many variables for this block size. Maximum number of variables for two kernel scan: " << THREADS_PER_BLOCK*THREADS_PER_BLOCK << std::endl;
-		while (1);
-	}
 
+    cutilSafeCall(cudaMemset(state.d_scanAlpha, 0, sizeof(float)));
     timer.startEvent("PCGStep_Kernel1");
-    PCGStep_Kernel1 << <blocksPerGrid, THREADS_PER_BLOCK, shmem_size >> >(input, state, parameters);
+    PCGStep_Kernel1 << <blocksPerGrid, THREADS_PER_BLOCK >> >(input, state, parameters);
     timer.endEvent();
 	#ifdef _DEBUG
 		cutilSafeCall(cudaDeviceSynchronize());
 		cutilCheckMsg(__FUNCTION__);
 	#endif
+#   if DEBUG_PRINT_INFO
+        float scanAlpha = 0.0f;
+        cutilSafeCall(cudaMemcpy(&scanAlpha, state.d_scanAlpha, sizeof(float), cudaMemcpyDeviceToHost));
+        printf("ScanAlpha: %f\n", scanAlpha);
+#   endif
 
+    cutilSafeCall(cudaMemset(state.d_scanBeta, 0, sizeof(float)));
 	timer.startEvent("PCGStep_Kernel2");
-	PCGStep_Kernel2 << <blocksPerGrid, THREADS_PER_BLOCK, shmem_size >> >(input, state);
+	PCGStep_Kernel2 << <blocksPerGrid, THREADS_PER_BLOCK >> >(input, state);
 	timer.endEvent();
 	#ifdef _DEBUG
 		cutilSafeCall(cudaDeviceSynchronize());
 		cutilCheckMsg(__FUNCTION__);
 	#endif
+#   if DEBUG_PRINT_INFO
+        float scanBeta = 0.0f;
+        cutilSafeCall(cudaMemcpy(&scanBeta, state.d_scanBeta, sizeof(float), cudaMemcpyDeviceToHost));
+        printf("ScanBeta: %f\n", scanBeta);
+#   endif
 
 	timer.startEvent("PCGStep_Kernel3");
-	PCGStep_Kernel3 << <blocksPerGrid, THREADS_PER_BLOCK, shmem_size >> >(input, state);
+	PCGStep_Kernel3 << <blocksPerGrid, THREADS_PER_BLOCK >> >(input, state);
 	timer.endEvent();
 	#ifdef _DEBUG
 		cutilSafeCall(cudaDeviceSynchronize());
@@ -322,8 +332,10 @@ extern "C" void ImageWarpiungSolveGNStub(SolverInput& input, SolverState& state,
 
         timer.nextIteration();
 	}
-    timer.evaluate();
 
 	float residual = EvalResidual(input, state, parameters, timer);
 	printf("final cost: %f\n", residual);
+
+
+    timer.evaluate();
 }

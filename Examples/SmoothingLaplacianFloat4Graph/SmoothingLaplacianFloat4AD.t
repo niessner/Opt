@@ -9,25 +9,23 @@ local w_regSqrt = S:Param("w_regSqrt", float, 1)
 
 local terms = terralib.newlist()
 
-for i = 0,3 do
-	local laplacianCost0 = X(0,0,i) - X(1,0,i)
-	local laplacianCost1 = X(0,0,i) - X(-1,0,i)
-	local laplacianCost2 = X(0,0,i) - X(0,1,i)
-	local laplacianCost3 = X(0,0,i) - X(0,-1,i)
-	
-	local laplacianCost0F = ad.select(opt.InBounds(0,0,0,0),ad.select(opt.InBounds(1,0,0,0), laplacianCost0,0),0)
-	local laplacianCost1F = ad.select(opt.InBounds(0,0,0,0),ad.select(opt.InBounds(-1,0,0,0),laplacianCost1,0),0)
-	local laplacianCost2F = ad.select(opt.InBounds(0,0,0,0),ad.select(opt.InBounds(0,1,0,0), laplacianCost2,0),0)
-	local laplacianCost3F = ad.select(opt.InBounds(0,0,0,0),ad.select(opt.InBounds(0,-1,0,0),laplacianCost3,0),0)
-	
-	local fittingCost = X(0,0,i) - A(0,0,i)
-	
-	terms:insert(w_regSqrt*laplacianCost0F)
-	terms:insert(w_regSqrt*laplacianCost1F)
-	terms:insert(w_regSqrt*laplacianCost2F)
-	terms:insert(w_regSqrt*laplacianCost3F)
-	terms:insert(w_fitSqrt*fittingCost)
+local offsets = { {1,0}, {-1,0}, {0,1}, {0,-1} }
+
+useprecompute = false
+for j,o in ipairs(offsets) do
+    local x,y = unpack(o)
+    local laplacianCost = X(0,0) - X(x,y)
+    if useprecompute then
+        local lc = S:ComputedImage("laplacian_"..tostring(j),W,H,laplacianCost)
+        laplacianCost = lc(0,0)
+    end
+    local laplacianCostF = ad.select(opt.InBounds(0,0,0,0),ad.select(opt.InBounds(x,y,0,0), laplacianCost,0),0)
+    terms:insert(w_regSqrt*laplacianCostF)
 end
+local fittingCost = X(0,0) - A(0,0)
+terms:insert(w_fitSqrt*fittingCost)
 
 local cost = ad.sumsquared(unpack(terms))
-return S:Cost(cost)
+S:Cost(cost)
+
+return S.P

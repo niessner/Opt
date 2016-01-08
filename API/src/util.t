@@ -41,6 +41,9 @@ sin  = 1,
 asin = 1,
 tan  = 1,
 atan = 1,
+ceil = 1,
+floor = 1,
+log = 1,
 pow  = 2,
 fmod = 2,
 fmax = 2,
@@ -65,25 +68,112 @@ util.gpuMath["abs"] = terra (x : float)
 	return x
 end
 
+local Vectors = {}
+function util.isvectortype(t) return Vectors[t] end
+util.Vector = terralib.memoize(function(typ,N)
+    N = assert(tonumber(N),"expected a number")
+    local ops = { "__sub","__add","__mul","__div" }
+    local struct VecType { 
+        data : typ[N]
+    }
+    Vectors[VecType] = true
+    VecType.metamethods.type, VecType.metamethods.N = typ,N
+    VecType.metamethods.__typename = function(self) return ("%s_%d"):format(tostring(self.metamethods.type),self.metamethods.N) end
+    for i, op in ipairs(ops) do
+        local i = symbol("i")
+        local function template(ae,be)
+            return quote
+                var c : VecType
+                for [i] = 0,N do
+                    c.data[i] = operator(op,ae,be)
+                end
+                return c
+            end
+        end
+        local terra doop(a : VecType, b : VecType) [template(`a.data[i],`b.data[i])]  end
+        terra doop(a : typ, b : VecType) [template(`a,`b.data[i])]  end
+        terra doop(a : VecType, b : typ) [template(`a.data[i],`b)]  end
+       VecType.metamethods[op] = doop
+    end
+    terra VecType.metamethods.__unm(self : VecType)
+        var c : VecType
+        for i = 0,N do
+            c.data[i] = -self.data[i]
+        end
+        return c
+    end
+    terra VecType:abs()
+       var c : VecType
+       for i = 0,N do
+	  -- TODO: use opt.abs
+	  if self.data[i] < 0 then
+	     c.data[i] = -self.data[i]
+	  else
+	     c.data[i] = self.data[i]
+	  end
+       end
+       return c
+    end
+    terra VecType:sum()
+       var c : typ = 0
+       for i = 0,N do
+	  c = c + self.data[i]
+       end
+       return c
+    end
+    terra VecType:dot(b : VecType)
+        var c : typ = 0
+        for i = 0,N do
+            c = c + self.data[i]*b.data[i]
+        end
+        return c
+    end
+	terra VecType:size()
+        return N
+    end
+    terra VecType.methods.FromConstant(x : typ)
+        var c : VecType
+        for i = 0,N do
+            c.data[i] = x
+        end
+        return c
+    end
+    VecType.metamethods.__apply = macro(function(self,idx) return `self.data[idx] end)
+    VecType.metamethods.__cast = function(from,to,exp)
+        if from:isarithmetic() and to == VecType then
+            return `VecType.FromConstant(exp)
+        end
+        error(("unknown vector conversion %s to %s"):format(tostring(from),tostring(to)))
+    end
+    return VecType
+end)
+util.Dot = macro(function(a,b) 
+    local at,bt = a:gettype(),b:gettype()
+    if util.isvectortype(at) then
+        return `a:dot(b)
+    else
+        return `a*b
+    end
+end)
 
-function Vector(T,debug)
-    local struct Vector(S.Object) {
+function Array(T,debug)
+    local struct Array(S.Object) {
         _data : &T;
         _size : int32;
         _capacity : int32;
     }
-    function Vector.metamethods.__typename() return ("Vector(%s)"):format(tostring(T)) end
+    function Array.metamethods.__typename() return ("Array(%s)"):format(tostring(T)) end
     local assert = debug and S.assert or macro(function() return quote end end)
-    terra Vector:init() : &Vector
+    terra Array:init() : &Array
         self._data,self._size,self._capacity = nil,0,0
         return self
     end
-    terra Vector:init(cap : int32) : &Vector
+    terra Array:init(cap : int32) : &Array
         self:init()
         self:reserve(cap)
         return self
     end
-    terra Vector:reserve(cap : int32)
+    terra Array:reserve(cap : int32)
         if cap > 0 and cap > self._capacity then
             var oc = self._capacity
             if self._capacity == 0 then
@@ -95,7 +185,7 @@ function Vector(T,debug)
             self._data = [&T](S.realloc(self._data,sizeof(T)*self._capacity))
         end
     end
-    terra Vector:__destruct()
+    terra Array:__destruct()
         assert(self._capacity >= self._size)
         for i = 0ULL,self._size do
             S.rundestructor(self._data[i])
@@ -105,17 +195,17 @@ function Vector(T,debug)
             self._data = nil
         end
     end
-    terra Vector:size() return self._size end
+    terra Array:size() return self._size end
     
-    terra Vector:get(i : int32)
+    terra Array:get(i : int32)
         assert(i < self._size) 
         return &self._data[i]
     end
-    Vector.metamethods.__apply = macro(function(self,idx)
+    Array.metamethods.__apply = macro(function(self,idx)
         return `@self:get(idx)
     end)
     
-    terra Vector:insert(idx : int32, N : int32, v : T) : {}
+    terra Array:insert(idx : int32, N : int32, v : T) : {}
         assert(idx <= self._size)
         self._size = self._size + N
         self:reserve(self._size)
@@ -132,18 +222,18 @@ function Vector(T,debug)
             self._data[idx + i] = v
         end
     end
-    terra Vector:insert(idx : int32, v : T) : {}
+    terra Array:insert(idx : int32, v : T) : {}
         return self:insert(idx,1,v)
     end
-    terra Vector:insert(v : T) : {}
+    terra Array:insert(v : T) : {}
         return self:insert(self._size,1,v)
     end
-    terra Vector:insert() : &T
+    terra Array:insert() : &T
         self._size = self._size + 1
         self:reserve(self._size)
         return self:get(self._size - 1)
     end
-    terra Vector:remove(idx : int32) : T
+    terra Array:remove(idx : int32) : T
         assert(idx < self._size)
         var v = self._data[idx]
         self._size = self._size - 1
@@ -152,12 +242,12 @@ function Vector(T,debug)
         end
         return v
     end
-    terra Vector:remove() : T
+    terra Array:remove() : T
         assert(self._size > 0)
         return self:remove(self._size - 1)
     end
 
-    terra Vector:indexof(v : T) : int32
+    terra Array:indexof(v : T) : int32
     	for i = 0LL,self._size do
             if (v == self._data[i]) then
             	return i
@@ -166,14 +256,14 @@ function Vector(T,debug)
         return -1
 	end
 
-	terra Vector:contains(v : T) : bool
+	terra Array:contains(v : T) : bool
     	return self:indexof(v) >= 0
 	end
 
-    return Vector
+    return Array
 end
 
-Vector = S.memoize(Vector)
+local Array = S.memoize(Array)
 
 local warpSize = 32
 util.warpSize = warpSize
@@ -198,39 +288,52 @@ struct util.TimingInfo {
 }
 local TimingInfo = util.TimingInfo
 
+util.TimerEvent = C.cudaEvent_t
+
 struct util.Timer {
-	timingInfo : &Vector(TimingInfo)
-	currentIteration : int
+	timingInfo : &Array(TimingInfo)
 }
 local Timer = util.Timer
 
 terra Timer:init() 
-	self.timingInfo = [Vector(TimingInfo)].alloc():init()
-	self.currentIteration = 0
+	self.timingInfo = [Array(TimingInfo)].alloc():init()
 end
 
 terra Timer:cleanup()
 	self.timingInfo:delete()
 end 
 
-terra Timer:nextIteration() 
-	self.currentIteration = self.currentIteration + 1
-end
-
 terra Timer:reset() 
 	self.timingInfo:fastclear()
-	self.currentIteration = 0
 end
 
+terra Timer:startEvent(name : rawstring,  stream : C.cudaStream_t, endEvent : &C.cudaEvent_t)
+    var timingInfo : TimingInfo
+    timingInfo.eventName = name
+    C.cudaEventCreate(&timingInfo.startEvent)
+    C.cudaEventCreate(&timingInfo.endEvent)
+    C.cudaEventRecord(timingInfo.startEvent, stream)
+    self.timingInfo:insert(timingInfo)
+    @endEvent = timingInfo.endEvent
+end
+terra Timer:endEvent(stream : C.cudaStream_t, endEvent : C.cudaEvent_t)
+    C.cudaEventRecord(endEvent, stream)
+end
+
+terra isprefix(pre : rawstring, str : rawstring) : bool
+    if @pre == 0 then return true end
+    if @str ~= @pre then return false end
+    return isprefix(pre+1,str+1)
+end
 terra Timer:evaluate()
 	if ([timeIndividualKernels]) then
-		var aggregateTimingInfo = [Vector(tuple(float,int))].salloc():init()
-		var aggregateTimingNames = [Vector(rawstring)].salloc():init()
+		var aggregateTimingInfo = [Array(tuple(float,int))].salloc():init()
+		var aggregateTimingNames = [Array(rawstring)].salloc():init()
 		for i = 0,self.timingInfo:size() do
 			var eventInfo = self.timingInfo(i);
 			C.cudaEventSynchronize(eventInfo.endEvent)
 	    	C.cudaEventElapsedTime(&eventInfo.duration, eventInfo.startEvent, eventInfo.endEvent);
-	    	var index = aggregateTimingNames:indexof(eventInfo.eventName)
+	    	var index =  aggregateTimingNames:indexof(eventInfo.eventName)
 	    	if index < 0 then
 	    		aggregateTimingNames:insert(eventInfo.eventName)
 	    		aggregateTimingInfo:insert({eventInfo.duration, 1})
@@ -248,6 +351,14 @@ terra Timer:evaluate()
 			C.printf(" %-20s |   %4d   | %8.3fms| %7.4fms\n", aggregateTimingNames(i), aggregateTimingInfo(i)._1, aggregateTimingInfo(i)._0, aggregateTimingInfo(i)._0/aggregateTimingInfo(i)._1)
 	    end
 	    C.printf(		"--------------------------------------------------------\n")
+            C.printf("TIMING ")
+            for i = 0, aggregateTimingNames:size() do
+		var n = aggregateTimingNames(i)
+                if isprefix("PCGInit1",n) or isprefix("PCGStep1",n) or isprefix("overall",n) then
+                    C.printf("%f ",aggregateTimingInfo(i)._0)
+                end
+            end
+            C.printf("\n")
 	end
     
 end
@@ -328,25 +439,40 @@ local function noFooter(pd)
 	return quote end
 end
 
-util.getParameters = function(ProblemSpec, images, graphSizes, edgeValues, xs, ys, paramValues)
-	local inits = terralib.newlist()
+util.initParameters = function(parameters, ProblemSpec, images, graphSizes, edgeValues, xs, ys, paramValues,allocateTemporaries)
+    local stmts = terralib.newlist()
 	for _, entry in ipairs(ProblemSpec.parameters) do
 		if entry.kind == "image" then
-			inits:insert(`entry.type { data = [&uint8](images[entry.idx])})
-		elseif entry.kind == "graph" then
-		    local graphinits = terralib.newlist { `graphSizes[entry.idx] }
-		    for i,e in ipairs(entry.type.metamethods.elements) do
-		        graphinits:insert( `xs[e.idx] )
-		        graphinits:insert( `ys[e.idx] )
-		    end
-			inits:insert(`entry.type { graphinits } )
-		elseif entry.kind == "edgevalues" then
-			inits:insert(`entry.type { data = [&entry.type.metamethods.type](edgeValues[entry.idx]) })
-		elseif entry.kind == "param" then
-		    inits:insert `@[&entry.type](paramValues[entry.idx])
-		end
+            if entry.idx == "alloc" then
+    		    if allocateTemporaries then
+    		        stmts:insert quote
+    		            parameters.[entry.name]:initGPU()
+    		        end
+    		    end
+            else
+                local function_name = allocateTemporaries and "initFromGPUptr" or "setGPUptr"
+                stmts:insert quote
+                    parameters.[entry.name]:[function_name]([&uint8](images[entry.idx]))
+                end
+            end
+		else
+            local rhs
+            if entry.kind == "graph" then
+                local graphinits = terralib.newlist { `graphSizes[entry.idx] }
+                for i,e in ipairs(entry.type.metamethods.elements) do
+                    graphinits:insert( `xs[e.idx] )
+                    graphinits:insert( `ys[e.idx] )
+                end
+                rhs = `entry.type { graphinits }
+            elseif entry.kind == "edgevalues" then
+                rhs = `entry.type { data = [&entry.type.metamethods.type](edgeValues[entry.idx]) }
+            elseif entry.kind == "param" then
+                rhs = `@[&entry.type](paramValues[entry.idx])
+            end
+            stmts:insert quote parameters.[entry.name] = rhs end
+        end
 	end
-	return `[ProblemSpec:ParameterType(false)]{ inits }	--don't use the blocked version
+	return stmts
 end
 
 
@@ -374,7 +500,7 @@ local cd = macro(function(cufunc)
     return quote
         var r = cufunc
         if r ~= 0 then  
-            C.printf("Cuda reported error %d\n",r)
+            C.printf("Cuda reported error %d: %s\n",r, C.cudaGetErrorString(r))
             return r
         end
     end
@@ -384,15 +510,12 @@ function util.makeGPUFunctions(problemSpec, PlanData, kernels)
 	
 	local wrappedKernels = {}
 	
-	local data = {}
-	data.problemSpec = problemSpec
-	data.PlanData = PlanData
-	data.imageType = problemSpec:UnknownType(false) -- get non-blocked version
+	local imageType = problemSpec:UnknownType(false) -- get non-blocked version
 	
 	local kernelFunctions = {}
 	local key = "_"..tostring(os.time())
 	for k,v in pairs(kernels) do
-	    kernelFunctions[k..key] = { kernel = v , annotations = { {"maxntidx", 16}, {"maxntidy", 16}, {"maxntidz", 1}, {"minctasm",5} } } -- force at least 5 threadblocks to run per SM
+	    kernelFunctions[k..key] = { kernel = v , annotations = { {"maxntidx", 16}, {"maxntidy", 16}, {"maxntidz", 1}, {"minctasm",1} } } -- force at least 5 threadblocks to run per SM
 	end
 	local compiledKernels = terralib.cudacompile(kernelFunctions, false)
 	
@@ -405,7 +528,11 @@ function util.makeGPUFunctions(problemSpec, PlanData, kernels)
         local BLOCK_SIZE = problemSpec:BlockSize()
         local function createLaunchParameters(pd)
             if not kernelName:match("_Graph$") then
-                return {`pd.parameters.X:W(),`pd.parameters.X:H(),BLOCK_SIZE,BLOCK_SIZE}
+                if imageType.metamethods.H.size == 1 then -- this image isn't really 2D, so don't waste most of the block
+                    return {`pd.parameters.X:W(), 1, BLOCK_SIZE*BLOCK_SIZE, 1 }
+                else
+                    return {`pd.parameters.X:W(),`pd.parameters.X:H(),BLOCK_SIZE,BLOCK_SIZE}
+                end
             else
                 return quote
                     var N = 0
@@ -432,24 +559,21 @@ function util.makeGPUFunctions(problemSpec, PlanData, kernels)
             var launch = terralib.CUDAParams { (xdim - 1) / xblock + 1, (ydim - 1) / yblock + 1, 1, 
                                                 xblock, yblock, 1, 
                                                 0, nil }
-            C.cudaDeviceSynchronize()
+            --C.cudaDeviceSynchronize()
             var stream : C.cudaStream_t = nil
-            var timingInfo : TimingInfo 
+            var endEvent : C.cudaEvent_t 
             if ([timeIndividualKernels]) then
-                C.cudaEventCreate(&timingInfo.startEvent)
-                C.cudaEventCreate(&timingInfo.endEvent)
-                C.cudaEventRecord(timingInfo.startEvent, stream)
-                timingInfo.eventName = kernelName
+                pd.timer:startEvent(kernelName,nil,&endEvent)
             end
             compiledKernel(&launch, @pd, params)
-            cd(C.cudaGetLastError())
-        
+            
+            --cd(C.cudaGetLastError())
+            
             if ([timeIndividualKernels]) then
-                cd(C.cudaEventRecord(timingInfo.endEvent, stream))
-                pd.timer.timingInfo:insert(timingInfo)
+                pd.timer:endEvent(nil,endEvent)
             end
 
-            cd(C.cudaDeviceSynchronize())
+            --cd(C.cudaDeviceSynchronize())
             cd(C.cudaGetLastError())
         end
 	    return GPULauncher

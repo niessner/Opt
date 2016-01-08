@@ -102,6 +102,9 @@
     </ClCompile>
     <ClCompile Include="Cuda\PatchSolverSFS\Optimizer.cpp" />
     <ClCompile Include="DumpOptImage.cpp" />
+    <ClCompile Include="Cuda\PatchSolverSFS\SolverSFSCeres.cpp">
+      <Filter>Cuda\PatchSolverSFS</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="RealtimeSFS.h" />
@@ -265,8 +268,9 @@
     <ClInclude Include="Cuda\PatchSolverSFS\PatchSolverSFSNoSharedEquations.h">
       <Filter>Cuda\PatchSolverSFS</Filter>
     </ClInclude>
-    <ClInclude Include="Cuda\SolverSFS\SolverSFSState.h">
-      <Filter>Cuda\SolverSFS</Filter>
+    <ClInclude Include="Cuda\SolverSFS\SolverSFSState.h" />
+    <ClInclude Include="Cuda\PatchSolverSFS\SolverSFSCeres.h">
+      <Filter>Cuda\PatchSolverSFS</Filter>
     </ClInclude>
   </ItemGroup>
   <ItemGroup>

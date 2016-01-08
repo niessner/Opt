@@ -1,11 +1,17 @@
 #include "SimpleBuffer.h"
 
+#include <string.h>
 #include <cuda_runtime.h>
 #include <stdio.h>
+#include <math.h>
+#include <limits>
+//using std::memcpy;
 
 
 
-SimpleBuffer::SimpleBuffer(std::string filename, bool onGPU) {
+SimpleBuffer::SimpleBuffer(std::string filename, bool onGPU, bool clampInfinity) :
+    m_onGPU(onGPU)
+{
     FILE* fileHandle = fopen(filename.c_str(), "rb"); //b for binary
     fread(&m_width,         sizeof(int), 1, fileHandle);
     fread(&m_height,        sizeof(int), 1, fileHandle);
@@ -18,8 +24,24 @@ SimpleBuffer::SimpleBuffer(std::string filename, bool onGPU) {
     size_t size = elementSize*m_channelCount*(m_width*m_height);
     void* ptr = malloc(size);
     fread(ptr, elementSize*m_channelCount, (m_width*m_height), fileHandle);
-    
+
     fclose(fileHandle);
+    
+    if (m_dataType == 0 && clampInfinity) {
+      float* fPtr = (float*)ptr;
+      for (int i = 0; i < m_width*m_height; ++i) {
+	if (isinf(fPtr[i])) {
+	  if (fPtr[i] > 0) {
+	    fPtr[i] = std::numeric_limits<float>::max();
+	  } else {
+	    fPtr[i] = -10000.0f;//std::numeric_limits<float>::lowest();
+	  }
+	}
+      }
+    }
+
+    
+
     if (m_onGPU) {
         cudaMalloc(&m_data, size);
         cudaMemcpy(m_data, ptr, size, cudaMemcpyHostToDevice);

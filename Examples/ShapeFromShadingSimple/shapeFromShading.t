@@ -6,8 +6,9 @@ local USE_SHADING_CONSTRAINT 	= true
 local USE_TEMPORAL_CONSTRAINT 	= false
 local USE_PRECONDITIONER 		= false
 
-
+local USE_PRECOMPUTE = true
 local USE_CRAPPY_SHADING_BOUNDARY = true
+local USE_PROPER_REGULARIZATION_BOUNDARY  = true
 
 local FLOAT_EPSILON = 0.000001
 local DEPTH_DISCONTINUITY_THRE = 0.01
@@ -22,6 +23,18 @@ local I 	= P:Image("I",float, W,H,2) -- Target Intensity
 local D_p 	= P:Image("D_p",float, W,H,3) -- Previous Depth
 local edgeMaskR 	= P:Image("edgeMaskR",uint8, W,H,4) -- Edge mask. 
 local edgeMaskC 	= P:Image("edgeMaskC",uint8, W,H,5) -- Edge mask. 
+
+local B_I
+local B_I_dx0
+local B_I_dx1
+local B_I_dx2
+if USE_PRECOMPUTE then
+	B_I = P:Image("B_I", float, W, H, "alloc")
+	B_I_dx0 = P:Image("B_I_dx0", float, W, H, "alloc")
+	B_I_dx1 = P:Image("B_I_dx1", float, W, H, "alloc")
+	B_I_dx2 = P:Image("B_I_dx2", float, W, H, "alloc")
+	pguard = P:Image("pguard", float, W, H, "alloc")
+end	
 
 -- See TerraSolverParameters
 local w_p						= P:Param("w_p",float,0)-- Is initialized by the solver!
@@ -253,9 +266,7 @@ local terra prior_normal_from_previous_depth(d : float, gidx : int32, gidy : int
 	return 
 end
 
-
-
-local terra calShading2depthGrad(i : int, j : int, posx : int, posy: int, self : P:ParameterType()) : float4
+local terra calShading2depthGradHelper(i : int, j : int, posx : int, posy: int, self : P:ParameterType()) : float4
 	var f_x : float = self.f_x
 	var f_y : float = self.f_y
 	var u_x : float = self.u_x
@@ -382,6 +393,23 @@ local terra calShading2depthGrad(i : int, j : int, posx : int, posy: int, self :
 	end
 end
 
+local terra calShading2depthGrad(i : int, j : int, posx : int, posy: int, self : P:ParameterType()) : float4
+	escape
+		if USE_PRECOMPUTE then
+			emit quote
+				return make_float4(	self.B_I_dx0(i,j),
+									self.B_I_dx1(i,j),
+									self.B_I_dx2(i,j),
+									self.B_I(i,j)) 
+			end
+		else
+			emit quote
+				return calShading2depthGradHelper(i,j, posx, posy, self)
+			end
+		end
+    end
+end
+
 
 local terra est_lap_init_3d_imp(i : int,  j : int, self : P:ParameterType(), w0 : float, w1 : float, uf_x : float, uf_y : float, b_valid : &bool) : float3
 
@@ -431,7 +459,11 @@ local terra cost(i : int32, j : int32, gi : int32, gj : int32, self : P:Paramete
 	var W = self.X:W()
 	var H = self.X:H()
 
-	var E_s : float = 0.0f
+	var E_s_x : float = 0.0f
+	var E_s_y : float = 0.0f
+	var E_s_z : float = 0.0f
+
+
 	var E_p : float = 0.0f
 	var E_r_h : float = 0.0f 
 	var E_r_v : float = 0.0f 
@@ -508,7 +540,10 @@ local terra cost(i : int32, j : int32, gi : int32, gj : int32, self : P:Paramete
 			opt.math.abs(d - self.X(i,j-1)) < [float](DEPTH_DISCONTINUITY_THRE) then
          
                 --E_s = p(i,j,gi,gj,self)[0] --sqMagnitude(4.0*p(i,j,gi,gj,self))
-				E_s = sqMagnitude(4.0f*p(i,j,gi,gj,self) - (p(i-1,j,gi-1,gj, self) + p(i,j-1,gi,gj-1, self) + p(i+1, j,gi+1,gj, self) + p(i,j+1,gi,gj+1, self)))
+				var E_s = (4.0f*p(i,j,gi,gj,self) - (p(i-1,j,gi-1,gj, self) + p(i,j-1,gi,gj-1, self) + p(i+1, j,gi+1,gj, self) + p(i,j+1,gi,gj+1, self)))
+				E_s_x = E_s[0]
+				E_s_y = E_s[1]
+				E_s_z = E_s[2]
 		end
 	end
 
@@ -532,7 +567,7 @@ local terra cost(i : int32, j : int32, gi : int32, gj : int32, self : P:Paramete
 		E_r_d = dot(n_p, p(i,j,gi,gj,self) - p(i-1,j-1,gi-1,gj-1,self))
 	end
 
-	var cost : float = self.w_s*E_s*E_s + self.w_p*E_p*E_p + self.w_g*E_g_h*E_g_h + self.w_g*E_g_v*E_g_v + self.w_r*E_r_h*E_r_h + self.w_r*E_r_v*E_r_v + self.w_r*E_r_d*E_r_d 
+	var cost : float = self.w_s*E_s_x*E_s_x + self.w_s*E_s_y*E_s_y + self.w_s*E_s_z*E_s_z + self.w_p*E_p*E_p + self.w_g*E_g_h*E_g_h + self.w_g*E_g_v*E_g_v + self.w_r*E_r_h*E_r_h + self.w_r*E_r_v*E_r_v + self.w_r*E_r_d*E_r_d 
 	--[[
     if gi>1 and gi<(W - 5) and gj>1 and gj<(H - 5) then
         cost = [float](self.edgeMaskC(i,j))
@@ -723,7 +758,7 @@ local terra evalMinusJTFDeviceLS_SFS_Shared_Mask_Prior(i : int, j : int, posx : 
 				sum = sum + lapval[1]*val1;
 				sum = sum + lapval[2]
 					
-				if b_valid then
+				if [USE_PROPER_REGULARIZATION_BOUNDARY] or b_valid then
 					b = b + sum* self.w_s					
 					tmpval = (val0 * val0 + val1 * val1 + 1)*(16+4);						
 					p = p + tmpval * self.w_s --smoothness
@@ -733,8 +768,8 @@ local terra evalMinusJTFDeviceLS_SFS_Shared_Mask_Prior(i : int, j : int, posx : 
 
 			if [USE_DEPTH_CONSTRAINT]	then
 				--position term 			
-				p = p + self.w_r --position constraint			
-				b = b - ((XC - targetDepth) * self.w_r);
+				p = p + self.w_p --position constraint			
+				b = b - ((XC - targetDepth) * self.w_p);
 			end
 
 
@@ -802,7 +837,7 @@ local terra evalJTF(i : int32, j : int32, gId_i : int32, gId_j : int32, self : P
 
 	prior_normal_from_previous_depth(self.X(i, j), gId_i, gId_j, self, &normal0, &normal1, &normal2);
 	
-	__syncthreads()
+	--__syncthreads()
 
 	---- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- 
 	----  Initialize linear patch systems
@@ -825,6 +860,8 @@ local terra add_mul_inp_grad_ls_bsp(self : P:ParameterType(), pImage : P:Unknown
 end
 
 local terra est_lap_3d_bsp_imp(pImage : P:UnknownType(), i :int, j : int, w0 : float, w1 : float, uf_x : float, uf_y : float)
+	
+	
 	var d  : float = pImage(i,   j)
 	var d0 : float = pImage(i-1, j)
 	var d1 : float = pImage(i+1, j)
@@ -836,6 +873,30 @@ local terra est_lap_3d_bsp_imp(pImage : P:UnknownType(), i :int, j : int, w0 : f
 	var z : float = ( d * 4 - d0 - d1 - d2 - d3);
 	return vector(x,y,z);
 end
+
+local terra est_lap_3d_bsp_imp_with_guard(self : P:ParameterType(), pImage : P:UnknownType(), i :int, j : int, w0 : float, w1 : float, uf_x : float, uf_y : float, b_valid : &bool)
+	
+	var retval_0 = 0.0f
+	var retval_1 = 0.0f
+	var retval_2 = 0.0f	
+	
+	if self.pguard:get(i,j) == 1.f then	
+		var p  : float = pImage(i,   j)
+		var p0 : float = pImage(i-1, j)
+		var p1 : float = pImage(i+1, j)
+		var p2 : float = pImage(i,   j-1)
+		var p3 : float = pImage(i,   j+1)
+		
+		retval_0 = ( p * 4 * w0 - p0 * (w0 - uf_x) - p1 * (w0 + uf_x)	- p2 * w0 - p3 * w0);
+		retval_1 = ( p * 4 * w1 - p0 * w1 - p1 * w1 - p2 * (w1 - uf_y) - p3 * (w1 + uf_y));
+		retval_2 = ( p * 4 - p0 - p1 - p2 - p3);
+	else
+		@b_valid = false
+	end
+	return vector(retval_0,retval_1,retval_2);
+end
+
+
 
 -- eval 2*JtF == \nabla(F); eval diag(2*(Jt)^2) == pre-conditioner
 local terra gradient(i : int32, j : int32, gId_i : int32, gId_j : int32, self : P:ParameterType())
@@ -996,36 +1057,72 @@ local terra applyJTJDeviceLS_SFS_Shared_BSP_Mask_Prior(i : int, j : int, posx : 
 			-- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- /
 				
 			if [USE_REGULARIZATION] then
+
 				sum = 0.0f
 				val0 = (posx - u_x)/f_x
 				val1 = (posy - u_y)/f_y
-				
-				var lapval : float3 = est_lap_3d_bsp_imp(pImage,i,j,val0,val1,uf_x,uf_y)			
-				sum = sum + lapval[0]*val0*(4.0f)
-				sum = sum + lapval[1]*val1*(4.0f)
-				sum = sum + lapval[2]*(4.0f)
-							
-				lapval = est_lap_3d_bsp_imp(pImage,i-1,j,val0-uf_x,val1,uf_x,uf_y)
-				sum = sum - lapval[0]*val0
-				sum = sum - lapval[1]*val1
-				sum = sum - lapval[2]
-							
-				lapval = est_lap_3d_bsp_imp(pImage,i+1,j,val0+uf_x,val1,uf_x,uf_y)
-				sum = sum - lapval[0]*val0
-				sum = sum - lapval[1]*val1
-				sum = sum - lapval[2]
-							
-				lapval = est_lap_3d_bsp_imp(pImage,i,j-1,val0,val1-uf_y,uf_x,uf_y)
-				sum = sum - lapval[0]*val0
-				sum = sum - lapval[1]*val1
-				sum = sum - lapval[2]
-							
-				lapval = est_lap_3d_bsp_imp(pImage,i,j+1,val0,val1+uf_y,uf_x,uf_y)
-				sum = sum - lapval[0]*val0
-				sum = sum - lapval[1]*val1
-				sum = sum - lapval[2]
 
-				b = b + sum*self.w_s
+				if [USE_PROPER_REGULARIZATION_BOUNDARY] then 
+
+					var b_valid = true
+
+					var lapval : float3 = est_lap_3d_bsp_imp_with_guard(self,pImage,i,j,val0,val1,uf_x,uf_y, &b_valid)			
+					sum = sum + lapval[0]*val0*(4.0f)
+					sum = sum + lapval[1]*val1*(4.0f)
+					sum = sum + lapval[2]*(4.0f)
+
+					lapval = est_lap_3d_bsp_imp_with_guard(self, pImage,i-1,j,val0-uf_x,val1,uf_x,uf_y, &b_valid)
+					sum = sum - lapval[0]*val0
+					sum = sum - lapval[1]*val1
+					sum = sum - lapval[2]
+								
+					lapval = est_lap_3d_bsp_imp_with_guard(self, pImage,i+1,j,val0+uf_x,val1,uf_x,uf_y, &b_valid)
+					sum = sum - lapval[0]*val0
+					sum = sum - lapval[1]*val1
+					sum = sum - lapval[2]
+								
+					lapval = est_lap_3d_bsp_imp_with_guard(self, pImage,i,j-1,val0,val1-uf_y,uf_x,uf_y, &b_valid)
+					sum = sum - lapval[0]*val0
+					sum = sum - lapval[1]*val1
+					sum = sum - lapval[2]
+							
+					lapval = est_lap_3d_bsp_imp_with_guard(self, pImage,i,j+1,val0,val1+uf_y,uf_x,uf_y, &b_valid)
+					sum = sum - lapval[0]*val0
+					sum = sum - lapval[1]*val1
+					sum = sum - lapval[2]
+
+					-- always add
+					b = b + sum*self.w_s
+				else
+					var lapval : float3 = est_lap_3d_bsp_imp(pImage,i,j,val0,val1,uf_x,uf_y)			
+					sum = sum + lapval[0]*val0*(4.0f)
+					sum = sum + lapval[1]*val1*(4.0f)
+					sum = sum + lapval[2]*(4.0f)
+								
+					lapval = est_lap_3d_bsp_imp(pImage,i-1,j,val0-uf_x,val1,uf_x,uf_y)
+					sum = sum - lapval[0]*val0
+					sum = sum - lapval[1]*val1
+					sum = sum - lapval[2]
+								
+					lapval = est_lap_3d_bsp_imp(pImage,i+1,j,val0+uf_x,val1,uf_x,uf_y)
+					sum = sum - lapval[0]*val0
+					sum = sum - lapval[1]*val1
+					sum = sum - lapval[2]
+								
+					lapval = est_lap_3d_bsp_imp(pImage,i,j-1,val0,val1-uf_y,uf_x,uf_y)
+					sum = sum - lapval[0]*val0
+					sum = sum - lapval[1]*val1
+					sum = sum - lapval[2]
+								
+					lapval = est_lap_3d_bsp_imp(pImage,i,j+1,val0,val1+uf_y,uf_x,uf_y)
+					sum = sum - lapval[0]*val0
+					sum = sum - lapval[1]*val1
+					sum = sum - lapval[2]
+
+					b = b + sum*self.w_s
+				end
+
+				
 			end
 
 			-- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- 
@@ -1076,16 +1173,37 @@ local terra applyJTJ(i : int32, j : int32, gi : int32, gj : int32, self : P:Para
 
 	prior_normal_from_previous_depth(self.X(i, j), gi, gj, self, &normal0, &normal1, &normal2)
 	
-	__syncthreads()
+	--__syncthreads()
 
  	var JTJ: float = applyJTJDeviceLS_SFS_Shared_BSP_Mask_Prior(i, j, gi, gj, W, H, self, pImage, normal0, normal1, normal2)
 	return 2.0*JTJ
 end
 
-P:Function("cost",      cost)
-P:Function("evalJTF",   evalJTF)
-P:Function("gradient",  gradient)
-P:Function("applyJTJ",  applyJTJ)
+local terra precompute(i : int32, j : int32, gi : int32, gj : int32, self : P:ParameterType())
+	var temp = calShading2depthGradHelper(i, j, gi, gj, self)
+	self.B_I_dx0(i,j) 	= temp[0]
+	self.B_I_dx1(i,j) 	= temp[1]
+	self.B_I_dx2(i,j) 	= temp[2]
+	self.B_I(i,j) 		= temp[3]
+	var d  : float = self.X(i,j)
+	var d0 : float = self.X(i-1,j)
+	var d1 : float = self.X(i+1,j)
+	var d2 : float = self.X(i,j-1)
+	var d3 : float = self.X(i,j+1)
+	self.pguard(i,j) = terralib.select(IsValidPoint(d) and IsValidPoint(d0) and IsValidPoint(d1) and IsValidPoint(d2) and IsValidPoint(d3)
+		and opt.math.abs(d-d0) < [float](DEPTH_DISCONTINUITY_THRE) 
+		and opt.math.abs(d-d1) < [float](DEPTH_DISCONTINUITY_THRE) 
+		and opt.math.abs(d-d2) < [float](DEPTH_DISCONTINUITY_THRE) 
+		and opt.math.abs(d-d3) < [float](DEPTH_DISCONTINUITY_THRE),1.f,0.f)
+end
+
+P:Function("cost",       cost)
+P:Function("evalJTF",    evalJTF)
+P:Function("gradient",   gradient)
+P:Function("applyJTJ",   applyJTJ)
+if USE_PRECOMPUTE then
+	P:Function("precompute", precompute)
+end
 
 
 return P

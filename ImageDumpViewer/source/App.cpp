@@ -79,26 +79,45 @@ int main(int argc, const char* argv[]) {
 App::App(const GApp::Settings& settings) : GApp(settings) {
 }
 
+static const ImageFormat* imageFormat(ElementFormat elementFormat, int numChannels, int& texelSize) {
+    if (numChannels > 0 && numChannels < 5) {
+        if (elementFormat == ElementFormat::FLOAT) {
+            texelSize = numChannels * sizeof(float);
+            return ImageFormat::floatFormat(numChannels);
+        } else if (elementFormat == ElementFormat::UCHAR) {
+            texelSize = numChannels * sizeof(uint8);
+            switch (numChannels) {
+            case 1:
+                return ImageFormat::R8();
+            case 2:
+                return ImageFormat::RG8();
+            case 3:
+                return ImageFormat::RGB8();
+            case 4:
+                return ImageFormat::RGBA8();
+            }
+        }
+    }
+    alwaysAssertM(false, "Unsupported Image Format");
+}
 
 void App::loadImageDump(const String& filename) {
     BinaryInput bi(filename, G3D_LITTLE_ENDIAN);
     int width   = bi.readInt32();
     int height = bi.readInt32();
     int channels = bi.readInt32();
-    int datatype = bi.readInt32();
-    Array<float> dataArray;
-    dataArray.resize(width*height*channels);
-    for (int i = 0; i < width*height*channels; ++i) {
-        dataArray[i] = bi.readFloat32();
-    }
-    //bi.readFloat32(dataArray, width*height*channels);
-    alwaysAssertM(datatype == 0, "Only float handling currently implemented");
-    shared_ptr<GLPixelTransferBuffer> ptb = GLPixelTransferBuffer::create(width, height, ImageFormat::floatFormat(channels), dataArray.getCArray());
-    shared_ptr<Texture> newTexture = Texture::createEmpty(filename, width, height, ImageFormat::floatFormat(channels));
+    ElementFormat datatype = ElementFormat(bi.readInt32());
+    int texelSize;
+    const ImageFormat* format = imageFormat(datatype, channels, texelSize);
+
+    Array<uint8> dataArray;
+    dataArray.resize(width*height*texelSize);
+    bi.readBytes(dataArray.getCArray(), width*height*texelSize);
+   
+    shared_ptr<GLPixelTransferBuffer> ptb = GLPixelTransferBuffer::create(width, height, format, dataArray.getCArray());
+    shared_ptr<Texture> newTexture = Texture::createEmpty(filename, width, height, format);
     newTexture->update(ptb);
     newTexture->visualization.channels = Texture::Visualization::RasL;
-    newTexture->visualization.max = 2;
-    newTexture->visualization.min = -1;
     m_dumpTextures.append(newTexture);
 
 
@@ -195,32 +214,79 @@ static void compareCUDAAndTerraNonBlock(RenderDevice* rd, const String& director
     shared_ptr<Texture> costCUDA = Texture::getTextureByName(directory + "cost" + cuda);
     shared_ptr<Texture> costTerra = Texture::getTextureByName(directory + "cost" + terra);
 
+    shared_ptr<Texture> preCUDA = Texture::getTextureByName(directory + "Pre" + cuda);
+    shared_ptr<Texture> preTerra = Texture::getTextureByName(directory + "Pre" + terra);
 
-    static shared_ptr<Texture> preDiff = Texture::singleChannelDifference(rd,
-        Texture::getTextureByName(directory + "Pre" + cuda),
-        Texture::getTextureByName(directory + "Pre" + terra));
+    
 
     shared_ptr<Texture> jtjCUDA = Texture::getTextureByName(directory + "JTJ" + cuda);
     shared_ptr<Texture> jtjTerra = Texture::getTextureByName(directory + "JTJ" + terra);
 
     static shared_ptr<Texture> jtfDiff = differenceImage(rd, "JTF Difference", jtfCUDA, jtfTerra);
     static shared_ptr<Texture> costDiff = Texture::singleChannelDifference(rd, costCUDA, costTerra);
+    static shared_ptr<Texture> preDiff = Texture::singleChannelDifference(rd, preCUDA, preTerra);
     static shared_ptr<Texture> jtjDiff = differenceImage(rd, "JTJ Difference", jtjCUDA, jtjTerra);
+    
 
 
     highPrecisionCompare("Cost", costCUDA, costTerra);
     highPrecisionCompare("JTF", jtfCUDA, jtfTerra);
     highPrecisionCompare("JTJ", jtjCUDA, jtjTerra);
+    highPrecisionCompare("Pre", preCUDA, preTerra);
 
     jtfDiff->visualization.documentGamma = 2.2f;
     costDiff->visualization.documentGamma = 2.2f;
     jtjDiff->visualization.documentGamma = 2.2f;
+    preDiff->visualization.documentGamma = 2.2f;
 
     static shared_ptr<Texture> jtjQ = quotientImage(rd, "JTJ Quotient", jtjCUDA, jtjTerra);
     static shared_ptr<Texture> jtfQ = quotientImage(rd, "JTF Quotient", jtfCUDA, jtfTerra);
     static shared_ptr<Texture> costQ = quotientImage(rd, "Cost Quotient", costCUDA, costTerra);
+    static shared_ptr<Texture> preQ = quotientImage(rd, "Pre Quotient", preCUDA, preTerra);
 }
 
+
+static void compareOptAndCudaNonBlock(RenderDevice* rd, const String& directory) {
+    String opt = "_optAD.imagedump";
+    String cuda = "_nonblock_cuda.imagedump";
+
+    shared_ptr<Texture> jtfOpt = Texture::getTextureByName(directory + "JTF" + opt);
+    shared_ptr<Texture> jtfCUDA = Texture::getTextureByName(directory + "JTF" + cuda);
+
+
+    shared_ptr<Texture> costOpt = Texture::getTextureByName(directory + "cost" + opt);
+    shared_ptr<Texture> costCUDA = Texture::getTextureByName(directory + "cost" + cuda);
+
+
+    shared_ptr<Texture> preOpt = Texture::getTextureByName(directory + "Pre" + opt);
+    shared_ptr<Texture> preCUDA = Texture::getTextureByName(directory + "Pre" + cuda);
+
+
+    shared_ptr<Texture> jtjOpt = Texture::getTextureByName(directory + "JTJ" + opt);
+    shared_ptr<Texture> jtjCUDA = Texture::getTextureByName(directory + "JTJ" + cuda);
+
+
+    static shared_ptr<Texture> costDiff = Texture::singleChannelDifference(rd, costOpt, costCUDA);
+    static shared_ptr<Texture> jtfDiff = Texture::singleChannelDifference(rd, jtfOpt, jtfCUDA);
+    static shared_ptr<Texture> jtjDiff = Texture::singleChannelDifference(rd, jtjOpt, jtjCUDA);
+    static shared_ptr<Texture> preDiff = Texture::singleChannelDifference(rd, preOpt, preCUDA);
+
+
+    highPrecisionCompare("Cost", costOpt, costCUDA);
+    highPrecisionCompare("JTF", jtfOpt, jtfCUDA);
+    highPrecisionCompare("JTJ", jtjOpt, jtjCUDA);
+    highPrecisionCompare("Pre", preOpt, preCUDA);
+
+    jtfDiff->visualization.documentGamma = 2.2f;
+    costDiff->visualization.documentGamma = 2.2f;
+    jtjDiff->visualization.documentGamma = 2.2f;
+    preDiff->visualization.documentGamma = 2.2f;
+
+    static shared_ptr<Texture> jtjQ = quotientImage(rd, "JTJ Quotient", jtjOpt, jtjCUDA);
+    static shared_ptr<Texture> jtfQ = quotientImage(rd, "JTF Quotient", jtfOpt, jtfCUDA);
+    static shared_ptr<Texture> costQ = quotientImage(rd, "Cost Quotient", costOpt, costCUDA);
+    static shared_ptr<Texture> preQ = quotientImage(rd, "Pre Quotient", preOpt, preCUDA);
+}
 
 
 static void compareOptAndTerraNonBlock(RenderDevice* rd, const String& directory) {
@@ -235,30 +301,35 @@ static void compareOptAndTerraNonBlock(RenderDevice* rd, const String& directory
     shared_ptr<Texture> costTerra = Texture::getTextureByName(directory + "cost" + terra);
 
 
-    static shared_ptr<Texture> preDiff = Texture::singleChannelDifference(rd,
-        Texture::getTextureByName(directory + "Pre" + opt),
-        Texture::getTextureByName(directory + "Pre" + terra));
+    shared_ptr<Texture> preOpt = Texture::getTextureByName(directory + "Pre" + opt);
+    shared_ptr<Texture> preTerra = Texture::getTextureByName(directory + "Pre" + terra);
+    
 
     shared_ptr<Texture> jtjOpt = Texture::getTextureByName(directory + "JTJ" + opt);
     shared_ptr<Texture> jtjTerra = Texture::getTextureByName(directory + "JTJ" + terra);
 
 
-    static shared_ptr<Texture> costDiff = Texture::singleChannelDifference(rd, costOpt, costTerra);
-    static shared_ptr<Texture> jtfDiff = Texture::singleChannelDifference(rd, jtfOpt, jtfTerra);
-    static shared_ptr<Texture> jtjDiff = Texture::singleChannelDifference(rd, jtjOpt, jtjTerra);
+    static shared_ptr<Texture> costDiff = differenceImage(rd, "Cost Diff (O-T)", costOpt, costTerra);
+    static shared_ptr<Texture> jtfDiff  = differenceImage(rd, "JTF Diff (O-T)", jtfOpt, jtfTerra);
+    static shared_ptr<Texture> jtjDiff  = differenceImage(rd, "JTJ Diff (O-T)", jtjOpt, jtjTerra);
+    static shared_ptr<Texture> preDiff  = differenceImage(rd, "Pre Diff (O-T)", preOpt, preTerra);
 
+    debugPrintf("Opt vs Terra\n");
 
     highPrecisionCompare("Cost", costOpt, costTerra);
     highPrecisionCompare("JTF", jtfOpt, jtfTerra);
     highPrecisionCompare("JTJ", jtjOpt, jtjTerra);
+    highPrecisionCompare("Pre", preOpt, preTerra);
 
-    jtfDiff->visualization.documentGamma = 2.2f;
+    /*jtfDiff->visualization.documentGamma = 2.2f;
     costDiff->visualization.documentGamma = 2.2f;
     jtjDiff->visualization.documentGamma = 2.2f;
+    preDiff->visualization.documentGamma = 2.2f;*/
 
-    static shared_ptr<Texture> jtjQ = quotientImage(rd, "JTJ Quotient", jtjOpt, jtjTerra);
-    static shared_ptr<Texture> jtfQ = quotientImage(rd, "JTF Quotient", jtfOpt, jtfTerra);
-    static shared_ptr<Texture> costQ = quotientImage(rd, "Cost Quotient", costOpt, costTerra);
+    static shared_ptr<Texture> jtjQ = quotientImage(rd, "JTJ Quotient (O-T)", jtjOpt, jtjTerra);
+    static shared_ptr<Texture> jtfQ = quotientImage(rd, "JTF Quotient (O-T)", jtfOpt, jtfTerra);
+    static shared_ptr<Texture> costQ = quotientImage(rd, "Cost Quotient (O-T)", costOpt, costTerra);
+    static shared_ptr<Texture> preQ = quotientImage(rd, "Pre Quotient (O-T)", preOpt, preTerra);
 }
 
 
@@ -280,7 +351,9 @@ void App::onInit() {
     // developerWindow->videoRecordDialog->setCaptureGui(false);
     developerWindow->cameraControlWindow->moveTo(Point2(developerWindow->cameraControlWindow->rect().x0(), 0));
     
-    String directory = "D:/Projects/DSL/Optimization/Examples/ShapeFromShading/";
+    //String directory = "D:/Projects/DSL/Optimization/Examples/ShapeFromShading/";
+    //String directory = "D:/Projects/DSL/Optimization/Examples/ShapeFromShadingSimple/";
+    String directory = "/Users/michaelmara/OptDSL/Opt/Examples/ShapeFromShadingSimple/";
 
     Array<String> filenames;
     FileSystem::getFiles(directory+"*.imagedump", filenames);
@@ -295,7 +368,9 @@ void App::onInit() {
 
     compareCUDAAndTerraNonBlock(rd, directory);
 
-    //compareOptAndTerraNonBlock(rd, directory);
+    compareOptAndTerraNonBlock(rd, directory);
+
+    //compareOptAndCudaNonBlock(rd, directory);
 
     dynamic_pointer_cast<DefaultRenderer>(m_renderer)->setOrderIndependentTransparency(false);
 }

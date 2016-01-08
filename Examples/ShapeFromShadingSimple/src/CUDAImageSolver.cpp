@@ -1,6 +1,8 @@
 #include "CUDAImageSolver.h"
 #include "ConvergenceAnalysis.h"
 
+#define DEBUG_DUMP_INFO 0
+
 
 extern "C" void solveSFSStub(SolverInput& input, SolverState& state, SolverParameters& parameters, ConvergenceAnalysis<float>* ca);
 extern "C" void solveSFSEvalCurrentCostJTFPreAndJTJStub(SolverInput& input, SolverState& state, SolverParameters& parameters, float* costResult, float* jtfResult, float* preResult, float* jtjResult);
@@ -26,6 +28,12 @@ CUDAImageSolver::CUDAImageSolver(unsigned int imageWidth, unsigned int imageHeig
 	cutilSafeCall(cudaMalloc(&m_solverState.d_rDotzOld,		sizeof(float)*N));
     cutilSafeCall(cudaMalloc(&m_solverState.d_preconditioner, unknownStorageSize));
 	cutilSafeCall(cudaMalloc(&m_solverState.d_sumResidual,	sizeof(float)));
+
+    // Solver-specific intermediates
+    cutilSafeCall(cudaMalloc(&m_solverState.B_I    , sizeof(float)*N));
+    cutilSafeCall(cudaMalloc(&m_solverState.B_I_dx0, sizeof(float)*N));
+    cutilSafeCall(cudaMalloc(&m_solverState.B_I_dx1, sizeof(float)*N));
+    cutilSafeCall(cudaMalloc(&m_solverState.B_I_dx2, sizeof(float)*N));
 }
 
 CUDAImageSolver::~CUDAImageSolver()
@@ -41,6 +49,12 @@ CUDAImageSolver::~CUDAImageSolver()
 	cutilSafeCall(cudaFree(m_solverState.d_rDotzOld));
     cutilSafeCall(cudaFree(m_solverState.d_preconditioner));
 	cutilSafeCall(cudaFree(m_solverState.d_sumResidual));
+
+    // Solver-specific intermediates
+    cutilSafeCall(cudaFree(m_solverState.B_I    ));
+    cutilSafeCall(cudaFree(m_solverState.B_I_dx0));
+    cutilSafeCall(cudaFree(m_solverState.B_I_dx1));
+    cutilSafeCall(cudaFree(m_solverState.B_I_dx2));
 }
 
 void CUDAImageSolver::solve(std::shared_ptr<SimpleBuffer>   result, const SFSSolverInput& rawSolverInput)
@@ -61,6 +75,10 @@ void CUDAImageSolver::solve(std::shared_ptr<SimpleBuffer>   result, const SFSSol
     cudaMemcpy(solverInput.d_litcoeff, rawSolverInput.parameters.lightingCoefficients, sizeof(float) * 9, cudaMemcpyHostToDevice);
     
     solverInput.deltaTransform = rawSolverInput.parameters.deltaTransform; // transformation to last frame
+    solverInput.calibparams.ux = rawSolverInput.parameters.ux;
+    solverInput.calibparams.uy = rawSolverInput.parameters.uy;
+    solverInput.calibparams.fx = rawSolverInput.parameters.fx;
+    solverInput.calibparams.fy = rawSolverInput.parameters.fy;
 
     SolverParameters parameters;
     parameters.weightFitting = rawSolverInput.parameters.weightFitting;
@@ -74,6 +92,18 @@ void CUDAImageSolver::solve(std::shared_ptr<SimpleBuffer>   result, const SFSSol
     parameters.nLinIterations = rawSolverInput.parameters.nLinIterations;
     parameters.nPatchIterations = rawSolverInput.parameters.nPatchIterations;
 	
+#if DEBUG_DUMP_INFO
+    std::shared_ptr<SimpleBuffer> cost = std::shared_ptr<SimpleBuffer>(new SimpleBuffer(*result, true));
+    std::shared_ptr<SimpleBuffer> jtf  = std::shared_ptr<SimpleBuffer>(new SimpleBuffer(*result, true));
+    std::shared_ptr<SimpleBuffer> pre  = std::shared_ptr<SimpleBuffer>(new SimpleBuffer(*result, true));
+    std::shared_ptr<SimpleBuffer> jtj  = std::shared_ptr<SimpleBuffer>(new SimpleBuffer(*result, true)); 
+    solveSFSEvalCurrentCostJTFPreAndJTJStub(solverInput, m_solverState, parameters, (float*)cost->data(), (float*)jtf->data(), (float*)pre->data(), (float*)jtj->data());
+    cost->save("cost_nonblock_cuda.imagedump");
+    jtf->save("JTF_nonblock_cuda.imagedump");
+    pre->save("Pre_nonblock_cuda.imagedump");
+    jtj->save("JTJ_nonblock_cuda.imagedump");
+
+#endif
     ConvergenceAnalysis<float>* ca = NULL;
     solveSFSStub(solverInput, m_solverState, parameters, ca);
 }

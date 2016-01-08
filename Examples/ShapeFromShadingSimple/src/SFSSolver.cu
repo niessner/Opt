@@ -2,7 +2,7 @@
 
 #include "SFSSolverParameters.h"
 #include "SFSSolverState.h"
-#include "SFSSolverState.h"
+#include "SFSSolverTerms.h"
 #include "SFSSolverUtil.h"
 #include "SFSSolverEquations.h"
 
@@ -26,8 +26,7 @@
 #define WARP_SIZE 32u
 #define WARP_MASK (WARP_SIZE-1u)
 
-
-
+#define DEBUG_PRINT_INFO 0
 
 /*
 static void checkForNan(std::string name, float* cudaPtr, int W, int H) {
@@ -178,11 +177,16 @@ void Initialization(SolverInput& input, SolverState& state, SolverParameters& pa
 		cutilSafeCall(cudaDeviceSynchronize());
 		cutilCheckMsg(__FUNCTION__);
 
-        float scanAlpha = 0.0f;
-        cutilSafeCall(cudaMemcpy(&scanAlpha, state.d_scanAlpha, sizeof(float), cudaMemcpyDeviceToHost));
-        //printf("ScanAlpha: %f\n", scanAlpha);
+        
         checkEverythingForNan(input, state);
 	#endif
+    #if DEBUG_PRINT_INFO
+        float scanAlpha = 0.0f;
+        cutilSafeCall(cudaMemcpy(&scanAlpha, state.d_scanAlpha, sizeof(float), cudaMemcpyDeviceToHost));
+        printf("ScanAlpha: %f\n", scanAlpha);
+    #endif
+
+
 
 	timer.startEvent("PCGInit_Kernel2");
 	PCGInit_Kernel2 << <blocksPerGrid, THREADS_PER_BLOCK >> >(N, state);
@@ -292,11 +296,14 @@ void PCGIteration(SolverInput& input, SolverState& state, SolverParameters& para
 		cutilSafeCall(cudaDeviceSynchronize());
 		cutilCheckMsg(__FUNCTION__);
 
-        float scanAlpha = 0.0f;
-        cutilSafeCall(cudaMemcpy(&scanAlpha, state.d_scanAlpha, sizeof(float), cudaMemcpyDeviceToHost));
-        //printf("ScanAlpha: %f\n", scanAlpha);
+        
         checkEverythingForNan(input, state);
 	#endif
+    #if DEBUG_PRINT_INFO
+        float scanAlpha = 0.0f;
+        cutilSafeCall(cudaMemcpy(&scanAlpha, state.d_scanAlpha, sizeof(float), cudaMemcpyDeviceToHost));
+        printf("ScanAlpha: %f\n", scanAlpha);
+    #endif
     
     cutilSafeCall(cudaMemset(state.d_scanBeta, 0, sizeof(float)));
 	timer.startEvent("PCGStep_Kernel2");
@@ -306,11 +313,15 @@ void PCGIteration(SolverInput& input, SolverState& state, SolverParameters& para
 		cutilSafeCall(cudaDeviceSynchronize());
 		cutilCheckMsg(__FUNCTION__);
 
-        float scanBeta = 0.0f;
-        cutilSafeCall(cudaMemcpy(&scanBeta, state.d_scanBeta, sizeof(float), cudaMemcpyDeviceToHost));
-        //printf("ScanBeta: %f\n", scanBeta);
+        
         checkEverythingForNan(input, state);
 	#endif
+    #if DEBUG_PRINT_INFO
+        float scanBeta = 0.0f;
+        cutilSafeCall(cudaMemcpy(&scanBeta, state.d_scanBeta, sizeof(float), cudaMemcpyDeviceToHost));
+        printf("ScanBeta: %f\n", scanBeta);
+    #endif
+
 
 	timer.startEvent("PCGStep_Kernel3");
 	PCGStep_Kernel3 << <blocksPerGrid, THREADS_PER_BLOCK>> >(input, state);
@@ -349,6 +360,43 @@ void ApplyLinearUpdate(SolverInput& input, SolverState& state, SolverParameters&
 		cutilCheckMsg(__FUNCTION__);
 	#endif
 }
+__global__ void Precompute_Kernel(SolverInput input, SolverState state, SolverParameters parameters)
+{
+    const unsigned int N = input.N; // Number of block variables
+    const unsigned int x = blockIdx.x * blockDim.x + threadIdx.x;
+
+    if (x < N) {
+        int posy; int posx; get2DIdx(x, input.width, input.height, posy, posx);
+        float4 temp = calShading2depthGradCompute(state, posx, posy, input);
+        state.B_I_dx0[x] = temp.x;
+        state.B_I_dx1[x] = temp.y;
+        state.B_I_dx2[x] = temp.z;
+        state.B_I[x]     = temp.w;
+    }
+}
+
+
+void Precompute(SolverInput& input, SolverState& state, SolverParameters& parameters, CUDATimer& timer)
+{
+    const unsigned int N = input.N;
+
+    const int blocksPerGrid = (N + THREADS_PER_BLOCK - 1) / THREADS_PER_BLOCK;
+    cutilSafeCall(cudaDeviceSynchronize());
+    if (blocksPerGrid > THREADS_PER_BLOCK)
+    {
+        std::cout << "Too many variables for this block size. Maximum number of variables for two kernel scan: " << THREADS_PER_BLOCK*THREADS_PER_BLOCK << std::endl;
+        while (1);
+    }
+    timer.startEvent("Precompute_Kernel");
+    Precompute_Kernel << <blocksPerGrid, THREADS_PER_BLOCK >> >(input, state, parameters);
+    timer.endEvent();
+
+    #ifdef _DEBUG
+        cutilSafeCall(cudaDeviceSynchronize());
+        cutilCheckMsg(__FUNCTION__);
+    #endif
+}
+
 
 ////////////////////////////////////////////////////////////////////
 // Main GN Solver Loop
@@ -358,18 +406,18 @@ extern "C" void solveSFSStub(SolverInput& input, SolverState& state, SolverParam
 {
     CUDATimer timer;
 
-    timer.reset();
     parameters.weightShading = parameters.weightShadingStart;
 
 	for (unsigned int nIter = 0; nIter < parameters.nNonLinearIterations; nIter++)
 	{
+        Precompute(input, state, parameters, timer);
+
 		float residual = EvalResidual(input, state, parameters, timer);
 		printf("%i: cost: %f\n", nIter, residual);
 
 		Initialization(input, state, parameters, timer);
 
 		for (unsigned int linIter = 0; linIter < parameters.nLinIterations; linIter++) {
-            printf("Iteration %d\n", linIter);
 			PCGIteration(input, state, parameters, timer);
             parameters.weightShading += parameters.weightShadingIncrement;
             if (ca != NULL) 
@@ -381,11 +429,10 @@ extern "C" void solveSFSStub(SolverInput& input, SolverState& state, SolverParam
         timer.nextIteration();
 
 	}
-    timer.evaluate();
-
-
+    Precompute(input, state, parameters, timer);
 	float residual = EvalResidual(input, state, parameters, timer);
 	printf("final cost: %f\n", residual);
+    timer.evaluate();
 }
 
 __global__ void PCGStep_Kernel_SaveInitialCostJTFAndPre(SolverInput input, SolverState state, SolverParameters parameters,
@@ -421,14 +468,16 @@ __global__ void PCGStep_Kernel_SaveJTJ(SolverInput input, SolverState state, Sol
 void NonPatchSaveInitialCostJTFAndPreAndJTJ(SolverInput& input, SolverState& state, SolverParameters& parameters, float* costResult, float* jtfResult, float* preResult, float* jtjResult)
 {
     const unsigned int N = input.N; // Number of block variables
+    CUDATimer timer;
+    Precompute(input, state, parameters, timer);
+
     cutilSafeCall(cudaDeviceSynchronize());
     PCGStep_Kernel_SaveInitialCostJTFAndPre<< <(N + THREADS_PER_BLOCK - 1) / THREADS_PER_BLOCK, THREADS_PER_BLOCK >> >(input, state, parameters, costResult, jtfResult, preResult);
 
     cutilSafeCall(cudaDeviceSynchronize());
     cutilCheckMsg(__FUNCTION__);
 
-    CUDATimer timer;
-    timer.reset();
+    
     Initialization(input, state, parameters, timer);
     PCGStep_Kernel_SaveJTJ<< <(N + THREADS_PER_BLOCK - 1) / THREADS_PER_BLOCK, THREADS_PER_BLOCK >> >(input, state, parameters, jtjResult);
 

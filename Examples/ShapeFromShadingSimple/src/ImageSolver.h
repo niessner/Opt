@@ -8,6 +8,7 @@
 #include "CUDAImageSolver.h"
 
 #include "OptImageSolver.h"
+#include "CeresImageSolver.h"
 #include "SFSSolverInput.h"
 
 class ImageSolver {
@@ -17,7 +18,9 @@ private:
     SFSSolverInput                  m_solverInput;
 
     CUDAImageSolver*  m_cudaSolver;
-    OptImageSolver*	    m_optSolver;
+    OptImageSolver*	  m_terraSolver;
+    OptImageSolver*	  m_optSolver;
+    CeresImageSolver* m_ceresSolver;
 
 public:
 	ImageSolver(const SFSSolverInput& input)
@@ -27,39 +30,50 @@ public:
 		resetGPUMemory();
 
         m_cudaSolver = new CUDAImageSolver(m_result->width(), m_result->height());
-        //m_optSolver = new OptImageSolver(m_result->width(), m_result->height(), "smoothingLaplacianFloat4AD.t", "gaussNewtonGPU");
-		/*		m_terraBlockSolverFloat4 = new OptImageSolver(m_image.getWidth(), m_image.getHeight(), "smoothingLaplacianFloat4AD.t", "gaussNewtonBlockGPU");*/
+        m_terraSolver = new OptImageSolver(m_result->width(), m_result->height(), "shapeFromShading.t", "gaussNewtonGPU");
+        m_optSolver = new OptImageSolver(m_result->width(), m_result->height(), "shapeFromShadingAD.t", "gaussNewtonGPU");
+		
 		
 	}
 
 	void resetGPUMemory()
 	{
-        m_result = std::shared_ptr<SimpleBuffer>(new SimpleBuffer(*m_solverInput.targetDepth.get(), true));
+        m_result = std::shared_ptr<SimpleBuffer>(new SimpleBuffer(*m_solverInput.initialUnknown.get(), true));
 	}
 
 	~ImageSolver()
 	{
         SAFE_DELETE(m_cudaSolver);
-
+        SAFE_DELETE(m_terraSolver);
         SAFE_DELETE(m_optSolver);
-		//		SAFE_DELETE(m_terraBlockSolverFloat4);
 	}
 
     std::shared_ptr<SimpleBuffer> solve()
-	{
-		
+    {
 
-				
-		std::cout << "CUDA" << std::endl;
-		resetGPUMemory();
+        std::cout << "CUDA" << std::endl;
+        resetGPUMemory();
         m_cudaSolver->solve(m_result, m_solverInput);
-		
 
-		//std::cout << "\n\nTERRA" << std::endl;
-		//resetGPUMemory();
-		//m_terraSolverFloat4->solve(d_imageFloat4, d_targetFloat4, nonLinearIter, linearIter, patchIter, weightFit, weightReg);
 
-		return m_result;
-	}
+        m_solverInput.parameters.solveCount = 0;
+        std::cout << "\n\nTERRA" << std::endl;
+        resetGPUMemory();
+        m_terraSolver->solve(m_result, m_solverInput);
+
+        m_solverInput.parameters.solveCount = 1;
+        std::cout << "\n\nOPT" << std::endl;
+        resetGPUMemory();
+        m_optSolver->solve(m_result, m_solverInput);
+
+#ifdef USE_CERES
+        m_solverInput.parameters.solveCount = 2;
+        std::cout << "\n\nCERES" << std::endl;
+        m_result = std::shared_ptr<SimpleBuffer>(new SimpleBuffer(*m_solverInput.initialUnknown.get(), false));
+        m_ceresSolver->solve(m_result, m_solverInput);
+#endif
+
+        return m_result;
+    }
 
 };
