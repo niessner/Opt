@@ -3,8 +3,8 @@
 #include <string>
 
 namespace OptUtil {
-    /** Assumes floating point type for now */
-    void dumpOptImage(float* d_ptr, std::string filename, int width, int height, int numChannels);
+    /** datatype = 0 means float, datatype = 1 means uint8 */
+    void dumpOptImage(void* d_ptr, std::string filename, int width, int height, int numChannels, int datatype = 0);
 }
 
 #endif

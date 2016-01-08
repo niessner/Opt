@@ -265,6 +265,9 @@
     <ClInclude Include="Cuda\PatchSolverSFS\PatchSolverSFSNoSharedEquations.h">
       <Filter>Cuda\PatchSolverSFS</Filter>
     </ClInclude>
+    <ClInclude Include="Cuda\SolverSFS\SolverSFSState.h">
+      <Filter>Cuda\SolverSFS</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <None Include="Shaders\PhongLighting.hlsl">
