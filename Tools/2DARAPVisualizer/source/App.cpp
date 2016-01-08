@@ -129,6 +129,19 @@ void App::makeGUI() {
 }
 
 
+static void drawLine(const Point2& p0, const Point2& p1, RenderDevice* rd, Color4 color, float width) {
+    Point2 v0 = p0 - p1;
+    Vector2 v1(-v0.y, v0.x);
+    v1 = v1.direction() * width / 2;
+
+    Array<Point2> polygon;
+    polygon.append(p0 - v1, p0 + v1, p1 + v1, p1 - v1);
+
+    Draw::poly2D(polygon, rd, color);
+
+
+}
+
 void App::onGraphics3D(RenderDevice* rd, Array<shared_ptr<Surface> >& allSurfaces) {
     Texture::copy(m_input, m_visualizationFB->texture(0));
     rd->push2D(m_visualizationFB); {
@@ -136,7 +149,9 @@ void App::onGraphics3D(RenderDevice* rd, Array<shared_ptr<Surface> >& allSurface
             Point2 start(handle.x, handle.y);
             Point2 end(handle.z, handle.w);
 
-            Draw::lineSegment(LineSegment::fromTwoPoints(Point3(start, 0.0f), Point3(end, 0.0f)), rd, Color3::blue(), 3.2f);
+            drawLine(start, end, rd, Color3::blue(), 3.0);
+
+            //Draw::lineSegment(LineSegment::fromTwoPoints(Point3(start, 0.0f), Point3(end, 0.0f)), rd, Color3::blue(), 13.2f);
             Draw::point(start, rd, Color3::red(), 3.2f);
             Draw::point(end, rd, Color3::green(), 3.2f);
         }

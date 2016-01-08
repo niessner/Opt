@@ -53,7 +53,7 @@ App::App(const GApp::Settings& settings) : GApp(settings) {
 // automatically caught.
 void App::onInit() {
     GApp::onInit();
-    setFrameDuration(1.0f / 120.0f);
+    setFrameDuration(1.0f / 60.0f);
 
     // Call setScene(shared_ptr<Scene>()) or setScene(MyScene::create()) to replace
     // the default scene here.
@@ -66,9 +66,7 @@ void App::onInit() {
     // developerWindow->videoRecordDialog->setCaptureGui(false);
     developerWindow->cameraControlWindow->moveTo(Point2(developerWindow->cameraControlWindow->rect().x0(), 0));
     loadScene(
-//        "Hair"
-         //"G3D Sponza"
-        "G3D Cornell Box" // Load something simple
+        "Mesh" 
         //developerWindow->sceneEditorWindow->selectedSceneName()  // Load the first scene encountered 
         );
 }

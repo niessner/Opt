@@ -12,6 +12,11 @@
 class App : public GApp {
 protected:
 
+    Array<Point3> constraints;
+    Array<int> constraintIndex;
+
+    String m_markerFilename;
+
     /** Called from onInit */
     void makeGUI();
 

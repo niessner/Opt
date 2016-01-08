@@ -11,13 +11,10 @@
     </ClInclude>
   </ItemGroup>
   <ItemGroup>
-    <ResourceCompile Include="resources.rc" />
-  </ItemGroup>
-  <ItemGroup>
     <None Include="mainpage.dox" />
     <None Include="Doxyfile" />
     <None Include="journal\journal.dox" />
-    <None Include="data-files\test.Scene.Any">
+    <None Include="data-files\Mesh.Scene.Any">
       <Filter>Scene Files</Filter>
     </None>
   </ItemGroup>
