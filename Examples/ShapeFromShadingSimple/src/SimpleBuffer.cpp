@@ -1,3 +1,5 @@
+#include "mLibInclude.h"
+
 #include "SimpleBuffer.h"
 
 #include <string.h>
@@ -76,7 +78,7 @@ SimpleBuffer::SimpleBuffer(const SimpleBuffer& other, bool onGPU) :
     }
 }
 
-void SimpleBuffer::save(std::string filename) {
+void SimpleBuffer::save(std::string filename) const {
     int datatype = m_dataType;
     FILE* fileHandle = fopen(filename.c_str(), "wb"); //b for binary
     fwrite(&m_width, sizeof(int), 1, fileHandle);
@@ -101,6 +103,129 @@ void SimpleBuffer::save(std::string filename) {
         free(ptr);
     }
 }
+
+void SimpleBuffer::savePNG(std::string filenameBase, float depthScale) const {
+    size_t elementSize = datatypeToSize(m_dataType);
+    size_t size = elementSize*m_channelCount*(m_width*m_height);
+    void* ptr;
+    if (m_onGPU) {
+        ptr = malloc(size);
+        cudaMemcpy(ptr, m_data, size, cudaMemcpyDeviceToHost);
+    }
+    else {
+        ptr = m_data;
+    }
+
+    std::cout << "Saving " << filenameBase << " " << m_width << "x" << m_height << "x" << m_channelCount << std::endl;
+    for (int channel = 0; channel < m_channelCount; channel++)
+    {
+        ColorImageR8G8B8A8 image(m_width, m_height);
+        for (auto &p : image)
+        {
+            //elementSize*m_channelCount*(m_width*m_height)
+            if (m_dataType == FLOAT)
+            {
+                float value = *((const float*)ptr + (p.y * m_width + p.x));
+                BYTE c = util::boundToByte(value * depthScale);
+                p.value = vec4uc(c, c, c, 255);
+            }
+        }
+
+        LodePNG::save(image, filenameBase + std::to_string(channel) + ".png");
+    }
+
+    if (m_onGPU) {
+        free(ptr);
+    }
+}
+
+void SimpleBuffer::savePLYPoints(std::string filename) const {
+    size_t elementSize = datatypeToSize(m_dataType);
+    size_t size = elementSize*m_channelCount*(m_width*m_height);
+    void* ptr;
+    if (m_onGPU) {
+        ptr = malloc(size);
+        cudaMemcpy(ptr, m_data, size, cudaMemcpyDeviceToHost);
+    }
+    else {
+        ptr = m_data;
+    }
+
+    std::cout << "Saving " << filename << " " << m_width << "x" << m_height << "x" << m_channelCount << std::endl;
+    for (int channel = 0; channel < m_channelCount; channel++)
+    {
+        PointCloudf cloud;
+        ColorImageR8G8B8A8 image(m_width, m_height);
+        for (auto &p : image)
+        {
+            if (m_dataType == FLOAT)
+            {
+                float value = *((const float*)ptr + (p.y * m_width + p.x));
+                //std::cout << value << std::endl;
+                if (value > 0.01f && value <= 10000.0f)
+                {
+                    cloud.m_points.push_back(vec3f(p.x, p.y, value * 1000.0f));
+                }
+            }
+        }
+        PointCloudIOf::saveToFile(filename, cloud);
+    }
+
+    if (m_onGPU) {
+        free(ptr);
+    }
+}
+
+void SimpleBuffer::savePLYMesh(std::string filename) const {
+    size_t elementSize = datatypeToSize(m_dataType);
+    size_t size = elementSize*m_channelCount*(m_width*m_height);
+    void* ptr;
+    if (m_onGPU) {
+        ptr = malloc(size);
+        cudaMemcpy(ptr, m_data, size, cudaMemcpyDeviceToHost);
+    }
+    else {
+        ptr = m_data;
+    }
+
+    std::cout << "Saving " << filename << " " << m_width << "x" << m_height << "x" << m_channelCount << std::endl;
+    
+    vector<vec3f> vertices;
+    vector<UINT> indices;
+    ColorImageR8G8B8A8 image(m_width, m_height);
+    for (auto &p : image)
+    {
+        
+        float value = *((const float*)ptr + (p.y * m_width + p.x));
+        if (!(value > 0.01f && value <= 10000.0f))
+            value = 0.47f;
+        
+        vertices.push_back(vec3f(p.x, p.y, value * 1000.0f));
+        
+        if (p.x < image.getDimX() - 1 && p.y < image.getDimY() - 1)
+        {
+            int i00 = (p.y + 0) * m_width + p.x + 0;
+            int i01 = (p.y + 0) * m_width + p.x + 1;
+            int i10 = (p.y + 1) * m_width + p.x + 0;
+            int i11 = (p.y + 1) * m_width + p.x + 1;
+
+            indices.push_back(i00);
+            indices.push_back(i10);
+            indices.push_back(i11);
+
+            indices.push_back(i00);
+            indices.push_back(i11);
+            indices.push_back(i01);
+        }
+    }
+    TriMeshf mesh(vertices, indices);
+    MeshIOf::saveToPLY(filename, mesh.getMeshData());
+
+    if (m_onGPU) {
+        free(ptr);
+    }
+}
+
 SimpleBuffer::~SimpleBuffer() {
     if (m_onGPU) {
         cudaFree(m_data);

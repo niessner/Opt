@@ -50,27 +50,42 @@ public:
 
     std::shared_ptr<SimpleBuffer> solve()
     {
+        const bool useCUDA = false;
+        const bool useTerra = false;
+        const bool useOpt = true;
+        const bool useCeres = false;
 
-        std::cout << "CUDA" << std::endl;
-        resetGPUMemory();
-        m_cudaSolver->solve(m_result, m_solverInput);
+        if (useCUDA)
+        {
+            std::cout << "CUDA" << std::endl;
+            resetGPUMemory();
+            m_cudaSolver->solve(m_result, m_solverInput);
+        }
 
+        if (useTerra)
+        {
+            m_solverInput.parameters.solveCount = 0;
+            std::cout << "\n\nTERRA" << std::endl;
+            resetGPUMemory();
+            m_terraSolver->solve(m_result, m_solverInput);
+        }
 
-        m_solverInput.parameters.solveCount = 0;
-        std::cout << "\n\nTERRA" << std::endl;
-        resetGPUMemory();
-        m_terraSolver->solve(m_result, m_solverInput);
-
-        m_solverInput.parameters.solveCount = 1;
-        std::cout << "\n\nOPT" << std::endl;
-        resetGPUMemory();
-        m_optSolver->solve(m_result, m_solverInput);
+        if (useOpt)
+        {
+            m_solverInput.parameters.solveCount = 1;
+            std::cout << "\n\nOPT" << std::endl;
+            resetGPUMemory();
+            m_optSolver->solve(m_result, m_solverInput);
+        }
 
 #ifdef USE_CERES
-        m_solverInput.parameters.solveCount = 2;
-        std::cout << "\n\nCERES" << std::endl;
-        m_result = std::shared_ptr<SimpleBuffer>(new SimpleBuffer(*m_solverInput.initialUnknown.get(), false));
-        m_ceresSolver->solve(m_result, m_solverInput);
+        if (useCeres)
+        {
+            m_solverInput.parameters.solveCount = 2;
+            std::cout << "\n\nCERES" << std::endl;
+            m_result = std::shared_ptr<SimpleBuffer>(new SimpleBuffer(*m_solverInput.initialUnknown.get(), false));
+            m_ceresSolver->solve(m_result, m_solverInput);
+        }
 #endif
 
         return m_result;
