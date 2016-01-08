@@ -159,6 +159,7 @@
     <CudaCompile Include="src\WarpingSolver.cu" />
   </ItemGroup>
   <ItemGroup>
+    <None Include="cat - Copy.constraints" />
     <None Include="cat.constraints" />
     <None Include="ImageWarping.t" />
     <None Include="ImageWarpingAD.t" />

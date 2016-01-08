@@ -121,5 +121,6 @@
     <None Include="shapeFromShading.t">
       <Filter>Terra</Filter>
     </None>
+    <None Include="default.SFSSolverParameters" />
   </ItemGroup>
 </Project>

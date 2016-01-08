@@ -40,27 +40,32 @@ int main(int argc, const char * argv[]) {
 
 
 	// PILLAR
-    
+    /*
 	const std::string inputImage = "bend2.png";
 	const std::string inputImageMask = "bendMask.png";
 	std::vector<std::vector<int>> constraints; constraints.resize(3);
 	constraints[0].push_back(48); constraints[0].push_back(61); constraints[0].push_back(144); constraints[0].push_back(69);
 	constraints[1].push_back(64); constraints[1].push_back(61); constraints[1].push_back(154); constraints[1].push_back(82);
 	constraints[2].push_back(80); constraints[2].push_back(61); constraints[2].push_back(165); constraints[2].push_back(92);
-	
+	*/
 
 
 	// CAT
-    /*
 	const std::string inputImage = "cartooncat.png";
 	const std::string inputImageMask = "catmask.png";
 	std::vector<std::vector<int>> constraints;
 	loadConstraints(constraints, "cat.constraints");
-    */
-	
+    
 
-	
 	ColorImageR8G8B8A8 image = LodePNG::load(inputImage);
+
+    ColorImageR32G32B32 imageColor(image.getWidth(), image.getHeight());
+    for (auto &p : imageColor)
+    {
+        auto val = image(p.x, p.y);
+        p.value = vec3f(val.x, val.y, val.z);
+    }
+
 	ColorImageR32 imageR32(image.getWidth(), image.getHeight());
 	//printf("width %d, height %d\n", image.getWidth(), image.getHeight());
 	for (unsigned int y = 0; y < image.getHeight(); y++) {
@@ -92,14 +97,16 @@ int main(int argc, const char * argv[]) {
 		}
 	}
 
-	ImageWarping warping(imageR32, imageR32Mask, constraints);
+    ImageWarping warping(imageR32, imageColor, imageR32Mask, constraints);
 
-	ColorImageR32* res = warping.solve();
+	ColorImageR32G32B32* res = warping.solve();
 	ColorImageR8G8B8A8 out(res->getWidth(), res->getHeight());
 	for (unsigned int y = 0; y < res->getHeight(); y++) {
 		for (unsigned int x = 0; x < res->getWidth(); x++) {
-			unsigned char p = math::round(math::clamp((*res)(x, y), 0.0f, 255.0f));
-			out(x, y) = vec4uc(p, p, p, 255);
+			unsigned char r = util::boundToByte((*res)(x, y).x);
+            unsigned char g = util::boundToByte((*res)(x, y).y);
+            unsigned char b = util::boundToByte((*res)(x, y).z);
+			out(x, y) = vec4uc(r, g, b, 255);
 	
 			for (unsigned int k = 0; k < constraints.size(); k++)
 			{

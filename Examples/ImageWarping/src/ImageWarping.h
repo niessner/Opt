@@ -11,15 +11,16 @@
 #include "CeresSolverImageWarping.h"
 
 
-static bool useCUDA = true;
+static bool useCUDA = false;
 static bool useTerra = false;
 static bool useAD = true;
 static bool useCeres = false;
 
 class ImageWarping {
 public:
-	ImageWarping(const ColorImageR32& image, const ColorImageR32& imageMask, std::vector<std::vector<int>>& constraints) : m_constraints(constraints){
+    ImageWarping(const ColorImageR32& image, const ColorImageR32G32B32& imageColor, const ColorImageR32& imageMask, std::vector<std::vector<int>>& constraints) : m_constraints(constraints){
 		m_image = image;
+        m_imageColor = imageColor;
 		m_imageMask = imageMask;
 
 		cutilSafeCall(cudaMalloc(&d_urshape,     sizeof(float2)*m_image.getWidth()*m_image.getHeight()));
@@ -71,7 +72,7 @@ public:
 	void setConstraintImage(float alpha)
 	{
 		float2* h_constraints = new float2[m_image.getWidth()*m_image.getHeight()];
-        printf("m_constraints.size() = %d\n", m_constraints.size());
+        //printf("m_constraints.size() = %d\n", m_constraints.size());
         for (unsigned int y = 0; y < m_image.getHeight(); y++)
         {
             for (unsigned int x = 0; x < m_image.getWidth(); x++)
@@ -120,13 +121,13 @@ public:
 
 	}
 
-	ColorImageR32* solve() {
+	ColorImageR32G32B32* solve() {
 		float weightFit = 100.0f;
 		float weightReg = 0.01f;
 
-		unsigned int numIter = 5;
-		unsigned int nonLinearIter = 25;
-		unsigned int linearIter = 25;
+		unsigned int numIter = 20;
+		unsigned int nonLinearIter = 2;
+		unsigned int linearIter = 200;
 		unsigned int patchIter = 32;
 
 		//unsigned int numIter = 20;
@@ -224,12 +225,12 @@ public:
             std::cout << std::endl;
         }
 
-		return &m_result;
+        return &m_resultColor;
 	}
 
 	void copyResultToCPU() {
-		m_result = ColorImageR32(m_image.getWidth(), m_image.getHeight());
-		m_result.setPixels(255);
+        m_resultColor = ColorImageR32G32B32(m_image.getWidth(), m_image.getHeight());
+        m_resultColor.setPixels(vec3f(255.0f, 255.0f, 255.0f));
 
 		float2* h_warpField = new float2[m_image.getWidth()*m_image.getHeight()];
 		cutilSafeCall(cudaMemcpy(h_warpField, d_warpField, sizeof(float2)*m_image.getWidth()*m_image.getHeight(), cudaMemcpyDeviceToHost));
@@ -248,10 +249,10 @@ public:
 						float2 pos10 = h_warpField[(y + 1)*m_image.getWidth() + x];
 						float2 pos11 = h_warpField[(y + 1)*m_image.getWidth() + (x + 1)];
 
-						float v00 = m_image(x, y);
-						float v01 = m_image(x, (y + 1));
-						float v10 = m_image((x + 1), y);
-						float v11 = m_image((x + 1), (y + 1));
+                        vec3f v00 = m_imageColor(x, y);
+                        vec3f v01 = m_imageColor(x, (y + 1));
+                        vec3f v10 = m_imageColor((x + 1), y);
+                        vec3f v11 = m_imageColor((x + 1), (y + 1));
 
 						for (unsigned int g = 0; g < c; g++)
 						{
@@ -271,21 +272,21 @@ public:
 									float2 pos1 = (1 - alpha)*pos10 + alpha* pos11;
 									float2 pos = (1 - beta)*pos0 + beta*pos1;
 
-									float v0 = (1 - alpha)*v00 + alpha* v01;
-									float v1 = (1 - alpha)*v10 + alpha* v11;
-									float v = (1 - beta)*v0 + beta * v1;
+									vec3f v0 = (1 - alpha)*v00 + alpha* v01;
+                                    vec3f v1 = (1 - alpha)*v10 + alpha* v11;
+                                    vec3f v = (1 - beta)*v0 + beta * v1;
 
 									unsigned int newX = (unsigned int)(pos.x + 0.5f);
                                     unsigned int newY = (unsigned int)(pos.y + 0.5f);
-									if (newX < m_result.getHeight() && newY < m_result.getWidth()) m_result(newX, newY) = v;
+                                    if (newX < m_resultColor.getWidth() && newY < m_resultColor.getHeight()) m_resultColor(newX, newY) = v;
 								}
 								else
 								{
 									float2 pos = pos00;
-									float v = v00;
+									vec3f v = v00;
                                     unsigned int newX = (unsigned int)(pos.x + 0.5f);
                                     unsigned int newY = (unsigned int)(pos.y + 0.5f);
-                                    if (newX < m_result.getHeight() && newY < m_result.getWidth()) m_result(newX, newY) = v;
+                                    if (newX < m_resultColor.getWidth() && newY < m_resultColor.getHeight()) m_resultColor(newX, newY) = v;
 								}
 							}
 						}
@@ -299,9 +300,11 @@ public:
 
 private:
 	ColorImageR32 m_image;
+    ColorImageR32G32B32 m_imageColor;
 	ColorImageR32 m_imageMask;
 
 	ColorImageR32 m_result;
+    ColorImageR32G32B32 m_resultColor;
 
 	float2*	d_urshape;
 	float2* d_warpField;

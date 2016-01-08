@@ -154,9 +154,9 @@ class ImageWarping
 			//unsigned int nonLinearIter = 20;
 			//unsigned int linearIter = 50;
 
-			unsigned int numIter = 2;
-			unsigned int nonLinearIter = 3;
-			unsigned int linearIter = 3;
+			unsigned int numIter = 20;
+			unsigned int nonLinearIter = 35;
+			unsigned int linearIter = 25;
 			
 #			if RUN_CUDA
 			m_result = m_initial;
@@ -220,14 +220,18 @@ class ImageWarping
             cutilSafeCall(cudaMemcpy(h_neighbourIdx, d_neighbourIdx, sizeof(int) * 2 * E, cudaMemcpyDeviceToHost));
             cutilSafeCall(cudaMemcpy(h_neighbourOffset, d_neighbourOffset, sizeof(int)*(N + 1), cudaMemcpyDeviceToHost));
 
+            float finalIterTime;
             for (unsigned int i = 1; i < numIter; i++)
             {
                 std::cout << "//////////// ITERATION" << i << "  (OPT) ///////////////" << std::endl;
                 setConstraints((float)i / (float)(numIter - 1));
                 cutilSafeCall(cudaMemcpy(h_vertexPosTargetFloat3, d_vertexPosTargetFloat3, sizeof(float3)*N, cudaMemcpyDeviceToHost));
 
-                m_ceresWarpingSolver->solveGN(h_vertexPosFloat3, h_anglesFloat3, h_vertexPosFloat3Urshape, h_vertexPosTargetFloat3, weightFit, weightReg);
+                finalIterTime = m_ceresWarpingSolver->solveGN(h_vertexPosFloat3, h_anglesFloat3, h_vertexPosFloat3Urshape, h_vertexPosTargetFloat3, weightFit, weightReg);
             }
+            std::cout << "CERES final iter time: " << finalIterTime << "ms" << std::endl;
+
+            cutilSafeCall(cudaMemcpy(d_vertexPosFloat3, h_vertexPosFloat3, sizeof(float3)*N, cudaMemcpyHostToDevice));
             copyResultToCPUFromFloat3();
 #			endif
 						

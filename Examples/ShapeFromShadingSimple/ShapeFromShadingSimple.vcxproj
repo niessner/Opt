@@ -168,6 +168,7 @@
     <CudaCompile Include="src\SFSSolver.cu" />
   </ItemGroup>
   <ItemGroup>
+    <None Include="default.SFSSolverParameters" />
     <None Include="shapeFromShading.t" />
     <None Include="shapeFromShadingAD.t" />
   </ItemGroup>
