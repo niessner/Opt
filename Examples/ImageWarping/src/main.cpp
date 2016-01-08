@@ -58,6 +58,14 @@ int main(int argc, const char * argv[]) {
     
 
 	ColorImageR8G8B8A8 image = LodePNG::load(inputImage);
+
+    ColorImageR32G32B32 imageColor(image.getWidth(), image.getHeight());
+    for (auto &p : imageColor)
+    {
+        auto val = image(p.x, p.y);
+        p.value = vec3f(val.x, val.y, val.z);
+    }
+
 	ColorImageR32 imageR32(image.getWidth(), image.getHeight());
 	//printf("width %d, height %d\n", image.getWidth(), image.getHeight());
 	for (unsigned int y = 0; y < image.getHeight(); y++) {
@@ -89,14 +97,16 @@ int main(int argc, const char * argv[]) {
 		}
 	}
 
-	ImageWarping warping(imageR32, imageR32Mask, constraints);
+    ImageWarping warping(imageR32, imageColor, imageR32Mask, constraints);
 
-	ColorImageR32* res = warping.solve();
+	ColorImageR32G32B32* res = warping.solve();
 	ColorImageR8G8B8A8 out(res->getWidth(), res->getHeight());
 	for (unsigned int y = 0; y < res->getHeight(); y++) {
 		for (unsigned int x = 0; x < res->getWidth(); x++) {
-			unsigned char p = math::round(math::clamp((*res)(x, y), 0.0f, 255.0f));
-			out(x, y) = vec4uc(p, p, p, 255);
+			unsigned char r = util::boundToByte((*res)(x, y).x);
+            unsigned char g = util::boundToByte((*res)(x, y).y);
+            unsigned char b = util::boundToByte((*res)(x, y).z);
+			out(x, y) = vec4uc(r, g, b, 255);
 	
 			for (unsigned int k = 0; k < constraints.size(); k++)
 			{

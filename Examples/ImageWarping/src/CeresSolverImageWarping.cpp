@@ -221,7 +221,7 @@ float CeresSolverWarping::solve(float2* h_x_float, float* h_a_float, float2* h_u
     
     //options.min_linear_solver_iterations = linearIterationMin;
     options.max_num_iterations = 10000;
-    options.function_tolerance = 0.4;
+    options.function_tolerance = 0.2;
     options.gradient_tolerance = 1e-4 * options.function_tolerance;
 
     //options.min_lm_diagonal = 1.0f;
@@ -262,9 +262,9 @@ float CeresSolverWarping::solve(float2* h_x_float, float* h_a_float, float2* h_u
 
     for (int i = 0; i < pixelCount; i++)
     {
-        h_x_float[i].x = h_x_double[i].x;
-        h_x_float[i].y = h_x_double[i].y;
-        h_a_float[i] = h_a_double[i];
+        h_x_float[i].x = (float)h_x_double[i].x;
+        h_x_float[i].y = (float)h_x_double[i].y;
+        h_a_float[i] = (float)h_a_double[i];
     }
 
     return (float)(summary.total_time_in_seconds * 1000.0);
