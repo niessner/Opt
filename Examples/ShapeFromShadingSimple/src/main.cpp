@@ -13,6 +13,7 @@ int main(int argc, const char * argv[])
     
     solverInput.load(inputFilenamePrefix);
     solverInput.parameters.nNonLinearIterations = 6;
+    //solverInput.parameters.nLinIterations = 100;
 	
     ImageSolver solver(solverInput);
 	printf("Solving\n");
@@ -20,6 +21,8 @@ int main(int argc, const char * argv[])
 	printf("Solved\n");
 	printf("About to save\n");
     result->save("sfsOutput.imagedump");
+    result->savePNG("sfsOutput", 150.0f);
+    result->savePLYMesh("sfsOutput.ply");
 	printf("Save\n");
 	#ifdef _WIN32
 	getchar();
