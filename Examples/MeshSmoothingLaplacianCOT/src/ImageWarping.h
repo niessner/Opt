@@ -129,7 +129,7 @@ public:
 	SimpleMesh* solve()
 	{
 		float weightFit = 1.0f;
-		float weightReg = 0.8f;
+		float weightReg = 4.5f;
 
 		unsigned int nonLinearIter = 10;
 		unsigned int linearIter = 200;
