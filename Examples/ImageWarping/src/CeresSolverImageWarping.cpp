@@ -212,17 +212,19 @@ float CeresSolverWarping::solve(float2* h_x_float, float* h_a_float, float2* h_u
     //faster methods
     options.num_threads = 8;
     options.num_linear_solver_threads = 8;
-    options.linear_solver_type = ceres::LinearSolverType::SPARSE_NORMAL_CHOLESKY; //7.2s
+    //options.linear_solver_type = ceres::LinearSolverType::SPARSE_NORMAL_CHOLESKY; //7.2s
     //options.linear_solver_type = ceres::LinearSolverType::SPARSE_SCHUR; //10.0s
     
     //slower methods
     //options.linear_solver_type = ceres::LinearSolverType::ITERATIVE_SCHUR; //40.6s
     //options.linear_solver_type = ceres::LinearSolverType::CGNR; //46.9s
     
+    //options.minimizer_type = ceres::LINE_SEARCH;
+
     //options.min_linear_solver_iterations = linearIterationMin;
-    options.max_num_iterations = 10000;
-    options.function_tolerance = 0.2;
-    options.gradient_tolerance = 1e-4 * options.function_tolerance;
+    options.max_num_iterations = 100;
+    //options.function_tolerance = 0.01;
+    //options.gradient_tolerance = 1e-4 * options.function_tolerance;
 
     //options.min_lm_diagonal = 1.0f;
     //options.min_lm_diagonal = options.max_lm_diagonal;
