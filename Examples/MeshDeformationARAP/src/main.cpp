@@ -5,14 +5,14 @@
 
 int main(int argc, const char * argv[])
 {
-	std::string filename = "raptor_simplify2k.off";
+	std::string filename = "Armadillo.ply";
 	if (argc >= 2) {
 		filename = argv[1];
 	}
 
 	// Load Constraints
 	LandMarkSet markersMesh;
-	markersMesh.loadFromFile("raptor_simplify2k_target.mrk");
+	markersMesh.loadFromFile("armadillo.mrk");
 
 	std::vector<int>				constraintsIdx;
 	std::vector<std::vector<float>> constraintsTarget;
@@ -24,17 +24,19 @@ int main(int argc, const char * argv[])
 	}
 
 	SimpleMesh* mesh = new SimpleMesh();
-	if (!OpenMesh::IO::read_mesh(*mesh, filename))
+
+	if (!OpenMesh::IO::read_mesh(*mesh, filename)) 
 	{
 	        std::cerr << "Error -> File: " << __FILE__ << " Line: " << __LINE__ << " Function: " << __FUNCTION__ << std::endl;
 		std::cout << filename << std::endl;
 		exit(1);
 	}
+    printf("Faces: %d\nVertices: %d\n", mesh->n_faces(), mesh->n_vertices());
 
 	ImageWarping warping(mesh, constraintsIdx, constraintsTarget);
-	SimpleMesh* res = warping.solve();
+    SimpleMesh* res = mesh;//warping.solve();
 
-	if (!OpenMesh::IO::write_mesh(*res, "out.off"))
+	if (!OpenMesh::IO::write_mesh(*res, "out.ply"))
 	{
 	        std::cerr << "Error -> File: " << __FILE__ << " Line: " << __LINE__ << " Function: " << __FUNCTION__ << std::endl;
 		std::cout << "out.off" << std::endl;
