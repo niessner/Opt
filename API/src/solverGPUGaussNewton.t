@@ -634,6 +634,7 @@ return function(problemSpec)
 		pd.Ap_X:initGPU()
 		pd.preconditioner:initGPU()
 		pd.rDotzOld:initGPU()
+		[util.initPrecomputedImages(`pd.parameters,problemSpec)]
 		
 		C.cudaMalloc([&&opaque](&(pd.scanAlpha)), sizeof(float))
 		C.cudaMalloc([&&opaque](&(pd.scanBeta)), sizeof(float))

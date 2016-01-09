@@ -35,10 +35,13 @@ local constraintUV = Constraints(0,0)	-- float2
 local e_fit = ad.select(ad.eq(m,0.0), x - constraintUV, ad.Vector(0.0, 0.0))
 e_fit = ad.select(ad.greatereq(constraintUV(0), 0.0), e_fit, ad.Vector(0.0, 0.0))
 e_fit = ad.select(ad.greatereq(constraintUV(1), 0.0), e_fit, ad.Vector(0.0, 0.0))
+e_fit = w_fitSqrt*e_fit
 
-terms:insert(w_fitSqrt*e_fit)
+if USE_J then
+    e_fit = S:ComputedImage("J_fit",W,H,e_fit)(0,0)
+end
 
-
+terms:insert(e_fit)
 
 --regularization
 local a = X(0,0,2)			-- rotation : float
@@ -52,11 +55,11 @@ for ii ,o in ipairs(offsets) do
     local ARAPCost = (x - n)	-	mul(R, (xHat - UrShape( i,j)))
     local ARAPCostF = ad.select(opt.InBounds(0,0,0,0),	ad.select(opt.InBounds( i,j,0,0), ARAPCost, ad.Vector(0.0, 0.0)), ad.Vector(0.0, 0.0))
     local m = Mask(i,j)
-    ARAPCostF = ad.select(ad.eq(m, 0.0), ARAPCostF, ad.Vector(0.0, 0.0))
+    ARAPCostF = w_regSqrt*ad.select(ad.eq(m, 0.0), ARAPCostF, ad.Vector(0.0, 0.0))
     if USE_J then
-        ARAPCostF = S:ComputedImage("ARAPCostF"..tostring(ii),W,H,ARAPCostF)(0,0)
+        ARAPCostF = S:ComputedImage("J_reg_"..tostring(i).."_"..tostring(j),W,H,ARAPCostF)(0,0)
     end
-    terms:insert(w_regSqrt*ARAPCostF)
+    terms:insert(ARAPCostF)
 end
 
 local cost = ad.sumsquared(unpack(terms))
