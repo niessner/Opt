@@ -35,11 +35,12 @@ return function(problemSpec)
 		p : problemSpec:UnknownType()		--descent direction -> num vars
 		Ap_X : problemSpec:UnknownType()	--cache values for next kernel call after A = J^T x J x p -> num vars
 		preconditioner : problemSpec:UnknownType() --pre-conditioner for linear system -> num vars
-		--rDotzOld : problemSpec:UnknownType()	--Old nominator (denominator) of alpha (beta) -> num vars	
-		rDotzOld : problemSpec:InternalImage(float, unknownType.metamethods.W, unknownType.metamethods.H, false)	--Old nominator (denominator) of alpha (beta) -> num vars	
 		
-		scanAlpha : &float					-- tmp variable for alpha scan
-		scanBeta : &float					-- tmp variable for alpha scan
+		
+		scanAlphaNumerator : &float
+		scanAlphaDenominator : &float
+		scanBetaNumerator : &float
+		scanBetaDenominator : &float
 		
 		timer : Timer
 		endSolver : util.TimerEvent
@@ -91,12 +92,15 @@ return function(problemSpec)
         var d = 0.0f -- init for out of bounds lanes
         var w : int, h : int
         if getValidUnknown(pd, &w, &h) then
-            -- residuum = J^T x -F - A x delta_0  => J^T x -F, since A x x_0 == 0
-                            
+		
+            -- residuum = J^T x -F - A x delta_0  => J^T x -F, since A x x_0 == 0                            
             var residuum : unknownElement = 0.0f
             var pre : unknownElement = 0.0f	
+			
             if (not [problemSpec:EvalExclude(w,h,w,h,`pd.parameters)]) then 
-                            
+                
+				pd.delta(w,h) = 0.0f    
+				
                 residuum, pre = problemSpec.functions.evalJTF.unknownfunction(w, h, w, h, pd.parameters)
                 residuum = -residuum
                 pd.r(w, h) = residuum
@@ -106,8 +110,7 @@ return function(problemSpec)
 				end
             end        
             
-			if not isGraph then
-				
+			if not isGraph then				
 				pre = guardedInvert(pre)
 				var p = pre*residuum	-- apply pre-conditioner M^-1			   
 				pd.p(w, h) = p
@@ -122,7 +125,7 @@ return function(problemSpec)
 		if not isGraph then
 			d = util.warpReduce(d)	
 			if (util.laneid() == 0) then				
-				util.atomicAdd(pd.scanAlpha, d)
+				util.atomicAdd(pd.scanAlphaNumerator, d)
 			end
 		end
     end
@@ -161,17 +164,9 @@ return function(problemSpec)
 
 		d = util.warpReduce(d)	
         if (util.laneid() == 0) then
-            util.atomicAdd(pd.scanAlpha, d)
+            util.atomicAdd(pd.scanAlphaNumerator, d)
         end
 	end
-	
-    terra kernels.PCGInit2(pd : PlanData)
-        var w : int, h : int
-        if getValidUnknown(pd, &w, &h) and (not [problemSpec:EvalExclude(w,h,w,h,`pd.parameters)]) then
-            pd.rDotzOld(w,h) = pd.scanAlpha[0]
-            pd.delta(w,h) = 0.0f	--TODO check if we need that
-        end
-    end
 	
     terra kernels.PCGStep1(pd : PlanData)
         var d = 0.0f
@@ -180,13 +175,12 @@ return function(problemSpec)
             var tmp : unknownElement = 0.0f
              -- A x p_k  => J^T x J x p_k 
             tmp = problemSpec.functions.applyJTJ.unknownfunction(w, h, w, h, pd.parameters, pd.p)
-            pd.Ap_X(w, h) = tmp								  -- store for next kernel call
-            --d = pd.p(w, h)*tmp					              -- x-th term of denominator of alpha
-            d = util.Dot(pd.p(w,h),tmp)
+            pd.Ap_X(w, h) = tmp					 -- store for next kernel call
+            d = util.Dot(pd.p(w,h),tmp)			 -- x-th term of denominator of alpha
         end
         d = util.warpReduce(d)
         if (util.laneid() == 0) then
-            util.atomicAdd(pd.scanAlpha, d)
+            util.atomicAdd(pd.scanAlphaDenominator, d)
         end
     end
 	
@@ -205,7 +199,7 @@ return function(problemSpec)
 		end
 		d = util.warpReduce(d)
         if (util.laneid() == 0) then
-            util.atomicAdd(pd.scanAlpha, d)
+            util.atomicAdd(pd.scanAlphaDenominator, d)
         end
     end
 
@@ -215,11 +209,14 @@ return function(problemSpec)
         var w : int, h : int
         if getValidUnknown(pd, &w, &h)  and (not [problemSpec:EvalExclude(w,h,w,h,`pd.parameters)]) then
             -- sum over block results to compute denominator of alpha
-            var dotProduct : float = pd.scanAlpha[0]
-            var alpha = 0.0f
-            
+            var alphaDenominator : float = pd.scanAlphaDenominator[0]
+			var alphaNumerator : float = pd.scanAlphaNumerator[0]
+                        
             -- update step size alpha
-            if dotProduct > FLOAT_EPSILON then alpha = pd.rDotzOld(w, h)/dotProduct end 
+			var alpha = 0.0f
+            if alphaDenominator > FLOAT_EPSILON then 
+				alpha = alphaNumerator/alphaDenominator 
+			end 
         
             pd.delta(w, h) = pd.delta(w, h)+alpha*pd.p(w,h)		-- do a decent step
             
@@ -238,27 +235,26 @@ return function(problemSpec)
             var z = pre*r										-- apply pre-conditioner M^-1
             pd.z(w,h) = z;										-- save for next kernel call
             
-            --b = z*r;											-- compute x-th term of the nominator of beta
-            b = util.Dot(z,r)
+            b = util.Dot(z,r)									-- compute x-th term of the numerator of beta
         end
         b = util.warpReduce(b)
         if (util.laneid() == 0) then
-            util.atomicAdd(pd.scanBeta, b)
+            util.atomicAdd(pd.scanBetaNumerator, b)
         end
     end
 	
     terra kernels.PCGStep3(pd : PlanData)			
         var w : int, h : int
+		
         if getValidUnknown(pd, &w, &h) and (not [problemSpec:EvalExclude(w,h,w,h,`pd.parameters)]) then
-            var rDotzNew : float =  pd.scanBeta[0]						-- get new nominator
-            var rDotzOld : float = pd.rDotzOld(w,h)						-- get old denominator
+			
+			var rDotzNew : float = pd.scanBetaNumerator[0]				-- get new numerator
+			var rDotzOld : float = pd.scanAlphaNumerator[0]				-- get old denominator
 
-            var beta : float = 0.0f			
-                    
-            if rDotzOld > FLOAT_EPSILON then beta = rDotzNew/rDotzOld end	-- update step size beta
-        
-            pd.rDotzOld(w,h) = rDotzNew										-- save new rDotz for next iteration
-            pd.p(w,h) = pd.z(w,h)+beta*pd.p(w,h)							-- update decent direction
+			var beta : float = 0.0f		                    
+			if rDotzOld > FLOAT_EPSILON then beta = rDotzNew/rDotzOld end	-- update step size beta
+			pd.p(w,h) = pd.z(w,h)+beta*pd.p(w,h)							-- update decent direction
+
         end
     end
 	
@@ -476,14 +472,19 @@ return function(problemSpec)
 		    var startCost = computeCost(pd)
 			logSolver("iteration %d, cost=%f\n", pd.nIter, startCost)
 
-			C.cudaMemset(pd.scanAlpha, 0, sizeof(float))	--scan in PCGInit1 requires reset
+			C.cudaMemset(pd.scanAlphaNumerator, 0, sizeof(float))	--scan in PCGInit1 requires reset
+			C.cudaMemset(pd.scanAlphaDenominator, 0, sizeof(float))	--scan in PCGInit1 requires reset
+			C.cudaMemset(pd.scanBetaNumerator, 0, sizeof(float))	--scan in PCGInit1 requires reset
+			C.cudaMemset(pd.scanBetaDenominator, 0, sizeof(float))	--scan in PCGInit1 requires reset
+			
 			gpu.PCGInit1(pd)
+			
 			if isGraph then
-				C.cudaMemset(pd.scanAlpha, 0, sizeof(float))	--TODO: don't write to scanAlpha in the previous kernel if it is a graph
+				--C.cudaMemset(pd.scanAlpha, 0, sizeof(float))	--TODO: don't write to scanAlpha in the previous kernel if it is a graph
 				gpu.PCGInit1_Graph(pd)	
 				gpu.PCGInit1_Finish(pd)	
 			end
-			gpu.PCGInit2(pd)
+
 			
 			escape
 			    if util.debugPrintSolverInfo then
@@ -543,20 +544,24 @@ return function(problemSpec)
 		    	end
 		    end
 
-			for lIter = 0, pd.lIterations do
-				
+			for lIter = 0, pd.lIterations do				
 
-                C.cudaMemset(pd.scanAlpha, 0, sizeof(float))
+                C.cudaMemset(pd.scanAlphaDenominator, 0, sizeof(float))
+				
 				gpu.PCGStep1(pd)
 
 				if isGraph then
 					gpu.PCGStep1_Graph(pd)	
 				end
 				
-				C.cudaMemset(pd.scanBeta, 0, sizeof(float))
+				C.cudaMemset(pd.scanBetaNumerator, 0, sizeof(float))
+				
 				gpu.PCGStep2(pd)
 				gpu.PCGStep3(pd)
 
+				-- save new rDotz for next iteration
+				C.cudaMemcpy(pd.scanAlphaNumerator, pd.scanBetaNumerator, sizeof(float), C.cudaMemcpyDeviceToDevice)	
+				
 
 				escape
 				    if util.debugPrintSolverInfo then
@@ -633,11 +638,13 @@ return function(problemSpec)
 		pd.p:initGPU()
 		pd.Ap_X:initGPU()
 		pd.preconditioner:initGPU()
-		pd.rDotzOld:initGPU()
+
 		[util.initPrecomputedImages(`pd.parameters,problemSpec)]
 		
-		C.cudaMalloc([&&opaque](&(pd.scanAlpha)), sizeof(float))
-		C.cudaMalloc([&&opaque](&(pd.scanBeta)), sizeof(float))
+		C.cudaMalloc([&&opaque](&(pd.scanAlphaNumerator)), sizeof(float))
+		C.cudaMalloc([&&opaque](&(pd.scanBetaNumerator)), sizeof(float))
+		C.cudaMalloc([&&opaque](&(pd.scanAlphaDenominator)), sizeof(float))
+		C.cudaMalloc([&&opaque](&(pd.scanBetaDenominator)), sizeof(float))
 		
 		C.cudaMalloc([&&opaque](&(pd.scratchF)), sizeof(float))
 		return &pd.plan
