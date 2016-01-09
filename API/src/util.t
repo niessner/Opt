@@ -439,18 +439,12 @@ local function noFooter(pd)
 	return quote end
 end
 
-util.initParameters = function(parameters, ProblemSpec, images, graphSizes, edgeValues, xs, ys, paramValues,allocateTemporaries)
+util.initParameters = function(parameters, ProblemSpec, images, graphSizes, edgeValues, xs, ys, paramValues,isInit)
     local stmts = terralib.newlist()
 	for _, entry in ipairs(ProblemSpec.parameters) do
 		if entry.kind == "image" then
-            if entry.idx == "alloc" then
-    		    if allocateTemporaries then
-    		        stmts:insert quote
-    		            parameters.[entry.name]:initGPU()
-    		        end
-    		    end
-            else
-                local function_name = allocateTemporaries and "initFromGPUptr" or "setGPUptr"
+		    if entry.idx ~= "alloc" then
+                local function_name = isInit and "initFromGPUptr" or "setGPUptr"
                 stmts:insert quote
                     parameters.[entry.name]:[function_name]([&uint8](images[entry.idx]))
                 end
@@ -473,6 +467,18 @@ util.initParameters = function(parameters, ProblemSpec, images, graphSizes, edge
         end
 	end
 	return stmts
+end
+
+util.initPrecomputedImages = function(parameters, ProblemSpec)
+    local stmts = terralib.newlist()
+	for _, entry in ipairs(ProblemSpec.parameters) do
+		if entry.kind == "image" and entry.idx == "alloc" then
+            stmts:insert quote
+    		    parameters.[entry.name]:initGPU()
+    		end
+    	end
+    end
+    return stmts
 end
 
 

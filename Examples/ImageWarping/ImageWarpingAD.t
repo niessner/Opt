@@ -1,5 +1,5 @@
 
-local USE_J = false
+local USE_J = true
 local W,H = opt.Dim("W",0), opt.Dim("H",1)
 local S = ad.ProblemSpec()
 S:UsePreconditioner(true)
