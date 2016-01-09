@@ -34,7 +34,7 @@ int main(int argc, const char * argv[])
     printf("Faces: %d\nVertices: %d\n", mesh->n_faces(), mesh->n_vertices());
 
 	ImageWarping warping(mesh, constraintsIdx, constraintsTarget);
-    SimpleMesh* res = mesh;//warping.solve();
+    SimpleMesh* res = warping.solve();
 
 	if (!OpenMesh::IO::write_mesh(*res, "out.ply"))
 	{

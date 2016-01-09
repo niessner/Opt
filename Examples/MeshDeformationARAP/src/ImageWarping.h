@@ -155,8 +155,8 @@ class ImageWarping
 			//unsigned int linearIter = 50;
 
 			unsigned int numIter = 20;
-			unsigned int nonLinearIter = 35;
-			unsigned int linearIter = 25;
+			unsigned int nonLinearIter = 2;
+			unsigned int linearIter = 200;
 			
 #			if RUN_CUDA
 			m_result = m_initial;
