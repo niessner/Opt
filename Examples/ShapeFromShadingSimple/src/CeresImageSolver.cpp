@@ -24,10 +24,6 @@ using ceres::Solver;
 using ceres::Solve;
 using namespace std;
 
-const int imageDimX = 128;
-const int imageDimY = 128;
-const int imagePixelCount = imageDimX * imageDimY;
-
 template<class T>
 struct vec3T
 {
@@ -53,9 +49,36 @@ struct vec3T
 };
 
 template<class T>
-vec3T<T> ppp(const CeresImageSolver &solver, T *X, int posX, int posY, int offX, int offY)
+struct SFSStencil
 {
-    T d = X[getPixel(posX + offX, posY + offY)];
+    SFSStencil(const T* const Xmm, const T* const X0m, const T* const X1m,
+               const T* const Xm0, const T* const X00, const T* const X10,
+               const T* const Xm1, const T* const X01, const T* const X11)
+    {
+        values[0][0] = Xmm[0];
+        values[0][1] = Xm0[0];
+        values[0][2] = Xm1[0];
+
+        values[1][0] = X0m[0];
+        values[1][1] = X00[0];
+        values[1][2] = X01[0];
+
+        values[2][0] = X1m[0];
+        values[2][1] = X10[0];
+        values[2][2] = X11[0];
+    }
+    T& operator()(int offX, int offY)
+    {
+        return values[offX + 1][offY + 1];
+    }
+private:
+    T values[3][3];
+};
+
+template<class T>
+vec3T<T> ppp(const CeresImageSolver &solver, SFSStencil<T> &stencil, int posX, int posY, int offX, int offY)
+{
+    T d = SFSStencil(offX, offY);
     T i = offX + posX;
     T j = offY + posY;
     vec3T<T> point;
@@ -66,24 +89,17 @@ vec3T<T> ppp(const CeresImageSolver &solver, T *X, int posX, int posY, int offX,
 }
 
 template<class T>
-T softSelect(T x, T left, T right)
+vec3T<T> normalAt(const CeresImageSolver &solver, SFSStencil<T> &stencil, int posX, int posY, int offX, int offY)
 {
-
-}
-
-template<class T>
-vec3T<T> normalAt(const CeresImageSolver &solver, T *X, int posX, int posY, int offX, int offY)
-{
-    ceres::EulerAnglesToRotationMatrix
     T i = offX + posX;
     T j = offY + posY;
     T f_x = (T)solver.f_x;
     T f_y = (T)solver.f_y;
 
-    T X01 = X[getPixel(posX + offX, posY + offY - 1)];
-    T X00 = X[getPixel(posX + offX, posY + offY)];
-    T X10 = X[getPixel(posX + offX - 1, posY + offY)];
-
+    T X01 = SFSStencil(offX, offY - 1);
+    T X00 = SFSStencil(offX, offY);
+    T X10 = SFSStencil(offX - 1, offY);
+    
     T n_x = (X01 * (X00 - X10)) / f_y;
     T n_y = (X10 * (X00 - X01)) / f_x;
     T n_z = (n_x * (u_x - i) / f_x) + (n_y * ((T)solver.u_y - j) / f_y) - (X10 * X01) / (f_x * f_y);
@@ -95,9 +111,9 @@ vec3T<T> normalAt(const CeresImageSolver &solver, T *X, int posX, int posY, int 
 }
 
 template<class T>
-T BBB(const CeresImageSolver &solver, T *X, int posX, int posY, int offX, int offY)
+T BBB(const CeresImageSolver &solver, SFSStencil<T> &stencil, int posX, int posY, int offX, int offY)
 {
-    vec3T<T> normal = normalAt(solver, X, posX, posY, offX, offY);
+    vec3T<T> normal = normalAt(solver, stencil, posX, posY, offX, offY);
     T n_x = normal.x;
     T n_y = normal.y;
     T n_z = normal.z;
@@ -124,9 +140,9 @@ float III(const CeresImageSolver &solver, int posX, int posY, int offX, int offY
 // ad.greater(D_i(x-1,y) + D_i(x,y) + D_i(x,y-1), 0)
 // opt.InBounds(0,0,1,1)
 template<class T>
-T B_I(const CeresImageSolver &solver, T *X, int posX, int posY, int offX, int offY)
+T B_I(const CeresImageSolver &solver, SFSStencil<T> &stencil, int posX, int posY, int offX, int offY)
 {
-    T bi = BBB(solver, X, posX, posY, offX, offY) - (T)III(solver, posX, posY, offX, offY);
+    T bi = BBB(solver, stencil, posX, posY, offX, offY) - (T)III(solver, posX, posY, offX, offY);
     return bi;
 }
 
@@ -136,9 +152,13 @@ struct DepthConstraintTerm
         : solver(_solver), coord(_coord), weight(_weight) {}
 
     template <typename T>
-    bool operator()(const T* const X, T* residuals) const
+    bool operator()(const T* const Xmm, const T* const X0m, const T* const X1m,
+                    const T* const Xm0, const T* const X00, const T* const X10,
+                    const T* const Xm1, const T* const X01, const T* const X11,
+                    T* residuals) const
     {
-        T xVal = X[solver->getPixel(coord.x, coord.y)];
+        SFSStencil<T> stencil(Xmm, X0m, X1m, Xm0, X00, X10, Xm1, X01, X11);
+        T xVal = stencil(0, 0);
         T dVal = (T)solver->D_i[solver->getPixel(coord.x, coord.y)];
         residuals[0] = (xVal - dVal) * T(weight);
         return true;
@@ -149,7 +169,7 @@ struct DepthConstraintTerm
     // opt.InBounds(0,0,0,0)
     static ceres::CostFunction* Create(const CeresImageSolver *solver, vec2i coord, float weight)
     {
-        return (new ceres::AutoDiffCostFunction<DepthConstraintTerm, 1, imagePixelCount>(
+        return (new ceres::AutoDiffCostFunction<DepthConstraintTerm, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1>(
             new DepthConstraintTerm(solver, coord, weight)));
     }
 
@@ -256,12 +276,6 @@ return P:Cost(cost)
 */
 void CeresImageSolver::solve(std::shared_ptr<SimpleBuffer> result, const SFSSolverInput& rawSolverInput)
 {
-    if (width != imageDimX || height != imageDimY)
-    {
-        cout << "Set imageDims to: " << width << "," << height << endl;
-        return;
-    }
-
     const int pixelCount = width * height;
     Xfloat = (float *)result->data();
     D_i = (float *)rawSolverInput.targetDepth->data();
@@ -303,16 +317,25 @@ void CeresImageSolver::solve(std::shared_ptr<SimpleBuffer> result, const SFSSolv
     // add all fit constraints
     //if (mask(i, j) == 0 && constaints(i, j).u >= 0 && constaints(i, j).v >= 0)
     //    fit = (x(i, j) - constraints(i, j)) * w_fitSqrt
-    for (int y = 0; y < height; y++)
+    const int borderSize = 1;
+    for (int y = borderSize; y < height - borderSize; y++)
     {
-        for (int x = 0; x < width; x++)
+        for (int x = borderSize; x < width - borderSize; x++)
         {
             const bool depthCheck = (D_i[getPixel(x, y)] > 0.0f);
             if (depthCheck)
             {
                 ceres::CostFunction* costFunction = DepthConstraintTerm::Create(this, vec2i(x, y), w_p);
-                //double2 *varStart = h_x_double + getPixel(x, y);
-                problem.AddResidualBlock(costFunction, NULL, Xdouble);
+                double *Xmm = Xdouble + getPixel(x - 1, y - 1);
+                double *X0m = Xdouble + getPixel(x + 0, y - 1);
+                double *X1m = Xdouble + getPixel(x + 1, y - 1);
+                double *Xm0 = Xdouble + getPixel(x - 1, y + 0);
+                double *X00 = Xdouble + getPixel(x + 0, y + 0);
+                double *X10 = Xdouble + getPixel(x + 1, y + 0);
+                double *Xm1 = Xdouble + getPixel(x - 1, y + 1);
+                double *X01 = Xdouble + getPixel(x + 0, y + 1);
+                double *X11 = Xdouble + getPixel(x + 1, y + 1);
+                problem.AddResidualBlock(costFunction, NULL, Xmm, X0m, X1m, Xm0, X00, X10, Xm1, X01, X11);
             }
         }
     }

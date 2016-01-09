@@ -13,8 +13,7 @@ struct SFSSolverInput {
     std::shared_ptr<SimpleBuffer>   maskEdgeMap; //uint8s, and actually the row and column maps stuck together...
     TerraSolverParameters           parameters;
 
-    void load(const std::string& filenamePrefix) {
-        bool onGPU = true;
+    void load(const std::string& filenamePrefix, bool onGPU) {
         targetIntensity = std::shared_ptr<SimpleBuffer>(new SimpleBuffer(filenamePrefix + "_targetIntensity.imagedump", onGPU));
         targetDepth     = std::shared_ptr<SimpleBuffer>(new SimpleBuffer(filenamePrefix + "_targetDepth.imagedump",     onGPU));
         previousDepth   = std::shared_ptr<SimpleBuffer>(new SimpleBuffer(filenamePrefix + "_previousDepth.imagedump",   onGPU));
