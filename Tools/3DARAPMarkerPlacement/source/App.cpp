@@ -1,8 +1,6 @@
 /** \file App.cpp */
 #include "App.h"
 
-#include <fstream>
-
 // Tells C++ to invoke command-line main() function even on OS X and Win32.
 G3D_START_AT_MAIN();
 
@@ -50,47 +48,12 @@ App::App(const GApp::Settings& settings) : GApp(settings) {
 }
 
 
-
-static void loadConstraints(Array<Point4int32>& constraints, const String& filename) {
-    std::ifstream in(filename.c_str(), std::fstream::in);
-
-    if (!in.good())
-    {
-        std::cout << "Could not open marker file " << filename.c_str() << std::endl;
-        assert(false);
-    }
-
-    unsigned int nMarkers;
-    in >> nMarkers;
-    constraints.resize(nMarkers);
-    for (unsigned int m = 0; m<nMarkers; m++)
-    {
-        int temp;
-        for (int i = 0; i < 4; ++i) {
-            in >> temp;
-            constraints[m][i] = temp;
-        }
-
-    }
-
-    in.close();
-}
-
 // Called before the application loop begins.  Load data here and
 // not in the constructor so that common exceptions will be
 // automatically caught.
 void App::onInit() {
     GApp::onInit();
     setFrameDuration(1.0f / 60.0f);
-
-    m_directory = "../../../Examples/ImageWarping/";
-    m_input  = Texture::fromFile(System::findDataFile(m_directory  + "cartooncat.png"));
-    m_output = Texture::fromFile(System::findDataFile(m_directory + "output.png"));
-
-    loadConstraints(m_handles, System::findDataFile(m_directory + "cat.constraints"));
-
-
-    m_visualizationFB = Framebuffer::create(Texture::createEmpty("Visualization", m_input->width(), m_input->height()));
 
     // Call setScene(shared_ptr<Scene>()) or setScene(MyScene::create()) to replace
     // the default scene here.
@@ -102,7 +65,10 @@ void App::onInit() {
     // developerWindow->videoRecordDialog->setScreenShotFormat("PNG");
     // developerWindow->videoRecordDialog->setCaptureGui(false);
     developerWindow->cameraControlWindow->moveTo(Point2(developerWindow->cameraControlWindow->rect().x0(), 0));
-
+    loadScene(
+        "Mesh" 
+        //developerWindow->sceneEditorWindow->selectedSceneName()  // Load the first scene encountered 
+        );
 }
 
 
@@ -111,11 +77,13 @@ void App::makeGUI() {
     createDeveloperHUD();
     debugWindow->setVisible(true);
     developerWindow->videoRecordDialog->setEnabled(true);
-    
+
     GuiPane* infoPane = debugPane->addPane("Info", GuiTheme::ORNATE_PANE_STYLE);
     
     // Example of how to add debugging controls
-    infoPane->addButton("Reload", [&](){loadConstraints(m_handles, System::findDataFile(m_directory + "cat.constraints")); });
+    infoPane->addLabel("You can add GUI controls");
+    infoPane->addLabel("in App::onInit().");
+    infoPane->addButton("Exit", this, &App::endProgram);
     infoPane->pack();
 
     // More examples of debugging GUI controls:
@@ -129,38 +97,8 @@ void App::makeGUI() {
 }
 
 
-static void drawLine(const Point2& p0, const Point2& p1, RenderDevice* rd, Color4 color, float width) {
-    Point2 v0 = p0 - p1;
-    Vector2 v1(-v0.y, v0.x);
-    v1 = v1.direction() * width / 2;
-
-    Array<Point2> polygon;
-    polygon.append(p0 - v1, p0 + v1, p1 + v1, p1 - v1);
-
-    Draw::poly2D(polygon, rd, color);
-
-
-}
-
 void App::onGraphics3D(RenderDevice* rd, Array<shared_ptr<Surface> >& allSurfaces) {
-    Texture::copy(m_input, m_visualizationFB->texture(0));
-    rd->push2D(m_visualizationFB); {
-        for (auto handle : m_handles) {
-            Point2 start(handle.x, handle.y);
-            Point2 end(handle.z, handle.w);
-
-            drawLine(start, end, rd, Color3::blue(), 3.0);
-
-            //Draw::lineSegment(LineSegment::fromTwoPoints(Point3(start, 0.0f), Point3(end, 0.0f)), rd, Color3::blue(), 13.2f);
-            Draw::point(start, rd, Color3::red(), 3.2f);
-            Draw::point(end, rd, Color3::green(), 3.2f);
-        }
-
-    } rd->pop2D();
     if (!scene()) {
-        
-
-
         if ((submitToDisplayMode() == SubmitToDisplayMode::MAXIMIZE_THROUGHPUT) && (!rd->swapBuffersAutomatically())) {
             swapBuffers();
         }
