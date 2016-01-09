@@ -126,7 +126,7 @@ public:
 		float weightReg = 0.01f;
 
 		unsigned int numIter = 20;
-		unsigned int nonLinearIter = 2;
+		unsigned int nonLinearIter = 3;
 		unsigned int linearIter = 200;
 		unsigned int patchIter = 32;
 
