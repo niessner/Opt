@@ -34,6 +34,7 @@ CUDAImageSolver::CUDAImageSolver(unsigned int imageWidth, unsigned int imageHeig
     cutilSafeCall(cudaMalloc(&m_solverState.B_I_dx0, sizeof(float)*N));
     cutilSafeCall(cudaMalloc(&m_solverState.B_I_dx1, sizeof(float)*N));
     cutilSafeCall(cudaMalloc(&m_solverState.B_I_dx2, sizeof(float)*N));
+    cutilSafeCall(cudaMalloc(&m_solverState.pguard, sizeof(bool)*N));
 }
 
 CUDAImageSolver::~CUDAImageSolver()

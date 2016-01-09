@@ -366,12 +366,26 @@ __global__ void Precompute_Kernel(SolverInput input, SolverState state, SolverPa
     const unsigned int x = blockIdx.x * blockDim.x + threadIdx.x;
 
     if (x < N) {
+        int W = input.width;
         int posy; int posx; get2DIdx(x, input.width, input.height, posy, posx);
         float4 temp = calShading2depthGradCompute(state, posx, posy, input);
         state.B_I_dx0[x] = temp.x;
         state.B_I_dx1[x] = temp.y;
         state.B_I_dx2[x] = temp.z;
         state.B_I[x]     = temp.w;
+            
+        float d  = readX(state, posy, posx, W);
+        float d0 = readX(state, posy, posx - 1, W);
+        float d1 = readX(state, posy, posx + 1, W);
+        float d2 = readX(state, posy - 1, posx, W);
+        float d3 = readX(state, posy + 1, posx, W);
+
+        state.pguard[x] = 
+           IsValidPoint(d) && IsValidPoint(d0) && IsValidPoint(d1) && IsValidPoint(d2) && IsValidPoint(d3)
+            && abs(d - d0)<DEPTH_DISCONTINUITY_THRE
+            && abs(d - d1)<DEPTH_DISCONTINUITY_THRE
+            && abs(d - d2)<DEPTH_DISCONTINUITY_THRE
+            && abs(d - d3)<DEPTH_DISCONTINUITY_THRE;
     }
 }
 

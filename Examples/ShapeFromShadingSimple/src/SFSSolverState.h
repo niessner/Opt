@@ -61,6 +61,7 @@ struct SolverState
     float* B_I_dx0;
     float* B_I_dx1;
     float* B_I_dx2;
+    bool* pguard;
 
 };
 
