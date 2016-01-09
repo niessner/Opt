@@ -120,7 +120,7 @@ void SimpleBuffer::savePNG(std::string filenameBase, float depthScale) const {
     for (int channel = 0; channel < m_channelCount; channel++)
     {
         ColorImageR8G8B8A8 image(m_width, m_height);
-        for (auto &p : image)
+        for (const auto &p : image)
         {
             //elementSize*m_channelCount*(m_width*m_height)
             if (m_dataType == FLOAT)
@@ -156,7 +156,7 @@ void SimpleBuffer::savePLYPoints(std::string filename) const {
     {
         PointCloudf cloud;
         ColorImageR8G8B8A8 image(m_width, m_height);
-        for (auto &p : image)
+        for (const auto &p : image)
         {
             if (m_dataType == FLOAT)
             {
@@ -193,7 +193,7 @@ void SimpleBuffer::savePLYMesh(std::string filename) const {
     vector<vec3f> vertices;
     vector<UINT> indices;
     ColorImageR8G8B8A8 image(m_width, m_height);
-    for (auto &p : image)
+    for (const auto &p : image)
     {
         
         float value = *((const float*)ptr + (p.y * m_width + p.x));
