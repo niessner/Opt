@@ -1,6 +1,8 @@
 /** \file App.cpp */
 #include "App.h"
 
+#include "OpenMesh.h"
+
 // Tells C++ to invoke command-line main() function even on OS X and Win32.
 G3D_START_AT_MAIN();
 
@@ -47,6 +49,21 @@ int main(int argc, const char* argv[]) {
 App::App(const GApp::Settings& settings) : GApp(settings) {
 }
 
+void App::saveMarkerFile() {
+
+    float scale = 100.0f;
+    TextOutput to(m_markerFilename);
+    to.writeNumber(m_constraints.size());
+    for (int i = 0; i < m_constraints.size(); ++i) {
+        to.writeNewline();
+        to.writeNumber(m_constraints[i].x*scale);
+        to.writeNumber(m_constraints[i].y*scale);
+        to.writeNumber(m_constraints[i].z*scale);
+        to.writeNumber(0.0224524);
+        to.writeNumber(m_constraintIndices[i]);
+    }
+    to.commit();
+}
 
 // Called before the application loop begins.  Load data here and
 // not in the constructor so that common exceptions will be
@@ -54,6 +71,20 @@ App::App(const GApp::Settings& settings) : GApp(settings) {
 void App::onInit() {
     GApp::onInit();
     setFrameDuration(1.0f / 60.0f);
+
+    m_meshFilename = System::findDataFile("../../../Examples/MeshDeformationARAP/Armadillo.ply");
+
+    m_markerFilename = "armadillo.mrk";
+
+    if (!OpenMesh::IO::read_mesh(m_mesh, m_meshFilename.c_str()))
+    {
+        std::cerr << "Error -> File: " << __FILE__ << " Line: " << __LINE__ << " Function: " << __FUNCTION__ << std::endl;
+        std::cout << m_meshFilename.c_str() << std::endl;
+        exit(1);
+    }
+    m_mesh.update_normals();
+    setNewIndex(0);
+
 
     // Call setScene(shared_ptr<Scene>()) or setScene(MyScene::create()) to replace
     // the default scene here.
@@ -96,6 +127,26 @@ void App::makeGUI() {
     debugWindow->setRect(Rect2D::xywh(0, 0, (float)window()->width(), debugWindow->rect().height()));
 }
 
+static Vector3 toVec3(const Vec3f& v) {
+    return Vector3(v[0], v[1], v[2]) * 0.01f;
+}
+
+void App::setNewIndex(int index) {
+    m_selectedIndex = index;
+    const Vector3& p = toVec3(m_mesh.point(VertexHandle(m_selectedIndex)));
+    m_currentConstraintPosition = p * 1.3f;
+
+}
+
+
+static void drawConstraint(RenderDevice* rd, const Point3& p0, const Point3& p1, Color3 c0, Color3 c1) {
+    float sphereRadius = 0.01f;
+    Draw::sphere(Sphere(p0, sphereRadius), rd, Color4(c0, 0.5), Color4::clear());
+    Draw::sphere(Sphere(p1, sphereRadius), rd, Color4(c1, 0.5), Color4::clear());
+
+    float cylinderRadius = 0.001f;
+    Draw::cylinder(Cylinder(p0, p1, cylinderRadius), rd, Color3::black(), Color4::clear());
+}
 
 void App::onGraphics3D(RenderDevice* rd, Array<shared_ptr<Surface> >& allSurfaces) {
     if (!scene()) {
@@ -109,6 +160,13 @@ void App::onGraphics3D(RenderDevice* rd, Array<shared_ptr<Surface> >& allSurface
         } rd->popState();
         return;
     }
+    
+    screenPrintf("Press R to randomly select a vertex.");
+    screenPrintf("Press <- or -> to change through the vertices in order.");
+    screenPrintf("Press space to lock in a constraint.");
+    screenPrintf("Press enter to save constraints");
+
+
 
     GBuffer::Specification gbufferSpec = m_gbufferSpecification;
     extendGBufferSpecification(gbufferSpec);
@@ -126,6 +184,17 @@ void App::onGraphics3D(RenderDevice* rd, Array<shared_ptr<Surface> >& allSurface
         drawDebugShapes();
         const shared_ptr<Entity>& selectedEntity = (notNull(developerWindow) && notNull(developerWindow->sceneEditorWindow)) ? developerWindow->sceneEditorWindow->selectedEntity() : shared_ptr<Entity>();
         scene()->visualize(rd, selectedEntity, allSurfaces, sceneVisualizationSettings(), activeCamera());
+
+        const Point3& p = toVec3(m_mesh.point(VertexHandle(m_selectedIndex)));
+        drawConstraint(rd, p, m_currentConstraintPosition, Color3::red(), Color3::green());
+
+        for (int i = 0; i < m_constraintIndices.size(); ++i) {
+            drawConstraint(rd, 
+                toVec3(m_mesh.point(VertexHandle(m_constraintIndices[i]))), 
+                m_constraints[i], Color3::red(), Color3::blue());
+        }
+        
+
 
         // Post-process special effects
         m_depthOfField->apply(rd, m_framebuffer->texture(0), m_framebuffer->texture(Framebuffer::DEPTH), activeCamera(), m_settings.depthGuardBandThickness - m_settings.colorGuardBandThickness);
@@ -174,7 +243,10 @@ void App::onSimulation(RealTime rdt, SimTime sdt, SimTime idt) {
 
 bool App::onEvent(const GEvent& event) {
     // Handle super-class events
+
     if (GApp::onEvent(event)) { return true; }
+
+
 
     // If you need to track individual UI events, manage them here.
     // Return true if you want to prevent other parts of the system
@@ -189,8 +261,53 @@ bool App::onEvent(const GEvent& event) {
 
 
 void App::onUserInput(UserInput* ui) {
+
+    if (ui->keyDown(GKey::LCTRL) || ui->keyDown(GKey::RCTRL)) {
+        float s = 0.005f;
+        if (ui->keyDown(GKey('w'))) {
+            m_currentConstraintPosition += Vector3(0, 0, -s);
+        }
+        if (ui->keyDown(GKey('s'))) {
+            m_currentConstraintPosition += Vector3(0, 0, s);
+        }
+        if (ui->keyDown(GKey('a'))) {
+            m_currentConstraintPosition += Vector3(-s, 0, 0);
+        }
+        if (ui->keyDown(GKey('d'))) {
+            m_currentConstraintPosition += Vector3(s, 0, 0);
+        }
+
+        if (ui->keyDown(GKey('q'))) {
+            m_currentConstraintPosition += Vector3(0, -s, 0);
+        }
+        if (ui->keyDown(GKey('e'))) {
+            m_currentConstraintPosition += Vector3(0, s, 0);
+        }
+    }
+
+
     GApp::onUserInput(ui);
-    (void)ui;
+
+    if (ui->keyPressed(GKey('r'))) {
+        setNewIndex(Random::common().integer(0, m_mesh.n_vertices() - 1));
+    }
+
+    if (ui->keyPressed(GKey::LEFT)) {
+        setNewIndex((m_selectedIndex + m_mesh.n_vertices() - 1) % m_mesh.n_vertices());
+    }
+    if (ui->keyPressed(GKey::RIGHT)) {
+        setNewIndex((m_selectedIndex + 1) % m_mesh.n_vertices());
+    }
+    if (ui->keyPressed(GKey::RETURN)) {
+        saveMarkerFile();
+    }
+    if (ui->keyPressed(GKey::SPACE)) {
+        m_constraints.append(m_currentConstraintPosition);
+        m_constraintIndices.append(m_selectedIndex);
+    }
+
+
+
     // Add key handling here based on the keys currently held or
     // ones that changed in the last frame.
 }

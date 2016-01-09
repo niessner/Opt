@@ -137,6 +137,7 @@
         resultModel = ArticulatedModel::Specification { 
             //filename = "out.off"; 
             filename = "../../../Examples/MeshDeformationARAP/Armadillo.ply"; 
+            //filename = "../../../Examples/MeshDeformationARAP/out.off"; 
             scale = 0.01; 
             stripMaterials = true; 
 

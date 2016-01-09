@@ -42,12 +42,12 @@
   <PropertyGroup Label="UserMacros" />
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
     <LinkIncremental>true</LinkIncremental>
-    <IncludePath>..\..\..\..\mLib\include;D:\Projects\g3d\G3D10\build\include;$(VC_IncludePath);$(WindowsSDK_IncludePath);</IncludePath>
+    <IncludePath>..\..\..\..\mLib\include;..\..\..\..\mLibExternal\include;D:\Projects\g3d\G3D10\build\include;$(VC_IncludePath);$(WindowsSDK_IncludePath);</IncludePath>
     <LibraryPath>..\..\..\..\mLibExternal\libsWindows\lib64;D:\Projects\g3d\G3D10\build\lib;$(VC_LibraryPath_x64);$(WindowsSDK_LibraryPath_x64);$(NETFXKitsDir)Lib\um\x64</LibraryPath>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
     <LinkIncremental>false</LinkIncremental>
-    <IncludePath>..\..\..\..\mLib\include;D:\Projects\g3d\G3D10\build\include;$(VC_IncludePath);$(WindowsSDK_IncludePath);</IncludePath>
+    <IncludePath>..\..\..\..\mLib\include;..\..\..\..\mLibExternal\include;D:\Projects\g3d\G3D10\build\include;$(VC_IncludePath);$(WindowsSDK_IncludePath);</IncludePath>
     <LibraryPath>..\..\..\..\mLibExternal\libsWindows\lib64;D:\Projects\g3d\G3D10\build\lib;$(VC_LibraryPath_x64);$(WindowsSDK_LibraryPath_x64);$(NETFXKitsDir)Lib\um\x64</LibraryPath>
   </PropertyGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
@@ -92,9 +92,12 @@
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClInclude Include="source\App.h" />
+    <ClInclude Include="source\mLibInclude.h" />
+    <ClInclude Include="source\OpenMesh.h" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="source\App.cpp" />
+    <ClCompile Include="source\mLibSource.cpp" />
   </ItemGroup>
   <ItemGroup>
     <None Include="data-files\Mesh.Scene.Any" />
