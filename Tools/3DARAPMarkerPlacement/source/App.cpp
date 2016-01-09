@@ -33,7 +33,7 @@ int main(int argc, const char* argv[]) {
     // or if you *want* to render faster than the display.
     settings.window.asynchronous        = false;
 
-    settings.depthGuardBandThickness    = Vector2int16(64, 64);
+    settings.depthGuardBandThickness    = Vector2int16(0, 0);
     settings.colorGuardBandThickness    = Vector2int16(0, 0);
     settings.dataDir                    = FileSystem::currentDirectory();
     settings.screenshotDirectory        = "../journal/";
@@ -282,6 +282,25 @@ void App::onUserInput(UserInput* ui) {
         }
         if (ui->keyDown(GKey('e'))) {
             m_currentConstraintPosition += Vector3(0, s, 0);
+        }
+        if (ui->keyPressed(GKey('v'))) {
+
+            const Ray& eyeRay = scene()->eyeRay(activeCamera(), ui->mouseXY(), RenderDevice::current->viewport(), Vector2int16(0, 0));
+            float distance = finf();
+            scene()->intersect(eyeRay, distance);
+            Point3 hitPoint = eyeRay.origin() + eyeRay.direction() * distance;
+
+            float closestDistance = finf();
+            int newIndex = m_selectedIndex;
+            for (int i = 0; i < m_mesh.n_vertices(); ++i) {
+                float newDist = (toVec3(m_mesh.point(VertexHandle(i))) - hitPoint).squaredLength();
+                if (newDist < closestDistance) {
+                    newIndex = i;
+                    closestDistance = newDist;
+                }
+            }
+            setNewIndex(newIndex);
+
         }
     }
 

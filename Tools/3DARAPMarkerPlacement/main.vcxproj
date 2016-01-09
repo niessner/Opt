@@ -47,8 +47,8 @@
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
     <LinkIncremental>false</LinkIncremental>
-    <IncludePath>..\..\..\..\mLib\include;..\..\..\..\mLibExternal\include;D:\Projects\g3d\G3D10\build\include;$(VC_IncludePath);$(WindowsSDK_IncludePath);</IncludePath>
-    <LibraryPath>..\..\..\..\mLibExternal\libsWindows\lib64;D:\Projects\g3d\G3D10\build\lib;$(VC_LibraryPath_x64);$(WindowsSDK_LibraryPath_x64);$(NETFXKitsDir)Lib\um\x64</LibraryPath>
+    <IncludePath>..\..\..\..\mLibExternal\include;..\..\..\..\mLib\include;$(IncludePath)</IncludePath>
+    <LibraryPath>..\..\..\..\mLibExternal\libsWindows\lib64;$(LibraryPath)</LibraryPath>
   </PropertyGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
     <ClCompile>
