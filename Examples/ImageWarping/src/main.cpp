@@ -60,7 +60,7 @@ int main(int argc, const char * argv[]) {
 	ColorImageR8G8B8A8 image = LodePNG::load(inputImage);
 
     ColorImageR32G32B32 imageColor(image.getWidth(), image.getHeight());
-    for (auto &p : imageColor)
+    for (const auto &p : imageColor)
     {
         auto val = image(p.x, p.y);
         p.value = vec3f(val.x, val.y, val.z);
