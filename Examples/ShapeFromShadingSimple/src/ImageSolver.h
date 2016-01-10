@@ -15,7 +15,8 @@ class ImageSolver {
 private:
 
     std::shared_ptr<SimpleBuffer>   m_result;
-    SFSSolverInput                  m_solverInput;
+    SFSSolverInput                  m_solverInputGPU;
+    SFSSolverInput                  m_solverInputCPU;
 
     CUDAImageSolver*  m_cudaSolver;
     OptImageSolver*	  m_terraSolver;
@@ -23,22 +24,22 @@ private:
     CeresImageSolver* m_ceresSolver;
 
 public:
-	ImageSolver(const SFSSolverInput& input)
+    ImageSolver(const SFSSolverInput& inputGPU, const SFSSolverInput& inputCPU)
 	{
-        m_solverInput = input;
+        m_solverInputGPU = inputGPU;
+        m_solverInputCPU = inputCPU;
 
 		resetGPUMemory();
 
         m_cudaSolver = new CUDAImageSolver(m_result->width(), m_result->height());
         m_terraSolver = new OptImageSolver(m_result->width(), m_result->height(), "shapeFromShading.t", "gaussNewtonGPU");
         m_optSolver = new OptImageSolver(m_result->width(), m_result->height(), "shapeFromShadingAD.t", "gaussNewtonGPU");
-		
-		
+        m_ceresSolver = new CeresImageSolver(m_result->width(), m_result->height());
 	}
 
 	void resetGPUMemory()
 	{
-        m_result = std::shared_ptr<SimpleBuffer>(new SimpleBuffer(*m_solverInput.initialUnknown.get(), true));
+        m_result = std::shared_ptr<SimpleBuffer>(new SimpleBuffer(*m_solverInputGPU.initialUnknown.get(), true));
 	}
 
 	~ImageSolver()
@@ -50,41 +51,40 @@ public:
 
     std::shared_ptr<SimpleBuffer> solve()
     {
-        const bool useCUDA = true;
-        const bool useTerra = true;
-        const bool useOpt = true;
-        const bool useCeres = false;
+        const bool useCUDA = false;
+        const bool useTerra = false;
+        const bool useOpt = false;
+        const bool useCeres = true;
 
         if (useCUDA)
         {
             std::cout << "CUDA" << std::endl;
             resetGPUMemory();
-            m_cudaSolver->solve(m_result, m_solverInput);
+            m_cudaSolver->solve(m_result, m_solverInputGPU);
         }
 
         if (useTerra)
         {
-            m_solverInput.parameters.solveCount = 0;
+            m_solverInputGPU.parameters.solveCount = 0;
             std::cout << "\n\nTERRA" << std::endl;
             resetGPUMemory();
-            m_terraSolver->solve(m_result, m_solverInput);
+            m_terraSolver->solve(m_result, m_solverInputGPU);
         }
 
         if (useOpt)
         {
-            m_solverInput.parameters.solveCount = 1;
+            m_solverInputGPU.parameters.solveCount = 1;
             std::cout << "\n\nOPT" << std::endl;
             resetGPUMemory();
-            m_optSolver->solve(m_result, m_solverInput);
+            m_optSolver->solve(m_result, m_solverInputGPU);
         }
 
 #ifdef USE_CERES
         if (useCeres)
         {
-            m_solverInput.parameters.solveCount = 2;
             std::cout << "\n\nCERES" << std::endl;
-            m_result = std::shared_ptr<SimpleBuffer>(new SimpleBuffer(*m_solverInput.initialUnknown.get(), false));
-            m_ceresSolver->solve(m_result, m_solverInput);
+            m_result = std::shared_ptr<SimpleBuffer>(new SimpleBuffer(*m_solverInputCPU.initialUnknown.get(), false));
+            m_ceresSolver->solve(m_result, m_solverInputCPU);
         }
 #endif
 

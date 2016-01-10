@@ -157,8 +157,7 @@ class ImageWarping
 
 			unsigned int numIter = 32;
 			unsigned int nonLinearIter = 1;
-            unsigned int linearIter = 4000;
-			
+            unsigned int linearIter = 4000;			
 #			if RUN_CUDA
 			m_result = m_initial;
 			resetGPUMemory();

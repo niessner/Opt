@@ -9,13 +9,15 @@ int main(int argc, const char * argv[])
 	if (argc >= 2) {
         inputFilenamePrefix = std::string(argv[1]);
 	}
-    SFSSolverInput solverInput;
+    SFSSolverInput solverInputCPU, solverInputGPU;
     
-    solverInput.load(inputFilenamePrefix);
-    solverInput.parameters.nNonLinearIterations = 6;
+    solverInputGPU.load(inputFilenamePrefix, true);
+    solverInputGPU.parameters.nNonLinearIterations = 6;
     //solverInput.parameters.nLinIterations = 100;
+
+    solverInputCPU.load(inputFilenamePrefix, false);
 	
-    ImageSolver solver(solverInput);
+    ImageSolver solver(solverInputGPU, solverInputCPU);
 	printf("Solving\n");
     std::shared_ptr<SimpleBuffer> result = solver.solve();
 	printf("Solved\n");

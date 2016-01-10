@@ -118,7 +118,6 @@ public:
 		if (useAD) 
 		  SAFE_DELETE(m_warpingSolverTerraAD);
 		
-
 	}
 
 	ColorImageR32G32B32* solve() {
