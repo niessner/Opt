@@ -34,6 +34,7 @@ public:
         m_cudaSolver = new CUDAImageSolver(m_result->width(), m_result->height());
         m_terraSolver = new OptImageSolver(m_result->width(), m_result->height(), "shapeFromShading.t", "gaussNewtonGPU");
         m_optSolver = new OptImageSolver(m_result->width(), m_result->height(), "shapeFromShadingAD.t", "gaussNewtonGPU");
+        //m_optSolver = new OptImageSolver(m_result->width(), m_result->height(), "shapeFromShadingADHacked.t", "gaussNewtonGPU");
         m_ceresSolver = new CeresImageSolver(m_result->width(), m_result->height());
 	}
 
@@ -53,7 +54,7 @@ public:
     {
         const bool useCUDA = false;
         const bool useTerra = false;
-        const bool useOpt = false;
+        const bool useOpt = true;
         const bool useCeres = true;
 
         if (useCUDA)
