@@ -5,14 +5,14 @@
 
 int main(int argc, const char * argv[])
 {
-	std::string filename = "raptor_fullres.ply";
+	std::string filename = "../MeshDeformationARAP/raptor_clean.stl";
 	if (argc >= 2) {
 		filename = argv[1];
 	}
 
 	// Load Constraints
 	LandMarkSet markersMesh;
-	markersMesh.loadFromFile("raptor.mrk");
+	markersMesh.loadFromFile("../MeshDeformationARAP/raptor.mrk");
 
 	std::vector<int>				constraintsIdx;
 	std::vector<std::vector<float>> constraintsTarget;
