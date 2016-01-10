@@ -12,8 +12,8 @@ int main(int argc, const char * argv[])
     SFSSolverInput solverInputCPU, solverInputGPU;
     
     solverInputGPU.load(inputFilenamePrefix, true);
-    solverInputGPU.parameters.nNonLinearIterations = 6;
-    //solverInput.parameters.nLinIterations = 100;
+    solverInputGPU.parameters.nNonLinearIterations = 60;
+    solverInputGPU.parameters.nLinIterations = 10;
 
     solverInputCPU.load(inputFilenamePrefix, false);
 	
