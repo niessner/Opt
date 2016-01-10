@@ -119,8 +119,7 @@
       <Optimization>O3</Optimization>
     </CudaCompile>
     <PreBuildEvent>
-      <Command>
-      </Command>
+      <Command>call "../../API/common/optMake.bat" "$(ProjectDir)/../../../terra" "$(ProjectDir)/../../API/build" "$(ProjectDir)"</Command>
     </PreBuildEvent>
   </ItemDefinitionGroup>
   <ItemGroup>

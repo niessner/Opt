@@ -8,34 +8,19 @@
 #define App_h
 #include <G3D/G3DAll.h>
 
-#include "OpenMesh.h"
-
 /** Application framework. */
 class App : public GApp {
 protected:
-    float m_scaleFactor;
-    Point3 m_currentConstraintPosition;
-    int m_selectedIndex; 
+    String              m_directory;
 
-    SimpleMesh m_mesh;
+    shared_ptr<Texture> m_input;
+    shared_ptr<Texture> m_output;
+    shared_ptr<Framebuffer> m_visualizationFB;
 
-    String m_meshFilename;
-
-    Array<Point3> m_constraints;
-    Array<int> m_constraintIndices;
-
-    String m_markerFilename;
+    Array<Point4int32> m_handles;
 
     /** Called from onInit */
     void makeGUI();
-
-    void setNewIndex(int index);
-
-    void saveMarkerFile();
-
-    void loadMarkerFile();
-
-    Vector3 App::toVec3(const Vec3f& v);
 
 public:
     

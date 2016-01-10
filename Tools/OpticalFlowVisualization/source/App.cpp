@@ -1,13 +1,6 @@
 /** \file App.cpp */
 #include "App.h"
 
-#include "OpenMesh.h"
-
-
-#define ARMADILLO 1
-
-
-
 // Tells C++ to invoke command-line main() function even on OS X and Win32.
 G3D_START_AT_MAIN();
 
@@ -38,7 +31,7 @@ int main(int argc, const char* argv[]) {
     // or if you *want* to render faster than the display.
     settings.window.asynchronous        = false;
 
-    settings.depthGuardBandThickness    = Vector2int16(0, 0);
+    settings.depthGuardBandThickness    = Vector2int16(64, 64);
     settings.colorGuardBandThickness    = Vector2int16(0, 0);
     settings.dataDir                    = FileSystem::currentDirectory();
     settings.screenshotDirectory        = "../journal/";
@@ -54,96 +47,25 @@ int main(int argc, const char* argv[]) {
 App::App(const GApp::Settings& settings) : GApp(settings) {
 }
 
-void App::saveMarkerFile() {
-
-    float scale = 1.0f / m_scaleFactor;
-    TextOutput to(m_markerFilename);
-    to.writeNumber(m_constraints.size());
-    for (int i = 0; i < m_constraints.size(); ++i) {
-        to.writeNewline();
-        to.writeNumber(m_constraints[i].x*scale);
-        to.writeNumber(m_constraints[i].y*scale);
-        to.writeNumber(m_constraints[i].z*scale);
-        to.writeNumber(0.0224524);
-        to.writeNumber(m_constraintIndices[i]);
-    }
-    to.commit();
-}
-
-void App::loadMarkerFile() {
-    TextInput ti(m_markerFilename);
-    int numConstraints = ti.readNumber();//.writeNumber(m_constraints.size());
-    m_constraints.resize(numConstraints);
-    m_constraintIndices.resize(numConstraints);
-    for (int i = 0; i < m_constraints.size(); ++i) {
-        //ti.readNewline();
-        m_constraints[i].x = ti.readNumber() * m_scaleFactor;
-        m_constraints[i].y = ti.readNumber() * m_scaleFactor;
-        m_constraints[i].z = ti.readNumber() * m_scaleFactor;
-        ti.readNumber();
-        m_constraintIndices[i] = ti.readNumber();
-    }
-    /*
-    for (int i = 0; i < m_constraintIndices.size(); ++i) {
-        debugPrintf("i: %d\n", i);
-        Point3 start = toVec3(m_mesh.point(VertexHandle(m_constraintIndices[i])));
-        Point3 newPoint = start * 100.0f;
-        if (start.y > 0) {
-            if (start.x*100.0f < -40) {
-                CFrame frame = CFrame::fromXYZYPRDegrees(-0.45, 0.5, 0.5, 0.0, 0.0, 0.0);
-                newPoint = frame.pointToObjectSpace(start) * 100.0f;
-            }
-            else if (start.x*100.0f > 40) {
-                CFrame frame = CFrame::fromXYZYPRDegrees(0.45, 0.5, 0.5, 0.0, 0.0, 0.0);
-                newPoint = frame.pointToObjectSpace(start) * 100.0f;
-            }
-            else {
-                CFrame frame = CFrame::fromXYZYPRDegrees(0.0, 0.15, 0.0, 0.0, 30.0, 0.0);
-                newPoint = frame.pointToWorldSpace(start) * 100.0f;
-            }
-        }
-        debugPrintf("%f %f %f 0.0224524 %d\n", newPoint.x, newPoint.y, newPoint.z, m_constraintIndices[i]);
-    }*/
-
-}
-
-
 // Called before the application loop begins.  Load data here and
 // not in the constructor so that common exceptions will be
 // automatically caught.
 void App::onInit() {
     GApp::onInit();
     setFrameDuration(1.0f / 60.0f);
-# if ARMADILLO
-    m_scaleFactor = 0.01f;
-    m_meshFilename = System::findDataFile("../../../Examples/MeshDeformationARAP/Armadillo20k.ply");
-    //m_meshFilename = System::findDataFile("../../../Examples/MeshDeformationARAP/out.ply");
-    m_markerFilename = "armadillo.mrk";
-    bool doLoadMarkerFile = true;
-# else
-    m_scaleFactor = 1.0f;
-    m_meshFilename = System::findDataFile("../../../Examples/MeshDeformationED/raptor_fullres.ply");
-    m_markerFilename = "raptor.mrk";
-    bool doLoadMarkerFile = false;
-#endif
 
+    m_directory = "../../../Examples/OpticalFlow/";
+    BinaryInput bi(System::findDataFile(m_directory + "RubberWhale/flow10.flo"), G3D_LITTLE_ENDIAN);
+    bi.readFloat32();
+    int width = bi.readInt32();
+    int height = bi.readInt32();
+    shared_ptr<CPUPixelTransferBuffer> ptb = CPUPixelTransferBuffer::create(width, height, ImageFormat::RG32F());
+    void* ptbPtr = ptb->mapWrite();
+    bi.readBytes(ptbPtr, width*height*sizeof(Vector2));
+    ptb->unmap();
+    static shared_ptr<Texture> tex = Texture::createEmpty("Flow", width, height, ImageFormat::RG32F());
+    tex->update(ptb);
 
-    if (doLoadMarkerFile) {
-        loadMarkerFile();
-    }
-
-
-    if (!OpenMesh::IO::read_mesh(m_mesh, m_meshFilename.c_str()))
-    {
-        std::cerr << "Error -> File: " << __FILE__ << " Line: " << __LINE__ << " Function: " << __FUNCTION__ << std::endl;
-        std::cout << m_meshFilename.c_str() << std::endl;
-        exit(1);
-    }
-    m_mesh.update_normals();
-    setNewIndex(-1);
-
-
-    
 
 
     // Call setScene(shared_ptr<Scene>()) or setScene(MyScene::create()) to replace
@@ -156,29 +78,6 @@ void App::onInit() {
     // developerWindow->videoRecordDialog->setScreenShotFormat("PNG");
     // developerWindow->videoRecordDialog->setCaptureGui(false);
     developerWindow->cameraControlWindow->moveTo(Point2(developerWindow->cameraControlWindow->rect().x0(), 0));
-    loadScene(
-        "Mesh" 
-        //developerWindow->sceneEditorWindow->selectedSceneName()  // Load the first scene encountered 
-        );
-    Any modelAny(Any::TABLE, "ArticulatedModel::Specification");
-
-    modelAny["filename"] = m_meshFilename;
-    modelAny["scale"] = m_scaleFactor;
-    modelAny["stripMaterials"] = true;
-    /*
-    Any preprocessAny(STR((
-        setMaterial(all(), UniversalMaterial::Specification{
-        glossy = Color4(0.6, 0.6, 0.6, 0.5);
-        lambertian = Color3(0.9);
-        mirrorHint = "STATIC_PROBE";
-    }));));
-    modelAny["preprocess"] = preprocessAny;*/
-
-    scene()->createModel(modelAny, "meshModel");
-    Any entityAny(Any::TABLE, "VisibleEntity");
-    entityAny["model"] = "meshModel";
-    scene()->createEntity("mesh", entityAny);
-
 
 }
 
@@ -188,11 +87,11 @@ void App::makeGUI() {
     createDeveloperHUD();
     debugWindow->setVisible(true);
     developerWindow->videoRecordDialog->setEnabled(true);
-
+    
     GuiPane* infoPane = debugPane->addPane("Info", GuiTheme::ORNATE_PANE_STYLE);
     
     // Example of how to add debugging controls
-    infoPane->addButton("Reload Markers", this, &App::loadMarkerFile);
+   // infoPane->addButton("Reload", [&](){loadConstraints(m_handles, System::findDataFile(m_directory + "cat.constraints")); });
     infoPane->pack();
 
     // More examples of debugging GUI controls:
@@ -205,28 +104,26 @@ void App::makeGUI() {
     debugWindow->setRect(Rect2D::xywh(0, 0, (float)window()->width(), debugWindow->rect().height()));
 }
 
-Vector3 App::toVec3(const Vec3f& v) {
-    return Vector3(v[0], v[1], v[2]) * m_scaleFactor;
-}
 
-void App::setNewIndex(int index) {
-    m_selectedIndex = index;
-    m_currentConstraintPosition = toVec3(m_mesh.point(VertexHandle(m_selectedIndex)));
+static void drawLine(const Point2& p0, const Point2& p1, RenderDevice* rd, Color4 color, float width) {
+    Point2 v0 = p0 - p1;
+    Vector2 v1(-v0.y, v0.x);
+    v1 = v1.direction() * width / 2;
 
-}
+    Array<Point2> polygon;
+    polygon.append(p0 - v1, p0 + v1, p1 + v1, p1 - v1);
+
+    Draw::poly2D(polygon, rd, color);
 
 
-static void drawConstraint(RenderDevice* rd, const Point3& p0, const Point3& p1, Color3 c0, Color3 c1) {
-    float sphereRadius = 0.01f;
-    Draw::sphere(Sphere(p0, sphereRadius), rd, Color4(c0, 0.5), Color4::clear());
-    Draw::sphere(Sphere(p1, sphereRadius), rd, Color4(c1, 0.5), Color4::clear());
-
-    float cylinderRadius = 0.001f;
-    Draw::cylinder(Cylinder(p0, p1, cylinderRadius), rd, Color3::black(), Color4::clear());
 }
 
 void App::onGraphics3D(RenderDevice* rd, Array<shared_ptr<Surface> >& allSurfaces) {
+    
     if (!scene()) {
+        
+
+
         if ((submitToDisplayMode() == SubmitToDisplayMode::MAXIMIZE_THROUGHPUT) && (!rd->swapBuffersAutomatically())) {
             swapBuffers();
         }
@@ -237,13 +134,6 @@ void App::onGraphics3D(RenderDevice* rd, Array<shared_ptr<Surface> >& allSurface
         } rd->popState();
         return;
     }
-    
-    screenPrintf("Press R to randomly select a vertex.");
-    screenPrintf("Press <- or -> to change through the vertices in order.");
-    screenPrintf("Press space to lock in a constraint.");
-    screenPrintf("Press enter to save constraints");
-
-
 
     GBuffer::Specification gbufferSpec = m_gbufferSpecification;
     extendGBufferSpecification(gbufferSpec);
@@ -261,16 +151,6 @@ void App::onGraphics3D(RenderDevice* rd, Array<shared_ptr<Surface> >& allSurface
         drawDebugShapes();
         const shared_ptr<Entity>& selectedEntity = (notNull(developerWindow) && notNull(developerWindow->sceneEditorWindow)) ? developerWindow->sceneEditorWindow->selectedEntity() : shared_ptr<Entity>();
         scene()->visualize(rd, selectedEntity, allSurfaces, sceneVisualizationSettings(), activeCamera());
-        if (m_selectedIndex >= 0) {
-            const Point3& p = toVec3(m_mesh.point(VertexHandle(m_selectedIndex)));
-            drawConstraint(rd, p, m_currentConstraintPosition, Color3::red(), Color3::green());
-        }
-        
-        for (int i = 0; i < m_constraintIndices.size(); ++i) {
-            drawConstraint(rd,
-                toVec3(m_mesh.point(VertexHandle(m_constraintIndices[i]))),
-                m_constraints[i], Color3::red(), Color3::blue());
-        }
 
         // Post-process special effects
         m_depthOfField->apply(rd, m_framebuffer->texture(0), m_framebuffer->texture(Framebuffer::DEPTH), activeCamera(), m_settings.depthGuardBandThickness - m_settings.colorGuardBandThickness);
@@ -319,10 +199,7 @@ void App::onSimulation(RealTime rdt, SimTime sdt, SimTime idt) {
 
 bool App::onEvent(const GEvent& event) {
     // Handle super-class events
-
     if (GApp::onEvent(event)) { return true; }
-
-
 
     // If you need to track individual UI events, manage them here.
     // Return true if you want to prevent other parts of the system
@@ -337,72 +214,8 @@ bool App::onEvent(const GEvent& event) {
 
 
 void App::onUserInput(UserInput* ui) {
-
-    if (ui->keyDown(GKey::LCTRL) || ui->keyDown(GKey::RCTRL)) {
-        float s = 0.005f;
-        if (ui->keyDown(GKey('w')) || ui->keyDown(GKey('i'))) {
-            m_currentConstraintPosition += Vector3(0, 0, -s);
-        }
-        if (ui->keyDown(GKey('s')) || ui->keyDown(GKey('k'))) {
-            m_currentConstraintPosition += Vector3(0, 0, s);
-        }
-        if (ui->keyDown(GKey('a')) || ui->keyDown(GKey('j'))) {
-            m_currentConstraintPosition += Vector3(-s, 0, 0);
-        }
-        if (ui->keyDown(GKey('d')) || ui->keyDown(GKey('l'))) {
-            m_currentConstraintPosition += Vector3(s, 0, 0);
-        }
-
-        if (ui->keyDown(GKey('q')) || ui->keyDown(GKey('u'))) {
-            m_currentConstraintPosition += Vector3(0, -s, 0);
-        }
-        if (ui->keyDown(GKey('e')) || ui->keyDown(GKey('o'))) {
-            m_currentConstraintPosition += Vector3(0, s, 0);
-        }
-        if (ui->keyPressed(GKey('v'))) {
-
-            const Ray& eyeRay = scene()->eyeRay(activeCamera(), ui->mouseXY(), RenderDevice::current->viewport(), Vector2int16(0, 0));
-            float distance = finf();
-            scene()->intersect(eyeRay, distance);
-            Point3 hitPoint = eyeRay.origin() + eyeRay.direction() * distance;
-
-            float closestDistance = finf();
-            int newIndex = m_selectedIndex;
-            for (int i = 0; i < m_mesh.n_vertices(); ++i) {
-                float newDist = (toVec3(m_mesh.point(VertexHandle(i))) - hitPoint).squaredLength();
-                if (newDist < closestDistance) {
-                    newIndex = i;
-                    closestDistance = newDist;
-                }
-            }
-            setNewIndex(newIndex);
-
-        }
-    }
-
-
     GApp::onUserInput(ui);
-
-    if (ui->keyPressed(GKey('r'))) {
-        setNewIndex(Random::common().integer(0, m_mesh.n_vertices() - 1));
-    }
-
-    if (ui->keyPressed(GKey::LEFT)) {
-        setNewIndex((m_selectedIndex + m_mesh.n_vertices() - 1) % m_mesh.n_vertices());
-    }
-    if (ui->keyPressed(GKey::RIGHT)) {
-        setNewIndex((m_selectedIndex + 1) % m_mesh.n_vertices());
-    }
-    if (ui->keyPressed(GKey::RETURN)) {
-        saveMarkerFile();
-    }
-    if (ui->keyPressed(GKey::SPACE)) {
-        m_constraints.append(m_currentConstraintPosition);
-        m_constraintIndices.append(m_selectedIndex);
-    }
-
-
-
+    (void)ui;
     // Add key handling here based on the keys currently held or
     // ones that changed in the last frame.
 }

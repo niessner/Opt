@@ -2,9 +2,7 @@
 /* -*- c++ -*- */
 { 
     entities = { 
-        result = VisibleEntity { 
-            model = "resultModel"; 
-        }; 
+
         
         camera = Camera { 
             depthOfFieldSettings = DepthOfFieldSettings { 
@@ -134,27 +132,7 @@
     }; 
     
     models = { 
-        resultModel = ArticulatedModel::Specification { 
-            //filename = "out.off"; 
-            filename = "../../../Examples/MeshDeformationARAP/Armadillo.ply"; 
-            //filename = "../../../Examples/MeshDeformationARAP/out.off"; 
-            scale = 0.01; 
-            stripMaterials = true; 
-
-            // Avoid the potentially-slow welding step
-            cleanGeometrySettings = CleanGeometrySettings {
-                forceVertexMerging = false;
-                allowVertexMerging = false;
-            };
-
-            preprocess = ( 
-                setMaterial(all(), UniversalMaterial::Specification { 
-                        glossy = Color4(0.6, 0.6, 0.6, 0.5 ); 
-                        lambertian = Color3(0.9 ); 
-                        mirrorHint = "STATIC_PROBE"; 
-                    } ) ); 
-
-        };   
+          
     }; 
     
     name = "Mesh"; 
