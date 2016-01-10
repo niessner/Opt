@@ -33,10 +33,6 @@ struct vec3T
         y = _y;
         z = _z;
     }
-    T sqMagintude()
-    {
-        return x * x + y * y + z * z;
-    }
     vec3T operator * (T v)
     {
         return vec3T(v * x, v * y, v * z);
@@ -95,21 +91,22 @@ vec3T<T> ppp(const CeresImageSolver &solver, SFSStencil<T> &stencil, int posX, i
 template<class T>
 vec3T<T> normalAt(const CeresImageSolver &solver, SFSStencil<T> &stencil, int posX, int posY, int offX, int offY)
 {
-    T i = offX + posX;
-    T j = offY + posY;
+    T i = (T)(offX + posX);
+    T j = (T)(offY + posY);
     T f_x = (T)solver.f_x;
     T f_y = (T)solver.f_y;
+    T u_x = (T)solver.u_x;
+    T u_y = (T)solver.u_y;
 
-    T X01 = SFSStencil(offX, offY - 1);
-    T X00 = SFSStencil(offX, offY);
-    T X10 = SFSStencil(offX - 1, offY);
+    T X01 = stencil(offX, offY - 1);
+    T X00 = stencil(offX, offY);
+    T X10 = stencil(offX - 1, offY);
     
     T n_x = (X01 * (X00 - X10)) / f_y;
     T n_y = (X10 * (X00 - X01)) / f_x;
-    T n_z = (n_x * (u_x - i) / f_x) + (n_y * ((T)solver.u_y - j) / f_y) - (X10 * X01) / (f_x * f_y);
-    T sqLength = n_x*n_x + n_y*n_y + n_z*n_z + T(1e-6);
+    T n_z = (n_x * (u_x - i) / f_x) + (n_y * (u_y - j) / f_y) - (X10 * X01 / (f_x * f_y));
+    T sqLength = n_x*n_x + n_y*n_y + n_z*n_z + T(1e-10);
 
-    vec3T<T> result;
     T invMagnitude = (T)1.0 / sqrt(sqLength);
     return vec3T<T>(n_x, n_y, n_z) * invMagnitude;
 }
@@ -123,11 +120,11 @@ T BBB(const CeresImageSolver &solver, SFSStencil<T> &stencil, int posX, int posY
     T n_z = normal.z;
     T L[9];
     for (int i = 0; i < 9; i++)
-        L[i] = solver.L[i];
+        L[i] = (T)solver.L[i];
 
     T lighting = L[0] +
         L[1] * n_y + L[2] * n_z + L[3] * n_x +
-        L[4] * n_x*n_y + L[5] * n_y*n_z + L[6] * (-n_x*n_x - n_y*n_y + 2 * n_z*n_z) + L[7] * n_z*n_x + L[8] * (n_x*n_x - n_y*n_y);
+        L[4] * n_x*n_y + L[5] * n_y*n_z + L[6] * (-n_x*n_x - n_y*n_y + (T)2.0 * n_z*n_z) + L[7] * n_z*n_x + L[8] * (n_x*n_x - n_y*n_y);
 
     return lighting;
 }
@@ -147,6 +144,12 @@ template<class T>
 T B_I(const CeresImageSolver &solver, SFSStencil<T> &stencil, int posX, int posY, int offX, int offY)
 {
     T bi = BBB(solver, stencil, posX, posY, offX, offY) - (T)III(solver, posX, posY, offX, offY);
+    //D_i(x-1,y) + D_i(x,y) + D_i(x,y-1)
+    float sum = solver.D_i[solver.getPixel(posX + offX - 1, posY + offY)] +
+                solver.D_i[solver.getPixel(posX + offX, posY + offY)] +
+                solver.D_i[solver.getPixel(posX + offX, posY + offY - 1)];
+    if (sum > 0.0f)
+        return (T)0.0f;
     return bi;
 }
 
@@ -164,13 +167,13 @@ struct DepthConstraintTerm
         SFSStencil<T> stencil(Xmm, X0m, X1m, Xm0, X00, X10, Xm1, X01, X11);
         T xVal = stencil(0, 0);
         T dVal = (T)solver->D_i[solver->getPixel(coord.x, coord.y)];
+        //T dVal = (T)0.4;
         residuals[0] = (xVal - dVal) * T(weight);
         return true;
     }
 
     // CHECK!!!
     // ad.greater(D_i(0,0), 0)
-    // opt.InBounds(0,0,0,0)
     static ceres::CostFunction* Create(const CeresImageSolver *solver, vec2i coord, float weight)
     {
         return (new ceres::AutoDiffCostFunction<DepthConstraintTerm, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1>(
@@ -223,6 +226,68 @@ struct ShadingTerm
     float weight;
 };
 
+struct HorzTerm
+{
+    HorzTerm(const CeresImageSolver *_solver, vec2i _coord, float _weight)
+        : solver(_solver), coord(_coord), weight(_weight) {}
+
+    template <typename T>
+    bool operator()(const T* const Xmm, const T* const X0m, const T* const X1m,
+        const T* const Xm0, const T* const X00, const T* const X10,
+        const T* const Xm1, const T* const X01, const T* const X11,
+        T* residuals) const
+    {
+        SFSStencil<T> stencil(Xmm, X0m, X1m, Xm0, X00, X10, Xm1, X01, X11);
+
+        //E_g_h_someCheck = B_I(0,0) - B_I(1,0)
+        T BI00 = B_I(*solver, stencil, coord.x, coord.y, 0, 0);
+        T BI10 = B_I(*solver, stencil, coord.x, coord.y, 1, 0);
+        residuals[0] = (BI00 - BI10) * T(weight);
+        return true;
+    }
+
+    static ceres::CostFunction* Create(const CeresImageSolver *solver, vec2i coord, float weight)
+    {
+        return (new ceres::AutoDiffCostFunction<HorzTerm, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1>(
+            new HorzTerm(solver, coord, weight)));
+    }
+
+    const CeresImageSolver *solver;
+    vec2i coord;
+    float weight;
+};
+
+struct VertTerm
+{
+    VertTerm(const CeresImageSolver *_solver, vec2i _coord, float _weight)
+        : solver(_solver), coord(_coord), weight(_weight) {}
+
+    template <typename T>
+    bool operator()(const T* const Xmm, const T* const X0m, const T* const X1m,
+        const T* const Xm0, const T* const X00, const T* const X10,
+        const T* const Xm1, const T* const X01, const T* const X11,
+        T* residuals) const
+    {
+        SFSStencil<T> stencil(Xmm, X0m, X1m, Xm0, X00, X10, Xm1, X01, X11);
+
+        //E_g_h_someCheck = B_I(0,0) - B_I(1,0)
+        T BI00 = B_I(*solver, stencil, coord.x, coord.y, 0, 0);
+        T BI01 = B_I(*solver, stencil, coord.x, coord.y, 0, 1);
+        residuals[0] = (BI00 - BI01) * T(weight);
+        return true;
+    }
+
+    static ceres::CostFunction* Create(const CeresImageSolver *solver, vec2i coord, float weight)
+    {
+        return (new ceres::AutoDiffCostFunction<VertTerm, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1>(
+            new VertTerm(solver, coord, weight)));
+    }
+
+    const CeresImageSolver *solver;
+    vec2i coord;
+    float weight;
+};
+
 /*
 local DEPTH_DISCONTINUITY_THRE = 0.01
 
@@ -249,9 +314,6 @@ E_g_v_someCheck = E_g_v_someCheck * edgeMaskC(0,0)
 
 E_g_h = ad.select(opt.InBounds(0,0,1,1), E_g_h_someCheck, 0.0)
 E_g_v = ad.select(opt.InBounds(0,0,1,1), E_g_v_someCheck, 0.0)
-
-
-
 
 local cost = ad.sumsquared(w_g*E_g_h, w_g*E_g_v, w_s*E_s, w_p*E_p)
 
@@ -283,7 +345,6 @@ void CeresImageSolver::solve(std::shared_ptr<SimpleBuffer> result, const SFSSolv
     u_x = rawSolverInput.parameters.ux;
     u_y = rawSolverInput.parameters.uy;
 
-    deltaTransform = rawSolverInput.parameters.deltaTransform;
     for (int i = 0; i < 9; i++)
         L[i] = rawSolverInput.parameters.lightingCoefficients[i];
     
@@ -335,7 +396,57 @@ void CeresImageSolver::solve(std::shared_ptr<SimpleBuffer> result, const SFSSolv
                                      D_i[getPixel(x + 0, y - 1)] > 0.0f);
             if (depthCheck)
             {
-                ceres::CostFunction* costFunction = DepthConstraintTerm::Create(this, vec2i(x, y), w_s);
+                ceres::CostFunction* costFunction = ShadingTerm::Create(this, vec2i(x, y), w_s);
+                double *Xmm = Xdouble + getPixel(x - 1, y - 1);
+                double *X0m = Xdouble + getPixel(x + 0, y - 1);
+                double *X1m = Xdouble + getPixel(x + 1, y - 1);
+                double *Xm0 = Xdouble + getPixel(x - 1, y + 0);
+                double *X00 = Xdouble + getPixel(x + 0, y + 0);
+                double *X10 = Xdouble + getPixel(x + 1, y + 0);
+                double *Xm1 = Xdouble + getPixel(x - 1, y + 1);
+                double *X01 = Xdouble + getPixel(x + 0, y + 1);
+                double *X11 = Xdouble + getPixel(x + 1, y + 1);
+
+                problem.AddResidualBlock(costFunction, NULL, Xmm, X0m, X1m, Xm0, X00, X10, Xm1, X01, X11);
+            }
+        }
+    }
+
+    // add all horz constraints
+    for (int y = borderSize; y < height - borderSize; y++)
+    {
+        for (int x = borderSize; x < width - borderSize; x++)
+        {
+            const bool depthCheck = (D_i[getPixel(x + 0, y + 0)] > 0.0f &&
+                                    edgeMaskR[getPixel(x + 0, y + 0)] != 0);
+            if (depthCheck)
+            {
+                ceres::CostFunction* costFunction = HorzTerm::Create(this, vec2i(x, y), w_g);
+                double *Xmm = Xdouble + getPixel(x - 1, y - 1);
+                double *X0m = Xdouble + getPixel(x + 0, y - 1);
+                double *X1m = Xdouble + getPixel(x + 1, y - 1);
+                double *Xm0 = Xdouble + getPixel(x - 1, y + 0);
+                double *X00 = Xdouble + getPixel(x + 0, y + 0);
+                double *X10 = Xdouble + getPixel(x + 1, y + 0);
+                double *Xm1 = Xdouble + getPixel(x - 1, y + 1);
+                double *X01 = Xdouble + getPixel(x + 0, y + 1);
+                double *X11 = Xdouble + getPixel(x + 1, y + 1);
+
+                problem.AddResidualBlock(costFunction, NULL, Xmm, X0m, X1m, Xm0, X00, X10, Xm1, X01, X11);
+            }
+        }
+    }
+
+    // add all vert constraints
+    for (int y = borderSize; y < height - borderSize; y++)
+    {
+        for (int x = borderSize; x < width - borderSize; x++)
+        {
+            const bool depthCheck = (D_i[getPixel(x + 0, y + 0)] > 0.0f &&
+                                    edgeMaskC[getPixel(x + 0, y + 0)] != 0);
+            if (depthCheck)
+            {
+                ceres::CostFunction* costFunction = VertTerm::Create(this, vec2i(x, y), w_g);
                 double *Xmm = Xdouble + getPixel(x - 1, y - 1);
                 double *X0m = Xdouble + getPixel(x + 0, y - 1);
                 double *X1m = Xdouble + getPixel(x + 1, y - 1);
@@ -357,12 +468,15 @@ void CeresImageSolver::solve(std::shared_ptr<SimpleBuffer> result, const SFSSolv
     Solver::Summary summary;
 
     options.minimizer_progress_to_stdout = !performanceTest;
-    //options.linear_solver_type = ceres::LinearSolverType::SPARSE_NORMAL_CHOLESKY;
-    options.linear_solver_type = ceres::LinearSolverType::CGNR;
+    options.linear_solver_type = ceres::LinearSolverType::SPARSE_NORMAL_CHOLESKY;
+    //options.linear_solver_type = ceres::LinearSolverType::CGNR;
     //options.min_linear_solver_iterations = linearIterationMin;
     options.max_num_iterations = 10000;
     //options.linear_solver_type = ceres::LinearSolverType::SPARSE_SCHUR;
     //options.linear_solver_type = ceres::LinearSolverType::ITERATIVE_SCHUR;
+
+    options.function_tolerance = 1e-6;
+    options.gradient_tolerance = 1e-4 * options.function_tolerance;
 
     //options.min_lm_diagonal = 1.0f;
     //options.min_lm_diagonal = options.max_lm_diagonal;

@@ -49,7 +49,7 @@ public:
     float u_x;
     float u_y;
 
-    float4x4 deltaTransform;
+    //float4x4 deltaTransform;
 
     float L[9];
 };
