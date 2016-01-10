@@ -1,12 +1,8 @@
-local USE_MASK_REFINE 			= true
 
 local USE_DEPTH_CONSTRAINT 		= true
 local USE_REGULARIZATION 		= true
-local USE_SHADING_CONSTRAINT 	= false
-local USE_TEMPORAL_CONSTRAINT 	= false
-local USE_PRECONDITIONER 		= false
+local USE_SHADING_CONSTRAINT 	= true
 
-local USE_CRAPPY_SHADING_BOUNDARY = true
 local USE_J = false
 local USE_PRECOMPUTE = true and not USE_J
 
@@ -137,40 +133,15 @@ if USE_DEPTH_CONSTRAINT then
 end 
 
 if USE_SHADING_CONSTRAINT then
-	if USE_CRAPPY_SHADING_BOUNDARY then
-        local center_tap = B_I(0,0)
-        local E_g_h_noCheck = B_I(1,0) --(B(1,0) - I(1,0))
-        local E_g_v_noCheck = B_I(0,1) --(B(0,1) - I(0,1))
-
-        local E_g_h_someCheck = center_tap - E_g_h_noCheck
-        local E_g_v_someCheck = center_tap - E_g_v_noCheck
-        
-        if USE_MASK_REFINE then
-		    E_g_h_someCheck = E_g_h_someCheck * edgeMaskR(0,0)
-		    E_g_v_someCheck = E_g_v_someCheck * edgeMaskC(0,0)
-	    end
-	    E_g_h = ad.select(opt.InBounds(0,0,1,1), E_g_h_someCheck, 0.0)
-		E_g_v = ad.select(opt.InBounds(0,0,1,1), E_g_v_someCheck, 0.0)
-	    --E_g_h = center_tap_noCheck - E_g_h_noCheck 
-	    --E_g_v = center_tap_noCheck - E_g_v_noCheck 
-        
-    else
-	    local shading_h_valid = ad.greater(D_i(-1,0) + D_i(0,0) + D_i(1,0) + D_i(0,-1) + D_i(1,-1), 0)
+    local BI00 = B_I(0,0)
+    E_g_h = BI00 - B_I(1,0)
+    E_g_v = BI00 - B_I(0,1)
+    
+    E_g_h = E_g_h * edgeMaskR(0,0)
+	E_g_v = E_g_v * edgeMaskC(0,0)
 	
-	    local E_g_h_noCheck = B(0,0) - B(1,0) - (I(0,0) - I(1,0))
-	    if USE_MASK_REFINE then
-		    E_g_h_noCheck = E_g_h_noCheck * edgeMaskR(0,0)
-	    end
-	    E_g_h = ad.select(opt.InBounds(0,0,1,1), ad.select(shading_h_valid, E_g_h_noCheck, 0.0), 0.0) 
-
-	    local shading_v_valid = ad.greater(D_i(0,-1) + D_i(0,0) + D_i(0,1) + D_i(-1,0) + D_i(-1,1), 0)
-	
-	    local E_g_v_noCheck = B(0,0) - B(0,1) - (I(0,0) - I(0,1))
-	    if USE_MASK_REFINE then
-		    E_g_v_noCheck = E_g_v_noCheck * edgeMaskC(0,0)
-	    end
-	    E_g_v = ad.select(opt.InBounds(0,0,1,1), ad.select(shading_v_valid, E_g_v_noCheck, 0.0), 0.0) 
-	end
+	E_g_h = ad.select(opt.InBounds(0,0,1,1), E_g_h, 0.0)
+	E_g_v = ad.select(opt.InBounds(0,0,1,1), E_g_v, 0.0)
 end
 
 local function allpositive(a,...)
@@ -200,10 +171,6 @@ if USE_REGULARIZATION then
 	end
 	
 	E_s = ad.select(E_s_guard,E_s_noCheck,0)
-end
-
-if USE_TEMPORAL_CONSTRAINT then
-	--TODO: Implement
 end
 
 if USE_J then
