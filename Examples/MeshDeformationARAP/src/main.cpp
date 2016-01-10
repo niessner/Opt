@@ -5,14 +5,17 @@
 
 int main(int argc, const char * argv[])
 {
-	std::string filename = "Armadillo.ply";
+	//std::string filename = "Armadillo20k.ply";
+    //const char* markerFilename = "armadillo.mrk";
+    std::string filename = "raptor_clean.stl";
+    const char* markerFilename = "raptor.mrk";
 	if (argc >= 2) {
 		filename = argv[1];
 	}
 
 	// Load Constraints
 	LandMarkSet markersMesh;
-	markersMesh.loadFromFile("armadillo.mrk");
+    markersMesh.loadFromFile(markerFilename);
 
 	std::vector<int>				constraintsIdx;
 	std::vector<std::vector<float>> constraintsTarget;

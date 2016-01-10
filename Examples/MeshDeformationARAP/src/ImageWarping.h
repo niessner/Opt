@@ -146,7 +146,8 @@ class ImageWarping
 		SimpleMesh* solve()
 		{
 			
-			//float weightFit = 5.0f;
+			//float weightFit = 6.0f;
+            //float weightReg = 0.5f;
 			float weightFit = 3.0f;
 			float weightReg = 4.0f; //0.000001f;
 		
@@ -154,10 +155,9 @@ class ImageWarping
 			//unsigned int nonLinearIter = 20;
 			//unsigned int linearIter = 50;
 
-			unsigned int numIter = 20;
-			unsigned int nonLinearIter = 20;
-			unsigned int linearIter = 200;
-			
+			unsigned int numIter = 32;
+			unsigned int nonLinearIter = 1;
+            unsigned int linearIter = 4000;			
 #			if RUN_CUDA
 			m_result = m_initial;
 			resetGPUMemory();

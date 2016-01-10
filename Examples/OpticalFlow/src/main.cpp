@@ -30,6 +30,8 @@ int main(int argc, const char * argv[]) {
 
 	const std::string srcFile = "other-data/Beanbags/frame07.png";
 	const std::string tarFile = "other-data/Beanbags/frame08.png";
+    //const std::string srcFile = "RubberWhale/frame10.png";
+    //const std::string tarFile = "RubberWhale/frame11.png";
 
 	ColorImageR8G8B8A8 imageSrc = LodePNG::load(srcFile);
 	ColorImageR8G8B8A8 imageTar = LodePNG::load(tarFile);
