@@ -5,7 +5,7 @@
 #include "cutil.h"
 
 extern "C" {
-#include "Opt.h"
+#include "../Opt.h"
 }
 
 class TerraSolverPoissonImageEditing {
