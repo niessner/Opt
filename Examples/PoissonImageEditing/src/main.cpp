@@ -3,12 +3,21 @@
 
 int main(int argc, const char * argv[]) {
 
-	// MONA
-	const std::string inputImage	 = "MonaSource1.png";
-	const std::string inputImage1	 = "MonaSource2.png";
-	const std::string inputImageMask = "MonaMask.png";
-	unsigned int offsetX = 37;
-	unsigned int offsetY = 88;
+	// JRK
+	const std::string inputImage	 = "jrkSource2.png";
+	const std::string inputImage1	 = "jrkSource1.png";
+	const std::string inputImageMask = "jrkMask.png";
+	const unsigned int offsetX = 0;
+	const unsigned int offsetY = 0;
+	const bool invertMask = true;
+
+	//// MONA
+	//const std::string inputImage = "MonaSource1.png";
+	//const std::string inputImage1 = "MonaSource2.png";
+	//const std::string inputImageMask = "MonaMask.png";
+	//const unsigned int offsetX = 37;
+	//const unsigned int offsetY = 88;
+	//const bool invertMasek = false;
 
 	ColorImageR8G8B8A8	   image = LodePNG::load(inputImage);
 	ColorImageR32G32B32A32 imageR32(image.getWidth(), image.getHeight());
@@ -33,12 +42,27 @@ int main(int argc, const char * argv[]) {
 			image1Large(x + offsetY, y + offsetX) = imageR321(x, y);
 		}
 	}
+
+	//ColorImageR8G8B8A8 tmp(image1Large.getWidth(), image1Large.getHeight());
+	//for (unsigned int y = 0; y < image1Large.getHeight(); y++) {
+	//	for (unsigned int x = 0; x < image1Large.getWidth(); x++) {
+	//		tmp(x, y) = math::round(image1Large(x, y) * 255);
+	//	}
+	//}
+	//LodePNG::save(tmp, "tmp.png");
+
 	
 	const ColorImageR8G8B8A8 imageMask = LodePNG::load(inputImageMask);
 	ColorImageR32 imageR32Mask(imageMask.getWidth(), imageMask.getHeight());
 	for (unsigned int y = 0; y < imageMask.getHeight(); y++) {
 		for (unsigned int x = 0; x < imageMask.getWidth(); x++) {
-			imageR32Mask(x, y) = imageMask(x, y).x;
+			unsigned char c = imageMask(x, y).x;
+			if (invertMask) {
+				if (c == 255) c = 0;
+				else c = 255;
+			}
+
+			imageR32Mask(x, y) = c;
 		}
 	}
 
