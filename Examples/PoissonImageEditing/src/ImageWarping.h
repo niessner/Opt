@@ -118,8 +118,8 @@ public:
 		float weightFit = 0.0f; // not used
 		float weightReg = 0.0f; // not used
 		
-		unsigned int nonLinearIter = 5;
-		unsigned int linearIter = 50;
+		unsigned int nonLinearIter = 1;
+		unsigned int linearIter = 100;
 		unsigned int patchIter = 16;
 		
 #if RUN_CUDA
