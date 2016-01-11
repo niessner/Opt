@@ -1,9 +1,9 @@
 #pragma once
 
-#define RUN_CUDA 1
-#define RUN_TERRA 1
+#define RUN_CUDA 0
+#define RUN_TERRA 0
 #define RUN_OPT 1
-#define RUN_CERES 1
+#define RUN_CERES 0
 
 #define RUN_CUDA_BLOCK 0
 #define RUN_TERRA_BLOCK 0
