@@ -3,6 +3,7 @@
 #define RUN_CUDA 1
 #define RUN_TERRA 1
 #define RUN_OPT 1
+#define RUN_CERES 1
 
 #define RUN_CUDA_BLOCK 0
 #define RUN_TERRA_BLOCK 0
@@ -16,6 +17,7 @@
 #include "CUDAWarpingSolver.h"
 #include "CUDAPatchSolverWarping.h"
 #include "TerraSolverPoissonImageEditing.h"
+#include "CeresSolverPoissonImageEditing.h"
 
 class ImageWarping {
 public:
@@ -41,13 +43,16 @@ public:
 
 		//non-blocked solvers
 #if RUN_CUDA
-		m_warpingSolver		 = new CUDAWarpingSolver(m_image.getWidth(), m_image.getHeight());	
+		m_warpingSolver = new CUDAWarpingSolver(m_image.getWidth(), m_image.getHeight());	
 #endif
 #if RUN_TERRA
 		m_terraSolver = new TerraSolverPoissonImageEditing(m_image.getWidth(), m_image.getHeight(), "PoissonImageEditing.t", "gaussNewtonGPU");
 #endif
 #ifdef RUN_OPT
 		m_optSolver = new TerraSolverPoissonImageEditing(m_image.getWidth(), m_image.getHeight(), "PoissonImageEditingAD.t", "gaussNewtonGPU");
+#endif
+#ifdef RUN_CERES
+        m_ceresSolver = new CeresSolverPoissonImageEditing(m_image.getWidth(), m_image.getHeight());
 #endif
 
 		//blocked solvers
@@ -135,6 +140,26 @@ public:
 		m_optSolver->solve(d_image, d_target, d_mask, nonLinearIter, linearIter, patchIter, weightFit, weightReg);
 		copyResultToCPU();
 #endif
+#if RUN_CERES
+        std::cout << "\n\n========CERES========" << std::endl;
+        resetGPUMemory();
+
+        float4* h_image = new float4[m_image.getWidth()*m_image.getHeight()];
+        float4* h_target = new float4[m_image.getWidth()*m_image.getHeight()];
+        float*  h_mask = new float[m_image.getWidth()*m_image.getHeight()];
+
+        cutilSafeCall(cudaMemcpy(h_image, d_image, sizeof(float4)*m_image.getWidth()*m_image.getHeight(), cudaMemcpyDeviceToHost));
+        cutilSafeCall(cudaMemcpy(h_target, d_target, sizeof(float4)*m_image.getWidth()*m_image.getHeight(), cudaMemcpyDeviceToHost));
+        cutilSafeCall(cudaMemcpy(h_mask, d_mask, sizeof(float)*m_image.getWidth()*m_image.getHeight(), cudaMemcpyDeviceToHost));
+
+        m_ceresSolver->solve(h_image, h_target, h_mask, weightFit, weightReg);
+
+        cutilSafeCall(cudaMemcpy(d_image, h_image, sizeof(float4)*m_image.getWidth()*m_image.getHeight(), cudaMemcpyHostToDevice));
+        cutilSafeCall(cudaMemcpy(d_target, h_target, sizeof(float4)*m_image.getWidth()*m_image.getHeight(), cudaMemcpyHostToDevice));
+        cutilSafeCall(cudaMemcpy(d_mask, h_mask, sizeof(float)*m_image.getWidth()*m_image.getHeight(), cudaMemcpyHostToDevice));
+
+        copyResultToCPU();
+#endif
 
 
 
@@ -182,6 +207,7 @@ private:
 	CUDAWarpingSolver*	    m_warpingSolver;
 	TerraSolverPoissonImageEditing* m_terraSolver;
 	TerraSolverPoissonImageEditing* m_optSolver;
+    CeresSolverPoissonImageEditing* m_ceresSolver;
 
 	CUDAPatchSolverWarping* m_warpingSolverPatch;
 	TerraSolverPoissonImageEditing* m_terraBlockSolver;
