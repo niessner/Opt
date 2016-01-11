@@ -3,13 +3,22 @@
 
 int main(int argc, const char * argv[]) {
 
-	// JRK
-	const std::string inputImage	 = "jrkSource2.png";
-	const std::string inputImage1	 = "jrkSource1.png";
-	const std::string inputImageMask = "jrkMask.png";
+	// Women
+	const std::string inputImage = "womenSource1_2.png";
+	const std::string inputImage1 = "womenSource2_2.png";
+	const std::string inputImageMask = "womenMask_2.png";
 	const unsigned int offsetX = 0;
 	const unsigned int offsetY = 0;
 	const bool invertMask = false;
+
+
+	//// JRK
+	//const std::string inputImage	 = "jrkSource2.png";
+	//const std::string inputImage1	 = "jrkSource1.png";
+	//const std::string inputImageMask = "jrkMask.png";
+	//const unsigned int offsetX = 0;
+	//const unsigned int offsetY = 0;
+	//const bool invertMask = false;
 
 	//// MONA
 	//const std::string inputImage = "MonaSource1.png";
