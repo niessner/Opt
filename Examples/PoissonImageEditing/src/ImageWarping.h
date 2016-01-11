@@ -1,7 +1,7 @@
 #pragma once
 
 #define RUN_CUDA 1
-#define RUN_TERRA 0
+#define RUN_TERRA 1
 #define RUN_OPT 1
 
 #define RUN_CUDA_BLOCK 0
@@ -114,7 +114,7 @@ public:
 		float weightReg = 0.0f; // not used
 		
 		unsigned int nonLinearIter = 5;
-		unsigned int linearIter = 250;
+		unsigned int linearIter = 50;
 		unsigned int patchIter = 16;
 		
 #if RUN_CUDA
