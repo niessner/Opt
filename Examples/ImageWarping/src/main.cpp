@@ -58,31 +58,34 @@ int main(int argc, const char * argv[]) {
     
 
 	ColorImageR8G8B8A8 image = LodePNG::load(inputImage);
-
+    
     ColorImageR32G32B32 imageColor(image.getWidth(), image.getHeight());
     for (const auto &p : imageColor)
     {
         auto val = image(p.x, p.y);
+        
         p.value = vec3f(val.x, val.y, val.z);
     }
 
 	ColorImageR32 imageR32(image.getWidth(), image.getHeight());
-	//printf("width %d, height %d\n", image.getWidth(), image.getHeight());
+	printf("width %d, height %d\n", image.getWidth(), image.getHeight());
 	for (unsigned int y = 0; y < image.getHeight(); y++) {
 		for (unsigned int x = 0; x < image.getWidth(); x++) {
-			//printf("x %d, y %d\n", x, y);
-
 			imageR32(x,y) = image(x,y).x;
 		}
 	}
-
+    int activePixels = 0;
 	const ColorImageR8G8B8A8 imageMask = LodePNG::load(inputImageMask);
 	ColorImageR32 imageR32Mask(imageMask.getWidth(), imageMask.getHeight());
 	for (unsigned int y = 0; y < imageMask.getHeight(); y++) {
 		for (unsigned int x = 0; x < imageMask.getWidth(); x++) {
 			imageR32Mask(x, y) = imageMask(x, y).x;
+            if (imageMask(x, y).x == 0.0f) {
+                ++activePixels;
+            }
 		}
 	}
+    printf("numActivePixels: %d\n", activePixels);
 	
 	
 	for (unsigned int y = 0; y < image.getHeight(); y++)
