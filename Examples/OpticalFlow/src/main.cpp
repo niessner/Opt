@@ -28,8 +28,18 @@ int main(int argc, const char * argv[]) {
 	//const std::string srcFile = "eval-data/Mequon/frame07.png";
 	//const std::string tarFile = "eval-data/Mequon/frame10.png";
 
-	const std::string srcFile = "other-data/Beanbags/frame07.png";
-	const std::string tarFile = "other-data/Beanbags/frame08.png";
+	//const std::string srcFile = "other-data/Beanbags/frame07.png";
+	//const std::string tarFile = "other-data/Beanbags/frame08.png";
+
+    //const std::string srcFile = "other-data/RubberWhale/frame10.png";
+    //const std::string tarFile = "other-data/RubberWhale/frame11.png";
+
+    const std::string srcFile = "other-data/DogDance/frame10.png";
+    const std::string tarFile = "other-data/DogDance/frame11.png";
+
+    //const std::string srcFile = "other-data/Walking/frame13.png";
+    //const std::string tarFile = "other-data/Walking/frame14.png";
+
     //const std::string srcFile = "RubberWhale/frame10.png";
     //const std::string tarFile = "RubberWhale/frame11.png";
 

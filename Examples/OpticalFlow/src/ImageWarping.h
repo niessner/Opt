@@ -50,12 +50,18 @@ public:
 	}
 
 	BaseImage<float2> solve() {
-		float weightFit = 1.0f;
-		float weightReg = 1.0f;
+		float weightFit = 10.0f;
+		float weightReg = 0.1f;
 
-		unsigned int numRelaxIter = 50;
-		unsigned int nonLinearIter = 10;
-		unsigned int linearIter = 30;
+        float fitTarget = 50.0f;
+        
+
+		unsigned int numRelaxIter = 10;
+		unsigned int nonLinearIter = 1;
+		unsigned int linearIter = 100;
+
+
+        float fitStepSize = (fitTarget - weightFit) / (numRelaxIter);
 
 		//unsigned int numIter = 20;
 		//unsigned int nonLinearIter = 32;
@@ -73,7 +79,7 @@ public:
 			
 			HierarchyLevel& level = m_levels[i];
 			for (unsigned int k = 0; k < numRelaxIter; k++)  {
-				weightFit += 1.0f;
+                weightFit += fitStepSize;
 				std::cout << "//////////// ITERATION " << k << " (on hierarchy level " << i << " )  (DSL AD) ///////////////" << std::endl;
 				m_solverOpt->solve(level.d_flowVectors, level.d_source, level.d_target, level.d_targetDU, level.d_targetDV, nonLinearIter, linearIter, 1, weightFit, weightReg);
 				std::cout << std::endl;
