@@ -3,20 +3,20 @@
 
 int main(int argc, const char * argv[]) {
 	//// Women
-	//const std::string inputImage = "womenSource2_2.png";
-	//const std::string inputImage1 = "womenSource1_2.png";
-	//const std::string inputImageMask = "womenMask_2.png";
-	//const unsigned int offsetX = 0;
-	//const unsigned int offsetY = 0;
-	//const bool invertMask = false;
+	const std::string inputImage = "womenSource2_2.png";
+	const std::string inputImage1 = "womenSource1_2.png";
+	const std::string inputImageMask = "womenMask_2.png";
+	const unsigned int offsetX = 0;
+	const unsigned int offsetY = 0;
+	const bool invertMask = false;
 
 	// Boy
-	const std::string inputImage = "boymanSource2_2.png";
+	/*const std::string inputImage = "boymanSource2_2.png";
 	const std::string inputImage1 = "boymanSource1_2.png";
 	const std::string inputImageMask = "boymanMask_2.png";
 	const unsigned int offsetX = 0;
 	const unsigned int offsetY = 0;
-	const bool invertMask = false;
+	const bool invertMask = false;*/
 
 
 	//// JRK
