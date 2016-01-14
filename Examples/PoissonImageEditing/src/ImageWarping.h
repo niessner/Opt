@@ -5,6 +5,8 @@
 #define RUN_OPT 1
 #define RUN_CERES 0
 
+#define RUN_EIGEN 1
+
 #define RUN_CUDA_BLOCK 0
 #define RUN_TERRA_BLOCK 0
 #define RUN_OPT_BLOCK 0
@@ -18,6 +20,7 @@
 #include "CUDAPatchSolverWarping.h"
 #include "TerraSolverPoissonImageEditing.h"
 #include "CeresSolverPoissonImageEditing.h"
+#include "EigenSolverPoissonImageEditing.h"
 
 class ImageWarping {
 public:
@@ -53,6 +56,10 @@ public:
 #endif
 #ifdef RUN_CERES
         m_ceresSolver = new CeresSolverPoissonImageEditing(m_image.getWidth(), m_image.getHeight());
+#endif
+
+#ifdef RUN_EIGEN
+        m_eigenSolver = new EigenSolverPoissonImageEditing(m_image.getWidth(), m_image.getHeight());
 #endif
 
 		//blocked solvers
@@ -161,6 +168,27 @@ public:
         copyResultToCPU();
 #endif
 
+#if RUN_EIGEN
+        std::cout << "\n\n========EIGEN========" << std::endl;
+        resetGPUMemory();
+
+        float4* h_image = new float4[m_image.getWidth()*m_image.getHeight()];
+        float4* h_target = new float4[m_image.getWidth()*m_image.getHeight()];
+        float*  h_mask = new float[m_image.getWidth()*m_image.getHeight()];
+
+        cutilSafeCall(cudaMemcpy(h_image, d_image, sizeof(float4)*m_image.getWidth()*m_image.getHeight(), cudaMemcpyDeviceToHost));
+        cutilSafeCall(cudaMemcpy(h_target, d_target, sizeof(float4)*m_image.getWidth()*m_image.getHeight(), cudaMemcpyDeviceToHost));
+        cutilSafeCall(cudaMemcpy(h_mask, d_mask, sizeof(float)*m_image.getWidth()*m_image.getHeight(), cudaMemcpyDeviceToHost));
+
+        m_eigenSolver->solve(h_image, h_target, h_mask, weightFit, weightReg);
+
+        cutilSafeCall(cudaMemcpy(d_image, h_image, sizeof(float4)*m_image.getWidth()*m_image.getHeight(), cudaMemcpyHostToDevice));
+        cutilSafeCall(cudaMemcpy(d_target, h_target, sizeof(float4)*m_image.getWidth()*m_image.getHeight(), cudaMemcpyHostToDevice));
+        cutilSafeCall(cudaMemcpy(d_mask, h_mask, sizeof(float)*m_image.getWidth()*m_image.getHeight(), cudaMemcpyHostToDevice));
+
+        copyResultToCPU();
+#endif
+
 
 
 #if RUN_CUDA_BLOCK
@@ -208,6 +236,7 @@ private:
 	TerraSolverPoissonImageEditing* m_terraSolver;
 	TerraSolverPoissonImageEditing* m_optSolver;
     CeresSolverPoissonImageEditing* m_ceresSolver;
+    EigenSolverPoissonImageEditing* m_eigenSolver;
 
 	CUDAPatchSolverWarping* m_warpingSolverPatch;
 	TerraSolverPoissonImageEditing* m_terraBlockSolver;
