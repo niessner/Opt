@@ -352,8 +352,8 @@ void App::onInit() {
     developerWindow->cameraControlWindow->moveTo(Point2(developerWindow->cameraControlWindow->rect().x0(), 0));
     
     //String directory = "D:/Projects/DSL/Optimization/Examples/ShapeFromShading/";
-    //String directory = "D:/Projects/DSL/Optimization/Examples/ShapeFromShadingSimple/";
-    String directory = "/Users/michaelmara/OptDSL/Opt/Examples/ShapeFromShadingSimple/";
+    String directory = "D:/Projects/DSL/Optimization/Examples/ShapeFromShadingSimple/";
+    //String directory = "/Users/michaelmara/OptDSL/Opt/Examples/ShapeFromShadingSimple/";
 
     Array<String> filenames;
     FileSystem::getFiles(directory+"*.imagedump", filenames);
@@ -366,9 +366,9 @@ void App::onInit() {
     RenderDevice* rd = RenderDevice::current;
     //compareCUDABlockAndNonBlock(rd, directory);
 
-    compareCUDAAndTerraNonBlock(rd, directory);
+    //compareCUDAAndTerraNonBlock(rd, directory);
 
-    compareOptAndTerraNonBlock(rd, directory);
+    //compareOptAndTerraNonBlock(rd, directory);
 
     //compareOptAndCudaNonBlock(rd, directory);
 

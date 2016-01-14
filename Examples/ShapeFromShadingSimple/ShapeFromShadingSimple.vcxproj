@@ -171,7 +171,6 @@
     <None Include="default.SFSSolverParameters" />
     <None Include="shapeFromShading.t" />
     <None Include="shapeFromShadingAD.t" />
-    <None Include="shapeFromShadingADHacked.t" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

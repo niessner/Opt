@@ -20,6 +20,16 @@ struct SFSSolverInput {
         initialUnknown = std::shared_ptr<SimpleBuffer>(new SimpleBuffer(filenamePrefix + "_initialUnknown.imagedump", onGPU));
         maskEdgeMap     = std::shared_ptr<SimpleBuffer>(new SimpleBuffer(filenamePrefix + "_maskEdgeMap.imagedump",     onGPU));
 	
+        auto test = std::shared_ptr<SimpleBuffer>(new SimpleBuffer(filenamePrefix + "_targetDepth.imagedump", false));
+        float* ptr = (float*)test->data();
+        int numActiveUnkowns = 0;
+        for (int i = 0; i < test->width()*test->height(); ++i) {
+            if (ptr[i] > 0.0f) {
+                ++numActiveUnkowns;
+            }
+        }
+        printf("Num Active Unknowns: %d\n", numActiveUnkowns);
+
         parameters.load(filenamePrefix + ".SFSSolverParameters");
     }
 

@@ -12,9 +12,17 @@ class ImageWarping {
 public:
 	ImageWarping(const ColorImageR32& sourceImage, const ColorImageR32& targetImage) {
 
-		const unsigned int numLevels = 5;
+		/*
+        const unsigned int numLevels = 5;
 		const float sigmas[5] = { 1.0f, 2.0f, 3.0f, 4.0f, 5.0f };
-
+        */
+        
+        const unsigned int numLevels = 2;
+        const float sigmas[2] = { 1.0f, 5.0f };
+        /*
+        const unsigned int numLevels = 3;
+        const float sigmas[3] = { 1.0f, 3.0, 5.0f };
+        */
 		//const unsigned int numLevels = 1;
 		//const float sigmas[numLevels] = { 4.0f };
 
@@ -54,11 +62,10 @@ public:
 		float weightReg = 0.1f;
 
         float fitTarget = 50.0f;
-        
 
-		unsigned int numRelaxIter = 10;
+		unsigned int numRelaxIter = 3;
 		unsigned int nonLinearIter = 1;
-		unsigned int linearIter = 100;
+		unsigned int linearIter = 50;
 
 
         float fitStepSize = (fitTarget - weightFit) / (numRelaxIter);

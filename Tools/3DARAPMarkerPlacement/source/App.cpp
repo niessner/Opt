@@ -3,8 +3,11 @@
 
 #include "OpenMesh.h"
 
+#define ARMADILLO 0
+#define RAPTOR 1
+#define STATUE_HEAD 2
+#define MESH_KIND STATUE_HEAD
 
-#define ARMADILLO 1
 
 
 
@@ -114,19 +117,27 @@ void App::loadMarkerFile() {
 void App::onInit() {
     GApp::onInit();
     setFrameDuration(1.0f / 60.0f);
-# if ARMADILLO
+    m_modelFrame = CFrame();
+# if MESH_KIND == ARMADILLO
     m_scaleFactor = 0.01f;
     m_meshFilename = System::findDataFile("../../../Examples/MeshDeformationARAP/Armadillo20k.ply");
     //m_meshFilename = System::findDataFile("../../../Examples/MeshDeformationARAP/out.ply");
     m_markerFilename = "armadillo.mrk";
-    bool doLoadMarkerFile = true;
-# else
+    bool doLoadMarkerFile = false;
+# elif MESH_KIND == RAPTOR
     m_scaleFactor = 1.0f;
-    m_meshFilename = System::findDataFile("../../../Examples/MeshDeformationED/raptor_fullres.ply");
+    m_meshFilename = System::findDataFile("../../../Examples/MeshDeformationARAP/raptor_clean.stl");
     m_markerFilename = "raptor.mrk";
     bool doLoadMarkerFile = false;
+#else
+    m_scaleFactor = 0.02f;
+    m_meshFilename = System::findDataFile("../../../Examples/MeshSmoothingLaplacianCOT/serapis.stl");
+    m_meshFilename = System::findDataFile("../../../Examples/MeshSmoothingLaplacianCOT/out.off");
+    m_markerFilename = "raptor.mrk";
+    m_modelFrame = CFrame::fromXYZYPRDegrees(0, 0, 0, -120, -90, 0);
+    bool doLoadMarkerFile = false;
 #endif
-
+    //m_meshFilename = System::findDataFile("../../../Examples/MeshDeformationED/out.off");
 
     if (doLoadMarkerFile) {
         loadMarkerFile();
@@ -153,8 +164,8 @@ void App::onInit() {
 
     makeGUI();
     // For higher-quality screenshots:
-    // developerWindow->videoRecordDialog->setScreenShotFormat("PNG");
-    // developerWindow->videoRecordDialog->setCaptureGui(false);
+    developerWindow->videoRecordDialog->setScreenShotFormat("PNG");
+    developerWindow->videoRecordDialog->setCaptureGui(false);
     developerWindow->cameraControlWindow->moveTo(Point2(developerWindow->cameraControlWindow->rect().x0(), 0));
     loadScene(
         "Mesh" 
@@ -177,6 +188,7 @@ void App::onInit() {
     scene()->createModel(modelAny, "meshModel");
     Any entityAny(Any::TABLE, "VisibleEntity");
     entityAny["model"] = "meshModel";
+    entityAny["frame"] = m_modelFrame; 
     scene()->createEntity("mesh", entityAny);
 
 
@@ -218,10 +230,14 @@ void App::setNewIndex(int index) {
 
 static void drawConstraint(RenderDevice* rd, const Point3& p0, const Point3& p1, Color3 c0, Color3 c1) {
     float sphereRadius = 0.01f;
+    if ((p0 - p1).length() < 0.01f) {
+        c0 = Color3::red();
+        c1 = Color3::red();
+    }
     Draw::sphere(Sphere(p0, sphereRadius), rd, Color4(c0, 0.5), Color4::clear());
     Draw::sphere(Sphere(p1, sphereRadius), rd, Color4(c1, 0.5), Color4::clear());
 
-    float cylinderRadius = 0.001f;
+    float cylinderRadius = 0.003f;
     Draw::cylinder(Cylinder(p0, p1, cylinderRadius), rd, Color3::black(), Color4::clear());
 }
 
@@ -269,7 +285,7 @@ void App::onGraphics3D(RenderDevice* rd, Array<shared_ptr<Surface> >& allSurface
         for (int i = 0; i < m_constraintIndices.size(); ++i) {
             drawConstraint(rd,
                 toVec3(m_mesh.point(VertexHandle(m_constraintIndices[i]))),
-                m_constraints[i], Color3::red(), Color3::blue());
+                m_constraints[i], Color3::red(), Color3::purple());
         }
 
         // Post-process special effects

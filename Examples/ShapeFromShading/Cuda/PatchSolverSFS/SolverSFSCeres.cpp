@@ -223,7 +223,7 @@ void CeresSolverSFS::solve(int _width, int _height, const std::vector<uint32_t>&
     auto getPixel = [=](int x, int y) {
         return y * width + x;
     };
-
+    /*
     float w_p = sqrtf(params.floatPointers[0]);
     float w_s = sqrtf(params.floatPointers[1]);
     float w_r = sqrtf(params.floatPointers[2]);
@@ -261,7 +261,7 @@ void CeresSolverSFS::solve(int _width, int _height, const std::vector<uint32_t>&
             local L = {}
             for i = 1, 9 do
                 L[i] = P:Param("L_" ..i .. "", float, offset + i)
-                end
+                end*/
 }
 
 //

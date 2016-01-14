@@ -176,6 +176,11 @@ void SimpleBuffer::savePLYPoints(std::string filename) const {
     }
 }
 
+static bool isValidPixel(void* ptr, int index) {
+    float value = *((const float*)ptr + index);
+    return (value > 0.01f && value <= 10000.0f);
+}
+
 void SimpleBuffer::savePLYMesh(std::string filename) const {
     size_t elementSize = datatypeToSize(m_dataType);
     size_t size = elementSize*m_channelCount*(m_width*m_height);
@@ -195,27 +200,35 @@ void SimpleBuffer::savePLYMesh(std::string filename) const {
     ColorImageR8G8B8A8 image(m_width, m_height);
     for (const auto &p : image)
     {
+        int i00 = (p.y * m_width + p.x);
+        float value = *((const float*)ptr + i00);
+        bool valid = isValidPixel(ptr, i00);
         
-        float value = *((const float*)ptr + (p.y * m_width + p.x));
-        if (!(value > 0.01f && value <= 10000.0f))
-            value = 0.47f;
+        //if (valid) {
+            vertices.push_back(vec3f(p.x, p.y, value * 1000.0f));
+        //}
         
-        vertices.push_back(vec3f(p.x, p.y, value * 1000.0f));
         
-        if (p.x < image.getDimX() - 1 && p.y < image.getDimY() - 1)
+        if (valid && p.x < image.getDimX() - 1 && p.y < image.getDimY() - 1)
         {
-            int i00 = (p.y + 0) * m_width + p.x + 0;
             int i01 = (p.y + 0) * m_width + p.x + 1;
             int i10 = (p.y + 1) * m_width + p.x + 0;
             int i11 = (p.y + 1) * m_width + p.x + 1;
 
-            indices.push_back(i00);
-            indices.push_back(i10);
-            indices.push_back(i11);
 
-            indices.push_back(i00);
-            indices.push_back(i11);
-            indices.push_back(i01);
+            if (isValidPixel(ptr, i10) && isValidPixel(ptr, i11)) {
+                indices.push_back(i00);
+                indices.push_back(i10);
+                indices.push_back(i11);
+            }
+            
+            if (isValidPixel(ptr, i01) && isValidPixel(ptr, i11)) {
+                indices.push_back(i00);
+                indices.push_back(i11);
+                indices.push_back(i01);
+            }
+
+            
         }
     }
     TriMeshf mesh(vertices, indices);

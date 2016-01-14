@@ -131,8 +131,8 @@ public:
 		float weightFit = 1.0f;
 		float weightReg = 4.5f;
 
-		unsigned int nonLinearIter = 10;
-		unsigned int linearIter = 200;
+		unsigned int nonLinearIter = 2;
+		unsigned int linearIter = 25;
 
 
 #		if RUN_OPT

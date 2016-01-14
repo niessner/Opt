@@ -14,7 +14,7 @@ int main(int argc, const char * argv[])
     solverInputGPU.load(inputFilenamePrefix, true);
     solverInputGPU.parameters.nNonLinearIterations = 60;
     solverInputGPU.parameters.nLinIterations = 10;
-
+    solverInputGPU.targetDepth->savePLYMesh("sfsInitDepth.ply");
     solverInputCPU.load(inputFilenamePrefix, false);
 	
     ImageSolver solver(solverInputGPU, solverInputCPU);

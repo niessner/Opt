@@ -5,7 +5,7 @@
 
 int main(int argc, const char * argv[])
 {
-	std::string filename = "raptor_fullres.ply";
+	std::string filename = "../MeshDeformationARAP/raptor_clean.stl";
 	if (argc >= 2) {
 		filename = argv[1];
 	}
@@ -19,6 +19,7 @@ int main(int argc, const char * argv[])
 
 	for (unsigned int i = 0; i < markersMesh.size(); i++)
 	{
+        printf("%d: %d\n", i, (markersMesh[i].getVertexIndex()));
 		constraintsIdx.push_back(markersMesh[i].getVertexIndex());
 		constraintsTarget.push_back(markersMesh[i].getPosition());
 	}
