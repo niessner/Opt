@@ -24,6 +24,10 @@ public:
 
     int getPixel(int x, int y) const
     {
+        if (x < 0 || x >= width || y < 0 || y >= height)
+        {
+            std::cout << "getPixel called: " << x << "," << y << std::endl;
+        }
         return y * width + x;
     }
 

@@ -2,8 +2,123 @@
 /* -*- c++ -*- */
 { 
     entities = { 
+    
 
-        
+         statueCamera = Camera { 
+            depthOfFieldSettings = DepthOfFieldSettings { 
+                enabled = false; 
+                farBlurRadiusFraction = 0.005; 
+                farBlurryPlaneZ = -100; 
+                farSharpPlaneZ = -40; 
+                focusPlaneZ = -10; 
+                lensRadius = 0.01; 
+                model = "NONE"; 
+                nearBlurRadiusFraction = 0.015; 
+                nearBlurryPlaneZ = -0.25; 
+                nearSharpPlaneZ = -1; 
+            }; 
+            
+            filmSettings = FilmSettings { 
+                antialiasingEnabled = true; 
+                antialiasingFilterRadius = 0; 
+                antialiasingHighQuality = true; 
+                bloomRadiusFraction = 0.009; 
+                bloomStrength = 0.0; 
+                debugZoom = 1; 
+                gamma = 2.2; 
+                sensitivity = 1.7; 
+                
+                toneCurve = Spline { 
+                    control = ( 0, 0.0787234, 0.306383, 0.75532, 0.829787 ); 
+                    extrapolationMode = LINEAR; 
+                    finalInterval = -1; 
+                    interpolationMode = CUBIC; 
+                    time = ( 0, 0.169565, 0.339131, 0.752174, 1 ); 
+                };
+                
+                vignetteBottomStrength = 0.00; 
+                vignetteSizeFraction = 0.0; 
+                vignetteTopStrength = 0.0; 
+            }; 
+            
+            frame = CFrame::fromXYZYPRDegrees(1.8495, 0.6268, -2.9375, 149.63, -0.00022508, 0); 
+            motionBlurSettings = MotionBlurSettings { 
+                cameraMotionInfluence = 0.5; 
+                enabled = false; 
+                exposureFraction = 0.75; 
+                maxBlurDiameterFraction = 0.1; 
+                numSamples = 27; 
+            }; 
+            
+            projection = Projection { 
+                farPlaneZ = -200; 
+                fovDegrees = 25; 
+                fovDirection = "VERTICAL"; 
+                nearPlaneZ = -0.1; 
+                pixelOffset = Vector2(0, 0 ); 
+            }; 
+            
+            visualizationScale = 1; 
+        }; 
+
+
+        raptorCamera = Camera { 
+            depthOfFieldSettings = DepthOfFieldSettings { 
+                enabled = false; 
+                farBlurRadiusFraction = 0.005; 
+                farBlurryPlaneZ = -100; 
+                farSharpPlaneZ = -40; 
+                focusPlaneZ = -10; 
+                lensRadius = 0.01; 
+                model = "NONE"; 
+                nearBlurRadiusFraction = 0.015; 
+                nearBlurryPlaneZ = -0.25; 
+                nearSharpPlaneZ = -1; 
+            }; 
+            
+            filmSettings = FilmSettings { 
+                antialiasingEnabled = true; 
+                antialiasingFilterRadius = 0; 
+                antialiasingHighQuality = true; 
+                bloomRadiusFraction = 0.009; 
+                bloomStrength = 0.0; 
+                debugZoom = 1; 
+                gamma = 2.2; 
+                sensitivity = 1.7; 
+                
+                toneCurve = Spline { 
+                    control = ( 0, 0.0787234, 0.306383, 0.75532, 0.829787 ); 
+                    extrapolationMode = LINEAR; 
+                    finalInterval = -1; 
+                    interpolationMode = CUBIC; 
+                    time = ( 0, 0.169565, 0.339131, 0.752174, 1 ); 
+                };
+                
+                vignetteBottomStrength = 0.00; 
+                vignetteSizeFraction = 0.0; 
+                vignetteTopStrength = 0.0; 
+            }; 
+            
+            frame = CFrame::fromXYZYPRDegrees(-2.2007, -0.1205, -1.9184, -131.3, 4.0105, 0); 
+            motionBlurSettings = MotionBlurSettings { 
+                cameraMotionInfluence = 0.5; 
+                enabled = false; 
+                exposureFraction = 0.75; 
+                maxBlurDiameterFraction = 0.1; 
+                numSamples = 27; 
+            }; 
+            
+            projection = Projection { 
+                farPlaneZ = -200; 
+                fovDegrees = 25; 
+                fovDirection = "VERTICAL"; 
+                nearPlaneZ = -0.1; 
+                pixelOffset = Vector2(0, 0 ); 
+            }; 
+            
+            visualizationScale = 1; 
+        }; 
+
         camera = Camera { 
             depthOfFieldSettings = DepthOfFieldSettings { 
                 enabled = false; 
@@ -26,21 +141,22 @@
                 bloomStrength = 0.0; 
                 debugZoom = 1; 
                 gamma = 2.2; 
-                sensitivity = 1; 
+                sensitivity = 1.7; 
+                
                 toneCurve = Spline { 
-                    control = ( 0, 0.1, 0.2, 0.5, 1 ); 
-                    extrapolationMode = "LINEAR"; 
+                    control = ( 0, 0.0787234, 0.306383, 0.75532, 0.829787 ); 
+                    extrapolationMode = LINEAR; 
                     finalInterval = -1; 
-                    interpolationMode = "CUBIC"; 
-                    time = ( 0, 0.1, 0.2, 0.5, 1 ); 
-                }; 
+                    interpolationMode = CUBIC; 
+                    time = ( 0, 0.169565, 0.339131, 0.752174, 1 ); 
+                };
                 
                 vignetteBottomStrength = 0.00; 
                 vignetteSizeFraction = 0.0; 
                 vignetteTopStrength = 0.0; 
             }; 
             
-            frame = CFrame::fromXYZYPRDegrees(0.038389, 0.26569, -5.3587, -179.91, 1.1457, 0); 
+            frame = CFrame::fromXYZYPRDegrees(0.0, -0.37942, -4.4326, 180, 9.1671, 0); 
             motionBlurSettings = MotionBlurSettings { 
                 cameraMotionInfluence = 0.5; 
                 enabled = false; 
@@ -59,13 +175,28 @@
             
             visualizationScale = 1; 
         }; 
-
-        keyLight = Light { 
+        /*
+        
+        backLight = Light { 
             attenuation = ( 0, 0, 1 ); 
             bulbPower = Power3(4e+002 ); 
             castsShadows = true; 
             enabled = true; 
-            frame = CFrame::fromXYZYPRDegrees(1.2167, -2.1158, 6.5216, 10.886, 25.21, 0); 
+            frame = CFrame::fromXYZYPRDegrees(0.10249, -0.19475, 4.8324, 2.3827, 4.5834, 0); 
+            producesDirectIllumination = true; 
+            producesIndirectIllumination = true; 
+            shadowMapSize = Vector2int16(2048, 2048 ); 
+            spotHalfAngleDegrees = 15; 
+            spotSquare = true; 
+            type = "SPOT"; 
+        };
+
+        keyLight = Light { 
+            attenuation = ( 0, 0, 1 ); 
+            bulbPower = Power3(8e+002 ); 
+            castsShadows = true; 
+            enabled = true; 
+            frame = CFrame::fromXYZYPRDegrees(3.099, 3.5507, -3.7316, 136.46, -35.524, 0); 
             producesDirectIllumination = true; 
             producesIndirectIllumination = true; 
             shadowMapSize = Vector2int16(2048, 2048 ); 
@@ -75,21 +206,22 @@
         };
 
         
-        sun = Light { 
+        fillLight = Light { 
             attenuation = ( 0, 0, 1 ); 
-            bulbPower = Power3(4e+006 ); 
+            bulbPower = Power3(1e+002 ); 
             castsShadows = true; 
             enabled = true; 
-			shadowMapBias = 0.05;
-            frame = CFrame::fromXYZYPRDegrees(-15.5767, 207.755, -41.952, -164.03, -76.7166, 76.514 ); 
-            nearPlaneZLimit = -170; 
+            frame = CFrame::fromXYZYPRDegrees(-2.2203, -0.51205, -3.378, -147.91, 10.886, 0); 
             producesDirectIllumination = true; 
             producesIndirectIllumination = true; 
             shadowMapSize = Vector2int16(2048, 2048 ); 
-            spotHalfAngleDegrees = 5; 
+            spotHalfAngleDegrees = 15; 
             spotSquare = true; 
             type = "SPOT"; 
-        };
+        };*/
+
+        
+        
         skybox = Skybox { 
             texture = "cubemap/whiteroom/whiteroom-*.png"; 
         };
@@ -98,7 +230,7 @@
     
     lightingEnvironment = LightingEnvironment { 
         ambientOcclusionSettings = AmbientOcclusionSettings { 
-            bias = 0.008125; 
+            bias = 0.002125; 
             blurRadius = 0; 
             blurStepSize = 2; 
             depthPeelSeparationHint = 0.104059; 
@@ -109,7 +241,7 @@
             monotonicallyDecreasingBilateralWeights = false; 
             numSamples = 99; 
             packBlurKeys = false; 
-            radius = 0.526345; 
+            radius = 0.226345; 
             temporalFilterSettings = TemporalFilter::Settings { 
                 falloffEndDistance = 0.07; 
                 falloffStartDistance = 0.05; 
@@ -124,10 +256,8 @@
         }; 
         
          environmentMap = Texture::Specification { 
-            filename = "cubemap/uffizi/uffizi*.jpg"; 
-            encoding = Texture::Encoding {
-                readMultiplyFirst = 0.6;
-            };
+            filename  = "cubemap/pisa/pisa-*.exr";  
+            
         }; 
     }; 
     

@@ -5,7 +5,7 @@
 #include "cutil.h"
 
 extern "C" {
-#include "../Opt.h"
+#include "Opt.h"
 }
 
 class TerraSolverPoissonImageEditing {
@@ -17,7 +17,7 @@ public:
 		m_problem = Opt_ProblemDefine(m_optimizerState, terraFile.c_str(), optName.c_str(), NULL);
 
 
-		uint32_t strides[] = { width * sizeof(float4), width * sizeof(float4), width * sizeof(float) };
+		uint32_t strides[] = { (uint32_t) (width * sizeof(float4)), (uint32_t) (width * sizeof(float4)), (uint32_t)(width * sizeof(float)) };
 		uint32_t elemsizes[] = { sizeof(float4), sizeof(float4), sizeof(float) };
 		uint32_t dims[] = { width, height };
 		m_plan = Opt_ProblemPlan(m_optimizerState, m_problem, dims, elemsizes, strides);

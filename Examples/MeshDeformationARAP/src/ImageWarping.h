@@ -223,7 +223,7 @@ class ImageWarping
             float finalIterTime;
             for (unsigned int i = 1; i < numIter; i++)
             {
-                std::cout << "//////////// ITERATION" << i << "  (OPT) ///////////////" << std::endl;
+                std::cout << "//////////// ITERATION" << i << "  (CERES) ///////////////" << std::endl;
                 setConstraints((float)i / (float)(numIter - 1));
                 cutilSafeCall(cudaMemcpy(h_vertexPosTargetFloat3, d_vertexPosTargetFloat3, sizeof(float3)*N, cudaMemcpyDeviceToHost));
 

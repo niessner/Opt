@@ -5,10 +5,10 @@
 
 int main(int argc, const char * argv[])
 {
-	//std::string filename = "Armadillo20k.ply";
-    //const char* markerFilename = "armadillo.mrk";
-    std::string filename = "raptor_clean.stl";
-    const char* markerFilename = "raptor.mrk";
+	std::string filename = "Armadillo20k.ply";
+    const char* markerFilename = "armadillo.mrk";
+    //std::string filename = "raptor_clean.stl";
+    //const char* markerFilename = "raptor.mrk";
 	if (argc >= 2) {
 		filename = argv[1];
 	}

@@ -2,13 +2,38 @@
 #include "ImageWarping.h"
 
 int main(int argc, const char * argv[]) {
+	//// Women
+	const std::string inputImage = "womenSource2_2.png";
+	const std::string inputImage1 = "womenSource1_2.png";
+	const std::string inputImageMask = "womenMask_2.png";
+	const unsigned int offsetX = 0;
+	const unsigned int offsetY = 0;
+	const bool invertMask = false;
 
-	// MONA
-	const std::string inputImage	 = "MonaSource1.png";
-	const std::string inputImage1	 = "MonaSource2.png";
-	const std::string inputImageMask = "MonaMask.png";
-	unsigned int offsetX = 37;
-	unsigned int offsetY = 88;
+	// Boy
+	/*const std::string inputImage = "boymanSource2_2.png";
+	const std::string inputImage1 = "boymanSource1_2.png";
+	const std::string inputImageMask = "boymanMask_2.png";
+	const unsigned int offsetX = 0;
+	const unsigned int offsetY = 0;
+	const bool invertMask = false;*/
+
+
+	//// JRK
+	//const std::string inputImage	 = "jrkSource2.png";
+	//const std::string inputImage1	 = "jrkSource1.png";
+	//const std::string inputImageMask = "jrkMask.png";
+	//const unsigned int offsetX = 0;
+	//const unsigned int offsetY = 0;
+	//const bool invertMask = false;
+
+	//// MONA
+	//const std::string inputImage = "MonaSource1.png";
+	//const std::string inputImage1 = "MonaSource2.png";
+	//const std::string inputImageMask = "MonaMask.png";
+	//const unsigned int offsetX = 37;
+	//const unsigned int offsetY = 88;
+	//const bool invertMasek = false;
 
 	ColorImageR8G8B8A8	   image = LodePNG::load(inputImage);
 	ColorImageR32G32B32A32 imageR32(image.getWidth(), image.getHeight());
@@ -33,12 +58,20 @@ int main(int argc, const char * argv[]) {
 			image1Large(x + offsetY, y + offsetX) = imageR321(x, y);
 		}
 	}
+
+
 	
 	const ColorImageR8G8B8A8 imageMask = LodePNG::load(inputImageMask);
 	ColorImageR32 imageR32Mask(imageMask.getWidth(), imageMask.getHeight());
 	for (unsigned int y = 0; y < imageMask.getHeight(); y++) {
 		for (unsigned int x = 0; x < imageMask.getWidth(); x++) {
-			imageR32Mask(x, y) = imageMask(x, y).x;
+			unsigned char c = imageMask(x, y).x;
+			if (invertMask) {
+				if (c == 255) c = 0;
+				else c = 255;
+			}
+
+			imageR32Mask(x, y) = c;
 		}
 	}
 
@@ -63,7 +96,8 @@ int main(int argc, const char * argv[]) {
 		}
 	}
 	LodePNG::save(out, "output.png");
-
+#ifdef _WIN32
 	getchar();
+#endif
 	return 0;
 }

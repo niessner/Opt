@@ -14,6 +14,9 @@
 class App : public GApp {
 protected:
     float m_scaleFactor;
+
+    CFrame m_modelFrame;
+
     Point3 m_currentConstraintPosition;
     int m_selectedIndex; 
 

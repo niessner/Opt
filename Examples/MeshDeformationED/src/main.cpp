@@ -19,6 +19,7 @@ int main(int argc, const char * argv[])
 
 	for (unsigned int i = 0; i < markersMesh.size(); i++)
 	{
+        printf("%d: %d\n", i, (markersMesh[i].getVertexIndex()));
 		constraintsIdx.push_back(markersMesh[i].getVertexIndex());
 		constraintsTarget.push_back(markersMesh[i].getPosition());
 	}
