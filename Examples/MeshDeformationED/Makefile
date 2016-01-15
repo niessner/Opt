@@ -30,7 +30,7 @@ NVCCFLAGS = -arch sm_30 $(FLAGS)
 
 
 LFLAGS = -L../../API/build -L$(CUDAHOME)/lib$(S4) -Wl,-rpath,$(CUDAHOME)/lib$(S4) -lcudart -lOpt -Wl,-rpath,$(shell pwd)/../../API/build -L$(TERRAHOME)/lib -lterra -ldl 
-
+LFLAGS += -lOpenMeshCore -lOpenMeshTools -pthread
 ifeq ($(UNAME), Darwin)
   LFLAGS += -pagezero_size 10000 -image_base 100000000 -L$(MLIB_EXTERNAL)/libsOSX -Wl,-rpath,$(MLIB_EXTERNAL)/libsOSX -lOpenMeshCore -lOpenMeshTools
 endif
