@@ -45,7 +45,7 @@ void solveAxEqb(AxEqBSolver& solver, const Eigen::VectorXf& b, Eigen::VectorXf& 
 #if SOLVER==LEAST_SQ_CONJ_GRADIENT
     x = solver.solveWithGuess(b, x);
     //std::cout << "#iterations:     " << solver.iterations() << std::endl;
-   // std::cout << "estimated error: " << solver.error() << std::endl;
+    //std::cout << "estimated error: " << solver.error() << std::endl;
 #else
     x = solver.solve(b);
 #endif
@@ -74,50 +74,65 @@ void EigenSolverPoissonImageEditing::solve(float4* h_unknownFloat, float4* h_tar
     Eigen::VectorXf x_r(numUnknowns), b_r(numResiduals);
     Eigen::VectorXf x_g(numUnknowns), b_g(numResiduals);
     Eigen::VectorXf x_b(numUnknowns), b_b(numResiduals);
+    Eigen::VectorXf x_a(numUnknowns), b_a(numResiduals);
 
     b_r.setZero();
     b_g.setZero();
     b_b.setZero();
+    b_a.setZero();
 
     for (int i = 0; i < pixelLocations.size(); ++i) {
         vec2i p = pixelLocations[i];
         float4 color = sampleImage(h_unknownFloat, p, m_width);
         x_r[i] = color.x;
+        //printf("%f\n", color.x);
         x_g[i] = color.y;
         x_b[i] = color.z;
+        x_a[i] = color.w;
     }
     SpMatrixf A(numResiduals, numUnknowns);
     A.setZero();
     printf("Constructing Matrix\n");
     std::vector<Tripf> entriesA;
+
+    std::vector<vec2i> offsets;
+    offsets.push_back(vec2i(-1, 0));
+    offsets.push_back(vec2i(1, 0));
+    offsets.push_back(vec2i(0, -1));
+    offsets.push_back(vec2i(0, 1));
+
     for (int i = 0; i < pixelLocations.size(); ++i) {
         vec2i p = pixelLocations[i];
         int numInternalNeighbors = 0;
         float4 g_p = sampleImage(h_target, p, m_width);
         int j = 0;
-        for (int off_y = -1; off_y <= 1; off_y += 2) {
-            for (int off_x = -1; off_x <= 1; off_x += 2) {
-                vec2i q(p.x + off_x, p.y + off_y);
-                auto it = pixelLocationsToIndex.find(q);
-                int row = 4*i + j;
-                if (it == pixelLocationsToIndex.end()) {
-                    float4 f_q = sampleImage(h_unknownFloat, q, m_width);
-                    b_r[row] += f_q.x;
-                    b_g[row] += f_q.y;
-                    b_b[row] += f_q.z;
-                } else {
-                    entriesA.push_back(Tripf(row, it->second, -1.0f));
-                }
-                entriesA.push_back(Tripf(row, i, 1.0f));
-                
-                float4 g_q = sampleImage(h_target, q, m_width);
-                b_r[row] += (g_p.x - g_q.x);
-                b_g[row] += (g_p.y - g_q.y);
-                b_b[row] += (g_p.z - g_q.z);
-                ++j;
+
+        for (vec2i off : offsets) {
+            vec2i q = p + off;
+            auto it = pixelLocationsToIndex.find(q);
+            int row = 4*i + j;
+            if (it == pixelLocationsToIndex.end()) {
+                float4 f_q = sampleImage(h_unknownFloat, q, m_width);
+                b_r[row] += f_q.x;
+                b_g[row] += f_q.y;
+                b_b[row] += f_q.z;
+                b_a[row] += f_q.w;
+            } else {
+                entriesA.push_back(Tripf(row, it->second, -1.0f));
             }
+            entriesA.push_back(Tripf(row, i, 1.0f));
+                
+            float4 g_q = sampleImage(h_target, q, m_width);
+            b_r[row] += (g_p.x - g_q.x);
+            b_g[row] += (g_p.y - g_q.y);
+            b_b[row] += (g_p.z - g_q.z);
+            b_a[row] += (g_p.w - g_q.w);
+            ++j;
+            
         }
     }
+    
+
     printf("Entries Set\n");
     A.setFromTriplets(entriesA.begin(), entriesA.end());
     printf("Sparse Matrix Constructed\n");
@@ -129,12 +144,15 @@ void EigenSolverPoissonImageEditing::solve(float4* h_unknownFloat, float4* h_tar
         float cost_r = (A*x_r - b_r).squaredNorm();
         float cost_g = (A*x_g - b_g).squaredNorm();
         float cost_b = (A*x_b - b_b).squaredNorm();
-        totalCost = cost_r + cost_g + cost_b;
-        printf("Initial Cost: %f : (%f, %f, %f)\n", totalCost, cost_r, cost_g, cost_b);
+        float cost_a = (A*x_a - b_a).squaredNorm();
+        totalCost = cost_r + cost_g + cost_b + cost_a;
+        printf("Initial Cost: %f : (%f, %f, %f, %f)\n", totalCost, cost_r, cost_g, cost_b, cost_a);
 
     }
-    // fill A and b
+    
+
     AxEqBSolver solver;
+    solver.setMaxIterations(97);
     printf("Solvers Initialized\n");
 
     clock_t start = clock(), diff;
@@ -147,6 +165,7 @@ void EigenSolverPoissonImageEditing::solve(float4* h_unknownFloat, float4* h_tar
     //printf("Green solve done\n");
     solveAxEqb(solver, b_b, x_b);
     //printf("Blue solve done\n");
+    solveAxEqb(solver, b_a, x_a);
 
     diff = clock() - start;
     printf("Time taken %f ms\n", diff*1000.0 / double(CLOCKS_PER_SEC));
@@ -156,8 +175,9 @@ void EigenSolverPoissonImageEditing::solve(float4* h_unknownFloat, float4* h_tar
     float cost_r = (A*x_r - b_r).squaredNorm(); 
     float cost_g = (A*x_g - b_g).squaredNorm();
     float cost_b = (A*x_b - b_b).squaredNorm();
-    totalCost = cost_r + cost_g + cost_b;
-    printf("Final Cost: %f : (%f, %f, %f)\n", totalCost, cost_r, cost_g, cost_b);
+    float cost_a = (A*x_a - b_a).squaredNorm();
+    totalCost = cost_r + cost_g + cost_b + cost_a;
+    printf("Final Cost: %f : (%f, %f, %f, %f)\n", totalCost, cost_r, cost_g, cost_b, cost_a);
 
     for (int i = 0; i < pixelLocations.size(); ++i) {
         setPixel(h_unknownFloat, pixelLocations[i], m_width, x_r[i], x_g[i], x_b[i]);
