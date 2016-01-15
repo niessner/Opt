@@ -2,13 +2,13 @@
 #include "ImageWarping.h"
 
 int main(int argc, const char * argv[]) {
-	////// Women
-	//const std::string inputImage = "womenSource2_2.png";
-	//const std::string inputImage1 = "womenSource1_2.png";
-	//const std::string inputImageMask = "womenMask_2.png";
-	//const unsigned int offsetX = 0;
-	//const unsigned int offsetY = 0;
-	//const bool invertMask = false;
+	//// Women
+	const std::string inputImage = "womenSource2_2.png";
+	const std::string inputImage1 = "womenSource1_2.png";
+	const std::string inputImageMask = "womenMask_2.png";
+	const unsigned int offsetX = 0;
+	const unsigned int offsetY = 0;
+	const bool invertMask = false;
 
 	// Boy
 	/*const std::string inputImage = "boymanSource2_2.png";
@@ -27,13 +27,13 @@ int main(int argc, const char * argv[]) {
 	//const unsigned int offsetY = 0;
 	//const bool invertMask = false;
 
-	// MONA
-	const std::string inputImage = "MonaSource1.png";
-	const std::string inputImage1 = "MonaSource2.png";
-	const std::string inputImageMask = "MonaMask.png";
-	const unsigned int offsetX = 37;
-	const unsigned int offsetY = 88;
-    const bool invertMask = false;
+	//// MONA
+	//const std::string inputImage = "MonaSource1.png";
+	//const std::string inputImage1 = "MonaSource2.png";
+	//const std::string inputImageMask = "MonaMask.png";
+	//const unsigned int offsetX = 37;
+	//const unsigned int offsetY = 88;
+ //   const bool invertMask = false;
 
 	ColorImageR8G8B8A8	   image = LodePNG::load(inputImage);
 	ColorImageR32G32B32A32 imageR32(image.getWidth(), image.getHeight());

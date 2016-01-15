@@ -5,6 +5,8 @@
 #include <Eigen33b1/IterativeLinearSolvers>
 #include <cuda_runtime.h>
 
+#include <time.h>
+
 #define LEAST_SQ_CONJ_GRADIENT 0
 #define SPARSE_QR 1
 
@@ -42,8 +44,8 @@ void solveAxEqb(AxEqBSolver& solver, const Eigen::VectorXf& b, Eigen::VectorXf& 
     
 #if SOLVER==LEAST_SQ_CONJ_GRADIENT
     x = solver.solveWithGuess(b, x);
-    std::cout << "#iterations:     " << solver.iterations() << std::endl;
-    std::cout << "estimated error: " << solver.error() << std::endl;
+    //std::cout << "#iterations:     " << solver.iterations() << std::endl;
+   // std::cout << "estimated error: " << solver.error() << std::endl;
 #else
     x = solver.solve(b);
 #endif
@@ -67,9 +69,11 @@ void EigenSolverPoissonImageEditing::solve(float4* h_unknownFloat, float4* h_tar
         }
     }
     printf("# Unknowns: %d\n", numUnknowns);
-    Eigen::VectorXf x_r(pixelLocations.size()), b_r(pixelLocations.size());
-    Eigen::VectorXf x_g(pixelLocations.size()), b_g(pixelLocations.size());
-    Eigen::VectorXf x_b(pixelLocations.size()), b_b(pixelLocations.size());
+    int numResiduals = pixelLocations.size() * 4;
+
+    Eigen::VectorXf x_r(numUnknowns), b_r(numResiduals);
+    Eigen::VectorXf x_g(numUnknowns), b_g(numResiduals);
+    Eigen::VectorXf x_b(numUnknowns), b_b(numResiduals);
 
     b_r.setZero();
     b_g.setZero();
@@ -82,35 +86,37 @@ void EigenSolverPoissonImageEditing::solve(float4* h_unknownFloat, float4* h_tar
         x_g[i] = color.y;
         x_b[i] = color.z;
     }
-    SpMatrixf A(pixelLocations.size(), pixelLocations.size());
+    SpMatrixf A(numResiduals, numUnknowns);
     A.setZero();
     printf("Constructing Matrix\n");
     std::vector<Tripf> entriesA;
     for (int i = 0; i < pixelLocations.size(); ++i) {
         vec2i p = pixelLocations[i];
-        int row = i;
         int numInternalNeighbors = 0;
         float4 g_p = sampleImage(h_target, p, m_width);
+        int j = 0;
         for (int off_y = -1; off_y <= 1; off_y += 2) {
             for (int off_x = -1; off_x <= 1; off_x += 2) {
                 vec2i q(p.x + off_x, p.y + off_y);
                 auto it = pixelLocationsToIndex.find(q);
-                if (it != pixelLocationsToIndex.end()) {
-                    ++numInternalNeighbors;
-                    entriesA.push_back(Tripf(row, it->second, -1.0f));
+                int row = 4*i + j;
+                if (it == pixelLocationsToIndex.end()) {
+                    float4 f_q = sampleImage(h_unknownFloat, q, m_width);
+                    b_r[row] += f_q.x;
+                    b_g[row] += f_q.y;
+                    b_b[row] += f_q.z;
                 } else {
-                    float4 f_star_q = sampleImage(h_unknownFloat, q, m_width);
-                    b_r[i] += f_star_q.x;
-                    b_g[i] += f_star_q.y;
-                    b_b[i] += f_star_q.z;
+                    entriesA.push_back(Tripf(row, it->second, -1.0f));
                 }
+                entriesA.push_back(Tripf(row, i, 1.0f));
+                
                 float4 g_q = sampleImage(h_target, q, m_width);
-                b_r[i] += (g_p.x - g_q.x);
-                b_g[i] += (g_p.y - g_q.y);
-                b_b[i] += (g_p.z - g_q.z);
+                b_r[row] += (g_p.x - g_q.x);
+                b_g[row] += (g_p.y - g_q.y);
+                b_b[row] += (g_p.z - g_q.z);
+                ++j;
             }
         }
-        entriesA.push_back(Tripf(row, row, (float)numInternalNeighbors));
     }
     printf("Entries Set\n");
     A.setFromTriplets(entriesA.begin(), entriesA.end());
@@ -127,19 +133,24 @@ void EigenSolverPoissonImageEditing::solve(float4* h_unknownFloat, float4* h_tar
         printf("Initial Cost: %f : (%f, %f, %f)\n", totalCost, cost_r, cost_g, cost_b);
 
     }
-
-    
     // fill A and b
     AxEqBSolver solver;
     printf("Solvers Initialized\n");
+
+    clock_t start = clock(), diff;
+    
     solver.compute(A);
-    printf("solver.compute(A)\n");
+    //printf("solver.compute(A)\n");
     solveAxEqb(solver, b_r, x_r);
-    printf("Red solve done\n");
+    //printf("Red solve done\n");
     solveAxEqb(solver, b_g, x_g);
-    printf("Green solve done\n");
+    //printf("Green solve done\n");
     solveAxEqb(solver, b_b, x_b);
-    printf("Blue solve done\n");
+    //printf("Blue solve done\n");
+
+    diff = clock() - start;
+    printf("Time taken %f ms\n", diff*1000.0 / double(CLOCKS_PER_SEC));
+
     float totalCost = 0.0f;
  
     float cost_r = (A*x_r - b_r).squaredNorm(); 
@@ -154,3 +165,36 @@ void EigenSolverPoissonImageEditing::solve(float4* h_unknownFloat, float4* h_tar
     
 
 }
+
+
+/* Proper Poisson Image Editing
+
+for (int i = 0; i < pixelLocations.size(); ++i) {
+vec2i p = pixelLocations[i];
+int row = i;
+int numInternalNeighbors = 0;
+float4 g_p = sampleImage(h_target, p, m_width);
+for (int off_y = -1; off_y <= 1; off_y += 2) {
+for (int off_x = -1; off_x <= 1; off_x += 2) {
+vec2i q(p.x + off_x, p.y + off_y);
+auto it = pixelLocationsToIndex.find(q);
+if (it != pixelLocationsToIndex.end()) {
+++numInternalNeighbors;
+entriesA.push_back(Tripf(row, it->second, -1.0f));
+} else {
+
+float4 f_star_q = sampleImage(h_target, q, m_width);
+b_r[i] += f_star_q.x;
+b_g[i] += f_star_q.y;
+b_b[i] += f_star_q.z;
+}
+float4 g_q = sampleImage(h_target, q, m_width);
+b_r[i] += (g_p.x - g_q.x);
+b_g[i] += (g_p.y - g_q.y);
+b_b[i] += (g_p.z - g_q.z);
+}
+}
+entriesA.push_back(Tripf(row, row, (float)numInternalNeighbors));
+}
+
+*/
