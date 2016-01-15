@@ -1,4 +1,4 @@
-local W,H = opt.Dim("W",0), opt.Dim("H",1)
+
 local S = ad.ProblemSpec()
 S:UsePreconditioner(true)
 
@@ -59,6 +59,7 @@ function All(v)
 end
 
 -----------------------------------------------------------------------------------------
+local W,H = opt.Dim("W",0), opt.Dim("H",1)
 local X = Array2D("X", opt.float3,W,H,0)				--uv, a <- unknown
 local UrShape = Array2D("UrShape", opt.float2,W,H,1)		--urshape
 local Constraints = Array2D("Constraints", opt.float2,W,H,2)	--constraints
