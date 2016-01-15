@@ -114,3 +114,4 @@ end
 
 Not = ad.not_
 Dim = opt.Dim
+SampledImage = ad.sampledimage
