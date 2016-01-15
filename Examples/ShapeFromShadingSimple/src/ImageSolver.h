@@ -55,7 +55,7 @@ public:
         const bool useCUDA = false;
         const bool useTerra = false;
         const bool useOpt = true;
-        const bool useCeres = true;
+        const bool useCeres = false;
 
         if (useCUDA)
         {

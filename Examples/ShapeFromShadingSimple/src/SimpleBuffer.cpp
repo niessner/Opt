@@ -203,7 +203,9 @@ void SimpleBuffer::savePLYMesh(std::string filename) const {
         int i00 = (p.y * m_width + p.x);
         float value = *((const float*)ptr + i00);
         bool valid = isValidPixel(ptr, i00);
-        
+        if (!valid) {
+            value = 0.0f;
+        }
         //if (valid) {
             vertices.push_back(vec3f(p.x, p.y, value * 1000.0f));
         //}
