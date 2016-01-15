@@ -16,8 +16,6 @@ local w_rotSqrt = Param("w_rotSqrt", float, 2)
 local Offset = Slice(X,0,3)
 
 --fitting
-local x_fit = ad.Vector(X(0,0,0), X(0,0,1), X(0,0,2))	--vertex-unknown : float3
-local x = X(0,0)
 local e_fit = Offset(0,0) - Constraints(0,0)
 local valid = greatereq(Constraints(0,0,0), -999999.9)
 Energy(Select(valid, w_fitSqrt*e_fit, 0))
