@@ -204,11 +204,12 @@ void SimpleBuffer::savePLYMesh(std::string filename) const {
         float value = *((const float*)ptr + i00);
         bool valid = isValidPixel(ptr, i00);
         if (!valid) {
+            // Meshlab compute bounding boxes from all vertices, even ones not in faces
+            // so make the vertex be close to the origin to prevent weird behavior
             value = 0.0f;
         }
-        //if (valid) {
-            vertices.push_back(vec3f(p.x, p.y, value * 1000.0f));
-        //}
+        // Always put in vertices (even if invalid)... this is due to laziness of not wanting to rewrite code
+        vertices.push_back(vec3f(p.x, p.y, value * 1000.0f));
         
         
         if (valid && p.x < image.getDimX() - 1 && p.y < image.getDimY() - 1)
