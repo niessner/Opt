@@ -35,6 +35,15 @@ int main(int argc, const char * argv[]) {
 	//const unsigned int offsetY = 88;
  //   const bool invertMask = false;
 
+
+    //const std::string inputImage = "test_1.png";
+    //const std::string inputImage1 = "test_2.png";
+    //const std::string inputImageMask = "testMask.png";
+    //const unsigned int offsetX = 0;
+    //const unsigned int offsetY = 0;
+    //const bool invertMask = false;
+
+
 	ColorImageR8G8B8A8	   image = LodePNG::load(inputImage);
 	ColorImageR32G32B32A32 imageR32(image.getWidth(), image.getHeight());
 	for (unsigned int y = 0; y < image.getHeight(); y++) {
