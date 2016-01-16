@@ -1,7 +1,7 @@
 #pragma once
 
 #include "mLibInclude.h"
-#include "/Users/zdevito/vdb/vdb.h"
+//#include "/Users/zdevito/vdb/vdb.h"
 
 #include <cuda_runtime.h>
 #include <cudaUtil.h>
@@ -86,6 +86,7 @@ PointInTriangleLK(float x0, float y0, float w0,
     float d20 = X[2]*Y[0] - Y[2]*X[0];
 
     if (d01 < 0 & d12 < 0 & d20 < 0) {
+        //printf("Backfacing\n");
         // backfacing
         return false;
     }
@@ -262,6 +263,9 @@ public:
 			
 		    m_warpingSolverTerraAD->solve(d_warpField, d_warpAngles, d_urshape, d_constraints, d_mask, nonLinearIter, linearIter, patchIter, weightFit, weightReg);
 		    std::cout << std::endl;
+            if (i == 3) {
+                //break;
+            }
 		  }
 
 		  copyResultToCPU();
@@ -313,7 +317,44 @@ public:
         return &m_resultColor;
 	}
 
+    vec2f toVec2(float2 p) {
+        return vec2f(p.x, p.y);
+    }
+
+    void rasterizeTriangle(float2 p0, float2 p1, float2 p2, vec3f c0, vec3f c1, vec3f c2) {
+        vec2f t0 = toVec2(p0);
+        vec2f t1 = toVec2(p1);
+        vec2f t2 = toVec2(p2);
+
+
+        int W = m_resultColor.getWidth();
+        int H = m_resultColor.getHeight();
+
+        vec2f minBound = math::floor(math::min(t0, math::min(t1, t2)));
+        vec2f maxBound = math::ceil(math::max(t0, math::max(t1, t2)));
+        for (int x = (int)minBound.x; x <= maxBound.x; ++x) {
+            for (int y = (int)minBound.y; y <= maxBound.y; ++y) {
+                if (x >= 0 && x < W && y >= 0 && y < H) {
+                    float b0, b1, b2;
+                    if (PointInTriangleLK(t0.x, t0.y, 1.0f,
+                        t1.x, t1.y, 1.0f,
+                        t2.x, t2.y, 1.0f, x, y, &b0, &b1, &b2)) {
+                        vec3f color = c0*b0 + c1*b1 + c2*b2;
+                        m_resultColor(x, y) = color;
+                    }
+
+                }
+            }
+        }
+
+        //bound
+        //loop
+        //point in trinagle
+        // z-test?
+    }
+
 	void copyResultToCPU() {
+      
         m_resultColor = ColorImageR32G32B32(m_image.getWidth(), m_image.getHeight());
         m_resultColor.setPixels(vec3f(255.0f, 255.0f, 255.0f));
 
@@ -335,9 +376,9 @@ public:
 						float2 pos11 = h_warpField[(y + 1)*m_image.getWidth() + (x + 1)];
 
                         vec3f v00 = m_imageColor(x, y);
-                        vec3f v01 = m_imageColor(x, (y + 1));
-                        vec3f v10 = m_imageColor((x + 1), y);
-                        vec3f v11 = m_imageColor((x + 1), (y + 1));
+                        vec3f v01 = m_imageColor(x+1, y);
+                        vec3f v10 = m_imageColor(x, y+1);
+                        vec3f v11 = m_imageColor(x + 1, y + 1);
                         
              			bool valid00 = (m_imageMask(x,   y) == 0);
 						bool valid01 = (m_imageMask(x,   y+1) == 0);
@@ -345,16 +386,12 @@ public:
 						bool valid11 = (m_imageMask(x+1, y+1) == 0);
                         
                         if (valid00 && valid01 && valid10 && valid11) {
-                            vec3f avg = (v00+v01+v10+v11)/(4*255);
-                            vdb_color(avg.x,avg.y,avg.z);
-                            float z = (x)/(float)(m_image.getWidth()*10);
-                            vdb_triangle(pos00.x,pos00.y,z,
-                                         pos10.x,pos10.y,z,
-                                         pos01.x,pos01.y,z);
-                            vdb_triangle(pos10.x,pos10.y,z,
-                                         pos11.x,pos11.y,z,
-                                         pos01.x,pos01.y,z);
+                            rasterizeTriangle(pos00, pos01, pos10, 
+                                v00, v01, v10);
+                            rasterizeTriangle(pos10, pos01, pos11, 
+                                v10, v01, v11);
                         }
+                        /*
 						for (unsigned int g = 0; g < c; g++)
 						{
 							for (unsigned int h = 0; h < c; h++)
@@ -387,7 +424,7 @@ public:
                                     if (newX < m_resultColor.getWidth() && newY < m_resultColor.getHeight()) m_resultColor(newX, newY) = v;
 								}
 							}
-						}
+						}*/
 					}
 				}
 			}
@@ -403,6 +440,8 @@ private:
 
 	ColorImageR32 m_result;
     ColorImageR32G32B32 m_resultColor;
+
+    float m_scale;
 
 	float2*	d_urshape;
 	float2* d_warpField;
