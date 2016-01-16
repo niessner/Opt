@@ -117,7 +117,7 @@ int main(int argc, const char * argv[]) {
 				{
                     if (imageR32Mask(constraints[k][0], constraints[k][1]) == 0)
 					{
-						out(x, y) = vec4uc(255, 0, 0, 255);
+						//out(x, y) = vec4uc(255, 0, 0, 255);
 					}
 				}
 		
