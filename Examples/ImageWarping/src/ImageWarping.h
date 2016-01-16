@@ -259,13 +259,11 @@ public:
 		  for (unsigned int i = 0; i < numIter; i++)	{
 		    std::cout << "//////////// ITERATION" << i << "  (DSL AD) ///////////////" << std::endl;
             setConstraintImage((float)i / (float)numIter);
-
+            break;
 			
 		    m_warpingSolverTerraAD->solve(d_warpField, d_warpAngles, d_urshape, d_constraints, d_mask, nonLinearIter, linearIter, patchIter, weightFit, weightReg);
 		    std::cout << std::endl;
-            if (i == 3) {
-                //break;
-            }
+            
 		  }
 
 		  copyResultToCPU();
@@ -322,9 +320,9 @@ public:
     }
 
     void rasterizeTriangle(float2 p0, float2 p1, float2 p2, vec3f c0, vec3f c1, vec3f c2) {
-        vec2f t0 = toVec2(p0);
-        vec2f t1 = toVec2(p1);
-        vec2f t2 = toVec2(p2);
+        vec2f t0 = toVec2(p0)*m_scale;
+        vec2f t1 = toVec2(p1)*m_scale;
+        vec2f t2 = toVec2(p2)*m_scale;
 
 
         int W = m_resultColor.getWidth();
@@ -354,8 +352,8 @@ public:
     }
 
 	void copyResultToCPU() {
-      
-        m_resultColor = ColorImageR32G32B32(m_image.getWidth(), m_image.getHeight());
+        m_scale = 1.0f;
+        m_resultColor = ColorImageR32G32B32(m_image.getWidth()*m_scale, m_image.getHeight()*m_scale);
         m_resultColor.setPixels(vec3f(255.0f, 255.0f, 255.0f));
 
 		float2* h_warpField = new float2[m_image.getWidth()*m_image.getHeight()];
