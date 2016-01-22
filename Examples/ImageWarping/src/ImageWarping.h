@@ -259,7 +259,6 @@ public:
 		  for (unsigned int i = 0; i < numIter; i++)	{
 		    std::cout << "//////////// ITERATION" << i << "  (DSL AD) ///////////////" << std::endl;
             setConstraintImage((float)i / (float)numIter);
-            break;
 			
 		    m_warpingSolverTerraAD->solve(d_warpField, d_warpAngles, d_urshape, d_constraints, d_mask, nonLinearIter, linearIter, patchIter, weightFit, weightReg);
 		    std::cout << std::endl;
