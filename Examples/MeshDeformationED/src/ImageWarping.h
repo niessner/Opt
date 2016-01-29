@@ -31,7 +31,7 @@ class ImageWarping
 			cutilSafeCall(cudaMalloc(&d_neighbourOffset, sizeof(int)*(N+1)));
 		
 			resetGPUMemory();	
-			m_optSolver = new TerraSolver(N, 2 * E, d_neighbourIdx, d_neighbourOffset, "MeshDeformationEDSimple.t", "gaussNewtonGPU");
+			m_optSolver = new TerraSolver(N, 2 * E, d_neighbourIdx, d_neighbourOffset, "MeshDeformationAD.t", "gaussNewtonGPU");
 		} 
 
 		void setConstraints(float alpha)
@@ -140,7 +140,7 @@ class ImageWarping
 			float weightReg = 4.0f;
 			float weightRot = 5.0f;
 		
-            unsigned int numIter = 32;
+            unsigned int numIter = 1;
             unsigned int nonLinearIter = 1;
             unsigned int linearIter = 4000;
 
