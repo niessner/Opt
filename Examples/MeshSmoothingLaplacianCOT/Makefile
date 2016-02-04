@@ -41,7 +41,7 @@ LINK = clang++
 all:	meshsmoothing
 
 
-%.o:	%.cpp
+%.o:	%.cpp src/ImageWarping.h
 	$(CXX) $(CXXFLAGS) $< -c -o $@
 
 %.o:	%.cu

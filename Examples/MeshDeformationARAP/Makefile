@@ -39,7 +39,7 @@ LINK = clang++
 all:	meshdeformation
 
 
-%.o:	%.cpp
+%.o:	%.cpp src/ImageWarping.h
 	$(CXX) $(CXXFLAGS) $< -c -o $@
 
 %.o:	%.cu
