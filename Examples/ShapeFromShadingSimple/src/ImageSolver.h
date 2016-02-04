@@ -52,8 +52,8 @@ public:
 
     std::shared_ptr<SimpleBuffer> solve()
     {
-        const bool useCUDA = false;
-        const bool useTerra = false;
+        const bool useCUDA = true;
+        const bool useTerra = true;
         const bool useOpt = true;
         const bool useCeres = false;
 
