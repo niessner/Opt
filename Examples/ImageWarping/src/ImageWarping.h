@@ -230,7 +230,7 @@ public:
             setConstraintImage((float)i / (float)numIter);
 
 		    m_warpingSolver->solveGN(d_urshape, d_warpField, d_warpAngles, d_constraints, d_mask, nonLinearIter, linearIter, weightFit, weightReg);
-		    if (earlyOut) break;
+		    if (i == 2 && earlyOut) break;
 			//	std::cout << std::endl;
 		  }
 		  copyResultToCPU();
@@ -246,7 +246,7 @@ public:
             setConstraintImage((float)i / (float)numIter);
 		    
 		    m_warpingSolverTerra->solve(d_warpField, d_warpAngles, d_urshape, d_constraints, d_mask, nonLinearIter, linearIter, patchIter, weightFit, weightReg);
-		    if (earlyOut) break;
+		    if (i == 2 && earlyOut) break;
 			//	std::cout << std::endl;
 		  }
 		  copyResultToCPU();
@@ -265,7 +265,7 @@ public:
 			
 		    m_warpingSolverTerraAD->solve(d_warpField, d_warpAngles, d_urshape, d_constraints, d_mask, nonLinearIter, linearIter, patchIter, weightFit, weightReg);
 		    std::cout << std::endl;
-            if (earlyOut) break;
+            if (i == 2 && earlyOut) break;
 		  }
 
 		  copyResultToCPU();
