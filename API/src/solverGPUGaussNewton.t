@@ -20,7 +20,7 @@ return function(problemSpec)
     local isGraph = #problemSpec.functions.cost.graphfunctions > 0
     local struct PlanData(S.Object) {
 		plan : opt.Plan
-		parameters : problemSpec:ParameterType(false)	--get the non-blocked version
+		parameters : problemSpec:ParameterType()
 		scratchF : &float
 		debugDumpImage : &float
 		debugCostImage : &float
@@ -48,30 +48,6 @@ return function(problemSpec)
 		nIterations : int		--non-linear iterations
 		lIterations : int		--linear iterations
 	}
-	
-	
-	
-	local terra isBlockOnBoundary(gi : int, gj : int, width : uint, height : uint) : bool
-		-- TODO meta program the bad based on the block size and stencil;
-		-- TODO assert padX > stencil
-		var padX : int
-		var padY : int
-		escape
-			local blockSize = problemSpec:BlockSize()
-		
-			emit quote
-				padX = int(blockSize)
-				padY = int(blockSize)
-			end
-		end
-		
-		if gi - padX < 0 or gi + padX >= width or 
-		   gj - padY < 0 or gj + padY >= height then
-			return true
-		end
-		
-		return false
-	end
 	
 	local guardedInvert = macro(function(p)
 	    local pt = p:gettype()
@@ -312,117 +288,16 @@ return function(problemSpec)
             end
         end
     end
-
-	if util.debugDumpInfo then
-	    terra kernels.dumpCostJTFAndPre(pd : PlanData)
-			var w : int, h : int
-			if getValidUnknown(pd, &w, &h) then
-				-- residuum = J^T x -F - A x delta_0  => J^T x -F, since A x x_0 == 0
-				
-				var residuum : unknownElement = 0.0f
-				var pre : unknownElement = 0.0f
-				var cost : float = 0.0f
-
-				cost = problemSpec.functions.cost.unknownfunction(w, h, w, h, pd.parameters)
-				residuum, pre = problemSpec.functions.evalJTF.unknownfunction(w, h, w, h, pd.parameters)
-
-				pd.debugCostImage[h*pd.parameters.X:W()+w] = cost
-				[&unknownElement](pd.debugJTFImage)[h*pd.parameters.X:W()+w]  = residuum
-				[&unknownElement](pd.debugPreImage)[h*pd.parameters.X:W()+w]  = pre
-			end 
-		end
-	end
-
-	terra kernels.dumpJTJ(pd : PlanData)
-        var d = 0.0f
-        var w : int, h : int
-        if getValidUnknown(pd, &w, &h) then
-            var tmp : unknownElement = 0.0f
-             -- A x p_k  => J^T x J x p_k 
-            tmp = problemSpec.functions.applyJTJ.unknownfunction(w, h, w, h, pd.parameters, pd.p)
-            [&unknownElement](pd.debugJTJImage)[h*pd.parameters.X:W()+w] = tmp
-        end
-    end
     
 	local gpu = util.makeGPUFunctions(problemSpec, PlanData, kernels)
 
-	---------------------------------------DEBUGGING FUNCTIONS------------------------------------------
-
-	local terra initAllDebugImages(pd : &PlanData)
-		C.printf("initAllDebugImages\n")
-		dbg.initCudaImage(&pd.debugDumpImage,pd.parameters.X:W(), pd.parameters.X:H(),  1)
-		dbg.initCudaImage(&pd.debugCostImage,pd.parameters.X:W(), pd.parameters.X:H(),  1)
-		dbg.initCudaImage(&pd.debugJTJImage, pd.parameters.X:W(), pd.parameters.X:H(), sizeof([unknownElement]) / 4)
-		dbg.initCudaImage(&pd.debugJTFImage, pd.parameters.X:W(), pd.parameters.X:H(), sizeof([unknownElement]) / 4)
-		dbg.initCudaImage(&pd.debugPreImage, pd.parameters.X:W(), pd.parameters.X:H(), sizeof([unknownElement]) / 4)
-	end
-
-
-
-
-	local terra dumpImage(pd : &PlanData, ptr: &float, name : rawstring, nIter : int, lIter : int)
-		if ([util.debugDumpInfo]) then
-			var buffer : int8[64]
-			C.sprintf(buffer, "%s_%d_%d.imagedump", name, nIter, lIter)
-			dbg.imageWriteFromCuda(pd, ptr, 1, buffer)
-		end
-	end
-
-	local function tableLength(T)
-	   local count = 0
-	   for _ in pairs(T) do count = count + 1 end
-	   return count
-	end
-
-
-	---------------------------------------END DEBUGGING FUNCTIONS------------------------------------------
-
-	
-	local terra init(data_ : &opaque, images : &&opaque, graphSizes : &int32, edgeValues : &&opaque, xs : &&int32, ys : &&int32, params_ : &&opaque, solverparams : &&opaque)
+	local terra init(data_ : &opaque, params_ : &&opaque, solverparams : &&opaque)
 	   var pd = [&PlanData](data_)
 	   pd.timer:init()
 	   pd.timer:startEvent("overall",nil,&pd.endSolver)
-       [util.initParameters(`pd.parameters,problemSpec,images, graphSizes,edgeValues,xs,ys,params_,true)]
+       [util.initParameters(`pd.parameters,problemSpec,params_,true)]
 	   pd.nIter = 0
-	   
-	   escape 
-	      if util.debugDumpInfo then
-		 emit quote
-		    C.printf("initDebugImages\n")
-		    initAllDebugImages(pd)
-		 end
-	      end
-	   end
-	   var buffer : int8[64]
-	   escape
-	      --TODO: Remove
- 	     if false then
-		 for key, entry in ipairs(problemSpec.parameters) do
-		    if entry.kind == "image" then
-		       print("" .. key .. " = imageTypes[" .. entry.idx .. "] = " .. tostring(entry.type))
-		       local channel = 0 
-		       local pixelType = entry.type.metamethods.typ
-		       if pixelType == float then
-			  channel = 1 
-		       elseif pixelType == opt.float2 then
-			  channel = 2
-		       elseif pixelType == opt.float3 then
-			  channel = 3
-		       elseif pixelType == opt.float4 then
-			  channel = 4
-		       end
-		       emit quote
-			     C.sprintf(buffer, "arapTest%d.imagedump", entry.idx)
-			     dbg.imageWriteFromCuda(pd, images[entry.idx], channel, buffer)
-		       end
-
-		    end
-		 end
-
-	      
-	      end
-	   end
-           pd.nIterations = @[&int](solverparams[0])
+	   pd.nIterations = @[&int](solverparams[0])
 	   pd.lIterations = @[&int](solverparams[1])
 	end
     local terra computeCost(pd : &PlanData) : float
@@ -434,39 +309,9 @@ return function(problemSpec)
         return f
     end
 
-	local terra step(data_ : &opaque, images : &&opaque, graphSizes : &int32, edgeValues : &&opaque, xs : &&int32, ys : &&int32, params_ : &&opaque, solverparams : &&opaque)
+	local terra step(data_ : &opaque, params_ : &&opaque, solverparams : &&opaque)
 		var pd = [&PlanData](data_)
-		[util.initParameters(`pd.parameters,problemSpec, images, graphSizes,edgeValues,xs,ys,params_,false)]
-        
-        var suffix = "optNoAD"
-
-        --Hack for debugging SFS
-        --[[
-        var solveCount = ([&&uint32](params_))[39][0]
-        var isAD : bool = (solveCount == 1)
-        if isAD then
-        	suffix = "optAD"
-        end--]]
-        escape 
-	    	if util.debugDumpInfo then
-	    		emit quote
-
-	    			-- Hack for SFS
-	    			--var solveCount = ([&&uint32](params_))[39][0]
-	    			if pd.nIter == 0 then
-		    			C.printf("dumpingCostJTFAndPre\n")
-		    			gpu.dumpCostJTFAndPre(pd)
-		    			C.printf("saving\n")
-		    			dbg.imageWriteFromCudaPrefixSuffix(pd.debugCostImage, pd.parameters.X:W(), pd.parameters.X:H(), 1, "cost", suffix)
-		    			dbg.imageWriteFromCudaPrefixSuffix(pd.debugJTFImage, pd.parameters.X:W(), pd.parameters.X:H(), sizeof([unknownElement]) / 4, "JTF", suffix)
-		    			dbg.imageWriteFromCudaPrefixSuffix(pd.debugPreImage, pd.parameters.X:W(), pd.parameters.X:H(), sizeof([unknownElement]) / 4, "Pre", suffix)
-		    		end
-
-
-	    		end
-	    	end
-		end
-		
+		[util.initParameters(`pd.parameters,problemSpec, params_,false)]
         gpu.precomputeImages(pd)    
 		if pd.nIter < pd.nIterations then
 		    var startCost = computeCost(pd)
@@ -480,69 +325,9 @@ return function(problemSpec)
 			gpu.PCGInit1(pd)
 			
 			if isGraph then
-				--C.cudaMemset(pd.scanAlpha, 0, sizeof(float))	--TODO: don't write to scanAlpha in the previous kernel if it is a graph
 				gpu.PCGInit1_Graph(pd)	
 				gpu.PCGInit1_Finish(pd)	
 			end
-
-			
-			escape
-			    if util.debugPrintSolverInfo then
-				emit quote
-				    var temp : float
-				    C.cudaMemcpy(&temp, pd.scanAlpha, sizeof(float), C.cudaMemcpyDeviceToHost)
-				    C.printf("ScanAlpha (Init): %f\n", temp);
-
-
-				    --[[
-				    var r0 : float
-				    var r1 : float
-				    var r2 : float
-				    var r3 : float
-				    C.cudaMemcpy(&r0, ([&float](pd.r.data)) + 0, sizeof(float), C.cudaMemcpyDeviceToHost)
-				    C.cudaMemcpy(&r1, ([&float](pd.r.data)) + 1, sizeof(float), C.cudaMemcpyDeviceToHost)
-				    C.cudaMemcpy(&r2, ([&float](pd.r.data)) + 2, sizeof(float), C.cudaMemcpyDeviceToHost)
-				    C.cudaMemcpy(&r3, ([&float](pd.r.data)) + 3, sizeof(float), C.cudaMemcpyDeviceToHost)
-				    C.printf("Residuum 0: %f, %f, %f, %f\n", r0, r1, r2, r3);
-
-				    C.cudaMemcpy(&r0, ([&float](pd.r.data)) + 4, sizeof(float), C.cudaMemcpyDeviceToHost)
-				    C.cudaMemcpy(&r1, ([&float](pd.r.data)) + 5, sizeof(float), C.cudaMemcpyDeviceToHost)
-				    C.cudaMemcpy(&r2, ([&float](pd.r.data)) + 6, sizeof(float), C.cudaMemcpyDeviceToHost)
-				    C.cudaMemcpy(&r3, ([&float](pd.r.data)) + 7, sizeof(float), C.cudaMemcpyDeviceToHost)
-				    C.printf("Residuum 1: %f, %f, %f, %f\n", r0, r1, r2, r3);
-
-
-				    C.cudaMemcpy(&r0, ([&float](pd.preconditioner.data)) + 0, sizeof(float), C.cudaMemcpyDeviceToHost)
-				    C.cudaMemcpy(&r1, ([&float](pd.preconditioner.data)) + 1, sizeof(float), C.cudaMemcpyDeviceToHost)
-				    C.cudaMemcpy(&r2, ([&float](pd.preconditioner.data)) + 2, sizeof(float), C.cudaMemcpyDeviceToHost)
-				    C.cudaMemcpy(&r3, ([&float](pd.preconditioner.data)) + 3, sizeof(float), C.cudaMemcpyDeviceToHost)
-				    C.printf("Preconditioner 0: %f, %f, %f, %f\n", r0, r1, r2, r3);
-
-				    C.cudaMemcpy(&r0, ([&float](pd.preconditioner.data)) + 4, sizeof(float), C.cudaMemcpyDeviceToHost)
-				    C.cudaMemcpy(&r1, ([&float](pd.preconditioner.data)) + 5, sizeof(float), C.cudaMemcpyDeviceToHost)
-				    C.cudaMemcpy(&r2, ([&float](pd.preconditioner.data)) + 6, sizeof(float), C.cudaMemcpyDeviceToHost)
-				    C.cudaMemcpy(&r3, ([&float](pd.preconditioner.data)) + 7, sizeof(float), C.cudaMemcpyDeviceToHost)
-				    C.printf("Preconditioner 1: %f, %f, %f, %f\n", r0, r1, r2, r3);
---]]
-				end
-			    end
-
-			    if util.debugDumpInfo then
-
-				    emit quote
-			    		-- Hack for SFS
-		    			--var solveCount = ([&&uint32](params_))[39][0]
-		    			
-		    			if pd.nIter == 0 then
-			    			C.printf("dumpingJTJ\n")
-			    			gpu.dumpJTJ(pd)
-			    			C.printf("saving\n")
-			    			dbg.imageWriteFromCudaPrefixSuffix(pd.debugJTJImage, pd.parameters.X:W(), pd.parameters.X:H(), sizeof([unknownElement]) / 4, "JTJ", suffix)
-			    			return 0
-			    		end
-		    		end
-		    	end
-		    end
 
 			for lIter = 0, pd.lIterations do				
 
@@ -562,33 +347,12 @@ return function(problemSpec)
 				-- save new rDotz for next iteration
 				C.cudaMemcpy(pd.scanAlphaNumerator, pd.scanBetaNumerator, sizeof(float), C.cudaMemcpyDeviceToDevice)	
 				
-
-				escape
-				    if util.debugPrintSolverInfo then
-					emit quote
-					var temp : float
-					C.cudaMemcpy(&temp, pd.scanAlpha, sizeof(float), C.cudaMemcpyDeviceToHost)
-					C.printf("ScanAlpha (Step): %f\n", temp);
-					C.cudaMemcpy(&temp, pd.scanBeta, sizeof(float), C.cudaMemcpyDeviceToHost)
-					C.printf("ScanBeta (Step): %f\n", temp);		
-					end
-				    end
-			        end
-
 			end
 			
 			gpu.PCGLinearUpdate(pd)
 		    pd.nIter = pd.nIter + 1
 		    return 1
 		else
-			escape
-				if util.debugDumpInfo then
-		    		emit quote
-						dbg.imageWriteFromCudaPrefixSuffix([&float](pd.parameters.X.data), pd.parameters.X:W(), pd.parameters.X:H(), sizeof([unknownElement]) / 4, "result", suffix)
-
-					end
-				end
-			end
 			var finalCost = computeCost(pd)
 			logSolver("final cost=%f\n", finalCost)
 		    pd.timer:endEvent(nil,pd.endSolver)
@@ -597,35 +361,6 @@ return function(problemSpec)
 		    return 0
 		end
 	end
-
-    --[[
-    local paramprints = {}
-    local paramnames_str = ''
-    local pdsym = symbol(&PlanData)
-    for _,pair in ipairs(problemSpec.ProblemParameters.entries) do
-        local name,typ = unpack(pair)
-        if typ:isstruct() and typ.metamethods.is_an_image_type then
-            table.insert(paramprints,quote
-                pdsym.parameters.[name]:debugprint()
-            end)
-            paramnames_str=paramnames_str..' '..name
-        end
-    end
-    terra PlanData:debugprint()
-        C.printf(["printing image structs...\n"..
-                  "delta r z p Ap_X preconditioner rDotzOld"..paramnames_str..
-                  "\n"])
-        self.delta:debugprint()
-        self.r:debugprint()
-        self.z:debugprint()
-        self.p:debugprint()
-        self.Ap_X:debugprint()
-        self.preconditioner:debugprint()
-        self.rDotzOld:debugprint()
-        var [pdsym] = self
-        [paramprints]
-    end
-    --]]
 
 	local terra makePlan() : &opt.Plan
 		var pd = PlanData.alloc()

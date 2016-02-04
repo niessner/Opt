@@ -9,8 +9,8 @@ local UrShape = 	P:Image("UrShape", opt.float2,W,H,1)		--urshape
 local Constraints = P:Image("Constraints", opt.float2,W,H,2)	--constraints
 local Mask = 		P:Image("Mask", float, W,H,3)				--validity mask for constraints
 
-local w_fitSqrt = P:Param("w_fitSqrt", float, 0)
-local w_regSqrt = P:Param("w_regSqrt", float, 1)
+local w_fitSqrt = P:Param("w_fitSqrt", float, 4)
+local w_regSqrt = P:Param("w_regSqrt", float, 5)
 
 P:Stencil(2)
 P:UsePreconditioner(true)

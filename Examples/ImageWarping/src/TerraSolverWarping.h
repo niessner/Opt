@@ -18,23 +18,10 @@ public:
 	TerraSolverWarping(unsigned int width, unsigned int height, const std::string& terraFile, const std::string& optName) : m_optimizerState(nullptr), m_problem(nullptr), m_plan(nullptr)
 	{
 		m_optimizerState = Opt_NewState();
-		m_problem = Opt_ProblemDefine(m_optimizerState, terraFile.c_str(), optName.c_str(), NULL);
+		m_problem = Opt_ProblemDefine(m_optimizerState, terraFile.c_str(), optName.c_str());
 
-
-		uint32_t strides[] = { 
-			width * (uint32_t)sizeof(float3), //X (includes uv, a)
-			width * (uint32_t)sizeof(float2),	//UrShape
-			width * (uint32_t)sizeof(float2),	//Constraints
-			width * (uint32_t)sizeof(float)
-		};
-		uint32_t elemsizes[] = { 
-			sizeof(float3), //X (includes uv, a)
-			sizeof(float2),	//UrShape
-			sizeof(float2),	//Constraints
-			sizeof(float)
-		};
 		uint32_t dims[] = { width, height };
-		m_plan = Opt_ProblemPlan(m_optimizerState, m_problem, dims, elemsizes, strides);
+		m_plan = Opt_ProblemPlan(m_optimizerState, m_problem, dims);
 
 		m_width = width;
 		m_height = height;
@@ -73,18 +60,12 @@ public:
 	void solve(float3* d_unknown, float2* d_urshape, float2* d_constraints, float* d_mask, unsigned int nNonLinearIterations, unsigned int nLinearIterations, unsigned int nBlockIterations, float weightFit, float weightReg)
 	{
 
+		void* solverParams[] = { &nNonLinearIterations, &nLinearIterations, &nBlockIterations };
 		float weightFitSqrt = sqrt(weightFit);
 		float weightRegSqrt = sqrt(weightReg);
-
-		void* problemParams[] = { &weightFitSqrt, &weightRegSqrt };
-		void* solverParams[] = { &nNonLinearIterations, &nLinearIterations, &nBlockIterations };
-		void* data[] = { d_unknown, d_urshape, d_constraints, d_mask };
+		void* problemParams[] = { d_unknown, d_urshape, d_constraints, d_mask, &weightFitSqrt, &weightRegSqrt };
 		
-
-
-		//Opt_ProblemInit(m_optimizerState, m_plan, data, NULL, problemParams, (void**)&numIter);
-		//while (Opt_ProblemStep(m_optimizerState, m_plan, data, NULL, problemParams, NULL));
-		Opt_ProblemSolve(m_optimizerState, m_plan, data, NULL, NULL, NULL, NULL, problemParams, solverParams);
+		Opt_ProblemSolve(m_optimizerState, m_plan, problemParams, solverParams);
 	}
 
 private:

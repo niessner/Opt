@@ -128,31 +128,27 @@ local problems = {}
 -- it should generate the field makePlan which is the terra function that 
 -- allocates the plan
 
-local function compilePlan(problemSpec, kind, params)
+local function compilePlan(problemSpec, kind)
     assert(kind == "gaussNewtonGPU","expected solver kind to be gaussNewtonGPU")
     return solversGPU.gaussNewtonGPU(problemSpec)
 end
 
-struct opt.GradientDescentPlanParams {
-    nIterations : uint32
-}
-
 struct opt.Plan(S.Object) {
-    init : {&opaque,&&opaque,&int32,&&opaque,&&int32,&&int32,&&opaque,&&opaque} -> {}
-    step : {&opaque,&&opaque,&int32,&&opaque,&&int32,&&int32,&&opaque,&&opaque} -> int
+    init : {&opaque,&&opaque,&&opaque} -> {} -- plan.data,params,solverparams
+    step : {&opaque,&&opaque,&&opaque} -> int
     data : &opaque
 } 
 
 struct opt.Problem {} -- just used as an opaque type, pointers are actually just the ID
-local function problemDefine(filename, kind, params, pid)
-    local problemmetadata = { filename = ffi.string(filename), kind = ffi.string(kind), params = params, id = #problems + 1 }
+local function problemDefine(filename, kind, pid)
+    local problemmetadata = { filename = ffi.string(filename), kind = ffi.string(kind), id = #problems + 1 }
     problems[problemmetadata.id] = problemmetadata
     pid[0] = problemmetadata.id
 end
 -- define just stores meta-data right now. ProblemPlan does all compilation for now
-terra opt.ProblemDefine(filename : rawstring, kind : rawstring, params : &opaque)
+terra opt.ProblemDefine(filename : rawstring, kind : rawstring)
     var id : int
-    problemDefine(filename, kind, params,&id)
+    problemDefine(filename, kind, &id)
     return [&opt.Problem](id)
 end 
 terra opt.ProblemDelete(p : &opt.Problem)
@@ -164,29 +160,15 @@ local ProblemSpec = newclass("ProblemSpec")
 opt.PSpec = ProblemSpec
 local PROBLEM_STAGES  = { inputs = 0, functions = 1 }
 function opt.ProblemSpec()
-    local BlockedProblemParameters = terralib.types.newstruct("BlockedProblemParameters")
-	local problemSpec = ProblemSpec:new { 
-	                         shouldblock = opt.problemkind:match("Block") or false,
-                             parameters = terralib.newlist(),-- listing of each parameter, {name = <string>, kind = <image|graph|edgevalue>, idx = <number>, type = <thetypeusedtostoreit> }
+    local problemSpec = ProblemSpec:new { 
+	                         parameters = terralib.newlist(),-- listing of each parameter, {name = <string>, kind = <image|graph>, idx = <number>, type = <thetypeusedtostoreit> }
                              names = {}, -- name -> index in parameters list
                              ProblemParameters = terralib.types.newstruct("ProblemParameters"),
-                             BlockedProblemParameters = BlockedProblemParameters,
-							 functions = {},
+                             functions = {},
 							 maxStencil = 0,
 							 stage = "inputs",
 							 usepreconditioner = false,
                            }
-	function BlockedProblemParameters.metamethods.__getentries(self)
-		local entries = {}
-		for i,p in ipairs(problemSpec.parameters) do
-			if p.kind ~= "image" then
-				entries[i] = {p.name,p.type}
-			else
-				entries[i] = {p.name,problemSpec:BlockedTypeForImageEntry(p)}
-			end
-		end
-		return entries
-	end
 	return problemSpec
 end
 
@@ -226,51 +208,24 @@ function ProblemSpec:BlockSize()
 	return 16
 end
 
-function ProblemSpec:BlockStride() 
-    self:Stage "functions"
-    return 2*self:MaxStencil() + self:BlockSize() 
-end
-
-function ProblemSpec:BlockedTypeForImage(W,H,typ)
-    self:Stage "functions"
-	local elemsize = terralib.sizeof(assert(typ))
-	return newImage(typ, W, H, elemsize, elemsize*self:BlockStride())
-end
-function ProblemSpec:BlockedTypeForImageEntry(p)
-    self:Stage "functions"
-	local mm = p.type.metamethods
-	return self:BlockedTypeForImage(mm.W,mm.H,mm.typ)
-end
-
 function ProblemSpec:newparameter(name,kind,idx,typ)
     self.parameters:insert { name = self:toname(name), kind = kind, idx = idx, type = typ }
 	self.ProblemParameters.entries:insert { name, typ }
 end
 
-function ProblemSpec:ParameterType(blocked) 
-	if blocked == nil then
-		blocked = self.shouldblock
-	end
-	return blocked and self.BlockedProblemParameters or  self.ProblemParameters
-end
-function ProblemSpec:UnknownType(blocked)
-    self:Stage "functions"
-	return self:TypeOf("X",blocked) 
-end
-function ProblemSpec:UnknownArrayType(blocked)
-	local ut = self:UnknownType(blocked)
-	local mm = ut.metamethods
-	local typ = mm.typ:isarray() and mm.typ or mm.typ[1]
-	return newImage(typ, mm.W, mm.H, mm.elemsize, mm.stride)
+function ProblemSpec:ParameterType()
+    return self.ProblemParameters
 end
 
-function ProblemSpec:TypeOf(name,blocked)
+function ProblemSpec:UnknownType()
     self:Stage "functions"
-	if blocked == nil then
-		blocked = self.shouldblock
-	end 
+	return self:TypeOf("X") 
+end
+
+function ProblemSpec:TypeOf(name)
+    self:Stage "functions"
 	local p = self.parameters[assert(self.names[name],"unknown name: " .. name)] 
-	return blocked and self:BlockedTypeForImageEntry(p) or p.type
+	return p.type
 end
 
 function ProblemSpec:Function(name,unknownfunction, ...)
@@ -309,22 +264,20 @@ function opt.Dim(name, idx)
     return newDim(name,size,idx)
 end
 
-function opt.InternalDim(name, size)
-	size = assert(tonumber(size), "expected a number for size")
-    return Dim:new { name = name, size = size }
-end
-
 opt.InBoundsCalc = macro(function(x,y,W,H,sx,sy)
     return `x >= sx and x < W - sx and y >= sy and y < H - sy
 end)
 	
-newImage = terralib.memoize(function(typ, W, H, elemsize, stride)
+newImage = terralib.memoize(function(typ, W, H)
+    local elemsize = terralib.sizeof(assert(typ))
+    local stride = elemsize*W.size
     -- NOTE: only use textures for float, vector(2, float), vector(4, float)
+    local use_texture = use_bindless_texture
     if not (util.isvectortype(typ) and typ.metamethods.type == float and
                 (typ.metamethods.N == 4 or typ.metamethods.N == 2)
            ) and typ ~= float
     then
-        use_bindless_texture = false
+        use_texture = false
     end
 
     local cd = macro(function(apicall) return quote
@@ -337,12 +290,10 @@ newImage = terralib.memoize(function(typ, W, H, elemsize, stride)
 
     local nvec = util.isvectortype(typ) and typ.metamethods.N or 1
     local wrapBindlessTexture, tex_read
-    if use_bindless_texture then
+    if use_texture then
         -- check alignment
         if stride % 128 ~= 0 then
-            print("*****\n*****\n Bad Stride Alignment "..stride..
-                  "\n*****\n*****")
-            print("using fallback...")
+            print(string.format("***** Bad Stride %d (elemsize %d) *****", stride, elemsize))
             use_pitched_memory = false
         end
 
@@ -443,7 +394,7 @@ newImage = terralib.memoize(function(typ, W, H, elemsize, stride)
 	if util.isvectortype(typ) and typ.metamethods.type == float and (typ.metamethods.N == 4 or typ.metamethods.N == 2) then
 	    -- emit code that will produce special CUDA vector load instructions
 	    local storetype = vector(float,typ.metamethods.N)
-        if use_bindless_texture then
+        if use_texture then
           terra Image.metamethods.__apply(self : &Image, x : int32, y : int32)
             return tex_read(self.tex, x, y)
           end
@@ -457,7 +408,7 @@ newImage = terralib.memoize(function(typ, W, H, elemsize, stride)
             @[&storetype](self.data + y*stride + x*elemsize) = @[&storetype](&v)
         end
 	else
-        if use_bindless_texture then
+        if use_texture then
           terra Image.metamethods.__apply(self : &Image, x : int32, y : int32)
             return tex_read(self.tex, x, y)
           end
@@ -496,7 +447,7 @@ newImage = terralib.memoize(function(typ, W, H, elemsize, stride)
 	        util.atomicAdd(addr,v)
 	    end
 	end
-    if use_bindless_texture and use_pitched_memory then
+    if use_texture and use_pitched_memory then
         Image.methods.get = macro(function(self,x,y,gx,gy)
             -- ignore gx, gy cause assuming no patch solver
             return `self(x,y)
@@ -547,7 +498,7 @@ newImage = terralib.memoize(function(typ, W, H, elemsize, stride)
         self.data = nil
         self:setGPUptr(ptr)
     end
-    if use_bindless_texture then
+    if use_texture then
         terra Image:setGPUptr(ptr : &uint8)
             if self.data ~= ptr then
                 if self.data ~= nil then
@@ -583,34 +534,14 @@ end
 function ProblemSpec:Image(name,typ,W,H,idx)
     self:Stage "inputs"
     typ = assert(tovalidimagetype(typ,"expected a number or an array of numbers"))
-    local r
-    if idx == "alloc" then
-        r = self:ImageType(typ,W,H) -- packed internally stored image
-    else -- image given by user
-        local elemsize = assert(tonumber(opt.elemsizes[idx]))
-        local stride = assert(tonumber(opt.strides[idx]))
-        r = newImage(typ, assert(todim(W)), assert(todim(H)), elemsize, stride)
-    end
+    local r = self:ImageType(typ,W,H) 
     self:newparameter(name,"image",idx,r)
 end
 
 function ProblemSpec:ImageType(typ,W,H)
     W,H = assert(todim(W)),assert(todim(H))
     assert(terralib.types.istype(typ))
-    local elemsize = terralib.sizeof(typ)
-    return newImage(typ,W,H,elemsize,elemsize*W.size)
-end
-
-function ProblemSpec:InternalImage(typ,W,H,blocked)
-    self:Stage "functions"
-	if blocked == nil then
-		blocked = self.shouldblock
-	end
-	if blocked then
-		return self:BlockedTypeForImage(W,H,typ)
-	else
-        return self:ImageType(typ,W,H)
-	end
+    return newImage(typ,W,H)
 end
 
 function ProblemSpec:Graph(name, idx, ...)
@@ -621,12 +552,12 @@ function ProblemSpec:Graph(name, idx, ...)
     local mm = GraphType.metamethods
     mm.idx = idx -- the index into the graph size table
     mm.elements = terralib.newlist()
-    for i = 1, select("#",...),4 do
-        local name,W,H,idx = select(i,...) --TODO: we don't bother to track the dimensions of these things now
+    for i = 1, select("#",...),5 do
+        local name,W,H,xidx,yidx = select(i,...) --TODO: we don't bother to track the dimensions of these things now
         assert(todim(W) and todim(H),"Expected dimensions")
         GraphType.entries:insert ( {name .. "_x", &int32} )
         GraphType.entries:insert ( {name .. "_y", &int32} )
-        mm.elements:insert( { name = name, idx = assert(tonumber(idx),"expected a numeric index") } )
+        mm.elements:insert( { name = name, xidx = assert(tonumber(idx)), yidx = assert(tonumber(idx)) } )
     end
     
     self:newparameter(name, "graph", idx, GraphType)
@@ -644,24 +575,24 @@ function opt.problemSpecFromFile(filename)
    return file()
 end
 
-local function problemPlan(id, dimensions, elemsizes, strides, pplan)
+local function problemPlan(id, dimensions, pplan)
     local success,p = xpcall(function() 
 		local problemmetadata = assert(problems[id])
-        opt.dimensions,opt.elemsizes,opt.strides = dimensions,elemsizes,strides
+        opt.dimensions = dimensions
         opt.math = problemmetadata.kind:match("GPU") and util.gpuMath or util.cpuMath
         opt.problemkind = problemmetadata.kind
 		
         local tbl = opt.problemSpecFromFile(problemmetadata.filename)
         assert(ProblemSpec:is(tbl))
-		local result = compilePlan(tbl,problemmetadata.kind,problemmetadata.params)
+		local result = compilePlan(tbl,problemmetadata.kind)
 		allPlans:insert(result)
 		pplan[0] = result()
     end,function(err) errorPrint(debug.traceback(err,2)) end)
 end
 
-terra opt.ProblemPlan(problem : &opt.Problem, dimensions : &uint32, elemsizes : &uint32, strides : &uint32) : &opt.Plan
+terra opt.ProblemPlan(problem : &opt.Problem, dimensions : &uint32) : &opt.Plan
 	var p : &opt.Plan = nil 
-	problemPlan(int(int64(problem)),dimensions,elemsizes,strides,&p)
+	problemPlan(int(int64(problem)),dimensions,&p)
 	return p
 end 
 
@@ -670,15 +601,15 @@ terra opt.PlanFree(plan : &opt.Plan)
     plan:delete()
 end
 
-terra opt.ProblemInit(plan : &opt.Plan, images : &&opaque, graphsizes : &int32, edgevalues : &&opaque, xs : &&int32, ys : &&int32, params : &&opaque, solverparams : &&opaque) 
-    return plan.init(plan.data, images, graphsizes, edgevalues, xs, ys, params, solverparams)
+terra opt.ProblemInit(plan : &opt.Plan, params : &&opaque, solverparams : &&opaque) 
+    return plan.init(plan.data, params, solverparams)
 end
-terra opt.ProblemStep(plan : &opt.Plan, images : &&opaque, graphsizes : &int32, edgevalues : &&opaque, xs : &&int32, ys : &&int32, params : &&opaque, solverparams : &&opaque) : int
-    return plan.step(plan.data, images, graphsizes, edgevalues, xs, ys, params, solverparams)
+terra opt.ProblemStep(plan : &opt.Plan, params : &&opaque, solverparams : &&opaque) : int
+    return plan.step(plan.data, params, solverparams)
 end
-terra opt.ProblemSolve(plan : &opt.Plan, images : &&opaque, graphsizes : &int32, edgevalues : &&opaque, xs : &&int32, ys : &&int32, params : &&opaque, solverparams : &&opaque)
-   opt.ProblemInit(plan, images, graphsizes, edgevalues, xs, ys, params, solverparams)
-   while opt.ProblemStep(plan, images, graphsizes, edgevalues, xs, ys, params, solverparams) ~= 0 do end
+terra opt.ProblemSolve(plan : &opt.Plan, params : &&opaque, solverparams : &&opaque)
+   opt.ProblemInit(plan, params, solverparams)
+   while opt.ProblemStep(plan, params, solverparams) ~= 0 do end
 end
 
 
@@ -834,8 +765,8 @@ function Graph:__tostring() return self.name end
 function ProblemSpecAD:Graph(name,idx,...)
     self.P:Graph(name,idx,...)
     local g = Graph:new { name = tostring(name) }
-    for i = 1, select("#",...),4 do
-        local name,W,H,idx = select(i,...)
+    for i = 1, select("#",...),5 do
+        local name,W,H,xidx,yidx = select(i,...)
         g[name] = GraphElement:get(g,name)
     end
     return g
@@ -1399,7 +1330,7 @@ local function createfunction(problemspec,name,usebounds,W,H,ndims,results,scatt
             return `P.[image.name]
         else
             if not extraimages[-image.idx] then
-                local imtype = problemspec.P:InternalImage(image.type,image.W,image.H)
+                local imtype = problemspec.P:ImageType(image.type,image.W,image.H)
                 extraimages[-image.idx] = symbol(imtype,image.name)
             end
             return extraimages[-image.idx]
@@ -2065,6 +1996,5 @@ for i = 2,12 do
 end
 
 opt.Dot = util.Dot
-opt.newImage = newImage
 
 return opt

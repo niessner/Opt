@@ -1,16 +1,10 @@
 
 local timeIndividualKernels = true
--- For saving intermediate buffers to file
-local debugDumpInfo = false
--- For printing a bunch of junk during the solve
-local debugPrintSolverInfo = false
 
 
 local S = require("std")
 
 local util = {}
-util.debugDumpInfo = debugDumpInfo
-util.debugPrintSolverInfo = debugPrintSolverInfo
 
 util.C = terralib.includecstring [[
 #include <stdio.h>
@@ -439,42 +433,40 @@ local function noFooter(pd)
 	return quote end
 end
 
-util.initParameters = function(parameters, ProblemSpec, images, graphSizes, edgeValues, xs, ys, paramValues,isInit)
+util.initParameters = function(self, ProblemSpec, params, isInit)
     local stmts = terralib.newlist()
 	for _, entry in ipairs(ProblemSpec.parameters) do
 		if entry.kind == "image" then
 		    if entry.idx ~= "alloc" then
                 local function_name = isInit and "initFromGPUptr" or "setGPUptr"
                 stmts:insert quote
-                    parameters.[entry.name]:[function_name]([&uint8](images[entry.idx]))
+                    self.[entry.name]:[function_name]([&uint8](params[entry.idx]))
                 end
             end
 		else
             local rhs
             if entry.kind == "graph" then
-                local graphinits = terralib.newlist { `graphSizes[entry.idx] }
+                local graphinits = terralib.newlist { `@[&int](params[entry.idx]) }
                 for i,e in ipairs(entry.type.metamethods.elements) do
-                    graphinits:insert( `xs[e.idx] )
-                    graphinits:insert( `ys[e.idx] )
+                    graphinits:insert( `@[&int](params[e.xidx]) )
+                    graphinits:insert( `@[&int](params[e.yidx]) )
                 end
                 rhs = `entry.type { graphinits }
-            elseif entry.kind == "edgevalues" then
-                rhs = `entry.type { data = [&entry.type.metamethods.type](edgeValues[entry.idx]) }
             elseif entry.kind == "param" then
-                rhs = `@[&entry.type](paramValues[entry.idx])
+                rhs = `@[&entry.type](params[entry.idx])
             end
-            stmts:insert quote parameters.[entry.name] = rhs end
+            stmts:insert quote self.[entry.name] = rhs end
         end
 	end
 	return stmts
 end
 
-util.initPrecomputedImages = function(parameters, ProblemSpec)
+util.initPrecomputedImages = function(self, ProblemSpec)
     local stmts = terralib.newlist()
 	for _, entry in ipairs(ProblemSpec.parameters) do
 		if entry.kind == "image" and entry.idx == "alloc" then
             stmts:insert quote
-    		    parameters.[entry.name]:initGPU()
+    		    self.[entry.name]:initGPU()
     		end
     	end
     end
@@ -516,7 +508,7 @@ function util.makeGPUFunctions(problemSpec, PlanData, kernels)
 	
 	local wrappedKernels = {}
 	
-	local imageType = problemSpec:UnknownType(false) -- get non-blocked version
+	local imageType = problemSpec:UnknownType()
 	
 	local kernelFunctions = {}
 	local key = "_"..tostring(os.time())

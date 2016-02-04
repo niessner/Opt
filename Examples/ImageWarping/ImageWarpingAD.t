@@ -9,8 +9,8 @@ local UrShape = 	S:Image("UrShape", opt.float2,W,H,1)		--urshape
 local Constraints = S:Image("Constraints", opt.float2,W,H,2)	--constraints
 local Mask = 		S:Image("Mask", float, W,H,3)				--validity mask for constraints
 
-local w_fitSqrt = S:Param("w_fitSqrt", float, 0)
-local w_regSqrt = S:Param("w_regSqrt", float, 1)
+local w_fitSqrt = S:Param("w_fitSqrt", float, 4)
+local w_regSqrt = S:Param("w_regSqrt", float, 5)
 
 function evalRot(CosAlpha, SinAlpha)
 	return ad.Vector(CosAlpha, -SinAlpha, SinAlpha, CosAlpha)
