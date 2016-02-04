@@ -140,7 +140,7 @@ class ImageWarping
 			float weightReg = 4.0f;
 			float weightRot = 5.0f;
 		
-            unsigned int numIter = 1;
+            unsigned int numIter = 32;
             unsigned int nonLinearIter = 1;
             unsigned int linearIter = 4000;
 
