@@ -5,6 +5,9 @@
 #define RUN_OPT 1
 #define RUN_CERES 0
 
+#define EARLY_OUT 1
+
+
 #include "mLibInclude.h"
 
 #include <cuda_runtime.h>
@@ -167,6 +170,9 @@ class ImageWarping
 				setConstraints((float)i/(float)(numIter-1));
 			
 				m_warpingSolver->solveGN(d_vertexPosFloat3, d_anglesFloat3, d_vertexPosFloat3Urshape, d_numNeighbours, d_neighbourIdx, d_neighbourOffset, d_vertexPosTargetFloat3, nonLinearIter, linearIter, weightFit, weightReg);
+                                #if EARLY_OUT
+				break;
+				#endif
 			}
 			copyResultToCPUFromFloat3();
 #			endif
@@ -181,6 +187,10 @@ class ImageWarping
 				setConstraints((float)i / (float)(numIter - 1));
 
 				m_terraWarpingSolver->solveGN(d_vertexPosFloat3, d_anglesFloat3, d_vertexPosFloat3Urshape, d_vertexPosTargetFloat3, nonLinearIter, linearIter, weightFit, weightReg);
+                                #if EARLY_OUT
+				break;
+				#endif
+
 			}
 			copyResultToCPUFromFloat3();
 #			endif
@@ -194,6 +204,10 @@ class ImageWarping
 				setConstraints((float)i / (float)(numIter - 1));
 
 				m_optWarpingSolver->solveGN(d_vertexPosFloat3, d_anglesFloat3, d_vertexPosFloat3Urshape, d_vertexPosTargetFloat3, nonLinearIter, linearIter, weightFit, weightReg);
+                                #if EARLY_OUT
+				break;
+				#endif
+
 			}
 			copyResultToCPUFromFloat3();
 #			endif
@@ -228,6 +242,10 @@ class ImageWarping
                 cutilSafeCall(cudaMemcpy(h_vertexPosTargetFloat3, d_vertexPosTargetFloat3, sizeof(float3)*N, cudaMemcpyDeviceToHost));
 
                 finalIterTime = m_ceresWarpingSolver->solveGN(h_vertexPosFloat3, h_anglesFloat3, h_vertexPosFloat3Urshape, h_vertexPosTargetFloat3, weightFit, weightReg);
+                #if EARLY_OUT
+		break;
+                #endif
+
             }
             std::cout << "CERES final iter time: " << finalIterTime << "ms" << std::endl;
 

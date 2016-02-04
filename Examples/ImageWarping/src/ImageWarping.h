@@ -17,6 +17,8 @@ static bool useTerra = false;
 static bool useAD = true;
 static bool useCeres = false;
 
+static bool earlyOut = true;
+
 
 static bool
 PointInTriangleBarycentric(float x0, float y0, float w0,
@@ -223,12 +225,12 @@ public:
 
 		if (useCUDA) {
 		  resetGPU();
-		  for (unsigned int i = 0; i < numIter; i++)	{
+		  for (unsigned int i = 1; i < numIter; i++)	{
 		    std::cout << "//////////// ITERATION"  << i << "  (CUDA) ///////////////" << std::endl;
             setConstraintImage((float)i / (float)numIter);
 
 		    m_warpingSolver->solveGN(d_urshape, d_warpField, d_warpAngles, d_constraints, d_mask, nonLinearIter, linearIter, weightFit, weightReg);
-		    
+		    if (earlyOut) break;
 			//	std::cout << std::endl;
 		  }
 		  copyResultToCPU();
@@ -239,12 +241,12 @@ public:
 
 		  std::cout << std::endl << std::endl;
 		  
-		  for (unsigned int i = 0; i < numIter; i++)	{
+		  for (unsigned int i = 1; i < numIter; i++)	{
 		    std::cout << "//////////// ITERATION"  << i << "  (TERRA) ///////////////" << std::endl;
             setConstraintImage((float)i / (float)numIter);
 		    
 		    m_warpingSolverTerra->solve(d_warpField, d_warpAngles, d_urshape, d_constraints, d_mask, nonLinearIter, linearIter, patchIter, weightFit, weightReg);
-
+		    if (earlyOut) break;
 			//	std::cout << std::endl;
 		  }
 		  copyResultToCPU();
@@ -256,13 +258,14 @@ public:
 
 		  std::cout << std::endl << std::endl;
 		
-		  for (unsigned int i = 0; i < numIter; i++)	{
+		  for (unsigned int i = 1; i < numIter; i++)	{
+		    
 		    std::cout << "//////////// ITERATION" << i << "  (DSL AD) ///////////////" << std::endl;
             setConstraintImage((float)i / (float)numIter);
 			
 		    m_warpingSolverTerraAD->solve(d_warpField, d_warpAngles, d_urshape, d_constraints, d_mask, nonLinearIter, linearIter, patchIter, weightFit, weightReg);
 		    std::cout << std::endl;
-            
+            if (earlyOut) break;
 		  }
 
 		  copyResultToCPU();

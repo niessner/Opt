@@ -31,7 +31,7 @@ int main(int argc, const char * argv[])
 		std::cout << "bunny.off" << std::endl;
 		exit(1);
 	}
-
+	printf("Beginning MeshDeformationED Warp\n");
 	ImageWarping warping(mesh, constraintsIdx, constraintsTarget);
 	SimpleMesh* res = warping.solve();
 

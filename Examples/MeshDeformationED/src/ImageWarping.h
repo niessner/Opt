@@ -2,6 +2,8 @@
 
 #define RUN_OPT 1
 
+#define EARLY_OUT 1
+
 #include "mLibInclude.h"
 
 #include <cuda_runtime.h>
@@ -157,6 +159,10 @@ class ImageWarping
 				setConstraints((float)i / (float)(numIter - 1));
 
 				m_optSolver->solveGN(d_vertexPosFloat3, d_rotsFloat9, d_vertexPosFloat3Urshape, d_vertexPosTargetFloat3, nonLinearIter, linearIter, weightFit, weightReg, weightRot);
+				#if EARLY_OUT
+				break;
+				#endif
+
 			}
 			copyResultToCPUFromFloat3();
 #			endif
