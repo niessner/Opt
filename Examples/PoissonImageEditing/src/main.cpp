@@ -106,7 +106,7 @@ int main(int argc, const char * argv[]) {
 	}
 	LodePNG::save(out, "output.png");
 #ifdef _WIN32
-	getchar();
+	//	getchar();
 #endif
 	return 0;
 }
