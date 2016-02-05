@@ -448,8 +448,8 @@ util.initParameters = function(self, ProblemSpec, params, isInit)
             if entry.kind == "graph" then
                 local graphinits = terralib.newlist { `@[&int](params[entry.idx]) }
                 for i,e in ipairs(entry.type.metamethods.elements) do
-                    graphinits:insert( `@[&int](params[e.xidx]) )
-                    graphinits:insert( `@[&int](params[e.yidx]) )
+                    graphinits:insert( `[&int](params[e.xidx]) )
+                    graphinits:insert( `[&int](params[e.yidx]) )
                 end
                 rhs = `entry.type { graphinits }
             elseif entry.kind == "param" then

@@ -557,7 +557,7 @@ function ProblemSpec:Graph(name, idx, ...)
         assert(todim(W) and todim(H),"Expected dimensions")
         GraphType.entries:insert ( {name .. "_x", &int32} )
         GraphType.entries:insert ( {name .. "_y", &int32} )
-        mm.elements:insert( { name = name, xidx = assert(tonumber(idx)), yidx = assert(tonumber(idx)) } )
+        mm.elements:insert( { name = name, xidx = assert(tonumber(xidx)), yidx = assert(tonumber(yidx)) } )
     end
     
     self:newparameter(name, "graph", idx, GraphType)

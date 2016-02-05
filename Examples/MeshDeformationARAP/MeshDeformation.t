@@ -3,15 +3,16 @@ local adP = ad.ProblemSpec()
 local P = adP.P
 local W,H = opt.Dim("W",0), opt.Dim("H",1)
 
-local X = 			adP:Image("X", opt.float6,W,H,0)			--vertex.xyz, rotation.xyz <- unknown
-local UrShape = 	adP:Image("UrShape", opt.float3,W,H,1)		--urshape: vertex.xyz
-local Constraints = adP:Image("Constraints", opt.float3,W,H,2)	--constraints
-local G = adP:Graph("G", 0, "v0", W, H, 0, "v1", W, H, 1)
-P:Stencil(2)
-P:UsePreconditioner(true)
 
 local w_fitSqrt = P:Param("w_fitSqrt", float, 0)
 local w_regSqrt = P:Param("w_regSqrt", float, 1)
+local X = 			adP:Image("X", opt.float6,W,H,2)			--vertex.xyz, rotation.xyz <- unknown
+local UrShape = 	adP:Image("UrShape", opt.float3,W,H,3)		--urshape: vertex.xyz
+local Constraints = adP:Image("Constraints", opt.float3,W,H,4)	--constraints
+local G = adP:Graph("G", 5, "v0", W, H, 6,7,
+                            "v1", W, H, 8,9)
+P:Stencil(2)
+P:UsePreconditioner(true)
 
 
 local C = terralib.includecstring [[
