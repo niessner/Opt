@@ -66,7 +66,6 @@ public:
 
         if (useTerra)
         {
-            m_solverInputGPU.parameters.solveCount = 0;
             std::cout << "\n\nTERRA" << std::endl;
             resetGPUMemory();
             m_terraSolver->solve(m_result, m_solverInputGPU);
@@ -74,7 +73,6 @@ public:
 
         if (useOpt)
         {
-            m_solverInputGPU.parameters.solveCount = 1;
             std::cout << "\n\nOPT" << std::endl;
             resetGPUMemory();
             m_optSolver->solve(m_result, m_solverInputGPU);

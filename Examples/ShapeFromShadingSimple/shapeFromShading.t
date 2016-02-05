@@ -17,24 +17,7 @@ local IO = terralib.includec("stdio.h")
 
 local W,H 	= opt.Dim("W",0), opt.Dim("H",1)
 local P 	= opt.ProblemSpec()
-local D 	= P:Image("X",float, W,H,0) -- Refined Depth
-local D_i 	= P:Image("D_i",float, W,H,1) -- Depth input
-local I 	= P:Image("I",float, W,H,2) -- Target Intensity
-local D_p 	= P:Image("D_p",float, W,H,3) -- Previous Depth
-local edgeMaskR 	= P:Image("edgeMaskR",uint8, W,H,4) -- Edge mask. 
-local edgeMaskC 	= P:Image("edgeMaskC",uint8, W,H,5) -- Edge mask. 
 
-local B_I
-local B_I_dx0
-local B_I_dx1
-local B_I_dx2
-if USE_PRECOMPUTE then
-	B_I = P:Image("B_I", float, W, H, "alloc")
-	B_I_dx0 = P:Image("B_I_dx0", float, W, H, "alloc")
-	B_I_dx1 = P:Image("B_I_dx1", float, W, H, "alloc")
-	B_I_dx2 = P:Image("B_I_dx2", float, W, H, "alloc")
-	pguard = P:Image("pguard", float, W, H, "alloc")
-end	
 
 -- See TerraSolverParameters
 local w_p						= P:Param("w_p",float,0)-- Is initialized by the solver!
@@ -67,6 +50,27 @@ offset = offset + 9
 local nNonLinearIterations 	= P:Param("nNonLinearIterations",uint,offset+1) -- Steps of the non-linear solver	
 local nLinIterations 		= P:Param("nLinIterations",uint,offset+2) -- Steps of the linear solver
 local nPatchIterations 		= P:Param("nPatchIterations",uint,offset+3) -- Steps on linear step on block level
+
+
+offset = offset + 4
+local D 	= P:Image("X",float, W,H,offset+0) -- Refined Depth
+local D_i 	= P:Image("D_i",float, W,H,offset+1) -- Depth input
+local I 	= P:Image("I",float, W,H,offset+2) -- Target Intensity
+local D_p 	= P:Image("D_p",float, W,H,offset+3) -- Previous Depth
+local edgeMaskR 	= P:Image("edgeMaskR",uint8, W,H,offset+4) -- Edge mask. 
+local edgeMaskC 	= P:Image("edgeMaskC",uint8, W,H,offset+5) -- Edge mask. 
+
+local B_I
+local B_I_dx0
+local B_I_dx1
+local B_I_dx2
+if USE_PRECOMPUTE then
+	B_I = P:Image("B_I", float, W, H, "alloc")
+	B_I_dx0 = P:Image("B_I_dx0", float, W, H, "alloc")
+	B_I_dx1 = P:Image("B_I_dx1", float, W, H, "alloc")
+	B_I_dx2 = P:Image("B_I_dx2", float, W, H, "alloc")
+	pguard = P:Image("pguard", float, W, H, "alloc")
+end	
 
 P:Stencil(2)
 

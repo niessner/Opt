@@ -15,25 +15,13 @@ public:
 	OptImageSolver(unsigned int width, unsigned int height, const std::string& terraFile, const std::string& optName) : m_optimizerState(nullptr), m_problem(nullptr), m_plan(nullptr)
 	{
 		m_optimizerState = Opt_NewState();
-		m_problem = Opt_ProblemDefine(m_optimizerState, terraFile.c_str(), optName.c_str(), NULL);
+		m_problem = Opt_ProblemDefine(m_optimizerState, terraFile.c_str(), optName.c_str());
 
-        std::vector<uint32_t> elemsize;
-        for (int i = 0; i < 4; ++i) {
-            elemsize.push_back(sizeof(float));
-        }
-        for (int i = 0; i < 2; ++i) {
-            elemsize.push_back(sizeof(char));
-        }
-
-        std::vector<uint32_t> stride;
-        for (int i = 0; i < elemsize.size(); ++i)
-        {
-            stride.push_back(width * elemsize[i]);
-        }
+        
 
 		uint32_t dims[] = { width, height };
 
-        m_plan = Opt_ProblemPlan(m_optimizerState, m_problem, dims, elemsize.data(), stride.data());
+        m_plan = Opt_ProblemPlan(m_optimizerState, m_problem, dims);
 
 		assert(m_optimizerState);
 		assert(m_problem);
@@ -72,9 +60,9 @@ public:
         unsigned int nIter[] = { rawSolverInput.parameters.nNonLinearIterations, rawSolverInput.parameters.nLinIterations, rawSolverInput.parameters.nPatchIterations };
         IterStruct iterStruct(&nIter[0], &nIter[1], &nIter[2]);
 
-        TerraSolverParameterPointers indirectParameters(rawSolverInput.parameters);
+        TerraSolverParameterPointers indirectParameters(rawSolverInput.parameters, images);
 
-        Opt_ProblemSolve(m_optimizerState, m_plan, images.data(), NULL, NULL, NULL, NULL, (void**)&indirectParameters, (void**)&iterStruct);
+        Opt_ProblemSolve(m_optimizerState, m_plan, (void**)&indirectParameters, (void**)&iterStruct);
 	}
 
 private:

@@ -2,6 +2,7 @@
 #include <string>
 #include "cuda_SimpleMatrixUtil.h" 
 #include <stdio.h>
+#include <vector>
 
 struct TerraSolverParameters {
     float weightFitting;					// Is initialized by the solver!
@@ -28,8 +29,6 @@ struct TerraSolverParameters {
     unsigned int nLinIterations;			// Steps of the linear solver
     unsigned int nPatchIterations;			// Steps on linear step on block level
 
-    unsigned int solveCount; // So that the solver can know; used for debugging
-
     TerraSolverParameters() {}
     void load(const std::string& filename) {
         FILE* fileHandle = fopen(filename.c_str(), "rb"); //b for binary
@@ -46,13 +45,17 @@ struct TerraSolverParameters {
 
 struct TerraSolverParameterPointers {
     float* floatPointers[36];
-    unsigned int* uintPointers[4];
-    TerraSolverParameterPointers(const TerraSolverParameters& p) {
+    unsigned int* uintPointers[3];
+    void* imagePointers[6];
+    TerraSolverParameterPointers(const TerraSolverParameters& p, const std::vector<void*>& images) {
         for (int i = 0; i < 36; ++i) {
             floatPointers[i] = ((float*)(&p)) + i;
         }
-        for (int i = 0; i < 4; ++i) {
+        for (int i = 0; i < 3; ++i) {
             uintPointers[i] = (unsigned int*)(floatPointers[35] + 1) + i;
+        }
+        for (int i = 0; i < 6; ++i) {
+            imagePointers[i] = images[i];
         }
     }
 };
