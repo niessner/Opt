@@ -3,21 +3,15 @@ local adP = ad.ProblemSpec()
 local P = adP.P
 local W,H = opt.Dim("W",0), opt.Dim("H",1)
 
-local X = 			adP:Image("X", opt.float12,W,H,0)			--vertex.xyz, rotation_matrix <- unknown
-local UrShape = 	adP:Image("UrShape", opt.float3,W,H,1)		--urshape: vertex.xyz
-local Constraints = adP:Image("Constraints", opt.float3,W,H,2)	--constraints
-local G = adP:Graph("G", 0, "v0", W, H, 0, "v1", W, H, 1)
-P:Stencil(2)
-P:UsePreconditioner(true)	--really needed here
-
-local C = terralib.includecstring [[
-#include <math.h>
-]]
-
 
 local w_fitSqrt = adP:Param("w_fitSqrt", float, 0)
 local w_regSqrt = adP:Param("w_regSqrt", float, 1)
 local w_rotSqrt = adP:Param("w_rotSqrt", float, 2)
+local X = 			adP:Image("X", opt.float12,W,H,3)			--vertex.xyz, rotation_matrix <- unknown
+local UrShape = 	adP:Image("UrShape", opt.float3,W,H,4)		--urshape: vertex.xyz
+local Constraints = adP:Image("Constraints", opt.float3,W,H,5)	--constraints
+local G = adP:Graph("G", 6, "v0", W, H, 7,8, "v1", W, H, 9,10)
+P:UsePreconditioner(true)	--really needed here
 
 function dot3(v0, v1) 
 	return v0(0)*v1(0)+v0(1)*v1(1)+v0(2)*v1(2)
