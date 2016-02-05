@@ -43,7 +43,7 @@ public:
 	{
 		edgeCount = (int)E;
 		m_optimizerState = Opt_NewState();
-		m_problem = Opt_ProblemDefine(m_optimizerState, terraFile.c_str(), optName.c_str(), NULL);
+		m_problem = Opt_ProblemDefine(m_optimizerState, terraFile.c_str(), optName.c_str());
 
 		std::vector<int> yCoords;
 
@@ -76,12 +76,8 @@ public:
 
 
 
-		uint32_t stride = vertexCount * sizeof(float3);
-		uint32_t strides[] = { stride*4, stride, stride };
-		uint32_t elemsizes[] = { sizeof(float12), sizeof(float3), sizeof(float3) };
 		uint32_t dims[] = { vertexCount, 1 };
-
-		m_plan = Opt_ProblemPlan(m_optimizerState, m_problem, dims, elemsizes, strides);
+		m_plan = Opt_ProblemPlan(m_optimizerState, m_problem, dims);
 
 		assert(m_optimizerState);
 		assert(m_problem);
@@ -126,18 +122,14 @@ public:
 
 		convertToFloat12(d_vertexPosFloat3, d_rotsFloat9, d_unknowns, m_numUnknown);
 
-		void* data[] = { d_unknowns, d_vertexPosFloat3Urshape, d_vertexPosTargetFloat3};
+		void* data[] = { };
 		void* solverParams[] = { &nNonLinearIterations, &nLinearIterations, &nBlockIterations };
 
 		float weightFitSqrt = sqrt(weightFit);
 		float weightRegSqrt = sqrt(weightReg);
 		float weightRotSqrt = sqrt(weightRot);
-		void* problemParams[] = { &weightFitSqrt, &weightRegSqrt, &weightRotSqrt };
-
-		int32_t* xCoords[] = { d_headX, d_tailX };
-		int32_t* yCoords[] = { d_headY, d_tailY };
-		int32_t edgeCounts[] = { edgeCount };
-		Opt_ProblemSolve(m_optimizerState, m_plan, data, edgeCounts, NULL, xCoords, yCoords, problemParams, solverParams);
+		void* problemParams[] = { &weightFitSqrt, &weightRegSqrt, &weightRotSqrt, d_unknowns, d_vertexPosFloat3Urshape, d_vertexPosTargetFloat3, &edgeCount, d_headX, d_headY, d_tailX, d_tailY };
+		Opt_ProblemSolve(m_optimizerState, m_plan, problemParams, solverParams);
 
 		convertFromFloat12(d_unknowns, d_vertexPosFloat3, d_rotsFloat9, m_numUnknown);
 	}

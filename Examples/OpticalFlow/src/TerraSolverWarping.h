@@ -16,7 +16,7 @@ public:
 	TerraSolverWarping(unsigned int width, unsigned int height, const std::string& terraFile, const std::string& optName) : m_optimizerState(nullptr), m_problem(nullptr), m_plan(nullptr)
 	{
 		m_optimizerState = Opt_NewState();
-		m_problem = Opt_ProblemDefine(m_optimizerState, terraFile.c_str(), optName.c_str(), NULL);
+		m_problem = Opt_ProblemDefine(m_optimizerState, terraFile.c_str(), optName.c_str());
 
 		uint32_t strides[] = { 
 			width * (uint32_t)sizeof(float2),	//X (offset vectors)
@@ -33,7 +33,7 @@ public:
 			(uint32_t)sizeof(float)		//target DV
 		};
 		uint32_t dims[] = { width, height };
-		m_plan = Opt_ProblemPlan(m_optimizerState, m_problem, dims, elemsizes, strides);
+		m_plan = Opt_ProblemPlan(m_optimizerState, m_problem, dims);
 
 		m_width = width;
 		m_height = height;
@@ -62,14 +62,9 @@ public:
 		float weightFitSqrt = sqrt(weightFit);
 		float weightRegSqrt = sqrt(weightReg);
 
-		void* problemParams[] = { &weightFitSqrt, &weightRegSqrt };
+		void* problemParams[] = { &weightFitSqrt, &weightRegSqrt, d_unknown, d_source, d_target, d_targetDU, d_targetDV };
 		void* solverParams[] = { &nNonLinearIterations, &nLinearIterations, &nBlockIterations };
-		void* data[] = { d_unknown, d_source, d_target, d_targetDU, d_targetDV };
-
-
-		//Opt_ProblemInit(m_optimizerState, m_plan, data, NULL, problemParams, (void**)&numIter);
-		//while (Opt_ProblemStep(m_optimizerState, m_plan, data, NULL, problemParams, NULL));
-		Opt_ProblemSolve(m_optimizerState, m_plan, data, NULL, NULL, NULL, NULL, problemParams, solverParams);
+ 		Opt_ProblemSolve(m_optimizerState, m_plan, problemParams, solverParams);
 	}
 
 private:

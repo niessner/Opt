@@ -1,13 +1,16 @@
 local W,H = opt.Dim("W",0), opt.Dim("H",1)
 local S = ad.ProblemSpec()
 
-local X = S:Image("X", opt.float2,W,H,0)
 
-local I = S:Image("I",float,W,H,1)
+local w_fitSqrt = S:Param("w_fit", float, 0)
+local w_regSqrt = S:Param("w_reg", float, 1)
 
-local I_hat_im = S:Image("I_hat",float,W,H,2)
-local I_hat_dx = S:Image("I_hat_dx",float,W,H,3)
-local I_hat_dy = S:Image("I_hat_dy",float,W,H,4)
+local X = S:Image("X", opt.float2,W,H,2)
+local I = S:Image("I",float,W,H,3)
+
+local I_hat_im = S:Image("I_hat",float,W,H,4)
+local I_hat_dx = S:Image("I_hat_dx",float,W,H,5)
+local I_hat_dy = S:Image("I_hat_dy",float,W,H,6)
 local I_hat = ad.sampledimage(I_hat_im,I_hat_dx,I_hat_dy)
 
 local i,j = W:index(),H:index()
@@ -17,11 +20,6 @@ S:UsePreconditioner(false)
 local C = terralib.includecstring [[
 #include <math.h>
 ]]
-
-local w_fitSqrt = S:Param("w_fit", float, 0)
-local w_regSqrt = S:Param("w_reg", float, 1)
-
-
 
 local terms = terralib.newlist()
 
