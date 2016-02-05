@@ -1,0 +1,343 @@
+local Context = {}
+function Context:__index(idx)
+    local d = self.definitions[idx]
+    if d ~= nil then return d end
+    return getmetatable(self)[idx]
+end
+
+local newlist, islist = terralib.newlist, terralib.islist
+
+-- prepare lexer stuff
+local tokens = "=|?*,()"
+local keywords = { attributes = true, unique = true }
+local tokenlist = {}
+for i = 1,#tokens do
+    local t = tokens:sub(i,i)
+    tokenlist[i] = "%"..t
+    keywords[t] = true
+end
+-- parser/lexer function
+local function parseAll(text)
+local pos = 1
+    local cur = nil -- current token
+    local value = nil -- current token value
+    local function err(what)
+        error(string.format("expected %s but found '%s' here:\n%s",what,value,
+              text:sub(1,pos).."<--##    "..text:sub(pos+1,-1)))
+    end
+    local function next()
+        local ws = text:match("^%s*",pos)
+        pos = pos + #ws
+        if pos > #text then
+            cur,value = "EOF","EOF"
+            return
+        end
+        local c = text:sub(pos,pos)
+        if keywords[c] then
+            cur,value,pos = c,c,pos+1
+            return
+        end
+        local ident = text:match("^[%a_][%a_%d]*",pos)
+        if not ident then
+            err("valid token")
+        end
+        cur,value = keywords[ident] and ident or "Ident", ident
+        pos = pos + #ident
+    end
+    local function nextif(kind)
+        if cur ~= kind then return false end
+        next()
+        return true
+    end
+    local function expect(kind)
+        if kind ~= cur then err(kind) end
+        local v = value
+        next()
+        return v
+    end
+    local function parseField()
+        local  f = {}
+        f.type = expect("Ident")
+        if nextif("?") then
+            f.optional = true
+        elseif nextif("*") then
+            f.list = true
+        end
+        f.name = expect("Ident")
+        return f
+    end
+    local function parseFields()
+        local fields = newlist()
+        expect("(")
+        repeat
+            fields:insert(parseField())
+        until not nextif(",")
+        expect(")")
+        return fields
+    end
+    local function parseProduct()
+        local p = { kind = "product", fields = parseFields() }
+        p.unique = nextif("unique")
+        return p
+    end
+    local function parseConstructor()
+        local c = { name = expect("Ident") }
+        if cur == "(" then
+            c.fields = parseFields()
+        end
+        c.unique = nextif("unique")
+        return c
+    end
+    local function parseSum()
+        local sum = { kind = "sum", constructors = newlist() }
+        repeat
+            sum.constructors:insert(parseConstructor())
+        until not nextif("|")
+        if nextif("attributes") then
+            local attributes = parseFields()
+            for i,ctor in ipairs(sum.constructors) do 
+                ctor.fields = ctor.fields or newlist()
+                for i,a in ipairs(attributes) do
+                    ctor.fields:insert(a)
+                end
+            end
+        end
+        return sum
+    end
+    
+    local function parseType()
+        if cur == "(" then
+            return parseProduct()
+        else
+            return parseSum()
+        end
+    end
+    local function parseDefinitions()
+        local ds = newlist()
+        while cur ~= "EOF" do
+            local d = { name = expect("Ident") }
+            expect("=")
+            d.type = parseType()
+            ds:insert(d)
+        end
+        return ds
+    end
+    next()
+    local defs = parseDefinitions()
+    expect("EOF")
+    return defs
+end
+
+local function checkbuiltin(t)
+    return function(v) return type(v) == t end
+end
+
+local function checkoptional(checkt)
+    return function(v) return v == nil or checkt(v) end
+end
+
+local function checklist(checkt)
+    return function(vs)
+        if type(vs) ~= "table" or (getmetatable(vs) ~= nil and not islist(vs)) then return false end
+        for i,e in ipairs(vs) do
+            if not checkt(e) then return false,i end
+        end
+        return true
+    end
+end
+local valuekey,nilkey = {},{}
+local function checkuniquelist(checkt,listcache)
+    return function(vs)
+        if type(vs) ~= "table" or (getmetatable(vs) ~= nil and not islist(vs)) then return false end
+        local node = listcache
+        for i,e in ipairs(vs) do
+            if not checkt(e) then return false,i end
+            local next = node[e]
+            if not next then
+                next = {}
+                node[e] = next
+            end
+            node = next
+        end
+        local r = node[valuekey]
+        if not r then
+            r = vs
+            node[valuekey] = r
+        end
+        return true,r
+    end
+end
+
+local defaultchecks = {} 
+for i in string.gmatch("nil number string boolean table thread userdata cdata","(%S+)") do
+    defaultchecks[i] = checkbuiltin(i)
+end
+defaultchecks["any"] = function() return true end
+
+local function newcontext()
+    return setmetatable({ checks = setmetatable({},{__index = defaultchecks}), members = {}, list = {}, uniquelist = {}, listcache = {}, optional = {}, definitions = {} },Context)
+end
+
+function Context:GetCheckForField(unique,field)
+    local check = assert(self.checks[field.type],string.format("type not defined: %s",field.type))
+    local function get(tbl,ctor)
+        if not tbl[field.type] then
+            tbl[field.type] = ctor(check,self.listcache)
+        end
+        return tbl[field.type]
+    end
+    if field.list and not unique then
+        return get(self.list,checklist)
+    elseif field.list and unique then
+        return get(self.uniquelist,checkuniquelist)
+    elseif field.optional then
+        return get(self.optional,checkoptional)
+    end
+    return check
+end
+
+function Context:DeclareClass(name)
+    assert(not self.definitions[name], "class name already defined")
+    local m = {}
+    self.definitions[name] = { members = m }
+    self.checks[name] = function(v) return m[getmetatable(v) or false] or false end
+end
+local function reporterr(i,name,tn,v,ii)
+    local fmt = "bad argument #%d to '%s' expected '%s' but found '%s'"
+    if ii then
+        v,fmt = v[ii],fmt .. " at list index %d"
+    end
+    local err = string.format(fmt,i,name,tn,type(v),ii)
+    local mt = getmetatable(v)
+    if mt then
+        print(mt)
+        err = string.format("%s (metatable = %s)",err,tostring(mt))
+    end
+    error(err)
+end
+function Context:DefineClass(name,unique,fields)
+    local mt = {}
+    local class = self.definitions[name]
+    
+    if fields then
+        local names = newlist()
+        local checks = newlist()
+        local tns = newlist()
+        for i,f in ipairs(fields) do
+            names:insert(f.name)
+            tns:insert(f.list and f.type.."*" or f.type)
+            checks:insert(self:GetCheckForField(unique,f))
+        end
+        if unique then
+            function mt:__call(...)
+                local node,key = self,"cache"
+                local obj = {}
+                for i = 1, #names do
+                    local v = select(i,...)
+                    local c,l = checks[i](v)
+                    if not c then 
+                       reporterr(i,name,tns[i],v,l) 
+                    end
+                    v = l or v -- use memoized list if it exists
+                    obj[names[i]] = v
+                    local next = node[key]
+                    if not next then
+                        next = {}
+                        node[key] = next
+                    end
+                    node,key = next,v
+                    if key == nil then
+                        key = nilkey
+                    end
+                end
+                local next = node[key]
+                if not next then
+                    next = setmetatable(obj,self)
+                    node[key] = next
+                end
+                return next
+            end
+        else
+            function mt:__call(...)
+                local obj = {}
+                for i = 1, #names do
+                    local v = select(i,...)
+                    local c,ii = checks[i](v)
+                    if not c then 
+                       reporterr(i,name,tns[i],v,ii) 
+                    end
+                    obj[names[i]] = v
+                end
+                return setmetatable(obj,self)
+            end
+        end
+        function class:__tostring()
+            local members = newlist()
+            for i,f in ipairs(fields) do
+                local v,r = self[f.name]
+                if f.list then
+                    local elems = newlist()
+                    for i,e in ipairs(self[f.name]) do
+                        elems:insert(tostring(e))
+                    end
+                    r = "{"..elems:concat(",").."}"
+                else
+                    r = tostring(v)
+                end
+                if not (f.optional and v == nil) then
+                    members:insert(string.format("%s = %s",f.name,r))
+                end
+            end
+            return string.format("%s(%s)",name,members:concat(","))
+        end
+    else
+        function class:__tostring() return name end
+    end
+    function mt:__tostring() return string.format("Class(%s)",name) end
+    function mt:__newindex(k,v)
+        for c,_ in pairs(self.members) do
+            rawset(c,k,v)
+        end
+    end
+    local check = assert(self.checks[name])
+    function class:is(obj)
+        return check(obj)
+    end
+    class.__index = class
+    class.members[class] = true
+    setmetatable(class,mt)
+    return class
+end
+function Context:Extern(name,istype)
+    self.checks[name] = istype
+end
+
+function Context:Define(text)
+    local defs = parseAll(text)
+    -- register all new type names
+    for i,d in ipairs(defs) do
+        self:DeclareClass(d.name)
+        if d.type.kind == "sum" then
+            for i,c in ipairs(d.type.constructors) do
+                self:DeclareClass(c.name)
+            end
+        end
+    end
+    for i,d in ipairs(defs) do
+        if d.type.kind == "sum" then
+            local parent = self:DefineClass(d.name,false,nil)
+            for i,c in ipairs(d.type.constructors) do
+                local child = self:DefineClass(c.name,c.unique,c.fields)
+                parent.members[child] = true --mark that any subclass is a member of its parent 
+                child.kind = c.name
+                if not c.fields then --single value, just create it
+                    self.definitions[c.name] = setmetatable({},child)
+                end
+            end
+        else
+            self:DefineClass(d.name,d.type.unique,d.type.fields)
+        end
+    end
+end
+
+return newcontext()

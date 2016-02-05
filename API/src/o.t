@@ -1,7 +1,7 @@
 --terralib.settypeerrordebugcallback( function(fn) fn:printpretty() end )
-
 opt = {} --anchor it in global namespace, otherwise it can be collected
 local S = require("std")
+local A = require("asdl")
 local ffi = require("ffi")
 local util = require("util")
 local solversCPU = require("solversCPU")
@@ -116,8 +116,11 @@ end
 
 __syncthreads = cudalib.nvvm_barrier0
 
-local Dim = newclass("dimension")
 
+A:Define [[
+Dim = (string name, number size, number? _index)
+]]
+local Dim = A.Dim
 
 local ffi = require('ffi')
 
@@ -254,14 +257,10 @@ function ProblemSpec:EvalExclude(...)
     end
 end
 
-local newDim = terralib.memoize(function(name,size,idx)
-	return Dim:new { name = name, size = size, _index = idx }
-end)
-
 function opt.Dim(name, idx)
     idx = assert(tonumber(idx), "expected an index for this dimension")
     local size = tonumber(opt.dimensions[idx])
-    return newDim(name,size,idx)
+    return Dim(name,size,idx)
 end
 
 opt.InBoundsCalc = macro(function(x,y,W,H,sx,sy)
@@ -517,7 +516,7 @@ newImage = terralib.memoize(function(typ, W, H)
 end)
 
 
-local unity = Dim:new { name = "1", size = 1 }
+local unity = Dim("1",1)
 local function todim(d)
     return Dim:is(d) and d or d == 1 and unity
 end
