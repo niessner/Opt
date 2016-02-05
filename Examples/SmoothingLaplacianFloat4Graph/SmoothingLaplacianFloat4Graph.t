@@ -4,9 +4,12 @@ local P = adP.P
 P:Stencil(2)
 local W,H = opt.Dim("W",0), opt.Dim("H",1)
 
-local X = adP:Image("X", opt.float4,W,H,0)
-local A = adP:Image("A", opt.float4,W,H,1)
-local G = adP:Graph("G", 0, "v0", W, H, 0, "v1", W, H, 1)
+
+local w_fitSqrt = adP:Param("w_fitSqrt", float, 0)
+local w_regSqrt = adP:Param("w_regSqrt", float, 1)
+local X = adP:Image("X", opt.float4,W,H,2)
+local A = adP:Image("A", opt.float4,W,H,3)
+local G = adP:Graph("G", 4, "v0", W, H, 5,6, "v1", W, H, 7,8)
 -- TODO: this should be factored into a parameter
 local w_fit = 0.1
 local w_reg = 1.0

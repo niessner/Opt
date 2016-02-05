@@ -28,7 +28,7 @@ public:
 	TerraSolverWarpingFloat4(unsigned int width, unsigned int height, const std::string& terraFile, const std::string& optName) : m_optimizerState(nullptr), m_problem(nullptr), m_plan(nullptr)
 	{
 		m_optimizerState = Opt_NewState();
-		m_problem = Opt_ProblemDefine(m_optimizerState, terraFile.c_str(), optName.c_str(), NULL);
+		m_problem = Opt_ProblemDefine(m_optimizerState, terraFile.c_str(), optName.c_str());
 
 
 		std::vector<int> headX;
@@ -64,12 +64,9 @@ public:
 		d_tailY = createDeviceBuffer(tailY);
 
 
-		uint32_t stride = width * sizeof(float4);
-		uint32_t strides[] = { stride, stride };
-		uint32_t elemsizes[] = { sizeof(float4), sizeof(float4) };
 		uint32_t dims[] = { width, height };
 
-		m_plan = Opt_ProblemPlan(m_optimizerState, m_problem, dims, elemsizes, strides);
+		m_plan = Opt_ProblemPlan(m_optimizerState, m_problem, dims);
 
 		assert(m_optimizerState);
 		assert(m_problem);
@@ -97,20 +94,13 @@ public:
 	void solve(float4* d_unknown, float4* d_target, unsigned int nNonLinearIterations, unsigned int nLinearIterations, unsigned int nBlockIterations, float weightFit, float weightReg)
 	{
 
-		void* data[] = { d_unknown, d_target };
 		void* solverParams[] = { &nNonLinearIterations, &nLinearIterations, &nBlockIterations };
 
 		float weightFitSqrt = sqrt(weightFit);
 		float weightRegSqrt = sqrt(weightReg);
-		void* problemParams[] = { &weightFitSqrt, &weightRegSqrt };
+		void* problemParams[] = { &weightFitSqrt, &weightRegSqrt, d_unknown, d_target, &edgeCount, d_headX, d_headY, d_tailX, d_tailY };
 
-
-		//Opt_ProblemInit(m_optimizerState, m_plan, data, NULL, problemParams, (void**)&solverParams);
-		//while (Opt_ProblemStep(m_optimizerState, m_plan, data, NULL, problemParams, NULL));
-		int32_t* xCoords[] = { d_headX, d_tailX };
-		int32_t* yCoords[] = { d_headY, d_tailY };
-		int32_t edgeCounts[] = { edgeCount };
-		Opt_ProblemSolve(m_optimizerState, m_plan, data, edgeCounts, NULL, xCoords, yCoords, problemParams, solverParams);
+		Opt_ProblemSolve(m_optimizerState, m_plan, problemParams, solverParams);
 	}
 
 private:
