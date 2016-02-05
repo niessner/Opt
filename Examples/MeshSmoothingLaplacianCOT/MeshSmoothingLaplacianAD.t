@@ -3,13 +3,15 @@ local adP = ad.ProblemSpec()
 local P = adP.P
 local W,H = opt.Dim("W",0), opt.Dim("H",1)
 
-local X = adP:Image("X", opt.float3,W,H,0)
-local A = adP:Image("A", opt.float3,W,H,1)
+local w_fitSqrt = adP:Param("w_fit", float, 0)
+local w_regSqrt = adP:Param("w_reg", float, 1)
+local X = adP:Image("X", opt.float3,W,H,2)
+local A = adP:Image("A", opt.float3,W,H,3)
 --local G = adP:Graph("G", 0, "v0", W, H, 0, "v1", W, H, 1)
-local G = adP:Graph("G", 0, "v0", W, H, 0, --current vertex
-                            "v1", W, H, 1, --neighboring vertex
-                            "v2", W, H, 2, --prev neighboring vertex
-                            "v3", W, H, 3) --next neighboring vertex
+local G = adP:Graph("G", 4, "v0", W, H, 5,6, --current vertex
+                            "v1", W, H, 7,8, --neighboring vertex
+                            "v2", W, H, 9,10, --prev neighboring vertex
+                            "v3", W, H, 11,12) --next neighboring vertex
 P:Stencil(2)
 P:UsePreconditioner(true)
 
@@ -17,8 +19,7 @@ local C = terralib.includecstring [[
 #include <math.h>
 ]]
 
-local w_fitSqrt = adP:Param("w_fit", float, 0)
-local w_regSqrt = adP:Param("w_reg", float, 1)
+
 
 function dot3(v0, v1) 
 	return v0(0)*v1(0)+v0(1)*v1(1)+v0(2)*v1(2)
