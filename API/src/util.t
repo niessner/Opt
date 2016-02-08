@@ -141,14 +141,6 @@ util.Vector = terralib.memoize(function(typ,N)
     end
     return VecType
 end)
-util.Dot = macro(function(a,b) 
-    local at,bt = a:gettype(),b:gettype()
-    if util.isvectortype(at) then
-        return `a:dot(b)
-    else
-        return `a*b
-    end
-end)
 
 function Array(T,debug)
     local struct Array(S.Object) {
@@ -436,7 +428,7 @@ end
 util.initParameters = function(self, ProblemSpec, params, isInit)
     local stmts = terralib.newlist()
 	for _, entry in ipairs(ProblemSpec.parameters) do
-		if entry.kind == "image" then
+		if entry.kind == "ImageParam" then
 		    if entry.idx ~= "alloc" then
                 local function_name = isInit and "initFromGPUptr" or "setGPUptr"
                 stmts:insert quote
@@ -445,14 +437,14 @@ util.initParameters = function(self, ProblemSpec, params, isInit)
             end
 		else
             local rhs
-            if entry.kind == "graph" then
+            if entry.kind == "GraphParam" then
                 local graphinits = terralib.newlist { `@[&int](params[entry.idx]) }
                 for i,e in ipairs(entry.type.metamethods.elements) do
                     graphinits:insert( `[&int](params[e.xidx]) )
                     graphinits:insert( `[&int](params[e.yidx]) )
                 end
                 rhs = `entry.type { graphinits }
-            elseif entry.kind == "param" then
+            elseif entry.kind == "ScalarParam" then
                 rhs = `@[&entry.type](params[entry.idx])
             end
             stmts:insert quote self.[entry.name] = rhs end
@@ -509,11 +501,12 @@ function util.makeGPUFunctions(problemSpec, PlanData, kernels)
 	local wrappedKernels = {}
 	
 	local imageType = problemSpec:UnknownType()
+	local ispace = imageType.ispace
 	
 	local kernelFunctions = {}
 	local key = "_"..tostring(os.time())
 	for k,v in pairs(kernels) do
-	    kernelFunctions[k..key] = { kernel = v , annotations = { {"maxntidx", 16}, {"maxntidy", 16}, {"maxntidz", 1}, {"minctasm",1} } } -- force at least 5 threadblocks to run per SM
+	    kernelFunctions[k..key] = { kernel = v , annotations = { {"maxntidx", 16}, {"maxntidy", #ispace.dims > 1 and 16 or 1}, {"maxntidz", #ispace.dims > 2 and 16 or 1}, {"minctasm",1} } }
 	end
 	local compiledKernels = terralib.cudacompile(kernelFunctions, false)
 	
@@ -523,14 +516,18 @@ function util.makeGPUFunctions(problemSpec, PlanData, kernels)
         for i = 3,#kernelparams do --skip GPU launcher and PlanData
             params:insert(symbol(kernelparams[i]))
         end
-        local BLOCK_SIZE = problemSpec:BlockSize()
         local function createLaunchParameters(pd)
             if not kernelName:match("_Graph$") then
-                if imageType.metamethods.H.size == 1 then -- this image isn't really 2D, so don't waste most of the block
-                    return {`pd.parameters.X:W(), 1, BLOCK_SIZE*BLOCK_SIZE, 1 }
-                else
-                    return {`pd.parameters.X:W(),`pd.parameters.X:H(),BLOCK_SIZE,BLOCK_SIZE}
+                local exps = terralib.newlist()
+                assert(#ispace.dims <= 3, "cannot launch over images with more than 3 dims")
+                local sizes = { {256,1,1}, {16,16,1}, {8,8,4} }
+                for i = 1,3 do
+                   local dim = #ispace.dims >= i and ispace.dims[i].size or 1
+                    local bs = sizes[#ispace.dims][i]
+                    exps:insert(dim)
+                    exps:insert(sizes[#ispace.dims][i])
                 end
+                return exps
             else
                 return quote
                     var N = 0
@@ -545,17 +542,17 @@ function util.makeGPUFunctions(problemSpec, PlanData, kernels)
                         end
                     end
                 in 
-                    N,1,BLOCK_SIZE*BLOCK_SIZE,1
+                    N,256,1,1,1,1
                 end
             end
         end
         local terra GPULauncher(pd : &PlanData, [params])
-            var xdim,ydim,xblock,yblock = [ createLaunchParameters(pd) ]
+            var xdim,xblock,ydim,yblock,zdim,zblock = [ createLaunchParameters(pd) ]
             if xdim == 0 then -- early out for 0-sized kernels
                 return 0
             end
-            var launch = terralib.CUDAParams { (xdim - 1) / xblock + 1, (ydim - 1) / yblock + 1, 1, 
-                                                xblock, yblock, 1, 
+            var launch = terralib.CUDAParams { (xdim - 1) / xblock + 1, (ydim - 1) / yblock + 1, (zdim - 1) / zblock + 1, 
+                                                xblock, yblock, zblock, 
                                                 0, nil }
             --C.cudaDeviceSynchronize()
             var stream : C.cudaStream_t = nil

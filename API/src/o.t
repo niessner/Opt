@@ -117,10 +117,6 @@ end
 __syncthreads = cudalib.nvvm_barrier0
 
 
-A:Define [[
-Dim = (string name, number size, number? _index)
-]]
-local Dim = A.Dim
 
 local ffi = require('ffi')
 
@@ -159,12 +155,28 @@ terra opt.ProblemDelete(p : &opt.Problem)
     --TODO: remove from problem table
 end
 
+
+A:Extern("TerraType",terralib.types.istype)
+A:Define [[
+Dim = (string name, number size, number? _index) unique
+IndexSpace = (Dim* dims) unique
+Index = Offset(number x, number y) unique
+      | GraphElement(any graph, string element) unique
+ImageType = (IndexSpace ispace, TerraType scalartype, number channelcount) unique
+ProblemParam = ImageParam(ImageType imagetype)
+             | ScalarParam(TerraType type)
+             | GraphParam(TerraType type)
+             attributes (string name, any idx)
+]]
+local Dim,IndexSpace,Index,Offset,GraphElement,ImageType,ProblemParam,ImageParam,ScalarParam,GraphParam = 
+      A.Dim,A.IndexSpace,A.Index,A.Offset,A.GraphElement,A.ImageType,A.ProblemParam,A.ImageParam,A.ScalarParam,A.GraphParam
+
 local ProblemSpec = newclass("ProblemSpec")
 opt.PSpec = ProblemSpec
 local PROBLEM_STAGES  = { inputs = 0, functions = 1 }
 function opt.ProblemSpec()
     local problemSpec = ProblemSpec:new { 
-	                         parameters = terralib.newlist(),-- listing of each parameter, {name = <string>, kind = <image|graph>, idx = <number>, type = <thetypeusedtostoreit> }
+	                         parameters = terralib.newlist(),-- ProblemParam*
                              names = {}, -- name -> index in parameters list
                              ProblemParameters = terralib.types.newstruct("ProblemParameters"),
                              functions = {},
@@ -184,14 +196,14 @@ function ProblemSpec:Stage(name)
     self.stage = name
 end
 
-function ProblemSpec:toname(name)
-    name = assert(tostring(name))
+function ProblemSpec:registername(name)
     assert(not self.names[name],string.format("name %s already in use",name))
     self.names[name] = #self.parameters + 1
-    return name
 end
 
-local newImage 
+function ProblemParam:terratype() return self.type end
+function ImageParam:terratype() return self.imagetype:terratype() end
+
 
 function ProblemSpec:MaxStencil()
     self:Stage "functions"
@@ -203,17 +215,11 @@ function ProblemSpec:Stencil(stencil)
 	self.maxStencil = math.max(stencil, self.maxStencil)
 end
 
-
-function ProblemSpec:BlockSize()
-    self:Stage "functions"
-	--TODO: compute based on problem
-	--return opt.BLOCK_SIZE
-	return 16
-end
-
-function ProblemSpec:newparameter(name,kind,idx,typ)
-    self.parameters:insert { name = self:toname(name), kind = kind, idx = idx, type = typ }
-	self.ProblemParameters.entries:insert { name, typ }
+function ProblemSpec:newparameter(p)
+    assert(ProblemParam:is(p))
+    self:registername(p.name)
+    self.parameters:insert(p)
+	self.ProblemParameters.entries:insert { p.name, p:terratype() }
 end
 
 function ProblemSpec:ParameterType()
@@ -222,13 +228,9 @@ end
 
 function ProblemSpec:UnknownType()
     self:Stage "functions"
-	return self:TypeOf("X") 
-end
-
-function ProblemSpec:TypeOf(name)
-    self:Stage "functions"
-	local p = self.parameters[assert(self.names[name],"unknown name: " .. name)] 
-	return p.type
+    local xt = assert(self.parameters[self.names["X"]],"unknown type X is not defined.")
+    assert(ImageParam:is(xt),"unknown type X is not an image")
+    return xt.imagetype
 end
 
 function ProblemSpec:Function(name,unknownfunction, ...)
@@ -245,7 +247,7 @@ end
 
 function ProblemSpec:Param(name,typ,idx)
     self:Stage "inputs"
-    self:newparameter(name,"param",idx,typ)
+    self:newparameter(ScalarParam(typ,name,idx))
 end
 
 function ProblemSpec:EvalExclude(...)
@@ -263,22 +265,177 @@ function opt.Dim(name, idx)
     return Dim(name,size,idx)
 end
 
-opt.InBoundsCalc = macro(function(x,y,W,H,sx,sy)
-    return `x >= sx and x < W - sx and y >= sy and y < H - sy
-end)
-	
-newImage = terralib.memoize(function(typ, W, H)
-    local elemsize = terralib.sizeof(assert(typ))
-    local stride = elemsize*W.size
-    -- NOTE: only use textures for float, vector(2, float), vector(4, float)
-    local use_texture = use_bindless_texture
-    if not (util.isvectortype(typ) and typ.metamethods.type == float and
-                (typ.metamethods.N == 4 or typ.metamethods.N == 2)
-           ) and typ ~= float
-    then
-        use_texture = false
+function IndexSpace:cardinality()
+    local c = 1
+    for i,d in ipairs(self.dims) do
+        c = c * d.size
+    end
+    return c
+end
+
+function IndexSpace:indextype()
+    if self._terratype then return self._terratype end
+    local dims = self.dims
+    assert(#dims > 0, "index space must have at least 1 dimension")
+    local struct Index {}
+    self._terratype = Index
+    
+    local params = terralib.newlist()
+    local fieldnames = terralib.newlist()
+    for i = 1,#dims do
+        params:insert(symbol(int,"d"..tostring(i-1)))
+        local n = "d"..tostring(i-1)
+        fieldnames:insert(n)
+        Index.entries:insert { n, int }
     end
 
+    terra Index.metamethods.__apply(self : &Index, [params])
+        var rhs : Index
+        escape
+            for i = 1,#dims do
+                emit quote  
+                    rhs.[fieldnames[i]] = self.[fieldnames[i]] + [params[i]]
+                end 
+            end
+        end
+        return rhs
+    end
+    local function genoffset(self)
+        local s = 1
+        local offset = `self.d0
+        for i = 2,#dims do
+            s = s * dims[i-1].size
+            offset = `s*self.[fieldnames[i]] + offset
+        end
+        return offset
+    end
+    terra Index:tooffset()
+        return [genoffset(self)]
+    end
+    local function genbounds(self)
+        local valid
+        for i = 1, #dims do
+            local n = fieldnames[i]
+            local v = `self.[n] >= 0 and self.[n] < [dims[i].size]
+            if valid then
+                valid = `valid and v
+            else
+                valid = v
+            end
+        end
+        return valid
+    end
+    terra Index:InBounds() return [ genbounds(self) ] end
+    
+    if #dims <= 3 then
+        local dimnames = "xyz"
+        terra Index:initFromCUDAParams() : bool
+            escape
+                local lhs,rhs = terralib.newlist(),terralib.newlist()
+                local valid = `true
+                for i = 1,#dims do
+                    local name = dimnames:sub(i,i)
+                    local l = `self.[fieldnames[i]]
+                    local r = `blockDim.[name] * blockIdx.[name] + threadIdx.[name]
+                    lhs:insert(l)
+                    rhs:insert(r)
+                    valid = `valid and l < [dims[i].size]
+                end
+                emit quote
+                    [lhs] = [rhs]
+                    return valid
+                end
+            end  
+        end
+    end
+    return Index
+end
+
+function ImageType:usestexture() -- texture, 2D texture
+    local c = self.channelcount
+    if use_bindless_texture and self.scalartype == float and 
+       (c == 1 and c == 2 or c == 4) then
+       if #self.ispace.dims == 2 then
+            return true, (self.ispace.dims[1].size*c % 32) and use_pitched_memory
+       end
+       return true, false 
+    end
+    return false, false 
+end
+
+function ImageType:ElementType() return util.Vector(self.scalartype,self.channelcount) end
+
+function ImageType:terratype()
+    if self._terratype then return self._terratype end
+    print("Creating ImageType: ",self)
+    print("VectorType",self:ElementType())
+    local scalartype = self.scalartype
+    local vectortype = self:ElementType()
+    local struct Image {
+        data : &vectortype
+        tex  : C.cudaTextureObject_t;
+    }
+    self._terratype = Image
+    local Index = self.ispace:indextype()
+    function Image.metamethods.__typename()
+	  return string.format("Image(%s,%s,%d)",tostring(self.scalartype),tostring(self.ispace),channelcount)
+	end
+
+    terra Image.metamethods.__apply(self : &Image, idx : Index) : vectortype
+        return self.data[idx:tooffset()]
+    end
+    terra Image.metamethods.__update(self : &Image, idx : Index, v : vectortype)
+        self.data[idx:tooffset()] = v
+    end
+	terra Image:atomicAddChannel(idx : Index, c : int32, v : scalartype)
+	    var addr : &scalartype = &self.data[idx:tooffset()][c]
+	    util.atomicAdd(addr,v)
+	end
+	
+    terra Image:get(idx : Index)
+        var v : vectortype = 0.f
+        if idx:InBounds() then
+            v = self(idx)
+        end
+        return v
+    end
+    
+    if self.channelcount == 2 then
+        local terra lerp(v0 : vectortype, v1 : vectortype, t : float)
+            return (1.f - t)*v0 + t*v1
+        end
+        terra Image:sample(x : float, y : float)
+            var x0 : int, x1 : int = opt.math.floor(x),opt.math.ceil(x)
+            var y0 : int, y1 : int = opt.math.floor(y),opt.math.ceil(y)
+            var xn,yn = x - x0,y - y0
+            var u = lerp(self:get( Index {x0,y0} ),self:get( Index {x1,y0} ),xn)
+            var b = lerp(self:get( Index {x0,y1} ),self:get( Index {x1,y1} ),xn)
+            return lerp(u,b,yn)
+        end
+    end
+    local cardinality = self.ispace:cardinality()
+    terra Image:totalbytes() return sizeof(vectortype)*cardinality end
+	terra Image:initCPU()
+		self.data = [&vectortype](C.malloc(self:totalbytes()))
+		C.memset(self.data,0,self:totalbytes())
+	end
+	terra Image:initGPU()
+        var data : &uint8
+        C.cudaMalloc([&&opaque](&data), self:totalbytes())
+        C.cudaMemset([&opaque](data), 0, self:totalbytes())
+        self:initFromGPUptr(data)
+    end
+    terra Image:initFromGPUptr( ptr : &uint8 )
+        self.data = nil
+        self:setGPUptr(ptr)
+    end
+    terra Image:setGPUptr(ptr : &uint8) self.data = [&vectortype](ptr) end
+    return Image
+end
+
+--[[
+newImage = terralib.memoize(function(typ, W, H)
+   
     local cd = macro(function(apicall) return quote
         var r = apicall
         if r ~= 0 then  
@@ -287,7 +444,6 @@ newImage = terralib.memoize(function(typ, W, H)
         end
     end end)
 
-    local nvec = util.isvectortype(typ) and typ.metamethods.N or 1
     local wrapBindlessTexture, tex_read
     if use_texture then
         -- check alignment
@@ -514,7 +670,7 @@ newImage = terralib.memoize(function(typ, W, H)
 	mm.typ,mm.W,mm.H,mm.elemsize,mm.stride = typ,W,H,elemsize,stride
 	return Image
 end)
-
+]]
 
 local unity = Dim("1",1)
 local function todim(d)
@@ -524,24 +680,21 @@ end
 local function tovalidimagetype(typ)
     if not terralib.types.istype(typ) then return nil end
     if util.isvectortype(typ) then
-        return typ, typ.metamethods.N
+        return typ.metamethods.type, typ.metamethods.N
     elseif typ:isarithmetic() then
         return typ, 1
     end
 end
 
-function ProblemSpec:Image(name,typ,W,H,idx)
+function ProblemSpec:Image(name,typ,dims,idx)
     self:Stage "inputs"
-    typ = assert(tovalidimagetype(typ,"expected a number or an array of numbers"))
-    local r = self:ImageType(typ,W,H) 
-    self:newparameter(name,"image",idx,r)
+    local ispace = IndexSpace(dims)
+    local scalartype,channelcount = tovalidimagetype(typ,"expected a number or an array of numbers")
+    assert(scalartype,"expected a number or an array of numbers")
+    local r = ImageType(ispace,scalartype,channelcount) 
+    self:newparameter(ImageParam(r,name,idx))
 end
 
-function ProblemSpec:ImageType(typ,W,H)
-    W,H = assert(todim(W)),assert(todim(H))
-    assert(terralib.types.istype(typ))
-    return newImage(typ,W,H)
-end
 
 function ProblemSpec:Graph(name, idx, ...)
     self:Stage "inputs"
@@ -558,8 +711,7 @@ function ProblemSpec:Graph(name, idx, ...)
         GraphType.entries:insert ( {name .. "_y", &int32} )
         mm.elements:insert( { name = name, xidx = assert(tonumber(xidx)), yidx = assert(tonumber(yidx)) } )
     end
-    
-    self:newparameter(name, "graph", idx, GraphType)
+    self:newparameter(GraphParam(GraphType,name,idx))
 end
 
 local allPlans = terralib.newlist()
@@ -611,18 +763,10 @@ terra opt.ProblemSolve(plan : &opt.Plan, params : &&opaque, solverparams : &&opa
    while opt.ProblemStep(plan, params, solverparams) ~= 0 do end
 end
 
-
 ad = require("ad")
 
-
-local Index = ad.newclass("Index")
-local Offset = Index:Variant("Offset") -- an local pixel relative index in an image
-local GraphElement = Index:Variant("GraphElement") -- an index looked up from a graph node
-
 function Offset:__tostring() return ("%d_%d"):format(self.x,self.y) end
-Offset.get = terralib.memoize(function(self,x,y) assert(type(x) == "number" and type(y) == "number") return Offset:new { x = x, y = y } end)
 function GraphElement:__tostring() return ("%s_%s"):format(tostring(self.graph), self.element) end
-GraphElement.get = terralib.memoize(function(self,g,e) return GraphElement:new { graph = g, element = e } end)
 
 local VarDef = ad.newclass("VarDef") -- meta-data attached to each ad variable about what actual value it is
 local ImageAccess = VarDef:Variant("ImageAccess") -- access into one particular image
@@ -766,7 +910,7 @@ function ProblemSpecAD:Graph(name,idx,...)
     local g = Graph:new { name = tostring(name) }
     for i = 1, select("#",...),5 do
         local name,W,H,xidx,yidx = select(i,...)
-        g[name] = GraphElement:get(g,name)
+        g[name] = GraphElement(g,name)
     end
     return g
 end
@@ -783,7 +927,7 @@ function Image:__call(x,y,c)
         assert(not c,"extra argument?")
         c = y
     else
-        index = Offset:get(assert(tonumber(x)),assert(tonumber(y)))
+        index = Offset(x,y)
     end
     c = tonumber(c)
     assert(not c or c < self.N, "channel outside of range")
@@ -816,7 +960,7 @@ end
 function BoundsAccess:type() return bool end --implementing AD's API for keys
 function ImageAccess:shift(x,y)
     assert(Offset:is(self.index), "cannot shift graph accesses!")
-    return ImageAccess:get(self.image,self:shape(),Offset:get(self.index.x + x, self.index.y + y),self.channel)
+    return ImageAccess:get(self.image,self:shape(),Offset(self.index.x + x, self.index.y + y),self.channel)
 end
 function IndexValue:shift(x,y)
     local v = {[0] = x,y}
@@ -1643,7 +1787,7 @@ local function residualsincludingX00(unknownsupport,channel)
     for i,u in ipairs(unknownsupport) do
         assert(Offset:is(u.index),"unexpected graph access")
         if u.channel == channel then
-            r:insert(Offset:get(-u.index.x,-u.index.y))
+            r:insert(Offset(-u.index.x,-u.index.y))
         end
     end
     return r
@@ -1897,12 +2041,12 @@ function createprecomputed(self,name,precomputedimages)
     local scatters = terralib.newlist()
     for i,im in ipairs(precomputedimages) do
         local expression = ad.polysimplify(im.expression)
-        scatters:insert(NewScatter(im, Offset:get(0,0), 0, im.expression, "set"))
+        scatters:insert(NewScatter(im, Offset(0,0), 0, im.expression, "set"))
         for u,gim in pairs(im.gradientimages) do
             local gradientexpression = im.gradientexpressions[u]
             gradientexpression = ad.polysimplify(gradientexpression)
             if not ad.Const:is(gradientexpression) then
-                scatters:insert(NewScatter(gim, Offset:get(0,0), 0, gradientexpression, "set"))
+                scatters:insert(NewScatter(gim, Offset(0,0), 0, gradientexpression, "set"))
             end
         end
     end

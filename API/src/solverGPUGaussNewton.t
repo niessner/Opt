@@ -15,9 +15,13 @@ local FLOAT_EPSILON = `0.000001f
 -- GAUSS NEWTON (non-block version)
 return function(problemSpec)
 
-	local unknownElement = problemSpec:UnknownType().metamethods.typ
-	local unknownType = problemSpec:UnknownType()
+    local UnknownType = problemSpec:UnknownType()
+	local unknownElement = UnknownType:ElementType()
+	local TUnknownType = UnknownType:terratype()
+	local UnknownIndexSpace = UnknownType.ispace
+    local Index = UnknownIndexSpace:indextype()
     local isGraph = #problemSpec.functions.cost.graphfunctions > 0
+    
     local struct PlanData(S.Object) {
 		plan : opt.Plan
 		parameters : problemSpec:ParameterType()
@@ -29,12 +33,12 @@ return function(problemSpec)
 		debugPreImage : &float
 
 
-		delta : problemSpec:UnknownType()	--current linear update to be computed -> num vars
-		r : problemSpec:UnknownType()		--residuals -> num vars	--TODO this needs to be a 'residual type'
-		z : problemSpec:UnknownType()		--preconditioned residuals -> num vars	--TODO this needs to be a 'residual type'
-		p : problemSpec:UnknownType()		--descent direction -> num vars
-		Ap_X : problemSpec:UnknownType()	--cache values for next kernel call after A = J^T x J x p -> num vars
-		preconditioner : problemSpec:UnknownType() --pre-conditioner for linear system -> num vars
+		delta : TUnknownType	--current linear update to be computed -> num vars
+		r : TUnknownType		--residuals -> num vars	--TODO this needs to be a 'residual type'
+		z : TUnknownType		--preconditioned residuals -> num vars	--TODO this needs to be a 'residual type'
+		p : TUnknownType		--descent direction -> num vars
+		Ap_X : TUnknownType	--cache values for next kernel call after A = J^T x J x p -> num vars
+		preconditioner : TUnknownType --pre-conditioner for linear system -> num vars
 		
 		
 		scanAlphaNumerator : &float
@@ -49,37 +53,32 @@ return function(problemSpec)
 		lIterations : int		--linear iterations
 	}
 	
-	local guardedInvert = macro(function(p)
-	    local pt = p:gettype()
-	    if util.isvectortype(pt) then
-	        return quote
-	                    var invp = p
-	                    for i = 0, invp:size() do
-	                        invp(i) = terralib.select(invp(i) > FLOAT_EPSILON, 1.f / invp(i),invp(i))
-	                    end
-	               in invp end
-	    else
-	        return `terralib.select(p > FLOAT_EPSILON, 1.f / p, p)
+	local terra guardedInvert(p : unknownElement)
+	    var invp = p
+	    for i = 0, invp:size() do
+	        invp(i) = terralib.select(invp(i) > FLOAT_EPSILON, 1.f / invp(i),invp(i))
 	    end
-	end)
-
+	    return invp
+	end
+	
     local kernels = {}
     terra kernels.PCGInit1(pd : PlanData)
         var d = 0.0f -- init for out of bounds lanes
-        var w : int, h : int
-        if getValidUnknown(pd, &w, &h) then
-		
+        
+        var idx : Index
+        if idx:initFromCUDAParams() then
+        
             -- residuum = J^T x -F - A x delta_0  => J^T x -F, since A x x_0 == 0                            
             var residuum : unknownElement = 0.0f
             var pre : unknownElement = 0.0f	
 			
-            if (not [problemSpec:EvalExclude(w,h,w,h,`pd.parameters)]) then 
+            if (not [problemSpec:EvalExclude(idx,`pd.parameters)]) then 
                 
-				pd.delta(w,h) = 0.0f    
+				pd.delta(idx) = 0.0f    
 				
-                residuum, pre = problemSpec.functions.evalJTF.unknownfunction(w, h, w, h, pd.parameters)
+                residuum, pre = problemSpec.functions.evalJTF.unknownfunction(idx, pd.parameters)
                 residuum = -residuum
-                pd.r(w, h) = residuum
+                pd.r(idx) = residuum
 				
 				if not problemSpec.usepreconditioner then
 					pre = 1.0f
@@ -89,13 +88,13 @@ return function(problemSpec)
 			if not isGraph then				
 				pre = guardedInvert(pre)
 				var p = pre*residuum	-- apply pre-conditioner M^-1			   
-				pd.p(w, h) = p
+				pd.p(idx) = p
 				
 				--d = residuum*p		-- x-th term of nominator for computing alpha and denominator for computing beta
-				d = util.Dot(residuum,p) 
+				d = residuum:dot(p) 
 			end
 			
-			pd.preconditioner(w, h) = pre
+			pd.preconditioner(idx) = pre
 			
         end 
 		if not isGraph then
@@ -122,10 +121,10 @@ return function(problemSpec)
 
     terra kernels.PCGInit1_Finish(pd : PlanData)	--only called for graphs
     	var d = 0.0f -- init for out of bounds lanes
-        var w : int, h : int
-        if getValidUnknown(pd, &w, &h) then
-        	var residuum = pd.r(w, h)			
-			var pre = pd.preconditioner(w, h)
+        var idx : Index
+        if idx:initFromCUDAParams() then
+        	var residuum = pd.r(idx)			
+			var pre = pd.preconditioner(idx)
 			
 			pre = guardedInvert(pre)
 			
@@ -134,8 +133,8 @@ return function(problemSpec)
 			end
 			
 			var p = pre*residuum	-- apply pre-conditioner M^-1			   
-			pd.p(w, h) = p
-        	d = util.Dot(residuum, p)
+			pd.p(idx) = p
+        	d = residuum:dot(p)
         end
 
 		d = util.warpReduce(d)	
@@ -146,13 +145,13 @@ return function(problemSpec)
 	
     terra kernels.PCGStep1(pd : PlanData)
         var d = 0.0f
-        var w : int, h : int
-        if getValidUnknown(pd, &w, &h) and (not [problemSpec:EvalExclude(w,h,w,h,`pd.parameters)]) then
+        var idx : Index
+        if idx:initFromCUDAParams() and (not [problemSpec:EvalExclude(idx,`pd.parameters)]) then
             var tmp : unknownElement = 0.0f
              -- A x p_k  => J^T x J x p_k 
-            tmp = problemSpec.functions.applyJTJ.unknownfunction(w, h, w, h, pd.parameters, pd.p)
-            pd.Ap_X(w, h) = tmp					 -- store for next kernel call
-            d = util.Dot(pd.p(w,h),tmp)			 -- x-th term of denominator of alpha
+            tmp = problemSpec.functions.applyJTJ.unknownfunction(idx, pd.parameters, pd.p)
+            pd.Ap_X(idx) = tmp					 -- store for next kernel call
+            d = pd.p(idx):dot(tmp)			 -- x-th term of denominator of alpha
         end
         d = util.warpReduce(d)
         if (util.laneid() == 0) then
@@ -182,8 +181,8 @@ return function(problemSpec)
 	
 	terra kernels.PCGStep2(pd : PlanData)
         var b = 0.0f 
-        var w : int, h : int
-        if getValidUnknown(pd, &w, &h)  and (not [problemSpec:EvalExclude(w,h,w,h,`pd.parameters)]) then
+        var idx : Index
+        if idx:initFromCUDAParams() and (not [problemSpec:EvalExclude(idx,`pd.parameters)]) then
             -- sum over block results to compute denominator of alpha
             var alphaDenominator : float = pd.scanAlphaDenominator[0]
 			var alphaNumerator : float = pd.scanAlphaNumerator[0]
@@ -194,12 +193,12 @@ return function(problemSpec)
 				alpha = alphaNumerator/alphaDenominator 
 			end 
         
-            pd.delta(w, h) = pd.delta(w, h)+alpha*pd.p(w,h)		-- do a decent step
+            pd.delta(idx) = pd.delta(idx)+alpha*pd.p(idx)		-- do a decent step
             
-            var r = pd.r(w,h)-alpha*pd.Ap_X(w,h)				-- update residuum
-            pd.r(w,h) = r										-- store for next kernel call
+            var r = pd.r(idx)-alpha*pd.Ap_X(idx)				-- update residuum
+            pd.r(idx) = r										-- store for next kernel call
         
-			var pre = pd.preconditioner(w,h)
+			var pre = pd.preconditioner(idx)
 			if not problemSpec.usepreconditioner then
 				pre = 1.0f
 			end
@@ -209,9 +208,9 @@ return function(problemSpec)
 			end
 			
             var z = pre*r										-- apply pre-conditioner M^-1
-            pd.z(w,h) = z;										-- save for next kernel call
+            pd.z(idx) = z;										-- save for next kernel call
             
-            b = util.Dot(z,r)									-- compute x-th term of the numerator of beta
+            b = z:dot(r)									-- compute x-th term of the numerator of beta
         end
         b = util.warpReduce(b)
         if (util.laneid() == 0) then
@@ -220,38 +219,37 @@ return function(problemSpec)
     end
 	
     terra kernels.PCGStep3(pd : PlanData)			
-        var w : int, h : int
-		
-        if getValidUnknown(pd, &w, &h) and (not [problemSpec:EvalExclude(w,h,w,h,`pd.parameters)]) then
+        var idx : Index
+        if idx:initFromCUDAParams() and (not [problemSpec:EvalExclude(idx,`pd.parameters)])  then
 			
 			var rDotzNew : float = pd.scanBetaNumerator[0]				-- get new numerator
 			var rDotzOld : float = pd.scanAlphaNumerator[0]				-- get old denominator
 
 			var beta : float = 0.0f		                    
 			if rDotzOld > FLOAT_EPSILON then beta = rDotzNew/rDotzOld end	-- update step size beta
-			pd.p(w,h) = pd.z(w,h)+beta*pd.p(w,h)							-- update decent direction
+			pd.p(idx) = pd.z(idx)+beta*pd.p(idx)							-- update decent direction
 
         end
     end
 	
 	terra kernels.PCGLinearUpdate(pd : PlanData)
-        var w : int, h : int
-        if getValidUnknown(pd, &w, &h) and (not [problemSpec:EvalExclude(w,h,w,h,`pd.parameters)]) then
-            pd.parameters.X(w,h) = pd.parameters.X(w,h) + pd.delta(w,h)
+        var idx : Index
+        if idx:initFromCUDAParams() and (not [problemSpec:EvalExclude(idx,`pd.parameters)])  then
+            pd.parameters.X(idx) = pd.parameters.X(idx) + pd.delta(idx)
         end
     end	
 	
 	terra kernels.computeCost(pd : PlanData)			
         var cost : float = 0.0f
-        var w : int, h : int
-        if util.getValidUnknown(pd, &w, &h)  and (not [problemSpec:EvalExclude(w,h,w,h,`pd.parameters)]) then
+        var idx : Index
+        if idx:initFromCUDAParams() and (not [problemSpec:EvalExclude(idx,`pd.parameters)])  then
             var params = pd.parameters				
-            cost = cost + [float](problemSpec.functions.cost.unknownfunction(w, h, w, h, params))
+            cost = cost + [float](problemSpec.functions.cost.unknownfunction(idx, params))
         end
 
         cost = util.warpReduce(cost)
         if (util.laneid() == 0) then
-        util.atomicAdd(pd.scratchF, cost)
+            util.atomicAdd(pd.scratchF, cost)
         end
     end
 	
@@ -277,12 +275,12 @@ return function(problemSpec)
     end
     
     terra kernels.precomputeImages(pd : PlanData)
-        var w : int, h : int
-        if util.getValidUnknown(pd,&w,&h) then
+        var idx : Index
+        if idx:initFromCUDAParams() then
             escape
                 if problemSpec.functions.precompute then
                     emit quote 
-                        problemSpec.functions.precompute.unknownfunction(w,h,w,h,pd.parameters)
+                        problemSpec.functions.precompute.unknownfunction(idx,pd.parameters)
                     end
                 end
             end
