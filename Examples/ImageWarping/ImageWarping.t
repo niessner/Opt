@@ -116,17 +116,17 @@ local terra costEpsilon(idx : Index, self : P:ParameterType(), eps : float_3) : 
 		e_reg = e_reg + d*d
 	end
 	if left:InBounds() and self.Mask(left)(0) == 0.0f then
-		var n : float_2 = getXFloat2(left,self) --make_float2(self.X(left)(0), self.X(left)(1))
+		var n : float_2 = getXFloat2(left,self) 
 		var d : float_2 = (x - n) - mul(R, (xHat - self.UrShape(left)))
 		e_reg = e_reg + d*d
 	end
 	if up:InBounds() and self.Mask(up)(0) == 0.0f then
-		var n : float_2 = getXFloat2(up,self) --make_float2(self.X(up)(0), self.X(up)(1))
+		var n : float_2 = getXFloat2(up,self) 
 		var d : float_2 = (x - n) - mul(R, (xHat - self.UrShape(up)))
 		e_reg = e_reg + d*d
 	end
 	if down:InBounds() and self.Mask(down)(0) == 0.0f then
-		var n : float_2 = getXFloat2(down,self) --make_float2(self.X(down)(0), self.X(down)(1))
+		var n : float_2 = getXFloat2(down,self)
 		var d : float_2 = (x - n) - mul(R, (xHat - self.UrShape(down)))
 		e_reg = e_reg + d*d
 	end

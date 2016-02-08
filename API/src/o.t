@@ -364,7 +364,7 @@ function ImageType:usestexture() -- texture, 2D texture
 end
 
 function ImageType:ElementType() return util.Vector(self.scalartype,self.channelcount) end
-
+function ImageType:LoadAsVector() return self.channelcount == 2 or self.channelcount == 4 end
 function ImageType:terratype()
     if self._terratype then return self._terratype end
     print("Creating ImageType: ",self)
@@ -381,12 +381,24 @@ function ImageType:terratype()
 	  return string.format("Image(%s,%s,%d)",tostring(self.scalartype),tostring(self.ispace),channelcount)
 	end
 
-    terra Image.metamethods.__apply(self : &Image, idx : Index) : vectortype
-        return self.data[idx:tooffset()]
+    if self:LoadAsVector() then
+        local VT = &vector(scalartype,self.channelcount)
+        terra Image.metamethods.__apply(self : &Image, idx : Index) : vectortype
+            var a = VT(self.data)[idx:tooffset()]
+            return @[&vectortype](&a)
+        end
+        terra Image.metamethods.__update(self : &Image, idx : Index, v : vectortype)
+            VT(self.data)[idx:tooffset()] = @VT(&v)
+        end
+    else
+        terra Image.metamethods.__apply(self : &Image, idx : Index) : vectortype
+            return self.data[idx:tooffset()]
+        end
+        terra Image.metamethods.__update(self : &Image, idx : Index, v : vectortype)
+            self.data[idx:tooffset()] = v
+        end
     end
-    terra Image.metamethods.__update(self : &Image, idx : Index, v : vectortype)
-        self.data[idx:tooffset()] = v
-    end
+    
 	terra Image:atomicAddChannel(idx : Index, c : int32, v : scalartype)
 	    var addr : &scalartype = &self.data[idx:tooffset()][c]
 	    util.atomicAdd(addr,v)
