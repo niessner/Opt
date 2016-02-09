@@ -10,7 +10,7 @@ local solversGPU = require("solversGPU")
 local C = util.C
 
 local use_bindless_texture = true
-local use_pitched_memory = false
+local use_pitched_memory = true
 local use_split_sums = true
 local use_condition_scheduling = true
 local use_register_minimization = true
@@ -355,8 +355,13 @@ function ImageType:usestexture() -- texture, 2D texture
     local c = self.channelcount
     if use_bindless_texture and self.scalartype == float and 
        (c == 1 or c == 2 or c == 4) then
-       if #self.ispace.dims == 2 then
-            return true, (self.ispace.dims[1].size*c % 32) and use_pitched_memory
+       if use_pitched_memory and #self.ispace.dims == 2 then
+            local floatstride = self.ispace.dims[1].size*c
+            local m = floatstride % 32
+            if m ~= 0 then
+                print(string.format("***** falling back to linear texture (width in floats %d %% 32 == %d)", floatstride , m))
+            end
+            return true,m == 0
        end
        return true, false 
     end
@@ -410,8 +415,6 @@ function ImageType:ElementType() return util.Vector(self.scalartype,self.channel
 function ImageType:LoadAsVector() return self.channelcount == 2 or self.channelcount == 4 end
 function ImageType:terratype()
     if self._terratype then return self._terratype end
-    print("Creating ImageType: ",self)
-    print("VectorType",self:ElementType())
     local scalartype = self.scalartype
     local vectortype = self:ElementType()
     local struct Image {
@@ -428,12 +431,18 @@ function ImageType:terratype()
 
     local VT = &vector(scalartype,channelcount)    
     -- reads
-    if textured then         
+    if pitched then
         terra Image.metamethods.__apply(self : &Image, idx : Index) : vectortype
-            var i : int = idx:tooffset()
+            var read = terralib.asm([tuple(float,float,float,float)],
+                "tex.2d.v4.f32.s32  {$0,$1,$2,$3}, [$4,{$5,$6}];",
+                "=f,=f,=f,=f,l,r,r",false, self.tex, idx.d0,idx.d1)
+            return @[&vectortype](&read)
+        end
+    elseif textured then         
+        terra Image.metamethods.__apply(self : &Image, idx : Index) : vectortype
             var read = terralib.asm([tuple(float,float,float,float)],
                 "tex.1d.v4.f32.s32  {$0,$1,$2,$3}, [$4,{$5}];",
-                "=f,=f,=f,=f,l,r",false, self.tex,i)
+                "=f,=f,=f,=f,l,r",false, self.tex,idx:tooffset())
             return @[&vectortype](&read)
         end
     elseif self:LoadAsVector() then
