@@ -10,7 +10,7 @@ local solversGPU = require("solversGPU")
 local C = util.C
 
 local use_bindless_texture = true
-local use_pitched_memory = true
+local use_pitched_memory = false
 local use_split_sums = true
 local use_condition_scheduling = true
 local use_register_minimization = true
@@ -354,13 +354,56 @@ end
 function ImageType:usestexture() -- texture, 2D texture
     local c = self.channelcount
     if use_bindless_texture and self.scalartype == float and 
-       (c == 1 and c == 2 or c == 4) then
+       (c == 1 or c == 2 or c == 4) then
        if #self.ispace.dims == 2 then
             return true, (self.ispace.dims[1].size*c % 32) and use_pitched_memory
        end
        return true, false 
     end
     return false, false 
+end
+
+local cd = macro(function(apicall) return quote
+    var r = apicall
+    if r ~= 0 then  
+        C.printf("Cuda reported error %d: %s\n",r, C.cudaGetErrorString(r))
+        return r
+    end
+end end)
+
+local terra wrapBindlessTexture(data : &uint8, channelcount : int, width : int, height : int) : C.cudaTextureObject_t
+    var res_desc : C.cudaResourceDesc
+    C.memset(&res_desc, 0, sizeof(C.cudaResourceDesc))
+
+    res_desc.res.linear.devPtr = data
+    res_desc.res.linear.desc.f = C.cudaChannelFormatKindFloat
+    res_desc.res.linear.desc.x = 32  -- bits per channel
+    if  channelcount > 1 then
+        res_desc.res.linear.desc.y = 32
+    end
+    if channelcount == 4 then
+        res_desc.res.linear.desc.z = 32
+        res_desc.res.linear.desc.w = 32
+    end
+
+    if height ~= 0 then
+        res_desc.resType = C.cudaResourceTypePitch2D
+        res_desc.res.pitch2D.width = width
+        res_desc.res.pitch2D.height = height
+        res_desc.res.pitch2D.pitchInBytes = sizeof(float)*width*channelcount
+    else
+        res_desc.resType = C.cudaResourceTypeLinear
+        res_desc.res.linear.sizeInBytes = sizeof(float)*width*channelcount
+    end
+
+    var tex_desc : C.cudaTextureDesc
+    C.memset(&tex_desc, 0, sizeof(C.cudaTextureDesc))
+    tex_desc.readMode       = C.cudaReadModeElementType
+
+    var tex : C.cudaTextureObject_t = 0;
+    cd(C.cudaCreateTextureObject(&tex, &res_desc, &tex_desc, nil))
+
+    return tex
 end
 
 function ImageType:ElementType() return util.Vector(self.scalartype,self.channelcount) end
@@ -376,24 +419,39 @@ function ImageType:terratype()
         tex  : C.cudaTextureObject_t;
     }
     self._terratype = Image
+    local channelcount = self.channelcount
+    local textured,pitched = self:usestexture()
     local Index = self.ispace:indextype()
     function Image.metamethods.__typename()
 	  return string.format("Image(%s,%s,%d)",tostring(self.scalartype),tostring(self.ispace),channelcount)
 	end
 
-    if self:LoadAsVector() then
-        local VT = &vector(scalartype,self.channelcount)
+    local VT = &vector(scalartype,channelcount)    
+    -- reads
+    if textured then         
+        terra Image.metamethods.__apply(self : &Image, idx : Index) : vectortype
+            var i : int = idx:tooffset()
+            var read = terralib.asm([tuple(float,float,float,float)],
+                "tex.1d.v4.f32.s32  {$0,$1,$2,$3}, [$4,{$5}];",
+                "=f,=f,=f,=f,l,r",false, self.tex,i)
+            return @[&vectortype](&read)
+        end
+    elseif self:LoadAsVector() then
         terra Image.metamethods.__apply(self : &Image, idx : Index) : vectortype
             var a = VT(self.data)[idx:tooffset()]
             return @[&vectortype](&a)
         end
+    else    
+        terra Image.metamethods.__apply(self : &Image, idx : Index) : vectortype
+            return self.data[idx:tooffset()]
+        end
+    end
+    -- writes
+    if self:LoadAsVector() then
         terra Image.metamethods.__update(self : &Image, idx : Index, v : vectortype)
             VT(self.data)[idx:tooffset()] = @VT(&v)
         end
     else
-        terra Image.metamethods.__apply(self : &Image, idx : Index) : vectortype
-            return self.data[idx:tooffset()]
-        end
         terra Image.metamethods.__update(self : &Image, idx : Index, v : vectortype)
             self.data[idx:tooffset()] = v
         end
@@ -412,7 +470,7 @@ function ImageType:terratype()
         return v
     end
     
-    if self.channelcount == 2 then
+    if channelcount == 2 then
         local terra lerp(v0 : vectortype, v1 : vectortype, t : float)
             return (1.f - t)*v0 + t*v1
         end
@@ -441,7 +499,23 @@ function ImageType:terratype()
         self.data = nil
         self:setGPUptr(ptr)
     end
-    terra Image:setGPUptr(ptr : &uint8) self.data = [&vectortype](ptr) end
+    if textured then
+        local W,H = cardinality,0
+        if pitched then
+            W,H = self.ispace.dims[1].size,self.ispace.dims[2].size
+        end
+        terra Image:setGPUptr(ptr : &uint8)
+            if [&uint8](self.data) ~= ptr then
+                if self.data ~= nil then
+                    cd(C.cudaDestroyTextureObject(self.tex))
+                end
+                self.tex = wrapBindlessTexture(ptr, channelcount, W, H)
+            end
+            self.data = [&vectortype](ptr)
+        end
+    else
+        terra Image:setGPUptr(ptr : &uint8) self.data = [&vectortype](ptr) end
+    end
     return Image
 end
 
