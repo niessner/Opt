@@ -4,10 +4,10 @@ local W,H = opt.Dim("W",0), opt.Dim("H",1)
 local S = ad.ProblemSpec()
 S:UsePreconditioner(true)
 
-local X = 			S:Image("X", opt.float3,W,H,0)				--uv, a <- unknown
-local UrShape = 	S:Image("UrShape", opt.float2,W,H,1)		--urshape
-local Constraints = S:Image("Constraints", opt.float2,W,H,2)	--constraints
-local Mask = 		S:Image("Mask", float, W,H,3)				--validity mask for constraints
+local X = 			S:Image("X", opt.float3,{W,H},0)				--uv, a <- unknown
+local UrShape = 	S:Image("UrShape", opt.float2,{W,H},1)		--urshape
+local Constraints = S:Image("Constraints", opt.float2,{W,H},2)	--constraints
+local Mask = 		S:Image("Mask", float, {W,H},3)				--validity mask for constraints
 
 local w_fitSqrt = S:Param("w_fitSqrt", float, 4)
 local w_regSqrt = S:Param("w_regSqrt", float, 5)
@@ -53,11 +53,11 @@ for ii ,o in ipairs(offsets) do
     local i,j = unpack(o)
     local n = ad.Vector(X(i,j,0), X(i,j,1))
     local ARAPCost = (x - n)	-	mul(R, (xHat - UrShape( i,j)))
-    local ARAPCostF = ad.select(opt.InBounds(0,0,0,0),	ad.select(opt.InBounds( i,j,0,0), ARAPCost, ad.Vector(0.0, 0.0)), ad.Vector(0.0, 0.0))
+    local ARAPCostF = ad.select(opt.InBounds(0,0),	ad.select(opt.InBounds( i,j), ARAPCost, ad.Vector(0.0, 0.0)), ad.Vector(0.0, 0.0))
     local m = Mask(i,j)
     ARAPCostF = w_regSqrt*ad.select(ad.eq(m, 0.0), ARAPCostF, ad.Vector(0.0, 0.0))
     if USE_J then
-        ARAPCostF = S:ComputedImage("J_reg_"..tostring(i).."_"..tostring(j),W,H,ARAPCostF)(0,0)
+        ARAPCostF = S:ComputedImage("J_reg_"..tostring(i).."_"..tostring(j),{W,H},ARAPCostF)(0,0)
     end
     terms:insert(ARAPCostF)
 end

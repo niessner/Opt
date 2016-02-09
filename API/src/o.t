@@ -155,21 +155,28 @@ terra opt.ProblemDelete(p : &opt.Problem)
     --TODO: remove from problem table
 end
 
-
+local List = terralib.newlist
 A:Extern("TerraType",terralib.types.istype)
+A:Extern("Shape",function(x) return ad.Shape:is(x) end)
 A:Define [[
 Dim = (string name, number size, number? _index) unique
 IndexSpace = (Dim* dims) unique
-Index = Offset(number x, number y) unique
+Index = Offset(number* data) unique
       | GraphElement(any graph, string element) unique
 ImageType = (IndexSpace ispace, TerraType scalartype, number channelcount) unique
+Image = (string name, ImageType type, number idx, boolean scalar)
+ImageVector = (Image* images)
 ProblemParam = ImageParam(ImageType imagetype)
              | ScalarParam(TerraType type)
              | GraphParam(TerraType type)
              attributes (string name, any idx)
+VarDef =  ImageAccess(Image image,  Shape _shape, Index index, number channel) unique
+       | BoundsAccess(Offset offset, number expand) unique
+       | IndexValue(number dim, number shift) unique
+       | ParamValue(string name,TerraType type) unique
 ]]
-local Dim,IndexSpace,Index,Offset,GraphElement,ImageType,ProblemParam,ImageParam,ScalarParam,GraphParam = 
-      A.Dim,A.IndexSpace,A.Index,A.Offset,A.GraphElement,A.ImageType,A.ProblemParam,A.ImageParam,A.ScalarParam,A.GraphParam
+local Dim,IndexSpace,Index,Offset,GraphElement,ImageType,Image,ImageVector,ProblemParam,ImageParam,ScalarParam,GraphParam,VarDef,ImageAccess,BoundsAccess,IndexValue,ParamValue = 
+      A.Dim,A.IndexSpace,A.Index,A.Offset,A.GraphElement,A.ImageType,A.Image,A.ImageVector,A.ProblemParam,A.ImageParam,A.ScalarParam,A.GraphParam,A.VarDef,A.ImageAccess,A.BoundsAccess,A.IndexValue,A.ParamValue
 
 local ProblemSpec = newclass("ProblemSpec")
 opt.PSpec = ProblemSpec
@@ -259,6 +266,8 @@ function ProblemSpec:EvalExclude(...)
     end
 end
 
+function Dim:__tostring() return "Dim("..self.name..")" end
+
 function opt.Dim(name, idx)
     idx = assert(tonumber(idx), "expected an index for this dimension")
     local size = tonumber(opt.dimensions[idx])
@@ -271,6 +280,15 @@ function IndexSpace:cardinality()
         c = c * d.size
     end
     return c
+end
+function IndexSpace:ZeroOffset()
+    if self._zerooffset then return self._zerooffset end
+    local zeros = terralib.newlist()
+    for i = 1,#self.dims do
+        zeros:insert(0)
+    end
+    self._zerooffset = Offset(zeros)
+    return self._zerooffset
 end
 
 function IndexSpace:indextype()
@@ -312,11 +330,11 @@ function IndexSpace:indextype()
     terra Index:tooffset()
         return [genoffset(self)]
     end
-    local function genbounds(self)
+    local function genbounds(self,e)
         local valid
         for i = 1, #dims do
             local n = fieldnames[i]
-            local v = `self.[n] >= 0 and self.[n] < [dims[i].size]
+            local v = `self.[n] >= e and self.[n] < [dims[i].size] - e
             if valid then
                 valid = `valid and v
             else
@@ -325,7 +343,8 @@ function IndexSpace:indextype()
         end
         return valid
     end
-    terra Index:InBounds() return [ genbounds(self) ] end
+    terra Index:InBounds() return [ genbounds(self,0) ] end
+    terra Index:InBoundsExpanded(e : int) return [ genbounds(self,e) ] end
     
     if #dims <= 3 then
         local dimnames = "xyz"
@@ -478,7 +497,7 @@ function ImageType:terratype()
         end
         return v
     end
-    
+    -- lerps for 2D images only
     if channelcount == 2 then
         local terra lerp(v0 : vectortype, v1 : vectortype, t : float)
             return (1.f - t)*v0 + t*v1
@@ -528,245 +547,6 @@ function ImageType:terratype()
     return Image
 end
 
---[[
-newImage = terralib.memoize(function(typ, W, H)
-   
-    local cd = macro(function(apicall) return quote
-        var r = apicall
-        if r ~= 0 then  
-            C.printf("Cuda reported error %d: %s\n",r, C.cudaGetErrorString(r))
-            return r
-        end
-    end end)
-
-    local wrapBindlessTexture, tex_read
-    if use_texture then
-        -- check alignment
-        if stride % 128 ~= 0 then
-            print(string.format("***** Bad Stride %d (elemsize %d) *****", stride, elemsize))
-            use_pitched_memory = false
-        end
-
-        local name = "Image("..tostring(typ)..','..W.size..','..H.size..
-                          ','..elemsize..','..stride..')'
-        terra wrapBindlessTexture(data : &uint8) : C.cudaTextureObject_t
-
-            -- Description of Texture Resource
-            var res_desc : C.cudaResourceDesc
-                C.memset(&res_desc, 0, sizeof(C.cudaResourceDesc))
-
-            -- The following fields are in the same place for both
-            -- the linear and pitch2D variant layouts
-            res_desc.res.linear.devPtr      = data
-            -- encode the fact we have vectors here...
-            res_desc.res.linear.desc.f      = C.cudaChannelFormatKindFloat
-            res_desc.res.linear.desc.x      = 32  -- bits per channel
-            if nvec > 1 then
-                res_desc.res.linear.desc.y  = 32
-            end
-            if nvec == 4 then
-                res_desc.res.linear.desc.z  = 32
-                res_desc.res.linear.desc.w  = 32
-            end
-
-            -- fill out differing data for linear vs pitch2D variants
-            escape if use_pitched_memory then emit quote
-                res_desc.resType                  = C.cudaResourceTypePitch2D
-                res_desc.res.pitch2D.width        = W.size
-                res_desc.res.pitch2D.height       = H.size
-                res_desc.res.pitch2D.pitchInBytes = stride
-
-                if [uint64](data) % 128 ~= 0 then
-                    C.printf(["*****\n*****\n"..
-                              " Bad Texture Start Alignment %lu"..
-                              "\n*****\n*****\n"], [uint64](data))
-                end
-            end else emit quote
-                res_desc.resType                = C.cudaResourceTypeLinear
-                res_desc.res.linear.sizeInBytes = stride * H.size
-            end end end
-
-            var tex_desc : C.cudaTextureDesc
-                C.memset(&tex_desc, 0, sizeof(C.cudaTextureDesc))
-            -- out of bounds accesses are set to 0:
-            --tex_desc.addressMode[0] = C.cudaAddressModeBorder
-            --tex_desc.addressMode[1] = C.cudaAddressModeBorder
-            ---- just read the entry:
-            --tex_desc.filterMode     = C.cudaFilterModePoint
-            tex_desc.readMode       = C.cudaReadModeElementType
-
-            -- cudaTextureObject_t should be uint64
-            var tex : C.cudaTextureObject_t = 0;
-            cd(C.cudaCreateTextureObject(&tex, &res_desc, &tex_desc, nil))
-
-            return tex
-        end
-
-        -- texture base address is assumed to be aligned to a 16-byte boundary
-        if use_pitched_memory then
-            terra tex_read(tex : C.cudaTextureObject_t, x : int32, y : int32)
-                var read = terralib.asm([tuple(float,float,float,float)],
-                    "tex.2d.v4.f32.s32  {$0,$1,$2,$3}, [$4,{$5,$6}];",
-                    "=f,=f,=f,=f,l,r,r",false, tex, x,y)
-                return escape if nvec == 1 then
-                    emit `read._0
-                else
-                    emit `@[&typ](&read)
-                end end
-            end
-        else
-            terra tex_read(tex : C.cudaTextureObject_t, x : int32, y : int32)
-                var idx  = y * [stride/elemsize] + x
-                var read = terralib.asm([tuple(float,float,float,float)],
-                    "tex.1d.v4.f32.s32  {$0,$1,$2,$3}, [$4,{$5}];",
-                    "=f,=f,=f,=f,l,r",false, tex, idx)
-                return escape if nvec == 1 then
-                    emit `read._0
-                else
-                    emit `@[&typ](&read)
-                end end
-            end
-        end
-    end
-
-	local struct Image {
-		data : &uint8;
-        tex  : C.cudaTextureObject_t;
-	}
-	function Image.metamethods.__typename()
-	  return string.format("Image(%s,%s,%s,%d,%d)",tostring(typ),W.name, H.name,elemsize,stride)
-	end
-
-    terra Image:debugprint()
-        C.printf(['  %p %lu '..tostring(typ)..'\n'], self.data, self.tex)
-    end
-
-	if util.isvectortype(typ) and typ.metamethods.type == float and (typ.metamethods.N == 4 or typ.metamethods.N == 2) then
-	    -- emit code that will produce special CUDA vector load instructions
-	    local storetype = vector(float,typ.metamethods.N)
-        if use_texture then
-          terra Image.metamethods.__apply(self : &Image, x : int32, y : int32)
-            return tex_read(self.tex, x, y)
-          end
-        else
-          terra Image.metamethods.__apply(self : &Image, x : int32, y : int32)
-            var a = @[&storetype](self.data + y*stride + x*elemsize)
-            return @[&typ](&a)
-          end
-        end
-        terra Image.metamethods.__update(self : &Image, x : int32, y : int32, v : typ)
-            @[&storetype](self.data + y*stride + x*elemsize) = @[&storetype](&v)
-        end
-	else
-        if use_texture then
-          terra Image.metamethods.__apply(self : &Image, x : int32, y : int32)
-            return tex_read(self.tex, x, y)
-          end
-        else
-          terra Image.metamethods.__apply(self : &Image, x : int32, y : int32)
-              return @[&typ](self.data + y*stride + x*elemsize)
-          end
-        end
-        terra Image.metamethods.__update(self : &Image, x : int32, y : int32, v : typ)
-            @[&typ](self.data + y*stride + x*elemsize) = v
-        end
-    end
-	terra Image:inbounds(x : int32, y : int32)
-	    return x >= 0 and y >= 0 and x < W.size and y < H.size
-	end
-	if util.isvectortype(typ) then
-	    terra Image:atomicAdd(x : int32, y : int32, v : typ)
-	        escape
-	            for i = 0,typ.metamethods.N - 1 do
-	                emit quote
-	                    util.atomicAdd( &(@[&typ](self.data + y*stride + x*elemsize))(i) ,v(i))
-	                end
-	            end
-	        end
-	    end
-	    terra Image:atomicAddChannel(x : int32, y : int32, c : int32, v : typ.metamethods.type)
-	        var addr = &(@[&typ](self.data + y*stride + x*elemsize))(c)
-	        util.atomicAdd(addr,v)
-	    end
-	else
-	    terra Image:atomicAdd(x : int32, y : int32, v : typ)
-	        util.atomicAdd([&typ](self.data + y*stride + x*elemsize),v)
-	    end
-	    terra Image:atomicAddChannel(x : int32, y : int32, c : int32, v : typ) 
-	        var addr = [&typ](self.data + y*stride + x*elemsize)
-	        util.atomicAdd(addr,v)
-	    end
-	end
-    if use_texture and use_pitched_memory then
-        Image.methods.get = macro(function(self,x,y,gx,gy)
-            -- ignore gx, gy cause assuming no patch solver
-            return `self(x,y)
-        end)
-    else
-    	Image.methods.get = macro(function(self,x,y,gx,gy)
-    		if not gx then
-    		    gx,gy = x,y
-    		end
-    		return quote
-                var v : typ = 0.f
-                if opt.InBoundsCalc(gx,gy,W.size,H.size,0,0) then
-                    v = self(x,y)
-                end
-            in v end
-    	end)
-    end
-    local terra lerp(v0 : typ, v1 : typ, t : float)
-        return (1.f - t)*v0 + t*v1
-    end
-    terra Image:sample(x : float, y : float)
-        var x0 : int, x1 : int = opt.math.floor(x),opt.math.ceil(x)
-        var y0 : int, y1 : int = opt.math.floor(y),opt.math.ceil(y)
-        var xn,yn = x - x0,y - y0
-        var u = lerp(self:get(x0,y0),self:get(x1,y0),xn)
-        var b = lerp(self:get(x0,y1),self:get(x1,y1),xn)
-        return lerp(u,b,yn)
-    end
-	terra Image:H() return H.size end
-	terra Image:W() return W.size end
-	terra Image:elemsize() return elemsize end
-	terra Image:stride() return stride end
-	terra Image:initCPU()
-		self.data = [&uint8](C.malloc(stride*H.size))
-		for h = 0, H.size do
-			for w = 0, W.size do
-				self(w, h) = 0.0f
-			end
-		end
-	end
-	terra Image:initGPU()
-        var data : &uint8
-        C.cudaMalloc([&&opaque](&data), stride*H.size)
-        C.cudaMemset([&opaque](data), 0, stride*H.size)
-        self:initFromGPUptr(data)
-    end
-    terra Image:initFromGPUptr( ptr : &uint8 )
-        self.data = nil
-        self:setGPUptr(ptr)
-    end
-    if use_texture then
-        terra Image:setGPUptr(ptr : &uint8)
-            if self.data ~= ptr then
-                if self.data ~= nil then
-                    cd(C.cudaDestroyTextureObject(self.tex))
-                end
-                self.tex = wrapBindlessTexture(ptr)
-            end
-            self.data = ptr
-        end
-    else
-        terra Image:setGPUptr(ptr : &uint8) self.data = ptr end
-    end
-	local mm = Image.metamethods
-	mm.typ,mm.W,mm.H,mm.elemsize,mm.stride = typ,W,H,elemsize,stride
-	return Image
-end)
-]]
-
 local unity = Dim("1",1)
 local function todim(d)
     return Dim:is(d) and d or d == 1 and unity
@@ -781,13 +561,18 @@ local function tovalidimagetype(typ)
     end
 end
 
-function ProblemSpec:Image(name,typ,dims,idx)
-    self:Stage "inputs"
-    local ispace = IndexSpace(dims)
+function ProblemSpec:ImageType(typ,ispace)
     local scalartype,channelcount = tovalidimagetype(typ,"expected a number or an array of numbers")
     assert(scalartype,"expected a number or an array of numbers")
-    local r = ImageType(ispace,scalartype,channelcount) 
-    self:newparameter(ImageParam(r,name,idx))
+    return ImageType(ispace,scalartype,channelcount) 
+end
+
+function ProblemSpec:Image(name,typ,ispace,idx)
+    self:Stage "inputs"
+    if not IndexSpace:is(ispace) then -- for handwritten API
+        ispace = IndexSpace(List(ispace)) 
+    end
+    self:newparameter(ImageParam(self:ImageType(typ,ispace),name,idx))
 end
 
 
@@ -860,14 +645,10 @@ end
 
 ad = require("ad")
 
-function Offset:__tostring() return ("%d_%d"):format(self.x,self.y) end
+function Offset:__tostring() return string.format("(%s)",self.data:map(tostring):concat(",")) end
 function GraphElement:__tostring() return ("%s_%s"):format(tostring(self.graph), self.element) end
 
-local VarDef = ad.newclass("VarDef") -- meta-data attached to each ad variable about what actual value it is
-local ImageAccess = VarDef:Variant("ImageAccess") -- access into one particular image
-local BoundsAccess = VarDef:Variant("BoundsAccess") -- query about the bounds of an image
-local IndexValue = VarDef:Variant("IndexValue") -- query of the numeric index
-local ParamValue = VarDef:Variant("ParamValue") -- get one of the global parameter values
+function VarDef:asvar() return ad.v[self] end
 
 function ImageAccess:__tostring()
     local r = ("%s_%s_%s"):format(self.image.name,tostring(self.index),self.channel)
@@ -876,23 +657,12 @@ function ImageAccess:__tostring()
     end
     return r
 end
-function BoundsAccess:__tostring() return ("bounds_%d_%d_%d_%d"):format(self.x,self.y,self.sx,self.sy) end
-function IndexValue:__tostring() return ({[0] = "i","j","k"})[self.dim._index] end
+function BoundsAccess:__tostring() return ("bounds_%s_%d"):format(tostring(self.offset),self.expand) end
+function IndexValue:__tostring() return ({[0] = "i","j","k"})[self.dim] end
 function ParamValue:__tostring() return "param_"..self.name end
 
-ImageAccess.get = terralib.memoize(function(self,im,shape,index,channel)
-    assert(Index:is(index))
-    return ImageAccess:new { image = im, index = index , channel = channel, _shape = shape}
-end)
-
-BoundsAccess.get = terralib.memoize(function(self,x,y,sx,sy)
-    return BoundsAccess:new { x = x, y = y, sx = sx, sy = sy }
-end)
-IndexValue.get = terralib.memoize(function(self,dim,shift)
-    return IndexValue:new { _shift = tonumber(shift) or 0, dim = assert(todim(dim),"expected a dimension object") } 
-end)
-
 function ImageAccess:shape() return self._shape end -- implementing AD's API for keys
+
 local emptygradient = {}
 function ImageAccess:gradient()
     if self.image.gradientimages then
@@ -900,17 +670,17 @@ function ImageAccess:gradient()
         local gt = {}
         for u,im in pairs(self.image.gradientimages) do
             local exp = self.image.gradientexpressions[u]
-            local k = u:shift(self.index.x,self.index.y)
-            local v = ad.Const:is(exp) and exp or im(self.index.x,self.index.y)
+            local k = u:shift(self.index)
+            local v = ad.Const:is(exp) and exp or im(unpack(self.index.data))
             gt[k] = v
         end
         return gt
     end
     return emptygradient
  end
-
-function Dim:index() return ad.v[IndexValue:get(self)] end
-
+ 
+function ad.Index(d) return IndexValue(d,0):asvar() end
+ 
 local SumOfSquares = newclass("SumOfSquares")
 function ad.sumsquared(...)
     local exp = terralib.newlist {}
@@ -936,38 +706,34 @@ function ProblemSpecAD:UsePreconditioner(v)
 	self.P:UsePreconditioner(v)
 end
 
-local Image = newclass("Image")
 -- Z: this will eventually be opt.Image, but that is currently used by our direct methods
 -- so this is going in the ad table for now
 -- small workaround: idx > 0 means it is part of ProblemSpec struct
 -- idx < 0 means that it is the -idx-th argument to the function begin generated after the Parameters struct. (.e.g -1 is the first argument) 
-function ProblemSpecAD:Image(name,typ,W,H,idx)
+function ProblemSpecAD:Image(name,typ,dims,idx)
     if not terralib.types.istype(typ) then
-        typ,W,H,idx = float,typ,W,H --shift arguments left
+        typ,ispace,idx = float,typ,ispace --shift arguments left
     end
-    assert(W == 1 or Dim:is(W))
-    assert(H == 1 or Dim:is(H))
-    assert(type(idx) == "number" or idx == "alloc", "expected an index number") -- alloc indicates that the solver should allocate the image as an intermediate
-    if idx == "alloc" or idx >= 0 then
-        self.P:Image(name,typ,W,H,idx)
-    end
-    local typ,N = tovalidimagetype(typ)
-    local r = Image:new { name = tostring(name), W = W, H = H, idx = idx, N = N, type = typ }
+    local ispace = IndexSpace(List(dims))
+    assert( (type(idx) == "number" and idx >= 0) or idx == "alloc", "expected an index number") -- alloc indicates that the solver should allocate the image as an intermediate
+    self.P:Image(name,typ,ispace,idx)
+    local r = Image(name,self.P:ImageType(typ,ispace),idx,not util.isvectortype(typ))
     self.nametoimage[name] = r
     return r
+end
+function ProblemSpecAD:ImageArgument(name,imagetype,argpos)
+    return Image(name,imagetype,-argpos,false)
 end
 
 function Image:__tostring() return self.name end
 
-local ImageVector = newclass("ImageVector") -- wrapper for many images in a vector, just implements the __call methodf for Images Image:
-
-function ProblemSpecAD:ComputedImage(name,W,H,exp)
+function ProblemSpecAD:ComputedImage(name,dims,exp)
     if ad.ExpVector:is(exp) then
         local imgs = terralib.newlist()
         for i,e in ipairs(exp:expressions()) do
-            imgs:insert(self:ComputedImage(name.."_"..tostring(i-1),W,H,e))
+            imgs:insert(self:ComputedImage(name.."_"..tostring(i-1),dims,e))
         end
-        return ImageVector:new { images = imgs }
+        return ImageVector(images)
     end
     exp = assert(ad.toexp(exp),"expected a math expression")
     local unknowns = terralib.newlist()
@@ -981,13 +747,13 @@ function ProblemSpecAD:ComputedImage(name,W,H,exp)
             end
         end
     end)
-    local im = self:Image(name,float,W,H,"alloc")
+    local im = self:Image(name,float,dims,"alloc")
     local gradients = exp:gradient(unknowns:map(function(x) return ad.v[x] end))
     local gradientexpressions = {}
     local gradientimages = {}
     for i,u in ipairs(unknowns) do
         gradientexpressions[u] = gradients[i]
-        gradientimages[u] = self:Image(name.."_d_"..tostring(u),float,W,H,"alloc")
+        gradientimages[u] = self:Image(name.."_d_"..tostring(u),float,dims,"alloc")
     end
     
     im.expression = exp
@@ -1011,69 +777,109 @@ function ProblemSpecAD:Graph(name,idx,...)
 end
 
 function ProblemSpecAD:Param(name,typ,idx)
-    self.P:Param(name,float,idx)
-    return ad.v[ParamValue:new { name = name, type = typ }]
+    self.P:Param(name,typ,idx)
+    return ParamValue(name,typ):asvar()
 end
 
-function Image:__call(x,y,c)
-    local index
-    if GraphElement:is(x) then
-        index = x
-        assert(not c,"extra argument?")
-        c = y
+function Image:DimCount() return #self.type.ispace.dims end
+function Image:__call(first,...)
+    local index,c
+    if GraphElement:is(first) or Offset:is(first) then
+        index = first
+        c = ...
     else
-        index = Offset(x,y)
+        local o = terralib.newlist { (assert(first,"no arguments?")) }
+        for i = 1,self:DimCount() - 1 do
+            o:insert((select(i,...)))
+        end
+        index = Offset(o)
+        c = select(self:DimCount(), ...)
     end
     c = tonumber(c)
-    assert(not c or c < self.N, "channel outside of range")
-    if self.N == 1 or c then
-        return ad.v[ImageAccess:get(self,ad.scalar,index,c or 0)]
+    assert(not c or c < self.type.channelcount, "channel outside of range")
+    if self.scalar or c then
+        return ImageAccess(self,ad.scalar,index,c or 0):asvar()
     else
         local r = {}
-        for i = 1,self.N do
-            r[i] = ad.v[ImageAccess:get(self,ad.scalar,index,i-1)]
+        for i = 1,self.type.channelcount do
+            r[i] = ImageAccess(self,ad.scalar,index,i-1):asvar()
         end
         return ad.Vector(unpack(r))
     end
 end
-function ImageVector:__call(x,y,c)
-    if c then
+ -- wrapper for many images in a vector, just implements the __call methodf for Images Image:
+function ImageVector:__call(...)
+    local args = {...}
+    local channelindex = self.images[1]:DimCount() + 1
+    if #args == channelindex then
+        local c = args[channelindex]
         assert(c < #self.images, "channel outside of range")
-        return self.images[c+1](x,y)
+        return self.images[c+1](unpack(args,1,channelindex-1))
     end
-    local result = self.images:map(function(im) return im(x,y) end)
+    local result = self.images:map(function(im) return im(unpack(args)) end)
     return ad.Vector(unpack(result))
 end
 
-function opt.InBounds(x,y,sx,sy)
-	assert(x and y and sx and sy, "InBounds Requires 4 values (x,y,stencil_x,stencil_y)")
-    return ad.v[BoundsAccess:get(x,y,sx,sy)]
+function opt.InBounds(...)
+	return BoundsAccess(Offset(List{...}),0):asvar()
 end
-function BoundsAccess:shift(x,y)
-    return BoundsAccess:get(self.x+x,self.y+y,self.sx,self.sy)
+function opt.InBoundsExpanded(e,...)
+    return BoundsAccess(Offset(List{...}),e):asvar()
 end
 function BoundsAccess:type() return bool end --implementing AD's API for keys
-function ImageAccess:shift(x,y)
-    assert(Offset:is(self.index), "cannot shift graph accesses!")
-    return ImageAccess:get(self.image,self:shape(),Offset(self.index.x + x, self.index.y + y),self.channel)
-end
-function IndexValue:shift(x,y)
-    local v = {[0] = x,y}
-    return IndexValue:get(self.dim,self._shift + assert(v[self.dim._index]))
-end
-function ParamValue:shift(x,y) return self end
 
-local function shiftexp(exp,x,y)
+
+function VarDef:shift(o) return self end
+function BoundsAccess:shift(o)
+    return BoundsAccess(self.offset:shift(o),self.expand)
+end
+function ImageAccess:shift(o)
+    assert(Offset:is(self.index), "cannot shift graph accesses!")
+    return ImageAccess(self.image,self:shape(),self.index:shift(o),self.channel)
+end
+function IndexValue:shift(o)
+    return IndexValue(self.dim,self.shift + assert(o.data[self.dim+1],"dim of index not in shift"))
+end
+
+local function shiftexp(exp,o)
     local function rename(a)
-        return ad.v[a:shift(x,y)]
+        return ad.v[a:shift(o)]
     end
     return exp:rename(rename)
 end 
 
+function Offset:IsZero()
+    for i,o in ipairs(self.data) do
+        if o ~= 0 then return false end
+    end
+    return true
+end
+function Offset:MaxValue()
+    local m = 0
+    for i, o in ipairs(self.data) do
+        if o > m then m = o end
+    end
+    return m
+end
+function Offset:Invert()
+    local r = terralib.newlist()
+    for i,o in ipairs(self.data) do
+        r[i] = -o
+    end
+    return Offset(r)
+end
+function Offset:shift(o)
+    assert(Offset:is(o) and #o.data == #self.data)
+    local ns = terralib.newlist()
+    for i = 1,#self.data do
+        ns[i] = self.data[i] + o.data[i]
+    end
+    return Offset(ns)
+end
 local function removeboundaries(exp)
     if ad.ExpVector:is(exp) or terralib.islist(exp) then return exp:map(removeboundaries) end
     local function nobounds(a)
-        if BoundsAccess:is(a) and (a.x == 0 and a.y == 0 and a.sx == 0 and a.sy == 0) then return ad.toexp(1)
+        if BoundsAccess:is(a) and a.offset:IsZero() and a.expand == 0 then return ad.toexp(1)
         else return ad.v[a] end
     end
     return exp:rename(nobounds)
@@ -1132,14 +938,14 @@ function Condition:Union(rhs)
     return Condition:create(r)
 end
 
-local function createfunction(problemspec,name,usebounds,W,H,ndims,results,scatters)
+local function createfunction(problemspec,name,ispace,results,scatters)
     results = removeboundaries(results)
     
-    local imageload = terralib.memoize(function(image)
-        return IRNode:create { kind = "vectorload", value = image, type = image.image.type, shape = image:shape(), count = 0 }
+    local imageload = terralib.memoize(function(imageaccess)
+        return IRNode:create { kind = "vectorload", value = imageaccess, type = imageaccess.image.type:ElementType(), shape = imageaccess:shape(), count = 0 }
     end)
     local imagesample = terralib.memoize(function(image, shape, x, y)
-        return IRNode:create { kind = "sampleimage", image = image, type = image.type, shape = shape, count = 0, children = terralib.newlist {x,y} }
+        return IRNode:create { kind = "sampleimage", image = image, type = image.type:ElementType(), shape = shape, count = 0, children = terralib.newlist {x,y} }
     end)
     local irmap
     
@@ -1173,8 +979,8 @@ local function createfunction(problemspec,name,usebounds,W,H,ndims,results,scatt
         elseif "Var" == e.kind then
             local a = e:key()
             if "ImageAccess" == a.kind then
-                if not a.image.type:isarithmetic() then
-                    local loadvec = imageload(ImageAccess:get(a.image,a:shape(),a.index,0))
+                if not a.image.scalar then
+                    local loadvec = imageload(ImageAccess(a.image,a:shape(),a.index,0))
                     loadvec.count = loadvec.count + 1
                     return IRNode:create { kind = "vectorextract", children = terralib.newlist { loadvec }, channel = a.channel, type = e:type(), shape = a:shape() }  
                 else
@@ -1520,10 +1326,10 @@ local function createfunction(problemspec,name,usebounds,W,H,ndims,results,scatt
         printschedule(instructions,regcounts)
     end
     
+    local Index = ispace:indextype()
     local P = symbol(problemspec.P:ParameterType(),"P")
-    local i,j,gi,gj = symbol(int32,"i"), symbol(int32,"j"),symbol(int32,"gi"), symbol(int32,"gj")
-    local mi,mj = symbol(int32,"mi"), symbol(int32,"mj")
-    local indexes = {[0] = i,j }
+    local idx = symbol(Index,"idx")
+    local midx = symbol(Index,"midx")
     
     local statementstack = terralib.newlist { terralib.newlist() } 
     local statements = statementstack[1]
@@ -1548,28 +1354,35 @@ local function createfunction(problemspec,name,usebounds,W,H,ndims,results,scatt
         statements = statementstack[#statementstack]
     end
     local currentidx
-    local function conditioncoversload(condition,x,y)
-        if x == 0 and y == 0 then return true end
+    local function boundcoversload(ba,off)
+        print("Bound Covers? ",ba,off)
+        assert(#off.data == #ba.offset.data)
+        for i = 1,#off.data do
+            local o,b = off.data[i],ba.offset.data[i]
+            if o < b - ba.expand or o > b + ba.expand then
+                print("no")
+                return false
+            end
+        end
+        print("yes")
+        return true
+    end
+    local function conditioncoversload(condition,off)
+        if off:IsZero() then return true end
         for i,ir in ipairs(condition.members) do
             assert(ir.type == bool)
-            if ir.kind == "intrinsic" and ir.value.kind == "BoundsAccess" then
-                local bx,by,sx,sy = ir.value.x,ir.value.y,ir.value.sx,ir.value.sy
-                local minx,maxx,miny,maxy = bx - sx, bx + sx,by - sy, by + sy
-                if minx <= x and x <= maxx and miny <= y and y <= maxy then
-                    return true
-                end
+            if ir.kind == "intrinsic" and ir.value.kind == "BoundsAccess" and boundcoversload(ir.value,off) then
+                return true
             end
         end
         return false
     end
-    
     local function imageref(image)
         if image.idx == "alloc" or image.idx >= 0 then
             return `P.[image.name]
         else
             if not extraimages[-image.idx] then
-                local imtype = problemspec.P:ImageType(image.type,image.W,image.H)
-                extraimages[-image.idx] = symbol(imtype,image.name)
+                extraimages[-image.idx] = symbol(image.type:terratype(),image.name)
             end
             return extraimages[-image.idx]
         end
@@ -1583,9 +1396,10 @@ local function createfunction(problemspec,name,usebounds,W,H,ndims,results,scatt
         elseif "intrinsic" == ir.kind then
             local a = ir.value
             if "BoundsAccess" == a.kind then--bounds calculation
-                return `opt.InBoundsCalc(gi+a.x,gj+a.y,W.size,H.size,a.sx,a.sy)
+                return `midx([a.offset.data]):InBoundsExpanded(a.expand)
             elseif "IndexValue" == a.kind then
-                return `[ assert(indexes[a.dim._index]) ] + a._shift 
+                local n = "d"..tostring(a.dim)
+                return `idx.[n] + a.shift 
             else assert("ParamValue" == a.kind)
                 return `float(P.[a.name])
             end
@@ -1593,10 +1407,10 @@ local function createfunction(problemspec,name,usebounds,W,H,ndims,results,scatt
             local a = ir.value
             local im = imageref(a.image)
             if Offset:is(a.index) then
-                if conditioncoversload(ir.condition,a.index.x,a.index.y) then
-                   return `im(mi+[a.index.x],mj+[a.index.y])
+                if conditioncoversload(ir.condition,a.index) then
+                   return `im(midx(a.index.data))(0) 
                 else
-                   return `im:get(mi+[a.index.x],mj+[a.index.y],mi+[a.index.x],mj+[a.index.y])
+                   return `im:get(midx(a.index.data))(0)
                 end
             else
                 local gr = graphref(a.index)
@@ -1607,15 +1421,15 @@ local function createfunction(problemspec,name,usebounds,W,H,ndims,results,scatt
             local im = imageref(a.image)
             local s = symbol(("%s_%s"):format(a.image.name,tostring(a.index)))
             if Offset:is(a.index) then
-                if conditioncoversload(ir.condition,a.index.x,a.index.y) then
+                if conditioncoversload(ir.condition,a.index) then
                     statements:insert(quote
-                        var [s] : a.image.type = im(mi+[a.index.x],mj+[a.index.y])
+                        var [s] : a.image.type:ElementType() = im(midx(a.index.data))
                     end)
                 else 
                     statements:insert(quote
-                        var [s] : a.image.type = 0.f
-                        if opt.InBoundsCalc(mi+[a.index.x],mj+[a.index.y],[W.size],[H.size],0,0) then
-                            [s] = im(mi+[a.index.x],mj+[a.index.y])
+                        var [s] : a.image.type:ElementType() = 0.f
+                        if midx(a.index.data):InBounds() then
+                            [s] = im(midx(a.index.data))
                         end
                     end)
                 end
@@ -1677,10 +1491,7 @@ local function createfunction(problemspec,name,usebounds,W,H,ndims,results,scatt
             local stmts = statementstack:remove()
             local a = current.keys[#current.keys]
             statementstack[#statementstack]:insert quote
-                for adj in P.[a.name]:neighbors(mi,mj) do
-                    var [mi],[mj] = adj.x,adj.y
-                    [stmts]
-                end
+                error("NYI - shapeiteration")
             end
             current = current:fromreduction()
        end
@@ -1726,56 +1537,40 @@ local function createfunction(problemspec,name,usebounds,W,H,ndims,results,scatt
             local exp = assert(createexp(ir),"nil exp")
             statements:insert(quote
                 [r] = exp
-                --[[if [name == "precompute"] and mi == 10 and mj == 40 then
-                    printf("%d,%d: k_%s: %s = %f\n",mi,mj,name,[tostring(r)],float(r))
-                end]]
             end)
         end
         emitted[ir] = r
     end
-    --emitconditionchange(currentcondition,basecondition)
+    
     emitshapechange(currentshape,ad.scalar) -- also blanks condition
     assert(#statementstack == 1)
     
     local expressions = irroots:map(emit)
     local resultexpressions,scatterexpressions = {unpack(expressions,1,#results)},{unpack(expressions,#results+1)}
-    
-    local dimarguments
-    if ndims == 2 then
-        dimarguments = {i,j,gi,gj}
-    else
-        dimarguments = {i}
-    end
         
     local scatterstatements = terralib.newlist()
-    local function xypair(index)
-        if Offset:is(index) then return {`mi + index.x, `mj + index.y }
+    local function toidx(index)
+        if Offset:is(index) then return `midx(index.data)
         else return graphref(index) end
-    end 
+    end
     for i,s in ipairs(scatters) do
         local image,exp = imageref(s.image),scatterexpressions[i]
-        local xy = xypair(s.index)
+        local index = toindex(s.index)
         local stmt
         if s.kind == "add" then
-            stmt = s.channel and (`image:atomicAddChannel(xy, s.channel, exp)) or (`image:atomicAdd(xy, exp))
+            assert(s.channel, "no channel on scatter?")
+            stmt = `image:atomicAddChannel(index, s.channel, exp)
         else
-            assert(s.kind == "set" and s.channel == 0)
+            assert(s.kind == "set" and s.channel == 0, "set only works for single channel images")
             stmt = quote 
                 image(xy) = exp
-            end -- NYI - multi-channel images
+            end
         end
         scatterstatements:insert(stmt)
     end
 
-    local terra generatedfn([dimarguments], [P], [extraimages])
-        escape
-            if ndims == 1 then
-                emit quote
-                  var[j],[gi],[gj] = 0,0,0
-                end
-            end
-        end
-        var [mi],[mj] = [i],[j]
+    local terra generatedfn([idx], [P], [extraimages])
+        var [midx] = idx
         [declarations]
         [statements]
         [scatterstatements]
@@ -1799,9 +1594,9 @@ local function stencilforexpression(exp)
     exp:visit(function(a)
         if "ImageAccess" == a.kind then
             assert(Offset:is(a.index), "stencils not defined for graph image access")
-            stencil = math.max(stencil,math.max(math.abs(a.index.x),math.abs(a.index.y))) 
+            stencil = math.max(stencil,a.index:MaxValue()) 
         elseif "BoundsAccess" == a.kind then--bounds calculation
-            stencil = math.max(stencil,math.max(math.abs(a.x)+a.sx,math.abs(a.y)+a.sy))
+            stencil = math.max(stencil,a.offset:MaxValue()+a.expand)
         end
     end)
     return stencil
@@ -1810,12 +1605,11 @@ local noscatters = terralib.newlist()
 function ProblemSpecAD:createfunctionset(name,results,graphfunctions)
     results,graphfunctions = terralib.newlist(results), terralib.newlist(graphfunctions)
     local ut = self.P:UnknownType()
-    local W,H = ut.metamethods.W,ut.metamethods.H
     dprint("function for: ",name)
-    local centered = createfunction(self,name,true,W,H,2,results,noscatters)
+    local centered = createfunction(self,name,ut.ispace,results,noscatters)
     local args = terralib.newlist()
     for i,g in ipairs(graphfunctions) do
-        local gf = createfunction(self,("%s_graph%d"):format(name,i),true,W,H,1,g.results,g.scatters)
+        local gf = createfunction(self,("%s_graph%d"):format(name,i),ut.ispace,g.results,g.scatters)
         args:insert(g.graph.name)
         args:insert(gf)
     end
@@ -1826,7 +1620,7 @@ end
 -- { unknown = {<entry>}, graphs = { <graphobj> -> <entry> } }, where each entry is:
 -- { expression = <ad-exp>, unknownaccess = [<ImagAccess>] }
 
-local function classifyresiduals(Rs)
+local function classifyresiduals(uispace, Rs)
     local result = { unknown = terralib.newlist {}, graphs = {} }
     local function unknownaccesses(exp)
         local classification
@@ -1845,20 +1639,25 @@ local function classifyresiduals(Rs)
                 elseif a.image.gradientimages then
                     for u,_ in pairs(a.image.gradientimages) do
                         assert(Offset:is(a.index),"NYI - precomputed with graphs")
-                        addunknown(u:shift(a.index.x,a.index.y))
+                        addunknown(u:shift(a.index))
                     end
                 end
-                local aclass = Offset:is(a.index) and "centered" or a.index.graph
+                local aclass = Offset:is(a.index) and a.image.type.ispace or a.index.graph
                 assert(nil == classification or aclass == classification, "residual contains image reads from multiple domains")
                 classification = aclass
             end
         end)
         local entry = { expression = exp, unknownaccesses = unknownaccesses }
         if not classification then
-            classification = "centered"
+            classification = uispace
         end
-        --assert(classification, "residual does not contain an unknown term?")
-        if classification == "centered" then
+        if IndexSpace:is(classification) then
+            assert(classification == uispace,"energy must be defined over graphs or the index space of the unknown")
+            exp:visit(function(a)
+                if BoundsAccess:is(a) and #a.offset.data ~= #classification.dims then
+                    error(string.format("%s does not match index space %s",a,classification))
+                end
+            end)
             result.unknown:insert(entry)
         else
             local list = result.graphs[classification] or terralib.newlist()
@@ -1882,20 +1681,14 @@ local function residualsincludingX00(unknownsupport,channel)
     for i,u in ipairs(unknownsupport) do
         assert(Offset:is(u.index),"unexpected graph access")
         if u.channel == channel then
-            r:insert(Offset(-u.index.x,-u.index.y))
+            r:insert(u.index:Invert())
         end
     end
     return r
 end
 local function unknownsforresidual(r,unknownsupport)
-    return unknownsupport:map("shift",r.x,r.y)
+    return unknownsupport:map("shift",r)
 end
-
-local function conformtounknown(exps,unknown)
-    if util.isvectortype(unknown.type) then return ad.Vector(unpack(exps))
-    else return exps[1] end
-end
-
 
 local function createzerolist(N)
     local r = terralib.newlist()
@@ -1920,21 +1713,21 @@ local function createjtjcentered(residuals,unknown,P)
         local F,unknownsupport = residual.expression,residual.unknownaccesses
         lprintf(0,"\n\n\n\n\n##################################################")
         lprintf(0,"r%d = %s",rn,F)
-        for channel = 0, unknown.N-1 do
-            local x = unknown(0,0,channel)
+        for channel = 0, unknown.type.channelcount-1 do
+            local x = unknown(unknown.type.ispace:ZeroOffset(),channel)
             local residuals = residualsincludingX00(unknownsupport,channel)
             local columns = {}
             local nonzerounknowns = terralib.newlist()
         
             for _,r in ipairs(residuals) do
-                local rexp = shiftexp(F,r.x,r.y)
+                local rexp = shiftexp(F,r)
                 local condition,drdx00 = ad.splitcondition(rexp:d(x))
-                lprintf(1,"instance:\ndr%d_%d%d/dx00[%d] = %s",rn,r.x,r.y,channel,tostring(drdx00))
+                lprintf(1,"instance:\ndr%d_%s/dx00[%d] = %s",rn,tostring(r),channel,tostring(drdx00))
                 local unknowns = unknownsforresidual(r,unknownsupport)
                 for _,u in ipairs(unknowns) do
-                    local condition2, drdx_u = ad.splitcondition(rexp:d(unknown(u.index.x,u.index.y,u.channel)))
+                    local condition2, drdx_u = ad.splitcondition(rexp:d(unknown(u.index,u.channel)))
                     local exp = drdx00*drdx_u
-                    lprintf(2,"term:\ndr%d_%d%d/dx%d%d[%d] = %s",rn,r.x,r.y,u.index.x,u.index.y,u.channel,tostring(drdx_u))
+                    lprintf(2,"term:\ndr%d_%s/dx%s[%d] = %s",rn,tostring(r),tostring(u.index),u.channel,tostring(drdx_u))
                     if not columns[u] then
                         columns[u] = 0
                         nonzerounknowns:insert(u)
@@ -1942,16 +1735,16 @@ local function createjtjcentered(residuals,unknown,P)
                     local conditionmerged = condition*condition2
                     if not P_hat_c[conditionmerged] then
                         conditions:insert(conditionmerged)
-                        P_hat_c[conditionmerged] = createzerolist(unknown.N)
+                        P_hat_c[conditionmerged] = createzerolist(unknown.type.channelcount)
                     end
-                    P_hat_c[conditionmerged][channel+1] = P_hat_c[conditionmerged][channel+1] + P(u.index.x,u.index.y,u.channel)*exp
+                    P_hat_c[conditionmerged][channel+1] = P_hat_c[conditionmerged][channel+1] + P(u.index,u.channel)*exp
                 end
             end
         end
     end
-    local P_hat = createzerolist(unknown.N)
+    local P_hat = createzerolist(unknown.type.channelcount)
     for _,c in ipairs(conditions) do
-        for i = 1,unknown.N do
+        for i = 1,unknown.type.channelcount do
             P_hat[i] = P_hat[i] + c*P_hat_c[c][i]
         end
     end
@@ -1961,7 +1754,7 @@ local function createjtjcentered(residuals,unknown,P)
     dprint("JTJ[nopoly] = ", ad.tostrings(P_hat))
     P_hat = ad.polysimplify(P_hat)
     dprint("JTJ[poly] = ", ad.tostrings(P_hat))
-    return conformtounknown(P_hat,unknown)
+    return ad.Vector(unpack(P_hat))
 end
 
 local function NewGraphFunctionSpec(graph, results, scatters)
@@ -2012,21 +1805,20 @@ local function createjtj(residuals,unknown,P,Ap_X)
 end
 
 local function createjtfcentered(problemSpec,residuals,unknown)
-   local F_hat = createzerolist(unknown.N) --gradient
-   local P_hat = createzerolist(unknown.N) --preconditioner
+   local F_hat = createzerolist(unknown.type.channelcount) --gradient
+   local P_hat = createzerolist(unknown.type.channelcount) --preconditioner
     
     for ridx,residual in ipairs(residuals.unknown) do
         local F, unknownsupport = residual.expression,residual.unknownaccesses
         lprintf(0,"-------------")
         lprintf(1,"R[%d] = %s",ridx,tostring(F))
-        for channel = 0, unknown.N-1 do
-            local x = unknown(0,0,channel)
+        for channel = 0, unknown.type.channelcount-1 do
+            local x = unknown(unknown.type.ispace:ZeroOffset(),channel)
             local residuals = residualsincludingX00(unknownsupport,channel)
-            
             
             local sum = 0
             for _,f in ipairs(residuals) do
-                local F_x = shiftexp(F,f.x,f.y)
+                local F_x = shiftexp(F,f)
                 local dfdx00 = F_x:d(x)		-- entry of J^T
                 local dfdx00F = dfdx00*F_x	-- entry of \gradF == J^TF
                 F_hat[channel+1] = F_hat[channel+1] + dfdx00F			-- summing it up to get \gradF
@@ -2034,13 +1826,13 @@ local function createjtfcentered(problemSpec,residuals,unknown)
                 local dfdx00Sq = dfdx00*dfdx00	-- entry of Diag(J^TJ)
                 P_hat[channel+1] = P_hat[channel+1] + dfdx00Sq			-- summing the pre-conditioner up
                 --sum = sum + dfdx00F
-                lprintf(2,"dR[%d]_%d_%d/dx[%d] = %s",ridx,f.x,f.y,channel,tostring(dfdx00F))
+                lprintf(2,"dR[%d]_%s/dx[%d] = %s",ridx,tostring(f),channel,tostring(dfdx00F))
             end
             
             
         end
     end
-	for i = 1,unknown.N do
+	for i = 1,unknown.type.channelcount do
 	    if not problemSpec.P.usepreconditioner then
 		    P_hat[i] = ad.toexp(1.0)
 	    else
@@ -2050,7 +1842,7 @@ local function createjtfcentered(problemSpec,residuals,unknown)
 	    F_hat[i] = ad.polysimplify(2.0*F_hat[i])
 	end
 	dprint("JTF =", ad.tostrings({F_hat[1], F_hat[2], F_hat[3]}))
-    return terralib.newlist{conformtounknown(F_hat,unknown), conformtounknown(P_hat,unknown) }
+    return terralib.newlist{ ad.Vector(unpack(F_hat)), ad.Vector(unpack(P_hat)) }
 end
 
 local function createjtfgraph(residuals,R,Pre)
@@ -2105,15 +1897,15 @@ local function creategradient(unknown,costexp)
     local names = table.concat(unknownvars:map(function(v) return tostring(v:key()) end),", ")
     dprint(names.." = "..ad.tostrings(gradient))
     
-    local gradientsgathered = createzerolist(unknown.N)
+    local gradientsgathered = createzerolist(unknown.type.channelcount)
     for i,u in ipairs(unknownvars) do
         local a = u:key()
-        local shift = shiftexp(gradient[i],-a.index.x,-a.index.y)
+        local shift = shiftexp(gradient[i],a.index:Invert())
         gradientsgathered[a.channel+1] = gradientsgathered[a.channel+1] + shift
     end
     dprint("grad gather")
     dprint(ad.tostrings(gradientsgathered))
-    return conformtounknown(gradientsgathered,unknown)
+    return ad.Vector(gradientsgathered)
 end
 
 local function createcost(residuals)
@@ -2134,21 +1926,23 @@ end
 
 function createprecomputed(self,name,precomputedimages)
     local scatters = terralib.newlist()
+    local ut = self.P:UnknownType()
+    
+    local zoff = ut.ispace:ZeroOffset()
+    
     for i,im in ipairs(precomputedimages) do
         local expression = ad.polysimplify(im.expression)
-        scatters:insert(NewScatter(im, Offset(0,0), 0, im.expression, "set"))
+        scatters:insert(NewScatter(im, zoff, 0, im.expression, "set"))
         for u,gim in pairs(im.gradientimages) do
             local gradientexpression = im.gradientexpressions[u]
             gradientexpression = ad.polysimplify(gradientexpression)
             if not ad.Const:is(gradientexpression) then
-                scatters:insert(NewScatter(gim, Offset(0,0), 0, gradientexpression, "set"))
+                scatters:insert(NewScatter(gim, zoff, 0, gradientexpression, "set"))
             end
         end
     end
     
-    local ut = self.P:UnknownType()
-    local W,H = ut.metamethods.W,ut.metamethods.H    
-    return createfunction(self,name,true,W,H,2,terralib.newlist(),scatters)
+    return createfunction(self,name,ut.ispace,terralib.newlist(),scatters)
 end
 
 function ProblemSpecAD:Cost(costexp)
@@ -2156,20 +1950,20 @@ function ProblemSpecAD:Cost(costexp)
     
     assert(SumOfSquares:is(costexp),"expected a sum of squares object")
     
-    local residuals = classifyresiduals(costexp.terms)
+    local residuals = classifyresiduals(unknown.type.ispace,costexp.terms)
     
     local centeredcost,graphcost = createcost(residuals)
     
     self.P:Stencil(stencilforexpression(centeredcost))
     
     -- Not updated for graphs yet:    
-    local P = self:Image("P",unknown.type,unknown.W,unknown.H,-1)
-    local Ap_X = self:Image("Ap_X",unknown.type,unknown.W,unknown.H,-2)
+    local P = self:ImageArgument("P",unknown.type,1)
+    local Ap_X = self:ImageArgument("Ap_X",unknown.type,2)
     local jtjexp,jtjgraph = createjtj(residuals,unknown,P,Ap_X)
     self.P:Stencil(stencilforexpression(jtjexp))
     
-    local R = self:Image("R",unknown.type,unknown.W,unknown.H,-1)
-    local Pre = self:Image("Pre",unknown.type,unknown.W,unknown.H,-2)
+    local R = self:ImageArgument("R",unknown.type,1)
+    local Pre = self:ImageArgument("Pre",unknown.type,2)
     local jtfcentered,jtfgraph = createjtf(self,residuals,unknown,R,Pre) --includes the 2.0
     self.P:Stencil(stencilforexpression(jtfcentered[1]))
     
@@ -2195,12 +1989,12 @@ end
 
 local SampledImage = ad.newclass("SampledImage")
 function SampledImage:__call(x,y,c)
-    if c or self.op.imagebeingsampled.N == 1 then
-        assert(not c or c < self.op.imagebeingsampled.N, "index out of bounds")
+    if c or self.op.imagebeingsampled.type.channelcount == 1 then
+        assert(not c or c < self.op.imagebeingsampled.type.channelcount, "index out of bounds")
         return self.op(c or 0,x,y)
     else
         local r = {}
-        for i = 0,self.op.imagebeingsampled.N - 1 do
+        for i = 0,self.op.imagebeingsampled.type.channelcount - 1 do
             r[i+1] = self.op(i,x,y)
         end
         return ad.Vector(unpack(r))
@@ -2208,6 +2002,7 @@ function SampledImage:__call(x,y,c)
 end
 local function tosampledimage(im)
     if Image:is(im) then
+        assert(im:DimCount() == 2, "sampled images must be 2D")
         return ad.sampledimage(im)
     end
     return SampledImage:is(im) and im or nil

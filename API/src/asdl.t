@@ -138,17 +138,18 @@ end
 
 local function checklist(checkt)
     return function(vs)
-        if type(vs) ~= "table" or (getmetatable(vs) ~= nil and not islist(vs)) then return false end
+        if not islist(vs) then return false end
         for i,e in ipairs(vs) do
             if not checkt(e) then return false,i end
         end
         return true
     end
 end
+
 local valuekey,nilkey = {},{}
 local function checkuniquelist(checkt,listcache)
     return function(vs)
-        if type(vs) ~= "table" or (getmetatable(vs) ~= nil and not islist(vs)) then return false end
+        if not islist(vs) then return false end
         local node = listcache
         for i,e in ipairs(vs) do
             if not checkt(e) then return false,i end
@@ -210,10 +211,9 @@ local function reporterr(i,name,tn,v,ii)
     local err = string.format(fmt,i,name,tn,type(v),ii)
     local mt = getmetatable(v)
     if mt then
-        print(mt)
         err = string.format("%s (metatable = %s)",err,tostring(mt))
     end
-    error(err)
+    error(err,3)
 end
 function Context:DefineClass(name,unique,fields)
     local mt = {}
