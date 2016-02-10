@@ -440,8 +440,7 @@ util.initParameters = function(self, ProblemSpec, params, isInit)
             if entry.kind == "GraphParam" then
                 local graphinits = terralib.newlist { `@[&int](params[entry.idx]) }
                 for i,e in ipairs(entry.type.metamethods.elements) do
-                    graphinits:insert( `[&int](params[e.xidx]) )
-                    graphinits:insert( `[&int](params[e.yidx]) )
+                    graphinits:insert( `[&e.type](params[e.idx]) )
                 end
                 rhs = `entry.type { graphinits }
             elseif entry.kind == "ScalarParam" then
@@ -502,11 +501,14 @@ function util.makeGPUFunctions(problemSpec, PlanData, kernels)
 	
 	local imageType = problemSpec:UnknownType()
 	local ispace = imageType.ispace
-	
+	local dimcount = #ispace.dims
+	 assert(dimcount <= 3, "cannot launch over images with more than 3 dims")
+	 
 	local kernelFunctions = {}
 	local key = "_"..tostring(os.time())
+	local grid_sizes = { {256,1,1}, {16,16,1}, {8,8,4} }
 	for k,v in pairs(kernels) do
-	    kernelFunctions[k..key] = { kernel = v , annotations = { {"maxntidx", 16}, {"maxntidy", #ispace.dims > 1 and 16 or 1}, {"maxntidz", #ispace.dims > 2 and 16 or 1}, {"minctasm",1} } }
+	    kernelFunctions[k..key] = { kernel = v , annotations = { {"maxntidx", grid_sizes[dimcount][1]}, {"maxntidy", grid_sizes[dimcount][2]}, {"maxntidz", grid_sizes[dimcount][3]}, {"minctasm",1} } }
 	end
 	local compiledKernels = terralib.cudacompile(kernelFunctions, false)
 	
@@ -519,13 +521,12 @@ function util.makeGPUFunctions(problemSpec, PlanData, kernels)
         local function createLaunchParameters(pd)
             if not kernelName:match("_Graph$") then
                 local exps = terralib.newlist()
-                assert(#ispace.dims <= 3, "cannot launch over images with more than 3 dims")
-                local sizes = { {256,1,1}, {16,16,1}, {8,8,4} }
+                
                 for i = 1,3 do
-                   local dim = #ispace.dims >= i and ispace.dims[i].size or 1
-                    local bs = sizes[#ispace.dims][i]
+                   local dim = dimcount >= i and ispace.dims[i].size or 1
+                    local bs = grid_sizes[#ispace.dims][i]
                     exps:insert(dim)
-                    exps:insert(sizes[#ispace.dims][i])
+                    exps:insert(bs)
                 end
                 return exps
             else
@@ -551,24 +552,21 @@ function util.makeGPUFunctions(problemSpec, PlanData, kernels)
             if xdim == 0 then -- early out for 0-sized kernels
                 return 0
             end
+                
             var launch = terralib.CUDAParams { (xdim - 1) / xblock + 1, (ydim - 1) / yblock + 1, (zdim - 1) / zblock + 1, 
                                                 xblock, yblock, zblock, 
                                                 0, nil }
-            --C.cudaDeviceSynchronize()
             var stream : C.cudaStream_t = nil
             var endEvent : C.cudaEvent_t 
             if ([timeIndividualKernels]) then
                 pd.timer:startEvent(kernelName,nil,&endEvent)
             end
-            compiledKernel(&launch, @pd, params)
-            
-            --cd(C.cudaGetLastError())
+            cd(compiledKernel(&launch, @pd, params))
             
             if ([timeIndividualKernels]) then
                 pd.timer:endEvent(nil,endEvent)
             end
 
-            --cd(C.cudaDeviceSynchronize())
             cd(C.cudaGetLastError())
         end
 	    return GPULauncher

@@ -2,7 +2,7 @@
 
 #define RUN_CUDA 1
 #define RUN_TERRA 1
-#define RUN_OPT 1
+#define RUN_OPT 0
 #define RUN_CERES 0
 
 #define EARLY_OUT 1
@@ -41,9 +41,9 @@ class ImageWarping
 			resetGPUMemory();
 
 			m_warpingSolver	= new CUDAWarpingSolver(N);
-			m_terraWarpingSolver = new TerraWarpingSolver(N, 2 * E, d_neighbourIdx, d_neighbourOffset, "MeshDeformation.t", "gaussNewtonGPU");			
-			m_optWarpingSolver = new TerraWarpingSolver(N, 2 * E, d_neighbourIdx, d_neighbourOffset, "MeshDeformationAD.t", "gaussNewtonGPU");
-            m_ceresWarpingSolver = new CeresWarpingSolver(m_initial);
+			m_terraWarpingSolver = new TerraWarpingSolver(N, 2 * E, d_neighbourIdx, d_neighbourOffset, "MeshDeformation.t", "gaussNewtonGPU");				
+                 	m_optWarpingSolver = new TerraWarpingSolver(N, 2 * E, d_neighbourIdx, d_neighbourOffset, "MeshDeformationAD.t", "gaussNewtonGPU");
+                        m_ceresWarpingSolver = new CeresWarpingSolver(m_initial);
 		} 
 
 		void setConstraints(float alpha)

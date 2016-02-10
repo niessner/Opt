@@ -486,8 +486,13 @@ function ImageType:terratype()
     end
     
 	terra Image:atomicAddChannel(idx : Index, c : int32, v : scalartype)
-	    var addr : &scalartype = &self.data[idx:tooffset()][c]
+	    var addr : &scalartype = &self.data[idx:tooffset()].data[c]
 	    util.atomicAdd(addr,v)
+	end
+	terra Image:atomicAdd(idx : Index, v : vectortype) -- only for hand written stuff
+	    for i = 0,channelcount do
+	        self:atomicAddChannel(idx,i,v(i))
+	    end
 	end
 	
     terra Image:get(idx : Index)
@@ -584,12 +589,12 @@ function ProblemSpec:Graph(name, idx, ...)
     local mm = GraphType.metamethods
     mm.idx = idx -- the index into the graph size table
     mm.elements = terralib.newlist()
-    for i = 1, select("#",...),5 do
-        local name,W,H,xidx,yidx = select(i,...) --TODO: we don't bother to track the dimensions of these things now
-        assert(todim(W) and todim(H),"Expected dimensions")
-        GraphType.entries:insert ( {name .. "_x", &int32} )
-        GraphType.entries:insert ( {name .. "_y", &int32} )
-        mm.elements:insert( { name = name, xidx = assert(tonumber(xidx)), yidx = assert(tonumber(yidx)) } )
+    for i = 1, select("#",...),3 do
+        local name,dims,didx = select(i,...) --TODO: we don't bother to track the dimensions of these things now
+        local ispace = IndexSpace(List(dims))
+        local Index = ispace:indextype()
+        GraphType.entries:insert {name, &Index}
+        mm.elements:insert( { name = name, type = Index, idx = assert(tonumber(didx))} )
     end
     self:newparameter(GraphParam(GraphType,name,idx))
 end
@@ -769,8 +774,8 @@ function Graph:__tostring() return self.name end
 function ProblemSpecAD:Graph(name,idx,...)
     self.P:Graph(name,idx,...)
     local g = Graph:new { name = tostring(name) }
-    for i = 1, select("#",...),5 do
-        local name,W,H,xidx,yidx = select(i,...)
+    for i = 1, select("#",...),3 do
+        local name,dims,didx = select(i,...)
         g[name] = GraphElement(g,name)
     end
     return g
@@ -938,7 +943,7 @@ function Condition:Union(rhs)
     return Condition:create(r)
 end
 
-local function createfunction(problemspec,name,ispace,results,scatters)
+local function createfunction(problemspec,name,Index,results,scatters)
     results = removeboundaries(results)
     
     local imageload = terralib.memoize(function(imageaccess)
@@ -1326,7 +1331,6 @@ local function createfunction(problemspec,name,ispace,results,scatters)
         printschedule(instructions,regcounts)
     end
     
-    local Index = ispace:indextype()
     local P = symbol(problemspec.P:ParameterType(),"P")
     local idx = symbol(Index,"idx")
     local midx = symbol(Index,"midx")
@@ -1388,7 +1392,7 @@ local function createfunction(problemspec,name,ispace,results,scatters)
         end
     end
     local function graphref(ge)
-        return {`P.[ge.graph.name].[ge.element.."_x"][i],`P.[ge.graph.name].[ge.element.."_y"][i]}
+        return `P.[ge.graph.name].[ge.element][idx]
     end
     local function createexp(ir)        
         if "const" == ir.kind then
@@ -1414,7 +1418,7 @@ local function createfunction(problemspec,name,ispace,results,scatters)
                 end
             else
                 local gr = graphref(a.index)
-                return `im(gr)
+                return `im(gr)(0)
             end
         elseif "vectorload" == ir.kind then
             local a = ir.value
@@ -1436,7 +1440,7 @@ local function createfunction(problemspec,name,ispace,results,scatters)
             else
                 local gr = graphref(a.index)
                 statements:insert(quote
-                    var [s] : a.image.type = im(gr)
+                    var [s] : a.image.type:ElementType() = im(gr)
                 end)
             end
             return s
@@ -1555,7 +1559,7 @@ local function createfunction(problemspec,name,ispace,results,scatters)
     end
     for i,s in ipairs(scatters) do
         local image,exp = imageref(s.image),scatterexpressions[i]
-        local index = toindex(s.index)
+        local index = toidx(s.index)
         local stmt
         if s.kind == "add" then
             assert(s.channel, "no channel on scatter?")
@@ -1606,10 +1610,10 @@ function ProblemSpecAD:createfunctionset(name,results,graphfunctions)
     results,graphfunctions = terralib.newlist(results), terralib.newlist(graphfunctions)
     local ut = self.P:UnknownType()
     dprint("function for: ",name)
-    local centered = createfunction(self,name,ut.ispace,results,noscatters)
+    local centered = createfunction(self,name,ut.ispace:indextype(),results,noscatters)
     local args = terralib.newlist()
     for i,g in ipairs(graphfunctions) do
-        local gf = createfunction(self,("%s_graph%d"):format(name,i),ut.ispace,g.results,g.scatters)
+        local gf = createfunction(self,("%s_graph%d"):format(name,i),int,g.results,g.scatters)
         args:insert(g.graph.name)
         args:insert(gf)
     end
@@ -1942,7 +1946,7 @@ function createprecomputed(self,name,precomputedimages)
         end
     end
     
-    return createfunction(self,name,ut.ispace,terralib.newlist(),scatters)
+    return createfunction(self,name,ut.ispace:indextype(),terralib.newlist(),scatters)
 end
 
 function ProblemSpecAD:Cost(costexp)

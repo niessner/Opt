@@ -1,22 +1,15 @@
 local IO = terralib.includec("stdio.h")
 local adP = ad.ProblemSpec()
 local P = adP.P
-local W,H = opt.Dim("W",0), opt.Dim("H",1)
+local N = opt.Dim("N",0)
 
 local w_fitSqrt = adP:Param("w_fitSqrt", float, 0)
 local w_regSqrt = adP:Param("w_regSqrt", float, 1)
-local X = 			adP:Image("X", opt.float6,W,H,2)			--vertex.xyz, rotation.xyz <- unknown
-local UrShape = 	adP:Image("UrShape", opt.float3,W,H,3)		--urshape: vertex.xyz
-local Constraints = adP:Image("Constraints", opt.float3,W,H,4)	--constraints
-local G = adP:Graph("G", 5, "v0", W, H, 6, 7, "v1", W, H, 8,9)
+local X = 			adP:Image("X", opt.float6,{N},2)			--vertex.xyz, rotation.xyz <- unknown
+local UrShape = 	adP:Image("UrShape", opt.float3, {N},3)		--urshape: vertex.xyz
+local Constraints = adP:Image("Constraints", opt.float3,{N},4)	--constraints
+local G = adP:Graph("G", 5, "v0", {N}, 6, "v1", {N}, 8)
 P:UsePreconditioner(true)
-
-local C = terralib.includecstring [[
-#include <math.h>
-]]
-
-
-
 
 function evalRot(CosAlpha, CosBeta, CosGamma, SinAlpha, SinBeta, SinGamma)
 	return ad.Vector(
@@ -45,8 +38,8 @@ end
 local terms = terralib.newlist()
 	
 --fitting
-local x_fit = ad.Vector(X(0,0,0), X(0,0,1), X(0,0,2))	--vertex-unknown : float3
-local constraint = Constraints(0,0)						--target : float3
+local x_fit = ad.Vector(X(0,0), X(0,1), X(0,2))	--vertex-unknown : float3
+local constraint = Constraints(0)						--target : float3
 local e_fit = x_fit - constraint
 e_fit = ad.select(ad.greatereq(constraint(0), -999999.9), e_fit, ad.Vector(0.0, 0.0, 0.0))
 terms:insert(w_fitSqrt*e_fit)

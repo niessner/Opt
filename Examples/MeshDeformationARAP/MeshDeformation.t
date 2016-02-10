@@ -1,19 +1,21 @@
 local IO = terralib.includec("stdio.h")
-local adP = ad.ProblemSpec()
-local P = adP.P
-local W,H = opt.Dim("W",0), opt.Dim("H",1)
-
+local P = opt.ProblemSpec()
+local N = opt.Dim("N",0)
 
 local w_fitSqrt = P:Param("w_fitSqrt", float, 0)
 local w_regSqrt = P:Param("w_regSqrt", float, 1)
-local X = 			adP:Image("X", opt.float6,W,H,2)			--vertex.xyz, rotation.xyz <- unknown
-local UrShape = 	adP:Image("UrShape", opt.float3,W,H,3)		--urshape: vertex.xyz
-local Constraints = adP:Image("Constraints", opt.float3,W,H,4)	--constraints
-local G = adP:Graph("G", 5, "v0", W, H, 6,7,
-                            "v1", W, H, 8,9)
+local X = 			P:Image("X", opt.float6,{N},2)			--vertex.xyz, rotation.xyz <- unknown
+local UrShape = 	P:Image("UrShape", opt.float3,{N},3)		--urshape: vertex.xyz
+local Constraints = P:Image("Constraints", opt.float3,{N},4)	--constraints
+local G =   P:Graph("G", 5, "v0", {N}, 6,
+                            "v1", {N}, 8)
 P:Stencil(2)
 P:UsePreconditioner(true)
 
+
+local TUnknownType = P:UnknownType():terratype()
+local unknownElement = P:UnknownType():ElementType()
+local Index = P:UnknownType().ispace:indextype()
 
 local C = terralib.includecstring [[
 #include <math.h>
@@ -98,11 +100,6 @@ local terra make_float3x3_diag(x0 : float, x1 : float, x2 : float)
 	return v
 end
 
-
-
-local unknownElement = P:UnknownType().metamethods.typ
-
-
 local terra  evalRot(CosAlpha : float, CosBeta  : float, CosGamma : float, SinAlpha : float, SinBeta : float, SinGamma : float)
 	return make_float3x3(
 		CosGamma*CosBeta, 
@@ -140,14 +137,14 @@ local terra matmul(A: float3x3, B: float3x3) : float3x3
 	return result
 end
 
-local terra cost(i : int32, j : int32, gi : int32, gj : int32, self : P:ParameterType()) : float
+local terra cost(idx : Index, self : P:ParameterType()) : float
 	
 	var e : float_3  = make_float3(0.0f, 0.0f, 0.0f)
-	var temp : float_6 = self.X(i,j)
+	var temp : float_6 = self.X(idx)
 	var x : float_3 = make_float3(temp(0), temp(1), temp(2))
-	var xHat : float_3 = self.UrShape(i,j)
+	var xHat : float_3 = self.UrShape(idx)
 	var a : float_3 = make_float3(temp(3), temp(4), temp(5))
-	var c : float_3 = self.Constraints(i, j)
+	var c : float_3 = self.Constraints(idx)
 
 	--e_fit
 	if c(0) >= -999999.9f then
@@ -167,34 +164,34 @@ end
 
 
 local terra cost_graph(idx : int32, self : P:ParameterType()) : float
-	var w0,h0 = self.G.v0_x[idx], self.G.v0_y[idx]
-    var w1,h1 = self.G.v1_x[idx], self.G.v1_y[idx]
+	var n0 = self.G.v0[idx]
+    var n1 = self.G.v1[idx]
 
-	var temp : float_6 = self.X(w0, h0)
+	var temp : float_6 = self.X(n0)
 	var a : float_3 = make_float3(temp(3), temp(4), temp(5))
 	var R : float3x3 = evalR(a);
 	var p = make_float3(temp(0), temp(1), temp(2))
-	var pHat : float_3 = self.UrShape(w0, h0)
+	var pHat : float_3 = self.UrShape(n0)
 	
-	temp = self.X(w1, h1)
+	temp = self.X(n1)
 	var q = make_float3(temp(0), temp(1), temp(2))
-	var qHat : float_3 = self.UrShape(w1, h1)
+	var qHat : float_3 = self.UrShape(n1)
 	var d : float_3 = (p - q) - mul(R,(pHat - qHat))
 	var e_reg = (self.w_regSqrt*self.w_regSqrt)*d*d
 	return e_reg(0) + e_reg(1) + e_reg(2)
 end
 
 -- eval 2*JtF == \nabla(F); eval diag(2*(Jt)^2) == pre-conditioner
-local terra evalJTF(i : int32, j : int32, gi : int32, gj : int32, self : P:ParameterType())
+local terra evalJTF(idx : Index, self : P:ParameterType())
 	var b : float_3 = make_float3(0.0f, 0.0f, 0.0f)
 	var pre : float_6 = make_float6(0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f)
 	var preT : float_3 = make_float3(0.0f, 0.0f, 0.0f)
 
 	var ones = make_float3(1.0,1.0,1.0)
 	
-	var temp : float_6 = self.X(i,j);
+	var temp : float_6 = self.X(idx);
 	var p : float_3 = make_float3(temp(0), temp(1), temp(2))
-	var c : float_3 = self.Constraints(i, j)
+	var c : float_3 = self.Constraints(idx)
 	-- TODO: use -inf?
 	if c(0) > -9999999.9 then
 		b   = b + 2.0*(self.w_fitSqrt*self.w_fitSqrt) * (p - c);
@@ -331,30 +328,30 @@ local terra evalDerivativeRotationMatrix(angles : float_3, dRAlpha : &float3x3, 
 	@dRGamma = evalRMat_dGamma(cosAlpha, cosBeta, cosGamma, sinAlpha, sinBeta, sinGamma);
 end
 
-local terra evalJTF_graph(idx : int32, self : P:ParameterType(), r : P:UnknownType(), preconditioner : P:UnknownType())
+local terra evalJTF_graph(idx : int32, self : P:ParameterType(), r : TUnknownType, preconditioner : TUnknownType)
 	
 	var ones = make_float3(1.0,1.0,1.0)
 	var identity = make_float3x3_diag(1.0, 1.0, 1.0)
 	
-	var w0,h0 = self.G.v0_x[idx], self.G.v0_y[idx]
-    var w1,h1 = self.G.v1_x[idx], self.G.v1_y[idx]
+	var n0 = self.G.v0[idx]
+    var n1 = self.G.v1[idx]
 	
 	var tmp : float_6
 
 
-	tmp = self.X(w0,h0)
+	tmp = self.X(n0)
 	var p : float_3 = make_float3(tmp(0), tmp(1), tmp(2))
 	var a_i : float_3 = make_float3(tmp(3), tmp(4), tmp(5))
-	var pHat : float_3 = self.UrShape(w0,h0)
+	var pHat : float_3 = self.UrShape(n0)
 	var R_i : float3x3 = evalR(a_i)
 	
 	var dRAlpha : float3x3, dRBeta : float3x3, dRGamma : float3x3
 	evalDerivativeRotationMatrix(a_i, &dRAlpha, &dRBeta, &dRGamma)
 
-	tmp = self.X(w1,h1)
+	tmp = self.X(n1)
 	var q : float_3 = make_float3(tmp(0), tmp(1), tmp(2))
 	var a_j : float_3 = make_float3(tmp(3), tmp(4), tmp(5))
-	var qHat  : float_3 = self.UrShape(w1,h1)
+	var qHat  : float_3 = self.UrShape(n1)
 	var R_j  : float3x3 = evalR(a_j)
 	
 	var D_i : float3x3 = -evalDerivativeRotationTimesVector(dRAlpha, dRBeta, dRGamma, pHat - qHat)
@@ -397,24 +394,24 @@ local terra evalJTF_graph(idx : int32, self : P:ParameterType(), r : P:UnknownTy
 	--write results
 	var _residuum0 = -c0
 	var _residuum1 = -c1
-	r:atomicAdd(w0, h0, _residuum0)
-	r:atomicAdd(w1, h1, _residuum1)
+	r:atomicAdd(n0, _residuum0)
+	r:atomicAdd(n1, _residuum1)
 	
 	if P.usepreconditioner then	
-		preconditioner:atomicAdd(w0, h0, pre0)
-		preconditioner:atomicAdd(w1, h1, pre1)
+		preconditioner:atomicAdd(n0, pre0)
+		preconditioner:atomicAdd(n1, pre1)
 	end
 end
 	
 -- eval 2*JtJ (note that we keep the '2' to make it consistent with the gradient
-local terra applyJTJ(i : int32, j : int32, gi : int32, gj : int32, self : P:ParameterType(), pImage : P:UnknownType()) : unknownElement 
+local terra applyJTJ(idx : Index, self : P:ParameterType(), pImage : TUnknownType) : unknownElement 
 	
 	var b 	= make_float3(0.0f, 0.0f, 0.0f)
-	var tmp = pImage(i,j)
+	var tmp = pImage(idx)
 	var p 	= make_float3(tmp(0), tmp(1), tmp(2))
 
 	-- fit/pos
-	var c : float_3 = self.Constraints(i, j)
+	var c : float_3 = self.Constraints(idx)
 	-- TODO: use -inf?
 	if c(0) >  -999999.9f then
 		b = b + 2.0f*(self.w_fitSqrt*self.w_fitSqrt)*p;
@@ -423,33 +420,33 @@ local terra applyJTJ(i : int32, j : int32, gi : int32, gj : int32, self : P:Para
 	return make_float6(b(0), b(1), b(2), 0.0f, 0.0f, 0.0f)
 end
 
-local terra applyJTJ_graph(idx : int32, self : P:ParameterType(), pImage : P:UnknownType(), Ap_X : P:UnknownType())
-    var w0,h0 = self.G.v0_x[idx], self.G.v0_y[idx]
-    var w1,h1 = self.G.v1_x[idx], self.G.v1_y[idx]
+local terra applyJTJ_graph(idx : int32, self : P:ParameterType(), pImage : TUnknownType, Ap_X : TUnknownType)
+    var n0 = self.G.v0[idx]
+    var n1 = self.G.v1[idx]
 	
 	var tmp : float_6
-	tmp = pImage(w0,h0)
+	tmp = pImage(n0)
 	var p : float_3      = make_float3(tmp(0), tmp(1), tmp(2))
 	var pAngle : float_3 = make_float3(tmp(3), tmp(4), tmp(5))
 
-	tmp = self.X(w0,h0)
+	tmp = self.X(n0)
 	var a_i : float_3 = make_float3(tmp(3), tmp(4), tmp(5))
 
 	var dRAlpha : float3x3, dRBeta : float3x3, dRGamma : float3x3
 	evalDerivativeRotationMatrix(a_i, &dRAlpha, &dRBeta, &dRGamma)
 
-	var pHat : float_3 = self.UrShape(w0,h0)
-	var qHat : float_3 = self.UrShape(w1,h1)
+	var pHat : float_3 = self.UrShape(n0)
+	var qHat : float_3 = self.UrShape(n1)
 	var D : float3x3 = -evalDerivativeRotationTimesVector(dRAlpha, dRBeta, dRGamma, pHat - qHat)
 
-	tmp = self.X(w1,h1)
+	tmp = self.X(n1)
 	var a_j : float_3 = make_float3(tmp(3), tmp(4), tmp(5))
 
 	var dRAlphaJ : float3x3, dRBetaJ : float3x3, dRGammaJ : float3x3
 	evalDerivativeRotationMatrix(a_j, &dRAlphaJ, &dRBetaJ, &dRGammaJ)
 	var D_j :float3x3 = -evalDerivativeRotationTimesVector(dRAlphaJ, dRBetaJ, dRGammaJ, pHat - qHat)
 
-	tmp = pImage(w1,h1)
+	tmp = pImage(n1)
 	var q  : float_3  = make_float3(tmp(0), tmp(1), tmp(2))
 	
 	var c0 : float_6
@@ -478,12 +475,12 @@ local terra applyJTJ_graph(idx : int32, self : P:ParameterType(), pImage : P:Unk
 		c1 = c
 	end
     
-	Ap_X:atomicAdd(w0, h0, c0)
-    Ap_X:atomicAdd(w1, h1, c1)
+	Ap_X:atomicAdd(n0, c0)
+    Ap_X:atomicAdd(n1, c1)
     
     var d = 0.0f
-	d = d + opt.Dot(pImage(w0,h0), c0)
-	d = d + opt.Dot(pImage(w1,h1), c1)	
+	d = d + pImage(n0):dot(c0)
+	d = d + pImage(n1):dot(c1)	
 	return d
 end
 
