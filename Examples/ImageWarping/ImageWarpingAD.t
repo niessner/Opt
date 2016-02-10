@@ -38,7 +38,7 @@ e_fit = ad.select(ad.greatereq(constraintUV(1), 0.0), e_fit, ad.Vector(0.0, 0.0)
 e_fit = w_fitSqrt*e_fit
 
 if USE_J then
-    e_fit = S:ComputedImage("J_fit",W,H,e_fit)(0,0)
+    e_fit = S:ComputedImage("J_fit",{W,H},e_fit)(0,0)
 end
 
 terms:insert(e_fit)

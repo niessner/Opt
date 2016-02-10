@@ -455,7 +455,7 @@ end
 util.initPrecomputedImages = function(self, ProblemSpec)
     local stmts = terralib.newlist()
 	for _, entry in ipairs(ProblemSpec.parameters) do
-		if entry.kind == "image" and entry.idx == "alloc" then
+		if entry.kind == "ImageParam" and entry.idx == "alloc" then
             stmts:insert quote
     		    self.[entry.name]:initGPU()
     		end
@@ -561,6 +561,7 @@ function util.makeGPUFunctions(problemSpec, PlanData, kernels)
             if ([timeIndividualKernels]) then
                 pd.timer:startEvent(kernelName,nil,&endEvent)
             end
+
             cd(compiledKernel(&launch, @pd, params))
             
             if ([timeIndividualKernels]) then

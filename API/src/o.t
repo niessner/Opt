@@ -26,7 +26,7 @@ end
 
 -- constants
 local verboseSolver = true
-local verboseAD = false
+local verboseAD = true
 
 local function newclass(name)
     local mt = { __name = name }
@@ -158,13 +158,14 @@ end
 local List = terralib.newlist
 A:Extern("TerraType",terralib.types.istype)
 A:Extern("Shape",function(x) return ad.Shape:is(x) end)
+A:Extern("imageindex",function(x) return type(x) == "number" or x == "alloc" end)
 A:Define [[
 Dim = (string name, number size, number? _index) unique
 IndexSpace = (Dim* dims) unique
 Index = Offset(number* data) unique
       | GraphElement(any graph, string element) unique
 ImageType = (IndexSpace ispace, TerraType scalartype, number channelcount) unique
-Image = (string name, ImageType type, number idx, boolean scalar)
+Image = (string name, ImageType type, imageindex idx, boolean scalar)
 ImageVector = (Image* images)
 ProblemParam = ImageParam(ImageType imagetype)
              | ScalarParam(TerraType type)
@@ -738,7 +739,7 @@ function ProblemSpecAD:ComputedImage(name,dims,exp)
         for i,e in ipairs(exp:expressions()) do
             imgs:insert(self:ComputedImage(name.."_"..tostring(i-1),dims,e))
         end
-        return ImageVector(images)
+        return ImageVector(imgs)
     end
     exp = assert(ad.toexp(exp),"expected a math expression")
     local unknowns = terralib.newlist()
@@ -1027,7 +1028,7 @@ local function createfunction(problemspec,name,Index,results,scatters)
             else
                 function gen(args) return e.op:generate(e,args) end
             end
-            return IRNode:create { kind = "apply", op = e.op.name, generator = gen, children = children, type = e:type(), shape = e:shape() }
+            return IRNode:create { kind = "apply", op = e.op.name, generator = gen, children = children, type = e:type(), shape = e:shape(), c = e.config.c, adid = assert(tonumber(e.id),"no id?") }
         elseif "Reduce" == e.kind then
             local vardecl = IRNode:create { kind = "vardecl", constant = 0, type = e:type(), shape = e:shape() }
             local arg = e.args[1]
@@ -1144,8 +1145,10 @@ local function createfunction(problemspec,name,Index,results,scatters)
         enter() --initial root level for non-speculative moves
         
         for i,r in ipairs(roots) do
-            state[r] = "ready"
-            readylists[#readylists]:insert(r)
+            if not state[r] then -- roots may appear in list more than once
+                state[r] = "ready"
+                readylists[#readylists]:insert(r)
+            end
         end
         
         local function leave()
@@ -1567,7 +1570,7 @@ local function createfunction(problemspec,name,Index,results,scatters)
         else
             assert(s.kind == "set" and s.channel == 0, "set only works for single channel images")
             stmt = quote 
-                image(xy) = exp
+                image(index) = exp
             end
         end
         scatterstatements:insert(stmt)
