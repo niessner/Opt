@@ -26,7 +26,7 @@ end
 
 -- constants
 local verboseSolver = true
-local verboseAD = true
+local verboseAD = false
 
 local function newclass(name)
     local mt = { __name = name }
@@ -584,6 +584,7 @@ end
 function ProblemSpec:Image(name,typ,ispace,idx)
     self:Stage "inputs"
     if not IndexSpace:is(ispace) then -- for handwritten API
+        assert(#ispace > 0, "expected at least one dimension")
         ispace = IndexSpace(List(ispace)) 
     end
     self:newparameter(ImageParam(self:ImageType(typ,ispace),name,idx))
@@ -712,6 +713,7 @@ function ProblemSpecAD:Image(name,typ,dims,idx)
     if not terralib.types.istype(typ) then
         typ,ispace,idx = float,typ,ispace --shift arguments left
     end
+    assert(#dims > 0,"expected at least one dimension")
     local ispace = IndexSpace(List(dims))
     assert( (type(idx) == "number" and idx >= 0) or idx == "alloc", "expected an index number") -- alloc indicates that the solver should allocate the image as an intermediate
     self.P:Image(name,typ,ispace,idx)
