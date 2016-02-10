@@ -159,6 +159,8 @@ local List = terralib.newlist
 A:Extern("TerraType",terralib.types.istype)
 A:Extern("Shape",function(x) return ad.Shape:is(x) end)
 A:Extern("imageindex",function(x) return type(x) == "number" or x == "alloc" end)
+A:Extern("Exp",function(x) return ad.Exp:is(x) end)
+A:Extern("ExpLike",function(x) return ad.Exp:is(x) or ad.ExpVector:is(x) end)
 A:Define [[
 Dim = (string name, number size, number? _index) unique
 IndexSpace = (Dim* dims) unique
@@ -175,9 +177,12 @@ VarDef =  ImageAccess(Image image,  Shape _shape, Index index, number channel) u
        | BoundsAccess(Offset offset, number expand) unique
        | IndexValue(number dim, number shift) unique
        | ParamValue(string name,TerraType type) unique
+Graph = (string name)
+GraphFunctionSpec = (Graph graph, ExpLike* results, Scatter* scatters)
+Scatter = (Image image,Index index, number channel, Exp expression, string kind)
 ]]
-local Dim,IndexSpace,Index,Offset,GraphElement,ImageType,Image,ImageVector,ProblemParam,ImageParam,ScalarParam,GraphParam,VarDef,ImageAccess,BoundsAccess,IndexValue,ParamValue = 
-      A.Dim,A.IndexSpace,A.Index,A.Offset,A.GraphElement,A.ImageType,A.Image,A.ImageVector,A.ProblemParam,A.ImageParam,A.ScalarParam,A.GraphParam,A.VarDef,A.ImageAccess,A.BoundsAccess,A.IndexValue,A.ParamValue
+local Dim,IndexSpace,Index,Offset,GraphElement,ImageType,Image,ImageVector,ProblemParam,ImageParam,ScalarParam,GraphParam,VarDef,ImageAccess,BoundsAccess,IndexValue,ParamValue,Graph,GraphFunctionSpec,Scatter = 
+      A.Dim,A.IndexSpace,A.Index,A.Offset,A.GraphElement,A.ImageType,A.Image,A.ImageVector,A.ProblemParam,A.ImageParam,A.ScalarParam,A.GraphParam,A.VarDef,A.ImageAccess,A.BoundsAccess,A.IndexValue,A.ParamValue,A.Graph,A.GraphFunctionSpec,A.Scatter
 
 local ProblemSpec = newclass("ProblemSpec")
 opt.PSpec = ProblemSpec
@@ -769,12 +774,10 @@ function ProblemSpecAD:ComputedImage(name,dims,exp)
     return im
 end
 
-local Graph = newclass("Graph")
 function Graph:__tostring() return self.name end
-
 function ProblemSpecAD:Graph(name,idx,...)
     self.P:Graph(name,idx,...)
-    local g = Graph:new { name = tostring(name) }
+    local g = Graph(name)
     for i = 1, select("#",...),3 do
         local name,dims,didx = select(i,...)
         g[name] = GraphElement(g,name)
@@ -1764,13 +1767,6 @@ local function createjtjcentered(residuals,unknown,P)
     return ad.Vector(unpack(P_hat))
 end
 
-local function NewGraphFunctionSpec(graph, results, scatters)
-    return { graph = graph, results = results, scatters = scatters }
-end
-local function NewScatter(im,idx,channel,exp, kind) 
-    return { image = im, index = idx, channel = channel, expression = exp, kind = kind or "add" }
-end
-
 local function createjtjgraph(residuals,P,Ap_X)
     local jtjgraph = terralib.newlist()
     for graph,terms in pairs(residuals.graphs) do
@@ -1780,7 +1776,7 @@ local function createjtjgraph(residuals,P,Ap_X)
         local function addscatter(u,exp)
             local s = scattermap[u]
             if not s then
-                s =  NewScatter(Ap_X,u.index,u.channel,ad.toexp(0))
+                s =  Scatter(Ap_X,u.index,u.channel,ad.toexp(0),"add")
                 scattermap[u] = s
                 scatters:insert(s)
             end
@@ -1803,7 +1799,7 @@ local function createjtjgraph(residuals,P,Ap_X)
                 addscatter(u,jtjp)
             end
         end
-        jtjgraph:insert(NewGraphFunctionSpec(graph,terralib.newlist { result },scatters)) 
+        jtjgraph:insert(GraphFunctionSpec(graph,List { result },scatters)) 
     end
     return jtjgraph
 end
@@ -1860,7 +1856,7 @@ local function createjtfgraph(residuals,R,Pre)
         local function addscatter(im,u,exp)
             local s = scattermap[im][u]
             if not s then
-                s =  NewScatter(im,u.index,u.channel,ad.toexp(0))
+                s =  Scatter(im,u.index,u.channel,ad.toexp(0),"add")
                 scattermap[im][u] = s
                 scatters:insert(s)
             end
@@ -1878,7 +1874,7 @@ local function createjtfgraph(residuals,R,Pre)
                 addscatter(Pre,u,2.0*partial*partial)
             end
         end
-        jtjgraph:insert(NewGraphFunctionSpec(graph,terralib.newlist {},scatters))
+        jtjgraph:insert(GraphFunctionSpec(graph,List {},scatters))
     end
     return jtjgraph
 end
@@ -1926,7 +1922,7 @@ local function createcost(residuals)
     end
     local graphwork = terralib.newlist()
     for graph,terms in pairs(residuals.graphs) do
-        graphwork:insert( NewGraphFunctionSpec(graph,terralib.newlist { sumsquared(terms) }, terralib.newlist()) )
+        graphwork:insert(GraphFunctionSpec(graph,List { sumsquared(terms) }, List()))
     end
     return sumsquared(residuals.unknown), graphwork
 end
@@ -1939,12 +1935,12 @@ function createprecomputed(self,name,precomputedimages)
     
     for i,im in ipairs(precomputedimages) do
         local expression = ad.polysimplify(im.expression)
-        scatters:insert(NewScatter(im, zoff, 0, im.expression, "set"))
+        scatters:insert(Scatter(im, zoff, 0, im.expression, "set"))
         for u,gim in pairs(im.gradientimages) do
             local gradientexpression = im.gradientexpressions[u]
             gradientexpression = ad.polysimplify(gradientexpression)
             if not ad.Const:is(gradientexpression) then
-                scatters:insert(NewScatter(gim, zoff, 0, gradientexpression, "set"))
+                scatters:insert(Scatter(gim, zoff, 0, gradientexpression, "set"))
             end
         end
     end
