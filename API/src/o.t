@@ -692,22 +692,6 @@ function ImageAccess:gradient()
  
 function ad.Index(d) return IndexValue(d,0):asvar() end
  
-local SumOfSquares = newclass("SumOfSquares")
-function ad.sumsquared(...)
-    local exp = terralib.newlist {}
-    for i = 1, select("#",...) do
-        local e = select(i,...)
-        if ad.ExpVector:is(e) then
-            for i,t in ipairs(e:expressions()) do
-                t = assert(ad.toexp(t), "expected an ad expression")
-                exp:insert(t)
-            end
-        else
-            exp:insert((assert(ad.toexp(e), "expected an ad expression")))
-        end
-    end
-    return SumOfSquares:new { terms = exp }
-end
 local ProblemSpecAD = newclass("ProblemSpecAD")
 
 function ad.ProblemSpec()
@@ -1947,13 +1931,26 @@ function createprecomputed(self,name,precomputedimages)
     
     return createfunction(self,name,ut.ispace:indextype(),terralib.newlist(),scatters)
 end
-
-function ProblemSpecAD:Cost(costexp)
+local function extractresidualterms(...)
+    local exp = terralib.newlist {}
+    for i = 1, select("#",...) do
+        local e = select(i,...)
+        if ad.ExpVector:is(e) then
+            for i,t in ipairs(e:expressions()) do
+                t = assert(ad.toexp(t), "expected an ad expression")
+                exp:insert(t)
+            end
+        else
+            exp:insert((assert(ad.toexp(e), "expected an ad expression")))
+        end
+    end
+    return exp
+end
+function ProblemSpecAD:Cost(...)
+    local terms = extractresidualterms(...)
     local unknown = assert(self.nametoimage.X, "unknown image X is not defined")
-    
-    assert(SumOfSquares:is(costexp),"expected a sum of squares object")
-    
-    local residuals = classifyresiduals(unknown.type.ispace,costexp.terms)
+
+    local residuals = classifyresiduals(unknown.type.ispace,terms)
     
     local centeredcost,graphcost = createcost(residuals)
     

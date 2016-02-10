@@ -62,7 +62,6 @@ for ii ,o in ipairs(offsets) do
     terms:insert(ARAPCostF)
 end
 
-local cost = ad.sumsquared(unpack(terms))
-return S:Cost(cost)
+return S:Cost(unpack(terms))
 
 
