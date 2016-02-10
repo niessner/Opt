@@ -156,11 +156,13 @@ terra opt.ProblemDelete(p : &opt.Problem)
 end
 
 local List = terralib.newlist
+local IRNode,nextirid = newclass("IRNode"),0
 A:Extern("TerraType",terralib.types.istype)
 A:Extern("Shape",function(x) return ad.Shape:is(x) end)
 A:Extern("imageindex",function(x) return type(x) == "number" or x == "alloc" end)
 A:Extern("Exp",function(x) return ad.Exp:is(x) end)
 A:Extern("ExpLike",function(x) return ad.Exp:is(x) or ad.ExpVector:is(x) end)
+A:Extern("IRNode",function(x) return IRNode:is(x) end)
 A:Define [[
 Dim = (string name, number size, number? _index) unique
 IndexSpace = (Dim* dims) unique
@@ -180,9 +182,10 @@ VarDef =  ImageAccess(Image image,  Shape _shape, Index index, number channel) u
 Graph = (string name)
 GraphFunctionSpec = (Graph graph, ExpLike* results, Scatter* scatters)
 Scatter = (Image image,Index index, number channel, Exp expression, string kind)
+Condition = (IRNode* members)
 ]]
-local Dim,IndexSpace,Index,Offset,GraphElement,ImageType,Image,ImageVector,ProblemParam,ImageParam,ScalarParam,GraphParam,VarDef,ImageAccess,BoundsAccess,IndexValue,ParamValue,Graph,GraphFunctionSpec,Scatter = 
-      A.Dim,A.IndexSpace,A.Index,A.Offset,A.GraphElement,A.ImageType,A.Image,A.ImageVector,A.ProblemParam,A.ImageParam,A.ScalarParam,A.GraphParam,A.VarDef,A.ImageAccess,A.BoundsAccess,A.IndexValue,A.ParamValue,A.Graph,A.GraphFunctionSpec,A.Scatter
+local Dim,IndexSpace,Index,Offset,GraphElement,ImageType,Image,ImageVector,ProblemParam,ImageParam,ScalarParam,GraphParam,VarDef,ImageAccess,BoundsAccess,IndexValue,ParamValue,Graph,GraphFunctionSpec,Scatter,Condition = 
+      A.Dim,A.IndexSpace,A.Index,A.Offset,A.GraphElement,A.ImageType,A.Image,A.ImageVector,A.ProblemParam,A.ImageParam,A.ScalarParam,A.GraphParam,A.VarDef,A.ImageAccess,A.BoundsAccess,A.IndexValue,A.ParamValue,A.Graph,A.GraphFunctionSpec,A.Scatter,A.Condition
 
 local ProblemSpec = newclass("ProblemSpec")
 opt.PSpec = ProblemSpec
@@ -879,7 +882,6 @@ local function removeboundaries(exp)
 end
 
 -- code ir is a table { kind = "...", ... }    
-local IRNode,nextirid = newclass("IRNode"),0
 function IRNode:create(body)
     local ir = IRNode:new(body)
     ir.id,nextirid = nextirid,nextirid+1
@@ -889,9 +891,6 @@ function IRNode:create(body)
     end
     return ir
 end
-
-local Condition = newclass("Condition")
-
 function Condition:create(members)
     local function cmp(a,b)
         if a.kind == "intrinsic" and b.kind ~= "intrinsic" then return true
@@ -899,7 +898,7 @@ function Condition:create(members)
         else return a.id < b.id end
     end
     table.sort(members,cmp)
-    return Condition:new { members = members }
+    return Condition(members)
 end
 
 function Condition:Intersect(rhs)
@@ -1057,7 +1056,7 @@ local function createfunction(problemspec,name,Index,results,scatters)
     for i = #linearized,1,-1 do
         local ir = linearized[i]
         if not ir.condition then
-            ir.condition = Condition:create {}
+            ir.condition = Condition:create(List{})
         end
         local function applyconditiontolist(condition,lst)
             for i,c in ipairs(lst) do
@@ -1073,7 +1072,7 @@ local function createfunction(problemspec,name,Index,results,scatters)
         if use_conditionalization then
             if ir.children then applyconditiontolist(ir.condition,ir.children) end
         end
-        if ir.kind == "reduce" then applyconditiontolist(Condition:create {}, ir.condition.members) end
+        if ir.kind == "reduce" then applyconditiontolist(Condition:create(List{}), ir.condition.members) end
     end
     
     local function calculateusesanddeps(roots)
@@ -1124,7 +1123,7 @@ local function createfunction(problemspec,name,Index,results,scatters)
         
         local state = nil -- ir -> "ready" or ir -> "scheduled"
         local readylists = terralib.newlist()
-        local currentcondition,currentshape = Condition:create {}, ad.scalar
+        local currentcondition,currentshape = Condition:create(List{}), ad.scalar
         local function enter()
             state = setmetatable({}, {__index = state})
             readylists:insert(terralib.newlist())
@@ -1473,7 +1472,7 @@ local function createfunction(problemspec,name,Index,results,scatters)
         return assert(emitted[ir],"use before def")
     end
 
-    local basecondition = Condition:create {}
+    local basecondition = Condition:create(List{})
     local currentcondition = basecondition
     local currentshape = ad.scalar
     
