@@ -67,9 +67,11 @@ local function parseAll(text)
     local function parseFields()
         local fields = newlist()
         expect("(")
-        repeat
-            fields:insert(parseField())
-        until not nextif(",")
+        if cur ~= ")" then
+            repeat
+                fields:insert(parseField())
+            until not nextif(",")
+        end
         expect(")")
         return fields
     end

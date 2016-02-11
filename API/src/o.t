@@ -28,23 +28,6 @@ end
 local verboseSolver = true
 local verboseAD = false
 
-local function newclass(name)
-    local mt = { __name = name }
-    mt.__index = mt
-    function mt:is(obj)
-        return getmetatable(obj) == self
-    end
-    function mt:__tostring()
-        return "<"..name.." instance>"
-    end
-    function mt:new(obj)
-        obj = obj or {}
-        setmetatable(obj,self)
-        return obj
-    end
-    return mt
-end
-
 local vprintfname = ffi.os == "Windows" and "vprintf" or "cudart:vprintf"
 local vprintf = terralib.externfunction(vprintfname, {&int8,&int8} -> int)
 
@@ -156,7 +139,6 @@ terra opt.ProblemDelete(p : &opt.Problem)
 end
 
 local List = terralib.newlist
-local IRNode,nextirid = newclass("IRNode"),0
 A:Extern("TerraType",terralib.types.istype)
 A:Extern("Shape",function(x) return ad.Shape:is(x) end)
 A:Extern("imageindex",function(x) return type(x) == "number" or x == "alloc" end)
@@ -194,24 +176,25 @@ IRNode = vectorload(ImageAccess value, number count)
        | varuse(IRNode* children)
        | apply(string op, function generator, IRNode * children)
          attributes (TerraType type, Shape shape, Condition? condition)
+ProblemSpec = ()
+ProblemSpecAD = ()
+SampledImage = (table op)
 ]]
-local Dim,IndexSpace,Index,Offset,GraphElement,ImageType,Image,ImageVector,ProblemParam,ImageParam,ScalarParam,GraphParam,VarDef,ImageAccess,BoundsAccess,IndexValue,ParamValue,Graph,GraphFunctionSpec,Scatter,Condition,IRNode = 
-      A.Dim,A.IndexSpace,A.Index,A.Offset,A.GraphElement,A.ImageType,A.Image,A.ImageVector,A.ProblemParam,A.ImageParam,A.ScalarParam,A.GraphParam,A.VarDef,A.ImageAccess,A.BoundsAccess,A.IndexValue,A.ParamValue,A.Graph,A.GraphFunctionSpec,A.Scatter,A.Condition,A.IRNode
+local Dim,IndexSpace,Index,Offset,GraphElement,ImageType,Image,ImageVector,ProblemParam,ImageParam,ScalarParam,GraphParam,VarDef,ImageAccess,BoundsAccess,IndexValue,ParamValue,Graph,GraphFunctionSpec,Scatter,Condition,IRNode,ProblemSpec,ProblemSpecAD,SampledImage = 
+      A.Dim,A.IndexSpace,A.Index,A.Offset,A.GraphElement,A.ImageType,A.Image,A.ImageVector,A.ProblemParam,A.ImageParam,A.ScalarParam,A.GraphParam,A.VarDef,A.ImageAccess,A.BoundsAccess,A.IndexValue,A.ParamValue,A.Graph,A.GraphFunctionSpec,A.Scatter,A.Condition,A.IRNode,A.ProblemSpec,A.ProblemSpecAD,A.SampledImage
 
-local ProblemSpec = newclass("ProblemSpec")
 opt.PSpec = ProblemSpec
 local PROBLEM_STAGES  = { inputs = 0, functions = 1 }
 function opt.ProblemSpec()
-    local problemSpec = ProblemSpec:new { 
-	                         parameters = terralib.newlist(),-- ProblemParam*
-                             names = {}, -- name -> index in parameters list
-                             ProblemParameters = terralib.types.newstruct("ProblemParameters"),
-                             functions = {},
-							 maxStencil = 0,
-							 stage = "inputs",
-							 usepreconditioner = false,
-                           }
-	return problemSpec
+    local ps = ProblemSpec()
+    ps.parameters = terralib.newlist() -- ProblemParam*
+    ps.names = {} -- name -> index in parameters list
+    ps.ProblemParameters = terralib.types.newstruct("ProblemParameters")
+    ps.functions = {}
+	ps.maxStencil = 0
+	ps.stage = "inputs"
+	ps.usepreconditioner = false
+	return ps
 end
 
 function ProblemSpec:UsePreconditioner(v)
@@ -707,10 +690,11 @@ function ImageAccess:gradient()
  
 function ad.Index(d) return IndexValue(d,0):asvar() end
  
-local ProblemSpecAD = newclass("ProblemSpecAD")
 
 function ad.ProblemSpec()
-    return ProblemSpecAD:new { P = opt.ProblemSpec(), nametoimage = {}, precomputed = terralib.newlist() }
+    local ps = ProblemSpecAD()
+    ps.P,ps.nametoimage,ps.precomputed = opt.ProblemSpec(), {}, List{}
+    return ps
 end
 function ProblemSpecAD:UsePreconditioner(v)
 	self.P:UsePreconditioner(v)
@@ -895,7 +879,7 @@ local function removeboundaries(exp)
     return exp:rename(nobounds)
 end
 
--- code ir is a table { kind = "...", ... }    
+local nextirid = 0
 function IRNode:init()
     self.id,nextirid = nextirid,nextirid+1
 end
@@ -2001,7 +1985,6 @@ function ProblemSpecAD:Exclude(exp)
     self.excludeexp = assert(ad.toexp(exp), "expected a AD expression")
 end
 
-local SampledImage = ad.newclass("SampledImage")
 function SampledImage:__call(x,y,c)
     if c or self.op.imagebeingsampled.type.channelcount == 1 then
         assert(not c or c < self.op.imagebeingsampled.type.channelcount, "index out of bounds")
@@ -2035,7 +2018,7 @@ function ad.sampledimage(image,imagedx,imagedy)
         local x,y = unpack(exp:children())
         return terralib.newlist { imagedx(x,y,exp.config.c), imagedy(x,y,exp.config.c) }
     end
-    return SampledImage:new { op = op }
+    return SampledImage(op)
 end
 
 for i = 2,12 do
