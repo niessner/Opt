@@ -26,7 +26,7 @@ end
 
 -- constants
 local verboseSolver = true
-local verboseAD = true
+local verboseAD = false
 
 local function newclass(name)
     local mt = { __name = name }
@@ -156,11 +156,13 @@ terra opt.ProblemDelete(p : &opt.Problem)
 end
 
 local List = terralib.newlist
+local IRNode,nextirid = newclass("IRNode"),0
 A:Extern("TerraType",terralib.types.istype)
 A:Extern("Shape",function(x) return ad.Shape:is(x) end)
 A:Extern("imageindex",function(x) return type(x) == "number" or x == "alloc" end)
 A:Extern("Exp",function(x) return ad.Exp:is(x) end)
 A:Extern("ExpLike",function(x) return ad.Exp:is(x) or ad.ExpVector:is(x) end)
+A:Extern("IRNode",function(x) return IRNode:is(x) end)
 A:Define [[
 Dim = (string name, number size, number? _index) unique
 IndexSpace = (Dim* dims) unique
@@ -175,14 +177,15 @@ ProblemParam = ImageParam(ImageType imagetype)
              attributes (string name, any idx)
 VarDef =  ImageAccess(Image image,  Shape _shape, Index index, number channel) unique
        | BoundsAccess(Offset offset, number expand) unique
-       | IndexValue(number dim, number shift) unique
+       | IndexValue(number dim, number shift_) unique
        | ParamValue(string name,TerraType type) unique
 Graph = (string name)
 GraphFunctionSpec = (Graph graph, ExpLike* results, Scatter* scatters)
 Scatter = (Image image,Index index, number channel, Exp expression, string kind)
+Condition = (IRNode* members)
 ]]
-local Dim,IndexSpace,Index,Offset,GraphElement,ImageType,Image,ImageVector,ProblemParam,ImageParam,ScalarParam,GraphParam,VarDef,ImageAccess,BoundsAccess,IndexValue,ParamValue,Graph,GraphFunctionSpec,Scatter = 
-      A.Dim,A.IndexSpace,A.Index,A.Offset,A.GraphElement,A.ImageType,A.Image,A.ImageVector,A.ProblemParam,A.ImageParam,A.ScalarParam,A.GraphParam,A.VarDef,A.ImageAccess,A.BoundsAccess,A.IndexValue,A.ParamValue,A.Graph,A.GraphFunctionSpec,A.Scatter
+local Dim,IndexSpace,Index,Offset,GraphElement,ImageType,Image,ImageVector,ProblemParam,ImageParam,ScalarParam,GraphParam,VarDef,ImageAccess,BoundsAccess,IndexValue,ParamValue,Graph,GraphFunctionSpec,Scatter,Condition = 
+      A.Dim,A.IndexSpace,A.Index,A.Offset,A.GraphElement,A.ImageType,A.Image,A.ImageVector,A.ProblemParam,A.ImageParam,A.ScalarParam,A.GraphParam,A.VarDef,A.ImageAccess,A.BoundsAccess,A.IndexValue,A.ParamValue,A.Graph,A.GraphFunctionSpec,A.Scatter,A.Condition
 
 local ProblemSpec = newclass("ProblemSpec")
 opt.PSpec = ProblemSpec
@@ -581,6 +584,7 @@ end
 function ProblemSpec:Image(name,typ,ispace,idx)
     self:Stage "inputs"
     if not IndexSpace:is(ispace) then -- for handwritten API
+        assert(#ispace > 0, "expected at least one dimension")
         ispace = IndexSpace(List(ispace)) 
     end
     self:newparameter(ImageParam(self:ImageType(typ,ispace),name,idx))
@@ -692,22 +696,6 @@ function ImageAccess:gradient()
  
 function ad.Index(d) return IndexValue(d,0):asvar() end
  
-local SumOfSquares = newclass("SumOfSquares")
-function ad.sumsquared(...)
-    local exp = terralib.newlist {}
-    for i = 1, select("#",...) do
-        local e = select(i,...)
-        if ad.ExpVector:is(e) then
-            for i,t in ipairs(e:expressions()) do
-                t = assert(ad.toexp(t), "expected an ad expression")
-                exp:insert(t)
-            end
-        else
-            exp:insert((assert(ad.toexp(e), "expected an ad expression")))
-        end
-    end
-    return SumOfSquares:new { terms = exp }
-end
 local ProblemSpecAD = newclass("ProblemSpecAD")
 
 function ad.ProblemSpec()
@@ -725,6 +713,7 @@ function ProblemSpecAD:Image(name,typ,dims,idx)
     if not terralib.types.istype(typ) then
         typ,ispace,idx = float,typ,ispace --shift arguments left
     end
+    assert(#dims > 0,"expected at least one dimension")
     local ispace = IndexSpace(List(dims))
     assert( (type(idx) == "number" and idx >= 0) or idx == "alloc", "expected an index number") -- alloc indicates that the solver should allocate the image as an intermediate
     self.P:Image(name,typ,ispace,idx)
@@ -832,8 +821,9 @@ end
 function opt.InBounds(...)
 	return BoundsAccess(Offset(List{...}),0):asvar()
 end
-function opt.InBoundsExpanded(e,...)
-    return BoundsAccess(Offset(List{...}),e):asvar()
+function opt.InBoundsExpanded(...)
+    local args = {...}
+    return BoundsAccess(Offset(List{unpack(args,1,#args-1)}),args[#args]):asvar()
 end
 function BoundsAccess:type() return bool end --implementing AD's API for keys
 
@@ -847,7 +837,7 @@ function ImageAccess:shift(o)
     return ImageAccess(self.image,self:shape(),self.index:shift(o),self.channel)
 end
 function IndexValue:shift(o)
-    return IndexValue(self.dim,self.shift + assert(o.data[self.dim+1],"dim of index not in shift"))
+    return IndexValue(self.dim,self.shift_ + assert(o.data[self.dim+1],"dim of index not in shift"))
 end
 
 local function shiftexp(exp,o)
@@ -895,7 +885,6 @@ local function removeboundaries(exp)
 end
 
 -- code ir is a table { kind = "...", ... }    
-local IRNode,nextirid = newclass("IRNode"),0
 function IRNode:create(body)
     local ir = IRNode:new(body)
     ir.id,nextirid = nextirid,nextirid+1
@@ -905,9 +894,6 @@ function IRNode:create(body)
     end
     return ir
 end
-
-local Condition = newclass("Condition")
-
 function Condition:create(members)
     local function cmp(a,b)
         if a.kind == "intrinsic" and b.kind ~= "intrinsic" then return true
@@ -915,7 +901,7 @@ function Condition:create(members)
         else return a.id < b.id end
     end
     table.sort(members,cmp)
-    return Condition:new { members = members }
+    return Condition(members)
 end
 
 function Condition:Intersect(rhs)
@@ -1073,7 +1059,7 @@ local function createfunction(problemspec,name,Index,results,scatters)
     for i = #linearized,1,-1 do
         local ir = linearized[i]
         if not ir.condition then
-            ir.condition = Condition:create {}
+            ir.condition = Condition:create(List{})
         end
         local function applyconditiontolist(condition,lst)
             for i,c in ipairs(lst) do
@@ -1089,7 +1075,7 @@ local function createfunction(problemspec,name,Index,results,scatters)
         if use_conditionalization then
             if ir.children then applyconditiontolist(ir.condition,ir.children) end
         end
-        if ir.kind == "reduce" then applyconditiontolist(Condition:create {}, ir.condition.members) end
+        if ir.kind == "reduce" then applyconditiontolist(Condition:create(List{}), ir.condition.members) end
     end
     
     local function calculateusesanddeps(roots)
@@ -1140,7 +1126,7 @@ local function createfunction(problemspec,name,Index,results,scatters)
         
         local state = nil -- ir -> "ready" or ir -> "scheduled"
         local readylists = terralib.newlist()
-        local currentcondition,currentshape = Condition:create {}, ad.scalar
+        local currentcondition,currentshape = Condition:create(List{}), ad.scalar
         local function enter()
             state = setmetatable({}, {__index = state})
             readylists:insert(terralib.newlist())
@@ -1409,7 +1395,7 @@ local function createfunction(problemspec,name,Index,results,scatters)
                 return `midx([a.offset.data]):InBoundsExpanded(a.expand)
             elseif "IndexValue" == a.kind then
                 local n = "d"..tostring(a.dim)
-                return `idx.[n] + a.shift 
+                return `idx.[n] + a.shift_ 
             else assert("ParamValue" == a.kind)
                 return `float(P.[a.name])
             end
@@ -1489,7 +1475,7 @@ local function createfunction(problemspec,name,Index,results,scatters)
         return assert(emitted[ir],"use before def")
     end
 
-    local basecondition = Condition:create {}
+    local basecondition = Condition:create(List{})
     local currentcondition = basecondition
     local currentshape = ad.scalar
     
@@ -1947,13 +1933,26 @@ function createprecomputed(self,name,precomputedimages)
     
     return createfunction(self,name,ut.ispace:indextype(),terralib.newlist(),scatters)
 end
-
-function ProblemSpecAD:Cost(costexp)
+local function extractresidualterms(...)
+    local exp = terralib.newlist {}
+    for i = 1, select("#",...) do
+        local e = select(i,...)
+        if ad.ExpVector:is(e) then
+            for i,t in ipairs(e:expressions()) do
+                t = assert(ad.toexp(t), "expected an ad expression")
+                exp:insert(t)
+            end
+        else
+            exp:insert((assert(ad.toexp(e), "expected an ad expression")))
+        end
+    end
+    return exp
+end
+function ProblemSpecAD:Cost(...)
+    local terms = extractresidualterms(...)
     local unknown = assert(self.nametoimage.X, "unknown image X is not defined")
-    
-    assert(SumOfSquares:is(costexp),"expected a sum of squares object")
-    
-    local residuals = classifyresiduals(unknown.type.ispace,costexp.terms)
+
+    local residuals = classifyresiduals(unknown.type.ispace,terms)
     
     local centeredcost,graphcost = createcost(residuals)
     

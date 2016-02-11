@@ -50,19 +50,19 @@ local nNonLinearIterations 	= P:Param("nNonLinearIterations",uint,offset+1) -- S
 local nLinIterations 		= P:Param("nLinIterations",uint,offset+2) -- Steps of the linear solver
 local nPatchIterations 		= P:Param("nPatchIterations",uint,offset+3) -- Steps on linear step on block level
 offset = offset + 4
-local X     = P:Image("X",float, W,H,offset+0) -- Refined Depth
-local D_i   = P:Image("D_i",float, W,H,offset+1) -- Depth input
+local X     = P:Image("X",float, {W,H},offset+0) -- Refined Depth
+local D_i   = P:Image("D_i",float, {W,H},offset+1) -- Depth input
 
-local Im    = P:Image("Im",float, W,H,offset+2) -- Target Intensity
-local D_p   = P:Image("D_p",float, W,H,offset+3) -- Previous Depth
-local edgeMaskR = P:Image("edgeMaskR",uint8, W,H,offset+4) -- Edge mask. 
-local edgeMaskC = P:Image("edgeMaskC",uint8, W,H,offset+5) -- Edge mask. 
+local Im    = P:Image("Im",float, {W,H},offset+2) -- Target Intensity
+local D_p   = P:Image("D_p",float, {W,H},offset+3) -- Previous Depth
+local edgeMaskR = P:Image("edgeMaskR",uint8, {W,H},offset+4) -- Edge mask. 
+local edgeMaskC = P:Image("edgeMaskC",uint8, {W,H},offset+5) -- Edge mask. 
 
 
 local util = require("util")
 
-local posX = W:index()
-local posY = H:index()
+local posX = ad.Index(0)
+local posY = ad.Index(1)
 
 
 function sqMagnitude(point) 
@@ -112,10 +112,10 @@ end
 local function B_I(x,y)
     local bi = B(x,y) - I(x,y)
     local valid = ad.greater(D_i(x-1,y) + D_i(x,y) + D_i(x,y-1), 0)
-    return ad.select(opt.InBounds(0,0,1,1)*valid,bi,0)
+    return ad.select(opt.InBoundsExpanded(0,0,1)*valid,bi,0)
 end
 if USE_PRECOMPUTE then
-    B_I = P:ComputedImage("B_I",W,H, B_I(0,0))
+    B_I = P:ComputedImage("B_I",{W,H}, B_I(0,0))
 end
 
 
@@ -130,7 +130,7 @@ local pointValid = ad.greater(D_i(0,0), 0)
 
 if USE_DEPTH_CONSTRAINT then
 	local E_p_noCheck = X(0,0) - D_i(0,0)
-	E_p = ad.select(opt.InBounds(0,0,0,0), ad.select(pointValid, E_p_noCheck, 0.0), 0.0)
+	E_p = ad.select(opt.InBounds(0,0), ad.select(pointValid, E_p_noCheck, 0.0), 0.0)
 end 
 
 if USE_SHADING_CONSTRAINT then
@@ -141,8 +141,8 @@ if USE_SHADING_CONSTRAINT then
     E_g_h = E_g_h * edgeMaskR(0,0)
 	E_g_v = E_g_v * edgeMaskC(0,0)
 	
-	E_g_h = ad.select(opt.InBounds(0,0,1,1), E_g_h, 0.0)
-	E_g_v = ad.select(opt.InBounds(0,0,1,1), E_g_v, 0.0)
+	E_g_h = ad.select(opt.InBoundsExpanded(0,0,1), E_g_h, 0.0)
+	E_g_v = ad.select(opt.InBoundsExpanded(0,0,1), E_g_v, 0.0)
 end
 
 local function allpositive(a,...)
@@ -164,10 +164,10 @@ if USE_REGULARIZATION then
                             ad.and_(ad.less(ad.abs(d - X(0,1)), DEPTH_DISCONTINUITY_THRE), 
                                 ad.and_(ad.less(ad.abs(d - X(-1,0)), DEPTH_DISCONTINUITY_THRE), 
                                     ad.and_(ad.less(ad.abs(d - X(1,0)), DEPTH_DISCONTINUITY_THRE), 
-                                        ad.and_(opt.InBounds(0,0,1,1), cross_valid)
+                                        ad.and_(opt.InBoundsExpanded(0,0,1), cross_valid)
                         ))))
     if USE_PRECOMPUTE then
-        local guard = P:ComputedImage("E_s_guard", W, H, E_s_guard)                        
+        local guard = P:ComputedImage("E_s_guard", {W, H}, E_s_guard)                        
 	    E_s_guard = ad.eq(guard(0,0),1)
 	end
 	
@@ -175,15 +175,14 @@ if USE_REGULARIZATION then
 end
 
 if USE_J then
-    E_g_h = P:ComputedImage("E_g_h", W,H, E_g_h)(0,0)
-    E_g_v = P:ComputedImage("E_g_v", W,H, E_g_v)(0,0)
-    E_s = P:ComputedImage("E_s", W,H, E_s)(0,0)
-    E_p = P:ComputedImage("E_p", W,H, E_p)(0,0)
+    E_g_h = P:ComputedImage("E_g_h", {W,H}, E_g_h)(0,0)
+    E_g_v = P:ComputedImage("E_g_v", {W,H}, E_g_v)(0,0)
+    E_s = P:ComputedImage("E_s", {W,H}, E_s)(0,0)
+    E_p = P:ComputedImage("E_p", {W,H}, E_p)(0,0)
 end
 
-local cost = ad.sumsquared(w_g*E_g_h, w_g*E_g_v, w_s*E_s, w_p*E_p)
-
+local cost = {w_g*E_g_h, w_g*E_g_v, w_s*E_s, w_p*E_p}
 P:Exclude(ad.not_(ad.greater(D_i(0,0),0)))
 
-return P:Cost(cost)
+return P:Cost(unpack(cost))
 

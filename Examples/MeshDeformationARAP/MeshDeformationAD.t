@@ -57,7 +57,6 @@ local ARAPCost = (x - n) - mul(R, (xHat - UrShape(G.v1)))
 
 terms:insert(w_regSqrt*ARAPCost)
 
-local cost = ad.sumsquared(unpack(terms))
-return adP:Cost(cost)
+return adP:Cost(unpack(terms))
 
 
