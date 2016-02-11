@@ -177,7 +177,7 @@ ProblemParam = ImageParam(ImageType imagetype)
              attributes (string name, any idx)
 VarDef =  ImageAccess(Image image,  Shape _shape, Index index, number channel) unique
        | BoundsAccess(Offset offset, number expand) unique
-       | IndexValue(number dim, number shift) unique
+       | IndexValue(number dim, number shift_) unique
        | ParamValue(string name,TerraType type) unique
 Graph = (string name)
 GraphFunctionSpec = (Graph graph, ExpLike* results, Scatter* scatters)
@@ -821,8 +821,9 @@ end
 function opt.InBounds(...)
 	return BoundsAccess(Offset(List{...}),0):asvar()
 end
-function opt.InBoundsExpanded(e,...)
-    return BoundsAccess(Offset(List{...}),e):asvar()
+function opt.InBoundsExpanded(...)
+    local args = {...}
+    return BoundsAccess(Offset(List{unpack(args,1,#args-1)}),args[#args]):asvar()
 end
 function BoundsAccess:type() return bool end --implementing AD's API for keys
 
@@ -836,7 +837,7 @@ function ImageAccess:shift(o)
     return ImageAccess(self.image,self:shape(),self.index:shift(o),self.channel)
 end
 function IndexValue:shift(o)
-    return IndexValue(self.dim,self.shift + assert(o.data[self.dim+1],"dim of index not in shift"))
+    return IndexValue(self.dim,self.shift_ + assert(o.data[self.dim+1],"dim of index not in shift"))
 end
 
 local function shiftexp(exp,o)
@@ -1394,7 +1395,7 @@ local function createfunction(problemspec,name,Index,results,scatters)
                 return `midx([a.offset.data]):InBoundsExpanded(a.expand)
             elseif "IndexValue" == a.kind then
                 local n = "d"..tostring(a.dim)
-                return `idx.[n] + a.shift 
+                return `idx.[n] + a.shift_ 
             else assert("ParamValue" == a.kind)
                 return `float(P.[a.name])
             end
