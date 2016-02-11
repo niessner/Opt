@@ -162,7 +162,6 @@ A:Extern("Shape",function(x) return ad.Shape:is(x) end)
 A:Extern("imageindex",function(x) return type(x) == "number" or x == "alloc" end)
 A:Extern("Exp",function(x) return ad.Exp:is(x) end)
 A:Extern("ExpLike",function(x) return ad.Exp:is(x) or ad.ExpVector:is(x) end)
-A:Extern("IRNode",function(x) return IRNode:is(x) end)
 A:Define [[
 Dim = (string name, number size, number? _index) unique
 IndexSpace = (Dim* dims) unique
@@ -183,9 +182,21 @@ Graph = (string name)
 GraphFunctionSpec = (Graph graph, ExpLike* results, Scatter* scatters)
 Scatter = (Image image,Index index, number channel, Exp expression, string kind)
 Condition = (IRNode* members)
+IRNode = vectorload(ImageAccess value, number count)
+       | sampleimage(Image image, number count, IRNode* children)
+       | reduce(string op, IRNode* children)
+       | vectorconstruct(IRNode* children)
+       | vectorextract(IRNode* children, number channel)
+       | load(ImageAccess value)
+       | intrinsic(VarDef value)
+       | const(number value)
+       | vardecl(number constant)
+       | varuse(IRNode* children)
+       | apply(string op, function generator, IRNode * children)
+         attributes (TerraType type, Shape shape, Condition? condition)
 ]]
-local Dim,IndexSpace,Index,Offset,GraphElement,ImageType,Image,ImageVector,ProblemParam,ImageParam,ScalarParam,GraphParam,VarDef,ImageAccess,BoundsAccess,IndexValue,ParamValue,Graph,GraphFunctionSpec,Scatter,Condition = 
-      A.Dim,A.IndexSpace,A.Index,A.Offset,A.GraphElement,A.ImageType,A.Image,A.ImageVector,A.ProblemParam,A.ImageParam,A.ScalarParam,A.GraphParam,A.VarDef,A.ImageAccess,A.BoundsAccess,A.IndexValue,A.ParamValue,A.Graph,A.GraphFunctionSpec,A.Scatter,A.Condition
+local Dim,IndexSpace,Index,Offset,GraphElement,ImageType,Image,ImageVector,ProblemParam,ImageParam,ScalarParam,GraphParam,VarDef,ImageAccess,BoundsAccess,IndexValue,ParamValue,Graph,GraphFunctionSpec,Scatter,Condition,IRNode = 
+      A.Dim,A.IndexSpace,A.Index,A.Offset,A.GraphElement,A.ImageType,A.Image,A.ImageVector,A.ProblemParam,A.ImageParam,A.ScalarParam,A.GraphParam,A.VarDef,A.ImageAccess,A.BoundsAccess,A.IndexValue,A.ParamValue,A.Graph,A.GraphFunctionSpec,A.Scatter,A.Condition,A.IRNode
 
 local ProblemSpec = newclass("ProblemSpec")
 opt.PSpec = ProblemSpec
@@ -885,14 +896,8 @@ local function removeboundaries(exp)
 end
 
 -- code ir is a table { kind = "...", ... }    
-function IRNode:create(body)
-    local ir = IRNode:new(body)
-    ir.id,nextirid = nextirid,nextirid+1
-    assert(body.type and terralib.types.istype(body.type),"missing type")
-    if not ir.shape then
-        ir.shape = ad.scalar
-    end
-    return ir
+function IRNode:init()
+    self.id,nextirid = nextirid,nextirid+1
 end
 function Condition:create(members)
     local function cmp(a,b)
@@ -938,10 +943,10 @@ local function createfunction(problemspec,name,Index,results,scatters)
     results = removeboundaries(results)
     
     local imageload = terralib.memoize(function(imageaccess)
-        return IRNode:create { kind = "vectorload", value = imageaccess, type = imageaccess.image.type:ElementType(), shape = imageaccess:shape(), count = 0 }
+        return A.vectorload(imageaccess,0,imageaccess.image.type:ElementType(),imageaccess:shape())
     end)
     local imagesample = terralib.memoize(function(image, shape, x, y)
-        return IRNode:create { kind = "sampleimage", image = image, type = image.scalar and image.type.scalartype or image.type:ElementType(), shape = shape, count = 0, children = terralib.newlist {x,y} }
+        return A.sampleimage(image,0,List{x,y},image.scalar and image.type.scalartype or image.type:ElementType(),shape)
     end)
     local irmap
     
@@ -967,31 +972,31 @@ local function createfunction(problemspec,name,Index,results,scatters)
             n = ad.prod(n.config.c,unpack(factors))
             cond = Condition:create(conditions)
         end
-        return IRNode:create { kind = "reduce", op = op, children = terralib.newlist { vardecl, irmap(n) }, condition = cond, type = float, shape = vardecl.shape }
+        return A.reduce(op,List{vardecl,irmap(n)},float,vardecl.shape,cond)
     end
     irmap = terralib.memoize(function(e)
         if ad.ExpVector:is(e) then
-            return IRNode:create { kind = "vectorconstruct", children = e.data:map(irmap), type = util.Vector(float,#e.data) }
+            return A.vectorconstruct(e.data:map(irmap),util.Vector(float,#e.data),ad.scalar)
         elseif "Var" == e.kind then
             local a = e:key()
             if "ImageAccess" == a.kind then
                 if not a.image.scalar then
                     local loadvec = imageload(ImageAccess(a.image,a:shape(),a.index,0))
                     loadvec.count = loadvec.count + 1
-                    return IRNode:create { kind = "vectorextract", children = terralib.newlist { loadvec }, channel = a.channel, type = e:type(), shape = a:shape() }  
+                    return A.vectorextract(List {loadvec}, a.channel, e:type(), a:shape())
                 else
-                    return IRNode:create { kind = "load", value = a, type = e:type(), shape = a:shape() }
+                    return A.load(a,e:type(),a:shape()) 
                 end 
             else
-                return IRNode:create { kind = "intrinsic", value = a, type = e:type() }
+                return A.intrinsic(a,e:type(),ad.scalar)
             end
         elseif "Const" == e.kind then
-            return IRNode:create { kind = "const", value = e.v, type = e:type() }
+            return A.const(e.v,e:type(),ad.scalar)
         elseif "Apply" == e.kind then
             if use_split_sums and (e.op.name == "sum") and #e:children() > 2 then
-                local vardecl = IRNode:create { kind = "vardecl", constant = e.config.c, type = float, shape = e:shape() }
-                local children = terralib.newlist { vardecl }
-                local varuse = IRNode:create { kind = "varuse", children = children, type = float, shape = e:shape() }
+                local vardecl = A.vardecl(e.config.c,float,e:shape())
+                local children = List { vardecl }
+                local varuse = A.varuse(children,float,e:shape())
                 for i,c in ipairs(e:children()) do
                     children:insert(createreduce(e.op.name,vardecl,c))
                 end
@@ -1004,7 +1009,7 @@ local function createfunction(problemspec,name,Index,results,scatters)
                 if not util.isvectortype(sm.image.type) then
                     return sm
                 end
-                return IRNode:create { kind = "vectorextract", children = terralib.newlist { sm }, channel = e.config.c, type = e:type(), shape = e:shape() }
+                return A.vectorextract(List {sm}, e.config.c, e:type(), e:shape()) 
             end
             local fn,gen = opt.math[e.op.name]
             if fn then
@@ -1018,13 +1023,13 @@ local function createfunction(problemspec,name,Index,results,scatters)
             else
                 function gen(args) return e.op:generate(e,args) end
             end
-            return IRNode:create { kind = "apply", op = e.op.name, generator = gen, children = children, type = e:type(), shape = e:shape(), c = e.config.c, adid = assert(tonumber(e.id),"no id?") }
+            return A.apply(e.op.name,gen,children,e:type(),e:shape()) 
         elseif "Reduce" == e.kind then
-            local vardecl = IRNode:create { kind = "vardecl", constant = 0, type = e:type(), shape = e:shape() }
+            local vardecl = A.vardecl(0,e:type(),e:shape()) 
             local arg = e.args[1]
-            local red = IRNode:create { kind = "reduce", op = "sum", children  = terralib.newlist { vardecl, irmap(arg) }, type = vardecl.type, shape = arg:shape() }
-            local children = terralib.newlist { vardecl, red }
-            local varuse = IRNode:create { kind = "varuse", children = children, type = vardecl.type, shape = e:shape() }
+            local red = A.reduce("sum",List { vardecl, irmap(arg) }, vardecl.type, arg:shape()) 
+            local children = List { vardecl, red }
+            local varuse = A.varuse(children,vardecl.type,e:shape())
             return varuse
         end
     end)

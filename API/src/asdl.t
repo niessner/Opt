@@ -168,7 +168,7 @@ local function checkuniquelist(checkt,listcache)
 end
 
 local defaultchecks = {} 
-for i in string.gmatch("nil number string boolean table thread userdata cdata","(%S+)") do
+for i in string.gmatch("nil number string boolean table thread userdata cdata function","(%S+)") do
     defaultchecks[i] = checkbuiltin(i)
 end
 defaultchecks["any"] = function() return true end
@@ -226,6 +226,7 @@ function Context:DefineClass(name,unique,fields)
             tns:insert(f.list and f.type.."*" or f.type)
             checks:insert(self:GetCheckForField(unique,f))
         end
+        
         if unique then
             function mt:__call(...)
                 local node,key = self,"cache"
@@ -251,6 +252,7 @@ function Context:DefineClass(name,unique,fields)
                 local next = node[key]
                 if not next then
                     next = setmetatable(obj,self)
+                    next:init()
                     node[key] = next
                 end
                 return next
@@ -266,9 +268,12 @@ function Context:DefineClass(name,unique,fields)
                     end
                     obj[names[i]] = v
                 end
-                return setmetatable(obj,self)
+                local r = setmetatable(obj,self)
+                r:init()
+                return r
             end
         end
+        function class:init() end -- override with custom initializer
         function class:__tostring()
             local members = newlist()
             for i,f in ipairs(fields) do
