@@ -512,7 +512,7 @@ function ImageType:terratype()
         return v
     end
     -- lerps for 2D images only
-    if channelcount == 2 then
+    if 2 == #self.ispace.dims then
         local terra lerp(v0 : vectortype, v1 : vectortype, t : float)
             return (1.f - t)*v0 + t*v1
         end
@@ -940,7 +940,7 @@ local function createfunction(problemspec,name,Index,results,scatters)
         return IRNode:create { kind = "vectorload", value = imageaccess, type = imageaccess.image.type:ElementType(), shape = imageaccess:shape(), count = 0 }
     end)
     local imagesample = terralib.memoize(function(image, shape, x, y)
-        return IRNode:create { kind = "sampleimage", image = image, type = image.type:ElementType(), shape = shape, count = 0, children = terralib.newlist {x,y} }
+        return IRNode:create { kind = "sampleimage", image = image, type = image.scalar and image.type.scalartype or image.type:ElementType(), shape = shape, count = 0, children = terralib.newlist {x,y} }
     end)
     local irmap
     
@@ -1445,7 +1445,11 @@ local function createfunction(problemspec,name,Index,results,scatters)
         elseif "sampleimage" == ir.kind then
             local im = imageref(ir.image)
             local exps = ir.children:map(emit)
-            return `im:sample(exps)
+            local r = `im:sample(exps)
+            if ir.image.scalar then
+                r = `r(0)
+            end
+            return r
         elseif "apply" == ir.kind then
             local exps = ir.children:map(emit)
             return ir.generator(exps)
