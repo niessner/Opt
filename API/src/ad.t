@@ -11,9 +11,9 @@ local List = terralib.newlist
 A:Extern("TerraType",terralib.types.istype)
 A:Define [[
     Op = (string name)
-    Shape = (table* keys)
+    Shape = (table* keys) unique
     ExpVector = (table* data)
-    Exp = Var(TerraType type_, any key_, Shape shape_) 
+    Exp = Var(any key_) unique
         | Apply(Op op, table config, Exp* args)
         | Reduce(Exp v) unique
         | Const(number v) unique
@@ -84,8 +84,19 @@ end
 function Const:__tostring() return tostring(self.v) end
 
 function Var:init()
+    local key = self.key_
     self.id = allocid()
+    self.type_ = float
+    if type(key) == "table" and type(key.type) == "function" then
+        self.type_ = key:type()
+    end 
+    assert(self.type_ == float or self.type_ == bool, "variable with key exists with a different type")
+    self.shape_ = ad.scalar
+    if type(key) == "table" and type(key.shape) == "function" then
+        self.shape_ = key:shape()
+    end
 end
+
 function Apply:init()
     assert(not self.op.nparams or #self.args == self.op.nparams)
     self.type_ = self.op:propagatetype(self.args)
@@ -343,25 +354,8 @@ end
 
 -- generates variable names
 local v = {} 
-
-function ad.getvar(key)
-    local r = rawget(v,key)
-    if not r then
-        
-    end
-    return r
-end
 setmetatable(v,{__index = function(self,key)
-    local type_ = float
-    if type(key) == "table" and type(key.type) == "function" then
-        type_ = key:type()
-    end 
-    assert(type_ == float or type_ == bool, "variable with key exists with a different type")
-    local shape = ad.scalar
-    if type(key) == "table" and type(key.shape) == "function" then
-        shape = key:shape()
-    end
-    local r = Var(type_,key,shape)
+    local r = Var(key)
     v[key] = r
     return r
 end})
