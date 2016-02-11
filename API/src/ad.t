@@ -1,54 +1,26 @@
 local ad = {}
 local C = terralib.includec("math.h")
+local A = require("asdl")
 
 local use_simplify = true
 local use_condition_factoring = true
 local use_polysimplify = true
 local use_backward_ad = true
+local List = terralib.newlist
 
-local function newclass(name)
-    local mt = { __name = name, variants = terralib.newlist() }
-    mt.__index = mt
-    function mt:is(obj)
-        local omt = getmetatable(obj)
-        while omt ~= nil do
-            if self == omt then return true end
-            omt = omt.__parent
-        end
-        return false
-    end
-    function mt:new(obj)
-        obj = obj or {}
-        setmetatable(obj,self)
-        return obj
-    end
-    function mt:Variant(name)
-        local vt = { kind = name, __parent = self }
-        for k,v in pairs(self) do
-            vt[k] = v
-        end
-        self.variants:insert(vt)
-        vt.__index = vt
-        return vt
-    end
-    setmetatable(mt, { __newindex = function(self,idx,v)
-        rawset(self,idx,v)
-        for i,j in ipairs(self.variants) do
-            rawset(j,idx,v)
-        end
-    end })
- 
-    return mt
-end
+A:Extern("TerraType",terralib.types.istype)
+A:Define [[
+    Op = (string name)
+    Shape = (table* keys)
+    ExpVector = (table* data)
+    Exp = Var(TerraType type_, any key_, Shape shape_) 
+        | Apply(Op op, table config, Exp* args)
+        | Reduce(Exp v) unique
+        | Const(number v) unique
+]]
+local Op,Shape,ExpVector,Exp,Var,Apply,Reduce,Const = A.Op,A.Shape,A.ExpVector,A.Exp,A.Var,A.Apply,A.Reduce,A.Const
 
-local Op = newclass("Op") -- a primitive operator like + or sin
-
-local Shape = newclass("Shape")
-
-local newshape = terralib.memoize(function(...) return Shape:new { keys = terralib.newlist {...} } end)
-
-function Shape:fromkeys(...) return newshape(...) end
-ad.scalar = Shape:fromkeys()
+ad.scalar = Shape(List{})
  
 function Shape:isprefixof(rhs)
     if #self.keys > #rhs.keys then return false end
@@ -76,18 +48,11 @@ local function joinshapes(shapes)
 end
 function Shape:fromreduction()
     if #self.keys == 0 then return nil end
-    return Shape:fromkeys(unpack(self.keys,1,#self.keys-1))
+    return Shape(List{unpack(self.keys,1,#self.keys-1)})
 end
 function Shape:__tostring()
     return "{"..table.concat(self.keys:map(tostring),",").."}"
 end
-
-local Exp = newclass("Exp") -- an expression involving primitives
-local Var = Exp:Variant("Var") -- a variable
-local Apply = Exp:Variant("Apply") -- an application
-local Const = Exp:Variant("Const") -- a constant, C
-local Reduce = Exp:Variant("Reduce") -- summation across the inner-most shape
-local ExpVector = newclass("ExpVector")
 
 local nextid = 0
 local function allocid()
@@ -118,18 +83,26 @@ function Exp:shape()
 end
 function Const:__tostring() return tostring(self.v) end
 
-local function newapply(op,config,args)
-    assert(not op.nparams or #args == op.nparams)
-    assert(type(config) == "table")
-    local id = allocid()
-    return Apply:new { op = op, args = args, config = config, id = id, type_ = op:propagatetype(args), shape_ = joinshapes(args:map("shape")) }
+function Var:init()
+    self.id = allocid()
+end
+function Apply:init()
+    assert(not self.op.nparams or #self.args == self.op.nparams)
+    self.type_ = self.op:propagatetype(self.args)
+    self.shape_ = joinshapes(self.args:map("shape"))
+    self.id = allocid()
 end
 
-local getconst = terralib.memoize(function(n) return Const:new { v = n, id = allocid(), type_ = float, shape_ = ad.scalar } end)
+function Const:init()
+    self.id = allocid()
+    self.type_ = float
+    self.shape_ = ad.scalar
+end
+
 local function toexp(n)
     if n then 
         if Exp:is(n) then return n
-        elseif type(n) == "number" then return getconst(n)
+        elseif type(n) == "number" then return Const(n)
         elseif type(n) == "table" then
             local mt = getmetatable(n)
             if mt and type(mt.__toadexp) == "function" then
@@ -139,13 +112,11 @@ local function toexp(n)
     end
     return nil
 end
-local getreduce = terralib.memoize(function(v) 
-    assert(Exp:is(v))
-    local ns = assert(v:shape():fromreduction(),"attempting to reduce a scalar value") 
-    local typ = v:type()
-    return Reduce:new { args = terralib.newlist{v}, v = v, type_ = typ, shape_ = ns, id = allocid() }
-end)
- 
+function Reduce:init()
+    self.args = List { self.v }
+    self.type_, self.shape_ = self.v:type(), assert(self.v:shape():fromreduction(),"attempting to reduce a scalar value") 
+    self.id = allocid()
+end
 local zero,one,negone = toexp(0),toexp(1),toexp(-1)
 local function allconst(args)
     for i,a in ipairs(args) do
@@ -186,7 +157,7 @@ end
 
 local polycache = terralib.memoize(function(op,c,...)
     local args,config = terralib.newlist {...}, { c = c }
-    return newapply(op,config,args)
+    return Apply(op,config,args)
 end)
 
 local function orderedexpressionkeys(tbl)
@@ -319,7 +290,7 @@ local function simplify(op,config,args)
         end
     end
     
-    return newapply(op,config,args)
+    return Apply(op,config,args)
 end
 
 local function getapply(op,...)
@@ -390,17 +361,15 @@ setmetatable(v,{__index = function(self,key)
     if type(key) == "table" and type(key.shape) == "function" then
         shape = key:shape()
     end
-    local r = Var:new { type_ = type_, key_ = assert(key), id = allocid(), shape_ = shape }
+    local r = Var(type_,key,shape)
     v[key] = r
     return r
 end})
 
 local x,y,z = v[1],v[2],v[3]
 
-
 ad.v = v
 ad.toexp = toexp
-ad.newclass = newclass
 ad.Shape = Shape
 
 function ad.Vector(...)
@@ -409,13 +378,13 @@ function ad.Vector(...)
         local e = select(i,...)
         data[i] = assert(toexpvectorentry(e),"expected a ExpVector or valid expression")
     end
-    return ExpVector:new { data = data }
+    return ExpVector(data)
 end
 ad.ExpVector = ExpVector
 
 setmetatable(ad, { __index = function(self,idx) -- for just this file, auto-generate an op 
     local name = assert(type(idx) == "string" and idx)
-    local op = Op:new { name = name }
+    local op = Op(name)
     rawset(self,idx,op)
     return op
 end })
@@ -450,7 +419,7 @@ function Op:__call(...)
         end
         exps:insert(self(unpack(newargs)))
     end
-    return ExpVector:new { data = exps }
+    return ExpVector(exps)
 end
 
 local function insertcast(from,to,exp)
@@ -527,7 +496,7 @@ function Exp:rename(vars)
     local visitcached
     local function visit(self) 
         if self.kind == "Apply" then
-            local nargs = self.args:map(visitcached,vars)
+            local nargs = self.args:map(visitcached)
             for i,c in ipairs(self.op.config) do
                 nargs:insert(i,self.config[c])
             end
@@ -539,7 +508,7 @@ function Exp:rename(vars)
             return assert(nv,
                           ("rename: unknown invalid mapping for variable %s which maps to %s"):format(tostring(self:key()),tostring(nv)))
         elseif self.kind == "Reduce" then
-            return getreduce(visitcached(self.v))
+            return Reduce(visitcached(self.v))
         end
     end
     local cached = {} 
@@ -954,9 +923,9 @@ setmetatable(ad,nil) -- remove special metatable that generates new blank ops
 ad.Var,ad.Apply,ad.Const,ad.Exp,ad.Reduce = Var, Apply, Const, Exp, Reduce
 function ad.reduce(x)
     if ExpVector:is(x) then
-        return x:map(getreduce)
+        return x:map(Reduce)
     end
-    return getreduce(x)
+    return Reduce(x)
 end
 function ad.polysimplify(exps)
     if not use_polysimplify then return exps end
@@ -1099,9 +1068,8 @@ function ad.splitcondition(exp)
     end
 end
 
-function ad.newop(name)
-    return Op:new { name = name }
-end
+ad.newop = Op
+
 --[[
 
 
@@ -1165,7 +1133,7 @@ function VC:__tostring() return "VC" end
 function VC:shape() return Shape:fromkeys{1,2} end 
 
 local vx = ad.v[ VC:new {} ]
-local r = (x + getreduce(y + vx))
+local r = (x + Reduce(y + vx))
 print(r)
 local rr = r:rename(function(x) if x == "y" then return ad.v.x else return ad.v[x] end end)
 print(rr)

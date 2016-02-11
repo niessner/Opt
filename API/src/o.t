@@ -4,6 +4,7 @@ local S = require("std")
 local A = require("asdl")
 local ffi = require("ffi")
 local util = require("util")
+ad = require("ad")
 local solversCPU = require("solversCPU")
 local solversGPU = require("solversGPU")
 
@@ -139,10 +140,7 @@ terra opt.ProblemDelete(p : &opt.Problem)
 end
 
 local List = terralib.newlist
-A:Extern("TerraType",terralib.types.istype)
-A:Extern("Shape",function(x) return ad.Shape:is(x) end)
 A:Extern("imageindex",function(x) return type(x) == "number" or x == "alloc" end)
-A:Extern("Exp",function(x) return ad.Exp:is(x) end)
 A:Extern("ExpLike",function(x) return ad.Exp:is(x) or ad.ExpVector:is(x) end)
 A:Define [[
 Dim = (string name, number size, number? _index) unique
@@ -621,10 +619,12 @@ local function problemPlan(id, dimensions, pplan)
         opt.dimensions = dimensions
         opt.math = problemmetadata.kind:match("GPU") and util.gpuMath or util.cpuMath
         opt.problemkind = problemmetadata.kind
-		
+		local b = terralib.currenttimeinseconds()
         local tbl = opt.problemSpecFromFile(problemmetadata.filename)
         assert(ProblemSpec:is(tbl))
 		local result = compilePlan(tbl,problemmetadata.kind)
+		local e = terralib.currenttimeinseconds()
+		print("compile time: ",e - b)
 		allPlans:insert(result)
 		pplan[0] = result()
     end,function(err) errorPrint(debug.traceback(err,2)) end)
@@ -651,8 +651,6 @@ terra opt.ProblemSolve(plan : &opt.Plan, params : &&opaque, solverparams : &&opa
    opt.ProblemInit(plan, params, solverparams)
    while opt.ProblemStep(plan, params, solverparams) ~= 0 do end
 end
-
-ad = require("ad")
 
 function Offset:__tostring() return string.format("(%s)",self.data:map(tostring):concat(",")) end
 function GraphElement:__tostring() return ("%s_%s"):format(tostring(self.graph), self.element) end
@@ -923,7 +921,6 @@ function Condition:Union(rhs)
 end
 
 local function createfunction(problemspec,name,Index,results,scatters)
-    timeSinceLast("Before create function "..name)
     results = removeboundaries(results)
     
     local imageload = terralib.memoize(function(imageaccess)
@@ -1566,7 +1563,6 @@ local function createfunction(problemspec,name,Index,results,scatters)
         [scatterstatements]
         return [resultexpressions]
     end
-    timeSinceLast("createfunction "..name)
     
     generatedfn:setname(name)
     if verboseAD then
