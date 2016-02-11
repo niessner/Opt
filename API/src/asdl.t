@@ -10,15 +10,13 @@ local newlist, islist = terralib.newlist, terralib.islist
 -- prepare lexer stuff
 local tokens = "=|?*,()"
 local keywords = { attributes = true, unique = true }
-local tokenlist = {}
 for i = 1,#tokens do
     local t = tokens:sub(i,i)
-    tokenlist[i] = "%"..t
     keywords[t] = true
 end
 -- parser/lexer function
 local function parseAll(text)
-local pos = 1
+    local pos = 1
     local cur = nil -- current token
     local value = nil -- current token value
     local function err(what)

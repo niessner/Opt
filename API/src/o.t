@@ -934,6 +934,7 @@ function Condition:Union(rhs)
 end
 
 local function createfunction(problemspec,name,Index,results,scatters)
+    timeSinceLast("Before create function "..name)
     results = removeboundaries(results)
     
     local imageload = terralib.memoize(function(imageaccess)
@@ -1351,16 +1352,16 @@ local function createfunction(problemspec,name,Index,results,scatters)
     end
     local currentidx
     local function boundcoversload(ba,off)
-        print("Bound Covers? ",ba,off)
+        --print("Bound Covers? ",ba,off)
         assert(#off.data == #ba.offset.data)
         for i = 1,#off.data do
             local o,b = off.data[i],ba.offset.data[i]
             if o < b - ba.expand or o > b + ba.expand then
-                print("no")
+                --print("no")
                 return false
             end
         end
-        print("yes")
+        --print("yes")
         return true
     end
     local function conditioncoversload(condition,off)
@@ -1576,6 +1577,8 @@ local function createfunction(problemspec,name,Index,results,scatters)
         [scatterstatements]
         return [resultexpressions]
     end
+    timeSinceLast("createfunction "..name)
+    
     generatedfn:setname(name)
     if verboseAD then
         generatedfn:printpretty(false, false)
@@ -1877,7 +1880,7 @@ function timeSinceLast(name)
     local currentTime = terralib.currenttimeinseconds()
     if (lastTime) then
         local deltaTime = currentTime-lastTime
-        --print(name,": ", deltaTime,"s")
+        print(string.format("%s: %f sec\n",name,deltaTime))
     end
     lastTime = currentTime
 end
