@@ -1,25 +1,18 @@
 local IO = terralib.includec("stdio.h")
 local adP = ad.ProblemSpec()
 local P = adP.P
-local W,H = opt.Dim("W",0), opt.Dim("H",1)
+local N = opt.Dim("N",0)
 
 local w_fitSqrt = adP:Param("w_fit", float, 0)
 local w_regSqrt = adP:Param("w_reg", float, 1)
-local X = adP:Image("X", opt.float3,W,H,2)
-local A = adP:Image("A", opt.float3,W,H,3)
---local G = adP:Graph("G", 0, "v0", W, H, 0, "v1", W, H, 1)
-local G = adP:Graph("G", 4, "v0", W, H, 5,6, --current vertex
-                            "v1", W, H, 7,8, --neighboring vertex
-                            "v2", W, H, 9,10, --prev neighboring vertex
-                            "v3", W, H, 11,12) --next neighboring vertex
-P:Stencil(2)
+local X = adP:Image("X", opt.float3,{N},2)
+local A = adP:Image("A", opt.float3,{N},3)
+--local G = adP:Graph("G", 0, "v0", {N}, 0, "v1", {N}, 1)
+local G = adP:Graph("G", 4, "v0", {N}, 5, --current vertex
+                            "v1", {N}, 7, --neighboring vertex
+                            "v2", {N}, 9, --prev neighboring vertex
+                            "v3", {N}, 11) --next neighboring vertex
 P:UsePreconditioner(true)
-
-local C = terralib.includecstring [[
-#include <math.h>
-]]
-
-
 
 function dot3(v0, v1) 
 	return v0(0)*v1(0)+v0(1)*v1(1)+v0(2)*v1(2)
@@ -68,6 +61,6 @@ local w = 0.5*(cot(a,b) + cot(c,d))
 w = ad.select(ad.greater(w, 0.0), w, 0.0001)
 w = ad.sqrt(w)
 
-local cost = ad.sumsquared(w_fitSqrt*(X(0,0) - A(0,0)), w_regSqrt*w*(X(G.v1) - X(G.v0)))
-return adP:Cost(cost)
+local cost = {w_fitSqrt*(X(0) - A(0)), w_regSqrt*w*(X(G.v1) - X(G.v0))}
+return adP:Cost(unpack(cost))
 

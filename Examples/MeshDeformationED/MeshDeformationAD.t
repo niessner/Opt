@@ -1,16 +1,16 @@
 local IO = terralib.includec("stdio.h")
 local adP = ad.ProblemSpec()
 local P = adP.P
-local W,H = opt.Dim("W",0), opt.Dim("H",1)
+local N = opt.Dim("N",0)
 
 
 local w_fitSqrt = adP:Param("w_fitSqrt", float, 0)
 local w_regSqrt = adP:Param("w_regSqrt", float, 1)
 local w_rotSqrt = adP:Param("w_rotSqrt", float, 2)
-local X = 			adP:Image("X", opt.float12,W,H,3)			--vertex.xyz, rotation_matrix <- unknown
-local UrShape = 	adP:Image("UrShape", opt.float3,W,H,4)		--urshape: vertex.xyz
-local Constraints = adP:Image("Constraints", opt.float3,W,H,5)	--constraints
-local G = adP:Graph("G", 6, "v0", W, H, 7,8, "v1", W, H, 9,10)
+local X = 			adP:Image("X", opt.float12,{N},3)			--vertex.xyz, rotation_matrix <- unknown
+local UrShape = 	adP:Image("UrShape", opt.float3,{N},4)		--urshape: vertex.xyz
+local Constraints = adP:Image("Constraints", opt.float3,{N},5)	--constraints
+local G = adP:Graph("G", 6, "v0", {N}, 7, "v1", {N}, 9)
 P:UsePreconditioner(true)	--really needed here
 
 function dot3(v0, v1) 
@@ -27,9 +27,9 @@ end
 local terms = terralib.newlist()
 	
 --fitting
-local x_fit = ad.Vector(X(0,0,0), X(0,0,1), X(0,0,2))	--vertex-unknown : float3
-local x = X(0,0)
-local constraint = Constraints(0,0)						--target : float3
+local x_fit = ad.Vector(X(0,0), X(0,1), X(0,2))	--vertex-unknown : float3
+local x = X(0)
+local constraint = Constraints(0)						--target : float3
 local e_fit = x_fit - constraint
 e_fit = ad.select(ad.greatereq(constraint(0), -999999.9), e_fit, ad.Vector(0.0, 0.0, 0.0))
 terms:insert(w_fitSqrt*e_fit)
@@ -61,7 +61,6 @@ local regCost = (x1 - x0) - mul(R0, (x1Hat - x0Hat))
 
 terms:insert(w_regSqrt*regCost)
 
-local cost = ad.sumsquared(unpack(terms))
-return adP:Cost(cost)
+return adP:Cost(unpack(terms))
 
 
