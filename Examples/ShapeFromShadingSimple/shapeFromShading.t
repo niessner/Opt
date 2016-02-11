@@ -15,8 +15,9 @@ local DEPTH_DISCONTINUITY_THRE = 0.01
 
 local IO = terralib.includec("stdio.h")
 
-local W,H 	= opt.Dim("W",0), opt.Dim("H",1)
 local P 	= opt.ProblemSpec()
+local W,H 	= opt.Dim("W",0), opt.Dim("H",1)
+
 
 
 -- See TerraSolverParameters
@@ -53,26 +54,29 @@ local nPatchIterations 		= P:Param("nPatchIterations",uint,offset+3) -- Steps on
 
 
 offset = offset + 4
-local D 	= P:Image("X",float, W,H,offset+0) -- Refined Depth
-local D_i 	= P:Image("D_i",float, W,H,offset+1) -- Depth input
-local I 	= P:Image("I",float, W,H,offset+2) -- Target Intensity
-local D_p 	= P:Image("D_p",float, W,H,offset+3) -- Previous Depth
-local edgeMaskR 	= P:Image("edgeMaskR",uint8, W,H,offset+4) -- Edge mask. 
-local edgeMaskC 	= P:Image("edgeMaskC",uint8, W,H,offset+5) -- Edge mask. 
+local D 	= P:Image("X",float, {W,H},offset+0) -- Refined Depth
+local D_i 	= P:Image("D_i",float, {W,H},offset+1) -- Depth input
+local I 	= P:Image("I",float, {W,H},offset+2) -- Target Intensity
+local D_p 	= P:Image("D_p",float, {W,H},offset+3) -- Previous Depth
+local edgeMaskR 	= P:Image("edgeMaskR",uint8, {W,H},offset+4) -- Edge mask. 
+local edgeMaskC 	= P:Image("edgeMaskC",uint8, {W,H},offset+5) -- Edge mask. 
 
 local B_I
 local B_I_dx0
 local B_I_dx1
 local B_I_dx2
 if USE_PRECOMPUTE then
-	B_I = P:Image("B_I", float, W, H, "alloc")
-	B_I_dx0 = P:Image("B_I_dx0", float, W, H, "alloc")
-	B_I_dx1 = P:Image("B_I_dx1", float, W, H, "alloc")
-	B_I_dx2 = P:Image("B_I_dx2", float, W, H, "alloc")
-	pguard = P:Image("pguard", float, W, H, "alloc")
+	B_I = P:Image("B_I", float, {W,H}, "alloc")
+	B_I_dx0 = P:Image("B_I_dx0", float, {W,H}, "alloc")
+	B_I_dx1 = P:Image("B_I_dx1", float, {W,H}, "alloc")
+	B_I_dx2 = P:Image("B_I_dx2", float, {W,H}, "alloc")
+	pguard = P:Image("pguard", float, {W,H}, "alloc")
 end	
 
 P:Stencil(2)
+
+local TUnknownType = P:UnknownType():terratype()
+local Index = P:UnknownType().ispace:indextype()
 
 local C = terralib.includecstring [[
 #include <math.h>
@@ -94,36 +98,6 @@ local terra make_float4(x : float, y : float, z : float, w : float)
 	return vector(x, y, z, w)
 end
 
---[[ May not be needed. Check code gen with vector() first.
-local float3 = terralib.types.newstruct("float3")
-local float4 = terralib.types.newstruct("float4")
-
-table.insert(float4.entries,{"x",float})
-table.insert(float4.entries,{"y",float})
-table.insert(float4.entries,{"z",float})
-table.insert(float4.entries,{"w",float})
-
-table.insert(float3.entries,{"x",float})
-table.insert(float3.entries,{"y",float})
-table.insert(float3.entries,{"z",float})
-
-local terra make_float4(x : float, y : float, z : float, w : float)
-	var result : float4
-	result.x = x
-	result.y = y
-	result.z = z
-	result.w = w
-	return result
-end
-
-local terra make_float3(x : float, y : float, z : float)
-	var result : float3
-	result.x = x
-	result.y = y
-	result.z = z
-	return result
-end
-]]
 local terra dot(v0 : float3, v1 : float3)
 	return v0[0]*v1[0] + v0[1]*v1[1] + v0[2]*v1[2]
 end
@@ -136,30 +110,28 @@ local terra IsValidPoint(d : float)
 	return d > 0
 end
 
-local terra isInsideImage(i : int, j : int, width : int, height : int)
-	return (i >= 0 and i < width and j >= 0 and j < height)
-end
-
-local terra I(self : P:ParameterType(), i : int32, j : int32)
-    -- TODO: WHYYYYYYYYYY?
-	return self.I(i,j)*0.5f + 0.25f*(self.I(i-1,j)+self.I(i,j-1))
+local terra I(self : P:ParameterType(), idx : Index)
+    -- This weird semi-blur was in the original code, so ported here.
+	return self.I(idx(0,0))(0)*0.5f + 0.25f*(self.I(idx(-1,0))(0)+self.I(idx(0,-1))(0))
 end
 
 -- equation 8
-local terra p(offX : int32, offY : int32, gi : int32, gj : int32, self : P:ParameterType()) 
-    var d : float= self.X(offX,offY)
+local terra p(idx : Index, gi : int32, gj : int32, self : P:ParameterType()) 
+    var d : float= self.X(idx)(0)
     return make_float3((([float](gi)-self.u_x)/self.f_x)*d, (([float](gj)-self.u_y)/self.f_y)*d, d)
 end
 
 -- equation 10
-local terra n(offX : int32, offY : int32, gi : int32, gj : int32, self : P:ParameterType())
+local terra n(idx : Index, gi : int32, gj : int32, self : P:ParameterType())
     --f_x good, f_y good
 
-    var n_x = (self.X(offX, offY - 1) * (self.X(offX, offY) - self.X(offX - 1, offY))) / self.f_y
-    var n_y = (self.X(offX - 1, offY) * (self.X(offX, offY) - self.X(offX, offY - 1))) / self.f_x
+    var center, left, up = idx, idx(-1,0), idx(0,-1)
+
+    var n_x = (self.X(up)(0) * (self.X(center)(0) - self.X(left)(0))) / self.f_y
+    var n_y = (self.X(left)(0) * (self.X(center)(0) - self.X(up)(0))) / self.f_x
     var n_z = 	((n_x * (self.u_x - [float](gi))) / self.f_x) + 
     			((n_y * (self.u_y - [float](gj))) / self.f_y) - 
-    			( (self.X(offX-1, offY)*self.X(offX, offY-1)) / (self.f_x*self.f_y))
+    			( (self.X(left)(0)*self.X(up)(0)) / (self.f_x*self.f_y))
 	var lengthSquared = n_x*n_x + n_y*n_y + n_z*n_z
    
     var normal = make_float3(n_x, n_y, n_z)
@@ -169,8 +141,8 @@ local terra n(offX : int32, offY : int32, gi : int32, gj : int32, self : P:Param
     return normal
 end
 
-local terra B(offX : int32, offY : int32, gi : int32, gj : int32, self : P:ParameterType())
-	var normal = n(offX, offY, gi, gj, self)
+local terra B(idx : Index, gi : int32, gj : int32, self : P:ParameterType())
+	var normal = n(idx, gi, gj, self)
 	var n_x : float = normal[0]
 	var n_y : float = normal[1]
 	var n_z : float = normal[2]
@@ -194,14 +166,14 @@ local terra mat4_times_float4(M : mat4, v : float4)
 	return make_float4(result[0], result[1], result[2], result[3])
 end
 
-local terra estimate_normal_from_depth2(inPriorDepth : P:UnknownType(), gidx : int, gidy : int, W : int, H : int, ax : float, ay : float, f_x : float, f_y : float)
+local terra estimate_normal_from_depth2(inPriorDepth : TUnknownType, gidx : int, gidy : int, W : int, H : int, ax : float, ay : float, f_x : float, f_y : float)
 	var x : float = 0.0f
 	var y : float = 0.0f
 	var z : float = 0.0f
 
-	var d0 : float = inPriorDepth.data[gidy*W+gidx-1];
-	var d1 : float = inPriorDepth.data[gidy*W+gidx];
-	var d2 : float = inPriorDepth.data[(gidy-1)*W+gidx];
+	var d0 : float = inPriorDepth.data[gidy*W+gidx-1](0);
+	var d1 : float = inPriorDepth.data[gidy*W+gidx](0);
+	var d2 : float = inPriorDepth.data[(gidy-1)*W+gidx](0);
 
 	if IsValidPoint(d0) and IsValidPoint(d1) and IsValidPoint(d2) then
 		x = - d2*(d0-d1)/f_y;
@@ -234,8 +206,8 @@ local terra prior_normal_from_previous_depth(d : float, gidx : int32, gidy : int
 	var u_y : float = self.u_y
 	var uf_x : float = 1.0f / f_x
 	var uf_y : float = 1.0f / f_y
-	var W = self.X:W()
-	var H = self.X:H()
+	var W = [W.size]
+	var H = [H.size]
 	
 	--var deltaTransform : mat4 = vector(self.deltaTransform_1, self.deltaTransform_2, self.deltaTransform_3, self.deltaTransform_4, self.deltaTransform_5, self.deltaTransform_6, self.deltaTransform_7, self.deltaTransform_8, self.deltaTransform_9, self.deltaTransform_10, self.deltaTransform_11, self.deltaTransform_12, self.deltaTransform_13, self.deltaTransform_14, self.deltaTransform_15, self.deltaTransform_16)
 
@@ -270,19 +242,20 @@ local terra prior_normal_from_previous_depth(d : float, gidx : int32, gidy : int
 	return 
 end
 
-local terra calShading2depthGradHelper(i : int, j : int, posx : int, posy: int, self : P:ParameterType()) : float4
+local terra calShading2depthGradHelper(idx : Index, posx : int, posy: int, self : P:ParameterType()) : float4
 	var f_x : float = self.f_x
 	var f_y : float = self.f_y
 	var u_x : float = self.u_x
 	var u_y : float = self.u_y
 
-	var d0 : float = self.X(i-1, j);
-	var d1 : float = self.X(i, j);
-	var d2 : float = self.X(i, j-1);
+	var mid,left,up =idx,idx(-1,0),idx(0,-1)
+
+	var d0 : float = self.X(left)(0);
+	var d1 : float = self.X(mid)(0);
+	var d2 : float = self.X(up)(0);
 	
 	if (IsValidPoint(d0)) and (IsValidPoint(d1)) and (IsValidPoint(d2)) then
-		-- TODO: Do we do this in the AD version?
-		var greyval : float = (self.I(i, j)*0.5f + self.I(i-1, j)*0.25f + self.I(i, j-1)*0.25f)
+		var greyval : float = (self.I(mid)(0)*0.5f + self.I(left)(0)*0.25f + self.I(up)(0)*0.25f)
 
 		var ax : float = (posx-u_x)/f_x
 		var ay : float = (posy-u_y)/f_y
@@ -397,34 +370,34 @@ local terra calShading2depthGradHelper(i : int, j : int, posx : int, posy: int, 
 	end
 end
 
-local terra calShading2depthGrad(i : int, j : int, posx : int, posy: int, self : P:ParameterType()) : float4
+local terra calShading2depthGrad(idx : Index, posx : int, posy: int, self : P:ParameterType()) : float4
 	escape
 		if USE_PRECOMPUTE then
 			emit quote
-				return make_float4(	self.B_I_dx0(i,j),
-									self.B_I_dx1(i,j),
-									self.B_I_dx2(i,j),
-									self.B_I(i,j)) 
+				return make_float4(	self.B_I_dx0(idx)(0),
+									self.B_I_dx1(idx)(0),
+									self.B_I_dx2(idx)(0),
+									self.B_I(idx)(0)) 
 			end
 		else
 			emit quote
-				return calShading2depthGradHelper(i,j, posx, posy, self)
+				return calShading2depthGradHelper(idx, posx, posy, self)
 			end
 		end
     end
 end
 
 
-local terra est_lap_init_3d_imp(i : int,  j : int, self : P:ParameterType(), w0 : float, w1 : float, uf_x : float, uf_y : float, b_valid : &bool) : float3
+local terra est_lap_init_3d_imp(idx : Index, self : P:ParameterType(), w0 : float, w1 : float, uf_x : float, uf_y : float, b_valid : &bool) : float3
 
 	var retval_0 = 0.0f
 	var retval_1 = 0.0f
 	var retval_2 = 0.0f	
-	var d  : float = self.X(i,j)
-	var d0 : float = self.X(i-1,j)
-	var d1 : float = self.X(i+1,j)
-	var d2 : float = self.X(i,j-1)
-	var d3 : float = self.X(i,j+1)
+	var d  : float = self.X(idx)(0)
+	var d0 : float = self.X(idx(-1,0))(0)
+	var d1 : float = self.X(idx(1,0))(0)
+	var d2 : float = self.X(idx(0,-1))(0)
+	var d3 : float = self.X(idx(0,1))(0)
 
 	if IsValidPoint(d) and IsValidPoint(d0) and IsValidPoint(d1) and IsValidPoint(d2) and IsValidPoint(d3)
 		and opt.math.abs(d-d0) < [float](DEPTH_DISCONTINUITY_THRE) 
@@ -459,9 +432,10 @@ local terra est_lap_init_3d_imp(i : int,  j : int, self : P:ParameterType(), w0 
 end
 
 
-local terra cost(i : int32, j : int32, gi : int32, gj : int32, self : P:ParameterType())
-	var W = self.X:W()
-	var H = self.X:H()
+local terra cost(idx : Index, self : P:ParameterType())
+	var W = [W.size]
+	var H = [H.size]
+	var gi,gj = idx.d0,idx.d1
 
 	var E_s_x : float = 0.0f
 	var E_s_y : float = 0.0f
@@ -475,42 +449,43 @@ local terra cost(i : int32, j : int32, gi : int32, gj : int32, self : P:Paramete
 	var E_g_v : float = 0.0f
 	var E_g_h : float = 0.0f
 
-	
+	var mid,left,up,right,down  = idx(0,0), idx(-1,0), idx(0,-1), idx(1,0), idx(0,1)
+	var leftUp,rightUp,leftDown = idx(-1,-1), idx(1,-1), idx(-1,1)
 
-	var pointValid 				= isInsideImage(gi,gj, W, H) and IsValidPoint(self.X(i,j))
-    var leftValid 				= isInsideImage(gi-1,gj, W, H) and IsValidPoint(self.X(i-1,j))
-    var rightValid 				= isInsideImage(gi+1,gj, W, H) and IsValidPoint(self.X(i+1,j))
-    var upValid 				= isInsideImage(gi,gj-1, W, H) and IsValidPoint(self.X(i,j-1))
-    var downValid 				= isInsideImage(gi,gj+1, W, H) and IsValidPoint(self.X(i,j+1))
+	var pointValid 				= mid:InBounds() and IsValidPoint(self.X(mid)(0))
+    var leftValid 				= left:InBounds() and IsValidPoint(self.X(left)(0))
+    var rightValid 				= right:InBounds() and IsValidPoint(self.X(right)(0))
+    var upValid 				= up:InBounds() and IsValidPoint(self.X(up)(0))
+    var downValid 				= down:InBounds() and IsValidPoint(self.X(down)(0))
 	var leftAndCenterValid 		= pointValid and leftValid
     var rightAndCenterValid 	= pointValid and rightValid
 	var upAndCenterValid   		= pointValid and upValid
     var downAndCenterValid      = pointValid and downValid
-	var leftUpAndCenterValid 	= pointValid and isInsideImage(gi-1,gj-1, W, H) and IsValidPoint(self.X(i-1,j-1))
-	var rightUpValid 			= isInsideImage(gi+1,gj-1, W, H) and IsValidPoint(self.X(i+1,j-1))
-	var leftDownValid 			= isInsideImage(gi-1,gj+1, W, H) and IsValidPoint(self.X(i-1,j+1))
+	var leftUpAndCenterValid 	= pointValid and leftUp:InBounds() and IsValidPoint(self.X(leftUp)(0))
+	var rightUpValid 			= rightUp:InBounds() and IsValidPoint(self.X(rightUp)(0))
+	var leftDownValid 			= leftDown:InBounds() and IsValidPoint(self.X(leftDown)(0))
 
 	var horizontalLineValid 	= leftAndCenterValid and rightValid
 	var verticalLineValid 		= upAndCenterValid and downValid
 	var crossValid 				= horizontalLineValid and verticalLineValid
 
 	if [USE_DEPTH_CONSTRAINT] and pointValid then 
-		E_p = self.X(i,j) - self.D_i(i,j)
+		E_p = self.X(idx)(0) - self.D_i(idx)(0)
 	end 
 
 	var shadingDifference = 0.0f
 	if [USE_SHADING_CONSTRAINT] then
-		if (not [USE_MASK_REFINE]) or self.edgeMaskR(i,j) > 0.0f then
+		if (not [USE_MASK_REFINE]) or self.edgeMaskR(idx)(0) > 0.0f then
             if [USE_CRAPPY_SHADING_BOUNDARY] then
                 if leftAndCenterValid and upValid then
-                    E_g_h = B(i,j,gi,gj,self) - I(self, i,j)
+                    E_g_h = B(idx,gi,gj,self) - I(self, idx)
                 end
                 if rightUpValid and rightAndCenterValid then
-                    E_g_h = E_g_h - (B(i+1,j,gi+1,gj,self) - I(self, i+1,j))
+                    E_g_h = E_g_h - (B(right,gi+1,gj,self) - I(self, right))
                 end
             else
                 if (horizontalLineValid and rightUpValid and upAndCenterValid) then
-                    E_g_h = B(i,j,gi,gj,self) - B(i+1,j,gi+1,gj,self) - (I(self, i,j) - I(self, i+1,j))
+                    E_g_h = B(idx,gi,gj,self) - B(right,gi+1,gj,self) - (I(self, idx) - I(self, right))
                 end
             end
 			
@@ -518,17 +493,17 @@ local terra cost(i : int32, j : int32, gi : int32, gj : int32, self : P:Paramete
 	end
 
     if [USE_SHADING_CONSTRAINT] then
-		if (not [USE_MASK_REFINE]) or self.edgeMaskC(i,j) > 0.0f then
+		if (not [USE_MASK_REFINE]) or self.edgeMaskC(idx)(0) > 0.0f then
             if [USE_CRAPPY_SHADING_BOUNDARY] then
                 if leftAndCenterValid and upValid then
-                    E_g_v = B(i,j,gi,gj,self) - I(self, i,j)
+                    E_g_v = B(idx,gi,gj,self) - I(self, idx)
                 end
                 if leftDownValid and downAndCenterValid then
-                    E_g_v = E_g_v - (B(i,j+1,gi,gj+1,self) - I(self, i,j+1))
+                    E_g_v = E_g_v - (B(down,gi,gj+1,self) - I(self, down))
                 end
             else
                 if (verticalLineValid and leftAndCenterValid and leftDownValid) then
-                   E_g_v = B(i,j,gi,gj,self) - B(i,j+1,gi,gj+1,self) - (I(self, i,j) - I(self, i,j+1))
+                   E_g_v = B(idx,gi,gj,self) - B(down,gi,gj+1,self) - (I(self, idx) - I(self, down))
                 end
             end
 			
@@ -536,15 +511,14 @@ local terra cost(i : int32, j : int32, gi : int32, gj : int32, self : P:Paramete
 	end
 
 	if [USE_REGULARIZATION] and crossValid then
-		var d = self.X(i,j)
+		var d = self.X(idx)(0)
 		
-         if 	opt.math.abs(d - self.X(i+1,j)) < [float](DEPTH_DISCONTINUITY_THRE) and 
-			opt.math.abs(d - self.X(i-1,j)) < [float](DEPTH_DISCONTINUITY_THRE) and 
-			opt.math.abs(d - self.X(i,j+1)) < [float](DEPTH_DISCONTINUITY_THRE) and 
-			opt.math.abs(d - self.X(i,j-1)) < [float](DEPTH_DISCONTINUITY_THRE) then
+         if opt.math.abs(d - self.X(idx(1,0))(0)) < [float](DEPTH_DISCONTINUITY_THRE) and 
+			opt.math.abs(d - self.X(idx(-1,0))(0)) < [float](DEPTH_DISCONTINUITY_THRE) and 
+			opt.math.abs(d - self.X(idx(0,1))(0)) < [float](DEPTH_DISCONTINUITY_THRE) and 
+			opt.math.abs(d - self.X(idx(0,-1))(0)) < [float](DEPTH_DISCONTINUITY_THRE) then
          
-                --E_s = p(i,j,gi,gj,self)[0] --sqMagnitude(4.0*p(i,j,gi,gj,self))
-				var E_s = (4.0f*p(i,j,gi,gj,self) - (p(i-1,j,gi-1,gj, self) + p(i,j-1,gi,gj-1, self) + p(i+1, j,gi+1,gj, self) + p(i,j+1,gi,gj+1, self)))
+				var E_s = (4.0f*p(idx,gi,gj,self) - (p(idx(-1,0),gi-1,gj, self) + p(idx(0,-1),gi,gj-1, self) + p(idx(1,0),gi+1,gj, self) + p(idx(0,1),gi,gj+1, self)))
 				E_s_x = E_s[0]
 				E_s_y = E_s[1]
 				E_s_z = E_s[2]
@@ -555,28 +529,24 @@ local terra cost(i : int32, j : int32, gi : int32, gj : int32, self : P:Paramete
 	if [USE_TEMPORAL_CONSTRAINT] then
 		var temp1 : float3
 		var temp2 : float3
-		prior_normal_from_previous_depth(self.X(i, j), gi, gj, self, &n_p, &temp1, &temp2)
+		prior_normal_from_previous_depth(self.X(idx)(0), gi, gj, self, &n_p, &temp1, &temp2)
 	end
 
 	
 	if [USE_TEMPORAL_CONSTRAINT] and leftAndCenterValid then
-		E_r_h = dot(n_p, p(i,j,gi,gj,self) - p(i-1,j,gi-1,gj,self))
+		E_r_h = dot(n_p, p(idx,gi,gj,self) - p(left,gi-1,gj,self))
 	end
 
 	if [USE_TEMPORAL_CONSTRAINT] and upAndCenterValid then
-		E_r_v = dot(n_p, p(i,j,gi,gj,self) - p(i,j-1,gi,gj-1,self))
+		E_r_v = dot(n_p, p(idx,gi,gj,self) - p(up,gi,gj-1,self))
 	end
 
 	if [USE_TEMPORAL_CONSTRAINT] and leftUpAndCenterValid then
-		E_r_d = dot(n_p, p(i,j,gi,gj,self) - p(i-1,j-1,gi-1,gj-1,self))
+		E_r_d = dot(n_p, p(idx,gi,gj,self) - p(leftUp,gi-1,gj-1,self))
 	end
 
 	var cost : float = self.w_s*E_s_x*E_s_x + self.w_s*E_s_y*E_s_y + self.w_s*E_s_z*E_s_z + self.w_p*E_p*E_p + self.w_g*E_g_h*E_g_h + self.w_g*E_g_v*E_g_v + self.w_r*E_r_h*E_r_h + self.w_r*E_r_v*E_r_v + self.w_r*E_r_d*E_r_d 
-	--[[
-    if gi>1 and gi<(W - 5) and gj>1 and gj<(H - 5) then
-        cost = [float](self.edgeMaskC(i,j))
-    end
-    --]]
+
     
     return cost
 	
@@ -586,7 +556,7 @@ end
 ----  evalMinusJTF
 ---- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- 
 
-local terra evalMinusJTFDeviceLS_SFS_Shared_Mask_Prior(i : int, j : int, posx : int, posy : int, W : uint, H : int, self : P:ParameterType(),
+local terra evalMinusJTFDeviceLS_SFS_Shared_Mask_Prior(idx : Index, posx : int, posy : int, W : uint, H : int, self : P:ParameterType(),
 														normal0 : float3, normal1 : float3, normal2 : float3, outPre : &float)
 	var f_x : float = self.f_x
 	var f_y : float = self.f_y
@@ -601,9 +571,9 @@ local terra evalMinusJTFDeviceLS_SFS_Shared_Mask_Prior(i : int, j : int, posx : 
 
 	-- Common stuff
 
-	var targetDepth : float = self.D_i(i, j); 
+	var targetDepth : float = self.D_i(idx)(0); 
 	var validTarget : bool  = IsValidPoint(targetDepth);
-	var XC : float 			= self.X(i,j);
+	var XC : float 			= self.X(idx)(0);
 
 
 		
@@ -615,20 +585,20 @@ local terra evalMinusJTFDeviceLS_SFS_Shared_Mask_Prior(i : int, j : int, posx : 
 			var maskval : uint8 = 1			
 			if [USE_SHADING_CONSTRAINT] then
 				-- TODO: How do we break this out to amortize for AD
-				val0 = calShading2depthGrad(i, j, posx, posy, self)[1] --readValueFromCache2DLS_SFS(inGrady,tidy  ,tidx  );
-				val1 = calShading2depthGrad(i + 1, j, posx + 1, posy, self)[0] --readValueFromCache2DLS_SFS(inGradx,tidy  ,tidx+1);
-				val2 = calShading2depthGrad(i, j + 1, posx, posy + 1, self)[2] --readValueFromCache2DLS_SFS(inGradz,tidy+1,tidx  );
+				val0 = calShading2depthGrad(idx, posx, posy, self)[1] --readValueFromCache2DLS_SFS(inGrady,tidy  ,tidx  );
+				val1 = calShading2depthGrad(idx(1,0), posx + 1, posy, self)[0] --readValueFromCache2DLS_SFS(inGradx,tidy  ,tidx+1);
+				val2 = calShading2depthGrad(idx(0,1), posx, posy + 1, self)[2] --readValueFromCache2DLS_SFS(inGradz,tidy+1,tidx  );
 						
-				var shadingDiff_0_m1 = calShading2depthGrad(i+0, j-1, posx+0, posy-1, self)[3]					
-				var shadingDiff_1_m1 = calShading2depthGrad(i+1, j-1, posx+1, posy-1, self)[3]
-				var shadingDiff_m1_0 = calShading2depthGrad(i-1, j-0, posx-1, posy-0, self)[3]
-				var shadingDiff_0_0	 = calShading2depthGrad(i  , j  , posx,   posy,   self)[3]
-				var shadingDiff_1_0	 = calShading2depthGrad(i+1, j  , posx+1, posy,   self)[3]
-				var shadingDiff_2_0	 = calShading2depthGrad(i+2, j  , posx+2, posy,   self)[3]
-				var shadingDiff_m1_1 = calShading2depthGrad(i-1, j+1, posx-1, posy+1, self)[3]
-				var shadingDiff_0_1	 = calShading2depthGrad(i  , j+1, posx,   posy+1, self)[3]
-				var shadingDiff_1_1	 = calShading2depthGrad(i+1, j+1, posx+1, posy+1, self)[3]
-				var shadingDiff_0_2	 = calShading2depthGrad(i  , j+2, posx,   posy+2, self)[3]
+				var shadingDiff_0_m1 = calShading2depthGrad(idx(0,-1), posx+0, posy-1, self)[3]					
+				var shadingDiff_1_m1 = calShading2depthGrad(idx(1,-1), posx+1, posy-1, self)[3]
+				var shadingDiff_m1_0 = calShading2depthGrad(idx(-1,-0), posx-1, posy-0, self)[3]
+				var shadingDiff_0_0	 = calShading2depthGrad(idx(0,0), posx,   posy,   self)[3]
+				var shadingDiff_1_0	 = calShading2depthGrad(idx(1,0), posx+1, posy,   self)[3]
+				var shadingDiff_2_0	 = calShading2depthGrad(idx(2,0), posx+2, posy,   self)[3]
+				var shadingDiff_m1_1 = calShading2depthGrad(idx(-1,1), posx-1, posy+1, self)[3]
+				var shadingDiff_0_1	 = calShading2depthGrad(idx(0,1), posx,   posy+1, self)[3]
+				var shadingDiff_1_1	 = calShading2depthGrad(idx(1,1), posx+1, posy+1, self)[3]
+				var shadingDiff_0_2	 = calShading2depthGrad(idx(0,2), posx,   posy+2, self)[3]
 				escape
 					
 					if USE_MASK_REFINE then
@@ -639,53 +609,53 @@ local terra evalMinusJTFDeviceLS_SFS_Shared_Mask_Prior(i : int, j : int, posx : 
 							sum = 0.0f;	
 							tmpval = 0.0f;			
 							tmpval = -(shadingDiff_m1_0 - shadingDiff_0_0) -- edge 0				
-							maskval = self.edgeMaskR(i-1, j)
+							maskval = self.edgeMaskR(idx(-1,0))(0)
 							sum = sum + tmpval*(-val0) * maskval --(posy, posx-1)*val0,(posy,posx)*(-val0)			
 							tmpval = tmpval + val0*val0*maskval 
 
 							tmpval = -(shadingDiff_0_0 - shadingDiff_1_0) -- edge 2				
-							maskval = self.edgeMaskR(i, j)
+							maskval = self.edgeMaskR(idx)(0)
 							sum = sum + tmpval*(val0-val1) * maskval -- (posy,posx)*(val1-val0), (posy,posx+1)*(val0-val1)			
 							tmpval	= tmpval + (val0-val1)*(val0-val1)* maskval
 
 							tmpval = -(shadingDiff_1_0 - shadingDiff_2_0) -- edge 4				
-							maskval = self.edgeMaskR(i+1, j)
+							maskval = self.edgeMaskR(idx(1,0))(0)
 							sum = sum + tmpval*(val1) * maskval -- (posy,posx+1)*(-val1), (posy,posx+2)*(val1)			
 							tmpval	= tmpval + val1*val1* maskval
 
 							tmpval = -(shadingDiff_m1_1 - shadingDiff_0_1) -- edge 5				
-							maskval = self.edgeMaskR(i-1, j+1)
+							maskval = self.edgeMaskR(idx(-1,1))(0)
 							sum = sum + tmpval*(-val2) * maskval -- (posy+1,posx-1)*(val2),(posy+1,pox)*(-val2)			
 							tmpval	= tmpval + val2*val2* maskval
 
 							tmpval  = -(shadingDiff_0_1 - shadingDiff_1_1) -- edge 7				
-							maskval = self.edgeMaskR(i, j+1)
+							maskval = self.edgeMaskR(idx(0,1))(0)
 							sum 	= sum + tmpval*val2 * maskval -- (posy+1,posx)*(-val2),(posy+1,posx+1)*(val2)
 							tmpval	= tmpval + val2*val2 * maskval
 										
 							--column edge constraint			
 							tmpval 	= -(shadingDiff_0_m1 - shadingDiff_0_0) -- edge 1
-							maskval = self.edgeMaskC(i, j-1)
+							maskval = self.edgeMaskC(idx(0,-1))(0)
 							sum 	= sum + tmpval*(-val0) * maskval -- (posy-1,posx)*(val0),(posy,posx)*(-val0)			
 							tmpval	= tmpval + val0*val0* maskval
 
 							tmpval 	= -(shadingDiff_1_m1 - shadingDiff_1_0) --edge 3
-							maskval = self.edgeMaskC(i+1, j-1)
+							maskval = self.edgeMaskC(idx(1,-1))(0)
 							sum 	= sum + tmpval*(-val1) * maskval --(posy-1,posx+1)*(val1),(posy,posx+1)*(-val1)			
 							tmpval	= tmpval +  val1*val1* maskval
 
 							tmpval 	= -(shadingDiff_0_0 - shadingDiff_0_1) --edge 6
-							maskval = self.edgeMaskC(i, j)
+							maskval = self.edgeMaskC(idx)(0)
 							sum 	= sum + tmpval*(val0-val2) * maskval -- (posy,posx)*(val2-val0),(posy+1,posx)*(val0-val2)			
 							tmpval	= tmpval +  (val0-val2)*(val0-val2)* maskval
 
 							tmpval = -(shadingDiff_1_0 - shadingDiff_1_1) --edge 8
-							maskval = self.edgeMaskC(i+1, j)
+							maskval = self.edgeMaskC(idx(1,0))(0)
 							sum = sum + tmpval*val1 * maskval -- (posy,posx+1)*(-val1),(posy+1,posx+1)*(val1)
 							tmpval	= tmpval +  val1*val1* maskval
 
 							tmpval 	= -(shadingDiff_0_1 - shadingDiff_0_2) --edge 9
-							maskval = self.edgeMaskC(i, j+1)
+							maskval = self.edgeMaskC(idx(0,1))(0)
 							sum 	= sum + tmpval*val2 * maskval --(posy+1,posx)*(-val2),(posy+2,posx)*(val2)
 							tmpval	= tmpval + val2*val2* maskval
 
@@ -736,28 +706,28 @@ local terra evalMinusJTFDeviceLS_SFS_Shared_Mask_Prior(i : int, j : int, posx : 
 				val1 = (posy - u_y)/f_y				
 
 				-- smoothness term							
-				var  lapval : float3 = est_lap_init_3d_imp(i,j,self,val0,val1,uf_x,uf_y,&b_valid);
+				var  lapval : float3 = est_lap_init_3d_imp(idx,self,val0,val1,uf_x,uf_y,&b_valid);
 				sum =  0.0f;
 				sum = sum + lapval[0]*val0*(-4.0f);
 				sum = sum + lapval[1]*val1*(-4.0f);
 				sum = sum + lapval[2]*(-4.0f);
 										
-				lapval = est_lap_init_3d_imp(i-1,j,self,val0-uf_x,val1,uf_x,uf_y,&b_valid);
+				lapval = est_lap_init_3d_imp(idx(-1,0),self,val0-uf_x,val1,uf_x,uf_y,&b_valid);
 				sum = sum + lapval[0]*val0;
 				sum = sum + lapval[1]*val1;
 				sum = sum + lapval[2];
 										
-				lapval = est_lap_init_3d_imp(i+1,j,self,val0+uf_x,val1,uf_x,uf_y,&b_valid);
+				lapval = est_lap_init_3d_imp(idx(1,0),self,val0+uf_x,val1,uf_x,uf_y,&b_valid);
 				sum = sum + lapval[0]*val0;
 				sum = sum + lapval[1]*val1;
 				sum = sum + lapval[2];
 										
-				lapval = est_lap_init_3d_imp(i,j-1,self,val0,val1-uf_y,uf_x,uf_y,&b_valid);
+				lapval = est_lap_init_3d_imp(idx(0,-1),self,val0,val1-uf_y,uf_x,uf_y,&b_valid);
 				sum = sum + lapval[0]*val0
 				sum = sum + lapval[1]*val1
 				sum = sum + lapval[2]
 										
-				lapval = est_lap_init_3d_imp(i,j+1,self,val0,val1+uf_y,uf_x,uf_y,&b_valid);
+				lapval = est_lap_init_3d_imp(idx(0,1),self,val0,val1+uf_y,uf_x,uf_y,&b_valid);
 				sum = sum + lapval[0]*val0;
 				sum = sum + lapval[1]*val1;
 				sum = sum + lapval[2]
@@ -791,28 +761,28 @@ local terra evalMinusJTFDeviceLS_SFS_Shared_Mask_Prior(i : int, j : int, posx : 
 				tmpval = normal0[0] * ax + normal0[1] * ay + normal0[2] -- derative of prior energy wrt depth			
 				p = p + tmpval * tmpval * 2  * self.w_r;
 
-				d = self.X(i-1,j)
+				d = self.X(idx(-1,0))(0)
 				if(IsValidPoint(d)) then
-					sum = sum - tmpval * ( tmpval * self.X(i,j) + ( -tmpval + normal0[0]/f_x) * d );
+					sum = sum - tmpval * ( tmpval * self.X(idx)(0) + ( -tmpval + normal0[0]/f_x) * d );
 				end
 
-				d = self.X(i,j-1)
+				d = self.X(idx(0,-1))(0)
 				if(IsValidPoint(d)) then
-					sum = sum - tmpval * ( tmpval * self.X(i,j) + ( -tmpval + normal0[1]/f_y) * d );
+					sum = sum - tmpval * ( tmpval * self.X(idx)(0) + ( -tmpval + normal0[1]/f_y) * d );
 				end
 
 				tmpval = normal1[0] * ax + normal1[1] * ay + normal1[2] -- derative of prior energy wrt depth			
 				p = p + tmpval * tmpval * self.w_r;
-				d = self.X(i+1,j)
+				d = self.X(idx(1,0))(0)
 				if(IsValidPoint(d)) then
-					sum = sum + tmpval * ( ( tmpval + normal1[0]/f_x) * d - tmpval * self.X(i,j))
+					sum = sum + tmpval * ( ( tmpval + normal1[0]/f_x) * d - tmpval * self.X(idx)(0))
 				end
 
 				tmpval = normal2[0] * ax + normal2[1] * ay + normal2[2] -- derative of prior energy wrt depth
 				p = p + tmpval * tmpval * self.w_r;
-				d = self.X(i,j+1)
+				d = self.X(idx(0,1))(0)
 				if(IsValidPoint(d)) then
-					sum = sum + tmpval * ( ( tmpval + normal2[1]/f_y) * d - tmpval * self.X(i,j))
+					sum = sum + tmpval * ( ( tmpval + normal2[1]/f_y) * d - tmpval * self.X(idx)(0))
 				end
 
 				b = b + sum  * self.w_r;
@@ -832,14 +802,14 @@ local terra evalMinusJTFDeviceLS_SFS_Shared_Mask_Prior(i : int, j : int, posx : 
 end
 
 
-local terra evalJTF(i : int32, j : int32, gId_i : int32, gId_j : int32, self : P:ParameterType())
+local terra evalJTF(idx : Index, self : P:ParameterType())
 		
 	var Pre     : float
 	var normal0 : float3
 	var normal1 : float3
 	var normal2 : float3
 
-	prior_normal_from_previous_depth(self.X(i, j), gId_i, gId_j, self, &normal0, &normal1, &normal2);
+	prior_normal_from_previous_depth(self.X(idx)(0), idx.d0, idx.d1, self, &normal0, &normal1, &normal2);
 	
 	--__syncthreads()
 
@@ -848,7 +818,7 @@ local terra evalJTF(i : int32, j : int32, gId_i : int32, gId_j : int32, self : P
 	---- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- 
 
 	-- Negative gradient
-	var negGradient : float = evalMinusJTFDeviceLS_SFS_Shared_Mask_Prior(i, j, gId_i, gId_j, self.X:W(), self.X:H(), self, normal0,normal1,normal2, &Pre); 
+	var negGradient : float = evalMinusJTFDeviceLS_SFS_Shared_Mask_Prior(idx, idx.d0, idx.d1, [W.size], [H.size], self, normal0,normal1,normal2, &Pre); 
 	if not [USE_PRECONDITIONER] then
 		Pre = 1.0f
 	end
@@ -856,21 +826,21 @@ local terra evalJTF(i : int32, j : int32, gId_i : int32, gId_j : int32, self : P
 	return -2.0f*negGradient, Pre
 end
 
-local terra add_mul_inp_grad_ls_bsp(self : P:ParameterType(), pImage : P:UnknownType(), i : int, j : int, posx : int, posy : int)
-	var gradient = calShading2depthGrad(i, j, posx, posy, self)
-	return pImage(i-1,j)	* gradient[0]
-		  + pImage(i, j)	* gradient[1]
-	   	  + pImage(i,j-1)	* gradient[2]
+local terra add_mul_inp_grad_ls_bsp(self : P:ParameterType(), pImage : TUnknownType, idx : Index, posx : int, posy : int)
+	var gradient = calShading2depthGrad(idx, posx, posy, self)
+	return pImage(idx(-1,0))(0)	* gradient[0]
+		  + pImage(idx)(0)	* gradient[1]
+	   	  + pImage(idx(0,-1))(0)	* gradient[2]
 end
 
-local terra est_lap_3d_bsp_imp(pImage : P:UnknownType(), i :int, j : int, w0 : float, w1 : float, uf_x : float, uf_y : float)
+local terra est_lap_3d_bsp_imp(pImage : TUnknownType, idx : Index, w0 : float, w1 : float, uf_x : float, uf_y : float)
 	
 	
-	var d  : float = pImage(i,   j)
-	var d0 : float = pImage(i-1, j)
-	var d1 : float = pImage(i+1, j)
-	var d2 : float = pImage(i,   j-1)
-	var d3 : float = pImage(i,   j+1)
+	var d  : float = pImage(idx)(0)
+	var d0 : float = pImage(idx(-1,0))(0)
+	var d1 : float = pImage(idx(1,0))(0)
+	var d2 : float = pImage(idx(0,-1))(0)
+	var d3 : float = pImage(idx(0,1))(0)
 	
 	var x : float = ( d * 4 * w0 - d0 * (w0 - uf_x) - d1 * (w0 + uf_x)	- d2 * w0 - d3 * w0);
 	var y : float = ( d * 4 * w1 - d0 * w1 - d1 * w1 - d2 * (w1 - uf_y) - d3 * (w1 + uf_y));
@@ -878,18 +848,18 @@ local terra est_lap_3d_bsp_imp(pImage : P:UnknownType(), i :int, j : int, w0 : f
 	return vector(x,y,z);
 end
 
-local terra est_lap_3d_bsp_imp_with_guard(self : P:ParameterType(), pImage : P:UnknownType(), i :int, j : int, w0 : float, w1 : float, uf_x : float, uf_y : float, b_valid : &bool)
+local terra est_lap_3d_bsp_imp_with_guard(self : P:ParameterType(), pImage : TUnknownType, idx : Index, w0 : float, w1 : float, uf_x : float, uf_y : float, b_valid : &bool)
 	
 	var retval_0 = 0.0f
 	var retval_1 = 0.0f
 	var retval_2 = 0.0f	
 	
-	if self.pguard:get(i,j) == 1.f then	
-		var p  : float = pImage(i,   j)
-		var p0 : float = pImage(i-1, j)
-		var p1 : float = pImage(i+1, j)
-		var p2 : float = pImage(i,   j-1)
-		var p3 : float = pImage(i,   j+1)
+	if self.pguard:get(idx)(0) == 1.f then	
+		var p  : float = pImage(idx)(0)
+		var p0 : float = pImage(idx(-1,0))(0)
+		var p1 : float = pImage(idx(1,0))(0)
+		var p2 : float = pImage(idx(0,-1))(0)
+		var p3 : float = pImage(idx(0,1))(0)
 		
 		retval_0 = ( p * 4 * w0 - p0 * (w0 - uf_x) - p1 * (w0 + uf_x)	- p2 * w0 - p3 * w0);
 		retval_1 = ( p * 4 * w1 - p0 * w1 - p1 * w1 - p2 * (w1 - uf_y) - p3 * (w1 + uf_y));
@@ -903,11 +873,11 @@ end
 
 
 -- eval 2*JtF == \nabla(F); eval diag(2*(Jt)^2) == pre-conditioner
-local terra gradient(i : int32, j : int32, gId_i : int32, gId_j : int32, self : P:ParameterType())
-	return evalJTF(i,j,gId_i, gId_j, self)._0
+local terra gradient(idx : Index, self : P:ParameterType())
+	return evalJTF(idx, self)._0
 end
 
-local terra applyJTJDeviceLS_SFS_Shared_BSP_Mask_Prior(i : int, j : int, posx : int, posy : int, W : uint, H : int, self : P:ParameterType(), pImage : P:UnknownType(),
+local terra applyJTJDeviceLS_SFS_Shared_BSP_Mask_Prior(idx : Index, posx : int, posy : int, W : uint, H : int, self : P:ParameterType(), pImage : TUnknownType,
 														normal0 : float3, normal1 : float3, normal2 : float3)
 
 	var f_x : float = self.f_x
@@ -919,9 +889,9 @@ local terra applyJTJDeviceLS_SFS_Shared_BSP_Mask_Prior(i : int, j : int, posx : 
 
 	var b = 0.0f
 
-	var targetDepth : float = self.D_i(i, j) 
+	var targetDepth : float = self.D_i(idx)(0) 
 	var validTarget : bool 	= IsValidPoint(targetDepth);
-	var PC : float  		= pImage(i,j)
+	var PC : float  		= pImage(idx)(0)
 		
 	if validTarget then
 		if (posx>1) and (posx<(W-5)) and (posy>1) and (posy<(H-5)) then
@@ -932,123 +902,123 @@ local terra applyJTJDeviceLS_SFS_Shared_BSP_Mask_Prior(i : int, j : int, posx : 
 
 			if [USE_SHADING_CONSTRAINT] then
 				-- TODO: How do we break this out to amortize for AD
-				val0 = calShading2depthGrad(i, j, posx, posy, self)[1] --readV
-				val1 = calShading2depthGrad(i + 1, j, posx + 1, posy, self)[0]
-				val2 = calShading2depthGrad(i, j + 1, posx, posy + 1, self)[2]
+				val0 = calShading2depthGrad(idx(0,0), posx, posy, self)[1] --readV
+				val1 = calShading2depthGrad(idx(1,0), posx + 1, posy, self)[0]
+				val2 = calShading2depthGrad(idx(0,1), posx, posy + 1, self)[2]
 
-				var grad_0_m1 = calShading2depthGrad(i+0, j-1, posx+0, posy-1, self)					
-				var grad_1_m1 = calShading2depthGrad(i+1, j-1, posx+1, posy-1, self)
-				var grad_m1_0 = calShading2depthGrad(i-1, j-0, posx-1, posy-0, self)
-				var grad_0_0  = calShading2depthGrad(i  , j  , posx,   posy,   self)
-				var grad_1_0  = calShading2depthGrad(i+1, j  , posx+1, posy,   self)
-				var grad_2_0  = calShading2depthGrad(i+2, j  , posx+2, posy,   self)
-				var grad_m1_1 = calShading2depthGrad(i-1, j+1, posx-1, posy+1, self)
-				var grad_0_1  = calShading2depthGrad(i  , j+1, posx, posy+1,   self)
-				var grad_1_1  = calShading2depthGrad(i+1, j+1, posx+1, posy+1, self)
-				var grad_0_2  = calShading2depthGrad(i  , j+2, posx, posy+2,   self)
+				var grad_0_m1 = calShading2depthGrad(idx(0,-1), posx+0, posy-1, self)					
+				var grad_1_m1 = calShading2depthGrad(idx(1,-1), posx+1, posy-1, self)
+				var grad_m1_0 = calShading2depthGrad(idx(-1,-0), posx-1, posy-0, self)
+				var grad_0_0  = calShading2depthGrad(idx(0,0), posx,   posy,   self)
+				var grad_1_0  = calShading2depthGrad(idx(1,0), posx+1, posy,   self)
+				var grad_2_0  = calShading2depthGrad(idx(2,0), posx+2, posy,   self)
+				var grad_m1_1 = calShading2depthGrad(idx(-1,1), posx-1, posy+1, self)
+				var grad_0_1  = calShading2depthGrad(idx(0,1), posx,   posy+1, self)
+				var grad_1_1  = calShading2depthGrad(idx(1,1), posx+1, posy+1, self)
+				var grad_0_2  = calShading2depthGrad(idx(0,2), posx,   posy+2, self)
 
 				escape
 					
 					if USE_MASK_REFINE then
 						emit quote
-							--pImage(i  ,j) * grad_0_0[0] // Doesn't do anything?!
+							--pImage(idx)(0) * grad_0_0[0] // Doesn't do anything?!
 
 							-- the following is the adding of the relative edge constraints to the sum
 							-- -val0, edge 0			
-							tmpval  = pImage(i-2,j  ) *  grad_m1_0[0];
-							tmpval = tmpval + pImage(i-1,j  ) * (grad_m1_0[1] - grad_0_0[0]);
-							tmpval = tmpval + pImage(i-1,j-1) *  grad_m1_0[2];
-							tmpval = tmpval - pImage(i  ,j  ) *  grad_0_0[1];
-							tmpval = tmpval - pImage(i  ,j-1) *  grad_0_0[2];			
-							sum = sum + (-val0) * tmpval  * self.edgeMaskR(i-1, j)
+							tmpval  = pImage(idx(-2,0))(0) *  grad_m1_0[0];
+							tmpval = tmpval + pImage(idx(-1,0))(0) * (grad_m1_0[1] - grad_0_0[0]);
+							tmpval = tmpval + pImage(idx(-1,-1))(0) *  grad_m1_0[2];
+							tmpval = tmpval - pImage(idx)(0) *  grad_0_0[1];
+							tmpval = tmpval - pImage(idx(0,-1))(0) *  grad_0_0[2];			
+							sum = sum + (-val0) * tmpval  * self.edgeMaskR(idx(-1,0))(0)
 							
 							-- -val0, edge 1
-							tmpval  = pImage(i-1,j-1) *  grad_0_m1[0];
-							tmpval = tmpval + pImage(i  ,j-1) * (grad_0_m1[1] - grad_0_0[2]);
-							tmpval = tmpval + pImage(i  ,j-2) *  grad_0_m1[2];
-							tmpval = tmpval - pImage(i-1,j  ) *  grad_0_0[0];
-							tmpval = tmpval - pImage(i  ,j  ) *  grad_0_0[1];		
-							sum = sum + (-val0) * tmpval  * self.edgeMaskC(i, j-1)
+							tmpval  = pImage(idx(-1,-1))(0) *  grad_0_m1[0];
+							tmpval = tmpval + pImage(idx(0,-1))(0) * (grad_0_m1[1] - grad_0_0[2]);
+							tmpval = tmpval + pImage(idx(0,-2))(0) *  grad_0_m1[2];
+							tmpval = tmpval - pImage(idx(-1,0))(0) *  grad_0_0[0];
+							tmpval = tmpval - pImage(idx)(0) *  grad_0_0[1];		
+							sum = sum + (-val0) * tmpval  * self.edgeMaskC(idx(0,-1))(0)
 
 							-- val0-val1, edge 2
-							tmpval  = pImage(i-1,j  ) *  grad_0_0[0];
-							tmpval = tmpval + pImage(i  ,j  ) * (grad_0_0[1] - grad_1_0[0]);
-							tmpval = tmpval + pImage(i  ,j-1) *  grad_0_0[2];
-							tmpval = tmpval - pImage(i+1,j  ) *  grad_1_0[1];
-							tmpval = tmpval - pImage(i+1,j-1) *  grad_1_0[2];		
-							sum = sum + (val0-val1) * tmpval * self.edgeMaskR(i, j)
+							tmpval  = pImage(idx(-1,0))(0) *  grad_0_0[0];
+							tmpval = tmpval + pImage(idx)(0) * (grad_0_0[1] - grad_1_0[0]);
+							tmpval = tmpval + pImage(idx(0,-1))(0) *  grad_0_0[2];
+							tmpval = tmpval - pImage(idx(1,0))(0) *  grad_1_0[1];
+							tmpval = tmpval - pImage(idx(1,-1))(0) *  grad_1_0[2];		
+							sum = sum + (val0-val1) * tmpval * self.edgeMaskR(idx)(0)
 
 							-- -val1, edge 3			
-							tmpval  = pImage(i  ,j-1) *  grad_1_m1[0];
-							tmpval = tmpval + pImage(i+1,j-1) * (grad_1_m1[1] - grad_1_0[2]);
-							tmpval = tmpval + pImage(i+1,j-2) *  grad_1_m1[2];
-							tmpval = tmpval - pImage(i  ,j  ) *  grad_1_0[0];
-							tmpval = tmpval - pImage(i+1,j  ) *  grad_1_0[1];		
-							sum = sum + (-val1) * tmpval	* self.edgeMaskC(i+1, j-1)
+							tmpval  = pImage(idx(0,-1))(0) *  grad_1_m1[0];
+							tmpval = tmpval + pImage(idx(1,-1))(0) * (grad_1_m1[1] - grad_1_0[2]);
+							tmpval = tmpval + pImage(idx(1,-2))(0) *  grad_1_m1[2];
+							tmpval = tmpval - pImage(idx)(0) *  grad_1_0[0];
+							tmpval = tmpval - pImage(idx(1,0))(0) *  grad_1_0[1];		
+							sum = sum + (-val1) * tmpval	* self.edgeMaskC(idx(1,-1))(0)
 
 							-- val1, edge 4
-							tmpval  = pImage(i  ,j  ) *  grad_1_0[0];
-							tmpval = tmpval + pImage(i+1,j  ) * (grad_1_0[1] - grad_2_0[0]);
-							tmpval = tmpval + pImage(i+1,j-1) *  grad_1_0[2];
-							tmpval = tmpval - pImage(i+2,j  ) *  grad_2_0[1];
-							tmpval = tmpval - pImage(i+2,j-1) *  grad_2_0[2];		
-							sum = sum + (val1) * tmpval * self.edgeMaskR(i+1, j)
+							tmpval  = pImage(idx)(0) *  grad_1_0[0];
+							tmpval = tmpval + pImage(idx(1,0))(0) * (grad_1_0[1] - grad_2_0[0]);
+							tmpval = tmpval + pImage(idx(1,-1))(0) *  grad_1_0[2];
+							tmpval = tmpval - pImage(idx(2,0))(0) *  grad_2_0[1];
+							tmpval = tmpval - pImage(idx(2,-1))(0) *  grad_2_0[2];		
+							sum = sum + (val1) * tmpval * self.edgeMaskR(idx(1,0))(0)
 
 							-- -val2, edge 5			
-							tmpval  = pImage(i-2,j+1) *  grad_m1_1[0];
-							tmpval = tmpval + pImage(i-1,j+1) * (grad_m1_1[1] - grad_0_1[0]);
-							tmpval = tmpval + pImage(i-1,j  ) *  grad_m1_1[2];
-							tmpval = tmpval - pImage(i  ,j+1) *  grad_0_1[1];
-							tmpval = tmpval - pImage(i  ,j  ) *  grad_0_1[2];		
-							sum = sum + (-val2) * tmpval * self.edgeMaskR(i-1, j+1)
+							tmpval  = pImage(idx(-2,1))(0) *  grad_m1_1[0];
+							tmpval = tmpval + pImage(idx(-1,1))(0) * (grad_m1_1[1] - grad_0_1[0]);
+							tmpval = tmpval + pImage(idx(-1,0))(0) *  grad_m1_1[2];
+							tmpval = tmpval - pImage(idx(0,1))(0) *  grad_0_1[1];
+							tmpval = tmpval - pImage(idx)(0) *  grad_0_1[2];		
+							sum = sum + (-val2) * tmpval * self.edgeMaskR(idx(-1,1))(0)
 							
 							-- val0-val2, edge 6
-							tmpval  = pImage(i-1,j  ) *  grad_0_0[0];
-							tmpval = tmpval + pImage(i  ,j  ) * (grad_0_0[1] - grad_0_1[2]);
-							tmpval = tmpval + pImage(i  ,j-1) *  grad_0_0[2];
-							tmpval = tmpval - pImage(i-1,j+1) *  grad_0_1[0];
-							tmpval = tmpval - pImage(i  ,j+1) *  grad_0_1[1];		
-							sum = sum + (val0-val2) * tmpval * self.edgeMaskC(i, j)
+							tmpval  = pImage(idx(-1,0))(0) *  grad_0_0[0];
+							tmpval = tmpval + pImage(idx)(0) * (grad_0_0[1] - grad_0_1[2]);
+							tmpval = tmpval + pImage(idx(0,-1))(0) *  grad_0_0[2];
+							tmpval = tmpval - pImage(idx(-1,1))(0) *  grad_0_1[0];
+							tmpval = tmpval - pImage(idx(0,1))(0) *  grad_0_1[1];		
+							sum = sum + (val0-val2) * tmpval * self.edgeMaskC(idx)(0)
 
 							-- val2, edge 7
-							tmpval  = pImage(i-1,j+1) *  grad_0_1[0];
-							tmpval = tmpval + pImage(i  ,j+1) * (grad_0_1[1] - grad_1_1[0]);
-							tmpval = tmpval + pImage(i  ,j  ) *  grad_0_1[2];
-							tmpval = tmpval - pImage(i+1,j+1) *  grad_1_1[1];
-							tmpval = tmpval - pImage(i+1,j  ) *  grad_1_1[2];		
-							sum = sum + val2 * tmpval * self.edgeMaskR(i, j+1)
+							tmpval  = pImage(idx(-1,1))(0) *  grad_0_1[0];
+							tmpval = tmpval + pImage(idx(0,1))(0) * (grad_0_1[1] - grad_1_1[0]);
+							tmpval = tmpval + pImage(idx)(0) *  grad_0_1[2];
+							tmpval = tmpval - pImage(idx(1,1))(0) *  grad_1_1[1];
+							tmpval = tmpval - pImage(idx(1,0))(0) *  grad_1_1[2];		
+							sum = sum + val2 * tmpval * self.edgeMaskR(idx(0,1))(0)
 
 							-- val1, edge 8
-							tmpval  = pImage(i  ,j  ) *  grad_1_0[0];
-							tmpval = tmpval + pImage(i+1,j  ) * (grad_1_0[1] - grad_1_1[2]);
-							tmpval = tmpval + pImage(i+1,j-1) *  grad_1_0[2];
-							tmpval = tmpval - pImage(i  ,j+1) *  grad_1_1[0];
-							tmpval = tmpval - pImage(i+1,j+1) *  grad_1_1[1];		
-							sum = sum + val1 * tmpval * self.edgeMaskC(i+1, j)
+							tmpval  = pImage(idx)(0) *  grad_1_0[0];
+							tmpval = tmpval + pImage(idx(1,0))(0) * (grad_1_0[1] - grad_1_1[2]);
+							tmpval = tmpval + pImage(idx(1,-1))(0) *  grad_1_0[2];
+							tmpval = tmpval - pImage(idx(0,1))(0) *  grad_1_1[0];
+							tmpval = tmpval - pImage(idx(1,1))(0) *  grad_1_1[1];		
+							sum = sum + val1 * tmpval * self.edgeMaskC(idx(1,0))(0)
 
 							-- val2, edge 9
-							tmpval  = pImage(i-1,j+1) *  grad_0_1[0];
-							tmpval = tmpval + pImage(i  ,j+1) * (grad_0_1[1] - grad_0_2[2]);
-							tmpval = tmpval + pImage(i  ,j  ) *  grad_0_1[2];
-							tmpval = tmpval - pImage(i-1,j+2) *  grad_0_2[0];
-							tmpval = tmpval - pImage(i  ,j+2) *  grad_0_2[1];		
-							sum = sum + val2 * tmpval * self.edgeMaskC(i, j+1)
+							tmpval  = pImage(idx(-1,1))(0) *  grad_0_1[0];
+							tmpval = tmpval + pImage(idx(0,1))(0) * (grad_0_1[1] - grad_0_2[2]);
+							tmpval = tmpval + pImage(idx)(0) *  grad_0_1[2];
+							tmpval = tmpval - pImage(idx(-1,2))(0) *  grad_0_2[0];
+							tmpval = tmpval - pImage(idx(0,2))(0) *  grad_0_2[1];		
+							sum = sum + val2 * tmpval * self.edgeMaskC(idx(0,1))(0)
 
 							b = b + sum * self.w_g
 						end
 
 					else
 						emit quote										
-							sum = sum + (val1*4.0f-val0) * 		add_mul_inp_grad_ls_bsp(self, pImage, i+1, j   , posx+1, posy)-- mulitplication of grad with inP needs to consid			
-							sum = sum + (val2*4.0f-val0) * 		add_mul_inp_grad_ls_bsp(self, pImage, i,   j+1 , posx,   posy+1)							
-							sum = sum + (val0*4.0f-val1-val2) * add_mul_inp_grad_ls_bsp(self, pImage, i,   j   , posx,   posy)				
-							sum = sum + (-val2-val1) * 			add_mul_inp_grad_ls_bsp(self, pImage, i+1, j+1 , posx+1, posy+1) 					
-							sum = sum + (-val0) *  				add_mul_inp_grad_ls_bsp(self, pImage, i-1, j   , posx-1, posy)							
-							sum = sum + (-val1) *  				add_mul_inp_grad_ls_bsp(self, pImage, i+2, j   , posx+2, posy)						
-							sum = sum + (-val0) *  				add_mul_inp_grad_ls_bsp(self, pImage, i,   j-1 , posx,   posy-1)		
-							sum = sum + (-val1) *  				add_mul_inp_grad_ls_bsp(self, pImage, i+1, j-1 , posx+1, posy-1)			
-							sum = sum + (-val2) *  				add_mul_inp_grad_ls_bsp(self, pImage, i-1, j+1 , posx-1, posy+1)				
-							sum = sum + (-val2) *  				add_mul_inp_grad_ls_bsp(self, pImage, i,   j+2 , posx,   posy+2)
+							sum = sum + (val1*4.0f-val0) * 		add_mul_inp_grad_ls_bsp(self, pImage, idx(1,0)   , posx+1, posy)-- mulitplication of grad with inP needs to consid			
+							sum = sum + (val2*4.0f-val0) * 		add_mul_inp_grad_ls_bsp(self, pImage, idx(0,1) , posx,   posy+1)							
+							sum = sum + (val0*4.0f-val1-val2) * add_mul_inp_grad_ls_bsp(self, pImage, idx(0,0)   , posx,   posy)				
+							sum = sum + (-val2-val1) * 			add_mul_inp_grad_ls_bsp(self, pImage, idx(1,1) , posx+1, posy+1) 					
+							sum = sum + (-val0) *  				add_mul_inp_grad_ls_bsp(self, pImage, idx(-1,0)   , posx-1, posy)							
+							sum = sum + (-val1) *  				add_mul_inp_grad_ls_bsp(self, pImage, idx(2,0), posx+2, posy)						
+							sum = sum + (-val0) *  				add_mul_inp_grad_ls_bsp(self, pImage, idx(0,-1) , posx,   posy-1)		
+							sum = sum + (-val1) *  				add_mul_inp_grad_ls_bsp(self, pImage, idx(1,-1) , posx+1, posy-1)			
+							sum = sum + (-val2) *  				add_mul_inp_grad_ls_bsp(self, pImage, idx(-1,1) , posx-1, posy+1)				
+							sum = sum + (-val2) *  				add_mul_inp_grad_ls_bsp(self, pImage, idx(0,2) , posx,   posy+2)
 							b = b + sum * self.w_g
 						end
 					end
@@ -1070,27 +1040,27 @@ local terra applyJTJDeviceLS_SFS_Shared_BSP_Mask_Prior(i : int, j : int, posx : 
 
 					var b_valid = true
 
-					var lapval : float3 = est_lap_3d_bsp_imp_with_guard(self,pImage,i,j,val0,val1,uf_x,uf_y, &b_valid)			
+					var lapval : float3 = est_lap_3d_bsp_imp_with_guard(self,pImage,idx,val0,val1,uf_x,uf_y, &b_valid)			
 					sum = sum + lapval[0]*val0*(4.0f)
 					sum = sum + lapval[1]*val1*(4.0f)
 					sum = sum + lapval[2]*(4.0f)
 
-					lapval = est_lap_3d_bsp_imp_with_guard(self, pImage,i-1,j,val0-uf_x,val1,uf_x,uf_y, &b_valid)
+					lapval = est_lap_3d_bsp_imp_with_guard(self, pImage,idx(-1,0),val0-uf_x,val1,uf_x,uf_y, &b_valid)
 					sum = sum - lapval[0]*val0
 					sum = sum - lapval[1]*val1
 					sum = sum - lapval[2]
 								
-					lapval = est_lap_3d_bsp_imp_with_guard(self, pImage,i+1,j,val0+uf_x,val1,uf_x,uf_y, &b_valid)
+					lapval = est_lap_3d_bsp_imp_with_guard(self, pImage,idx(1,0),val0+uf_x,val1,uf_x,uf_y, &b_valid)
 					sum = sum - lapval[0]*val0
 					sum = sum - lapval[1]*val1
 					sum = sum - lapval[2]
 								
-					lapval = est_lap_3d_bsp_imp_with_guard(self, pImage,i,j-1,val0,val1-uf_y,uf_x,uf_y, &b_valid)
+					lapval = est_lap_3d_bsp_imp_with_guard(self, pImage,idx(0,-1),val0,val1-uf_y,uf_x,uf_y, &b_valid)
 					sum = sum - lapval[0]*val0
 					sum = sum - lapval[1]*val1
 					sum = sum - lapval[2]
 							
-					lapval = est_lap_3d_bsp_imp_with_guard(self, pImage,i,j+1,val0,val1+uf_y,uf_x,uf_y, &b_valid)
+					lapval = est_lap_3d_bsp_imp_with_guard(self, pImage,idx(0,1),val0,val1+uf_y,uf_x,uf_y, &b_valid)
 					sum = sum - lapval[0]*val0
 					sum = sum - lapval[1]*val1
 					sum = sum - lapval[2]
@@ -1098,27 +1068,27 @@ local terra applyJTJDeviceLS_SFS_Shared_BSP_Mask_Prior(i : int, j : int, posx : 
 					-- always add
 					b = b + sum*self.w_s
 				else
-					var lapval : float3 = est_lap_3d_bsp_imp(pImage,i,j,val0,val1,uf_x,uf_y)			
+					var lapval : float3 = est_lap_3d_bsp_imp(pImage,idx,val0,val1,uf_x,uf_y)			
 					sum = sum + lapval[0]*val0*(4.0f)
 					sum = sum + lapval[1]*val1*(4.0f)
 					sum = sum + lapval[2]*(4.0f)
 								
-					lapval = est_lap_3d_bsp_imp(pImage,i-1,j,val0-uf_x,val1,uf_x,uf_y)
+					lapval = est_lap_3d_bsp_imp(pImage,idx(-1,0),val0-uf_x,val1,uf_x,uf_y)
 					sum = sum - lapval[0]*val0
 					sum = sum - lapval[1]*val1
 					sum = sum - lapval[2]
 								
-					lapval = est_lap_3d_bsp_imp(pImage,i+1,j,val0+uf_x,val1,uf_x,uf_y)
+					lapval = est_lap_3d_bsp_imp(pImage,idx(1,0),val0+uf_x,val1,uf_x,uf_y)
 					sum = sum - lapval[0]*val0
 					sum = sum - lapval[1]*val1
 					sum = sum - lapval[2]
 								
-					lapval = est_lap_3d_bsp_imp(pImage,i,j-1,val0,val1-uf_y,uf_x,uf_y)
+					lapval = est_lap_3d_bsp_imp(pImage,idx(0,-1),val0,val1-uf_y,uf_x,uf_y)
 					sum = sum - lapval[0]*val0
 					sum = sum - lapval[1]*val1
 					sum = sum - lapval[2]
 								
-					lapval = est_lap_3d_bsp_imp(pImage,i,j+1,val0,val1+uf_y,uf_x,uf_y)
+					lapval = est_lap_3d_bsp_imp(pImage,idx(0,1),val0,val1+uf_y,uf_x,uf_y)
 					sum = sum - lapval[0]*val0
 					sum = sum - lapval[1]*val1
 					sum = sum - lapval[2]
@@ -1146,14 +1116,14 @@ local terra applyJTJDeviceLS_SFS_Shared_BSP_Mask_Prior(i : int, j : int, posx : 
 				var ax : float = (posx-u_x)/f_x
 				var ay : float = (posy-u_y)/f_y;		
 				tmpval = normal0[0] * ax + normal0[1] * ay + normal0[2] --  derative of prior energy wrt depth			
-				sum = sum + tmpval * ( tmpval * pImage(i,j) + ( -tmpval + normal0[0]/f_x) * pImage(i-1,j) )
-				sum = sum + tmpval * ( tmpval * pImage(i,j) + ( -tmpval + normal0[1]/f_y) * pImage(i,j-1) )
+				sum = sum + tmpval * ( tmpval * pImage(idx)(0) + ( -tmpval + normal0[0]/f_x) * pImage(idx(-1,0))(0) )
+				sum = sum + tmpval * ( tmpval * pImage(idx)(0) + ( -tmpval + normal0[1]/f_y) * pImage(idx(0,-1))(0) )
 							
 				tmpval = normal1[0] * ax + normal1[1] * ay + normal1[2] ;--  derative of prior energy wrt depth			
-				sum = sum + -tmpval * ( ( tmpval + normal1[0]/f_x) * pImage(i+1,j) - tmpval * pImage(i,j))
+				sum = sum + -tmpval * ( ( tmpval + normal1[0]/f_x) * pImage(idx(1,0))(0) - tmpval * pImage(idx)(0))
 							
 				tmpval = normal2[0] * ax + normal2[1] * ay + normal2[2] ;--  derative of prior energy wrt depth			
-				sum = sum + -tmpval * ( ( tmpval + normal2[1]/f_y) * pImage(i,j+1) - tmpval * pImage(i,j))
+				sum = sum + -tmpval * ( ( tmpval + normal2[1]/f_y) * pImage(idx(0,1))(0) - tmpval * pImage(idx)(0))
 
 				b = b + sum * self.w_r
 			end
@@ -1167,38 +1137,40 @@ end
 
 
 -- eval 2*JtJ (note that we keep the '2' to make it consistent with the gradient
-local terra applyJTJ(i : int32, j : int32, gi : int32, gj : int32, self : P:ParameterType(), pImage : P:UnknownType())
-	var W : int = self.X:W()
-	var H : int = self.X:H()
+local terra applyJTJ(idx : Index, self : P:ParameterType(), pImage : TUnknownType)
+	var W : int = [W.size]
+	var H : int = [H.size]
 
 	var normal0 : float3
 	var normal1 : float3
 	var normal2 : float3
 
-	prior_normal_from_previous_depth(self.X(i, j), gi, gj, self, &normal0, &normal1, &normal2)
+	prior_normal_from_previous_depth(self.X(idx)(0), idx.d0, idx.d1, self, &normal0, &normal1, &normal2)
 	
 	--__syncthreads()
 
- 	var JTJ: float = applyJTJDeviceLS_SFS_Shared_BSP_Mask_Prior(i, j, gi, gj, W, H, self, pImage, normal0, normal1, normal2)
+ 	var JTJ: float = applyJTJDeviceLS_SFS_Shared_BSP_Mask_Prior(idx, idx.d0, idx.d1, W, H, self, pImage, normal0, normal1, normal2)
 	return 2.0*JTJ
 end
 
-local terra precompute(i : int32, j : int32, gi : int32, gj : int32, self : P:ParameterType())
-	var temp = calShading2depthGradHelper(i, j, gi, gj, self)
-	self.B_I_dx0(i,j) 	= temp[0]
-	self.B_I_dx1(i,j) 	= temp[1]
-	self.B_I_dx2(i,j) 	= temp[2]
-	self.B_I(i,j) 		= temp[3]
-	var d  : float = self.X(i,j)
-	var d0 : float = self.X(i-1,j)
-	var d1 : float = self.X(i+1,j)
-	var d2 : float = self.X(i,j-1)
-	var d3 : float = self.X(i,j+1)
-	self.pguard(i,j) = terralib.select(IsValidPoint(d) and IsValidPoint(d0) and IsValidPoint(d1) and IsValidPoint(d2) and IsValidPoint(d3)
+local terra precompute(idx : Index, self : P:ParameterType())
+
+	var temp = calShading2depthGradHelper(idx, idx.d0, idx.d1, self)
+	self.B_I_dx0(idx) 	= temp[0]
+	self.B_I_dx1(idx) 	= temp[1]
+	self.B_I_dx2(idx) 	= temp[2]
+	self.B_I(idx) 		= temp[3]
+	var d  : float = self.X(idx)(0)
+	var d0 : float = self.X(idx(-1,0))(0)
+	var d1 : float = self.X(idx(1,0))(0)
+	var d2 : float = self.X(idx(0,-1))(0)
+	var d3 : float = self.X(idx(0,1))(0)
+	var guard = terralib.select(IsValidPoint(d) and IsValidPoint(d0) and IsValidPoint(d1) and IsValidPoint(d2) and IsValidPoint(d3)
 		and opt.math.abs(d-d0) < [float](DEPTH_DISCONTINUITY_THRE) 
 		and opt.math.abs(d-d1) < [float](DEPTH_DISCONTINUITY_THRE) 
 		and opt.math.abs(d-d2) < [float](DEPTH_DISCONTINUITY_THRE) 
 		and opt.math.abs(d-d3) < [float](DEPTH_DISCONTINUITY_THRE),1.f,0.f)
+	self.pguard(idx) = guard
 end
 
 P:Function("cost",       cost)
