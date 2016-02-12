@@ -254,7 +254,7 @@ function Context:DefineClass(name,unique,fields)
                 local next = node[key]
                 if not next then
                     next = setmetatable(obj,self)
-                    next:init()
+                    if next.init then next:init() end
                     node[key] = next
                 end
                 return next
@@ -271,11 +271,10 @@ function Context:DefineClass(name,unique,fields)
                     obj[names[i]] = v
                 end
                 local r = setmetatable(obj,self)
-                r:init()
+                if r.init then r:init() end
                 return r
             end
         end
-        function class:init() end -- override with custom initializer
         function class:__tostring()
             local members = newlist()
             for i,f in ipairs(fields) do

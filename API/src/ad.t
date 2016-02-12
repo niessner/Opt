@@ -678,6 +678,7 @@ local function expstostring(es)
 end
 
 ad.tostrings = expstostring
+Exp.__tostring = nil -- force overrides to happen
 function Exp:__tostring()
     return expstostring(terralib.newlist{self})
 end
@@ -874,8 +875,6 @@ ad.sinh:define(function(x) return `C.sinh(x) end, ad.cosh(x))
 ad.sqrt:define(function(x) return `C.sqrt(x) end, 1.0/(2.0*ad.sqrt(x)))
 ad.tan:define(function(x) return `C.tan(x) end, 1.0 + ad.tan(x)*ad.tan(x))
 ad.tanh:define(function(x) return `C.tanh(x) end, 1.0/(ad.cosh(x)*ad.cosh(x)))
-
-
 
 function ad.select:propagatetype(args) return float, {bool,float,float} end
 ad.select:define(function(x,y,z) 
