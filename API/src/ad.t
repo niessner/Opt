@@ -14,7 +14,7 @@ A:Define [[
     Shape = (table* keys) unique
     ExpVector = (table* data)
     Exp = Var(any key_) unique
-        | Apply(Op op, table config, Exp* args)
+        | Apply(Op op, number? const, Exp* args)
         | Reduce(Exp v) unique
         | Const(number v) unique
 ]]
@@ -151,7 +151,7 @@ function Var:key() return self.key_ end
 
 local function asprod(exp)
     if Apply:is(exp) and exp.op.name == "prod" then
-        return exp.config.c, exp:children()
+        return exp.const, exp:children()
     elseif Const:is(exp) then
         return exp.v, empty
     else
@@ -160,15 +160,15 @@ local function asprod(exp)
 end
 local function aspowc(exp)
     if Apply:is(exp) and exp.op.name == "powc" then
-        return exp.config.c, exp:children()[1]
+        return exp.const, exp:children()[1]
     else
         return 1.0,exp
     end
 end
 
-local polycache = terralib.memoize(function(op,c,...)
-    local args,config = terralib.newlist {...}, { c = c }
-    return Apply(op,config,args)
+local polycache = terralib.memoize(function(op,const,...)
+    local args = terralib.newlist {...}
+    return Apply(op,const,args)
 end)
 
 local function orderedexpressionkeys(tbl)
@@ -180,8 +180,8 @@ local function orderedexpressionkeys(tbl)
     return keys
 end
 
-local function simplify(op,config,args)
-    if not use_simplify then return newapply(op,config,args) end
+local function simplify(op,const,args)
+    if not use_simplify then return newapply(op,const,args) end
     
     if allconst(args) then
         local r = op:propagateconstant(args:map("v"))
@@ -208,9 +208,9 @@ local function simplify(op,config,args)
         local function insertall(args)
             for i,a in ipairs(args) do
                 if Const:is(a) then
-                    config.c = config.c + a.v
+                    const = const + a.v
                 elseif Apply:is(a) and a.op.name == "sum" then
-                    config.c = config.c + a.config.c
+                    const = const + a.const
                     insertall(a.args)
                 else
                     local c,aa = asprod(a)
@@ -225,21 +225,21 @@ local function simplify(op,config,args)
         end
         insertall(args)
     
-        if #termnodes == 0 then return toexp(config.c) end
+        if #termnodes == 0 then return toexp(const) end
         local terms = terralib.newlist()
         for _,t in ipairs(termnodes) do
             if t.c ~= 0 then
                 terms:insert(ad.prod(t.c,unpack(t.value)))
             end
         end
-        if config.c == 0.0 and #terms == 1 then return terms[1] end
-        return polycache(op,config.c,unpack(sortexpressions(terms)))
+        if const == 0.0 and #terms == 1 then return terms[1] end
+        return polycache(op,const,unpack(sortexpressions(terms)))
     elseif op.name == "prod" then
         local expmap = {} -- maps each term to the power it has
         local function insertall(args)
             for i,a in ipairs(args) do
                 local c, es = asprod(a)
-                config.c = config.c * c
+                const = const * c
                 for _,e in ipairs(es) do
                     local c,ep = aspowc(e)
                     expmap[ep] = (expmap[ep] or 0) + c
@@ -247,7 +247,7 @@ local function simplify(op,config,args)
             end
         end
         insertall(args)
-        if config.c == 0.0 then return zero end
+        if const == 0.0 then return zero end
         
         local factors = terralib.newlist()
         local keys = orderedexpressionkeys(expmap)
@@ -258,9 +258,9 @@ local function simplify(op,config,args)
             end
         end
         
-        if #factors == 0 then return toexp(config.c) end
-        if #factors == 1 and config.c == 1.0 then return factors[1] end
-        return polycache(op,config.c,unpack(sortexpressions(factors)))
+        if #factors == 0 then return toexp(const) end
+        if #factors == 1 and const == 1.0 then return factors[1] end
+        return polycache(op,const,unpack(sortexpressions(factors)))
     end
     
     local x,y,z = unpack(args)
@@ -279,7 +279,7 @@ local function simplify(op,config,args)
     elseif op.name == "powc" then
         if x:type() == bool then
             return x
-        elseif Apply:is(x) and x.op.name == "sqrt" and config.c == 2 then
+        elseif Apply:is(x) and x.op.name == "sqrt" and const == 2 then
             return x.args[1]
         end
     elseif op.name == "select" then
@@ -301,22 +301,22 @@ local function simplify(op,config,args)
         end
     end
     
-    return Apply(op,config,args)
+    return Apply(op,const,args)
 end
 
 local function getapply(op,...)
     local args = terralib.newlist()
-    local config = {}
+    local const = nil
     for i = 1,select("#",...) do
         local e = select(i,...)
-        if i <= #op.config then 
-            config[op.config[i]] = assert(tonumber(e),"config must be a number")
+        if op.hasconst and i == 1 then 
+            const = assert(tonumber(e),"const must be a number")
         else
             e = assert(toexp(e),"expected an expression")
             args:insert(e)
         end
     end
-    return simplify(op,config,args)
+    return simplify(op,const,args)
 end
 getapply = terralib.memoize(getapply)
 
@@ -383,10 +383,10 @@ setmetatable(ad, { __index = function(self,idx) -- for just this file, auto-gene
     return op
 end })
 
-local function conformvectors(start,...)
+local function conformvectors(...)
     local N
     local es = terralib.newlist {}
-    for i = start, select('#',...) do
+    for i = 1, select('#',...) do
         local e = select(i,...)
         if ExpVector:is(e) then
             assert(not N or N == e:size(), "non-conforming vector sizes")
@@ -398,14 +398,14 @@ end
 
 
 function Op:__call(...)
-    local N = conformvectors(#self.config+1,...)
+    local N = conformvectors(select(self.hasconst and 2 or 1,...))
     if not N then return getapply(self,...) end
     local exps = terralib.newlist()
     for i = 0,N-1 do
         local newargs = terralib.newlist()
         for j = 1,select("#",...) do
             local e = select(j,...)
-            if j <= #self.config or not ExpVector:is(e) then
+            if j == 1 and self.hasconst or not ExpVector:is(e) then
                 newargs:insert(e)
             else
                 newargs:insert(e[i])
@@ -430,7 +430,7 @@ local function insertcasts(exp,args)
     return nargs
 end
 
-Op.config = {} -- operators that have configuration override this
+Op.hasconst = false -- operators that have a constant override this
 function Op:define(fn,...)
     local dbg = debug.getinfo(fn,"u")
     assert(not dbg.isvararg)
@@ -491,8 +491,8 @@ function Exp:rename(vars)
     local function visit(self) 
         if self.kind == "Apply" then
             local nargs = self.args:map(visitcached)
-            for i,c in ipairs(self.op.config) do
-                nargs:insert(i,self.config[c])
+            if self.op.hasconst then
+                nargs:insert(1,self.const)
             end
             return self.op(unpack(nargs))
         elseif self.kind == "Const" then
@@ -619,17 +619,17 @@ local function expstostring(es)
             return stringforuse(e)
         end
         if e.op.name == "powc" then
-            return ("%s^%s"):format(stringforuse(e.args[1]),e.config.c)
+            return ("%s^%s"):format(stringforuse(e.args[1]),e.const)
         elseif e.op.name == "prod" then
             local r = e.args:map(emitpoly,2):concat("*")
-            if e.config.c ~= 1 then
-                r = ("%s*%s"):format(e.config.c,r)
+            if e.const ~= 1 then
+                r = ("%s*%s"):format(e.const,r)
             end
             return r
         elseif e.op.name == "sum" then
             local r = e.args:map(emitpoly,1):concat(" + ")
-            if e.config.c ~= 0 then
-                r = ("%s + %s"):format(r,e.config.c)
+            if e.const ~= 0 then
+                r = ("%s + %s"):format(r,e.const)
             end
             return r
         end
@@ -640,9 +640,8 @@ local function expstostring(es)
             return emitpoly(e,0)
         end
         local name = e.op.name
-        if #e.op.config > 0 then
-            local cfgstr = terralib.list.map(e.op.config,function(name) return e.config[name] end):concat(",")
-            name = ("%s[%s]"):format(name,cfgstr)
+        if e.op.hasconst then
+            name = ("%s[%f]"):format(name,e.const)
         end
         return ("%s(%s)"):format(name,e.args:map(stringforuse):concat(","))
     end
@@ -780,14 +779,14 @@ end
 
 function ad.sum:generate(exp,args)
     args = insertcasts(exp,args)
-    local r = exp.config.c
+    local r = exp.const
     for i,c in ipairs(args) do
         r = `r+c
     end
     return r
 end
 function ad.sum:getpartials(exp) return rep(#exp.args,one) end
-ad.sum.config = {"c"}
+ad.sum.hasconst = true
 
 function ad.add(x,y) return ad.sum(0,x,y) end
 function ad.sub(x,y) return ad.sum(0,x,-y) end
@@ -795,7 +794,7 @@ function ad.mul(x,y) return ad.prod(1,x,y) end
 function ad.div(x,y) return ad.prod(1,x,y^-1) end
 
 function ad.prod:generate(exp,args)
-    local r = exp.config.c
+    local r = exp.const
     local condition = true
     for i,ce in ipairs(exp:children()) do
         local a = args[i]
@@ -820,11 +819,11 @@ function ad.prod:getpartials(exp)
                 terms:insert(a2)
             end
         end
-        r:insert(ad.prod(exp.config.c,unpack(terms)))
+        r:insert(ad.prod(exp.const,unpack(terms)))
     end
     return r
 end
-ad.prod.config = { "c" }
+ad.prod.hasconst = true
 
 local genpow = terralib.memoize(function(N)
     local terra pow(a : float) : float
@@ -839,7 +838,7 @@ local genpow = terralib.memoize(function(N)
 end)
 function ad.powc:generate(exp,args)
     args = insertcasts(exp,args)
-    local c,e = exp.config.c, args[1]
+    local c,e = exp.const, args[1]
     if c == 1 then
         return e
     elseif c > 0 then
@@ -851,10 +850,10 @@ end
 
 function ad.powc:getpartials(exp)
     local x = exp.args[1]
-    local c = exp.config.c
+    local c = exp.const
     return terralib.newlist { c*ad.pow(x,c-1) }
 end
-ad.powc.config = { "c" }
+ad.powc.hasconst = true
 
 function ad.unm(x) return ad.prod(-1.0,x) end
 
@@ -939,7 +938,7 @@ function ad.polysimplify(exps)
             
             terms:insert(factor)
         end
-        return terms,sum.config.c
+        return terms,sum.const
     end
 
     local function createsum(terms,c)
@@ -1032,8 +1031,8 @@ function ad.polysimplify(exps)
                 return simplifylist(sumtoterms(exp))
             else
                 local nargs = exp:children():map(ad.polysimplify)
-                if exp.config.c then -- HACK! only works for fake config we have now
-                    return exp.op(exp.config.c,unpack(nargs))
+                if exp.const then
+                    return exp.op(exp.const,unpack(nargs))
                 end
                 local r = exp.op(unpack(nargs))
                 return r
@@ -1055,7 +1054,7 @@ function ad.splitcondition(exp)
                 exp_ = exp_ * e
             end
         end
-        return cond,exp_ * exp.config.c
+        return cond,exp_ * exp.const
     else
         return one,exp
     end

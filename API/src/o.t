@@ -172,7 +172,7 @@ IRNode = vectorload(ImageAccess value, number count)
        | const(number value)
        | vardecl(number constant)
        | varuse(IRNode* children)
-       | apply(string op, function generator, IRNode * children,number? const)
+       | apply(string op, function generator, IRNode * children, number? const)
          attributes (TerraType type, Shape shape, Condition? condition)
 ProblemSpec = ()
 ProblemSpecAD = ()
@@ -947,7 +947,7 @@ local function createfunction(problemspec,name,Index,results,scatters)
                     factors:insert(c)
                 end
             end
-            n = ad.prod(n.config.c,unpack(factors))
+            n = ad.prod(n.const,unpack(factors))
             cond = Condition:create(conditions)
         end
         return A.reduce(op,List{vardecl,irmap(n)},float,vardecl.shape,cond)
@@ -972,7 +972,7 @@ local function createfunction(problemspec,name,Index,results,scatters)
             return A.const(e.v,e:type(),ad.scalar)
         elseif "Apply" == e.kind then
             if use_split_sums and (e.op.name == "sum") and #e:children() > 2 then
-                local vardecl = A.vardecl(e.config.c,float,e:shape())
+                local vardecl = A.vardecl(e.const,float,e:shape())
                 local children = List { vardecl }
                 local varuse = A.varuse(children,float,e:shape())
                 for i,c in ipairs(e:children()) do
@@ -987,7 +987,7 @@ local function createfunction(problemspec,name,Index,results,scatters)
                 if not util.isvectortype(sm.image.type) then
                     return sm
                 end
-                return A.vectorextract(List {sm}, e.config.c, e:type(), e:shape()) 
+                return A.vectorextract(List {sm}, e.const, e:type(), e:shape()) 
             end
             local fn,gen = opt.math[e.op.name]
             if fn then
@@ -1001,7 +1001,7 @@ local function createfunction(problemspec,name,Index,results,scatters)
             else
                 function gen(args) return e.op:generate(e,args) end
             end
-            return A.apply(e.op.name,gen,children,e.config.c,e:type(),e:shape()) 
+            return A.apply(e.op.name,gen,children,e.const,e:type(),e:shape()) 
         elseif "Reduce" == e.kind then
             local vardecl = A.vardecl(0,e:type(),e:shape()) 
             local arg = e.args[1]
@@ -2005,12 +2005,12 @@ function ad.sampledimage(image,imagedx,imagedy)
     end
     local op = ad.newop("sampleimage_"..image.name)
     op.imagebeingsampled = image --not the best place to store this but other ways are more cumbersome
-    op.config = { "c" }
+    op.hasconst = true
     function op:generate(exp,args) error("sample image is not implemented directly") end
     function op:getpartials(exp)
         assert(imagedx and imagedy, "image derivatives are not defined for this image and cannot be used in autodiff")
         local x,y = unpack(exp:children())
-        return terralib.newlist { imagedx(x,y,exp.config.c), imagedy(x,y,exp.config.c) }
+        return terralib.newlist { imagedx(x,y,exp.const), imagedy(x,y,exp.const) }
     end
     return SampledImage(op)
 end
