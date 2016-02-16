@@ -177,9 +177,10 @@ IRNode = vectorload(ImageAccess value, number count)
 ProblemSpec = ()
 ProblemSpecAD = ()
 SampledImage = (table op)
+GradientImage = (ImageAccess unknown, Exp expression, Image image)
 ]]
-local Dim,IndexSpace,Index,Offset,GraphElement,ImageType,Image,ImageVector,ProblemParam,ImageParam,ScalarParam,GraphParam,VarDef,ImageAccess,BoundsAccess,IndexValue,ParamValue,Graph,GraphFunctionSpec,Scatter,Condition,IRNode,ProblemSpec,ProblemSpecAD,SampledImage = 
-      A.Dim,A.IndexSpace,A.Index,A.Offset,A.GraphElement,A.ImageType,A.Image,A.ImageVector,A.ProblemParam,A.ImageParam,A.ScalarParam,A.GraphParam,A.VarDef,A.ImageAccess,A.BoundsAccess,A.IndexValue,A.ParamValue,A.Graph,A.GraphFunctionSpec,A.Scatter,A.Condition,A.IRNode,A.ProblemSpec,A.ProblemSpecAD,A.SampledImage
+local Dim,IndexSpace,Index,Offset,GraphElement,ImageType,Image,ImageVector,ProblemParam,ImageParam,ScalarParam,GraphParam,VarDef,ImageAccess,BoundsAccess,IndexValue,ParamValue,Graph,GraphFunctionSpec,Scatter,Condition,IRNode,ProblemSpec,ProblemSpecAD,SampledImage, GradientImage = 
+      A.Dim,A.IndexSpace,A.Index,A.Offset,A.GraphElement,A.ImageType,A.Image,A.ImageVector,A.ProblemParam,A.ImageParam,A.ScalarParam,A.GraphParam,A.VarDef,A.ImageAccess,A.BoundsAccess,A.IndexValue,A.ParamValue,A.Graph,A.GraphFunctionSpec,A.Scatter,A.Condition,A.IRNode,A.ProblemSpec,A.ProblemSpecAD,A.SampledImage,A.GradientImage
 
 opt.PSpec = ProblemSpec
 local PROBLEM_STAGES  = { inputs = 0, functions = 1 }
@@ -675,10 +676,9 @@ function ImageAccess:gradient()
     if self.image.gradientimages then
         assert(Offset:is(self.index),"NYI - support for graphs")
         local gt = {}
-        for u,im in pairs(self.image.gradientimages) do
-            local exp = self.image.gradientexpressions[u]
-            local k = u:shift(self.index)
-            local v = ad.Const:is(exp) and exp or im(unpack(self.index.data))
+        for i,im in ipairs(self.image.gradientimages) do
+            local k = im.unknown:shift(self.index)
+            local v = ad.Const:is(im.expression) and im.expression or im.image(self.index)
             gt[k] = v
         end
         return gt
@@ -742,16 +742,13 @@ function ProblemSpecAD:ComputedImage(name,dims,exp)
     end)
     local im = self:Image(name,float,dims,"alloc")
     local gradients = exp:gradient(unknowns:map(function(x) return ad.v[x] end))
-    local gradientexpressions = {}
-    local gradientimages = {}
-    for i,u in ipairs(unknowns) do
-        gradientexpressions[u] = gradients[i]
-        gradientimages[u] = self:Image(name.."_d_"..tostring(u),float,dims,"alloc")
+    im.gradientimages = terralib.newlist()
+    for i,g in ipairs(gradients) do
+        local u = unknowns[i]
+        local gim = self:Image(name.."_d_"..tostring(u),float,dims,"alloc")
+        im.gradientimages:insert(GradientImage(u,g,gim))
     end
-    
     im.expression = exp
-    im.gradientexpressions = gradientexpressions
-    im.gradientimages = gradientimages
     self.precomputed:insert(im)
     return im
 end
@@ -1625,9 +1622,9 @@ local function classifyresiduals(uispace, Rs)
                 if a.image.name == "X"then
                     addunknown(a)
                 elseif a.image.gradientimages then
-                    for u,_ in pairs(a.image.gradientimages) do
+                    for i,im in pairs(a.image.gradientimages) do
                         assert(Offset:is(a.index),"NYI - precomputed with graphs")
-                        addunknown(u:shift(a.index))
+                        addunknown(im.unknown:shift(a.index))
                     end
                 end
                 local aclass = Offset:is(a.index) and a.image.type.ispace or a.index.graph
@@ -1914,11 +1911,10 @@ function createprecomputed(self,name,precomputedimages)
     for i,im in ipairs(precomputedimages) do
         local expression = ad.polysimplify(im.expression)
         scatters:insert(Scatter(im, zoff, 0, im.expression, "set"))
-        for u,gim in pairs(im.gradientimages) do
-            local gradientexpression = im.gradientexpressions[u]
-            gradientexpression = ad.polysimplify(gradientexpression)
+        for _,gim in pairs(im.gradientimages) do
+            local gradientexpression = ad.polysimplify(gim.expression)
             if not ad.Const:is(gradientexpression) then
-                scatters:insert(Scatter(gim, zoff, 0, gradientexpression, "set"))
+                scatters:insert(Scatter(gim.image, zoff, 0, gradientexpression, "set"))
             end
         end
     end
