@@ -172,7 +172,7 @@ IRNode = vectorload(ImageAccess value, number count)
        | const(number value)
        | vardecl(number constant)
        | varuse(IRNode* children)
-       | apply(string op, function generator, IRNode * children)
+       | apply(string op, function generator, IRNode * children,number? const)
          attributes (TerraType type, Shape shape, Condition? condition)
 ProblemSpec = ()
 ProblemSpecAD = ()
@@ -1001,7 +1001,7 @@ local function createfunction(problemspec,name,Index,results,scatters)
             else
                 function gen(args) return e.op:generate(e,args) end
             end
-            return A.apply(e.op.name,gen,children,e:type(),e:shape()) 
+            return A.apply(e.op.name,gen,children,e.config.c,e:type(),e:shape()) 
         elseif "Reduce" == e.kind then
             local vardecl = A.vardecl(0,e:type(),e:shape()) 
             local arg = e.args[1]
@@ -1258,8 +1258,8 @@ local function createfunction(problemspec,name,Index,results,scatters)
     
     local instructions,regcounts = schedulebackwards(irroots,uses)
     
-    local function printschedule(instructions,regcounts)
-        print("schedule for ",name,"-----------")
+    local function printschedule(W,instructions,regcounts)
+        W:write(string.format("schedule for %s -----------\n",name))
         local emittedpos = {}
         local function formatchildren(children)
             local cs = terralib.newlist()
@@ -1295,16 +1295,18 @@ local function createfunction(problemspec,name,Index,results,scatters)
         end
         for i,ir in ipairs(instructions) do
             emittedpos[ir] = i
-            print(("[%d]%sr%d : %s%s = %s"):format(regcounts[i],formatcondition(ir.condition),i,tostring(ir.type),tostring(ir.shape),formatinst(ir)))
+            W:write(("[%d]%sr%d : %s%s = %s\n"):format(regcounts[i],formatcondition(ir.condition),i,tostring(ir.type),tostring(ir.shape),formatinst(ir)))
             if instructions[i+1] and conditioncost(ir.condition,instructions[i+1].condition) ~= 0 then
-                print("---------------------")
+                W:write("---------------------\n")
             end
         end
-        print("----------------------")
+        W:write("----------------------\n")
     end
     
-    if verboseAD then
-        printschedule(instructions,regcounts)
+    if verboseAD or true then
+        local W = io.open("log.txt","a")
+        printschedule(W,instructions,regcounts)
+        W:close()
     end
     
     local P = symbol(problemspec.P:ParameterType(),"P")
