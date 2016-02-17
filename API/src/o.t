@@ -1624,7 +1624,7 @@ local function classifyresiduals(uispace, Rs)
                 if a.image.name == "X"then
                     addunknown(a)
                 elseif a.image.gradientimages then
-                    for i,im in pairs(a.image.gradientimages) do
+                    for i,im in ipairs(a.image.gradientimages) do
                         assert(Offset:is(a.index),"NYI - precomputed with graphs")
                         addunknown(im.unknown:shift(a.index))
                     end
@@ -1913,7 +1913,7 @@ function createprecomputed(self,name,precomputedimages)
     for i,im in ipairs(precomputedimages) do
         local expression = ad.polysimplify(im.expression)
         scatters:insert(Scatter(im, zoff, 0, im.expression, "set"))
-        for _,gim in pairs(im.gradientimages) do
+        for _,gim in ipairs(im.gradientimages) do
             local gradientexpression = ad.polysimplify(gim.expression)
             if not ad.Const:is(gradientexpression) then
                 scatters:insert(Scatter(gim.image, zoff, 0, gradientexpression, "set"))
