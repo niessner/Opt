@@ -14,7 +14,7 @@ A:Define [[
     Shape = (table* keys) unique
     ExpVector = (table* data)
     Exp = Var(any key_) unique
-        | Apply(Op op, number? const, Exp* args)
+        | Apply(Op op, number? const, Exp* args) unique
         | Reduce(Exp v) unique
         | Const(number v) unique
 ]]
@@ -166,11 +166,6 @@ local function aspowc(exp)
     end
 end
 
-local polycache = terralib.memoize(function(op,const,...)
-    local args = terralib.newlist {...}
-    return Apply(op,const,args)
-end)
-
 local function orderedexpressionkeys(tbl)
     local keys = terralib.newlist()
     for k,v in pairs(tbl) do
@@ -179,9 +174,10 @@ local function orderedexpressionkeys(tbl)
     sortexpressions(keys)
     return keys
 end
-
-local function simplify(op,const,args)
-    if not use_simplify then return newapply(op,const,args) end
+    
+local function simplify(self)
+    local op,const,args = self.op,self.const,self.args
+    if not use_simplify then return self end
     
     if allconst(args) then
         local r = op:propagateconstant(args:map("v"))
@@ -233,7 +229,7 @@ local function simplify(op,const,args)
             end
         end
         if const == 0.0 and #terms == 1 then return terms[1] end
-        return polycache(op,const,unpack(sortexpressions(terms)))
+        return Apply(op,const,sortexpressions(terms))
     elseif op.name == "prod" then
         local expmap = {} -- maps each term to the power it has
         local function insertall(args)
@@ -260,7 +256,7 @@ local function simplify(op,const,args)
         
         if #factors == 0 then return toexp(const) end
         if #factors == 1 and const == 1.0 then return factors[1] end
-        return polycache(op,const,unpack(sortexpressions(factors)))
+        return Apply(op,const,sortexpressions(factors))
     end
     
     local x,y,z = unpack(args)
@@ -300,25 +296,15 @@ local function simplify(op,const,args)
             else return x end
         end
     end
-    
-    return Apply(op,const,args)
+    return self
 end
 
-local function getapply(op,...)
-    local args = terralib.newlist()
-    local const = nil
-    for i = 1,select("#",...) do
-        local e = select(i,...)
-        if op.hasconst and i == 1 then 
-            const = assert(tonumber(e),"const must be a number")
-        else
-            e = assert(toexp(e),"expected an expression")
-            args:insert(e)
-        end
+function Apply:simplified()
+    if not self._simplified then
+        self._simplified = simplify(self)
     end
-    return simplify(op,const,args)
+    return self._simplified 
 end
-getapply = terralib.memoize(getapply)
 
 function ExpVector:size() return #self.data end
 function ExpVector:__tostring() return "{"..ad.tostrings(self.data).."}" end
@@ -383,37 +369,33 @@ setmetatable(ad, { __index = function(self,idx) -- for just this file, auto-gene
     return op
 end })
 
-local function conformvectors(...)
+local function conformvectors(args)
     local N
-    local es = terralib.newlist {}
-    for i = 1, select('#',...) do
-        local e = select(i,...)
+    for i,e in ipairs(args) do
         if ExpVector:is(e) then
             assert(not N or N == e:size(), "non-conforming vector sizes")
             N = e:size()
+        else
+            args[i] = assert(toexp(e),"expected an expression")
         end
     end
     return N
 end
 
-
-function Op:__call(...)
-    local N = conformvectors(select(self.hasconst and 2 or 1,...))
-    if not N then return getapply(self,...) end
-    local exps = terralib.newlist()
+function Op:create(const,args)
+    local N = conformvectors(args)
+    if not N then return Apply(self,const,args):simplified() end
+    local exps = List()
     for i = 0,N-1 do
-        local newargs = terralib.newlist()
-        for j = 1,select("#",...) do
-            local e = select(j,...)
-            if j == 1 and self.hasconst or not ExpVector:is(e) then
-                newargs:insert(e)
-            else
-                newargs:insert(e[i])
-            end
-        end
-        exps:insert(self(unpack(newargs)))
+        local newargs = args:map(function(e) return ExpVector:is(e) and e[i] or e end)
+        exps:insert(self:create(const,newargs))
     end
     return ExpVector(exps)
+end
+
+function Op:__call(c,...)
+    if self.hasconst then return self:create(c,List{...})
+    else return self:create(nil,List{c,...}) end
 end
 
 local function insertcast(from,to,exp)
