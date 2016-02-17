@@ -473,10 +473,7 @@ function Exp:rename(vars)
     local function visit(self) 
         if self.kind == "Apply" then
             local nargs = self.args:map(visitcached)
-            if self.op.hasconst then
-                nargs:insert(1,self.const)
-            end
-            return self.op(unpack(nargs))
+            return self.op:create(self.const,nargs)
         elseif self.kind == "Const" then
             return self
         elseif self.kind == "Var" then
