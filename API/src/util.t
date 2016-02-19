@@ -431,8 +431,9 @@ util.initParameters = function(self, ProblemSpec, params, isInit)
 		if entry.kind == "ImageParam" then
 		    if entry.idx ~= "alloc" then
                 local function_name = isInit and "initFromGPUptr" or "setGPUptr"
+                local loc = entry.isunknown and (`self.X.[entry.name]) or `self.[entry.name]
                 stmts:insert quote
-                    self.[entry.name]:[function_name]([&uint8](params[entry.idx]))
+                    loc:[function_name]([&uint8](params[entry.idx]))
                 end
             end
 		else
@@ -499,7 +500,7 @@ function util.makeGPUFunctions(problemSpec, PlanData, kernels)
 	
 	local wrappedKernels = {}
 	
-	local imageType = problemSpec:UnknownType()
+	local imageType = problemSpec:UnknownType().images[1].imagetype
 	local ispace = imageType.ispace
 	local dimcount = #ispace.dims
 	 assert(dimcount <= 3, "cannot launch over images with more than 3 dims")

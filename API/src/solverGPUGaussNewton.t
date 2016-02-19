@@ -16,9 +16,9 @@ local FLOAT_EPSILON = `0.000001f
 return function(problemSpec)
 
     local UnknownType = problemSpec:UnknownType()
-	local unknownElement = UnknownType:ElementType()
+	local unknownElement = UnknownType.images[1].imagetype:ElementType()
 	local TUnknownType = UnknownType:terratype()
-	local UnknownIndexSpace = UnknownType.ispace
+	local UnknownIndexSpace = UnknownType:IndexSpaces()[1]
     local Index = UnknownIndexSpace:indextype()
     local isGraph = #problemSpec.functions.cost.graphfunctions > 0
     
@@ -149,7 +149,7 @@ return function(problemSpec)
         if idx:initFromCUDAParams() and (not [problemSpec:EvalExclude(idx,`pd.parameters)]) then
             var tmp : unknownElement = 0.0f
              -- A x p_k  => J^T x J x p_k 
-            tmp = problemSpec.functions.applyJTJ.unknownfunction(idx, pd.parameters, pd.p)
+            tmp = problemSpec.functions.applyJTJ.unknownfunction(idx, pd.parameters, pd.p.X)
             pd.Ap_X(idx) = tmp					 -- store for next kernel call
             d = pd.p(idx):dot(tmp)			 -- x-th term of denominator of alpha
         end

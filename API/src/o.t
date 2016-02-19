@@ -148,9 +148,9 @@ IndexSpace = (Dim* dims) unique
 Index = Offset(number* data) unique
       | GraphElement(any graph, string element) unique
 ImageType = (IndexSpace ispace, TerraType scalartype, number channelcount) unique
-Image = (string name, ImageType type, imageindex idx, boolean scalar)
+Image = (string name, ImageType type, imageindex idx, boolean scalar, boolean isunknown)
 ImageVector = (Image* images)
-ProblemParam = ImageParam(ImageType imagetype)
+ProblemParam = ImageParam(ImageType imagetype, boolean isunknown)
              | ScalarParam(TerraType type)
              | GraphParam(TerraType type)
              attributes (string name, any idx)
@@ -178,9 +178,10 @@ ProblemSpec = ()
 ProblemSpecAD = ()
 SampledImage = (table op)
 GradientImage = (ImageAccess unknown, Exp expression, Image image)
+UnknownType = (ImageParam* images)
 ]]
-local Dim,IndexSpace,Index,Offset,GraphElement,ImageType,Image,ImageVector,ProblemParam,ImageParam,ScalarParam,GraphParam,VarDef,ImageAccess,BoundsAccess,IndexValue,ParamValue,Graph,GraphFunctionSpec,Scatter,Condition,IRNode,ProblemSpec,ProblemSpecAD,SampledImage, GradientImage = 
-      A.Dim,A.IndexSpace,A.Index,A.Offset,A.GraphElement,A.ImageType,A.Image,A.ImageVector,A.ProblemParam,A.ImageParam,A.ScalarParam,A.GraphParam,A.VarDef,A.ImageAccess,A.BoundsAccess,A.IndexValue,A.ParamValue,A.Graph,A.GraphFunctionSpec,A.Scatter,A.Condition,A.IRNode,A.ProblemSpec,A.ProblemSpecAD,A.SampledImage,A.GradientImage
+local Dim,IndexSpace,Index,Offset,GraphElement,ImageType,Image,ImageVector,ProblemParam,ImageParam,ScalarParam,GraphParam,VarDef,ImageAccess,BoundsAccess,IndexValue,ParamValue,Graph,GraphFunctionSpec,Scatter,Condition,IRNode,ProblemSpec,ProblemSpecAD,SampledImage, GradientImage,UnknownType = 
+      A.Dim,A.IndexSpace,A.Index,A.Offset,A.GraphElement,A.ImageType,A.Image,A.ImageVector,A.ProblemParam,A.ImageParam,A.ScalarParam,A.GraphParam,A.VarDef,A.ImageAccess,A.BoundsAccess,A.IndexValue,A.ParamValue,A.Graph,A.GraphFunctionSpec,A.Scatter,A.Condition,A.IRNode,A.ProblemSpec,A.ProblemSpecAD,A.SampledImage,A.GradientImage,A.UnknownType
 
 opt.PSpec = ProblemSpec
 local PROBLEM_STAGES  = { inputs = 0, functions = 1 }
@@ -188,7 +189,6 @@ function opt.ProblemSpec()
     local ps = ProblemSpec()
     ps.parameters = terralib.newlist() -- ProblemParam*
     ps.names = {} -- name -> index in parameters list
-    ps.ProblemParameters = terralib.types.newstruct("ProblemParameters")
     ps.functions = {}
 	ps.maxStencil = 0
 	ps.stage = "inputs"
@@ -228,18 +228,31 @@ function ProblemSpec:newparameter(p)
     assert(ProblemParam:is(p))
     self:registername(p.name)
     self.parameters:insert(p)
-	self.ProblemParameters.entries:insert { p.name, p:terratype() }
 end
 
 function ProblemSpec:ParameterType()
+    self:Stage "functions"
+    if not self.ProblemParameters then
+        self.ProblemParameters = terralib.types.newstruct("ProblemParameters")
+        self.ProblemParameters.entries:insert { "X" , self:UnknownType():terratype() }
+        for i,p in ipairs(self.parameters) do
+            local n,t = p.name,p:terratype()
+            if not p.isunknown then self.ProblemParameters.entries:insert { n, t } end
+        end
+    end
     return self.ProblemParameters
 end
 
 function ProblemSpec:UnknownType()
     self:Stage "functions"
-    local xt = assert(self.parameters[self.names["X"]],"unknown type X is not defined.")
-    assert(ImageParam:is(xt),"unknown type X is not an image")
-    return xt.imagetype
+    if not self.Unknown then
+        local images = List()
+        for _,p in ipairs(self.parameters) do
+            if p.isunknown then images:insert(p) end
+        end
+        self.Unknown = UnknownType(images)
+    end
+    return self.Unknown
 end
 
 function ProblemSpec:Function(name,unknownfunction, ...)
@@ -554,6 +567,84 @@ function ImageType:terratype()
     return Image
 end
 
+function UnknownType:init()
+    self.ispaces = List()
+    self.ispacetoimages,self.ispacesizes = {},{} -- IndexSpace -> ImageParam
+    for i,ip in ipairs(self.images) do
+        assert(ip.imagetype.scalartype == float, "unknowns must be floating point numbers")
+        local ispace = ip.imagetype.ispace
+        if not self.ispacetoimages[ispace] then
+            self.ispacetoimages[ispace],self.ispacesizes[ispace] = List(),0
+            self.ispaces:insert(ispace)
+        end
+        self.ispacetoimages[ispace]:insert(ip)
+        self.ispacesizes[ispace] = self.ispacesizes[ispace] + ip.imagetype.channelcount 
+    end
+end
+function UnknownType:IndexSpaces()
+    return self.ispaces
+end
+function UnknownType:VectorTypeForIndexSpace(ispace)
+    return util.Vector(float,assert(self.ispacesizes[ispace],"unused ispace"))
+end
+
+function UnknownType:terratype()
+    if self._terratype then return self._terratype end
+    self._terratype = terralib.types.newstruct("UnknownType")
+    local T = self._terratype
+    local images = self.images
+    for i,ip in ipairs(images) do
+        T.entries:insert { ip.name, ip.imagetype:terratype() }
+    end
+    terra T:initGPU()
+        escape
+            for i,ip in ipairs(images) do
+                emit quote self.[ip.name]:initGPU() end
+            end
+        end
+    end
+    for _,ispace in ipairs(self:IndexSpaces()) do
+        local Index = ispace:indextype()
+        local ispaceimages = self.ispacetoimages[ispace]
+        local VT = self:VectorTypeForIndexSpace(ispace)
+        terra T.metamethods.__apply(self : &T, idx : Index) : VT
+            var r : VT
+            escape
+                local off = 0
+                for _,im in ipairs(ispaceimages) do
+                    emit quote
+                        var d = self.[im.name](idx)
+                        for i = 0,im.imagetype.channelcount do
+                            r.data[off+i] = d.data[i]
+                        end
+                    end
+                    off = off + im.imagetype.channelcount
+                end
+            end
+            return r
+        end
+        terra T.metamethods.__update(self : &T, idx : Index, v : VT)
+            escape
+                local off = 0
+                for _,im in ipairs(ispaceimages) do
+                    emit quote
+                        var d : im.imagetype:ElementType()
+                        for i = 0,im.imagetype.channelcount do
+                            d.data[i] = v.data[off+i]
+                        end
+                        self.[im.name](idx) = d
+                    end
+                    off = off + im.imagetype.channelcount
+                end
+            end
+        end
+        self._terratype.metamethods.__apply:printpretty()
+        self._terratype.metamethods.__update:printpretty()
+    end
+    
+    return self._terratype
+end
+
 local unity = Dim("1",1)
 local function todim(d)
     return Dim:is(d) and d or d == 1 and unity
@@ -580,7 +671,7 @@ function ProblemSpec:Image(name,typ,ispace,idx)
         assert(#ispace > 0, "expected at least one dimension")
         ispace = IndexSpace(List(ispace)) 
     end
-    self:newparameter(ImageParam(self:ImageType(typ,ispace),name,idx))
+    self:newparameter(ImageParam(self:ImageType(typ,ispace),name == "X",name,idx))
 end
 
 
@@ -710,12 +801,12 @@ function ProblemSpecAD:Image(name,typ,dims,idx)
     local ispace = IndexSpace(List(dims))
     assert( (type(idx) == "number" and idx >= 0) or idx == "alloc", "expected an index number") -- alloc indicates that the solver should allocate the image as an intermediate
     self.P:Image(name,typ,ispace,idx)
-    local r = Image(name,self.P:ImageType(typ,ispace),idx,not util.isvectortype(typ))
+    local r = Image(name,self.P:ImageType(typ,ispace),idx,not util.isvectortype(typ),name == "X")
     self.nametoimage[name] = r
     return r
 end
 function ProblemSpecAD:ImageArgument(name,imagetype,argpos)
-    return Image(name,imagetype,-argpos,false)
+    return Image(name,imagetype,-argpos,false,false)
 end
 
 function Image:__tostring() return self.name end
@@ -1361,7 +1452,8 @@ local function createfunction(problemspec,name,Index,results,scatters)
     end
     local function imageref(image)
         if image.idx == "alloc" or image.idx >= 0 then
-            return `P.[image.name]
+            if image.isunknown then return `P.X.[image.name]
+            else return `P.[image.name] end
         else
             if not extraimages[-image.idx] then
                 extraimages[-image.idx] = symbol(image.type:terratype(),image.name)
@@ -1591,7 +1683,7 @@ end
 local noscatters = terralib.newlist()
 function ProblemSpecAD:createfunctionset(name,results,graphfunctions)
     results,graphfunctions = terralib.newlist(results), terralib.newlist(graphfunctions)
-    local ut = self.P:UnknownType()
+    local ut = self.P:UnknownType().images[1].imagetype
     dprint("function for: ",name)
     local centered = createfunction(self,name,ut.ispace:indextype(),results,noscatters)
     local args = terralib.newlist()
@@ -1906,7 +1998,7 @@ end
 
 function createprecomputed(self,name,precomputedimages)
     local scatters = terralib.newlist()
-    local ut = self.P:UnknownType()
+    local ut = self.P:UnknownType().images[1].imagetype
     
     local zoff = ut.ispace:ZeroOffset()
     
