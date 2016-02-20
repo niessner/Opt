@@ -179,6 +179,9 @@ ProblemSpecAD = ()
 SampledImage = (table op)
 GradientImage = (ImageAccess unknown, Exp expression, Image image)
 UnknownType = (ImageParam* images)
+ProblemFunctionType = CenteredFunction(IndexSpace ispace)
+                    | GraphFunction(string graphname)
+ProblemFunctions = (ProblemFunctionType typ, table functionmap)
 ]]
 local Dim,IndexSpace,Index,Offset,GraphElement,ImageType,Image,ImageVector,ProblemParam,ImageParam,ScalarParam,GraphParam,VarDef,ImageAccess,BoundsAccess,IndexValue,ParamValue,Graph,GraphFunctionSpec,Scatter,Condition,IRNode,ProblemSpec,ProblemSpecAD,SampledImage, GradientImage,UnknownType = 
       A.Dim,A.IndexSpace,A.Index,A.Offset,A.GraphElement,A.ImageType,A.Image,A.ImageVector,A.ProblemParam,A.ImageParam,A.ScalarParam,A.GraphParam,A.VarDef,A.ImageAccess,A.BoundsAccess,A.IndexValue,A.ParamValue,A.Graph,A.GraphFunctionSpec,A.Scatter,A.Condition,A.IRNode,A.ProblemSpec,A.ProblemSpecAD,A.SampledImage,A.GradientImage,A.UnknownType
@@ -189,7 +192,7 @@ function opt.ProblemSpec()
     local ps = ProblemSpec()
     ps.parameters = terralib.newlist() -- ProblemParam*
     ps.names = {} -- name -> index in parameters list
-    ps.functions = {}
+    ps.functions = List() -- ProblemFunctions*
 	ps.maxStencil = 0
 	ps.stage = "inputs"
 	ps.usepreconditioner = false
@@ -255,30 +258,32 @@ function ProblemSpec:UnknownType()
     return self.Unknown
 end
 
-function ProblemSpec:Function(name,unknownfunction, ...)
+function A.CenteredFunction:__tostring() return tostring(self.ispace) end
+function A.GraphFunction:__tostring() return tostring(self.graphname) end
+
+function ProblemSpec:Functions(ft, functions)
     self:Stage "functions"
-    unknownfunction:gettype() -- check this typechecks
-    local graphfunctions = terralib.newlist()
-    for i = 1,select("#",...),2 do
-        local graphname, implementation =  select(i,...)
-        implementation:gettype()
-        graphfunctions:insert { graphname = graphname, implementation = implementation }
+    for k,v in pairs(functions) do
+        v:gettype() -- check they typecheck now
     end
-    self.functions[name] = { name = name, unknownfunction = unknownfunction, graphfunctions = graphfunctions }
+    if type(ft) == "string" then
+        local idx = assert(self.names[ft],"graph not defined")
+        assert(self.parameters[idx].kind == "GraphParam","expected a valid graph name")
+        ft = A.GraphFunction(ft)
+        self.usesgraphs = true
+    else
+        ft = A.CenteredFunction(ft)
+    end
+    if not functions.exclude then
+        functions.exclude = macro(function() return `false end)
+    end
+    self.functions:insert(A.ProblemFunctions(ft, functions))
 end
+function ProblemSpec:UsesGraphs() return self.usesgraphs or false end
 
 function ProblemSpec:Param(name,typ,idx)
     self:Stage "inputs"
     self:newparameter(ScalarParam(typ,name,idx))
-end
-
-function ProblemSpec:EvalExclude(...)
-    local args = {...}
-    if self.functions.exclude then
-        return `bool(self.functions.exclude.unknownfunction(args))
-    else
-        return `false
-    end
 end
 
 function Dim:__tostring() return "Dim("..self.name..")" end
@@ -296,6 +301,11 @@ function IndexSpace:cardinality()
     end
     return c
 end
+function IndexSpace:init()
+    self._string = self.dims:map(function(x) return x.name end):concat("_")
+end
+function IndexSpace:__tostring() return self._string end
+
 function IndexSpace:ZeroOffset()
     if self._zerooffset then return self._zerooffset end
     local zeros = terralib.newlist()
@@ -665,13 +675,18 @@ function ProblemSpec:ImageType(typ,ispace)
     return ImageType(ispace,scalartype,channelcount) 
 end
 
-function ProblemSpec:Image(name,typ,ispace,idx)
-    self:Stage "inputs"
+local function toispace(ispace)
     if not IndexSpace:is(ispace) then -- for handwritten API
         assert(#ispace > 0, "expected at least one dimension")
         ispace = IndexSpace(List(ispace)) 
     end
-    self:newparameter(ImageParam(self:ImageType(typ,ispace),name == "X",name,idx))
+    return ispace
+end
+
+
+function ProblemSpec:Image(name,typ,ispace,idx)
+    self:Stage "inputs"
+    self:newparameter(ImageParam(self:ImageType(typ,toispace(ispace)),name == "X",name,idx))
 end
 
 
@@ -685,7 +700,7 @@ function ProblemSpec:Graph(name, idx, ...)
     mm.elements = terralib.newlist()
     for i = 1, select("#",...),3 do
         local name,dims,didx = select(i,...) --TODO: we don't bother to track the dimensions of these things now
-        local ispace = IndexSpace(List(dims))
+        local ispace = toispace(dims)
         local Index = ispace:indextype()
         GraphType.entries:insert {name, &Index}
         mm.elements:insert( { name = name, type = Index, idx = assert(tonumber(didx))} )
@@ -797,8 +812,7 @@ function ProblemSpecAD:Image(name,typ,dims,idx)
     if not terralib.types.istype(typ) then
         typ,ispace,idx = float,typ,ispace --shift arguments left
     end
-    assert(#dims > 0,"expected at least one dimension")
-    local ispace = IndexSpace(List(dims))
+    local ispace = toispace(dims)
     assert( (type(idx) == "number" and idx >= 0) or idx == "alloc", "expected an index number") -- alloc indicates that the solver should allocate the image as an intermediate
     self.P:Image(name,typ,ispace,idx)
     local r = Image(name,self.P:ImageType(typ,ispace),idx,not util.isvectortype(typ),name == "X")
@@ -2112,5 +2126,5 @@ for i = 2,12 do
 end
 
 opt.Dot = util.Dot
-
+opt.toispace = toispace
 return opt

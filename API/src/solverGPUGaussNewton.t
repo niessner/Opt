@@ -16,11 +16,10 @@ local FLOAT_EPSILON = `0.000001f
 return function(problemSpec)
 
     local UnknownType = problemSpec:UnknownType()
-	local unknownElement = UnknownType.images[1].imagetype:ElementType()
 	local TUnknownType = UnknownType:terratype()
-	local UnknownIndexSpace = UnknownType:IndexSpaces()[1]
-    local Index = UnknownIndexSpace:indextype()
-    local isGraph = #problemSpec.functions.cost.graphfunctions > 0
+	
+	
+    local isGraph = problemSpec:UsesGraphs() 
     
     local struct PlanData(S.Object) {
 		plan : opt.Plan
@@ -53,241 +52,231 @@ return function(problemSpec)
 		lIterations : int		--linear iterations
 	}
 	
-	local terra guardedInvert(p : unknownElement)
-	    var invp = p
-	    for i = 0, invp:size() do
-	        invp(i) = terralib.select(invp(i) > FLOAT_EPSILON, 1.f / invp(i),invp(i))
-	    end
-	    return invp
-	end
+	local delegate = {}
 	
-    local kernels = {}
-    terra kernels.PCGInit1(pd : PlanData)
-        var d = 0.0f -- init for out of bounds lanes
+	function delegate.CenterFunctions(UnknownIndexSpace,fmap)
+	    local kernels = {}
+	    local unknownElement = UnknownType:VectorTypeForIndexSpace(UnknownIndexSpace)
+	    local Index = UnknownIndexSpace:indextype()
+
+        local terra guardedInvert(p : unknownElement)
+            var invp = p
+            for i = 0, invp:size() do
+                invp(i) = terralib.select(invp(i) > FLOAT_EPSILON, 1.f / invp(i),invp(i))
+            end
+            return invp
+        end
+	
+        terra kernels.PCGInit1(pd : PlanData)
+            var d = 0.0f -- init for out of bounds lanes
         
-        var idx : Index
-        if idx:initFromCUDAParams() then
+            var idx : Index
+            if idx:initFromCUDAParams() then
         
-            -- residuum = J^T x -F - A x delta_0  => J^T x -F, since A x x_0 == 0                            
-            var residuum : unknownElement = 0.0f
-            var pre : unknownElement = 0.0f	
-			
-            if (not [problemSpec:EvalExclude(idx,`pd.parameters)]) then 
+                -- residuum = J^T x -F - A x delta_0  => J^T x -F, since A x x_0 == 0                            
+                var residuum : unknownElement = 0.0f
+                var pre : unknownElement = 0.0f	
+            
+                if not fmap.exclude(idx,pd.parameters) then 
                 
-				pd.delta(idx) = 0.0f    
-				
-                residuum, pre = problemSpec.functions.evalJTF.unknownfunction(idx, pd.parameters)
-                residuum = -residuum
-                pd.r(idx) = residuum
-				
-				if not problemSpec.usepreconditioner then
-					pre = 1.0f
-				end
-            end        
-            
-			if not isGraph then				
-				pre = guardedInvert(pre)
-				var p = pre*residuum	-- apply pre-conditioner M^-1			   
-				pd.p(idx) = p
-				
-				--d = residuum*p		-- x-th term of nominator for computing alpha and denominator for computing beta
-				d = residuum:dot(p) 
-			end
-			
-			pd.preconditioner(idx) = pre
-			
-        end 
-		if not isGraph then
-			d = util.warpReduce(d)	
-			if (util.laneid() == 0) then				
-				util.atomicAdd(pd.scanAlphaNumerator, d)
-			end
-		end
-    end
-    
-    terra kernels.PCGInit1_Graph(pd : PlanData)
-		var tIdx = 0 	
-		escape 
-	    	for i,func in ipairs(problemSpec.functions.evalJTF.graphfunctions) do
-				local name,implementation = func.graphname,func.implementation
-				emit quote 
-	    			if util.getValidGraphElement(pd,[name],&tIdx) then
-						implementation(tIdx, pd.parameters, pd.r, pd.preconditioner)
-	    			end 
-				end
-    		end
-    	end
-    end
-
-    terra kernels.PCGInit1_Finish(pd : PlanData)	--only called for graphs
-    	var d = 0.0f -- init for out of bounds lanes
-        var idx : Index
-        if idx:initFromCUDAParams() then
-        	var residuum = pd.r(idx)			
-			var pre = pd.preconditioner(idx)
-			
-			pre = guardedInvert(pre)
-			
-			if not problemSpec.usepreconditioner then
-				pre = 1.0f
-			end
-			
-			var p = pre*residuum	-- apply pre-conditioner M^-1			   
-			pd.p(idx) = p
-        	d = residuum:dot(p)
-        end
-
-		d = util.warpReduce(d)	
-        if (util.laneid() == 0) then
-            util.atomicAdd(pd.scanAlphaNumerator, d)
-        end
-	end
-	
-    terra kernels.PCGStep1(pd : PlanData)
-        var d = 0.0f
-        var idx : Index
-        if idx:initFromCUDAParams() and (not [problemSpec:EvalExclude(idx,`pd.parameters)]) then
-            var tmp : unknownElement = 0.0f
-             -- A x p_k  => J^T x J x p_k 
-            tmp = problemSpec.functions.applyJTJ.unknownfunction(idx, pd.parameters, pd.p.X)
-            pd.Ap_X(idx) = tmp					 -- store for next kernel call
-            d = pd.p(idx):dot(tmp)			 -- x-th term of denominator of alpha
-        end
-        d = util.warpReduce(d)
-        if (util.laneid() == 0) then
-            util.atomicAdd(pd.scanAlphaDenominator, d)
-        end
-    end
-	
-	terra kernels.PCGStep1_Graph(pd : PlanData)
-		var d = 0.0f
-		var tIdx = 0 	
-        escape 
-			for i,func in ipairs(problemSpec.functions.applyJTJ.graphfunctions) do
-				local name,implementation = func.graphname,func.implementation
-				emit quote 
-				    if util.getValidGraphElement(pd,[name],&tIdx) then
-				        d = d + implementation(tIdx, pd.parameters, pd.p, pd.Ap_X)
-				    end 
-				end
-			end
-		end
-		d = util.warpReduce(d)
-        if (util.laneid() == 0) then
-            util.atomicAdd(pd.scanAlphaDenominator, d)
-        end
-    end
-
-	
-	terra kernels.PCGStep2(pd : PlanData)
-        var b = 0.0f 
-        var idx : Index
-        if idx:initFromCUDAParams() and (not [problemSpec:EvalExclude(idx,`pd.parameters)]) then
-            -- sum over block results to compute denominator of alpha
-            var alphaDenominator : float = pd.scanAlphaDenominator[0]
-			var alphaNumerator : float = pd.scanAlphaNumerator[0]
-                        
-            -- update step size alpha
-			var alpha = 0.0f
-            if alphaDenominator > FLOAT_EPSILON then 
-				alpha = alphaNumerator/alphaDenominator 
-			end 
-        
-            pd.delta(idx) = pd.delta(idx)+alpha*pd.p(idx)		-- do a decent step
-            
-            var r = pd.r(idx)-alpha*pd.Ap_X(idx)				-- update residuum
-            pd.r(idx) = r										-- store for next kernel call
-        
-			var pre = pd.preconditioner(idx)
-			if not problemSpec.usepreconditioner then
-				pre = 1.0f
-			end
-			
-			if isGraph then
-				pre = guardedInvert(pre)
-			end
-			
-            var z = pre*r										-- apply pre-conditioner M^-1
-            pd.z(idx) = z;										-- save for next kernel call
-            
-            b = z:dot(r)									-- compute x-th term of the numerator of beta
-        end
-        b = util.warpReduce(b)
-        if (util.laneid() == 0) then
-            util.atomicAdd(pd.scanBetaNumerator, b)
-        end
-    end
-	
-    terra kernels.PCGStep3(pd : PlanData)			
-        var idx : Index
-        if idx:initFromCUDAParams() and (not [problemSpec:EvalExclude(idx,`pd.parameters)])  then
-			
-			var rDotzNew : float = pd.scanBetaNumerator[0]				-- get new numerator
-			var rDotzOld : float = pd.scanAlphaNumerator[0]				-- get old denominator
-
-			var beta : float = 0.0f		                    
-			if rDotzOld > FLOAT_EPSILON then beta = rDotzNew/rDotzOld end	-- update step size beta
-			pd.p(idx) = pd.z(idx)+beta*pd.p(idx)							-- update decent direction
-
-        end
-    end
-	
-	terra kernels.PCGLinearUpdate(pd : PlanData)
-        var idx : Index
-        if idx:initFromCUDAParams() and (not [problemSpec:EvalExclude(idx,`pd.parameters)])  then
-            pd.parameters.X(idx) = pd.parameters.X(idx) + pd.delta(idx)
-        end
-    end	
-	
-	terra kernels.computeCost(pd : PlanData)			
-        var cost : float = 0.0f
-        var idx : Index
-        if idx:initFromCUDAParams() and (not [problemSpec:EvalExclude(idx,`pd.parameters)])  then
-            var params = pd.parameters				
-            cost = cost + [float](problemSpec.functions.cost.unknownfunction(idx, params))
-        end
-
-        cost = util.warpReduce(cost)
-        if (util.laneid() == 0) then
-            util.atomicAdd(pd.scratchF, cost)
-        end
-    end
-	
-	terra kernels.computeCost_Graph(pd : PlanData)			
-        var cost : float = 0.0f
-		
-		var tIdx = 0 	
-        escape 
-			for i,func in ipairs(problemSpec.functions.cost.graphfunctions) do
-				local name,implementation = func.graphname,func.implementation
-				emit quote 
-				    if util.getValidGraphElement(pd,[name],&tIdx) then
-				        cost = cost + implementation(tIdx, pd.parameters)
-				    end 
-				end
-			end
-		end
-		
-        cost = util.warpReduce(cost)
-        if (util.laneid() == 0) then
-            util.atomicAdd(pd.scratchF, cost)
-        end
-    end
-    
-    terra kernels.precomputeImages(pd : PlanData)
-        var idx : Index
-        if idx:initFromCUDAParams() then
-            escape
-                if problemSpec.functions.precompute then
-                    emit quote 
-                        problemSpec.functions.precompute.unknownfunction(idx,pd.parameters)
+                    pd.delta(idx) = 0.0f    
+                
+                    residuum, pre = fmap.evalJTF(idx, pd.parameters)
+                    residuum = -residuum
+                    pd.r(idx) = residuum
+                
+                    if not problemSpec.usepreconditioner then
+                        pre = 1.0f
                     end
+                end        
+            
+                if not isGraph then				
+                    pre = guardedInvert(pre)
+                    var p = pre*residuum	-- apply pre-conditioner M^-1			   
+                    pd.p(idx) = p
+                
+                    d = residuum:dot(p) 
+                end
+            
+                pd.preconditioner(idx) = pre
+            
+            end 
+            if not isGraph then
+                d = util.warpReduce(d)	
+                if (util.laneid() == 0) then				
+                    util.atomicAdd(pd.scanAlphaNumerator, d)
                 end
             end
         end
-    end
     
-	local gpu = util.makeGPUFunctions(problemSpec, PlanData, kernels)
+        terra kernels.PCGInit1_Finish(pd : PlanData)	--only called for graphs
+            var d = 0.0f -- init for out of bounds lanes
+            var idx : Index
+            if idx:initFromCUDAParams() then
+                var residuum = pd.r(idx)			
+                var pre = pd.preconditioner(idx)
+            
+                pre = guardedInvert(pre)
+            
+                if not problemSpec.usepreconditioner then
+                    pre = 1.0f
+                end
+            
+                var p = pre*residuum	-- apply pre-conditioner M^-1			   
+                pd.p(idx) = p
+                d = residuum:dot(p)
+            end
+
+            d = util.warpReduce(d)	
+            if (util.laneid() == 0) then
+                util.atomicAdd(pd.scanAlphaNumerator, d)
+            end
+        end
+        terra kernels.PCGStep1(pd : PlanData)
+            var d = 0.0f
+            var idx : Index
+            if idx:initFromCUDAParams() and not fmap.exclude(idx,pd.parameters) then
+                var tmp : unknownElement = 0.0f
+                 -- A x p_k  => J^T x J x p_k 
+                tmp = fmap.applyJTJ(idx, pd.parameters, pd.p)
+                pd.Ap_X(idx) = tmp					 -- store for next kernel call
+                d = pd.p(idx):dot(tmp)			 -- x-th term of denominator of alpha
+            end
+            d = util.warpReduce(d)
+            if (util.laneid() == 0) then
+                util.atomicAdd(pd.scanAlphaDenominator, d)
+            end
+        end
+        terra kernels.PCGStep2(pd : PlanData)
+            var b = 0.0f 
+            var idx : Index
+            if idx:initFromCUDAParams() and not fmap.exclude(idx,pd.parameters) then
+                -- sum over block results to compute denominator of alpha
+                var alphaDenominator : float = pd.scanAlphaDenominator[0]
+                var alphaNumerator : float = pd.scanAlphaNumerator[0]
+                    
+                -- update step size alpha
+                var alpha = 0.0f
+                if alphaDenominator > FLOAT_EPSILON then 
+                    alpha = alphaNumerator/alphaDenominator 
+                end 
+    
+                pd.delta(idx) = pd.delta(idx)+alpha*pd.p(idx)		-- do a decent step
+        
+                var r = pd.r(idx)-alpha*pd.Ap_X(idx)				-- update residuum
+                pd.r(idx) = r										-- store for next kernel call
+    
+                var pre = pd.preconditioner(idx)
+                if not problemSpec.usepreconditioner then
+                    pre = 1.0f
+                end
+        
+                if isGraph then
+                    pre = guardedInvert(pre)
+                end
+        
+                var z = pre*r										-- apply pre-conditioner M^-1
+                pd.z(idx) = z;										-- save for next kernel call
+        
+                b = z:dot(r)									-- compute x-th term of the numerator of beta
+            end
+            b = util.warpReduce(b)
+            if (util.laneid() == 0) then
+                util.atomicAdd(pd.scanBetaNumerator, b)
+            end
+        end
+        terra kernels.PCGStep3(pd : PlanData)			
+            var idx : Index
+            if idx:initFromCUDAParams() and not fmap.exclude(idx,pd.parameters) then
+            
+                var rDotzNew : float = pd.scanBetaNumerator[0]				-- get new numerator
+                var rDotzOld : float = pd.scanAlphaNumerator[0]				-- get old denominator
+
+                var beta : float = 0.0f		                    
+                if rDotzOld > FLOAT_EPSILON then beta = rDotzNew/rDotzOld end	-- update step size beta
+                pd.p(idx) = pd.z(idx)+beta*pd.p(idx)							-- update decent direction
+
+            end
+        end
+    
+        terra kernels.PCGLinearUpdate(pd : PlanData)
+            var idx : Index
+            if idx:initFromCUDAParams() and not fmap.exclude(idx,pd.parameters) then
+                pd.parameters.X(idx) = pd.parameters.X(idx) + pd.delta(idx)
+            end
+        end	
+    
+        terra kernels.computeCost(pd : PlanData)			
+            var cost : float = 0.0f
+            var idx : Index
+            if idx:initFromCUDAParams() and not fmap.exclude(idx,pd.parameters) then
+                var params = pd.parameters				
+                cost = cost + [float](fmap.cost(idx, params))
+            end
+
+            cost = util.warpReduce(cost)
+            if (util.laneid() == 0) then
+                util.atomicAdd(pd.scratchF, cost)
+            end
+        end
+        
+        if fmap.precompute then
+            terra kernels.precompute(pd : PlanData)
+                var idx : Index
+                if idx:initFromCUDAParams() then
+                   fmap.precompute(idx,pd.parameters)
+                end
+            end
+        end
+        
+	    return kernels
+	end
+	
+	function delegate.GraphFunctions(graphname,fmap)
+	    local kernels = {}
+        terra kernels.PCGInit1_Graph(pd : PlanData)
+            var tIdx = 0
+            if util.getValidGraphElement(pd,[graphname],&tIdx) then
+                fmap.evalJTF(tIdx, pd.parameters, pd.r, pd.preconditioner)
+            end
+        end    
+        
+    	terra kernels.PCGStep1_Graph(pd : PlanData)
+            var d = 0.0f
+            var tIdx = 0 
+            if util.getValidGraphElement(pd,[graphname],&tIdx) then
+               d = d + fmap.applyJTJ(tIdx, pd.parameters, pd.p, pd.Ap_X)
+            end 
+            d = util.warpReduce(d)
+            if (util.laneid() == 0) then
+                util.atomicAdd(pd.scanAlphaDenominator, d)
+            end
+        end
+        terra kernels.computeCost_Graph(pd : PlanData)			
+            var cost : float = 0.0f
+            var tIdx = 0
+            if util.getValidGraphElement(pd,[graphname],&tIdx) then
+                cost = cost + fmap.cost(tIdx, pd.parameters)
+            end 
+            cost = util.warpReduce(cost)
+            if (util.laneid() == 0) then
+                util.atomicAdd(pd.scratchF, cost)
+            end
+        end
+	    return kernels
+	end
+	
+	local gpu = util.makeGPUFunctions(problemSpec, PlanData, delegate, {"PCGInit1",
+                                                                        "PCGInit1_Finish",
+                                                                        "PCGStep1",
+                                                                        "PCGStep2",
+                                                                        "PCGStep3",
+                                                                        "PCGLinearUpdate",
+                                                                        "computeCost",
+                                                                        "precompute",
+                                                                        "PCGInit1_Graph",
+                                                                        "PCGStep1_Graph",
+                                                                        "computeCost_Graph"})
 
 	local terra init(data_ : &opaque, params_ : &&opaque, solverparams : &&opaque)
 	   var pd = [&PlanData](data_)
@@ -310,7 +299,7 @@ return function(problemSpec)
 	local terra step(data_ : &opaque, params_ : &&opaque, solverparams : &&opaque)
 		var pd = [&PlanData](data_)
 		[util.initParameters(`pd.parameters,problemSpec, params_,false)]
-        gpu.precomputeImages(pd)    
+        gpu.precompute(pd)    
 		if pd.nIter < pd.nIterations then
 		    var startCost = computeCost(pd)
 			logSolver("iteration %d, cost=%f\n", pd.nIter, startCost)

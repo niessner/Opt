@@ -496,90 +496,112 @@ local cd = macro(function(cufunc)
     end
 end)
 
-function util.makeGPUFunctions(problemSpec, PlanData, kernels)
-	
-	local wrappedKernels = {}
-	
-	local imageType = problemSpec:UnknownType().images[1].imagetype
-	local ispace = imageType.ispace
-	local dimcount = #ispace.dims
-	 assert(dimcount <= 3, "cannot launch over images with more than 3 dims")
-	 
-	local kernelFunctions = {}
-	local key = "_"..tostring(os.time())
-	local grid_sizes = { {256,1,1}, {16,16,1}, {8,8,4} }
-	for k,v in pairs(kernels) do
-	    kernelFunctions[k..key] = { kernel = v , annotations = { {"maxntidx", grid_sizes[dimcount][1]}, {"maxntidy", grid_sizes[dimcount][2]}, {"maxntidz", grid_sizes[dimcount][3]}, {"minctasm",1} } }
-	end
-	local compiledKernels = terralib.cudacompile(kernelFunctions, false)
-	
-	local function makeGPULauncher(kernelName,compiledKernel)
-        local kernelparams = compiledKernel:gettype().parameters
-        local params = terralib.newlist {}
-        for i = 3,#kernelparams do --skip GPU launcher and PlanData
-            params:insert(symbol(kernelparams[i]))
-        end
-        local function createLaunchParameters(pd)
-            if not kernelName:match("_Graph$") then
-                local exps = terralib.newlist()
-                
-                for i = 1,3 do
-                   local dim = dimcount >= i and ispace.dims[i].size or 1
-                    local bs = grid_sizes[#ispace.dims][i]
-                    exps:insert(dim)
-                    exps:insert(bs)
-                end
-                return exps
-            else
-                return quote
-                    var N = 0
-                    escape
-                        for i,gf in ipairs(problemSpec.functions.cost.graphfunctions) do
-                            local name = gf.graphname
-                            emit quote
-                                if N < pd.parameters.[name].N then
-                                    N = pd.parameters.[name].N
-                                end
-                            end
-                        end
-                    end
-                in 
-                    N,256,1,1,1,1
-                end
-            end
-        end
-        local terra GPULauncher(pd : &PlanData, [params])
-            var xdim,xblock,ydim,yblock,zdim,zblock = [ createLaunchParameters(pd) ]
-            if xdim == 0 then -- early out for 0-sized kernels
-                return 0
-            end
-                
-            var launch = terralib.CUDAParams { (xdim - 1) / xblock + 1, (ydim - 1) / yblock + 1, (zdim - 1) / zblock + 1, 
-                                                xblock, yblock, zblock, 
-                                                0, nil }
-            var stream : C.cudaStream_t = nil
-            var endEvent : C.cudaEvent_t 
-            if ([timeIndividualKernels]) then
-                pd.timer:startEvent(kernelName,nil,&endEvent)
-            end
 
-            cd(compiledKernel(&launch, @pd, params))
-            
-            if ([timeIndividualKernels]) then
-                pd.timer:endEvent(nil,endEvent)
-            end
+local GRID_SIZES = { {256,1,1}, {16,16,1}, {8,8,4} }
 
-            cd(C.cudaGetLastError())
-        end
-	    return GPULauncher
+
+local function makeGPULauncher(PlanData,kernelName,ft,compiledKernel)
+    kernelName = kernelName.."_"..tostring(ft)
+    local kernelparams = compiledKernel:gettype().parameters
+    local params = terralib.newlist {}
+    for i = 3,#kernelparams do --skip GPU launcher and PlanData
+        params:insert(symbol(kernelparams[i]))
     end
-	
-	local gpu = {}
-	for k, v in pairs(kernels) do
-		gpu[k] = makeGPULauncher(k, compiledKernels[k..key])
-	end
-	
-	return gpu
+    local function createLaunchParameters(pd)
+        if ft.kind == "CenteredFunction" then
+            local ispace = ft.ispace
+            local exps = terralib.newlist()
+            for i = 1,3 do
+               local dim = #ispace.dims >= i and ispace.dims[i].size or 1
+                local bs = GRID_SIZES[#ispace.dims][i]
+                exps:insert(dim)
+                exps:insert(bs)
+            end
+            return exps
+        else
+            return {`pd.parameters.[ft.graphname].N,256,1,1,1,1}
+        end
+    end
+    local terra GPULauncher(pd : &PlanData, [params])
+        var xdim,xblock,ydim,yblock,zdim,zblock = [ createLaunchParameters(pd) ]
+            
+        var launch = terralib.CUDAParams { (xdim - 1) / xblock + 1, (ydim - 1) / yblock + 1, (zdim - 1) / zblock + 1, 
+                                            xblock, yblock, zblock, 
+                                            0, nil }
+        var stream : C.cudaStream_t = nil
+        var endEvent : C.cudaEvent_t 
+        if ([timeIndividualKernels]) then
+            pd.timer:startEvent(kernelName,nil,&endEvent)
+        end
+
+        cd(compiledKernel(&launch, @pd, params))
+        
+        if ([timeIndividualKernels]) then
+            pd.timer:endEvent(nil,endEvent)
+        end
+
+        cd(C.cudaGetLastError())
+    end
+    return GPULauncher
+end
+
+function util.makeGPUFunctions(problemSpec, PlanData, delegate, names)
+    -- step 1: compile the actual cuda kernels
+    local kernelFunctions = {}
+    local key = tostring(os.time())
+    local function getkname(name,ft)
+        return string.format("%s_%s_%s",name,tostring(ft),key)
+    end
+    
+    for _,problemfunction in ipairs(problemSpec.functions) do
+        if problemfunction.typ.kind == "CenteredFunction" then
+           local ispace = problemfunction.typ.ispace
+           local dimcount = #ispace.dims
+	       assert(dimcount <= 3, "cannot launch over images with more than 3 dims")
+           local ks = delegate.CenterFunctions(ispace,problemfunction.functionmap)
+           for name,func in pairs(ks) do
+                kernelFunctions[getkname(name,problemfunction.typ)] = { kernel = func , annotations = { {"maxntidx", GRID_SIZES[dimcount][1]}, {"maxntidy", GRID_SIZES[dimcount][2]}, {"maxntidz", GRID_SIZES[dimcount][3]}, {"minctasm",1} } }
+           end
+        else
+            local graphname = problemfunction.typ.graphname
+            local ks = delegate.GraphFunctions(graphname,problemfunction.functionmap)
+            for name,func in pairs(ks) do
+                kernelFunctions[getkname(name,problemfunction.typ)] = { kernel = func , annotations = { {"maxntidx", 256}, {"minctasm",1} } }
+            end
+        end
+    end
+    
+    local kernels = terralib.cudacompile(kernelFunctions, false)
+    
+    -- step 2: generate wrapper functions around each named thing
+    local grouplaunchers = {}
+    for _,name in ipairs(names) do
+        local args
+        local launches = terralib.newlist()
+        for _,problemfunction in ipairs(problemSpec.functions) do
+            local kname = getkname(name,problemfunction.typ)
+            local kernel = kernels[kname]
+            if kernel then -- some domains do not have an associated kernel, (see _Finish kernels in GN which are only defined for 
+                local launcher = makeGPULauncher(PlanData, name, problemfunction.typ, kernel)
+                if not args then
+                    args = launcher:gettype().parameters:map(symbol)
+                end
+                launches:insert(`launcher(args))
+            else
+                print("not found: "..name.." for "..tostring(problemfunction.typ))
+            end
+        end
+        local fn
+        if not args then
+            fn = macro(function() return `{} end) -- dummy function for blank groups occur for things like precompute and _Graph when they are not present
+        else
+            fn = terra([args]) launches end
+            fn:setname(name)
+            fn:gettype()
+        end
+        grouplaunchers[name] = fn 
+    end
+    return grouplaunchers
 end
 
 return util

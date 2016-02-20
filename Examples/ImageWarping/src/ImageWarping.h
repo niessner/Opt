@@ -14,7 +14,7 @@
 
 static bool useCUDA = true;
 static bool useTerra = true;
-static bool useAD = true;
+static bool useAD = false;
 static bool useCeres = false;
 
 static bool earlyOut = true;

@@ -14,9 +14,10 @@ local w_regSqrt = P:Param("w_regSqrt", float, 5)
 P:Stencil(2)
 P:UsePreconditioner(true)
 
-local TUnknownType = P:UnknownType().images[1].imagetype:terratype()
-local unknownElement = P:UnknownType().images[1].imagetype:ElementType()
-local Index = P:UnknownType():IndexSpaces()[1]:indextype()
+local WH = opt.toispace {W,H}
+
+local TUnknownType = P:UnknownType():terratype()
+local Index = WH:indextype()
 
 local C = terralib.includecstring [[
 #include <math.h>
@@ -84,7 +85,7 @@ local terra evalR_dR(angle : float)
 	return eval_dR(opt.math.cos(angle), opt.math.sin(angle))
 end
 
-
+local F = {}
 
 
 local terra costEpsilon(idx : Index, self : P:ParameterType(), eps : float_3) : float
@@ -141,7 +142,7 @@ end
 
 
 
-local terra cost(idx : Index, self : P:ParameterType()) : float
+terra F.cost(idx : Index, self : P:ParameterType()) : float
 	return costEpsilon(idx, self, make_float3(0.0f, 0.0f, 0.0f))
 end
 
@@ -149,7 +150,7 @@ end
 
 
 -- eval 2*JtF == \nabla(F); eval diag(2*(Jt)^2) == pre-conditioner
-local terra evalJTF(idx : Index, self : P:ParameterType())
+terra F.evalJTF(idx : Index, self : P:ParameterType())
 	var b = make_float2(0.0f, 0.0f)
 	var bA = 0.0f
 	var pre = make_float2(0.0f, 0.0f)
@@ -322,17 +323,17 @@ end
 
 
 -- eval 2*JtF == \nabla(F); eval diag(2*(Jt)^2) == pre-conditioner
-local terra gradient(idx : Index, self : P:ParameterType())
-	return evalJTF(idx, self)._0
+terra F.gradient(idx : Index, self : P:ParameterType())
+	return F.evalJTF(idx, self)._0
 end
 	
 local terra getP(pImage : TUnknownType, idx : Index) 
-	var p = pImage(idx)
+	var p = pImage.X(idx)
 	return make_float2(p(0), p(1))
 end
 
 -- eval 2*JtJ (note that we keep the '2' to make it consistent with the gradient
-local terra applyJTJ(idx : Index, self : P:ParameterType(), pImage : TUnknownType)
+terra F.applyJTJ(idx : Index, self : P:ParameterType(), pImage : TUnknownType)
  	var b = make_float2(0.0f, 0.0f)
 	var bA = 0.0f
 
@@ -419,7 +420,7 @@ local terra applyJTJ(idx : Index, self : P:ParameterType(), pImage : TUnknownTyp
 	-- angle/reg
 	var e_reg_angle = 0.0f;
 	var dR : float2x2 = evalR_dR(self.X.X(idx)(2))
-	var angleP = pImage(idx)(2)
+	var angleP = pImage.X(idx)(2)
 	var pHat : float_2 = self.UrShape(idx)
 		
 	if valid0 then
@@ -458,10 +459,10 @@ local terra applyJTJ(idx : Index, self : P:ParameterType(), pImage : TUnknownTyp
 		var D_j : float_2	= mul(dR_j,(pHat - qHat))
 		--e_reg = e_reg + (D*pImage(idx)(2) - D_j*pImage(ni,nj)(2))
 		if m0 then 
-			e_reg = e_reg + D*pImage(idx)(2)
+			e_reg = e_reg + D*pImage.X(idx)(2)
 		end
 		if m then
-			e_reg = e_reg - D_j*pImage(idx(ni,nj))(2)
+			e_reg = e_reg - D_j*pImage.X(idx(ni,nj))(2)
 		end
 	end
 	if b1 then
@@ -473,10 +474,10 @@ local terra applyJTJ(idx : Index, self : P:ParameterType(), pImage : TUnknownTyp
 		var D_j : float_2	= mul(dR_j,(pHat - qHat))
 		--e_reg = e_reg + (D*pImage(idx)(2) - D_j*pImage(ni,nj)(2))
 		if m1 then 
-			e_reg = e_reg + D*pImage(idx)(2)
+			e_reg = e_reg + D*pImage.X(idx)(2)
 		end
 		if m then
-			e_reg = e_reg - D_j*pImage(idx(ni,nj))(2)
+			e_reg = e_reg - D_j*pImage.X(idx(ni,nj))(2)
 		end
 	end
 	if b2 then
@@ -488,10 +489,10 @@ local terra applyJTJ(idx : Index, self : P:ParameterType(), pImage : TUnknownTyp
 		var D_j : float_2	= mul(dR_j,(pHat - qHat))
 		--e_reg = e_reg + (D*pImage(idx)(2) - D_j*pImage(ni,nj)(2))
 		if m2 then 
-			e_reg = e_reg + D*pImage(idx)(2)
+			e_reg = e_reg + D*pImage.X(idx)(2)
 		end
 		if m then
-			e_reg = e_reg - D_j*pImage(idx(ni,nj))(2)
+			e_reg = e_reg - D_j*pImage.X(idx(ni,nj))(2)
 		end
 	end
 	if b3 then
@@ -503,10 +504,10 @@ local terra applyJTJ(idx : Index, self : P:ParameterType(), pImage : TUnknownTyp
 		var D_j : float_2	= mul(dR_j,(pHat - qHat))
 		--e_reg = e_reg + (D*pImage(idx)(2) - D_j*pImage(ni,nj)(2))
 		if m3 then 
-			e_reg = e_reg + D*pImage(idx)(2)
+			e_reg = e_reg + D*pImage.X(idx)(2)
 		end
 		if m then
-			e_reg = e_reg - D_j*pImage(idx(ni,nj))(2)
+			e_reg = e_reg - D_j*pImage.X(idx(ni,nj))(2)
 		end
 	end
 	b = b + (2.0f*self.w_regSqrt*self.w_regSqrt)*e_reg
@@ -551,10 +552,6 @@ local terra applyJTJ(idx : Index, self : P:ParameterType(), pImage : TUnknownTyp
 	return make_float3(b(0), b(1), bA)
 end
 
-P:Function("cost", cost)
-P:Function("gradient", gradient)
-P:Function("evalJTF", evalJTF)
-P:Function("evalJTFNumeric", evalJTFNumeric)
-P:Function("applyJTJ", applyJTJ)
+P:Functions(WH, F)
 
 return P
