@@ -172,14 +172,15 @@ IRNode = vectorload(ImageAccess value, number count)
        | const(number value)
        | vardecl(number constant)
        | varuse(IRNode* children)
-       | apply(string op, function generator, IRNode * children)
+       | apply(string op, function generator, IRNode * children, number? const)
          attributes (TerraType type, Shape shape, Condition? condition)
 ProblemSpec = ()
 ProblemSpecAD = ()
 SampledImage = (table op)
+GradientImage = (ImageAccess unknown, Exp expression, Image image)
 ]]
-local Dim,IndexSpace,Index,Offset,GraphElement,ImageType,Image,ImageVector,ProblemParam,ImageParam,ScalarParam,GraphParam,VarDef,ImageAccess,BoundsAccess,IndexValue,ParamValue,Graph,GraphFunctionSpec,Scatter,Condition,IRNode,ProblemSpec,ProblemSpecAD,SampledImage = 
-      A.Dim,A.IndexSpace,A.Index,A.Offset,A.GraphElement,A.ImageType,A.Image,A.ImageVector,A.ProblemParam,A.ImageParam,A.ScalarParam,A.GraphParam,A.VarDef,A.ImageAccess,A.BoundsAccess,A.IndexValue,A.ParamValue,A.Graph,A.GraphFunctionSpec,A.Scatter,A.Condition,A.IRNode,A.ProblemSpec,A.ProblemSpecAD,A.SampledImage
+local Dim,IndexSpace,Index,Offset,GraphElement,ImageType,Image,ImageVector,ProblemParam,ImageParam,ScalarParam,GraphParam,VarDef,ImageAccess,BoundsAccess,IndexValue,ParamValue,Graph,GraphFunctionSpec,Scatter,Condition,IRNode,ProblemSpec,ProblemSpecAD,SampledImage, GradientImage = 
+      A.Dim,A.IndexSpace,A.Index,A.Offset,A.GraphElement,A.ImageType,A.Image,A.ImageVector,A.ProblemParam,A.ImageParam,A.ScalarParam,A.GraphParam,A.VarDef,A.ImageAccess,A.BoundsAccess,A.IndexValue,A.ParamValue,A.Graph,A.GraphFunctionSpec,A.Scatter,A.Condition,A.IRNode,A.ProblemSpec,A.ProblemSpecAD,A.SampledImage,A.GradientImage
 
 opt.PSpec = ProblemSpec
 local PROBLEM_STAGES  = { inputs = 0, functions = 1 }
@@ -675,10 +676,9 @@ function ImageAccess:gradient()
     if self.image.gradientimages then
         assert(Offset:is(self.index),"NYI - support for graphs")
         local gt = {}
-        for u,im in pairs(self.image.gradientimages) do
-            local exp = self.image.gradientexpressions[u]
-            local k = u:shift(self.index)
-            local v = ad.Const:is(exp) and exp or im(unpack(self.index.data))
+        for i,im in ipairs(self.image.gradientimages) do
+            local k = im.unknown:shift(self.index)
+            local v = ad.Const:is(im.expression) and im.expression or im.image(self.index)
             gt[k] = v
         end
         return gt
@@ -742,16 +742,13 @@ function ProblemSpecAD:ComputedImage(name,dims,exp)
     end)
     local im = self:Image(name,float,dims,"alloc")
     local gradients = exp:gradient(unknowns:map(function(x) return ad.v[x] end))
-    local gradientexpressions = {}
-    local gradientimages = {}
-    for i,u in ipairs(unknowns) do
-        gradientexpressions[u] = gradients[i]
-        gradientimages[u] = self:Image(name.."_d_"..tostring(u),float,dims,"alloc")
+    im.gradientimages = terralib.newlist()
+    for i,g in ipairs(gradients) do
+        local u = unknowns[i]
+        local gim = self:Image(name.."_d_"..tostring(u),float,dims,"alloc")
+        im.gradientimages:insert(GradientImage(u,g,gim))
     end
-    
     im.expression = exp
-    im.gradientexpressions = gradientexpressions
-    im.gradientimages = gradientimages
     self.precomputed:insert(im)
     return im
 end
@@ -950,7 +947,7 @@ local function createfunction(problemspec,name,Index,results,scatters)
                     factors:insert(c)
                 end
             end
-            n = ad.prod(n.config.c,unpack(factors))
+            n = ad.prod(n.const,unpack(factors))
             cond = Condition:create(conditions)
         end
         return A.reduce(op,List{vardecl,irmap(n)},float,vardecl.shape,cond)
@@ -975,7 +972,7 @@ local function createfunction(problemspec,name,Index,results,scatters)
             return A.const(e.v,e:type(),ad.scalar)
         elseif "Apply" == e.kind then
             if use_split_sums and (e.op.name == "sum") and #e:children() > 2 then
-                local vardecl = A.vardecl(e.config.c,float,e:shape())
+                local vardecl = A.vardecl(e.const,float,e:shape())
                 local children = List { vardecl }
                 local varuse = A.varuse(children,float,e:shape())
                 for i,c in ipairs(e:children()) do
@@ -990,7 +987,7 @@ local function createfunction(problemspec,name,Index,results,scatters)
                 if not util.isvectortype(sm.image.type) then
                     return sm
                 end
-                return A.vectorextract(List {sm}, e.config.c, e:type(), e:shape()) 
+                return A.vectorextract(List {sm}, e.const, e:type(), e:shape()) 
             end
             local fn,gen = opt.math[e.op.name]
             if fn then
@@ -1004,7 +1001,7 @@ local function createfunction(problemspec,name,Index,results,scatters)
             else
                 function gen(args) return e.op:generate(e,args) end
             end
-            return A.apply(e.op.name,gen,children,e:type(),e:shape()) 
+            return A.apply(e.op.name,gen,children,e.const,e:type(),e:shape()) 
         elseif "Reduce" == e.kind then
             local vardecl = A.vardecl(0,e:type(),e:shape()) 
             local arg = e.args[1]
@@ -1261,8 +1258,8 @@ local function createfunction(problemspec,name,Index,results,scatters)
     
     local instructions,regcounts = schedulebackwards(irroots,uses)
     
-    local function printschedule(instructions,regcounts)
-        print("schedule for ",name,"-----------")
+    local function printschedule(W,instructions,regcounts)
+        W:write(string.format("schedule for %s -----------\n",name))
         local emittedpos = {}
         local function formatchildren(children)
             local cs = terralib.newlist()
@@ -1298,16 +1295,18 @@ local function createfunction(problemspec,name,Index,results,scatters)
         end
         for i,ir in ipairs(instructions) do
             emittedpos[ir] = i
-            print(("[%d]%sr%d : %s%s = %s"):format(regcounts[i],formatcondition(ir.condition),i,tostring(ir.type),tostring(ir.shape),formatinst(ir)))
+            W:write(("[%d]%sr%d : %s%s = %s\n"):format(regcounts[i],formatcondition(ir.condition),i,tostring(ir.type),tostring(ir.shape),formatinst(ir)))
             if instructions[i+1] and conditioncost(ir.condition,instructions[i+1].condition) ~= 0 then
-                print("---------------------")
+                W:write("---------------------\n")
             end
         end
-        print("----------------------")
+        W:write("----------------------\n")
     end
     
-    if verboseAD then
-        printschedule(instructions,regcounts)
+    if verboseAD or true then
+        local W = io.open("log.txt","a")
+        printschedule(W,instructions,regcounts)
+        W:close()
     end
     
     local P = symbol(problemspec.P:ParameterType(),"P")
@@ -1625,9 +1624,9 @@ local function classifyresiduals(uispace, Rs)
                 if a.image.name == "X"then
                     addunknown(a)
                 elseif a.image.gradientimages then
-                    for u,_ in pairs(a.image.gradientimages) do
+                    for i,im in ipairs(a.image.gradientimages) do
                         assert(Offset:is(a.index),"NYI - precomputed with graphs")
-                        addunknown(u:shift(a.index))
+                        addunknown(im.unknown:shift(a.index))
                     end
                 end
                 local aclass = Offset:is(a.index) and a.image.type.ispace or a.index.graph
@@ -1914,11 +1913,10 @@ function createprecomputed(self,name,precomputedimages)
     for i,im in ipairs(precomputedimages) do
         local expression = ad.polysimplify(im.expression)
         scatters:insert(Scatter(im, zoff, 0, im.expression, "set"))
-        for u,gim in pairs(im.gradientimages) do
-            local gradientexpression = im.gradientexpressions[u]
-            gradientexpression = ad.polysimplify(gradientexpression)
+        for _,gim in ipairs(im.gradientimages) do
+            local gradientexpression = ad.polysimplify(gim.expression)
             if not ad.Const:is(gradientexpression) then
-                scatters:insert(Scatter(gim, zoff, 0, gradientexpression, "set"))
+                scatters:insert(Scatter(gim.image, zoff, 0, gradientexpression, "set"))
             end
         end
     end
@@ -2007,12 +2005,12 @@ function ad.sampledimage(image,imagedx,imagedy)
     end
     local op = ad.newop("sampleimage_"..image.name)
     op.imagebeingsampled = image --not the best place to store this but other ways are more cumbersome
-    op.config = { "c" }
+    op.hasconst = true
     function op:generate(exp,args) error("sample image is not implemented directly") end
     function op:getpartials(exp)
         assert(imagedx and imagedy, "image derivatives are not defined for this image and cannot be used in autodiff")
         local x,y = unpack(exp:children())
-        return terralib.newlist { imagedx(x,y,exp.config.c), imagedy(x,y,exp.config.c) }
+        return terralib.newlist { imagedx(x,y,exp.const), imagedy(x,y,exp.const) }
     end
     return SampledImage(op)
 end
