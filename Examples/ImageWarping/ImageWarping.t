@@ -4,12 +4,13 @@ local P = opt.ProblemSpec()
 local W = opt.Dim("W",0)
 local H = opt.Dim("H",1)
 
-local X = 			P:Image("X", opt.float3,{W,H},0)				--uv, a <- unknown
-local UrShape = 	P:Image("UrShape", opt.float2,{W,H},1)		--urshape
-local Constraints = P:Image("Constraints", opt.float2,{W,H},2)	--constraints
-local Mask = 		P:Image("Mask", float, {W,H} ,3)				--validity mask for constraints
-local w_fitSqrt = P:Param("w_fitSqrt", float, 4)
-local w_regSqrt = P:Param("w_regSqrt", float, 5)
+local Offset = P:Unknown("Offset",opt.float2,{W,H},0)
+local Angle = P:Unknown("Angle",float,{W,H},1)
+local UrShape = 	P:Image("UrShape", opt.float2,{W,H},2)		--urshape
+local Constraints = P:Image("Constraints", opt.float2,{W,H},3)	--constraints
+local Mask = 		P:Image("Mask", float, {W,H} ,4)				--validity mask for constraints
+local w_fitSqrt = P:Param("w_fitSqrt", float, 5)
+local w_regSqrt = P:Param("w_regSqrt", float, 6)
 
 P:Stencil(2)
 P:UsePreconditioner(true)
@@ -18,10 +19,6 @@ local WH = opt.toispace {W,H}
 
 local TUnknownType = P:UnknownType():terratype()
 local Index = WH:indextype()
-
-local C = terralib.includecstring [[
-#include <math.h>
-]]
 
 local float_2 = opt.float2
 local float_3 = opt.float3
@@ -72,8 +69,7 @@ local terra mul(matrix : float2x2, v : float_2) : float_2
 end
 
 local terra getXFloat2(idx : Index, self : P:ParameterType())
-	var x = self.X.X(idx)
-	return make_float2(x(0), x(1))
+	return self.X.Offset(idx)
 end
 
 local terra eval_dR(cosAlpha : float, sinAlpha : float) 
@@ -88,12 +84,12 @@ end
 local F = {}
 
 
-local terra costEpsilon(idx : Index, self : P:ParameterType(), eps : float_3) : float
+terra F.cost(idx : Index, self : P:ParameterType()) : float
 	var e : float_2  = make_float2(0.0f, 0.0f)
 
-	var x = make_float2(self.X.X(idx)(0) + eps(0), self.X.X(idx)(1) + eps(1))
+	var x =  self.X.Offset(idx)
 	var xHat : float_2 = self.UrShape(idx)
-	var a = self.X.X(idx)(2) + eps(2)
+	var a = self.X.Angle(idx)(0)
 	var m = self.Mask(idx)(0)
 	var c = self.Constraints(idx)
 	
@@ -139,16 +135,6 @@ local terra costEpsilon(idx : Index, self : P:ParameterType(), eps : float_3) : 
 	return res
 end
 
-
-
-
-terra F.cost(idx : Index, self : P:ParameterType()) : float
-	return costEpsilon(idx, self, make_float3(0.0f, 0.0f, 0.0f))
-end
-
-
-
-
 -- eval 2*JtF == \nabla(F); eval diag(2*(Jt)^2) == pre-conditioner
 terra F.evalJTF(idx : Index, self : P:ParameterType())
 	var b = make_float2(0.0f, 0.0f)
@@ -164,7 +150,7 @@ terra F.evalJTF(idx : Index, self : P:ParameterType())
 	 	pre = pre + (2.0f*self.w_fitSqrt*self.w_fitSqrt)*make_float2(1.0f, 1.0f) 
 	end
 
-	var a = self.X.X(idx)(2)
+	var a = self.X.Angle(idx)(0)
 	-- reg/pos
 	var	 p : float_2    = getXFloat2(idx,self)
 	var	 pHat : float_2 = self.UrShape(idx)
@@ -197,7 +183,7 @@ terra F.evalJTF(idx : Index, self : P:ParameterType())
 	if b0 then
 		var q : float_2 	= getXFloat2(idx(0,-1), self)
 		var qHat : float_2 	= self.UrShape(idx(0,-1))
-		var R_j : float2x2 	= evalR(self.X.X(idx(0,-1))(2)) 
+		var R_j : float2x2 	= evalR(self.X.Angle(idx(0,-1))(0)) 
 		if m0 then
 			e_reg 			= e_reg + (p - q) - mul(R_i, pHat - qHat)
 			pre 			= pre + (2.0f*self.w_regSqrt*self.w_regSqrt)*make_float2(1.0f, 1.0f) 
@@ -210,7 +196,7 @@ terra F.evalJTF(idx : Index, self : P:ParameterType())
 	if b1 then
 		var q : float_2 	= getXFloat2(idx(0,1), self)
 		var qHat : float_2 	= self.UrShape(idx(0,1))
-		var R_j : float2x2 	= evalR(self.X.X(idx(0,1))(2)) 
+		var R_j : float2x2 	= evalR(self.X.Angle(idx(0,1))(0)) 
 		if m1 then
 			e_reg 			= e_reg + (p - q) - mul(R_i, pHat - qHat)
 			pre 			= pre + (2.0f*self.w_regSqrt*self.w_regSqrt)*make_float2(1.0f, 1.0f) 
@@ -223,7 +209,7 @@ terra F.evalJTF(idx : Index, self : P:ParameterType())
 	if b2 then
 		var q : float_2 	= getXFloat2(idx(-1,0), self)
 		var qHat : float_2 	= self.UrShape(idx(-1,0))
-		var R_j : float2x2 	= evalR(self.X.X(idx(-1,0))(2)) 
+		var R_j : float2x2 	= evalR(self.X.Angle(idx(-1,0))(0)) 
 		if m2 then
 			e_reg 			= e_reg + (p - q) - mul(R_i, pHat - qHat)
 			pre 			= pre + (2.0f*self.w_regSqrt*self.w_regSqrt)*make_float2(1.0f, 1.0f) 
@@ -236,7 +222,7 @@ terra F.evalJTF(idx : Index, self : P:ParameterType())
 	if b3 then
 		var q : float_2 	= getXFloat2(idx(1,0), self)
 		var qHat : float_2 	= self.UrShape(idx(1,0))
-		var R_j : float2x2 	= evalR(self.X.X(idx(1,0))(2)) 
+		var R_j : float2x2 	= evalR(self.X.Angle(idx(1,0))(0)) 
 		if m3 then
 			e_reg 			= e_reg + (p - q) - mul(R_i, pHat - qHat)
 			pre 			= pre + (2.0f*self.w_regSqrt*self.w_regSqrt)*make_float2(1.0f, 1.0f) 
@@ -305,31 +291,13 @@ terra F.evalJTF(idx : Index, self : P:ParameterType())
 
 end
 
-
-
-local terra evalJTFNumeric(idx : Index, self : P:ParameterType())
-	
-	var cBase = costEpsilon(idx, self, make_float3(0.0f, 0.0f, 0.0f))
-
-	var eps = 1e-4f
-	var c0 = costEpsilon(idx, self, make_float3(eps, 0.0f, 0.0f))
-	var c1 = costEpsilon(idx, self, make_float3(0.0f, eps, 0.0f))
-	var c2 = costEpsilon(idx, self, make_float3(0.0f, 0.0f, eps))
-
-	return (make_float3((c0 - cBase) / eps, (c1 - cBase) / eps, (c2 - cBase) / eps)), make_float3(1.0f, 1.0f, 1.0f)
-
-end
-
-
-
 -- eval 2*JtF == \nabla(F); eval diag(2*(Jt)^2) == pre-conditioner
 terra F.gradient(idx : Index, self : P:ParameterType())
 	return F.evalJTF(idx, self)._0
 end
 	
 local terra getP(pImage : TUnknownType, idx : Index) 
-	var p = pImage.X(idx)
-	return make_float2(p(0), p(1))
+	return pImage.Offset(idx)
 end
 
 -- eval 2*JtJ (note that we keep the '2' to make it consistent with the gradient
@@ -419,8 +387,8 @@ terra F.applyJTJ(idx : Index, self : P:ParameterType(), pImage : TUnknownType)
 
 	-- angle/reg
 	var e_reg_angle = 0.0f;
-	var dR : float2x2 = evalR_dR(self.X.X(idx)(2))
-	var angleP = pImage.X(idx)(2)
+	var dR : float2x2 = evalR_dR(self.X.Angle(idx)(0))
+	var angleP = pImage.Angle(idx)(0)
 	var pHat : float_2 = self.UrShape(idx)
 		
 	if valid0 then
@@ -454,60 +422,60 @@ terra F.applyJTJ(idx : Index, self : P:ParameterType(), pImage : TUnknownType)
 		var ni = 0
 		var nj = -1
 		var qHat : float_2 = self.UrShape(idx(ni,nj))
-		var dR_j = evalR_dR(self.X.X(idx(ni,nj))(2))
+		var dR_j = evalR_dR(self.X.Angle(idx(ni,nj))(0))
 		var D : float_2 	= -mul(dR,(pHat - qHat))
 		var D_j : float_2	= mul(dR_j,(pHat - qHat))
 		--e_reg = e_reg + (D*pImage(idx)(2) - D_j*pImage(ni,nj)(2))
 		if m0 then 
-			e_reg = e_reg + D*pImage.X(idx)(2)
+			e_reg = e_reg + D*pImage.Angle(idx)(0)
 		end
 		if m then
-			e_reg = e_reg - D_j*pImage.X(idx(ni,nj))(2)
+			e_reg = e_reg - D_j*pImage.Angle(idx(ni,nj))(0)
 		end
 	end
 	if b1 then
 		var ni = 0
 		var nj = 1
 		var qHat : float_2 = self.UrShape(idx(ni,nj))
-		var dR_j = evalR_dR(self.X.X(idx(ni,nj))(2))
+		var dR_j = evalR_dR(self.X.Angle(idx(ni,nj))(0))
 		var D : float_2 	= -mul(dR,(pHat - qHat))
 		var D_j : float_2	= mul(dR_j,(pHat - qHat))
 		--e_reg = e_reg + (D*pImage(idx)(2) - D_j*pImage(ni,nj)(2))
 		if m1 then 
-			e_reg = e_reg + D*pImage.X(idx)(2)
+			e_reg = e_reg + D*pImage.Angle(idx)(0)
 		end
 		if m then
-			e_reg = e_reg - D_j*pImage.X(idx(ni,nj))(2)
+			e_reg = e_reg - D_j*pImage.Angle(idx(ni,nj))(0)
 		end
 	end
 	if b2 then
 		var ni = -1
 		var nj = 0
 		var qHat : float_2 = self.UrShape(idx(ni,nj))
-		var dR_j = evalR_dR(self.X.X(idx(ni,nj))(2))
+		var dR_j = evalR_dR(self.X.Angle(idx(ni,nj))(0))
 		var D : float_2 	= -mul(dR,(pHat - qHat))
 		var D_j : float_2	= mul(dR_j,(pHat - qHat))
 		--e_reg = e_reg + (D*pImage(idx)(2) - D_j*pImage(ni,nj)(2))
 		if m2 then 
-			e_reg = e_reg + D*pImage.X(idx)(2)
+			e_reg = e_reg + D*pImage.Angle(idx)(0)
 		end
 		if m then
-			e_reg = e_reg - D_j*pImage.X(idx(ni,nj))(2)
+			e_reg = e_reg - D_j*pImage.Angle(idx(ni,nj))(0)
 		end
 	end
 	if b3 then
 		var ni = 1
 		var nj = 0
 		var qHat : float_2 = self.UrShape(idx(ni,nj))
-		var dR_j = evalR_dR(self.X.X(idx(ni,nj))(2))
+		var dR_j = evalR_dR(self.X.Angle(idx(ni,nj))(0))
 		var D : float_2 	= -mul(dR,(pHat - qHat))
 		var D_j : float_2	= mul(dR_j,(pHat - qHat))
 		--e_reg = e_reg + (D*pImage(idx)(2) - D_j*pImage(ni,nj)(2))
 		if m3 then 
-			e_reg = e_reg + D*pImage.X(idx)(2)
+			e_reg = e_reg + D*pImage.Angle(idx)(0)
 		end
 		if m then
-			e_reg = e_reg - D_j*pImage.X(idx(ni,nj))(2)
+			e_reg = e_reg - D_j*pImage.Angle(idx(ni,nj))(0)
 		end
 	end
 	b = b + (2.0f*self.w_regSqrt*self.w_regSqrt)*e_reg

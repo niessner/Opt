@@ -248,14 +248,14 @@ end
 
 function ProblemSpec:UnknownType()
     self:Stage "functions"
-    if not self.Unknown then
+    if not self._UnknownType then
         local images = List()
         for _,p in ipairs(self.parameters) do
             if p.isunknown then images:insert(p) end
         end
-        self.Unknown = UnknownType(images)
+        self._UnknownType = UnknownType(images)
     end
-    return self.Unknown
+    return self._UnknownType
 end
 
 function A.CenteredFunction:__tostring() return tostring(self.ispace) end
@@ -415,8 +415,7 @@ end
 local cd = macro(function(apicall) return quote
     var r = apicall
     if r ~= 0 then  
-        C.printf("Cuda reported error %d: %s\n",r, C.cudaGetErrorString(r))
-        return r
+        C.printf("CUDA reported error %d: %s\n",r, C.cudaGetErrorString(r))
     end
 end end)
 
@@ -451,7 +450,6 @@ local terra wrapBindlessTexture(data : &uint8, channelcount : int, width : int, 
 
     var tex : C.cudaTextureObject_t = 0;
     cd(C.cudaCreateTextureObject(&tex, &res_desc, &tex_desc, nil))
-
     return tex
 end
 
@@ -684,10 +682,12 @@ local function toispace(ispace)
 end
 
 
-function ProblemSpec:Image(name,typ,ispace,idx)
+function ProblemSpec:Image(name,typ,ispace,idx,isunknown)
     self:Stage "inputs"
-    self:newparameter(ImageParam(self:ImageType(typ,toispace(ispace)),name == "X",name,idx))
+    isunknown = isunknown and true or false
+    self:newparameter(ImageParam(self:ImageType(typ,toispace(ispace)),isunknown,name,idx))
 end
+function ProblemSpec:Unknown(name,typ,ispace,idx) return self:Image(name,typ,ispace,idx,true) end
 
 
 function ProblemSpec:Graph(name, idx, ...)

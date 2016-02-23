@@ -52,30 +52,13 @@ public:
 
 	void solve(float2* d_x, float* d_a, float2* d_urshape, float2* d_constraints, float* d_mask, unsigned int nNonLinearIterations, unsigned int nLinearIterations, unsigned int nBlockIterations, float weightFit, float weightReg)
 	{
-		reshuffleUnknowsToLocal(d_x, d_a);
-		solve(d_unknown, d_urshape, d_constraints, d_mask, nNonLinearIterations, nLinearIterations, nBlockIterations, weightFit, weightReg);
-		reshuffleUnknownsFromLocal(d_x, d_a);
-	}
-
-	void solve(float3* d_unknown, float2* d_urshape, float2* d_constraints, float* d_mask, unsigned int nNonLinearIterations, unsigned int nLinearIterations, unsigned int nBlockIterations, float weightFit, float weightReg)
-	{
-
 		void* solverParams[] = { &nNonLinearIterations, &nLinearIterations, &nBlockIterations };
 		float weightFitSqrt = sqrt(weightFit);
 		float weightRegSqrt = sqrt(weightReg);
-		void* problemParams[] = { d_unknown, d_urshape, d_constraints, d_mask, &weightFitSqrt, &weightRegSqrt };
+		
+		void* problemParams[] = { d_x, d_a, d_urshape, d_constraints, d_mask, &weightFitSqrt, &weightRegSqrt };
 		
 		Opt_ProblemSolve(m_optimizerState, m_plan, problemParams, solverParams);
-	}
-
-private:
-
-	void reshuffleUnknowsToLocal(float2* d_x, float* d_a) {
-		reshuffleToFloat3CUDA(d_x, d_a, d_unknown, m_width, m_height);
-	}
-
-	void reshuffleUnknownsFromLocal(float2* d_x, float* d_a) {
-		reshuffleFromFloat3CUDA(d_x, d_a, d_unknown, m_width, m_height);
 	}
 
 
