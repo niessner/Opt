@@ -140,7 +140,6 @@ terra opt.ProblemDelete(p : &opt.Problem)
 end
 
 local List = terralib.newlist
-A:Extern("imageindex",function(x) return type(x) == "number" or x == "alloc" end)
 A:Extern("ExpLike",function(x) return ad.Exp:is(x) or ad.ExpVector:is(x) end)
 A:Define [[
 Dim = (string name, number size, number? _index) unique
@@ -148,18 +147,28 @@ IndexSpace = (Dim* dims) unique
 Index = Offset(number* data) unique
       | GraphElement(any graph, string element) unique
 ImageType = (IndexSpace ispace, TerraType scalartype, number channelcount) unique
-Image = (string name, ImageType type, imageindex idx, boolean scalar, boolean isunknown)
+ImageLocation = ArgumentLocation(number idx) | UnknownLocation | StateLocation
+Image = (string name, ImageType type, boolean scalar, ImageLocation location)
 ImageVector = (Image* images)
 ProblemParam = ImageParam(ImageType imagetype, boolean isunknown)
              | ScalarParam(TerraType type)
              | GraphParam(TerraType type)
              attributes (string name, any idx)
+
 VarDef =  ImageAccess(Image image,  Shape _shape, Index index, number channel) unique
        | BoundsAccess(Offset offset, number expand) unique
        | IndexValue(number dim, number shift_) unique
        | ParamValue(string name,TerraType type) unique
 Graph = (string name)
-GraphFunctionSpec = (Graph graph, ExpLike* results, Scatter* scatters)
+
+FunctionKind = CenteredFunction(IndexSpace ispace) unique
+             | GraphFunction(string graphname) unique
+
+ResidualTemplate = (Exp expression, ImageAccess* unknowns)
+EnergySpec = (FunctionKind kind, ResidualTemplate* residuals)
+
+FunctionSpec = (FunctionKind kind, string name, string* arguments, ExpLike* results, Scatter* scatters)
+
 Scatter = (Image image,Index index, number channel, Exp expression, string kind)
 Condition = (IRNode* members)
 IRNode = vectorload(ImageAccess value, number count)
@@ -179,9 +188,8 @@ ProblemSpecAD = ()
 SampledImage = (table op)
 GradientImage = (ImageAccess unknown, Exp expression, Image image)
 UnknownType = (ImageParam* images)
-ProblemFunctionType = CenteredFunction(IndexSpace ispace)
-                    | GraphFunction(string graphname)
-ProblemFunctions = (ProblemFunctionType typ, table functionmap)
+
+ProblemFunctions = (FunctionKind typ, table functionmap)
 ]]
 local Dim,IndexSpace,Index,Offset,GraphElement,ImageType,Image,ImageVector,ProblemParam,ImageParam,ScalarParam,GraphParam,VarDef,ImageAccess,BoundsAccess,IndexValue,ParamValue,Graph,GraphFunctionSpec,Scatter,Condition,IRNode,ProblemSpec,ProblemSpecAD,SampledImage, GradientImage,UnknownType = 
       A.Dim,A.IndexSpace,A.Index,A.Offset,A.GraphElement,A.ImageType,A.Image,A.ImageVector,A.ProblemParam,A.ImageParam,A.ScalarParam,A.GraphParam,A.VarDef,A.ImageAccess,A.BoundsAccess,A.IndexValue,A.ParamValue,A.Graph,A.GraphFunctionSpec,A.Scatter,A.Condition,A.IRNode,A.ProblemSpec,A.ProblemSpecAD,A.SampledImage,A.GradientImage,A.UnknownType
@@ -266,13 +274,20 @@ function ProblemSpec:Functions(ft, functions)
     for k,v in pairs(functions) do
         v:gettype() -- check they typecheck now
     end
+    
+    -- support by-hand interface
     if type(ft) == "string" then
-        local idx = assert(self.names[ft],"graph not defined")
-        assert(self.parameters[idx].kind == "GraphParam","expected a valid graph name")
         ft = A.GraphFunction(ft)
-        self.usesgraphs = true
-    else
+    elseif IndexSpace:is(ft) then
         ft = A.CenteredFunction(ft)
+    end
+    
+    assert(A.FunctionKind:is(ft))
+    
+    if ft.kind == "GraphFunction" then
+        local idx = assert(self.names[ft.graphname],"graph not defined")
+        assert(self.parameters[idx].kind == "GraphParam","expected a valid graph name")
+        self.usesgraphs = true
     end
     if not functions.exclude then
         functions.exclude = macro(function() return `false end)
@@ -575,25 +590,52 @@ function ImageType:terratype()
     return Image
 end
 
-function UnknownType:init()
-    self.ispaces = List()
-    self.ispacetoimages,self.ispacesizes = {},{} -- IndexSpace -> ImageParam
-    for i,ip in ipairs(self.images) do
-        assert(ip.imagetype.scalartype == float, "unknowns must be floating point numbers")
-        local ispace = ip.imagetype.ispace
-        if not self.ispacetoimages[ispace] then
-            self.ispacetoimages[ispace],self.ispacesizes[ispace] = List(),0
-            self.ispaces:insert(ispace)
+local function MapAndGroupBy(list,fn,...)
+    local groups,map = List(),{}
+    for _,l in ipairs(list) do
+        local g,v = fn(l,...)
+        if not map[g] then
+            map[g] = List()
+            groups:insert(g)
         end
-        self.ispacetoimages[ispace]:insert(ip)
-        self.ispacesizes[ispace] = self.ispacesizes[ispace] + ip.imagetype.channelcount 
+        map[g]:insert(v)
+    end
+    return groups,map
+end
+
+function UnknownType:init()
+    self.ispaces,self.ispacetoimages = MapAndGroupBy(self.images, function(ip)
+        assert(ip.imagetype.scalartype == float, "unknowns must be floating point numbers")
+        return ip.imagetype.ispace, ip
+    end)
+    self.ispacesizes = {}
+    for _,ispace in ipairs(self.ispaces) do
+        local N = 0
+        for _,ip in ipairs(self.ispacetoimages[ispace]) do
+            N = N + ip.imagetype.channelcount
+        end
+        self.ispacesizes[ispace] = N
     end
 end
 function UnknownType:IndexSpaces()
     return self.ispaces
 end
+function UnknownType:VectorSizeForIndexSpace(ispace) return assert(self.ispacesizes[ispace],"unused ispace") end 
 function UnknownType:VectorTypeForIndexSpace(ispace)
-    return util.Vector(float,assert(self.ispacesizes[ispace],"unused ispace"))
+    return util.Vector(float,self:VectorSizeForIndexSpace(ispace))
+end
+function UnknownType:UnknownIteratorForIndexSpace(ispace)
+    local images = self.ispacetoimages[ispace]
+    local i,j,c = 0,1,0
+    return function()
+        if c >= images[j].imagetype.channelcount then
+            j,c = j+1,0
+        end
+        if j > #images then return nil end
+        i,c = i + 1,c + 1
+        --print(i-1,images[j].name,c-1)
+        return i - 1, images[j].name,c - 1
+    end
 end
 
 function UnknownType:terratype()
@@ -646,8 +688,6 @@ function UnknownType:terratype()
                 end
             end
         end
-        self._terratype.metamethods.__apply:printpretty()
-        self._terratype.metamethods.__update:printpretty()
     end
     
     return self._terratype
@@ -797,30 +837,48 @@ function ad.Index(d) return IndexValue(d,0):asvar() end
 
 function ad.ProblemSpec()
     local ps = ProblemSpecAD()
-    ps.P,ps.nametoimage,ps.precomputed = opt.ProblemSpec(), {}, List{}
+    ps.P,ps.nametoimage,ps.precomputed,ps.extraarguments,ps.excludeexps = opt.ProblemSpec(), {}, List(), List(), List()
     return ps
 end
 function ProblemSpecAD:UsePreconditioner(v)
 	self.P:UsePreconditioner(v)
 end
 
--- Z: this will eventually be opt.Image, but that is currently used by our direct methods
--- so this is going in the ad table for now
--- small workaround: idx > 0 means it is part of ProblemSpec struct
--- idx < 0 means that it is the -idx-th argument to the function begin generated after the Parameters struct. (.e.g -1 is the first argument) 
-function ProblemSpecAD:Image(name,typ,dims,idx)
+function ProblemSpecAD:Image(name,typ,dims,idx,isunknown)
     if not terralib.types.istype(typ) then
-        typ,ispace,idx = float,typ,ispace --shift arguments left
+        typ,dims,idx,isunknown = float,typ,dims,idx --shift arguments left
     end
+    isunknown = isunknown and true or false
     local ispace = toispace(dims)
     assert( (type(idx) == "number" and idx >= 0) or idx == "alloc", "expected an index number") -- alloc indicates that the solver should allocate the image as an intermediate
-    self.P:Image(name,typ,ispace,idx)
-    local r = Image(name,self.P:ImageType(typ,ispace),idx,not util.isvectortype(typ),name == "X")
+    self.P:Image(name,typ,ispace,idx,isunknown)
+    local r = Image(name,self.P:ImageType(typ,ispace),not util.isvectortype(typ),isunknown and A.UnknownLocation or A.StateLocation)
     self.nametoimage[name] = r
     return r
 end
-function ProblemSpecAD:ImageArgument(name,imagetype,argpos)
-    return Image(name,imagetype,-argpos,false,false)
+function ProblemSpecAD:Unknown(name,typ,dims,idx) return self:Image(name,typ,dims,idx,true) end
+
+function ProblemSpecAD:UnknownArgument(argpos)
+    if not self.extraarguments[argpos] then
+        local r = {}
+        for _,ip in ipairs(self.P:UnknownType().images) do
+            local template = self.nametoimage[ip.name]
+            r[ip.name] = Image(ip.name,template.type,template.scalar,A.ArgumentLocation(argpos))
+        end
+        self.extraarguments[argpos] = r
+    end
+    return self.extraarguments[argpos]
+end
+
+function ProblemSpecAD:ImageTemporary(name,ispace)
+    self.P:Image(name,float,ispace,"alloc",false)
+    local r = Image(name,self.P:ImageType(float,ispace),true,A.StateLocation)
+    self.nametoimage[name] = r
+    return r
+end
+
+function ProblemSpecAD:ImageWithName(name)
+    return assert(self.nametoimage[name],"unknown image name?")
 end
 
 function Image:__tostring() return self.name end
@@ -845,12 +903,13 @@ function ProblemSpecAD:ComputedImage(name,dims,exp)
             end
         end
     end)
-    local im = self:Image(name,float,dims,"alloc")
+    local ispace = toispace(dims)
+    local im = self:ImageTemporary(name,ispace)
     local gradients = exp:gradient(unknowns:map(function(x) return ad.v[x] end))
     im.gradientimages = terralib.newlist()
     for i,g in ipairs(gradients) do
         local u = unknowns[i]
-        local gim = self:Image(name.."_d_"..tostring(u),float,dims,"alloc")
+        local gim = self:ImageTemporary(name.."_d_"..tostring(u),ispace)
         im.gradientimages:insert(GradientImage(u,g,gim))
     end
     im.expression = exp
@@ -1022,7 +1081,7 @@ function Condition:Union(rhs)
     return Condition:create(r)
 end
 
-local function createfunction(problemspec,name,Index,results,scatters)
+local function createfunction(problemspec,name,Index,arguments,results,scatters)
     results = removeboundaries(results)
     
     local imageload = terralib.memoize(function(imageaccess)
@@ -1420,9 +1479,10 @@ local function createfunction(problemspec,name,Index,results,scatters)
     
     local statementstack = terralib.newlist { terralib.newlist() } 
     local statements = statementstack[1]
-    local extraimages = terralib.newlist()
-    local emit
+    local TUnknownType = problemspec.P:UnknownType():terratype()
+    local extraarguments = arguments:map(function(a) return symbol(TUnknownType,a) end)
     
+    local emit
     local function emitconditionchange(current,next)
         local u,d = conditiondiff(current,next)
         for i = 0,u - 1 do
@@ -1465,14 +1525,13 @@ local function createfunction(problemspec,name,Index,results,scatters)
         return false
     end
     local function imageref(image)
-        if image.idx == "alloc" or image.idx >= 0 then
-            if image.isunknown then return `P.X.[image.name]
-            else return `P.[image.name] end
+        if image.location == A.StateLocation then
+            return `P.[image.name]
+        elseif image.location == A.UnknownLocation then
+            return `P.X.[image.name]
         else
-            if not extraimages[-image.idx] then
-                extraimages[-image.idx] = symbol(image.type:terratype(),image.name)
-            end
-            return extraimages[-image.idx]
+            local sym = assert(extraarguments[image.location.idx],"unknown extra image")
+            return `sym.[image.name]
         end
     end
     local function graphref(ge)
@@ -1661,7 +1720,7 @@ local function createfunction(problemspec,name,Index,results,scatters)
         scatterstatements:insert(stmt)
     end
 
-    local terra generatedfn([idx], [P], [extraimages])
+    local terra generatedfn([idx], [P], [extraarguments])
         var [midx] = idx
         [declarations]
         [statements]
@@ -1695,85 +1754,86 @@ local function stencilforexpression(exp)
     return stencil
 end
 local noscatters = terralib.newlist()
-function ProblemSpecAD:createfunctionset(name,results,graphfunctions)
-    results,graphfunctions = terralib.newlist(results), terralib.newlist(graphfunctions)
-    local ut = self.P:UnknownType().images[1].imagetype
-    dprint("function for: ",name)
-    local centered = createfunction(self,name,ut.ispace:indextype(),results,noscatters)
-    local args = terralib.newlist()
-    for i,g in ipairs(graphfunctions) do
-        local gf = createfunction(self,("%s_graph%d"):format(name,i),int,g.results,g.scatters)
-        args:insert(g.graph.name)
-        args:insert(gf)
-    end
-    self.P:Function(name,centered,unpack(args))
+
+function ProblemSpecAD:CompileFunctionSpec(functionspec)
+    local Index = functionspec.kind == "GraphFunctionSpec" and int or functionspec.kind.ispace:indextype()
+    return createfunction(self,functionspec.name,Index,functionspec.arguments,functionspec.results,functionspec.scatters)
 end
 
--- the result is a data structure
--- { unknown = {<entry>}, graphs = { <graphobj> -> <entry> } }, where each entry is:
--- { expression = <ad-exp>, unknownaccess = [<ImagAccess>] }
-
-local function classifyresiduals(uispace, Rs)
-    local result = { unknown = terralib.newlist {}, graphs = {} }
-    local function unknownaccesses(exp)
-        local classification
-        local seenunknown = {}
-        local unknownaccesses = terralib.newlist()
-        local function addunknown(u)
-            if not seenunknown[u] then
-                unknownaccesses:insert(u)
-                seenunknown[u] = true
-            end
+function ProblemSpecAD:AddFunctions(functionspecs)
+    local kind_to_functionmap = {}
+    local kinds = List()
+    for i,fs in ipairs(functionspecs) do -- group by unique function kind to pass to ProblemSpec:Functions call
+        local fm = kind_to_functionmap[fs.kind]
+        if not fm then
+            fm = {}
+            kind_to_functionmap[fs.kind] = fm
+            kinds:insert(fs.kind)
         end
-        exp:visit(function(a)
-            if ImageAccess:is(a) then -- assume image X is unknown
-                if a.image.name == "X"then
-                    addunknown(a)
-                elseif a.image.gradientimages then
-                    for i,im in ipairs(a.image.gradientimages) do
-                        assert(Offset:is(a.index),"NYI - precomputed with graphs")
-                        addunknown(im.unknown:shift(a.index))
-                    end
+        assert(not fm[fs.name],"function already defined!")
+        fm[fs.name] = self:CompileFunctionSpec(fs)
+    end
+    for _,k in ipairs(kinds) do
+        local fm = kind_to_functionmap[k]
+        self.P:Functions(k,fm)
+    end
+end
+
+
+local function classifyexpression(exp) -- what index space, or graph is this thing mapped over
+    local classification
+    local seenunknown = {}
+    local unknownaccesses = terralib.newlist()
+    local function addunknown(u)
+        if not seenunknown[u] then
+            unknownaccesses:insert(u)
+            seenunknown[u] = true
+        end
+    end
+    exp:visit(function(a)
+        if ImageAccess:is(a) then -- assume image X is unknown
+            if a.image.location == A.UnknownLocation then
+                addunknown(a)
+            elseif a.image.gradientimages then
+                for i,im in ipairs(a.image.gradientimages) do
+                    assert(Offset:is(a.index),"NYI - precomputed with graphs")
+                    addunknown(im.unknown:shift(a.index))
                 end
-                local aclass = Offset:is(a.index) and a.image.type.ispace or a.index.graph
-                assert(nil == classification or aclass == classification, "residual contains image reads from multiple domains")
-                classification = aclass
+            end
+            local aclass = Offset:is(a.index) and A.CenteredFunction(a.image.type.ispace) or A.GraphFunction(a.index.graph.name)
+            assert(nil == classification or aclass == classification, "residual contains image reads from multiple domains")
+            classification = aclass
+        end
+    end)
+    local template = A.ResidualTemplate(exp,unknownaccesses)
+    if not classification then
+        error("residual must actually use some image")
+    end
+    if IndexSpace:is(classification) then
+        exp:visit(function(a)
+            if BoundsAccess:is(a) and #a.offset.data ~= #classification.dims then
+                error(string.format("%s does not match index space %s",a,classification))
             end
         end)
-        local entry = { expression = exp, unknownaccesses = unknownaccesses }
-        if not classification then
-            classification = uispace
-        end
-        if IndexSpace:is(classification) then
-            assert(classification == uispace,"energy must be defined over graphs or the index space of the unknown")
-            exp:visit(function(a)
-                if BoundsAccess:is(a) and #a.offset.data ~= #classification.dims then
-                    error(string.format("%s does not match index space %s",a,classification))
-                end
-            end)
-            result.unknown:insert(entry)
-        else
-            local list = result.graphs[classification] or terralib.newlist()
-            list:insert(entry)
-            result.graphs[classification] = list
-        end
     end
-    for i,r in ipairs(Rs) do
-        unknownaccesses(r)
-    end
-    return result
+    return classification,template
+end
+
+local function toenergyspecs(Rs)    
+    local kinds,kind_to_templates = MapAndGroupBy(Rs,classifyexpression)
+    return kinds:map(function(k) return A.EnergySpec(k,kind_to_templates[k]) end)
 end
 
 --given that the residual at (0,0) uses the variables in 'unknownsupport',
 --what is the set of residuals will use variable X(0,0).
 --this amounts to taking each variable in unknown support and asking which residual is it
 --that makes that variable X(0,0)
-local function residualsincludingX00(unknownsupport,channel)
+local function residualsincludingX00(unknownsupport,unknown,channel)
     assert(channel)
     local r = terralib.newlist()
     for i,u in ipairs(unknownsupport) do
         assert(Offset:is(u.index),"unexpected graph access")
-        if u.channel == channel then
+        if u.image == unknown and u.channel == channel then
             r:insert(u.index:Invert())
         end
     end
@@ -1799,45 +1859,46 @@ local function lprintf(ident,fmt,...)
     return print(str) 
 end
 
-local function createjtjcentered(residuals,unknown,P)
+local EMPTY = List()
+
+local function createjtjcentered(PS,ES)
+    local UnknownType = PS.P:UnknownType()
+    local ispace = ES.kind.ispace
+    local N = UnknownType:VectorSizeForIndexSpace(ES.kind.ispace)
+    local P = PS:UnknownArgument(1)
     local P_hat_c = {}
     local conditions = terralib.newlist()
-    for rn,residual in ipairs(residuals.unknown) do
-        local F,unknownsupport = residual.expression,residual.unknownaccesses
+    for rn,residual in ipairs(ES.residuals) do
+        local F,unknownsupport = residual.expression,residual.unknowns
         lprintf(0,"\n\n\n\n\n##################################################")
         lprintf(0,"r%d = %s",rn,F)
-        for channel = 0, unknown.type.channelcount-1 do
-            local x = unknown(unknown.type.ispace:ZeroOffset(),channel)
-            local residuals = residualsincludingX00(unknownsupport,channel)
-            local columns = {}
-            local nonzerounknowns = terralib.newlist()
-        
+        for idx,unknownname,chan in UnknownType:UnknownIteratorForIndexSpace(ispace) do 
+            local unknown = PS:ImageWithName(unknownname) 
+            local x = unknown(ispace:ZeroOffset(),chan)
+            local residuals = residualsincludingX00(unknownsupport,unknown,chan)
             for _,r in ipairs(residuals) do
                 local rexp = shiftexp(F,r)
                 local condition,drdx00 = ad.splitcondition(rexp:d(x))
-                lprintf(1,"instance:\ndr%d_%s/dx00[%d] = %s",rn,tostring(r),channel,tostring(drdx00))
+                lprintf(1,"instance:\ndr%d_%s/dx00[%d] = %s",rn,tostring(r),chan,tostring(drdx00))
                 local unknowns = unknownsforresidual(r,unknownsupport)
                 for _,u in ipairs(unknowns) do
-                    local condition2, drdx_u = ad.splitcondition(rexp:d(unknown(u.index,u.channel)))
+                    local uv = ad.v[u]
+                    local condition2, drdx_u = ad.splitcondition(rexp:d(uv))
                     local exp = drdx00*drdx_u
-                    lprintf(2,"term:\ndr%d_%s/dx%s[%d] = %s",rn,tostring(r),tostring(u.index),u.channel,tostring(drdx_u))
-                    if not columns[u] then
-                        columns[u] = 0
-                        nonzerounknowns:insert(u)
-                    end
+                    lprintf(2,"term:\ndr%d_%s/dx%s[%d] = %s",rn,tostring(r),tostring(u.index),u.chan,tostring(drdx_u))
                     local conditionmerged = condition*condition2
                     if not P_hat_c[conditionmerged] then
                         conditions:insert(conditionmerged)
-                        P_hat_c[conditionmerged] = createzerolist(unknown.type.channelcount)
+                        P_hat_c[conditionmerged] = createzerolist(N)
                     end
-                    P_hat_c[conditionmerged][channel+1] = P_hat_c[conditionmerged][channel+1] + P(u.index,u.channel)*exp
+                    P_hat_c[conditionmerged][idx+1] = P_hat_c[conditionmerged][idx+1] + P[u.image.name](u.index,u.channel)*exp
                 end
             end
         end
     end
-    local P_hat = createzerolist(unknown.type.channelcount)
+    local P_hat = createzerolist(N)
     for _,c in ipairs(conditions) do
-        for i = 1,unknown.type.channelcount do
+        for i = 1,N do
             P_hat[i] = P_hat[i] + c*P_hat_c[c][i]
         end
     end
@@ -1847,79 +1908,82 @@ local function createjtjcentered(residuals,unknown,P)
     dprint("JTJ[nopoly] = ", ad.tostrings(P_hat))
     P_hat = ad.polysimplify(P_hat)
     dprint("JTJ[poly] = ", ad.tostrings(P_hat))
-    return ad.Vector(unpack(P_hat))
+    local r = ad.Vector(unpack(P_hat))
+    return A.FunctionSpec(ES.kind,"applyJTJ", List {"P"}, List{r}, EMPTY)
 end
 
-local function createjtjgraph(residuals,P,Ap_X)
-    local jtjgraph = terralib.newlist()
-    for graph,terms in pairs(residuals.graphs) do
-        local result = ad.toexp(0)
-        local scatters = terralib.newlist() 
-        local scattermap = {}
-        local function addscatter(u,exp)
-            local s = scattermap[u]
-            if not s then
-                s =  Scatter(Ap_X,u.index,u.channel,ad.toexp(0),"add")
-                scattermap[u] = s
-                scatters:insert(s)
-            end
-            s.expression = s.expression + exp
+local function createjtjgraph(PS,ES)
+    local P,Ap_X = PS:UnknownArgument(1),PS:UnknownArgument(2)
+
+    local result = ad.toexp(0)
+    local scatters = List() 
+    local scattermap = {}
+    local function addscatter(u,exp)
+        local s = scattermap[u]
+        if not s then
+            s =  Scatter(Ap_X[u.image.name],u.index,u.channel,ad.toexp(0),"add")
+            scattermap[u] = s
+            scatters:insert(s)
         end
-        for i,term in ipairs(terms) do
-            local F,unknownsupport = term.expression,term.unknownaccesses
-            local unknownvars = unknownsupport:map(function(x) return ad.v[x] end)
-            local partials = F:gradient(unknownvars)
-            local Jp = ad.toexp(0)
-            for i,partial in ipairs(partials) do
-                local u = unknownsupport[i]
-                assert(GraphElement:is(u.index))
-                Jp = Jp + partial*P(u.index,u.channel)
-            end
-            for i,partial in ipairs(partials) do
-                local u = unknownsupport[i]
-                local jtjp = 2*Jp*partial
-                result = result + P(u.index,u.channel)*jtjp
-                addscatter(u,jtjp)
-            end
-        end
-        jtjgraph:insert(GraphFunctionSpec(graph,List { result },scatters)) 
+        s.expression = s.expression + exp
     end
-    return jtjgraph
-end
-local function createjtj(residuals,unknown,P,Ap_X)
-    return createjtjcentered(residuals,unknown,P),createjtjgraph(residuals,P,Ap_X)
+    for i,term in ipairs(ES.residuals) do
+        local F,unknownsupport = term.expression,term.unknowns
+        local unknownvars = unknownsupport:map(function(x) return ad.v[x] end)
+        local partials = F:gradient(unknownvars)
+        local Jp = ad.toexp(0)
+        for i,partial in ipairs(partials) do
+            local u = unknownsupport[i]
+            assert(GraphElement:is(u.index))
+            Jp = Jp + partial*P[u.image.name](u.index,u.channel)
+        end
+        for i,partial in ipairs(partials) do
+            local u = unknownsupport[i]
+            local jtjp = 2*Jp*partial
+            result = result + P[u.image.name](u.index,u.channel)*jtjp
+            addscatter(u,jtjp)
+        end
+    end
+
+    return A.FunctionSpec(PS.kind,"applyJTJ", List {"P", "Ap_X"}, List { result }, scatters)
 end
 
-local function createjtfcentered(problemSpec,residuals,unknown)
-   local F_hat = createzerolist(unknown.type.channelcount) --gradient
-   local P_hat = createzerolist(unknown.type.channelcount) --preconditioner
+local function createjtfcentered(PS,ES)
+   local UnknownType = PS.P:UnknownType()
+   local ispace = ES.kind.ispace
+   local N = UnknownType:VectorSizeForIndexSpace(ispace)
+   
+   local F_hat = createzerolist(N) --gradient
+   local P_hat = createzerolist(N) --preconditioner
     
-    for ridx,residual in ipairs(residuals.unknown) do
-        local F, unknownsupport = residual.expression,residual.unknownaccesses
+    for ridx,residual in ipairs(ES.residuals) do
+        local F, unknownsupport = residual.expression,residual.unknowns
         lprintf(0,"-------------")
         lprintf(1,"R[%d] = %s",ridx,tostring(F))
-        for channel = 0, unknown.type.channelcount-1 do
-            local x = unknown(unknown.type.ispace:ZeroOffset(),channel)
-            local residuals = residualsincludingX00(unknownsupport,channel)
+    
+        for idx,unknownname,chan in UnknownType:UnknownIteratorForIndexSpace(ispace) do
+            local unknown = PS:ImageWithName(unknownname) 
+            local x = unknown(ispace:ZeroOffset(),chan)
+            
+            local residuals = residualsincludingX00(unknownsupport,unknown,chan)
             
             local sum = 0
             for _,f in ipairs(residuals) do
                 local F_x = shiftexp(F,f)
                 local dfdx00 = F_x:d(x)		-- entry of J^T
                 local dfdx00F = dfdx00*F_x	-- entry of \gradF == J^TF
-                F_hat[channel+1] = F_hat[channel+1] + dfdx00F			-- summing it up to get \gradF
+                F_hat[idx+1] = F_hat[idx+1] + dfdx00F			-- summing it up to get \gradF
     
                 local dfdx00Sq = dfdx00*dfdx00	-- entry of Diag(J^TJ)
-                P_hat[channel+1] = P_hat[channel+1] + dfdx00Sq			-- summing the pre-conditioner up
+                P_hat[idx+1] = P_hat[idx+1] + dfdx00Sq			-- summing the pre-conditioner up
                 --sum = sum + dfdx00F
-                lprintf(2,"dR[%d]_%s/dx[%d] = %s",ridx,tostring(f),channel,tostring(dfdx00F))
+                lprintf(2,"dR[%d]_%s/dx[%d] = %s",ridx,tostring(f),chan,tostring(dfdx00F))
             end
-            
             
         end
     end
-	for i = 1,unknown.type.channelcount do
-	    if not problemSpec.P.usepreconditioner then
+	for i = 1,N do
+	    if not PS.P.usepreconditioner then
 		    P_hat[i] = ad.toexp(1.0)
 	    else
 		    P_hat[i] = 2.0*P_hat[i]
@@ -1928,41 +1992,35 @@ local function createjtfcentered(problemSpec,residuals,unknown)
 	    F_hat[i] = ad.polysimplify(2.0*F_hat[i])
 	end
 	dprint("JTF =", ad.tostrings({F_hat[1], F_hat[2], F_hat[3]}))
-    return terralib.newlist{ ad.Vector(unpack(F_hat)), ad.Vector(unpack(P_hat)) }
+    return A.FunctionSpec(ES.kind,"evalJTF", EMPTY, List{ ad.Vector(unpack(F_hat)), ad.Vector(unpack(P_hat)) }, EMPTY)
 end
 
-local function createjtfgraph(residuals,R,Pre)
-    local jtjgraph = terralib.newlist()
-    for graph,terms in pairs(residuals.graphs) do
-        local scatters = terralib.newlist() 
-        local scattermap = { [R] = {}, [Pre] = {}}
-        local function addscatter(im,u,exp)
-            local s = scattermap[im][u]
-            if not s then
-                s =  Scatter(im,u.index,u.channel,ad.toexp(0),"add")
-                scattermap[im][u] = s
-                scatters:insert(s)
-            end
-            s.expression = s.expression + exp
+local function createjtfgraph(PS,ES)
+    local R,Pre = PS:UnknownArgument(1),PS:UnknownArgument(2)
+    local scatters = List() 
+    local scattermap = { [R] = {}, [Pre] = {}}
+    local function addscatter(im,u,exp)
+        local s = scattermap[im][u]
+        if not s then
+            s =  Scatter(im[u.image.name],u.index,u.channel,ad.toexp(0),"add")
+            scattermap[im][u] = s
+            scatters:insert(s)
         end
-        for i,term in ipairs(terms) do
-            local F,unknownsupport = term.expression,term.unknownaccesses
-            local unknownvars = unknownsupport:map(function(x) return ad.v[x] end)
-            local partials = F:gradient(unknownvars)
-            local Jp = ad.toexp(0)
-            for i,partial in ipairs(partials) do
-                local u = unknownsupport[i]
-                assert(GraphElement:is(u.index))
-                addscatter(R,u,-2.0*partial*F)
-                addscatter(Pre,u,2.0*partial*partial)
-            end
-        end
-        jtjgraph:insert(GraphFunctionSpec(graph,List {},scatters))
+        s.expression = s.expression + exp
     end
-    return jtjgraph
-end
-local function createjtf(problemSpec,residuals,unknown,R,Pre)
-    return createjtfcentered(problemSpec,residuals,unknown), createjtfgraph(residuals,R,Pre)
+    for i,term in ipairs(terms) do
+        local F,unknownsupport = term.expression,term.unknowns
+        local unknownvars = unknownsupport:map(function(x) return ad.v[x] end)
+        local partials = F:gradient(unknownvars)
+        local Jp = ad.toexp(0)
+        for i,partial in ipairs(partials) do
+            local u = unknownsupport[i]
+            assert(GraphElement:is(u.index))
+            addscatter(R,u,-2.0*partial*F)
+            addscatter(Pre,u,2.0*partial*partial)
+        end
+    end
+    return A.FunctionSpec(PS.kind, "evalJTF", List { "R", "Pre" }, EMPTY, scatters)
 end
 
 local lastTime = nil
@@ -1993,41 +2051,40 @@ local function creategradient(unknown,costexp)
     dprint(ad.tostrings(gradientsgathered))
     return ad.Vector(gradientsgathered)
 end
-
-local function createcost(residuals)
+    
+local function createcost(ES)
     local function sumsquared(terms)
-        terms = terms:map("expression")
         local sum = ad.toexp(0)
         for i,t in ipairs(terms) do
             sum = sum + t*t
         end
         return sum
     end
-    local graphwork = terralib.newlist()
-    for graph,terms in pairs(residuals.graphs) do
-        graphwork:insert(GraphFunctionSpec(graph,List { sumsquared(terms) }, List()))
-    end
-    return sumsquared(residuals.unknown), graphwork
+    local exp = sumsquared(ES.residuals:map("expression"))
+    return A.FunctionSpec(ES.kind,"cost", EMPTY, List{exp}, EMPTY) 
 end
 
-function createprecomputed(self,name,precomputedimages)
-    local scatters = terralib.newlist()
-    local ut = self.P:UnknownType().images[1].imagetype
+function createprecomputed(self,precomputedimages)
+
+    local ispaces,image_map = MapAndGroupBy(precomputedimages,function(im) return im.type.ispace,im end)
     
-    local zoff = ut.ispace:ZeroOffset()
-    
-    for i,im in ipairs(precomputedimages) do
-        local expression = ad.polysimplify(im.expression)
-        scatters:insert(Scatter(im, zoff, 0, im.expression, "set"))
-        for _,gim in ipairs(im.gradientimages) do
-            local gradientexpression = ad.polysimplify(gim.expression)
-            if not ad.Const:is(gradientexpression) then
-                scatters:insert(Scatter(gim.image, zoff, 0, gradientexpression, "set"))
+    local precomputes = List()
+    for _,ispace in ipairs(ispaces) do
+        local scatters = List()
+        local zoff = ispace:ZeroOffset()
+        for _,im in ipairs(image_map[ispace]) do
+            local expression = ad.polysimplify(im.expression)
+            scatters:insert(Scatter(im, zoff, 0, im.expression, "set"))
+            for _,gim in ipairs(im.gradientimages) do
+                local gradientexpression = ad.polysimplify(gim.expression)
+                if not ad.Const:is(gradientexpression) then
+                    scatters:insert(Scatter(gim.image, zoff, 0, gradientexpression, "set"))
+                end
             end
         end
+        precomputes:insert(A.FunctionSpec(A.CenteredFunction(ispace),"precompute", EMPTY, EMPTY, scatters))
     end
-    
-    return createfunction(self,name,ut.ispace:indextype(),terralib.newlist(),scatters)
+    return precomputes
 end
 local function extractresidualterms(...)
     local exp = terralib.newlist {}
@@ -2046,43 +2103,32 @@ local function extractresidualterms(...)
 end
 function ProblemSpecAD:Cost(...)
     local terms = extractresidualterms(...)
-    local unknown = assert(self.nametoimage.X, "unknown image X is not defined")
-
-    local residuals = classifyresiduals(unknown.type.ispace,terms)
     
-    local centeredcost,graphcost = createcost(residuals)
-    
-    self.P:Stencil(stencilforexpression(centeredcost))
-    
-    -- Not updated for graphs yet:    
-    local P = self:ImageArgument("P",unknown.type,1)
-    local Ap_X = self:ImageArgument("Ap_X",unknown.type,2)
-    local jtjexp,jtjgraph = createjtj(residuals,unknown,P,Ap_X)
-    self.P:Stencil(stencilforexpression(jtjexp))
-    
-    local R = self:ImageArgument("R",unknown.type,1)
-    local Pre = self:ImageArgument("Pre",unknown.type,2)
-    local jtfcentered,jtfgraph = createjtf(self,residuals,unknown,R,Pre) --includes the 2.0
-    self.P:Stencil(stencilforexpression(jtfcentered[1]))
-    
-    self:createfunctionset("cost",terralib.newlist{centeredcost},graphcost)
-    self:createfunctionset("applyJTJ",terralib.newlist{jtjexp},jtjgraph)
-    --gradient with pre-conditioning
-    self:createfunctionset("evalJTF",jtfcentered,jtfgraph)
-    
-    
-    local precomputed = createprecomputed(self,"precompute",self.precomputed)
-    self.P:Function("precompute",precomputed)
-    
-    if self.excludeexp then
-        self:createfunctionset("exclude",terralib.newlist{self.excludeexp},{})
+    local functionspecs = List()
+    local energyspecs = toenergyspecs(terms)
+    for _,energyspec in ipairs(energyspecs) do
+        functionspecs:insert(createcost(energyspec))          
+        if energyspec.kind.kind == "CenteredFunction" then
+            functionspecs:insert(createjtjcentered(self,energyspec))
+            functionspecs:insert(createjtfcentered(self,energyspec))
+        else
+            functionspecs:insert(createjtjgraph(self,energyspec))
+            functionspecs:insert(createjtfgraph(self,energyspec))
+        end
     end
+    functionspecs:insertall(createprecomputed(self,self.precomputed))
+    for i,exclude in ipairs(self.excludeexps) do
+        local class = classifyexpression(exclude)
+        functionspecs:insert(A.FunctionSpec(class, "exclude", EMPTY,List{exclude}, EMPTY))
+    end
+    
+    self:AddFunctions(functionspecs)
     
     return self.P
 end
 
 function ProblemSpecAD:Exclude(exp)
-    self.excludeexp = assert(ad.toexp(exp), "expected a AD expression")
+    self.excludeexps:insert(assert(ad.toexp(exp), "expected a AD expression"))
 end
 
 function SampledImage:__call(x,y,c)

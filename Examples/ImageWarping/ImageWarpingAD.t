@@ -4,13 +4,14 @@ local W,H = opt.Dim("W",0), opt.Dim("H",1)
 local S = ad.ProblemSpec()
 S:UsePreconditioner(true)
 
-local X = 			S:Image("X", opt.float3,{W,H},0)				--uv, a <- unknown
-local UrShape = 	S:Image("UrShape", opt.float2,{W,H},1)		--urshape
-local Constraints = S:Image("Constraints", opt.float2,{W,H},2)	--constraints
-local Mask = 		S:Image("Mask", float, {W,H},3)				--validity mask for constraints
+local Offset = S:Unknown("Offset",opt.float2,{W,H},0)
+local Angle = S:Unknown("Angle",float,{W,H},1)
+local UrShape = 	S:Image("UrShape", opt.float2,{W,H},2)		--urshape
+local Constraints = S:Image("Constraints", opt.float2,{W,H},3)	--constraints
+local Mask = 		S:Image("Mask", float, {W,H},4)				--validity mask for constraints
 
-local w_fitSqrt = S:Param("w_fitSqrt", float, 4)
-local w_regSqrt = S:Param("w_regSqrt", float, 5)
+local w_fitSqrt = S:Param("w_fitSqrt", float, 5)
+local w_regSqrt = S:Param("w_regSqrt", float, 6)
 
 function evalRot(CosAlpha, SinAlpha)
 	return ad.Vector(CosAlpha, -SinAlpha, SinAlpha, CosAlpha)
@@ -27,7 +28,7 @@ end
 local terms = terralib.newlist()
 
 local m = Mask(0,0)	-- float
-local x = ad.Vector(X(0,0,0), X(0,0,1))	-- uv-unknown : float2
+local x = Offset(0,0)
 
 --fitting
 local constraintUV = Constraints(0,0)	-- float2
@@ -44,14 +45,14 @@ end
 terms:insert(e_fit)
 
 --regularization
-local a = X(0,0,2)			-- rotation : float
+local a = Angle(0,0) -- rotation : float
 local R = evalR(a)			-- rotation : float2x2
 local xHat = UrShape(0,0)	-- uv-urshape : float2
 
 local offsets = { {1,0}, {-1,0}, {0,1}, {0, -1} }
 for ii ,o in ipairs(offsets) do
     local i,j = unpack(o)
-    local n = ad.Vector(X(i,j,0), X(i,j,1))
+    local n = Offset(i,j)
     local ARAPCost = (x - n)	-	mul(R, (xHat - UrShape( i,j)))
     local ARAPCostF = ad.select(opt.InBounds(0,0),	ad.select(opt.InBounds( i,j), ARAPCost, ad.Vector(0.0, 0.0)), ad.Vector(0.0, 0.0))
     local m = Mask(i,j)
