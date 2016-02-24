@@ -1756,7 +1756,7 @@ end
 local noscatters = terralib.newlist()
 
 function ProblemSpecAD:CompileFunctionSpec(functionspec)
-    local Index = functionspec.kind == "GraphFunctionSpec" and int or functionspec.kind.ispace:indextype()
+    local Index = functionspec.kind.kind == "GraphFunction" and int or functionspec.kind.ispace:indextype()
     return createfunction(self,functionspec.name,Index,functionspec.arguments,functionspec.results,functionspec.scatters)
 end
 
@@ -1946,7 +1946,7 @@ local function createjtjgraph(PS,ES)
         end
     end
 
-    return A.FunctionSpec(PS.kind,"applyJTJ", List {"P", "Ap_X"}, List { result }, scatters)
+    return A.FunctionSpec(ES.kind,"applyJTJ", List {"P", "Ap_X"}, List { result }, scatters)
 end
 
 local function createjtfcentered(PS,ES)
@@ -2009,7 +2009,7 @@ local function createjtfgraph(PS,ES)
         end
         s.expression = s.expression + exp
     end
-    for i,term in ipairs(terms) do
+    for i,term in ipairs(ES.residuals) do
         local F,unknownsupport = term.expression,term.unknowns
         local unknownvars = unknownsupport:map(function(x) return ad.v[x] end)
         local partials = F:gradient(unknownvars)
@@ -2021,7 +2021,7 @@ local function createjtfgraph(PS,ES)
             addscatter(Pre,u,2.0*partial*partial)
         end
     end
-    return A.FunctionSpec(PS.kind, "evalJTF", List { "R", "Pre" }, EMPTY, scatters)
+    return A.FunctionSpec(ES.kind, "evalJTF", List { "R", "Pre" }, EMPTY, scatters)
 end
 
 local lastTime = nil

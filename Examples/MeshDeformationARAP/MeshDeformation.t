@@ -4,7 +4,7 @@ local N = opt.Dim("N",0)
 
 local w_fitSqrt = P:Param("w_fitSqrt", float, 0)
 local w_regSqrt = P:Param("w_regSqrt", float, 1)
-local X = 			P:Image("X", opt.float6,{N},2)			--vertex.xyz, rotation.xyz <- unknown
+local X = 			P:Unknown("X", opt.float6,{N},2)			--vertex.xyz, rotation.xyz <- unknown
 local UrShape = 	P:Image("UrShape", opt.float3,{N},3)		--urshape: vertex.xyz
 local Constraints = P:Image("Constraints", opt.float3,{N},4)	--constraints
 local G =   P:Graph("G", 5, "v0", {N}, 6,
