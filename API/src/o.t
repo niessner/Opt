@@ -895,7 +895,7 @@ function ProblemSpecAD:ComputedImage(name,dims,exp)
     local unknowns = terralib.newlist()
     local seen = {}
     exp:visit(function(a)
-        if ImageAccess:is(a) and a.image.name == "X" then
+        if ImageAccess:is(a) and a.image.location == A.UnknownLocation then
             assert(Offset:is(a.index),"NYI - support for graphs")
             if not seen[a] then
                 seen[a] = true
@@ -1909,7 +1909,8 @@ local function createjtjcentered(PS,ES)
     P_hat = ad.polysimplify(P_hat)
     dprint("JTJ[poly] = ", ad.tostrings(P_hat))
     local r = ad.Vector(unpack(P_hat))
-    return A.FunctionSpec(ES.kind,"applyJTJ", List {"P"}, List{r}, EMPTY)
+    local result = A.FunctionSpec(ES.kind,"applyJTJ", List {"P"}, List{r}, EMPTY)
+    return result
 end
 
 local function createjtjgraph(PS,ES)
@@ -2082,7 +2083,8 @@ function createprecomputed(self,precomputedimages)
                 end
             end
         end
-        precomputes:insert(A.FunctionSpec(A.CenteredFunction(ispace),"precompute", EMPTY, EMPTY, scatters))
+        local pc = A.FunctionSpec(A.CenteredFunction(ispace),"precompute", EMPTY, EMPTY, scatters)
+        precomputes:insert(pc)
     end
     return precomputes
 end
