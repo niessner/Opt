@@ -4,11 +4,13 @@ local N = opt.Dim("N",0)
 
 local w_fitSqrt = P:Param("w_fitSqrt", float, 0)
 local w_regSqrt = P:Param("w_regSqrt", float, 1)
-local X = 			P:Unknown("X", opt.float6,{N},2)			--vertex.xyz, rotation.xyz <- unknown
-local UrShape = 	P:Image("UrShape", opt.float3,{N},3)		--urshape: vertex.xyz
-local Constraints = P:Image("Constraints", opt.float3,{N},4)	--constraints
-local G =   P:Graph("G", 5, "v0", {N}, 6,
-                            "v1", {N}, 8)
+local Offset = 			P:Unknown("Offset", opt.float3,{N},2)			--vertex.xyz, rotation.xyz <- unknown
+local Angle = 			P:Unknown("Angle", opt.float3,{N},3)			--vertex.xyz, rotation.xyz <- unknown
+
+local UrShape = 	P:Image("UrShape", opt.float3,{N},4)		--urshape: vertex.xyz
+local Constraints = P:Image("Constraints", opt.float3,{N},5)	--constraints
+local G =   P:Graph("G", 6, "v0", {N}, 7,
+                            "v1", {N}, 9)
 P:Stencil(2)
 P:UsePreconditioner(true)
 
@@ -142,10 +144,9 @@ end
 terra C.cost(idx : Index, self : P:ParameterType()) : float
 	
 	var e : float_3  = make_float3(0.0f, 0.0f, 0.0f)
-	var temp : float_6 = self.X.X(idx)
-	var x : float_3 = make_float3(temp(0), temp(1), temp(2))
+	var x : float_3 = self.X.Offset(idx)
 	var xHat : float_3 = self.UrShape(idx)
-	var a : float_3 = make_float3(temp(3), temp(4), temp(5))
+	var a : float_3 = self.X.Angle(idx)
 	var c : float_3 = self.Constraints(idx)
 
 	--e_fit
@@ -168,14 +169,12 @@ terra G.cost(idx : int32, self : P:ParameterType()) : float
 	var n0 = self.G.v0[idx]
     var n1 = self.G.v1[idx]
 
-	var temp : float_6 = self.X.X(n0)
-	var a : float_3 = make_float3(temp(3), temp(4), temp(5))
+	var a : float_3 = self.X.Angle(n0)
 	var R : float3x3 = evalR(a);
-	var p = make_float3(temp(0), temp(1), temp(2))
+	var p = self.X.Offset(n0)
 	var pHat : float_3 = self.UrShape(n0)
 	
-	temp = self.X.X(n1)
-	var q = make_float3(temp(0), temp(1), temp(2))
+	var q = self.X.Offset(n1)
 	var qHat : float_3 = self.UrShape(n1)
 	var d : float_3 = (p - q) - mul(R,(pHat - qHat))
 	var e_reg = (self.w_regSqrt*self.w_regSqrt)*d*d
@@ -190,8 +189,7 @@ terra C.evalJTF(idx : Index, self : P:ParameterType())
 
 	var ones = make_float3(1.0,1.0,1.0)
 	
-	var temp : float_6 = self.X.X(idx);
-	var p : float_3 = make_float3(temp(0), temp(1), temp(2))
+	var p : float_3 = self.X.Offset(idx)
 	var c : float_3 = self.Constraints(idx)
 	-- TODO: use -inf?
 	if c(0) > -9999999.9 then
@@ -337,32 +335,23 @@ terra G.evalJTF(idx : int32, self : P:ParameterType(), r : TUnknownType, precond
 	var n0 = self.G.v0[idx]
     var n1 = self.G.v1[idx]
 	
-	var tmp : float_6
 
-
-	tmp = self.X.X(n0)
-	var p : float_3 = make_float3(tmp(0), tmp(1), tmp(2))
-	var a_i : float_3 = make_float3(tmp(3), tmp(4), tmp(5))
+	var p : float_3 = self.X.Offset(n0)
+	var a_i : float_3 = self.X.Angle(n0)
 	var pHat : float_3 = self.UrShape(n0)
 	var R_i : float3x3 = evalR(a_i)
 	
 	var dRAlpha : float3x3, dRBeta : float3x3, dRGamma : float3x3
 	evalDerivativeRotationMatrix(a_i, &dRAlpha, &dRBeta, &dRGamma)
 
-	tmp = self.X.X(n1)
-	var q : float_3 = make_float3(tmp(0), tmp(1), tmp(2))
-	var a_j : float_3 = make_float3(tmp(3), tmp(4), tmp(5))
+	var q : float_3 = self.X.Offset(n1) 
+	var a_j : float_3 = self.X.Angle(n1)
 	var qHat  : float_3 = self.UrShape(n1)
 	var R_j  : float3x3 = evalR(a_j)
 	
 	var D_i : float3x3 = -evalDerivativeRotationTimesVector(dRAlpha, dRBeta, dRGamma, pHat - qHat)
 	var f_i : float_3 = (p - q) - mul(R_i,(pHat - qHat))
 	
-	var c0 : float_6
-	var c1 : float_6
-	
-	var pre0 : float_6
-	var pre1 : float_6
 	
 	--1st part of the residual (d/d_i)
 	do
@@ -372,11 +361,15 @@ terra G.evalJTF(idx : int32, self : P:ParameterType(), r : TUnknownType, precond
 		var b  : float_3 = 2.0f*(self.w_regSqrt*self.w_regSqrt)*e_reg;
 		var bA : float_3 = 2.0f*(self.w_regSqrt*self.w_regSqrt)*e_reg_angle;
 		var c = make_float6(b(0), b(1), b(2), bA(0), bA(1), bA(2))
-		c0 = c
 		
 		var pre : float_3 = 2.0f*(self.w_regSqrt*self.w_regSqrt)*ones
 		var preA : float3x3 = 2.0f*(self.w_regSqrt*self.w_regSqrt)*matmul(transpose(D_i),D_i)
-		pre0 = make_float6(pre(0), pre(1), pre(2), preA(0), preA(4), preA(8))
+		r.Offset:atomicAdd(n0,-b)
+    	r.Angle:atomicAdd(n0,-bA)
+        if P.usepreconditioner then
+            preconditioner.Offset:atomicAdd(n0, pre)
+            preconditioner.Angle:atomicAdd(n0, make_float3(preA(0),preA(4),preA(8)))
+        end
 	end
 	--1st part of the residual (d/d_j)
 	do
@@ -386,22 +379,15 @@ terra G.evalJTF(idx : int32, self : P:ParameterType(), r : TUnknownType, precond
 		var b  : float_3 = 2.0f*(self.w_regSqrt*self.w_regSqrt)*e_reg;
 		var bA : float_3 = 2.0f*(self.w_regSqrt*self.w_regSqrt)*e_reg_angle;
 		var c = make_float6(b(0), b(1), b(2), bA(0), bA(1), bA(2))
-		c1 = c
 		
 		var pre : float_3 = 2.0f*(self.w_regSqrt*self.w_regSqrt)*ones
-		pre1 = make_float6(pre(0), pre(1), pre(2), 0, 0, 0)
+		r.Offset:atomicAdd(n1,-b)
+    	r.Angle:atomicAdd(n1,-bA)
+        if P.usepreconditioner then
+            preconditioner.Offset:atomicAdd(n1, pre)
+        end
 	end	
-    
-	--write results
-	var _residuum0 = -c0
-	var _residuum1 = -c1
-	r.X:atomicAdd(n0, _residuum0)
-	r.X:atomicAdd(n1, _residuum1)
 	
-	if P.usepreconditioner then	
-		preconditioner.X:atomicAdd(n0, pre0)
-		preconditioner.X:atomicAdd(n1, pre1)
-	end
 end
 	
 -- eval 2*JtJ (note that we keep the '2' to make it consistent with the gradient
@@ -425,13 +411,10 @@ terra G.applyJTJ(idx : int32, self : P:ParameterType(), pImage : TUnknownType, A
     var n0 = self.G.v0[idx]
     var n1 = self.G.v1[idx]
 	
-	var tmp : float_6
-	tmp = pImage(n0)
-	var p : float_3      = make_float3(tmp(0), tmp(1), tmp(2))
-	var pAngle : float_3 = make_float3(tmp(3), tmp(4), tmp(5))
+	var p : float_3      = pImage.Offset(n0) 
+	var pAngle : float_3 = pImage.Angle(n0)
 
-	tmp = self.X.X(n0)
-	var a_i : float_3 = make_float3(tmp(3), tmp(4), tmp(5))
+	var a_i : float_3 = self.X.Angle(n0) 
 
 	var dRAlpha : float3x3, dRBeta : float3x3, dRGamma : float3x3
 	evalDerivativeRotationMatrix(a_i, &dRAlpha, &dRBeta, &dRGamma)
@@ -440,18 +423,18 @@ terra G.applyJTJ(idx : int32, self : P:ParameterType(), pImage : TUnknownType, A
 	var qHat : float_3 = self.UrShape(n1)
 	var D : float3x3 = -evalDerivativeRotationTimesVector(dRAlpha, dRBeta, dRGamma, pHat - qHat)
 
-	tmp = self.X.X(n1)
-	var a_j : float_3 = make_float3(tmp(3), tmp(4), tmp(5))
-
+	var a_j : float_3 = self.X.Angle(n1) 
 	var dRAlphaJ : float3x3, dRBetaJ : float3x3, dRGammaJ : float3x3
 	evalDerivativeRotationMatrix(a_j, &dRAlphaJ, &dRBetaJ, &dRGammaJ)
 	var D_j :float3x3 = -evalDerivativeRotationTimesVector(dRAlphaJ, dRBetaJ, dRGammaJ, pHat - qHat)
 
-	tmp = pImage(n1)
-	var q  : float_3  = make_float3(tmp(0), tmp(1), tmp(2))
+	var q  : float_3  = pImage.Offset(n1) 
 	
-	var c0 : float_6
-	var c1 : float_6
+	
+	var b0 : float_3
+	var bA0 : float_3
+	var b1 : float_3
+	var bA1 : float_3
 	
 	do
 		var e_reg = p - q
@@ -459,10 +442,8 @@ terra G.applyJTJ(idx : int32, self : P:ParameterType(), pImage : TUnknownType, A
 		e_reg = e_reg + mul(D,pAngle)
 		e_reg_angle = e_reg_angle + mul(transpose(D),(p - q))
 		
-		var b  = 2.0f*(self.w_regSqrt*self.w_regSqrt)*e_reg
-		var bA = 2.0f*(self.w_regSqrt*self.w_regSqrt)*e_reg_angle
-		var c : float_6 = make_float6(b(0), b(1), b(2), bA(0), bA(1), bA(2))
-		c0 = c
+		b0  = 2.0f*(self.w_regSqrt*self.w_regSqrt)*e_reg
+		bA0 = 2.0f*(self.w_regSqrt*self.w_regSqrt)*e_reg_angle
 	end
 	
 	do 
@@ -470,18 +451,19 @@ terra G.applyJTJ(idx : int32, self : P:ParameterType(), pImage : TUnknownType, A
 		var e_reg_angle = make_float3(0,0,0)
 		e_reg = e_reg - mul(D,pAngle)
 		
-		var b  = 2.0f*(self.w_regSqrt*self.w_regSqrt)*e_reg
-		var bA = 2.0f*(self.w_regSqrt*self.w_regSqrt)*e_reg_angle
-		var c : float_6 = make_float6(b(0), b(1), b(2), bA(0), bA(1), bA(2))
-		c1 = c
+		b1  = 2.0f*(self.w_regSqrt*self.w_regSqrt)*e_reg
+		bA1 = 2.0f*(self.w_regSqrt*self.w_regSqrt)*e_reg_angle
 	end
     
-	Ap_X.X:atomicAdd(n0, c0)
-    Ap_X.X:atomicAdd(n1, c1)
+	Ap_X.Offset:atomicAdd(n0, b0)
+    Ap_X.Angle:atomicAdd(n0, bA0)
+
+    Ap_X.Offset:atomicAdd(n1, b1)
+    Ap_X.Angle:atomicAdd(n1, bA1)
     
     var d = 0.0f
-	d = d + pImage(n0):dot(c0)
-	d = d + pImage(n1):dot(c1)	
+	d = d + pImage.Offset(n0):dot(b0) + pImage.Angle(n0):dot(bA0)
+	d = d + pImage.Offset(n1):dot(b1) + pImage.Angle(n1):dot(bA1)
 	return d
 end
 

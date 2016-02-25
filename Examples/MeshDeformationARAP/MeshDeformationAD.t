@@ -5,10 +5,11 @@ local N = opt.Dim("N",0)
 
 local w_fitSqrt = adP:Param("w_fitSqrt", float, 0)
 local w_regSqrt = adP:Param("w_regSqrt", float, 1)
-local X = 			adP:Unknown("X", opt.float6,{N},2)			--vertex.xyz, rotation.xyz <- unknown
-local UrShape = 	adP:Image("UrShape", opt.float3, {N},3)		--urshape: vertex.xyz
-local Constraints = adP:Image("Constraints", opt.float3,{N},4)	--constraints
-local G = adP:Graph("G", 5, "v0", {N}, 6, "v1", {N}, 8)
+local Offset = 			adP:Unknown("Offset", opt.float3,{N},2)			--vertex.xyz, rotation.xyz <- unknown
+local Angle = 			adP:Unknown("Angle", opt.float3,{N},3)			--vertex.xyz, rotation.xyz <- unknown
+local UrShape = 	adP:Image("UrShape", opt.float3, {N},4)		--urshape: vertex.xyz
+local Constraints = adP:Image("Constraints", opt.float3,{N},5)	--constraints
+local G = adP:Graph("G", 6, "v0", {N}, 7, "v1", {N}, 9)
 P:UsePreconditioner(true)
 
 function evalRot(CosAlpha, CosBeta, CosGamma, SinAlpha, SinBeta, SinGamma)
@@ -38,21 +39,19 @@ end
 local terms = terralib.newlist()
 	
 --fitting
-local x_fit = ad.Vector(X(0,0), X(0,1), X(0,2))	--vertex-unknown : float3
+local x_fit = Offset(0)	--vertex-unknown : float3
 local constraint = Constraints(0)						--target : float3
 local e_fit = x_fit - constraint
 e_fit = ad.select(ad.greatereq(constraint(0), -999999.9), e_fit, ad.Vector(0.0, 0.0, 0.0))
 terms:insert(w_fitSqrt*e_fit)
 
 --regularization
-local x0 = X(G.v0)	--float6
-local x1 = X(G.v1)	--float6
-local x = ad.Vector(x0(0), x0(1), x0(2))	--vertex-unknown : float3
-local a = ad.Vector(x0(3), x0(4), x0(5))	--rotation(alpha,beta,gamma) : float3
+local x = Offset(G.v0)	--vertex-unknown : float3
+local a = Angle(G.v0)  --rotation(alpha,beta,gamma) : float3
 local R = evalR(a(0), a(1), a(2))			--rotation : float3x3
 local xHat = UrShape(G.v0)					--uv-urshape : float3
 	
-local n = ad.Vector(x1(0), x1(1), x1(2))
+local n = Offset(G.v1)
 local ARAPCost = (x - n) - mul(R, (xHat - UrShape(G.v1)))
 
 terms:insert(w_regSqrt*ARAPCost)

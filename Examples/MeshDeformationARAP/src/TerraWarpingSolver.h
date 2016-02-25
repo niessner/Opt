@@ -81,7 +81,6 @@ public:
 
 
 		m_numUnknown = vertexCount;
-		cutilSafeCall(cudaMalloc(&d_unknowns, sizeof(float6)*vertexCount));
 	}
 
 	~TerraWarpingSolver()
@@ -99,7 +98,6 @@ public:
 			Opt_ProblemDelete(m_optimizerState, m_problem);
 		}
 
-		cutilSafeCall(cudaFree(d_unknowns));
 	}
 
 	//void solve(float3* d_unknown, float3* d_target, unsigned int nNonLinearIterations, unsigned int nLinearIterations, unsigned int nBlockIterations, float weightFit, float weightReg)
@@ -118,19 +116,15 @@ public:
 	{
 		unsigned int nBlockIterations = 1;	//invalid just as a dummy;
 
-		convertToFloat6(d_vertexPosFloat3, d_anglesFloat3, d_unknowns, m_numUnknown);
-
 		void* solverParams[] = { &nNonLinearIterations, &nLinearIterations, &nBlockIterations };
 
 		float weightFitSqrt = sqrt(weightFit);
 		float weightRegSqrt = sqrt(weightReg);
 		
 		int * d_zeros = d_headY;		
-		void* problemParams[] = { &weightFitSqrt, &weightRegSqrt, d_unknowns, d_vertexPosFloat3Urshape, d_vertexPosTargetFloat3, &edgeCount,  d_headX, d_headY, d_tailX, d_tailY };
+		void* problemParams[] = { &weightFitSqrt, &weightRegSqrt, d_vertexPosFloat3, d_anglesFloat3, d_vertexPosFloat3Urshape, d_vertexPosTargetFloat3, &edgeCount,  d_headX, d_headY, d_tailX, d_tailY };
 
 		Opt_ProblemSolve(m_optimizerState, m_plan, problemParams, solverParams);
-
-		convertFromFloat6(d_unknowns, d_vertexPosFloat3, d_anglesFloat3, m_numUnknown);
 	}
 
 private:
@@ -139,5 +133,4 @@ private:
 	Plan*		m_plan;
 
 	unsigned int m_numUnknown;
-	float6*		d_unknowns;	//float3 (vertices) + float3 (angles)
 };
