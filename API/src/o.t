@@ -2130,7 +2130,8 @@ function ProblemSpecAD:Cost(...)
 end
 
 function ProblemSpecAD:Exclude(exp)
-    self.excludeexps:insert(assert(ad.toexp(exp), "expected a AD expression"))
+    exp = assert(ad.toexp(exp), "expected a AD expression")
+    self.excludeexps:insert(exp)
 end
 
 function SampledImage:__call(x,y,c)

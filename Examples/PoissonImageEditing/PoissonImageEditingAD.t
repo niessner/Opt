@@ -1,6 +1,6 @@
 local W,H = opt.Dim("W",0), opt.Dim("H",1)
 local S = ad.ProblemSpec()
-local X = S:Image("X", opt.float4,{W,H},0)
+local X = S:Unknown("X", opt.float4,{W,H},0)
 local T = S:Image("T", opt.float4,{W,H},1)
 local M = S:Image("M", float, {W,H},2)
 S:UsePreconditioner(false)
