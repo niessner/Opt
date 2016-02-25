@@ -5,7 +5,7 @@ local S = ad.ProblemSpec()
 local w_fitSqrt = S:Param("w_fit", float, 0)
 local w_regSqrt = S:Param("w_reg", float, 1)
 
-local X = S:Image("X", opt.float2,{W,H},2)
+local X = S:Unknown("X", opt.float2,{W,H},2)
 local I = S:Image("I",float,{W,H},3)
 
 local I_hat_im = S:Image("I_hat",float,{W,H},4)

@@ -5,7 +5,7 @@ local N = opt.Dim("N",0)
 
 local w_fitSqrt = adP:Param("w_fit", float, 0)
 local w_regSqrt = adP:Param("w_reg", float, 1)
-local X = adP:Image("X", opt.float3,{N},2)
+local X = adP:Unknown("X", opt.float3,{N},2)
 local A = adP:Image("A", opt.float3,{N},3)
 --local G = adP:Graph("G", 0, "v0", {N}, 0, "v1", {N}, 1)
 local G = adP:Graph("G", 4, "v0", {N}, 5, --current vertex
