@@ -18,8 +18,6 @@ local IO = terralib.includec("stdio.h")
 local P 	= opt.ProblemSpec()
 local W,H 	= opt.Dim("W",0), opt.Dim("H",1)
 
-
-
 -- See TerraSolverParameters
 local w_p						= P:Param("w_p",float,0)-- Is initialized by the solver!
 local w_s		 				= P:Param("w_s",float,1)-- Regularization weight
@@ -54,7 +52,7 @@ local nPatchIterations 		= P:Param("nPatchIterations",uint,offset+3) -- Steps on
 
 
 offset = offset + 4
-local D 	= P:Image("X",float, {W,H},offset+0) -- Refined Depth
+local D 	= P:Unknown("X",float, {W,H},offset+0) -- Refined Depth
 local D_i 	= P:Image("D_i",float, {W,H},offset+1) -- Depth input
 local I 	= P:Image("I",float, {W,H},offset+2) -- Target Intensity
 local D_p 	= P:Image("D_p",float, {W,H},offset+3) -- Previous Depth
@@ -75,12 +73,12 @@ end
 
 P:Stencil(2)
 
+local F = {}
+local WH = opt.toispace {W,H}
 local TUnknownType = P:UnknownType():terratype()
-local Index = P:UnknownType().ispace:indextype()
+local Index = WH:indextype()
 
-local C = terralib.includecstring [[
-#include <math.h>
-]]
+local ScalarImageType = P:ImageType(float, WH):terratype()
 
 local float3 = vector(float, 3)
 local float4 = vector(float, 4)
@@ -166,7 +164,7 @@ local terra mat4_times_float4(M : mat4, v : float4)
 	return make_float4(result[0], result[1], result[2], result[3])
 end
 
-local terra estimate_normal_from_depth2(inPriorDepth : TUnknownType, gidx : int, gidy : int, W : int, H : int, ax : float, ay : float, f_x : float, f_y : float)
+local terra estimate_normal_from_depth2(inPriorDepth : ScalarImageType, gidx : int, gidy : int, W : int, H : int, ax : float, ay : float, f_x : float, f_y : float)
 	var x : float = 0.0f
 	var y : float = 0.0f
 	var z : float = 0.0f
@@ -432,7 +430,7 @@ local terra est_lap_init_3d_imp(idx : Index, self : P:ParameterType(), w0 : floa
 end
 
 
-local terra cost(idx : Index, self : P:ParameterType())
+terra F.cost(idx : Index, self : P:ParameterType())
 	var W = [W.size]
 	var H = [H.size]
 	var gi,gj = idx.d0,idx.d1
@@ -802,7 +800,7 @@ local terra evalMinusJTFDeviceLS_SFS_Shared_Mask_Prior(idx : Index, posx : int, 
 end
 
 
-local terra evalJTF(idx : Index, self : P:ParameterType())
+terra F.evalJTF(idx : Index, self : P:ParameterType())
 		
 	var Pre     : float
 	var normal0 : float3
@@ -868,13 +866,6 @@ local terra est_lap_3d_bsp_imp_with_guard(self : P:ParameterType(), pImage : TUn
 		@b_valid = false
 	end
 	return vector(retval_0,retval_1,retval_2);
-end
-
-
-
--- eval 2*JtF == \nabla(F); eval diag(2*(Jt)^2) == pre-conditioner
-local terra gradient(idx : Index, self : P:ParameterType())
-	return evalJTF(idx, self)._0
 end
 
 local terra applyJTJDeviceLS_SFS_Shared_BSP_Mask_Prior(idx : Index, posx : int, posy : int, W : uint, H : int, self : P:ParameterType(), pImage : TUnknownType,
@@ -1137,7 +1128,7 @@ end
 
 
 -- eval 2*JtJ (note that we keep the '2' to make it consistent with the gradient
-local terra applyJTJ(idx : Index, self : P:ParameterType(), pImage : TUnknownType)
+terra F.applyJTJ(idx : Index, self : P:ParameterType(), pImage : TUnknownType)
 	var W : int = [W.size]
 	var H : int = [H.size]
 
@@ -1153,7 +1144,8 @@ local terra applyJTJ(idx : Index, self : P:ParameterType(), pImage : TUnknownTyp
 	return 2.0*JTJ
 end
 
-local terra precompute(idx : Index, self : P:ParameterType())
+if USE_PRECOMPUTE then
+terra F.precompute(idx : Index, self : P:ParameterType())
 
 	var temp = calShading2depthGradHelper(idx, idx.d0, idx.d1, self)
 	self.B_I_dx0(idx) 	= temp[0]
@@ -1173,13 +1165,6 @@ local terra precompute(idx : Index, self : P:ParameterType())
 	self.pguard(idx) = guard
 end
 
-P:Function("cost",       cost)
-P:Function("evalJTF",    evalJTF)
-P:Function("gradient",   gradient)
-P:Function("applyJTJ",   applyJTJ)
-if USE_PRECOMPUTE then
-	P:Function("precompute", precompute)
 end
-
-
+P:Functions(WH,F)
 return P

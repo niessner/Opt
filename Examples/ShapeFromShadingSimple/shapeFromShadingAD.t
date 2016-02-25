@@ -50,7 +50,7 @@ local nNonLinearIterations 	= P:Param("nNonLinearIterations",uint,offset+1) -- S
 local nLinIterations 		= P:Param("nLinIterations",uint,offset+2) -- Steps of the linear solver
 local nPatchIterations 		= P:Param("nPatchIterations",uint,offset+3) -- Steps on linear step on block level
 offset = offset + 4
-local X     = P:Image("X",float, {W,H},offset+0) -- Refined Depth
+local X     = P:Unknown("X",float, {W,H},offset+0) -- Refined Depth
 local D_i   = P:Image("D_i",float, {W,H},offset+1) -- Depth input
 
 local Im    = P:Image("Im",float, {W,H},offset+2) -- Target Intensity
