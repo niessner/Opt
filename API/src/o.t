@@ -923,7 +923,9 @@ function ProblemSpecAD:Graph(name,idx,...)
     local g = Graph(name)
     for i = 1, select("#",...),3 do
         local name,dims,didx = select(i,...)
-        g[name] = GraphElement(g,name)
+        local ge = GraphElement(g,name) 
+        ge.ispace = toispace(dims)
+        g[name] = ge
     end
     return g
 end
@@ -946,6 +948,9 @@ function Image:__call(first,...)
         end
         index = Offset(o)
         c = select(self:DimCount(), ...)
+    end
+    if GraphElement:is(index) then    
+        assert(index.ispace == self.type.ispace,"graph element is in a different index space from image")
     end
     c = tonumber(c)
     assert(not c or c < self.type.channelcount, "channel outside of range")
