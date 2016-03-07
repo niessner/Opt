@@ -1,10 +1,10 @@
 --terralib.settypeerrordebugcallback( function(fn) fn:printpretty() end )
 opt = {} --anchor it in global namespace, otherwise it can be collected
 local S = require("std")
-local A = require("asdl")
 local ffi = require("ffi")
 local util = require("util")
 ad = require("ad")
+local A = ad.classes
 local solversCPU = require("solversCPU")
 local solversGPU = require("solversGPU")
 
@@ -171,7 +171,7 @@ FunctionSpec = (FunctionKind kind, string name, string* arguments, ExpLike* resu
 
 Scatter = (Image image,Index index, number channel, Exp expression, string kind)
 Condition = (IRNode* members)
-IRNode = vectorload(ImageAccess value, number count)
+IRNode = vectorload(ImageAccess value, number count) # another one
        | sampleimage(Image image, number count, IRNode* children)
        | reduce(string op, IRNode* children)
        | vectorconstruct(IRNode* children)
@@ -522,17 +522,19 @@ function ImageType:terratype()
             self.data[idx:tooffset()] = v
         end
     end
-    
-	terra Image:atomicAddChannel(idx : Index, c : int32, v : scalartype)
-	    var addr : &scalartype = &self.data[idx:tooffset()].data[c]
-	    util.atomicAdd(addr,v)
-	end
-	terra Image:atomicAdd(idx : Index, v : vectortype) -- only for hand written stuff
-	    for i = 0,channelcount do
-	        self:atomicAddChannel(idx,i,v(i))
-	    end
-	end
-	
+
+    if scalartype == float then    
+        terra Image:atomicAddChannel(idx : Index, c : int32, v : scalartype)
+            var addr : &scalartype = &self.data[idx:tooffset()].data[c]
+            util.atomicAdd(addr,v)
+        end
+        terra Image:atomicAdd(idx : Index, v : vectortype) -- only for hand written stuff
+            for i = 0,channelcount do
+                self:atomicAddChannel(idx,i,v(i))
+            end
+        end
+    end
+
     terra Image:get(idx : Index)
         var v : vectortype = 0.f
         if idx:InBounds() then
@@ -560,16 +562,6 @@ function ImageType:terratype()
 		self.data = [&vectortype](C.malloc(self:totalbytes()))
 		C.memset(self.data,0,self:totalbytes())
 	end
-	terra Image:initGPU()
-        var data : &uint8
-        C.cudaMalloc([&&opaque](&data), self:totalbytes())
-        C.cudaMemset([&opaque](data), 0, self:totalbytes())
-        self:initFromGPUptr(data)
-    end
-    terra Image:initFromGPUptr( ptr : &uint8 )
-        self.data = nil
-        self:setGPUptr(ptr)
-    end
     if textured then
         local W,H = cardinality,0
         if pitched then
@@ -586,6 +578,16 @@ function ImageType:terratype()
         end
     else
         terra Image:setGPUptr(ptr : &uint8) self.data = [&vectortype](ptr) end
+    end
+	terra Image:initFromGPUptr( ptr : &uint8 )
+        self.data = nil
+        self:setGPUptr(ptr)
+    end
+	terra Image:initGPU()
+        var data : &uint8
+        C.cudaMalloc([&&opaque](&data), self:totalbytes())
+        C.cudaMemset([&opaque](data), 0, self:totalbytes())
+        self:initFromGPUptr(data)
     end
     return Image
 end

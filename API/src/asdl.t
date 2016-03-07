@@ -23,14 +23,22 @@ local function parseAll(text)
         error(string.format("expected %s but found '%s' here:\n%s",what,value,
               text:sub(1,pos).."<--##    "..text:sub(pos+1,-1)))
     end
-    local function next()
-        local ws = text:match("^%s*",pos)
-        pos = pos + #ws
-        if pos > #text then
-            cur,value = "EOF","EOF"
-            return
+    local function skip(pattern)
+        local matched = text:match(pattern,pos)
+        pos = pos + #matched
+        if pos <= #text then
+            return false
         end
+        cur,value = "EOF","EOF"
+        return true
+    end
+    local function next()
+        if skip("^%s*") then return end -- whitespace
         local c = text:sub(pos,pos)
+        if c == "#" then -- comment
+            if skip("^[^\n]*\n") then return end
+            return next()
+        end
         if keywords[c] then
             cur,value,pos = c,c,pos+1
             return
@@ -344,4 +352,4 @@ function Context:Define(text)
     end
 end
 
-return newcontext()
+return { newcontext = newcontext }

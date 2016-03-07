@@ -1,6 +1,6 @@
 local ad = {}
 local C = terralib.includec("math.h")
-local A = require("asdl")
+local A = require("asdl").newcontext()
 
 local use_simplify = true
 local use_condition_factoring = true
@@ -20,6 +20,7 @@ A:Define [[
 ]]
 local Op,Shape,ExpVector,Exp,Var,Apply,Reduce,Const = A.Op,A.Shape,A.ExpVector,A.Exp,A.Var,A.Apply,A.Reduce,A.Const
 
+ad.classes = A
 ad.scalar = Shape(List{})
  
 function Shape:isprefixof(rhs)

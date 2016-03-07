@@ -154,11 +154,6 @@ function Array(T,debug)
         self._data,self._size,self._capacity = nil,0,0
         return self
     end
-    terra Array:init(cap : int32) : &Array
-        self:init()
-        self:reserve(cap)
-        return self
-    end
     terra Array:reserve(cap : int32)
         if cap > 0 and cap > self._capacity then
             var oc = self._capacity
@@ -170,6 +165,11 @@ function Array(T,debug)
             end
             self._data = [&T](S.realloc(self._data,sizeof(T)*self._capacity))
         end
+    end
+    terra Array:init(cap : int32) : &Array
+        self:init()
+        self:reserve(cap)
+        return self
     end
     terra Array:__destruct()
         assert(self._capacity >= self._size)
@@ -232,20 +232,21 @@ function Array(T,debug)
         assert(self._size > 0)
         return self:remove(self._size - 1)
     end
-
-    terra Array:indexof(v : T) : int32
-    	for i = 0LL,self._size do
-            if (v == self._data[i]) then
-            	return i
+    
+    if not T:isstruct() then
+        terra Array:indexof(v : T) : int32
+            for i = 0LL,self._size do
+                if (v == self._data[i]) then
+                    return i
+                end
             end
+            return -1
         end
-        return -1
-	end
-
-	terra Array:contains(v : T) : bool
-    	return self:indexof(v) >= 0
-	end
-
+        terra Array:contains(v : T) : bool
+            return self:indexof(v) >= 0
+        end
+    end
+	
     return Array
 end
 
@@ -289,9 +290,6 @@ terra Timer:cleanup()
 	self.timingInfo:delete()
 end 
 
-terra Timer:reset() 
-	self.timingInfo:fastclear()
-end
 
 terra Timer:startEvent(name : rawstring,  stream : C.cudaStream_t, endEvent : &C.cudaEvent_t)
     var timingInfo : TimingInfo
