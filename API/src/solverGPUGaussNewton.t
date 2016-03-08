@@ -45,6 +45,8 @@ return function(problemSpec)
 		scanBetaNumerator : &float
 		scanBetaDenominator : &float
 		
+		prevCost : float -- cost during previous iteration, used for LM
+		
 		timer : Timer
 		endSolver : util.TimerEvent
 		nIter : int				--current non-linear iter counter
@@ -205,6 +207,13 @@ return function(problemSpec)
                 pd.parameters.X(idx) = pd.parameters.X(idx) + pd.delta(idx)
             end
         end	
+		
+		terra kernels.PCGLinearUpdateRevert(pd : PlanData)
+            var idx : Index
+            if idx:initFromCUDAParams() and not fmap.exclude(idx,pd.parameters) then
+                pd.parameters.X(idx) = pd.parameters.X(idx) - pd.delta(idx)
+            end
+        end	
     
         terra kernels.computeCost(pd : PlanData)			
             var cost : float = 0.0f
@@ -272,6 +281,7 @@ return function(problemSpec)
                                                                         "PCGStep2",
                                                                         "PCGStep3",
                                                                         "PCGLinearUpdate",
+																		"PCGLinearUpdateRevert"
                                                                         "computeCost",
                                                                         "precompute",
                                                                         "PCGInit1_Graph",
@@ -301,7 +311,14 @@ return function(problemSpec)
 		[util.initParameters(`pd.parameters,problemSpec, params_,false)]
         gpu.precompute(pd)    
 		if pd.nIter < pd.nIterations then
-		    var startCost = computeCost(pd)
+			var startCost = 0.0f
+			if pd.nIter == 0 then 
+				startCost = computeCost(pd)
+			else 
+				startCost = pd.prevCost
+			end
+			--var startCost = computeCost(pd)
+			
 			logSolver("iteration %d, cost=%f\n", pd.nIter, startCost)
 
 			C.cudaMemset(pd.scanAlphaNumerator, 0, sizeof(float))	--scan in PCGInit1 requires reset
@@ -338,6 +355,17 @@ return function(problemSpec)
 			
 			gpu.PCGLinearUpdate(pd)
 		    pd.nIter = pd.nIter + 1
+			
+			var cost = computeCost(pd)
+			if cost > startCost then	--in this case we revert
+				gpu.PCGLinearUpdateRevert(pd)
+				pd.parameters.lambda = pd.parameters.lambda * 10.0f
+			else 
+				pd.parameters.lambda = pd.parameters.lambda * 0.01f
+			end
+			
+			pd.prevCost = cost
+			
 		    return 1
 		else
 			var finalCost = computeCost(pd)
