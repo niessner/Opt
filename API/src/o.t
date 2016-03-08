@@ -1952,7 +1952,7 @@ local function createjtjgraph(PS,ES)
         for i,partial in ipairs(partials) do
             local u = unknownsupport[i]
             local jtjp = 2*Jp*partial
-            jtjp = jtjp + 2*partial*partial*PS.lambda 
+            jtjp = jtjp + 2*partial*partial*PS.lambda*P[u.image.name](u.index,u.channel)
             result = result + P[u.image.name](u.index,u.channel)*jtjp
             addscatter(u,jtjp)
         end
