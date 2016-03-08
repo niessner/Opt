@@ -36,7 +36,7 @@ return function(problemSpec)
 		r : TUnknownType		--residuals -> num vars	--TODO this needs to be a 'residual type'
 		z : TUnknownType		--preconditioned residuals -> num vars	--TODO this needs to be a 'residual type'
 		p : TUnknownType		--descent direction -> num vars
-		Ap_X : TUnknownType	--cache values for next kernel call after A = J^T x J x p -> num vars
+		Ap_X : TUnknownType		--cache values for next kernel call after A = J^T x J x p -> num vars
 		preconditioner : TUnknownType --pre-conditioner for linear system -> num vars
 		
 		
@@ -388,7 +388,7 @@ return function(problemSpec)
 		pd.p:initGPU()
 		pd.Ap_X:initGPU()
 		pd.preconditioner:initGPU()
-        pd.parameters.lambda = 0.f
+        pd.parameters.lambda = 0.001f
 		[util.initPrecomputedImages(`pd.parameters,problemSpec)]
 		
 		C.cudaMalloc([&&opaque](&(pd.scanAlphaNumerator)), sizeof(float))
