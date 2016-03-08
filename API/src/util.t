@@ -442,10 +442,12 @@ util.initParameters = function(self, ProblemSpec, params, isInit)
                     graphinits:insert( `[&e.type](params[e.idx]) )
                 end
                 rhs = `entry.type { graphinits }
-            elseif entry.kind == "ScalarParam" then
+            elseif entry.kind == "ScalarParam" and entry.idx >= 0 then
                 rhs = `@[&entry.type](params[entry.idx])
             end
-            stmts:insert quote self.[entry.name] = rhs end
+            if rhs ~= nil then
+                stmts:insert quote self.[entry.name] = rhs end
+            end
         end
 	end
 	return stmts
