@@ -840,6 +840,7 @@ function ad.Index(d) return IndexValue(d,0):asvar() end
 function ad.ProblemSpec()
     local ps = ProblemSpecAD()
     ps.P,ps.nametoimage,ps.precomputed,ps.extraarguments,ps.excludeexps = opt.ProblemSpec(), {}, List(), List(), List()
+    ps.lambda = ps:Param("lambda",float,-1)
     return ps
 end
 function ProblemSpecAD:UsePreconditioner(v)
@@ -1892,6 +1893,9 @@ local function createjtjcentered(PS,ES)
                     local uv = ad.v[u]
                     local condition2, drdx_u = ad.splitcondition(rexp:d(uv))
                     local exp = drdx00*drdx_u
+                    if uv == x then -- on the diagonal
+                        exp = exp*(1 + PS.lambda)
+                    end
                     lprintf(2,"term:\ndr%d_%s/dx%s[%d] = %s",rn,tostring(r),tostring(u.index),u.chan,tostring(drdx_u))
                     local conditionmerged = condition*condition2
                     if not P_hat_c[conditionmerged] then
@@ -1948,6 +1952,7 @@ local function createjtjgraph(PS,ES)
         for i,partial in ipairs(partials) do
             local u = unknownsupport[i]
             local jtjp = 2*Jp*partial
+            jtjp = jtjp + 2*partial*partial*PS.lambda 
             result = result + P[u.image.name](u.index,u.channel)*jtjp
             addscatter(u,jtjp)
         end

@@ -360,7 +360,7 @@ return function(problemSpec)
 		pd.p:initGPU()
 		pd.Ap_X:initGPU()
 		pd.preconditioner:initGPU()
-
+        pd.parameters.lambda = 0.f
 		[util.initPrecomputedImages(`pd.parameters,problemSpec)]
 		
 		C.cudaMalloc([&&opaque](&(pd.scanAlphaNumerator)), sizeof(float))
