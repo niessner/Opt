@@ -297,6 +297,7 @@ return function(problemSpec)
 	   pd.nIterations = @[&int](solverparams[0])
 	   pd.lIterations = @[&int](solverparams[1])
 	   pd.parameters.lambda = 0.001f
+	   gpu.precompute(pd)
 	end
     local terra computeCost(pd : &PlanData) : float
         C.cudaMemset(pd.scratchF, 0, sizeof(float))
@@ -310,8 +311,7 @@ return function(problemSpec)
 	local terra step(data_ : &opaque, params_ : &&opaque, solverparams : &&opaque)
 		var pd = [&PlanData](data_)
 		[util.initParameters(`pd.parameters,problemSpec, params_,false)]
-        gpu.precompute(pd)    
-		if pd.nIter < pd.nIterations then
+        if pd.nIter < pd.nIterations then
 		
 			var startCost = computeCost(pd)
 			
@@ -349,7 +349,7 @@ return function(problemSpec)
 			
 			gpu.PCGLinearUpdate(pd)
 		    
-			
+			gpu.precompute(pd)
 			var newCost = computeCost(pd)
 			
 			logSolver("\titeration %d, lambda=%f prev=%f new=%f ", pd.nIter, pd.parameters.lambda, startCost,newCost)
@@ -357,6 +357,7 @@ return function(problemSpec)
 				gpu.PCGLinearUpdateRevert(pd)
 				pd.parameters.lambda = pd.parameters.lambda * 10.0f
 				logSolver("REVERT\n")
+				gpu.precompute(pd)
 			else 
 				pd.parameters.lambda = pd.parameters.lambda * 0.01f
 				logSolver("\n")
