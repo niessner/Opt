@@ -312,17 +312,9 @@ return function(problemSpec)
 		[util.initParameters(`pd.parameters,problemSpec, params_,false)]
         gpu.precompute(pd)    
 		if pd.nIter < pd.nIterations then
-			--var startCost = 0.0f
-			--if pd.nIter == 0 then 
-			--	startCost = computeCost(pd)
-			--else 
-			--	startCost = pd.prevCost
-			--end
-			
+		
 			var startCost = computeCost(pd)
 			
-			logSolver("iteration %d, cost=%f\n", pd.nIter, startCost)
-
 			C.cudaMemset(pd.scanAlphaNumerator, 0, sizeof(float))	--scan in PCGInit1 requires reset
 			C.cudaMemset(pd.scanAlphaDenominator, 0, sizeof(float))	--scan in PCGInit1 requires reset
 			C.cudaMemset(pd.scanBetaNumerator, 0, sizeof(float))	--scan in PCGInit1 requires reset
@@ -360,22 +352,16 @@ return function(problemSpec)
 			
 			var newCost = computeCost(pd)
 			
-			logSolver("\titeration %d, lambda=%f\n", pd.nIter, pd.parameters.lambda)
-			logSolver("\titeration %d, prevCost=%f\n", pd.nIter, startCost)
-			logSolver("\titeration %d, newCost=%f\n", pd.nIter, newCost)
-			
+			logSolver("\titeration %d, lambda=%f prev=%f new=%f ", pd.nIter, pd.parameters.lambda, startCost,newCost)
 			if newCost > startCost then	--in this case we revert
 				gpu.PCGLinearUpdateRevert(pd)
 				pd.parameters.lambda = pd.parameters.lambda * 10.0f
-				logSolver("revert update\n")
+				logSolver("REVERT\n")
 			else 
 				pd.parameters.lambda = pd.parameters.lambda * 0.01f
-				logSolver("lambda update\n")
+				logSolver("\n")
 				pd.prevCost = newCost
 			end
-			
-			var updatedCost = computeCost(pd)
-			logSolver("\titeration %d, updatedCost=%f\n", pd.nIter, updatedCost)
 			
 			var min_lm_diagonal = 1e-6f
 			var max_lm_diagonal = 1e32f
