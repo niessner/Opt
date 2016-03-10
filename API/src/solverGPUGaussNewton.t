@@ -36,7 +36,7 @@ return function(problemSpec)
 		r : TUnknownType		--residuals -> num vars	--TODO this needs to be a 'residual type'
 		z : TUnknownType		--preconditioned residuals -> num vars	--TODO this needs to be a 'residual type'
 		p : TUnknownType		--descent direction -> num vars
-		Ap_X : TUnknownType		--cache values for next kernel call after A = J^T x J x p -> num vars
+		Ap_X : TUnknownType	--cache values for next kernel call after A = J^T x J x p -> num vars
 		preconditioner : TUnknownType --pre-conditioner for linear system -> num vars
 		
 		
@@ -44,8 +44,6 @@ return function(problemSpec)
 		scanAlphaDenominator : &float
 		scanBetaNumerator : &float
 		scanBetaDenominator : &float
-		
-		prevCost : float -- cost during previous iteration, used for LM
 		
 		timer : Timer
 		endSolver : util.TimerEvent
@@ -207,13 +205,6 @@ return function(problemSpec)
                 pd.parameters.X(idx) = pd.parameters.X(idx) + pd.delta(idx)
             end
         end	
-		
-		terra kernels.PCGLinearUpdateRevert(pd : PlanData)
-            var idx : Index
-            if idx:initFromCUDAParams() and not fmap.exclude(idx,pd.parameters) then
-                pd.parameters.X(idx) = pd.parameters.X(idx) - pd.delta(idx)
-            end
-        end	
     
         terra kernels.computeCost(pd : PlanData)			
             var cost : float = 0.0f
@@ -281,7 +272,6 @@ return function(problemSpec)
                                                                         "PCGStep2",
                                                                         "PCGStep3",
                                                                         "PCGLinearUpdate",
-																		"PCGLinearUpdateRevert",
                                                                         "computeCost",
                                                                         "precompute",
                                                                         "PCGInit1_Graph",
@@ -296,8 +286,6 @@ return function(problemSpec)
 	   pd.nIter = 0
 	   pd.nIterations = @[&int](solverparams[0])
 	   pd.lIterations = @[&int](solverparams[1])
-	   pd.parameters.lambda = 0.001f
-	   gpu.precompute(pd)
 	end
     local terra computeCost(pd : &PlanData) : float
         C.cudaMemset(pd.scratchF, 0, sizeof(float))
@@ -311,10 +299,11 @@ return function(problemSpec)
 	local terra step(data_ : &opaque, params_ : &&opaque, solverparams : &&opaque)
 		var pd = [&PlanData](data_)
 		[util.initParameters(`pd.parameters,problemSpec, params_,false)]
-        if pd.nIter < pd.nIterations then
-		
-			var startCost = computeCost(pd)
-			
+        gpu.precompute(pd)    
+		if pd.nIter < pd.nIterations then
+		    var startCost = computeCost(pd)
+			logSolver("iteration %d, cost=%f\n", pd.nIter, startCost)
+
 			C.cudaMemset(pd.scanAlphaNumerator, 0, sizeof(float))	--scan in PCGInit1 requires reset
 			C.cudaMemset(pd.scanAlphaDenominator, 0, sizeof(float))	--scan in PCGInit1 requires reset
 			C.cudaMemset(pd.scanBetaNumerator, 0, sizeof(float))	--scan in PCGInit1 requires reset
@@ -348,29 +337,7 @@ return function(problemSpec)
 			end
 			
 			gpu.PCGLinearUpdate(pd)
-		    
-			gpu.precompute(pd)
-			var newCost = computeCost(pd)
-			
-			logSolver("\titeration %d, lambda=%f prev=%f new=%f ", pd.nIter, pd.parameters.lambda, startCost,newCost)
-			if newCost > startCost then	--in this case we revert
-				gpu.PCGLinearUpdateRevert(pd)
-				pd.parameters.lambda = pd.parameters.lambda * 10.0f
-				logSolver("REVERT\n")
-				gpu.precompute(pd)
-			else 
-				pd.parameters.lambda = pd.parameters.lambda * 0.01f
-				logSolver("\n")
-				pd.prevCost = newCost
-			end
-			
-			var min_lm_diagonal = 1e-6f
-			var max_lm_diagonal = 1e32f
-			pd.parameters.lambda = util.cpuMath.fmax(min_lm_diagonal, pd.parameters.lambda)
-			pd.parameters.lambda = util.cpuMath.fmin(max_lm_diagonal, pd.parameters.lambda)
-			
-			pd.nIter = pd.nIter + 1
-			
+		    pd.nIter = pd.nIter + 1
 		    return 1
 		else
 			var finalCost = computeCost(pd)
@@ -393,7 +360,7 @@ return function(problemSpec)
 		pd.p:initGPU()
 		pd.Ap_X:initGPU()
 		pd.preconditioner:initGPU()
-        pd.parameters.lambda = 0.001f
+
 		[util.initPrecomputedImages(`pd.parameters,problemSpec)]
 		
 		C.cudaMalloc([&&opaque](&(pd.scanAlphaNumerator)), sizeof(float))

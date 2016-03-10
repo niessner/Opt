@@ -13,7 +13,7 @@
 
 
 static bool useCUDA = true;
-static bool useTerra = false;
+static bool useTerra = true;
 static bool useAD = true;
 static bool useCeres = false;
 
