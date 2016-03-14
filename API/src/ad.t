@@ -1,6 +1,6 @@
 local ad = {}
 local C = terralib.includec("math.h")
-local A = require("asdl").newcontext()
+local A = require("asdl").NewContext()
 
 local use_simplify = true
 local use_condition_factoring = true
@@ -33,7 +33,7 @@ end
 local function joinshapes(shapes)
     local longest = ad.scalar
     for i,s in ipairs(shapes) do
-        assert(Shape:is(s),"not a shape")
+        assert(Shape:isclassof(s),"not a shape")
         if #s.keys > #longest.keys then
             longest = s
         end
@@ -79,7 +79,7 @@ function Exp:type()
     return self.type_ 
 end
 function Exp:shape()
-    assert(Shape:is(self.shape_),"not a shape?")
+    assert(Shape:isclassof(self.shape_),"not a shape?")
     return self.shape_
 end
 function Const:__tostring() return tostring(self.v) end
@@ -113,7 +113,7 @@ end
 
 local function toexp(n)
     if n then 
-        if Exp:is(n) then return n
+        if Exp:isclassof(n) then return n
         elseif type(n) == "number" then return Const(n)
         elseif type(n) == "table" then
             local mt = getmetatable(n)
@@ -132,7 +132,7 @@ end
 local zero,one,negone = toexp(0),toexp(1),toexp(-1)
 local function allconst(args)
     for i,a in ipairs(args) do
-        if not Const:is(a) then return false end
+        if not Const:isclassof(a) then return false end
     end
     return true
 end
@@ -151,16 +151,16 @@ function Var:key() return self.key_ end
 ]]
 
 local function asprod(exp)
-    if Apply:is(exp) and exp.op.name == "prod" then
+    if Apply:isclassof(exp) and exp.op.name == "prod" then
         return exp.const, exp:children()
-    elseif Const:is(exp) then
+    elseif Const:isclassof(exp) then
         return exp.v, empty
     else
         return 1.0,terralib.newlist { exp }
     end
 end
 local function aspowc(exp)
-    if Apply:is(exp) and exp.op.name == "powc" then
+    if Apply:isclassof(exp) and exp.op.name == "powc" then
         return exp.const, exp:children()[1]
     else
         return 1.0,exp
@@ -204,9 +204,9 @@ local function simplify(self)
         
         local function insertall(args)
             for i,a in ipairs(args) do
-                if Const:is(a) then
+                if Const:isclassof(a) then
                     const = const + a.v
-                elseif Apply:is(a) and a.op.name == "sum" then
+                elseif Apply:isclassof(a) and a.op.name == "sum" then
                     const = const + a.const
                     insertall(a.args)
                 else
@@ -263,7 +263,7 @@ local function simplify(self)
     local x,y,z = unpack(args)
     
     if op.name == "pow" then
-        if Const:is(y) then
+        if Const:isclassof(y) then
             if y.v == 1.0 then
                 return x
             elseif y.v == 0.0 then
@@ -276,11 +276,11 @@ local function simplify(self)
     elseif op.name == "powc" then
         if x:type() == bool then
             return x
-        elseif Apply:is(x) and x.op.name == "sqrt" and const == 2 then
+        elseif Apply:isclassof(x) and x.op.name == "sqrt" and const == 2 then
             return x.args[1]
         end
     elseif op.name == "select" then
-        if Const:is(x) then
+        if Const:isclassof(x) then
             return  x.v ~= 0 and y or z
         elseif y == zero then
             return ad.not_(x) * z
@@ -289,10 +289,10 @@ local function simplify(self)
         end
     elseif op.name == "or_" then
         if x == y then return x
-        elseif Const:is(x) then
+        elseif Const:isclassof(x) then
             if x.v ~= 0 then return one
             else return y end
-        elseif Const:is(y) then
+        elseif Const:isclassof(y) then
             if y.v  ~= 0 then return one
             else return x end
         end
@@ -317,7 +317,7 @@ function ExpVector:__index(key)
 end
 ExpVector.__call = ExpVector.__index
 local function toexpvectorentry(v)
-    return ExpVector:is(v) and v or toexp(v)
+    return ExpVector:isclassof(v) and v or toexp(v)
 end
 function ExpVector:__newindex(key,v)
     assert(type(key) == "number", "unknown field in ExpVector: "..tostring(key))
@@ -373,7 +373,7 @@ end })
 local function conformvectors(args)
     local N
     for i,e in ipairs(args) do
-        if ExpVector:is(e) then
+        if ExpVector:isclassof(e) then
             assert(not N or N == e:size(), "non-conforming vector sizes")
             N = e:size()
         else
@@ -388,7 +388,7 @@ function Op:create(const,args)
     if not N then return Apply(self,const,args):simplified() end
     local exps = List()
     for i = 0,N-1 do
-        local newargs = args:map(function(e) return ExpVector:is(e) and e[i] or e end)
+        local newargs = args:map(function(e) return ExpVector:isclassof(e) and e[i] or e end)
         exps:insert(self:create(const,newargs))
     end
     return ExpVector(exps)
@@ -520,7 +520,7 @@ local function countuses(es)
         end
     end
     for i,a in ipairs(es) do 
-        if ExpVector:is(a) then
+        if ExpVector:isclassof(a) then
             for i,e in ipairs(a:expressions()) do
                 count(e)
             end
@@ -595,7 +595,7 @@ local function expstostring(es)
     end    
 
     local function emitpoly(e,l) 
-        if not Apply:is(e) or not ispoly[e.op.name] or l > ispoly[e.op.name] then
+        if not Apply:isclassof(e) or not ispoly[e.op.name] or l > ispoly[e.op.name] then
             return stringforuse(e)
         end
         if e.op.name == "powc" then
@@ -663,7 +663,7 @@ function Exp:__tostring()
 end
 
 function Exp:d(v)
-    assert(Var:is(v))
+    assert(Var:isclassof(v))
     self.derivs = self.derivs or {}
     local r = self.derivs[v]
     if r then return r end
@@ -733,7 +733,7 @@ if use_backward_ad then
         tape[self] = one -- the reverse ad 'seed'
         for i = #postorder,1,-1 do --reverse post order traversal from self to equation roots, all uses come before defs
             local e = postorder[i]
-            if Var:is(e) then
+            if Var:isclassof(e) then
                 local k = e:key()
                 if type(k) == "table" and type(k.gradient) == "function" then -- handle optional black-box relationship to other variables
                     local gradtable = k:gradient()
@@ -894,7 +894,7 @@ setmetatable(ad,nil) -- remove special metatable that generates new blank ops
 
 ad.Var,ad.Apply,ad.Const,ad.Exp,ad.Reduce = Var, Apply, Const, Exp, Reduce
 function ad.reduce(x)
-    if ExpVector:is(x) then
+    if ExpVector:isclassof(x) then
         return x:map(Reduce)
     end
     return Reduce(x)
@@ -902,7 +902,7 @@ end
 function ad.polysimplify(exps)
     if not use_polysimplify then return exps end
     local function sumtoterms(sum)
-        assert(Apply:is(sum) and sum.op.name == "sum")
+        assert(Apply:isclassof(sum) and sum.op.name == "sum")
         local terms = terralib.newlist()
         -- build internal list of terms
         for i,f in ipairs(sum:children()) do
@@ -1006,7 +1006,7 @@ function ad.polysimplify(exps)
     end
     
     local function dosimplify(exp)
-        if Apply:is(exp) then
+        if Apply:isclassof(exp) then
             if exp.op.name == "sum" then
                 return simplifylist(sumtoterms(exp))
             else
@@ -1025,7 +1025,7 @@ function ad.polysimplify(exps)
 end
 -- generate two terms, one boolean-only term and one float only term
 function ad.splitcondition(exp)
-    if use_condition_factoring and Apply:is(exp) and exp.op.name == "prod" then
+    if use_condition_factoring and Apply:isclassof(exp) and exp.op.name == "prod" then
         local cond,exp_ = one,one
         for i,e in ipairs(exp:children()) do
             if e:type() == bool then

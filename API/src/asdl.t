@@ -183,7 +183,7 @@ for i in string.gmatch("nil number string boolean table thread userdata cdata fu
 end
 defaultchecks["any"] = function() return true end
 
-local function newcontext()
+local function NewContext()
     return setmetatable({ checks = setmetatable({},{__index = defaultchecks}), members = {}, list = {}, uniquelist = {}, listcache = {}, optional = {}, definitions = {} },Context)
 end
 
@@ -228,6 +228,7 @@ function Context:DefineClass(name,unique,fields)
     local class = self.definitions[name]
     
     if fields then
+        class.__fields = fields -- for reflection in user-defined behavior
         local names = newlist()
         local checks = newlist()
         local tns = newlist()
@@ -312,7 +313,7 @@ function Context:DefineClass(name,unique,fields)
         end
     end
     local check = assert(self.checks[name])
-    function class:is(obj)
+    function class:isclassof(obj)
         return check(obj)
     end
     class.__index = class
@@ -351,5 +352,4 @@ function Context:Define(text)
         end
     end
 end
-
-return { newcontext = newcontext }
+return { NewContext = NewContext, List = List }

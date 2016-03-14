@@ -140,7 +140,7 @@ terra opt.ProblemDelete(p : &opt.Problem)
 end
 
 local List = terralib.newlist
-A:Extern("ExpLike",function(x) return ad.Exp:is(x) or ad.ExpVector:is(x) end)
+A:Extern("ExpLike",function(x) return ad.Exp:isclassof(x) or ad.ExpVector:isclassof(x) end)
 A:Define [[
 Dim = (string name, number size, number? _index) unique
 IndexSpace = (Dim* dims) unique
@@ -236,7 +236,7 @@ function ProblemSpec:Stencil(stencil)
 end
 
 function ProblemSpec:newparameter(p)
-    assert(ProblemParam:is(p))
+    assert(ProblemParam:isclassof(p))
     self:registername(p.name)
     self.parameters:insert(p)
 end
@@ -278,11 +278,11 @@ function ProblemSpec:Functions(ft, functions)
     -- support by-hand interface
     if type(ft) == "string" then
         ft = A.GraphFunction(ft)
-    elseif IndexSpace:is(ft) then
+    elseif IndexSpace:isclassof(ft) then
         ft = A.CenteredFunction(ft)
     end
     
-    assert(A.FunctionKind:is(ft))
+    assert(A.FunctionKind:isclassof(ft))
     
     if ft.kind == "GraphFunction" then
         local idx = assert(self.names[ft.graphname],"graph not defined")
@@ -697,7 +697,7 @@ end
 
 local unity = Dim("1",1)
 local function todim(d)
-    return Dim:is(d) and d or d == 1 and unity
+    return Dim:isclassof(d) and d or d == 1 and unity
 end
 
 local function tovalidimagetype(typ)
@@ -716,7 +716,7 @@ function ProblemSpec:ImageType(typ,ispace)
 end
 
 local function toispace(ispace)
-    if not IndexSpace:is(ispace) then -- for handwritten API
+    if not IndexSpace:isclassof(ispace) then -- for handwritten API
         assert(#ispace > 0, "expected at least one dimension")
         ispace = IndexSpace(List(ispace)) 
     end
@@ -770,7 +770,7 @@ local function problemPlan(id, dimensions, pplan)
         opt.problemkind = problemmetadata.kind
 		local b = terralib.currenttimeinseconds()
         local tbl = opt.problemSpecFromFile(problemmetadata.filename)
-        assert(ProblemSpec:is(tbl))
+        assert(ProblemSpec:isclassof(tbl))
 		local result = compilePlan(tbl,problemmetadata.kind)
 		local e = terralib.currenttimeinseconds()
 		print("compile time: ",e - b)
@@ -822,11 +822,11 @@ function ImageAccess:shape() return self._shape end -- implementing AD's API for
 local emptygradient = {}
 function ImageAccess:gradient()
     if self.image.gradientimages then
-        assert(Offset:is(self.index),"NYI - support for graphs")
+        assert(Offset:isclassof(self.index),"NYI - support for graphs")
         local gt = {}
         for i,im in ipairs(self.image.gradientimages) do
             local k = im.unknown:shift(self.index)
-            local v = ad.Const:is(im.expression) and im.expression or im.image(self.index)
+            local v = ad.Const:isclassof(im.expression) and im.expression or im.image(self.index)
             gt[k] = v
         end
         return gt
@@ -886,7 +886,7 @@ end
 function Image:__tostring() return self.name end
 
 function ProblemSpecAD:ComputedImage(name,dims,exp)
-    if ad.ExpVector:is(exp) then
+    if ad.ExpVector:isclassof(exp) then
         local imgs = terralib.newlist()
         for i,e in ipairs(exp:expressions()) do
             imgs:insert(self:ComputedImage(name.."_"..tostring(i-1),dims,e))
@@ -897,8 +897,8 @@ function ProblemSpecAD:ComputedImage(name,dims,exp)
     local unknowns = terralib.newlist()
     local seen = {}
     exp:visit(function(a)
-        if ImageAccess:is(a) and a.image.location == A.UnknownLocation then
-            assert(Offset:is(a.index),"NYI - support for graphs")
+        if ImageAccess:isclassof(a) and a.image.location == A.UnknownLocation then
+            assert(Offset:isclassof(a.index),"NYI - support for graphs")
             if not seen[a] then
                 seen[a] = true
                 unknowns:insert(a)
@@ -940,7 +940,7 @@ end
 function Image:DimCount() return #self.type.ispace.dims end
 function Image:__call(first,...)
     local index,c
-    if GraphElement:is(first) or Offset:is(first) then
+    if GraphElement:isclassof(first) or Offset:isclassof(first) then
         index = first
         c = ...
     else
@@ -951,7 +951,7 @@ function Image:__call(first,...)
         index = Offset(o)
         c = select(self:DimCount(), ...)
     end
-    if GraphElement:is(index) then    
+    if GraphElement:isclassof(index) then    
         assert(index.ispace == self.type.ispace,"graph element is in a different index space from image")
     end
     c = tonumber(c)
@@ -994,7 +994,7 @@ function BoundsAccess:shift(o)
     return BoundsAccess(self.offset:shift(o),self.expand)
 end
 function ImageAccess:shift(o)
-    assert(Offset:is(self.index), "cannot shift graph accesses!")
+    assert(Offset:isclassof(self.index), "cannot shift graph accesses!")
     return ImageAccess(self.image,self:shape(),self.index:shift(o),self.channel)
 end
 function IndexValue:shift(o)
@@ -1029,7 +1029,7 @@ function Offset:Invert()
     return Offset(r)
 end
 function Offset:shift(o)
-    assert(Offset:is(o) and #o.data == #self.data)
+    assert(Offset:isclassof(o) and #o.data == #self.data)
     local ns = terralib.newlist()
     for i = 1,#self.data do
         ns[i] = self.data[i] + o.data[i]
@@ -1037,9 +1037,9 @@ function Offset:shift(o)
     return Offset(ns)
 end
 local function removeboundaries(exp)
-    if ad.ExpVector:is(exp) or terralib.islist(exp) then return exp:map(removeboundaries) end
+    if ad.ExpVector:isclassof(exp) or terralib.islist(exp) then return exp:map(removeboundaries) end
     local function nobounds(a)
-        if BoundsAccess:is(a) and a.offset:IsZero() and a.expand == 0 then return ad.toexp(1)
+        if BoundsAccess:isclassof(a) and a.offset:IsZero() and a.expand == 0 then return ad.toexp(1)
         else return ad.v[a] end
     end
     return exp:rename(nobounds)
@@ -1124,7 +1124,7 @@ local function createfunction(problemspec,name,Index,arguments,results,scatters)
         return A.reduce(op,List{vardecl,irmap(n)},float,vardecl.shape,cond)
     end
     irmap = terralib.memoize(function(e)
-        if ad.ExpVector:is(e) then
+        if ad.ExpVector:isclassof(e) then
             return A.vectorconstruct(e.data:map(irmap),util.Vector(float,#e.data),ad.scalar)
         elseif "Var" == e.kind then
             local a = e:key()
@@ -1560,7 +1560,7 @@ local function createfunction(problemspec,name,Index,arguments,results,scatters)
         elseif "load" == ir.kind then
             local a = ir.value
             local im = imageref(a.image)
-            if Offset:is(a.index) then
+            if Offset:isclassof(a.index) then
                 if conditioncoversload(ir.condition,a.index) then
                    return `im(midx(a.index.data))(0) 
                 else
@@ -1574,7 +1574,7 @@ local function createfunction(problemspec,name,Index,arguments,results,scatters)
             local a = ir.value
             local im = imageref(a.image)
             local s = symbol(("%s_%s"):format(a.image.name,tostring(a.index)))
-            if Offset:is(a.index) then
+            if Offset:isclassof(a.index) then
                 if conditioncoversload(ir.condition,a.index) then
                     statements:insert(quote
                         var [s] : a.image.type:ElementType() = im(midx(a.index.data))
@@ -1708,7 +1708,7 @@ local function createfunction(problemspec,name,Index,arguments,results,scatters)
         
     local scatterstatements = terralib.newlist()
     local function toidx(index)
-        if Offset:is(index) then return `midx(index.data)
+        if Offset:isclassof(index) then return `midx(index.data)
         else return graphref(index) end
     end
     for i,s in ipairs(scatters) do
@@ -1744,7 +1744,7 @@ end
 
 local function stencilforexpression(exp)
     local stencil = 0
-    if ad.ExpVector:is(exp) then 
+    if ad.ExpVector:isclassof(exp) then 
         for i,e in ipairs(exp:expressions()) do
             stencil = math.max(stencil,stencilforexpression(e))
         end
@@ -1752,7 +1752,7 @@ local function stencilforexpression(exp)
     end
     exp:visit(function(a)
         if "ImageAccess" == a.kind then
-            assert(Offset:is(a.index), "stencils not defined for graph image access")
+            assert(Offset:isclassof(a.index), "stencils not defined for graph image access")
             stencil = math.max(stencil,a.index:MaxValue()) 
         elseif "BoundsAccess" == a.kind then--bounds calculation
             stencil = math.max(stencil,a.offset:MaxValue()+a.expand)
@@ -1798,16 +1798,16 @@ local function classifyexpression(exp) -- what index space, or graph is this thi
         end
     end
     exp:visit(function(a)
-        if ImageAccess:is(a) then -- assume image X is unknown
+        if ImageAccess:isclassof(a) then -- assume image X is unknown
             if a.image.location == A.UnknownLocation then
                 addunknown(a)
             elseif a.image.gradientimages then
                 for i,im in ipairs(a.image.gradientimages) do
-                    assert(Offset:is(a.index),"NYI - precomputed with graphs")
+                    assert(Offset:isclassof(a.index),"NYI - precomputed with graphs")
                     addunknown(im.unknown:shift(a.index))
                 end
             end
-            local aclass = Offset:is(a.index) and A.CenteredFunction(a.image.type.ispace) or A.GraphFunction(a.index.graph.name)
+            local aclass = Offset:isclassof(a.index) and A.CenteredFunction(a.image.type.ispace) or A.GraphFunction(a.index.graph.name)
             assert(nil == classification or aclass == classification, "residual contains image reads from multiple domains")
             classification = aclass
         end
@@ -1816,9 +1816,9 @@ local function classifyexpression(exp) -- what index space, or graph is this thi
     if not classification then
         error("residual must actually use some image")
     end
-    if IndexSpace:is(classification) then
+    if IndexSpace:isclassof(classification) then
         exp:visit(function(a)
-            if BoundsAccess:is(a) and #a.offset.data ~= #classification.dims then
+            if BoundsAccess:isclassof(a) and #a.offset.data ~= #classification.dims then
                 error(string.format("%s does not match index space %s",a,classification))
             end
         end)
@@ -1839,7 +1839,7 @@ local function residualsincludingX00(unknownsupport,unknown,channel)
     assert(channel)
     local r = terralib.newlist()
     for i,u in ipairs(unknownsupport) do
-        assert(Offset:is(u.index),"unexpected graph access")
+        assert(Offset:isclassof(u.index),"unexpected graph access")
         if u.image == unknown and u.channel == channel then
             r:insert(u.index:Invert())
         end
@@ -1942,7 +1942,7 @@ local function createjtjgraph(PS,ES)
         local Jp = ad.toexp(0)
         for i,partial in ipairs(partials) do
             local u = unknownsupport[i]
-            assert(GraphElement:is(u.index))
+            assert(GraphElement:isclassof(u.index))
             Jp = Jp + partial*P[u.image.name](u.index,u.channel)
         end
         for i,partial in ipairs(partials) do
@@ -2023,7 +2023,7 @@ local function createjtfgraph(PS,ES)
         local Jp = ad.toexp(0)
         for i,partial in ipairs(partials) do
             local u = unknownsupport[i]
-            assert(GraphElement:is(u.index))
+            assert(GraphElement:isclassof(u.index))
             addscatter(R,u,-2.0*partial*F)
             addscatter(Pre,u,2.0*partial*partial)
         end
@@ -2085,7 +2085,7 @@ function createprecomputed(self,precomputedimages)
             scatters:insert(Scatter(im, zoff, 0, im.expression, "set"))
             for _,gim in ipairs(im.gradientimages) do
                 local gradientexpression = ad.polysimplify(gim.expression)
-                if not ad.Const:is(gradientexpression) then
+                if not ad.Const:isclassof(gradientexpression) then
                     scatters:insert(Scatter(gim.image, zoff, 0, gradientexpression, "set"))
                 end
             end
@@ -2099,7 +2099,7 @@ local function extractresidualterms(...)
     local exp = terralib.newlist {}
     for i = 1, select("#",...) do
         local e = select(i,...)
-        if ad.ExpVector:is(e) then
+        if ad.ExpVector:isclassof(e) then
             for i,t in ipairs(e:expressions()) do
                 t = assert(ad.toexp(t), "expected an ad expression")
                 exp:insert(t)
@@ -2154,11 +2154,11 @@ function SampledImage:__call(x,y,c)
     end
 end
 local function tosampledimage(im)
-    if Image:is(im) then
+    if Image:isclassof(im) then
         assert(im:DimCount() == 2, "sampled images must be 2D")
         return ad.sampledimage(im)
     end
-    return SampledImage:is(im) and im or nil
+    return SampledImage:isclassof(im) and im or nil
 end
 function ad.sampledimage(image,imagedx,imagedy)
     if imagedx then

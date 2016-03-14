@@ -2,7 +2,7 @@
 
 function Apply:calcd(X)
     -- extract derivative graph
-    assert(Var:is(X))
+    assert(Var:isclassof(X))
     local succ = {}
     local pred = {}
     local function insertv(g,k,v)
