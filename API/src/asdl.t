@@ -352,4 +352,4 @@ function Context:Define(text)
         end
     end
 end
-return { NewContext = NewContext, List = List }
+return { NewContext = NewContext }
