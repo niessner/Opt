@@ -128,6 +128,8 @@ local function problemDefine(filename, kind, pid)
     problems[problemmetadata.id] = problemmetadata
     pid[0] = problemmetadata.id
 end
+problemDefine = terralib.cast({rawstring, rawstring, &int} -> {}, problemDefine)
+
 -- define just stores meta-data right now. ProblemPlan does all compilation for now
 terra opt.ProblemDefine(filename : rawstring, kind : rawstring)
     var id : int
@@ -778,7 +780,7 @@ local function problemPlan(id, dimensions, pplan)
 		pplan[0] = result()
     end,function(err) errorPrint(debug.traceback(err,2)) end)
 end
-
+problemPlan = terralib.cast({int,&uint32,&&opt.Plan} -> {}, problemPlan)
 terra opt.ProblemPlan(problem : &opt.Problem, dimensions : &uint32) : &opt.Plan
 	var p : &opt.Plan = nil 
 	problemPlan(int(int64(problem)),dimensions,&p)
