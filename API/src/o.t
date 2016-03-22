@@ -1575,15 +1575,15 @@ local function createfunction(problemspec,name,Index,arguments,results,scatters)
         elseif "vectorload" == ir.kind then
             local a = ir.value
             local im = imageref(a.image)
-            local s = symbol(("%s_%s"):format(a.image.name,tostring(a.index)))
+            local s = symbol(a.image.type:ElementType(),("%s_%s"):format(a.image.name,tostring(a.index)))
             if Offset:isclassof(a.index) then
                 if conditioncoversload(ir.condition,a.index) then
                     statements:insert(quote
-                        var [s] : a.image.type:ElementType() = im(midx(a.index.data))
+                        var [s] = im(midx(a.index.data))
                     end)
                 else 
                     statements:insert(quote
-                        var [s] : a.image.type:ElementType() = 0.f
+                        var [s] = 0.f
                         if midx(a.index.data):InBounds() then
                             [s] = im(midx(a.index.data))
                         end
@@ -1592,7 +1592,7 @@ local function createfunction(problemspec,name,Index,arguments,results,scatters)
             else
                 local gr = graphref(a.index)
                 statements:insert(quote
-                    var [s] : a.image.type:ElementType() = im(gr)
+                    var [s] = im(gr)
                 end)
             end
             return s

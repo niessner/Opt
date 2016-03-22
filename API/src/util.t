@@ -74,7 +74,7 @@ util.Vector = terralib.memoize(function(typ,N)
     VecType.metamethods.type, VecType.metamethods.N = typ,N
     VecType.metamethods.__typename = function(self) return ("%s_%d"):format(tostring(self.metamethods.type),self.metamethods.N) end
     for i, op in ipairs(ops) do
-        local i = symbol("i")
+        local i = symbol(int,"i")
         local function template(ae,be)
             return quote
                 var c : VecType
@@ -84,9 +84,19 @@ util.Vector = terralib.memoize(function(typ,N)
                 return c
             end
         end
-        local terra doop(a : VecType, b : VecType) [template(`a.data[i],`b.data[i])]  end
-        terra doop(a : typ, b : VecType) [template(`a,`b.data[i])]  end
-        terra doop(a : VecType, b : typ) [template(`a.data[i],`b)]  end
+        local terra opvv(a : VecType, b : VecType) [template(`a.data[i],`b.data[i])]  end
+        local terra opsv(a : typ, b : VecType) [template(`a,`b.data[i])]  end
+        local terra opvs(a : VecType, b : typ) [template(`a.data[i],`b)]  end
+        
+        local doop
+        if terralib.overloadedfunction then
+            doop = terralib.overloadedfunction("doop",{opvv,opsv,opvs})
+        else
+            doop = opvv
+            doop:adddefinition(opsv:getdefinitions()[1])
+            doop:adddefinition(opvs:getdefinitions()[1])
+        end
+        
        VecType.metamethods[op] = doop
     end
     terra VecType.metamethods.__unm(self : VecType)
@@ -166,7 +176,7 @@ function Array(T,debug)
             self._data = [&T](S.realloc(self._data,sizeof(T)*self._capacity))
         end
     end
-    terra Array:init(cap : int32) : &Array
+    terra Array:initwithcapacity(cap : int32) : &Array
         self:init()
         self:reserve(cap)
         return self
@@ -191,7 +201,7 @@ function Array(T,debug)
         return `@self:get(idx)
     end)
     
-    terra Array:insert(idx : int32, N : int32, v : T) : {}
+    terra Array:insertNatlocation(idx : int32, N : int32, v : T) : {}
         assert(idx <= self._size)
         self._size = self._size + N
         self:reserve(self._size)
@@ -208,16 +218,11 @@ function Array(T,debug)
             self._data[idx + i] = v
         end
     end
-    terra Array:insert(idx : int32, v : T) : {}
-        return self:insert(idx,1,v)
+    terra Array:insertatlocation(idx : int32, v : T) : {}
+        return self:insertNatlocation(idx,1,v)
     end
     terra Array:insert(v : T) : {}
-        return self:insert(self._size,1,v)
-    end
-    terra Array:insert() : &T
-        self._size = self._size + 1
-        self:reserve(self._size)
-        return self:get(self._size - 1)
+        return self:insertNatlocation(self._size,1,v)
     end
     terra Array:remove(idx : int32) : T
         assert(idx < self._size)
@@ -228,11 +233,6 @@ function Array(T,debug)
         end
         return v
     end
-    terra Array:remove() : T
-        assert(self._size > 0)
-        return self:remove(self._size - 1)
-    end
-    
     if not T:isstruct() then
         terra Array:indexof(v : T) : int32
             for i = 0LL,self._size do
