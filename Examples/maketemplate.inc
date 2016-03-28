@@ -25,7 +25,7 @@ endif
 
 all: $(EXECUTABLE)
 
-OPTLIB = ../../API/release/lib/libOpt.a
+OPTLIB = ../../API/release/lib/libOptDev.a
 
 build/%.o:	src/%.cpp
 	@mkdir -p build

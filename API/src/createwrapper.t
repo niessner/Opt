@@ -1,4 +1,5 @@
-local libraryname, sourcedirectory, main, headerfile, outputname = ...
+local libraryname, sourcedirectory, main, headerfile, outputname, embedsource = ...
+embedsource = "true" == embedsource or false
 
 local ffi = require("ffi")
 
@@ -89,6 +90,10 @@ end
 
 local terra doerror(L : &C.lua_State)
     C.printf("%s\n",C.luaL_checklstring(L,-1,nil))
+    C.lua_getfield(L,LUA_GLOBALSINDEX,"os")
+    C.lua_getfield(L,-1,"exit")
+    C.lua_pushnumber(L,1)
+    C.lua_call(L,1,0)
     return nil
 end
 
@@ -105,11 +110,30 @@ local terra NewState() : &LibraryState
     
     setupsigsegv(L)
     C.lua_getfield(L,LUA_GLOBALSINDEX,"package")
-    C.lua_getfield(L,-1,"terrapath")
-    C.lua_pushstring(L,";")
-    C.lua_pushstring(L,sourcepath)
-    C.lua_concat(L,3)
-    C.lua_setfield(L,-2,"terrapath")
+    escape 
+        if embedsource then
+            emit quote C.lua_getfield(L,-1,"preload") end
+            for line in io.popen("ls "..sourcedirectory):lines() do
+                local name = line:match("(.*)%.t")
+                if name then
+                    local content = io.open(sourcedirectory.."/"..line,"r"):read("*all")
+                    emit quote
+                        if 0 ~= C.terra_loadbuffer(L,content,[#content],["@"..line]) then doerror(L) end
+                        C.lua_setfield(L,-2,name)
+                    end
+                end
+            end
+        else
+            emit quote 
+                C.lua_getfield(L,-1,"terrapath")
+                C.lua_pushstring(L,";")
+                C.lua_pushstring(L,sourcepath)
+                C.lua_concat(L,3)
+                C.lua_setfield(L,-2,"terrapath")
+            end
+        end
+    end
+    
     C.lua_getfield(L,LUA_GLOBALSINDEX,"require")
     C.lua_pushstring(L,main)
     if C.lua_pcall(L,1,1,0) ~= 0 then return doerror(L) end
