@@ -206,23 +206,4 @@ local function saveaslibrary(libraryname, terrasourcefile)
     terralib.saveobj(libraryfmtname,wrappers,flags)
 end
 
---[[
-saveaslibrary("mylib","testlib.t")
-
-local C2 = terralib.includec("mylib.h","-I.")
-terra main()
-    var r = C2.mylib_newstate()
-    C2.mylib_foo(r)
-    return 0
-end
-
-local flags = terralib.newlist {"-L.","-L", terralib.terrahome,"-Wl,-rpath,"..terralib.terrahome,"-lterra","-lmylib"}
-if require("ffi").os == "OSX" then
-    flags:insertall {"-pagezero_size","10000", "-image_base", "100000000"}
-end
-
-terralib.saveobj("dynlib",{main = main},flags)
-assert(0 == os.execute("./dynlib"))
-]]
-
 saveaslibrary(arg[1],arg[2])

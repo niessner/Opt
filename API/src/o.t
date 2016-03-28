@@ -5,8 +5,6 @@ local ffi = require("ffi")
 local util = require("util")
 ad = require("ad")
 local A = ad.classes
-local solversCPU = require("solversCPU")
-local solversGPU = require("solversGPU")
 
 local C = util.C
 
@@ -100,7 +98,7 @@ end
 
 __syncthreads = cudalib.nvvm_barrier0
 
-
+local gaussNewtonGPU = require("solverGPUGaussNewton")
 
 local ffi = require('ffi')
 
@@ -113,7 +111,7 @@ local problems = {}
 
 local function compilePlan(problemSpec, kind)
     assert(kind == "gaussNewtonGPU","expected solver kind to be gaussNewtonGPU")
-    return solversGPU.gaussNewtonGPU(problemSpec)
+    return gaussNewtonGPU(problemSpec)
 end
 
 struct opt.Plan(S.Object) {
