@@ -1,4 +1,4 @@
-CXX = g++
+CXX = clang++
 LINK = clang++
 NVCC = /usr/local/cuda/bin/nvcc
 
@@ -18,6 +18,9 @@ UNAME := $(shell uname)
 
 ifeq ($(UNAME), Darwin)
   LFLAGS += -pagezero_size 10000 -image_base 100000000
+endif
+ifeq ($(UNAME), Linux)
+  S4 = 64
 endif
 
 all: $(EXECUTABLE)
