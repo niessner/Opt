@@ -128,17 +128,6 @@ local function problemDefine(filename, kind, pid)
 end
 problemDefine = terralib.cast({rawstring, rawstring, &int} -> {}, problemDefine)
 
--- define just stores meta-data right now. ProblemPlan does all compilation for now
-terra opt.ProblemDefine(filename : rawstring, kind : rawstring)
-    var id : int
-    problemDefine(filename, kind, &id)
-    return [&opt.Problem](id)
-end 
-terra opt.ProblemDelete(p : &opt.Problem)
-    var id = int64(p)
-    --TODO: remove from problem table
-end
-
 local List = terralib.newlist
 A:Extern("ExpLike",function(x) return ad.Exp:isclassof(x) or ad.ExpVector:isclassof(x) end)
 A:Define [[
@@ -779,27 +768,6 @@ local function problemPlan(id, dimensions, pplan)
     end,function(err) errorPrint(debug.traceback(err,2)) end)
 end
 problemPlan = terralib.cast({int,&uint32,&&opt.Plan} -> {}, problemPlan)
-terra opt.ProblemPlan(problem : &opt.Problem, dimensions : &uint32) : &opt.Plan
-	var p : &opt.Plan = nil 
-	problemPlan(int(int64(problem)),dimensions,&p)
-	return p
-end 
-
-terra opt.PlanFree(plan : &opt.Plan)
-    -- TODO: plan should also have a free implementation
-    plan:delete()
-end
-
-terra opt.ProblemInit(plan : &opt.Plan, params : &&opaque, solverparams : &&opaque) 
-    return plan.init(plan.data, params, solverparams)
-end
-terra opt.ProblemStep(plan : &opt.Plan, params : &&opaque, solverparams : &&opaque) : int
-    return plan.step(plan.data, params, solverparams)
-end
-terra opt.ProblemSolve(plan : &opt.Plan, params : &&opaque, solverparams : &&opaque)
-   opt.ProblemInit(plan, params, solverparams)
-   while opt.ProblemStep(plan, params, solverparams) ~= 0 do end
-end
 
 function Offset:__tostring() return string.format("(%s)",self.data:map(tostring):concat(",")) end
 function GraphElement:__tostring() return ("%s_%s"):format(tostring(self.graph), self.element) end
@@ -2183,4 +2151,40 @@ end
 
 opt.Dot = util.Dot
 opt.toispace = toispace
+
+-- C API implementation functions
+-- WARNING: if you change these you need to update release/Opt.h
+
+-- define just stores meta-data right now. ProblemPlan does all compilation for now
+terra opt.ProblemDefine(filename : rawstring, kind : rawstring)
+    var id : int
+    problemDefine(filename, kind, &id)
+    return [&opt.Problem](id)
+end 
+terra opt.ProblemDelete(p : &opt.Problem)
+    var id = int64(p)
+    --TODO: remove from problem table
+end
+terra opt.ProblemPlan(problem : &opt.Problem, dimensions : &uint32) : &opt.Plan
+	var p : &opt.Plan = nil 
+	problemPlan(int(int64(problem)),dimensions,&p)
+	return p
+end 
+
+terra opt.PlanFree(plan : &opt.Plan)
+    -- TODO: plan should also have a free implementation
+    plan:delete()
+end
+
+terra opt.ProblemInit(plan : &opt.Plan, params : &&opaque, solverparams : &&opaque) 
+    return plan.init(plan.data, params, solverparams)
+end
+terra opt.ProblemStep(plan : &opt.Plan, params : &&opaque, solverparams : &&opaque) : int
+    return plan.step(plan.data, params, solverparams)
+end
+terra opt.ProblemSolve(plan : &opt.Plan, params : &&opaque, solverparams : &&opaque)
+   opt.ProblemInit(plan, params, solverparams)
+   while opt.ProblemStep(plan, params, solverparams) ~= 0 do end
+end
+
 return opt

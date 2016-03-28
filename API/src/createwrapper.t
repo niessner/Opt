@@ -1,12 +1,8 @@
+local libraryname, sourcedirectory, main, headerfile, outputname = ...
+
 local ffi = require("ffi")
 
-local setupsigsegv
-
-local libraryformat = "lib%s.so"
-
-local headerformat = "%s.h"
-terralib.includepath = terralib.terrahome.."/include"
-
+terralib.includepath = terralib.terrahome.."/include;."
 local C,CN = terralib.includecstring[[ 
     #define _GNU_SOURCE
     #include <stdio.h>
@@ -25,20 +21,16 @@ local C,CN = terralib.includecstring[[
     #include "terra/terra.h"
 ]]
 
-
-
 local LUA_GLOBALSINDEX = -10002
 
-local pathforsymbol
+local tabsolutepath,setupsigsegv
 
 if ffi.os == "Windows" then
-    libraryformat = "%s.dll"
     terra setupsigsegv(L : &C.lua_State) end
-    terra directoryforsymbol(sym : &opaque, buf : rawstring, N : int)
-        var mbi : C.MEMORY_BASIC_INFORMATION;
-        C.VirtualQuery(sym, &mbi, sizeof(C.MEMORY_BASIC_INFORMATION));
-        C.GetModuleFileNameA([C.HINSTANCE](mbi.AllocationBase), buf, N);
-        C.PathRemoveFileSpecA(buf);
+    terra tabsolutepath(rel : rawstring)
+        var buf : rawstring = C.malloc(C.MAX_PATH)
+        C.GetFullPathName(rel,C.MAX_PATH,buf,nil)
+        return buf
     end  
 else
 
@@ -66,144 +58,92 @@ else
         C.lua_settop(L,-3)
     end
     
-    terra directoryforsymbol(sym : &opaque, buf : rawstring, N : int)
-        var info : C.Dl_info
-	    C.dladdr(sym, &info)
-	    var full = C.realpath(info.dli_fname, buf);
-	    buf[C.strlen(C.dirname(full))] = 0
+    terra tabsolutepath(path : rawstring)
+        return C.realpath(path,nil)
+    end
+end
+absolutepath = function(p) return ffi.string(tabsolutepath(p)) end
+
+local Header = terralib.includec(headerfile)
+local statename = libraryname.."State"
+local LibraryState = Header[statename]
+assert(terralib.types.istype(LibraryState) and LibraryState:isstruct())
+
+local apifunctions = terralib.newlist()
+local apimatch = ("%s_(.*)"):format(libraryname)
+for k,v in pairs(Header) do
+    local name = k:match(apimatch)
+    if name and terralib.isfunction(v) and name ~= "NewState" then
+        local type = v:gettype()
+        apifunctions[name] = {unpack(type.parameters,2)} -> type.returntype
     end
 end
 
-local function saveaslibrary(libraryname, terrasourcefile)
-    local filename = terrasourcefile:match("[^/\\]*.t$")
-    local terrapath, packagename = "/"..terrasourcefile:sub(1,-#filename-1).."?.t;",filename:sub(1,-3)
-    package.terrapath = package.terrapath..";."..terrapath
-    local success, tbl = xpcall(function() return assert(require(packagename)) end,
-                         function(err) return debug.traceback(err,2) end)
-    if not success then error(tbl,0) end
-    local apifunctions = terralib.newlist()
-    for k,v in pairs(tbl) do
-        if terralib.isfunction(v) then
-            apifunctions[k] = v
-        end
-    end
-    local wrappers = {}
-    local statename = libraryname.."State"
-    local LibraryState = terralib.types.newstruct(statename)
+local wrappers = {}
+
+struct LibraryState { L : &C.lua_State }
+
+for name,type in pairs(apifunctions) do
+    LibraryState.entries:insert { name, type }
+end
+
+local terra doerror(L : &C.lua_State)
+    C.printf("%s\n",C.luaL_checklstring(L,-1,nil))
+    return nil
+end
+
+local sourcepath = absolutepath(sourcedirectory).."/?.t"
+local terra NewState() : &LibraryState
+    var S = [&LibraryState](C.malloc(sizeof(LibraryState)))
+    var L = C.luaL_newstate();
+    S.L = L
+    if L == nil then return doerror(L) end
+    C.luaL_openlibs(L)
+    var o  = C.terra_Options { verbose = 0, debug = 1, usemcjit = 1 }
     
-    local ctypes = terralib.newlist()-- declarations for struct types
-    local cfunctions = terralib.newlist() -- list of lines in the header
+    C.terra_initwithoptions(L,&o)
     
-    LibraryState.entries:insert { "L", &C.lua_State }
-    for k,v in pairs(apifunctions) do
-        LibraryState.entries:insert { k, &v:gettype() }
-    end
+    setupsigsegv(L)
+    C.lua_getfield(L,LUA_GLOBALSINDEX,"package")
+    C.lua_getfield(L,-1,"terrapath")
+    C.lua_pushstring(L,";")
+    C.lua_pushstring(L,sourcepath)
+    C.lua_concat(L,3)
+    C.lua_setfield(L,-2,"terrapath")
+    C.lua_getfield(L,LUA_GLOBALSINDEX,"require")
+    C.lua_pushstring(L,main)
+    if C.lua_pcall(L,1,1,0) ~= 0 then return doerror(L) end
     
-    local terra doerror(L : &C.lua_State)
-        C.printf("%s\n",C.luaL_checklstring(L,-1,nil))
-        return nil
-    end
-    
-    local terra NewState() : &LibraryState
-        var S = [&LibraryState](C.malloc(sizeof(LibraryState)))
-        var L = C.luaL_newstate();
-        S.L = L
-        if L == nil then return doerror(L) end
-        C.luaL_openlibs(L)
-        var o  = C.terra_Options { verbose = 0, debug = 1, usemcjit = 1 }
-        C.terra_initwithoptions(L,&o)
-        
-        setupsigsegv(L)
-        var path : int8[4096]
-        directoryforsymbol(NewState,path,4096)
-        C.strncat(path,terrapath,4096)
-        C.lua_getfield(L,LUA_GLOBALSINDEX,"package")
-        C.lua_getfield(L,-1,"terrapath")
-		C.lua_pushstring(L,";")
-        C.lua_pushstring(L,path)
-        C.lua_concat(L,3)
-        C.lua_setfield(L,-2,"terrapath")
-        C.lua_getfield(L,LUA_GLOBALSINDEX,"require")
-        C.lua_pushstring(L,packagename)
-        if C.lua_pcall(L,1,1,0) ~= 0 then return doerror(L) end
-        
-        escape
-            for k,v in pairs(apifunctions) do
-                emit quote
-                    C.lua_getfield(L,-1,k)
-                    C.lua_getfield(L,-1,"getpointer")
-                    C.lua_insert(L,-2)
-                    C.lua_call(L,1,1) 
-                    S.[k] = @[&&v:gettype()](C.lua_topointer(L,-1))
-                    C.lua_settop(L, -2)
-                end
+    escape
+        for k,type in pairs(apifunctions) do
+            emit quote
+                C.lua_getfield(L,-1,k)
+                C.lua_getfield(L,-1,"getpointer")
+                C.lua_insert(L,-2)
+                C.lua_call(L,1,1) 
+                S.[k] = @[&type](C.lua_topointer(L,-1))
+                C.lua_settop(L, -2)
             end
         end
-        return S
     end
-    wrappers[libraryname.."_NewState"] =  NewState
-    
-    for k,v in pairs(apifunctions) do
-        local typ = v:gettype()
-        local syms = typ.parameters:map(symbol)
-        local terra wfn(s : &LibraryState, [syms]) : typ.returntype
-            return s.[k]([syms])
-        end
-        wrappers[libraryname.."_"..k] = wfn 
-    end 
-    
-    local typeemitted = {}
-    local function typetostring(T)
-        if T == rawstring then
-            return "const char *" --HACK: make it take strings
-        elseif T:ispointer() then
-            local p
-            if T.type:isstruct() then
-                p = tostring(T.type):match("%.?([^.]*)$")
-                if not typeemitted[T.type] then
-                    ctypes:insert("typedef struct "..p.." "..p..";\n")
-                    typeemitted[T.type] = true
-                end
-            else
-                p = typetostring(T.type)
-            end
-            return p.." *"
-        elseif T:isprimitive() then
-            return T:cstring()
-        elseif T == terralib.types.unit or T == opaque then
-            return "void"
-        else
-            error("unsupported type: "..tostring(T))
-        end
+    return S
+end
+wrappers[libraryname.."_NewState"] =  NewState
+
+for k,type in pairs(apifunctions) do
+    local syms = type.type.parameters:map(symbol)
+    local terra wfn(state : &LibraryState, [syms]) : type.type.returntype
+        return state.[k]([syms])
     end
+    wrappers[libraryname.."_"..k] = wfn 
+end 
+
+local flags = {}
+if ffi.os == "Windows" then
+    flags = terralib.newlist { string.format("/IMPLIB:%s.lib",libraryname),terralib.terrahome.."\\lib\\terra.lib",terralib.terrahome.."\\lib\\lua51.lib","Shlwapi.lib" }
     
-    local names = terralib.newlist()
-    for k,v in pairs(wrappers) do names:insert(k) end
-    names:sort()
     for i,k in ipairs(names) do
-        local v = wrappers[k]
-        local typ = v:gettype()
-        cfunctions:insert(string.format("%s %s(%s);\n",typetostring(typ.returntype),k,table.concat(typ.parameters:map(typetostring),",")))
+        flags:insert("/EXPORT:"..k)
     end
-    
-    local cheader = io.open(string.format(headerformat,libraryname),"w")
-    cheader:write '#include <stdint.h>\n'
-    for i,l in ipairs(ctypes) do cheader:write(l) end
-    for i,l in ipairs(cfunctions) do cheader:write(l) end
-    cheader:close()
-    local libraryfmtname = string.format(libraryformat,libraryname)
-    
-    local flags = {}
-    if ffi.os == "OSX" then
-        flags = { "-install_name", "@rpath/"..libraryfmtname, "-L"..terralib.terrahome.."/lib", "-lterra" }
-    elseif ffi.os == "Windows" then
-		flags = terralib.newlist { string.format("/IMPLIB:%s.lib",libraryname),terralib.terrahome.."\\lib\\terra.lib",terralib.terrahome.."\\lib\\lua51.lib","Shlwapi.lib" }
-        
-		for i,k in ipairs(names) do
-            flags:insert("/EXPORT:"..k)
-        end
-    end
-    terralib.saveobj(libraryfmtname,wrappers,flags)
 end
-
-saveaslibrary(arg[1],arg[2])
+terralib.saveobj(outputname,wrappers,flags)
