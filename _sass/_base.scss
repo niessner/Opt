@@ -124,15 +124,18 @@ blockquote {
 
 
 
+@import url(http://fonts.googleapis.com/css?family=Droid+Sans+Mono);
+
 /**
  * Code formatting
  */
 pre,
 code {
-    font-size: 15px;
+    font-size: 13px;
     border: 1px solid $grey-color-light;
     border-radius: 3px;
     background-color: #eef;
+    font-family: "Droid Sans Mono", Monaco, 'Andale Mono', monospace;
 }
 
 code {
