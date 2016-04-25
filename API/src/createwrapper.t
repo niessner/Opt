@@ -16,7 +16,7 @@ local C,CN = terralib.includecstring[[
     sig_t SIG_DFL_fn() { return SIG_DFL; }
     #else
     #define NOMINMAX
-    #include <Windows.h>
+    #include <windows.h>
     #include <Shlwapi.h>
     #endif
     #include "terra/terra.h"
@@ -29,8 +29,8 @@ local tabsolutepath,setupsigsegv
 if ffi.os == "Windows" then
     terra setupsigsegv(L : &C.lua_State) end
     terra tabsolutepath(rel : rawstring)
-        var buf : rawstring = C.malloc(C.MAX_PATH)
-        C.GetFullPathName(rel,C.MAX_PATH,buf,nil)
+        var buf : rawstring = rawstring(C.malloc(C.MAX_PATH))
+        C.GetFullPathNameA(rel,C.MAX_PATH,buf,nil)
         return buf
     end  
 else
@@ -113,7 +113,17 @@ local terra NewState() : &LibraryState
     escape 
         if embedsource then
             emit quote C.lua_getfield(L,-1,"preload") end
-            for line in io.popen("ls "..sourcedirectory):lines() do
+			
+			local command = ""
+			if ffi.os == "Windows" then
+				command = "cmd /c dir /b "
+			else
+				command = "ls "
+			end 
+
+			print(command..sourcedirectory)
+			
+            for line in io.popen(command..sourcedirectory):lines() do
                 local name = line:match("(.*)%.t")
                 if name then
                     local content = io.open(sourcedirectory.."/"..line,"r"):read("*all")
@@ -166,7 +176,7 @@ local flags = {}
 if ffi.os == "Windows" then
     flags = terralib.newlist { string.format("/IMPLIB:%s.lib",libraryname),terralib.terrahome.."\\lib\\terra.lib",terralib.terrahome.."\\lib\\lua51.lib","Shlwapi.lib" }
     
-    for i,k in ipairs(names) do
+    for k,_ in pairs(wrappers) do
         flags:insert("/EXPORT:"..k)
     end
 end

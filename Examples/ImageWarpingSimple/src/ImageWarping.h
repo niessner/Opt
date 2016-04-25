@@ -28,7 +28,7 @@ PointInTriangleLK(float x0, float y0, float w0,
     float d12 = X[1]*Y[2] - Y[1]*X[2];
     float d20 = X[2]*Y[0] - Y[2]*X[0];
 
-    if (d01 < 0 & d12 < 0 & d20 < 0) {
+    if ((d01 < 0) & (d12 < 0) & (d20 < 0)) {
         //printf("Backfacing\n");
         // backfacing
         return false;
@@ -181,7 +181,7 @@ public:
                     float b0, b1, b2;
                     if (PointInTriangleLK(t0.x, t0.y, 1.0f,
                         t1.x, t1.y, 1.0f,
-                        t2.x, t2.y, 1.0f, x, y, &b0, &b1, &b2)) {
+                        t2.x, t2.y, 1.0f, (float)x, (float)y, &b0, &b1, &b2)) {
                         vec3f color = c0*b0 + c1*b1 + c2*b2;
                         m_resultColor(x, y) = color;
                     }
@@ -193,7 +193,7 @@ public:
 
 	void copyResultToCPU() {
         m_scale = 1.0f;
-        m_resultColor = ColorImageR32G32B32(m_image.getWidth()*m_scale, m_image.getHeight()*m_scale);
+        m_resultColor = ColorImageR32G32B32(m_image.getWidth()*(int)m_scale, m_image.getHeight()*(int)m_scale);
         m_resultColor.setPixels(vec3f(255.0f, 255.0f, 255.0f));
 
 		float2* h_warpField = new float2[m_image.getWidth()*m_image.getHeight()];

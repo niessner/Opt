@@ -2,12 +2,6 @@ echo Remaking Opt.dll
 set TERRAHOME=%1
 set TERRA=%TERRAHOME%\release\bin\terra
 set OPT_DIR=%2
-set TARGET_DIR=%3
 
-
-cd %OPT_DIR%
-%TERRA% ..\..\API\src\createWrapper.t Opt ..\..\API\src\windowsErrorContextWrapper.t
-cd %TARGET_DIR%
-copy %OPT_DIR%\Opt.dll .
-copy %OPT_DIR%\Opt.lib .
-copy %OPT_DIR%\Opt.h .
+%TERRA% %OPT_DIR%\src\createWrapper.t Opt %OPT_DIR%\src o %OPT_DIR%\release\include\Opt.h .\Opt.dll true
+copy %OPT_DIR%\release\include\Opt.h .
