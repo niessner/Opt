@@ -6,7 +6,7 @@
 # 'jekyll serve'. If you change this file, please restart the server process.
 
 # Site settings
-title: Opt: A Domain Specific Language for Non-linear Least Squares Optimization in Graphics and Imaging
+title: "Opt: A Domain Specific Language for Non-linear Least Squares Optimization in Graphics and Imaging"
 email: your-email@domain.com
 baseurl: "" # the subpath of your site, e.g. /blog
 url: "http://optlang.org" # the base hostname & protocol for your site
