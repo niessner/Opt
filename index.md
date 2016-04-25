@@ -1,6 +1,7 @@
 ---
 layout: default
 ---
+[Zachary DeVito](http://cs.stanford.edu/~zdevito/), [Michael Mara](http://stanford.edu/), (Michael Zollhöfer)[http://people.mpi-inf.mpg.de/~mzollhoef/], [Gilbert Bernstein](http://www.gilbertbernstein.com/), [Jonathan Ragan-Kelley](http://people.csail.mit.edu/jrk/), [Christian Theobalt](https://people.mpi-inf.mpg.de/~theobalt/), [Pat Hanrahan](https://graphics.stanford.edu/~hanrahan/), [Matthew Fisher](https://graphics.stanford.edu/~mdfisher/), [Matthias Nießner](http://www.graphics.stanford.edu/~niessner/publications.html)
 
 ![Teaser](teaser.jpg)
 
