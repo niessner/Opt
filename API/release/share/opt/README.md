@@ -1,6 +1,10 @@
-TODO: instructions to build the API, general overview of how it works, where is the example.
+Opt is a new language in which a user simply writes energy functions over image- or graph-structured unknowns, and a compiler automatically generates state-of-the-art GPU optimization kernels. Real-world energy functions in graphics and vision applications are expressible in tens of lines of code. They compile directly into highly optimized GPU solver implementations with performance competitive with the best published hand-tuned, application-specific GPU solvers, and 1–2 orders of magnitude beyond a general-purpose auto-generated solver.
+
+
+TODO: instructions to build, general overview of how it works, where is the example.
 
 Beta-software warning.
+
 
 Using the Opt C/C++ API
 =======================
@@ -239,6 +243,8 @@ If you do not want the default behavior, you can use the `InBounds(x,y)` functio
 
 `InBounds` is true only when the relative offet `(1,0)` is in-bounds for the centered pixel. Any energy that uses `InBounds` will be evaluated at _every_ pixel including the border region, and it is up to the user to choose what to do about boundaries.
 
+It is also possible to exclude arbitrary pixels from the solve using the `Exclude(exp)` method. When `exp` is true, unknowns defined at these pixels will not be updated and residuals at these pixels will not be evaluated.
+
 ### Vectors ###
 
     vector = Vector(a,b,c)
@@ -287,6 +293,21 @@ Energy Specification:
     local Mask = 		Array("Mask", float, {W,H},4)	
     local w_fitSqrt = Param("w_fitSqrt", float, 5)
     local w_regSqrt = Param("w_regSqrt", float, 6)
+
+
+### Helpers ###
+
+    for x,y in Stencil { {1,0},{-1,0},{0,1},{0,-1} } do
+        Energy(X(0,0) - X(x,y)) -- laplacian regularization
+    end
+    
+    -- equivalent to
+    Energy(X(0,0) - X(1,0)) -- laplacian regularization
+    Energy(X(0,0) - X(-1,0)) -- laplacian regularization
+    Energy(X(0,0) - X(0,1)) -- laplacian regularization
+    Energy(X(0,0) - X(0,-1)) -- laplacian regularization
+    
+The function `Stencil` is a Lua iterator that makes it easy to define similar energy functions for a set of neighboring offsets.
 
 
 Solver Parameters
