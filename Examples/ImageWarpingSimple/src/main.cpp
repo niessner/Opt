@@ -1,7 +1,8 @@
-﻿#include "ImageWarping.h"
+﻿
+#include "ImageWarping.h"
 #include "mLibInclude.h"
 
-static void loadConstraints(std::vector<std::vector<int> >& constraints, std::string filename) {
+static void loadConstraints(std::vector<std::vector<int> >& constraints, const std::string& filename) {
   std::ifstream in(filename, std::fstream::in);
 
 	if(!in.good())
