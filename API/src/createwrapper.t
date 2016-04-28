@@ -66,7 +66,7 @@ end
 absolutepath = function(p) return ffi.string(tabsolutepath(p)) end
 
 local Header = terralib.includec(headerfile)
-local statename = libraryname.."State"
+local statename = libraryname.."_State"
 local LibraryState = Header[statename]
 assert(terralib.types.istype(LibraryState) and LibraryState:isstruct())
 
