@@ -1498,7 +1498,7 @@ local function createfunction(problemspec,name,Index,arguments,results,scatters)
         W:write("----------------------\n")
     end
     
-    if verboseAD or true then
+    if verboseAD then
         local W = io.open("log.txt","a")
         printschedule(W,instructions,regcounts)
         W:close()

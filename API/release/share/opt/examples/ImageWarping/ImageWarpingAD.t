@@ -3,9 +3,9 @@ UsePreconditioner(true)
 
 local Offset = Unknown("Offset",float2,{W,H},0)
 local Angle = Unknown("Angle",float,{W,H},1)
-local UrShape = 	Image("UrShape", float2,{W,H},2)		--urshape
-local Constraints = Image("Constraints", float2,{W,H},3)	--constraints
-local Mask = 		Image("Mask", float, {W,H},4)				--validity mask for constraints
+local UrShape = 	Array("UrShape", float2,{W,H},2)		--urshape
+local Constraints = Array("Constraints", float2,{W,H},3)	--constraints
+local Mask = 		Array("Mask", float, {W,H},4)				--validity mask for constraints
 
 local w_fitSqrt = Param("w_fitSqrt", float, 5)
 local w_regSqrt = Param("w_regSqrt", float, 6)

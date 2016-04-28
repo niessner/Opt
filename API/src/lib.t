@@ -32,7 +32,7 @@ return function(P)
     -- alas for Image/Array
     function L.Array(...) return P:Image(...) end
     function L.ComputedArray(...) return P:ComputedImage(...) end
---[[
+
     function L.Rotate3D(a,v)
         local alpha, beta, gamma = a(0), a(1), a(2)
         local  CosAlpha, CosBeta, CosGamma, SinAlpha, SinBeta, SinGamma = ad.cos(alpha), ad.cos(beta), ad.cos(gamma), ad.sin(alpha), ad.sin(beta), ad.sin(gamma)
@@ -51,7 +51,12 @@ return function(P)
                 matrix(3)*v(0)+matrix(4)*v(1)+matrix(5)*v(2),
                 matrix(6)*v(0)+matrix(7)*v(1)+matrix(8)*v(2))
     end
-]]
+
+    function L.Rotate2D(angle, v)
+	    local CosAlpha, SinAlpha = cos(angle), sin(angle)
+        local matrix = Vector(CosAlpha, -SinAlpha, SinAlpha, CosAlpha)
+	    return Vector(matrix(0)*v(0)+matrix(1)*v(1), matrix(2)*v(0)+matrix(3)*v(1))
+    end
     L.Select = ad.select
     function L.Stencil (lst)
         local i = 0

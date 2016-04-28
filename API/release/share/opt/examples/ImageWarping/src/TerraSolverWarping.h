@@ -48,7 +48,7 @@ public:
 
 	void solve(float2* d_x, float* d_a, float2* d_urshape, float2* d_constraints, float* d_mask, unsigned int nNonLinearIterations, unsigned int nLinearIterations, unsigned int nBlockIterations, float weightFit, float weightReg)
 	{
-		void* solverParams[] = { &nNonLinearIterations, &nLinearIterations, &nBlockIterations };
+		void* solverParams[] = { &nNonLinearIterations, &nLinearIterations };
 		float weightFitSqrt = sqrt(weightFit);
 		float weightRegSqrt = sqrt(weightReg);
 		

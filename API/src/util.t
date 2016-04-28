@@ -586,7 +586,7 @@ function util.makeGPUFunctions(problemSpec, PlanData, delegate, names)
                 end
                 launches:insert(`launcher(args))
             else
-                print("not found: "..name.." for "..tostring(problemfunction.typ))
+                --print("not found: "..name.." for "..tostring(problemfunction.typ))
             end
         end
         local fn
