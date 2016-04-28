@@ -13,7 +13,7 @@ void warningFunctionMLIB(const std::string &description)
 void errorFunctionMLIB(const std::string &description)
 {
 	std::cout << description << std::endl;
-	DEBUG_BREAK;
+//	DEBUG_BREAK;
 }
 
 void assertFunctionMLIB(bool statement, const std::string &description)
