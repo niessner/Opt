@@ -1,10 +1,40 @@
-Opt is a new language in which a user simply writes energy functions over image- or graph-structured unknowns, and a compiler automatically generates state-of-the-art GPU optimization kernels. Real-world energy functions in graphics and vision applications are expressible in tens of lines of code. They compile directly into highly optimized GPU solver implementations with performance competitive with the best published hand-tuned, application-specific GPU solvers, and 1–2 orders of magnitude beyond a general-purpose auto-generated solver.
+This document describes how to use the Opt language (optlang.org). 
 
+Opt is a new language in which a user simply writes energy functions over image- or graph-structured unknowns, and a compiler automatically generates state-of-the-art GPU optimization kernels. Real-world energy functions compile directly into highly optimized GPU solver implementations with performance competitive with the best published hand-tuned, application-specific GPU solvers.
 
-TODO: instructions to build, general overview of how it works, where is the example.
+This is an early release of the software to get feedback on the expressiveness of the language. We are interested in seeing what problems can be expressed and what features will be necessary to support more problems.
 
-Beta-software warning.
+As an early release there are some things that are not complete that will be improved over time.
 
+* Error reporting is limited and may be difficult to understand at times.
+* Code can only run on NVIDIA GPUs with a relatively modern version of CUDA (6.5 or greater on OSX/Linux, and 7.0 on windows)
+* The library of built-in math functions is somewhat limited. For instance, it include vectors but doesn't include small matrix operation.
+
+These issues will improve over time, but if you run into issues, just send us an email:
+
+* zdevito at cs dot stanford dot edu
+* niessner at cs dot stanford dot edu
+
+Overview
+========
+
+Opt is composed of a library `libOpt.a` and a header file `Opt.h`. An application links Opt and uses its API to define and solve optimization problems. Opt's high-level energy functions behave like shaders in OpenGL. They are loaded as your application runs using the `Opt_ProblemDefine` API.
+
+Our release includes:
+
+* ./lib/libOpt.a (implementation of Opt)
+* ./lib/libterra.a (a dependency of Opt)
+* ./include/Opt.h (API that interfaces with your application)
+* ./share/opt/examples/ImageWarping (a complete example application that uses Opt)
+* ./share/opt/examples/MeshDeformation (a complete example application that uses graphis in Opt)
+
+See the Makefiles in the examples for instructions on how to link Opt into your applications. In particular, on OSX, you will need to add the following linker flags:
+
+    # osx only
+    OSXFLAGS += -pagezero_size 10000 -image_base 100000000
+    
+    clang++ main.cpp -o main.cpp $(OSXFLAGS) -std=c++11 -L$(OPTHOME)/lib -L$(OPTHOME)/include -lOpt -lterra -ldl -pthread
+    
 
 Using the Opt C/C++ API
 =======================
