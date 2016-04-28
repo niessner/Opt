@@ -2,6 +2,7 @@ opt = {} --anchor it in global namespace, otherwise it can be collected
 local S = require("std")
 local ffi = require("ffi")
 local util = require("util")
+local optlib = require("lib")
 ad = require("ad")
 local A = ad.classes
 
@@ -746,11 +747,18 @@ local allPlans = terralib.newlist()
 errorPrint = rawget(_G,"errorPrint") or print
 
 function opt.problemSpecFromFile(filename)
-   local file, errorString = terralib.loadfile(filename)
-   if not file then
-      error(errorString, 0)
-   end
-   return file()
+    local file, errorString = terralib.loadfile(filename)
+    if not file then
+        error(errorString, 0)
+    end
+    local P = ad.ProblemSpec()
+    local libinstance = optlib(P)
+    setfenv(file,libinstance)
+    local result = file()
+    if ProblemSpec:isclassof(result) then
+        return result
+    end
+    return libinstance.Result()
 end
 
 local function problemPlan(id, dimensions, pplan)
@@ -1525,7 +1533,7 @@ local function createfunction(problemspec,name,Index,arguments,results,scatters)
     end
     local currentidx
     local function boundcoversload(ba,off)
-        print("Bound Covers? ",ba,off)
+        --print("Bound Covers? ",ba,off)
         assert(#off.data == #ba.min.data)
         for i = 1,#off.data do
             local o,bmin,bmax = off.data[i],ba.min.data[i],ba.max.data[i]
@@ -1534,7 +1542,7 @@ local function createfunction(problemspec,name,Index,arguments,results,scatters)
                 return false
             end
         end
-        print("yes")
+        --print("yes")
         return true
     end
     local function conditioncoversload(condition,off)
