@@ -21,8 +21,10 @@ void assertFunctionMLIB(bool statement, const std::string &description)
 	if(!statement)
 	{
 		std::cout << description << std::endl;
-#ifdef _DEBUG	
+#ifdef _DEBUG
+#ifdef _WIN32
 		DEBUG_BREAK;
+#endif
 #endif
 	}
 }
