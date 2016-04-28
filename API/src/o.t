@@ -144,7 +144,7 @@ ProblemParam = ImageParam(ImageType imagetype, boolean isunknown)
              attributes (string name, any idx)
 
 VarDef =  ImageAccess(Image image,  Shape _shape, Index index, number channel) unique
-       | BoundsAccess(Offset offset, number expand) unique
+       | BoundsAccess(Offset min, Offset max) unique
        | IndexValue(number dim, number shift_) unique
        | ParamValue(string name,TerraType type) unique
 Graph = (string name)
@@ -326,11 +326,12 @@ function IndexSpace:indextype()
     local struct Index {}
     self._terratype = Index
     
-    local params = terralib.newlist()
-    local fieldnames = terralib.newlist()
+    local params,params2 = List(),List()
+    local fieldnames = List()
     for i = 1,#dims do
-        params:insert(symbol(int,"d"..tostring(i-1)))
         local n = "d"..tostring(i-1)
+        params:insert(symbol(int,n))
+        params2:insert(symbol(int,n))
         fieldnames:insert(n)
         Index.entries:insert { n, int }
     end
@@ -358,21 +359,23 @@ function IndexSpace:indextype()
     terra Index:tooffset()
         return [genoffset(self)]
     end
-    local function genbounds(self,e)
+    local function genbounds(self,e,bmins,bmaxs)
         local valid
         for i = 1, #dims do
             local n = fieldnames[i]
-            local v = `self.[n] >= e and self.[n] < [dims[i].size] - e
+            local bmin,bmax = bmins and bmins[i] or 0, bmaxs and bmaxs[i] or 0
+            local v = `int(self.[n] >= -bmin) and int(self.[n] < [dims[i].size] - bmax)
             if valid then
-                valid = `valid and v
+                valid = `valid and int(v)
             else
-                valid = v
+                valid = `int(v)
             end
         end
-        return valid
+        return valid ~= 0
     end
-    terra Index:InBounds() return [ genbounds(self,0) ] end
-    terra Index:InBoundsExpanded(e : int) return [ genbounds(self,e) ] end
+    terra Index:InBounds() return [ genbounds(self) ] end
+    
+    terra Index:InBoundsExpanded([params],[params2]) return [ genbounds(self,params,params2) ] end
     
     if #dims <= 3 then
         local dimnames = "xyz"
@@ -780,7 +783,7 @@ function ImageAccess:__tostring()
     end
     return r
 end
-function BoundsAccess:__tostring() return ("bounds_%s_%d"):format(tostring(self.offset),self.expand) end
+function BoundsAccess:__tostring() return ("bounds_%s_%s"):format(tostring(self.min),self.min == self.max and "p" or tostring(self.max)) end
 function IndexValue:__tostring() return ({[0] = "i","j","k"})[self.dim] end
 function ParamValue:__tostring() return "param_"..self.name end
 
@@ -852,6 +855,28 @@ end
 
 function Image:__tostring() return self.name end
 
+local function bboxforexpression(ispace,exp)
+    local usesbounds = false
+    local bmin,bmax = ispace:ZeroOffset(),ispace:ZeroOffset()
+    exp:visit(function(a)
+        if ImageAccess:isclassof(a) then
+            assert(Offset:isclassof(a.index,"bbox not defined for graphs"))
+            if a.image.gradientimages then
+                local shiftedbbox = a.image.bbox:shift(a.index)
+                bmin,bmax = bmin:Min(shiftedbbox.min),bmax:Max(shiftedbbox.max)
+            else
+                bmin,bmax = bmin:Min(a.index),bmax:Max(a.index)
+            end
+        elseif BoundsAccess:isclassof(a) then
+            usesbounds = true
+        end
+    end)
+    if usesbounds then 
+        bmin,bmax = ispace:ZeroOffset(),ispace:ZeroOffset()
+    end
+    return BoundsAccess(bmin,bmax)
+end
+
 function ProblemSpecAD:ComputedImage(name,dims,exp)
     if ad.ExpVector:isclassof(exp) then
         local imgs = terralib.newlist()
@@ -882,6 +907,7 @@ function ProblemSpecAD:ComputedImage(name,dims,exp)
         im.gradientimages:insert(GradientImage(u,g,gim))
     end
     im.expression = exp
+    im.bbox = bboxforexpression(ispace,exp)
     self.precomputed:insert(im)
     return im
 end
@@ -947,18 +973,25 @@ function ImageVector:__call(...)
 end
 
 function opt.InBounds(...)
-	return BoundsAccess(Offset(List{...}),0):asvar()
+    local offset = Offset(List{...})
+	return BoundsAccess(offset,offset):asvar()
 end
 function opt.InBoundsExpanded(...)
     local args = {...}
-    return BoundsAccess(Offset(List{unpack(args,1,#args-1)}),args[#args]):asvar()
+    local expand = args[#args]
+    args[#args] = nil
+    local min,max = List(),List()
+    for i,a in ipairs(args) do
+        min[i],max[i] = a - expand, a + expand
+    end
+    return BoundsAccess(Offset(min),Offset(max)):asvar()
 end
 function BoundsAccess:type() return bool end --implementing AD's API for keys
 
 
 function VarDef:shift(o) return self end
 function BoundsAccess:shift(o)
-    return BoundsAccess(self.offset:shift(o),self.expand)
+    return BoundsAccess(self.min:shift(o),self.max:shift(o))
 end
 function ImageAccess:shift(o)
     assert(Offset:isclassof(self.index), "cannot shift graph accesses!")
@@ -995,6 +1028,22 @@ function Offset:Invert()
     end
     return Offset(r)
 end
+function Offset:Min(rhs)
+    assert(Offset:isclassof(rhs) and #self.data == #rhs.data)
+    local r = List()
+    for i = 1,#self.data do
+        r[i] = math.min(self.data[i],rhs.data[i])
+    end
+    return Offset(r)
+end
+function Offset:Max(rhs)
+    assert(Offset:isclassof(rhs) and #self.data == #rhs.data)
+    local r = List()
+    for i = 1,#self.data do
+        r[i] = math.max(self.data[i],rhs.data[i])
+    end
+    return Offset(r)
+end
 function Offset:shift(o)
     assert(Offset:isclassof(o) and #o.data == #self.data)
     local ns = terralib.newlist()
@@ -1006,7 +1055,7 @@ end
 local function removeboundaries(exp)
     if ad.ExpVector:isclassof(exp) or terralib.islist(exp) then return exp:map(removeboundaries) end
     local function nobounds(a)
-        if BoundsAccess:isclassof(a) and a.offset:IsZero() and a.expand == 0 then return ad.toexp(1)
+        if BoundsAccess:isclassof(a) and a.min:IsZero() and a.max:IsZero() then return ad.toexp(1)
         else return ad.v[a] end
     end
     return exp:rename(nobounds)
@@ -1476,16 +1525,16 @@ local function createfunction(problemspec,name,Index,arguments,results,scatters)
     end
     local currentidx
     local function boundcoversload(ba,off)
-        --print("Bound Covers? ",ba,off)
-        assert(#off.data == #ba.offset.data)
+        print("Bound Covers? ",ba,off)
+        assert(#off.data == #ba.min.data)
         for i = 1,#off.data do
-            local o,b = off.data[i],ba.offset.data[i]
-            if o < b - ba.expand or o > b + ba.expand then
+            local o,bmin,bmax = off.data[i],ba.min.data[i],ba.max.data[i]
+            if o < bmin or o > bmax then
                 --print("no")
                 return false
             end
         end
-        --print("yes")
+        print("yes")
         return true
     end
     local function conditioncoversload(condition,off)
@@ -1517,7 +1566,7 @@ local function createfunction(problemspec,name,Index,arguments,results,scatters)
         elseif "intrinsic" == ir.kind then
             local a = ir.value
             if "BoundsAccess" == a.kind then--bounds calculation
-                return `midx([a.offset.data]):InBoundsExpanded(a.expand)
+                return `midx:InBoundsExpanded([a.min.data],[a.max.data])
             elseif "IndexValue" == a.kind then
                 local n = "d"..tostring(a.dim)
                 return `idx.[n] + a.shift_ 
@@ -1709,24 +1758,6 @@ local function createfunction(problemspec,name,Index,arguments,results,scatters)
     return generatedfn
 end
 
-local function stencilforexpression(exp)
-    local stencil = 0
-    if ad.ExpVector:isclassof(exp) then 
-        for i,e in ipairs(exp:expressions()) do
-            stencil = math.max(stencil,stencilforexpression(e))
-        end
-        return stencil
-    end
-    exp:visit(function(a)
-        if "ImageAccess" == a.kind then
-            assert(Offset:isclassof(a.index), "stencils not defined for graph image access")
-            stencil = math.max(stencil,a.index:MaxValue()) 
-        elseif "BoundsAccess" == a.kind then--bounds calculation
-            stencil = math.max(stencil,a.offset:MaxValue()+a.expand)
-        end
-    end)
-    return stencil
-end
 local noscatters = terralib.newlist()
 
 function ProblemSpecAD:CompileFunctionSpec(functionspec)
@@ -1783,12 +1814,16 @@ local function classifyexpression(exp) -- what index space, or graph is this thi
     if not classification then
         error("residual must actually use some image")
     end
-    if IndexSpace:isclassof(classification) then
+    if classification.kind == "CenteredFunction" then
         exp:visit(function(a)
-            if BoundsAccess:isclassof(a) and #a.offset.data ~= #classification.dims then
-                error(string.format("%s does not match index space %s",a,classification))
+            if BoundsAccess:isclassof(a) and #a.min.data ~= #classification.ispace.dims then
+                error(string.format("%s does not match index space %s",a,classification.ispace.dims))
             end
         end)
+        -- by default zero-out any residual computation that uses out-of-bounds things
+        -- users can opt for per-residual custom behavior using the InBounds checks
+        local bbox = bboxforexpression(classification.ispace,exp)
+        template.expression = ad.select(bbox:asvar(),exp,0)
     end
     return classification,template
 end

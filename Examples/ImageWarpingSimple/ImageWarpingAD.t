@@ -47,8 +47,7 @@ local offsets = { {1,0}, {-1,0}, {0,1}, {0, -1} }
 for ii ,o in ipairs(offsets) do
     local i,j = unpack(o)
     local n = Offset(i,j)
-    local ARAPCost = (x - n) - mul(R, (xHat - UrShape( i,j)))
-    local ARAPCostF = ad.select(opt.InBounds(0,0),	ad.select(opt.InBounds( i,j), ARAPCost, ad.Vector(0.0, 0.0)), ad.Vector(0.0, 0.0))
+    local ARAPCostF = (x - n) - mul(R, (xHat - UrShape( i,j)))
     local m = Mask(i,j)
     ARAPCostF = w_regSqrt*ad.select(ad.eq(m, 0.0), ARAPCostF, ad.Vector(0.0, 0.0))
     terms:insert(ARAPCostF)
