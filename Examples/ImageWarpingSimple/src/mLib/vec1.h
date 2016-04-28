@@ -140,7 +140,7 @@ public:
 	}
 
 	inline void print() const {
-		Console::log() << "(" << array[0] << ")" << std::endl;
+		std::cout << "(" << array[0] << ")" << std::endl;
 	}
 
     inline bool isValid() const {

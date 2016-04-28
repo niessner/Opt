@@ -190,7 +190,7 @@ public:
 	}
 
 	inline void print() const {
-		Console::log() << "(" << array[0] << " / " << array[1] << ")" << std::endl;
+		std::cout << "(" << array[0] << " / " << array[1] << ")" << std::endl;
 	}
 
 	inline T* ptr() {

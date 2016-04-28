@@ -193,7 +193,7 @@ class vec4
 
         void print() const
         {
-            Console::log() << "(" << array[0] << " / " << array[1] << " / " << array[2] <<
+            std::cout << "(" << array[0] << " / " << array[1] << " / " << array[2] <<
                            " / " << array[3] << " ) " << std::endl;
         }
 

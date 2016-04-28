@@ -134,11 +134,38 @@
   <ItemGroup>
     <ClCompile Include="src\main.cpp" />
     <ClCompile Include="src\mLibSource.cpp" />
+    <ClCompile Include="src\mLib\common.cpp">
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">true</ExcludedFromBuild>
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|x64'">true</ExcludedFromBuild>
+    </ClCompile>
+    <ClCompile Include="src\mLib\imageLoaderLodePNG.cpp">
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">true</ExcludedFromBuild>
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|x64'">true</ExcludedFromBuild>
+    </ClCompile>
+    <ClCompile Include="src\mLib\lodepng.cpp">
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">true</ExcludedFromBuild>
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|x64'">true</ExcludedFromBuild>
+    </ClCompile>
+    <ClCompile Include="src\mLib\utility.cpp">
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">true</ExcludedFromBuild>
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|x64'">true</ExcludedFromBuild>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="src\cudaUtil.h" />
     <ClInclude Include="src\ImageWarping.h" />
     <ClInclude Include="src\mLibInclude.h" />
+    <ClInclude Include="src\mLib\baseImage.h" />
+    <ClInclude Include="src\mLib\baseImageHelper.h" />
+    <ClInclude Include="src\mLib\common.h" />
+    <ClInclude Include="src\mLib\imageLoaderLodePNG.h" />
+    <ClInclude Include="src\mLib\lodepng.h" />
+    <ClInclude Include="src\mLib\RGBColor.h" />
+    <ClInclude Include="src\mLib\utility.h" />
+    <ClInclude Include="src\mLib\vec1.h" />
+    <ClInclude Include="src\mLib\vec2.h" />
+    <ClInclude Include="src\mLib\vec3.h" />
+    <ClInclude Include="src\mLib\vec4.h" />
     <ClInclude Include="src\TerraSolverWarping.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
