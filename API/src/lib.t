@@ -29,7 +29,9 @@ return function(P)
     end
     L.And = L.Reduce(1,ad.and_)
     L.Or = L.Reduce(0,ad.or_)
-
+    -- alas for Image/Array
+    function L.Array(...) return P:Image(...) end
+    function L.ComputedArray(...) return P:ComputedImage(...) end
 --[[
     function L.Rotate3D(a,v)
         local alpha, beta, gamma = a(0), a(1), a(2)

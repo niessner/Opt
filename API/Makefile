@@ -20,3 +20,6 @@ release/lib/libOptDev.a:	$(wildcard src/*.t)
 clean:
 	rm -rf build/wrapper.o
 	rm -rf release/lib/libOpt.a
+
+release: release/lib/libOpt.a release/lib/libOptDev.a
+	cp $(TERRAHOME)/lib/libterra.a release/lib
