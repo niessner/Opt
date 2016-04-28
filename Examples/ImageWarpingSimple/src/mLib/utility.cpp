@@ -344,10 +344,6 @@ namespace util
 		return 0;
 	}
 
-	void makeDirectory(const std::string &directory)
-	{
-		mkdir(directory.c_str(), S_IRWXU | S_IRWXG | S_IROTH | S_IXOTH);
-	}
 #endif
 }  // namespace util
 
