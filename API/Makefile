@@ -21,6 +21,10 @@ clean:
 	rm -rf build/wrapper.o
 	rm -rf release/lib/libOpt.a
 
+RELEASE_NAME := Opt-`uname | sed -e s/Darwin/OSX/ | sed -e s/CYGWIN.*/Windows/`-`uname -m`-`git rev-parse --short HEAD`
 release: release/lib/libOpt.a release/lib/libOptDev.a
+	make -C release/share/opt/examples/ImageWarping purge
 	cp $(TERRAHOME)/lib/libterra.a release/lib
-	
+	mv release $(RELEASE_NAME)
+	zip -q -r $(RELEASE_NAME).zip $(RELEASE_NAME)
+	mv $(RELEASE_NAME) release

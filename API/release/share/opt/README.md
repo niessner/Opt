@@ -213,11 +213,31 @@ Generic math operators are usable on any value or vector:
     tan
     tanh
     Select(condition,truevalue,falsevalue) -- piecewise conditional operator, if condition ~= 0, it is truevalue, otherwise it is falsevalue
+    scalar = All(vector) -- true if all values in the vector are true
+    scalar = Any(vector) -- true of any value in the vector is true
 
 All operators apply elementwise to `Vector` objects.
 
 Because Lua does not allow generic overloading of comparison ( `==` , '<=', ... ), you must use the functions we have provided instead for comparisions:
 `eq(a,b)`, `lesseq(a,b)`, etc.
+
+
+### Defining Energies ###
+
+    `Energy(energy1,energy2,...)`
+    
+Add the terms `energy1`, ... to the energy of the whole problem. Energy terms are implicitly squared and summed over the entire domain (array or graph) on which they are defined.  Each channel of a `Vector` passed as an energy is treated as a separate energy term.
+
+
+### Boundaries ###
+
+For energies defined on arrays, it is possible to control how the energy behaves on the boundaries.  Any energy term has a particular pattern of data it reads from neighboring pixels in the arrays, which we call its `stencil`. By default, residual values are only defined for pixels in the array where the whole stencil has defined values. For a 3x3 stencil, for instance, this means that the 1-pixel border of an image will not evaluate this energy term (or equivalently, this term contributes 0 to the overall energy).
+
+If you do not want the default behavior, you can use the `InBounds(x,y)` functions along with the `Select` function to describe custom behavior:
+
+    customvalue = Select(InBounds(1,0),value_in_bounds,value_on_the_border) 
+
+`InBounds` is true only when the relative offet `(1,0)` is in-bounds for the centered pixel. Any energy that uses `InBounds` will be evaluated at _every_ pixel including the border region, and it is up to the user to choose what to do about boundaries.
 
 ### Vectors ###
 
