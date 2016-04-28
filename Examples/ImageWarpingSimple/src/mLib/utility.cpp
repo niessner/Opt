@@ -217,7 +217,7 @@ namespace util
 		rename(oldFilename.c_str(), newFilename.c_str());
 	}
 
-#ifdef WIN32
+#ifdef _WIN32
 
 	UINT64 getFileSize(const std::string &filename)
 	{
@@ -317,9 +317,7 @@ namespace util
 		//PathRemoveFileSpecA(path);
 		//return std::string(path);
 	}
-#endif
-
-#ifdef LINUX
+#else
 	void copyStringToClipboard(const std::string &S)
 	{
 

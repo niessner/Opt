@@ -30,7 +30,7 @@
 
 #endif
 
-#ifdef LINUX
+#ifdef __linux__
 #define DEBUG_BREAK assert(false)
 #endif
 
@@ -80,7 +80,7 @@ namespace ml
 #define NOMINMAX
 #endif
 
-#if defined (LINUX)
+#if __linux__
 #define __FUNCTION__ __func__
 #ifndef __LINE__
 #define __LINE__
