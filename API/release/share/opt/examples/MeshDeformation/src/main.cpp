@@ -8,10 +8,10 @@
 int main(int argc, const char * argv[])
 {
 	//std::string filename = "Armadillo20k.ply";
-    //const char* markerFilename = "armadillo.mrk";
-    
+	//const char* markerFilename = "armadillo.mrk";
+
 	std::string filename = "meshes/raptor_clean.stl";
-    const char* markerFilename = "meshes/raptor.mrk";
+	const char* markerFilename = "meshes/raptor.mrk";
 
 	if (argc >= 2) {
 		filename = argv[1];
@@ -19,7 +19,7 @@ int main(int argc, const char * argv[])
 
 	// Load Constraints
 	LandMarkSet markersMesh;
-    markersMesh.loadFromFile(markerFilename);
+	markersMesh.loadFromFile(markerFilename);
 
 	std::vector<int>				constraintsIdx;
 	std::vector<std::vector<float>> constraintsTarget;
@@ -32,23 +32,25 @@ int main(int argc, const char * argv[])
 
 	SimpleMesh* mesh = new SimpleMesh();
 
-	if (!OpenMesh::IO::read_mesh(*mesh, filename)) 
+	if (!OpenMesh::IO::read_mesh(*mesh, filename))
 	{
-	        std::cerr << "Error -> File: " << __FILE__ << " Line: " << __LINE__ << " Function: " << __FUNCTION__ << std::endl;
+		std::cerr << "Error -> File: " << __FILE__ << " Line: " << __LINE__ << " Function: " << __FUNCTION__ << std::endl;
 		std::cout << filename << std::endl;
 		exit(1);
 	}
-    printf("Faces: %d\nVertices: %d\n", mesh->n_faces(), mesh->n_vertices());
+	printf("Faces: %d\nVertices: %d\n", mesh->n_faces(), mesh->n_vertices());
 
 	ImageWarping warping(mesh, constraintsIdx, constraintsTarget);
-    SimpleMesh* res = warping.solve();
+	SimpleMesh* res = warping.solve();
 
 	if (!OpenMesh::IO::write_mesh(*res, "out.ply"))
 	{
-	        std::cerr << "Error -> File: " << __FILE__ << " Line: " << __LINE__ << " Function: " << __FUNCTION__ << std::endl;
+		std::cerr << "Error -> File: " << __FILE__ << " Line: " << __LINE__ << " Function: " << __FUNCTION__ << std::endl;
 		std::cout << "out.off" << std::endl;
 		exit(1);
 	}
+	printf("Saved\n");
+
 #ifdef _WIN32
 	getchar();
 #endif

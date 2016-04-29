@@ -137,10 +137,9 @@ public:
 		float weightFit = 100.0f;
 		float weightReg = 0.01f;
 
-		unsigned int numIter = 20;
+		unsigned int numIter = 10;
 		unsigned int nonLinearIter = 3;
 		unsigned int linearIter = 200;
-		unsigned int patchIter = 32;
 
         resetGPU();
 
@@ -151,7 +150,7 @@ public:
             std::cout << "//////////// ITERATION" << i << "  (DSL AD) ///////////////" << std::endl;
             setConstraintImage((float)i / (float)numIter);
 
-            m_warpingSolverTerraAD->solve(d_warpField, d_warpAngles, d_urshape, d_constraints, d_mask, nonLinearIter, linearIter, patchIter, weightFit, weightReg);
+            m_warpingSolverTerraAD->solve(d_warpField, d_warpAngles, d_urshape, d_constraints, d_mask, nonLinearIter, linearIter, weightFit, weightReg);
             std::cout << std::endl;
         }
 

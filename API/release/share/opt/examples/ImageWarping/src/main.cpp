@@ -12,7 +12,7 @@ static void loadConstraints(std::vector<std::vector<int> >& constraints, const s
 	}
 
 	unsigned int nMarkers;
-	in >> nMarkers  ;
+	in >> nMarkers;
 	constraints.resize(nMarkers);
 	for(unsigned int m = 0; m<nMarkers; m++)
 	{
