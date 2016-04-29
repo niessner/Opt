@@ -1,0 +1,20 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup>
+    <ClCompile Include="src\main.cpp" />
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="src\ImageWarping.h" />
+    <ClInclude Include="src\OpenMesh.h" />
+    <ClInclude Include="src\RotationHelper.h" />
+    <ClInclude Include="src\TerraWarpingSolver.h" />
+    <ClInclude Include="src\main.h" />
+    <ClInclude Include="src\SolverUtil.h" />
+    <ClInclude Include="src\LandMark.h" />
+    <ClInclude Include="src\LandMarkSet.h" />
+    <ClInclude Include="src\cudaUtil.h" />
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="MeshDeformationAD.t" />
+  </ItemGroup>
+</Project>
