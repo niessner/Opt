@@ -7,10 +7,7 @@
 
 int main(int argc, const char * argv[])
 {
-	//std::string filename = "Armadillo20k.ply";
-	//const char* markerFilename = "armadillo.mrk";
-
-	std::string filename = "meshes/raptor_clean.stl";
+	std::string filename = "meshes/raptor.stl";
 	const char* markerFilename = "meshes/raptor.mrk";
 
 	if (argc >= 2) {
