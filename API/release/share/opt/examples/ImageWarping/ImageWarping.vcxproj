@@ -168,6 +168,9 @@
     <ClInclude Include="src\mLib\vec4.h" />
     <ClInclude Include="src\TerraSolverWarping.h" />
   </ItemGroup>
+  <ItemGroup>
+    <None Include="ImageWarpingAD.t" />
+  </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">
     <Import Project="$(VCTargetsPath)\BuildCustomizations\CUDA 7.0.targets" />
