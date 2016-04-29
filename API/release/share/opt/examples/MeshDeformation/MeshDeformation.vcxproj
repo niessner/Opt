@@ -83,7 +83,7 @@
       <PtxAsOptionV>false</PtxAsOptionV>
     </CudaCompile>
     <PreBuildEvent>
-      <Command>call "..\..\API\common\optMake.bat" "$(ProjectDir)..\..\..\terra" "$(ProjectDir)..\..\API"</Command>
+      <Command>call "..\..\..\..\..\common\optMake.bat" "..\..\..\..\..\..\..\terra" "..\..\..\..\.."</Command>
     </PreBuildEvent>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
@@ -119,7 +119,7 @@
       <Optimization>O3</Optimization>
     </CudaCompile>
     <PreBuildEvent>
-      <Command>call "..\..\API\common\optMake.bat" "$(ProjectDir)..\..\..\terra" "$(ProjectDir)..\..\API"</Command>
+      <Command>call "..\..\..\..\..\common\optMake.bat" "..\..\..\..\..\..\..\terra" "..\..\..\..\.."</Command>
     </PreBuildEvent>
   </ItemDefinitionGroup>
   <ItemGroup>
