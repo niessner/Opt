@@ -8,7 +8,8 @@
 class ImageWarping
 {
 	public:
-		ImageWarping(const SimpleMesh* mesh, std::vector<int> constraintsIdx, std::vector<std::vector<float>> constraintsTarget) : m_constraintsIdx(constraintsIdx), m_constraintsTarget(constraintsTarget)
+		ImageWarping(const SimpleMesh* mesh, const std::vector<int>& constraintsIdx, const std::vector<std::vector<float>>& constraintsTarget) : 
+			m_constraintsIdx(constraintsIdx), m_constraintsTarget(constraintsTarget)
 		{
 			m_result = *mesh;
 			m_initial = m_result;
