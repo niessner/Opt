@@ -18,7 +18,7 @@ These issues will improve over time, but if you run into issues, just send us an
 Overview
 ========
 
-Opt is composed of a library `libOpt.a` and a header file `Opt.h`. An application links Opt and uses its API to define and solve optimization problems. Opt's high-level energy functions behave like shaders in OpenGL. They are loaded as your application runs using the `Opt_ProblemDefine` API.
+Opt is composed of a library `libOpt.a` (`Opt.lib` under windows) and a header file `Opt.h`. An application links Opt and uses its API to define and solve optimization problems. Opt's high-level energy functions behave like shaders in OpenGL. They are loaded as your application runs using the `Opt_ProblemDefine` API.
 
 Our release includes:
 
@@ -26,7 +26,7 @@ Our release includes:
 * ./lib/libterra.a (a dependency of Opt)
 * ./include/Opt.h (API that interfaces with your application)
 * ./share/opt/examples/ImageWarping (a complete example application that uses Opt)
-* ./share/opt/examples/MeshDeformation (a complete example application that uses graphis in Opt)
+* ./share/opt/examples/MeshDeformation (a complete example application that uses graphs in Opt)
 
 See the Makefiles in the examples for instructions on how to link Opt into your applications. In particular, on OSX, you will need to add the following linker flags:
 
@@ -45,33 +45,33 @@ Allocate a new independant context for Opt
     
 ---
     
-    Problem * Opt_ProblemDefine(OptState * state,const char * filename,const char * solverkind);
+    Opt_Problem* Opt_ProblemDefine(Opt_State* state, const char* filename, const char* solverkind);
 
 Load the energy specification from 'filename' and initialize a solver of type 'solverkind' (currently only one solver is supported: 'gaussNewtonGPU').
 See writing energy specifications for how to describe energy functions.
 
 ---
 
-    void Opt_ProblemDelete(OptState * state, Problem * problem);
+    void Opt_ProblemDelete(Opt_State* state, Opt_Problem* problem);
 
 Delete memory associated with the Problem object.
 
 ---
 
-    Plan * Opt_ProblemPlan(OptState * state,Problem * problem, unsigned int * dimensions);
+    Opt_Plan* Opt_ProblemPlan(Opt_State* state, Opt_Problem* problem, unsigned int* dimensions);
 
 Allocate intermediate arrays necessary to run 'problem' on the dimensions listed in 'dimensions'
 How the dimensions are used is based on the problem specification (see 'binding values' in 'writing energy specifications')
 
 ---
 
-    void Opt_PlanFree(OptState * state, Plan * plan);
+   void Opt_PlanFree(Opt_State * state, Opt_Plan* plan);
 
 Delete the memory associated with the plan.
 
 ---
 
-    void Opt_ProblemSolve(OptState * state,Plan * plan,void ** problemparams,void ** solverparams);
+    Opt_ProblemSolve(Opt_State* state, Opt_Plan* plan, void** problemparams, void** solverparams);
 
 Run the solver until completion using the plan 'plan'. 'problemparams' are the problem-specific inputs 
 and outputs that define the problem, including arrays, graphs, and problem paramaters
@@ -80,8 +80,8 @@ number of iterations, see 'solver parameters')
 
 ---
 
-    void Opt_ProblemInit(OptState * state,Plan * plan,void ** problemparams,void ** solverparams);
-    int Opt_ProblemStep(OptState * state,Plan * plan,void ** problemparams,void ** solverparams);
+    void Opt_ProblemInit(Opt_State* state, Opt_Plan* plan, void** problemparams, void** solverparams);
+    int Opt_ProblemStep(Opt_State* state, Opt_Plan* plan, void** problemparams, void** solverparams);
 
 Use these two functions to control the outer solver loop on your own. The arguments are the same as `Opt_ProblemSolve` but
 the `Step` function returns between iterations of the solver. Problem parameters can be inspected and updated between calls to Step.
@@ -98,7 +98,7 @@ Writing Energy Specifications
 ==============================
 
 Specifications of the energy are written using an API embedded in Lua. 
-Similar to SymPy or Mathematica, objects with overloaded operators in Lua are used to build up a symbolic expression of the energy. There are Lua functions to declare objects: dimensions, arrays (including unknown to be solved for),  and graphs.
+Similar to SymPy or Mathematica, objects with overloaded operators in Lua are used to build up a symbolic expression of the energy. There are Lua functions to declare objects: dimensions, arrays (including unknown to be solved for), and graphs.
 
 These objects can be used to create residuals functions defined per-pixel in an array or per-edge in graph. The mathematical expressions of energy are built using overloaded operators defined on these objects. The 'Energy' function adds an expression to the overall energy of the system. 
 
@@ -144,7 +144,7 @@ Declare a new input to the problem (`Array`), or an unknown value to be solved f
 
 `name` is the name of the object, used for debugging 
 `type` can be float, float2, float3, ...
-`dimlist` is a Lua array of dimensions (e.g. `{W,H}`). Arrays can be 1, 2, or 3 dimensional but 3 dims has not been tested heavily.
+`dimlist` is a Lua array of dimensions (e.g., `{W,H}`). Arrays can be 1, 2, or 3 dimensional but 3 dims has not been tested heavily.
 `problemparams_position` is the 0-based offset into the `problemparams` argument to `Opt_ProblemSolve` that will be bound to this value. 
 
 Examples:
@@ -168,7 +168,7 @@ Each vertex requires the following arguments:
      vertexname, dimlist, problemparams_position_of_indices
      
 `vertexname` is the name of the vertex used in the energy specification.
-`dimlist` is a Lua array of dimensions (e.g. `{W,H}`). Arrays can be 1, 2, or 3 dimensional but 3 dims has not been tested heavily. This vertex will be a pointer into any array of this dimension.
+`dimlist` is a Lua array of dimensions (e.g., `{W,H}`). Arrays can be 1, 2, or 3 dimensional but 3 dims has not been tested heavily. This vertex will be a pointer into any array of this dimension.
 `problemparams_position_of_indices` is the 0-based offset into the `problemparams` argument to `Opt_ProblemSolve` that is an array of indexes the size of the number of edges in the graph, where each entry is an index into the dimension specified in `dimlist`. For 2- or 3- dimensional arrays the indices for both dimensions are listed sequentially `(int,int)`.
     
 Example:
@@ -196,7 +196,7 @@ Values can be read from the arrays created with the `Array` or `Unknown` constru
     ...
 
 Each expression is implicitly defined over an entire array or entire set of edges. 
-Expressions are implicitly squared and summed over all domains since our solver is for non-linear least squared problems. Energies are described per-pixel or per-edge with, e.g. `Angle(0,0)`, as the centered pixel. Other constant offsets can be given to select neighbors.
+Expressions are implicitly squared and summed over all domains since our solver is for non-linear least squared problems. Energies are described per-pixel or per-edge with, e.g., `Angle(0,0)`, as the centered pixel. Other constant offsets can be given to select neighbors.
 
 To access values at graph locations you use the name of the vertex as the index into the array:
 
@@ -249,6 +249,10 @@ Generic math operators are usable on any value or vector:
     Select(condition,truevalue,falsevalue) -- piecewise conditional operator, if condition ~= 0, it is truevalue, otherwise it is falsevalue
     scalar = All(vector) -- true if all values in the vector are true
     scalar = Any(vector) -- true of any value in the vector is true
+	Rotate2D(angle, vector2)
+	Rotate3D(angle3, vector3)
+	
+	
 
 All operators apply elementwise to `Vector` objects.
 
