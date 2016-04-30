@@ -1,11 +1,46 @@
+
 EXECUTABLE = meshdeformation
-OBJS = build/LandMark.o build/LandMarkSet.o build/TerraWarpingSolver.o build/CUDAWarpingSolver.o build/mLibSource.o build/main.o build/WarpingSolver.o
+OBJS = build/main.o
+
+
+UNAME := $(shell uname)
+
+
+LFLAGS += -Lexternal/lib  -lOpenMeshCore -lOpenMeshTools
+CXX = clang++
+PREFIX = ../../../..
+CUDAHOME = /usr/local/cuda
+
+FLAGS += -O3 -g -std=c++11 -Isrc  -I$(PREFIX)/include -I$(CUDAHOME)/include  -Iexternal/include
 
 UNAME := $(shell uname)
 ifeq ($(UNAME), Darwin)
-  LFLAGS += -L$(MLIB_EXTERNAL)/libsOSX -Wl,-rpath,$(MLIB_EXTERNAL)/libsOSX
+  LFLAGS += -pagezero_size 10000 -image_base 100000000
+endif
+ifeq ($(UNAME), Linux)
+  S4 = 64
 endif
 
-LFLAGS += -lOpenMeshCore -lOpenMeshTools
+LFLAGS += -std=c++11 -L$(PREFIX)/lib -L$(CUDAHOME)/lib$(S4)  -Wl,-rpath,external/lib -Wl,-rpath,$(CUDAHOME)/lib$(S4) -lOpt -lcudart -lterra -ldl -pthread
 
-include ../maketemplate.inc
+.SUFFIXES:
+.PHONY:	all purge clean
+
+all: $(EXECUTABLE)
+
+build/%.o:	src/%.cpp
+	@mkdir -p build
+	$(CXX) $(FLAGS) -MP -MD $< -c -o $@
+
+$(EXECUTABLE):	$(OBJS)
+	$(CXX) $^ -o $@ $(LFLAGS)
+
+clean:
+	rm -rf build/*.o build/*.d
+	rm -rf $(EXECUTABLE)
+
+purge: clean
+	rm -rf build/*
+
+# dependency rules
+include $(wildcard build/*.d)
