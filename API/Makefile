@@ -20,6 +20,8 @@ release/lib/libOptDev.a:	$(wildcard src/*.t)
 clean:
 	rm -rf build/wrapper.o
 	rm -rf release/lib/libOpt.a
+	rm -rf release/lib/libOptDev.a
+	rm -rf release/lib/libterra.a
 
 # for release
 OPENMESH_LIB=/Users/zdevito/mLibExternal/libsOSX
