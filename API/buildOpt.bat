@@ -1,2 +1,1 @@
-cd release\bin
-"..\..\common\optMake.bat" "..\..\..\..\terra" "..\.."
+"common\optMake.bat" "..\..\terra" "."

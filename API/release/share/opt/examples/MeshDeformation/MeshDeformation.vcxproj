@@ -87,7 +87,7 @@
       </Command>
     </PreBuildEvent>
     <CustomBuildStep>
-      <Command>xcopy /Y /D "..\..\..\..\bin\*.dll" "*.dll"</Command>
+      <Command>xcopy /Y /D "..\..\..\..\bin\*.dll" "$(OutDir)"</Command>
       <Outputs>*.dll</Outputs>
     </CustomBuildStep>
     <PostBuildEvent>
@@ -132,7 +132,7 @@
       </Command>
     </PreBuildEvent>
     <CustomBuildStep>
-      <Command>xcopy /Y /D "..\..\..\..\bin\*.dll" "*.dll"</Command>
+      <Command>xcopy /Y /D "..\..\..\..\bin\*.dll" "$(OutDir)"</Command>
       <Outputs>*.dll</Outputs>
     </CustomBuildStep>
     <PostBuildEvent>

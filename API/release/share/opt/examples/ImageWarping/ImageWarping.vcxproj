@@ -44,14 +44,14 @@
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
     <LinkIncremental>true</LinkIncremental>
     <ExecutablePath>$(ExecutablePath)</ExecutablePath>
-    <IncludePath>$(IncludePath);$(CUDA_INC_PATH);./</IncludePath>
-    <LibraryPath>$(LibraryPath);$(CUDA_LIB_PATH)</LibraryPath>
+    <IncludePath>$(IncludePath);$(CUDA_INC_PATH);../../../../include</IncludePath>
+    <LibraryPath>$(LibraryPath);$(CUDA_LIB_PATH);../../../../lib</LibraryPath>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
     <LinkIncremental>false</LinkIncremental>
     <ExecutablePath>$(ExecutablePath)</ExecutablePath>
-    <IncludePath>$(IncludePath);$(CUDA_INC_PATH);./</IncludePath>
-    <LibraryPath>$(LibraryPath);$(CUDA_LIB_PATH)</LibraryPath>
+    <IncludePath>$(IncludePath);$(CUDA_INC_PATH);../../../../include</IncludePath>
+    <LibraryPath>$(LibraryPath);$(CUDA_LIB_PATH);../../../../lib</LibraryPath>
   </PropertyGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
     <ClCompile>
@@ -86,7 +86,7 @@
       </Command>
     </PreBuildEvent>
     <CustomBuildStep>
-      <Command>xcopy /Y /D "..\..\..\..\bin\*.dll" "*.dll"</Command>
+      <Command>xcopy /Y /D "..\..\..\..\bin\*.dll" "$(OutDir)"</Command>
     </CustomBuildStep>
     <CustomBuildStep>
       <Outputs>*.dll</Outputs>

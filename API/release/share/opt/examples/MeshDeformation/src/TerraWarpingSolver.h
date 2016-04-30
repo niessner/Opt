@@ -20,14 +20,6 @@ template <class type> type* createDeviceBuffer(const std::vector<type>& v) {
 
 class TerraWarpingSolver {
 
-	int* d_headX;
-	int* d_headY;
-
-	int* d_tailX;
-	int* d_tailY;
-
-	int edgeCount;
-
 public:
 	TerraWarpingSolver(unsigned int vertexCount, unsigned int E, const int* d_xCoords, const int* d_offsets, const std::string& terraFile, const std::string& optName) : 
 		m_optimizerState(nullptr), m_problem(nullptr), m_plan(nullptr)
@@ -35,6 +27,7 @@ public:
 		edgeCount = (int)E;
 		m_optimizerState = Opt_NewState();
 		m_problem = Opt_ProblemDefine(m_optimizerState, terraFile.c_str(), optName.c_str());
+
 
 		std::vector<int> yCoords;
 
@@ -119,6 +112,16 @@ public:
 	}
 
 private:
+
+	int* d_headX;
+	int* d_headY;
+
+	int* d_tailX;
+	int* d_tailY;
+
+	int edgeCount;
+
+
 	Opt_State*		m_optimizerState;
 	Opt_Problem*	m_problem;
 	Opt_Plan*		m_plan;
