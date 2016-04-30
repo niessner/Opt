@@ -7,7 +7,7 @@ UNAME := $(shell uname)
 
 
 LFLAGS += -Lexternal/lib  -lOpenMeshCore -lOpenMeshTools
-CXX = clang++
+CXX = c++
 PREFIX = ../../../..
 CUDAHOME = /usr/local/cuda
 

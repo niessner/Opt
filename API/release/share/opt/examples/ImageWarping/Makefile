@@ -1,7 +1,7 @@
 EXECUTABLE = imagewarping
 OBJS = build/mLibSource.o build/main.o
 
-CXX = clang++
+CXX = c++
 PREFIX = ../../../..
 CUDAHOME = /usr/local/cuda
 
