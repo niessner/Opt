@@ -2,7 +2,9 @@
 = Short Version ==
 ==================
 Go to  \share\opt\examples\<folder> -> run the Makefile and/or VisualStudio solution -> run example
-====================
+
+Under windows: Make sure the environment variable is currectly set (it needs to be CUDA 7.0)
+CUDA_PATH -> C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA\v7.0 
 
 =================
 = Long Version ==
