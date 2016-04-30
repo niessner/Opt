@@ -145,9 +145,9 @@
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="src\cudaUtil.h" />
-    <ClInclude Include="src\ImageWarping.h" />
     <ClInclude Include="src\LandMark.h" />
     <ClInclude Include="src\LandMarkSet.h" />
+    <ClInclude Include="src\MeshDeformation.h" />
     <ClInclude Include="src\OpenMesh.h" />
     <ClInclude Include="src\TerraWarpingSolver.h" />
     <ClInclude Include="src\main.h" />
