@@ -1,3 +1,13 @@
+==================
+= Short Version ==
+==================
+Go to  \share\opt\examples\<folder> -> run the Makefile and/or VisualStudio solution -> run example
+====================
+
+=================
+= Long Version ==
+=================
+
 This document describes how to use the Opt language (optlang.org). 
 
 Opt is a new language in which a user simply writes energy functions over image- or graph-structured unknowns, and a compiler automatically generates state-of-the-art GPU optimization kernels. Real-world energy functions compile directly into highly optimized GPU solver implementations with performance competitive with the best published hand-tuned, application-specific GPU solvers.
@@ -8,7 +18,7 @@ As an early release there are some things that are not complete that will be imp
 
 * Error reporting is limited and may be difficult to understand at times.
 * Code can only run on NVIDIA GPUs with a relatively modern version of CUDA (6.5 or greater on OSX/Linux, and 7.0 on windows)
-* The library of built-in math functions is somewhat limited. For instance, it include vectors but doesn't include small matrix operation.
+* The library of built-in math functions is somewhat limited. For instance, it include vectors but doesn't include small matrix operations.
 
 These issues will improve over time, but if you run into issues, just send us an email:
 
@@ -39,7 +49,7 @@ See the Makefiles in the examples for instructions on how to link Opt into your 
 Using the Opt C/C++ API
 =======================
 
-    OptState * Opt_NewState();
+    OptState* Opt_NewState();
     
 Allocate a new independant context for Opt
     
