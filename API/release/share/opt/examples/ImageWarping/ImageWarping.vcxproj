@@ -133,7 +133,7 @@
       </Command>
     </PreBuildEvent>
     <CustomBuildStep>
-      <Command>xcopy /Y /D "..\..\..\..\bin\*.dll" "*.dll"</Command>
+      <Command>xcopy /Y /D "..\..\..\..\bin\*.dll" "$(OutDir)"</Command>
     </CustomBuildStep>
     <CustomBuildStep>
       <Outputs>*.dll</Outputs>
