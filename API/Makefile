@@ -1,4 +1,4 @@
-.PHONY:	all clean purge
+.PHONY:	all clean purge release
 
 TERRAHOME ?= $(HOME)/terra/release
 TERRA ?= $(HOME)/terra/terra
@@ -24,7 +24,7 @@ clean:
 	rm -rf release/lib/libterra.a
 
 # for release
-UNAME := `uname`
+UNAME := $(shell uname)
 ifeq ($(UNAME),Darwin)
 OPENMESH_LIB=/Users/zdevito/mLibExternal/libsOSX
 OPENMESH_INCLUDE=/Users/zdevito/mLibExternal/include
