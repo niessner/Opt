@@ -288,17 +288,7 @@ return function(problemSpec)
                                                                         "PCGStep1_Graph",
                                                                         "computeCost_Graph"})
 
-	local terra init(data_ : &opaque, params_ : &&opaque, solverparams : &&opaque)
-	   var pd = [&PlanData](data_)
-	   pd.timer:init()
-	   pd.timer:startEvent("overall",nil,&pd.endSolver)
-       [util.initParameters(`pd.parameters,problemSpec,params_,true)]
-	   pd.nIter = 0
-	   pd.nIterations = @[&int](solverparams[0])
-	   pd.lIterations = @[&int](solverparams[1])
-	   pd.parameters.lambda = 0.001f
-	   gpu.precompute(pd)
-	end
+    
     local terra computeCost(pd : &PlanData) : float
         C.cudaMemset(pd.scratchF, 0, sizeof(float))
         gpu.computeCost(pd)
@@ -308,12 +298,25 @@ return function(problemSpec)
         return f
     end
 
+	local terra init(data_ : &opaque, params_ : &&opaque, solverparams : &&opaque)
+	   var pd = [&PlanData](data_)
+	   pd.timer:init()
+	   pd.timer:startEvent("overall",nil,&pd.endSolver)
+       [util.initParameters(`pd.parameters,problemSpec,params_,true)]
+	   pd.nIter = 0
+	   pd.nIterations = @[&int](solverparams[0])
+	   pd.lIterations = @[&int](solverparams[1])
+	   escape if problemSpec:UsesLambda() then
+	      emit quote pd.parameters.lambda = 0.001f end
+	   end end
+	   gpu.precompute(pd)
+	   pd.prevCost = computeCost(pd)
+	end
+	
 	local terra step(data_ : &opaque, params_ : &&opaque, solverparams : &&opaque)
 		var pd = [&PlanData](data_)
 		[util.initParameters(`pd.parameters,problemSpec, params_,false)]
         if pd.nIter < pd.nIterations then
-		
-			var startCost = computeCost(pd)
 			
 			C.cudaMemset(pd.scanAlphaNumerator, 0, sizeof(float))	--scan in PCGInit1 requires reset
 			C.cudaMemset(pd.scanAlphaDenominator, 0, sizeof(float))	--scan in PCGInit1 requires reset
@@ -352,29 +355,38 @@ return function(problemSpec)
 			gpu.precompute(pd)
 			var newCost = computeCost(pd)
 			
-			logSolver("\titeration %d, lambda=%f prev=%f new=%f ", pd.nIter, pd.parameters.lambda, startCost,newCost)
-			if newCost > startCost then	--in this case we revert
-				gpu.PCGLinearUpdateRevert(pd)
-				pd.parameters.lambda = pd.parameters.lambda * 10.0f
-				logSolver("REVERT\n")
-				gpu.precompute(pd)
-			else 
-				pd.parameters.lambda = pd.parameters.lambda * 0.01f
-				logSolver("\n")
-				pd.prevCost = newCost
-			end
+			logSolver("\t%d: prev=%f new=%f ", pd.nIter, pd.prevCost,newCost)
 			
-			var min_lm_diagonal = 1e-6f
-			var max_lm_diagonal = 1e32f
-			pd.parameters.lambda = util.cpuMath.fmax(min_lm_diagonal, pd.parameters.lambda)
-			pd.parameters.lambda = util.cpuMath.fmin(max_lm_diagonal, pd.parameters.lambda)
-			
+			escape if problemSpec:UsesLambda() then
+			    -- lm version
+			    emit quote
+                    logSolver(" lambda=%f ",pd.parameters.lambda)
+                    if newCost > pd.prevCost then	--in this case we revert
+                        gpu.PCGLinearUpdateRevert(pd)
+                        pd.parameters.lambda = pd.parameters.lambda * 10.0f
+                        logSolver("REVERT\n")
+                        gpu.precompute(pd)
+                    else 
+                        pd.parameters.lambda = pd.parameters.lambda * 0.01f
+                        logSolver("\n")
+                        pd.prevCost = newCost
+                    end
+                    var min_lm_diagonal = 1e-6f
+                    var max_lm_diagonal = 1e32f
+                    pd.parameters.lambda = util.cpuMath.fmax(min_lm_diagonal, pd.parameters.lambda)
+                    pd.parameters.lambda = util.cpuMath.fmin(max_lm_diagonal, pd.parameters.lambda)
+                end
+            else
+                emit quote
+                    logSolver("\n")
+                    pd.prevCost = newCost 
+                end
+            end end
 			pd.nIter = pd.nIter + 1
 			
 		    return 1
 		else
-			var finalCost = computeCost(pd)
-			logSolver("final cost=%f\n", finalCost)
+			logSolver("final cost=%f\n", pd.prevCost)
 		    pd.timer:endEvent(nil,pd.endSolver)
 		    pd.timer:evaluate()
 		    pd.timer:cleanup()
@@ -393,8 +405,7 @@ return function(problemSpec)
 		pd.p:initGPU()
 		pd.Ap_X:initGPU()
 		pd.preconditioner:initGPU()
-        pd.parameters.lambda = 0.001f
-		[util.initPrecomputedImages(`pd.parameters,problemSpec)]
+        [util.initPrecomputedImages(`pd.parameters,problemSpec)]
 		
 		C.cudaMalloc([&&opaque](&(pd.scanAlphaNumerator)), sizeof(float))
 		C.cudaMalloc([&&opaque](&(pd.scanBetaNumerator)), sizeof(float))

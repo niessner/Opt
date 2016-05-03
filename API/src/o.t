@@ -112,7 +112,7 @@ local problems = {}
 -- allocates the plan
 
 local function compilePlan(problemSpec, kind)
-    assert(kind == "gaussNewtonGPU","expected solver kind to be gaussNewtonGPU")
+    assert(kind == "gaussNewtonGPU" or kind == "LMGPU" ,"expected solver kind to be gaussNewtonGPU or LMGPU")
     return solversGPU.gaussNewtonGPU(problemSpec)
 end
 
@@ -204,6 +204,7 @@ function opt.ProblemSpec()
 	ps.maxStencil = 0
 	ps.stage = "inputs"
 	ps.usepreconditioner = false
+	ps.problemkind = opt.problemkind
 	return ps
 end
 
@@ -300,6 +301,9 @@ function ProblemSpec:Param(name,typ,idx)
     self:Stage "inputs"
     self:newparameter(ScalarParam(typ,name,idx))
 end
+
+function ProblemSpec:UsesLambda() return self.problemkind:match("LM") ~= nil end
+
 
 function Dim:__tostring() return "Dim("..self.name..")" end
 
@@ -840,9 +844,12 @@ function ad.Index(d) return IndexValue(d,0):asvar() end
 function ad.ProblemSpec()
     local ps = ProblemSpecAD()
     ps.P,ps.nametoimage,ps.precomputed,ps.extraarguments,ps.excludeexps = opt.ProblemSpec(), {}, List(), List(), List()
-    ps.lambda = ps:Param("lambda",float,-1)
+    if ps.P:UsesLambda() then
+        ps.lambda = ps:Param("lambda",float,-1)
+    end
     return ps
 end
+function ProblemSpecAD:UsesLambda() return self.P:UsesLambda() end
 function ProblemSpecAD:UsePreconditioner(v)
 	self.P:UsePreconditioner(v)
 end
@@ -1893,7 +1900,7 @@ local function createjtjcentered(PS,ES)
                     local uv = ad.v[u]
                     local condition2, drdx_u = ad.splitcondition(rexp:d(uv))
                     local exp = drdx00*drdx_u
-                    if uv == x then -- on the diagonal
+                    if uv == x and PS:UsesLambda() then -- on the diagonal
                         exp = exp*(1 + PS.lambda)
                     end
                     lprintf(2,"term:\ndr%d_%s/dx%s[%d] = %s",rn,tostring(r),tostring(u.index),u.chan,tostring(drdx_u))
@@ -1952,7 +1959,9 @@ local function createjtjgraph(PS,ES)
         for i,partial in ipairs(partials) do
             local u = unknownsupport[i]
             local jtjp = 2*Jp*partial
-            jtjp = jtjp + 2*partial*partial*PS.lambda*P[u.image.name](u.index,u.channel)
+            if PS:UsesLambda() then
+                jtjp = jtjp + 2*partial*partial*PS.lambda*P[u.image.name](u.index,u.channel)
+            end
             result = result + P[u.image.name](u.index,u.channel)*jtjp
             addscatter(u,jtjp)
         end
