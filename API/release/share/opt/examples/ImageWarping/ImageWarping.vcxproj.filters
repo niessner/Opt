@@ -1,0 +1,70 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup>
+    <ClCompile Include="src\main.cpp" />
+    <ClCompile Include="src\mLib\utility.cpp">
+      <Filter>mLib</Filter>
+    </ClCompile>
+    <ClCompile Include="src\mLibSource.cpp">
+      <Filter>mLib</Filter>
+    </ClCompile>
+    <ClCompile Include="src\mLib\lodepng.cpp">
+      <Filter>mLib</Filter>
+    </ClCompile>
+    <ClCompile Include="src\mLib\imageLoaderLodePNG.cpp">
+      <Filter>mLib</Filter>
+    </ClCompile>
+    <ClCompile Include="src\mLib\common.cpp">
+      <Filter>mLib</Filter>
+    </ClCompile>
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="src\cudaUtil.h" />
+    <ClInclude Include="src\ImageWarping.h" />
+    <ClInclude Include="src\TerraSolverWarping.h" />
+    <ClInclude Include="src\mLib\vec4.h">
+      <Filter>mLib</Filter>
+    </ClInclude>
+    <ClInclude Include="src\mLib\vec2.h">
+      <Filter>mLib</Filter>
+    </ClInclude>
+    <ClInclude Include="src\mLib\vec3.h">
+      <Filter>mLib</Filter>
+    </ClInclude>
+    <ClInclude Include="src\mLib\vec1.h">
+      <Filter>mLib</Filter>
+    </ClInclude>
+    <ClInclude Include="src\mLib\utility.h">
+      <Filter>mLib</Filter>
+    </ClInclude>
+    <ClInclude Include="src\mLib\RGBColor.h">
+      <Filter>mLib</Filter>
+    </ClInclude>
+    <ClInclude Include="src\mLibInclude.h">
+      <Filter>mLib</Filter>
+    </ClInclude>
+    <ClInclude Include="src\mLib\lodepng.h">
+      <Filter>mLib</Filter>
+    </ClInclude>
+    <ClInclude Include="src\mLib\imageLoaderLodePNG.h">
+      <Filter>mLib</Filter>
+    </ClInclude>
+    <ClInclude Include="src\mLib\baseImageHelper.h">
+      <Filter>mLib</Filter>
+    </ClInclude>
+    <ClInclude Include="src\mLib\baseImage.h">
+      <Filter>mLib</Filter>
+    </ClInclude>
+    <ClInclude Include="src\mLib\common.h">
+      <Filter>mLib</Filter>
+    </ClInclude>
+  </ItemGroup>
+  <ItemGroup>
+    <Filter Include="mLib">
+      <UniqueIdentifier>{2739c67d-a9d5-4602-80c3-5bce6060ca1b}</UniqueIdentifier>
+    </Filter>
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="ImageWarpingAD.t" />
+  </ItemGroup>
+</Project>
