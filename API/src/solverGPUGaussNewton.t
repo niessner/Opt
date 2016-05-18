@@ -16,8 +16,7 @@ local FLOAT_EPSILON = `0.000001f
 return function(problemSpec)
 
     local UnknownType = problemSpec:UnknownType()
-	local TUnknownType = UnknownType:terratype()
-	
+	local TUnknownType = UnknownType:terratype()	
 	
     local isGraph = problemSpec:UsesGraphs() 
     
@@ -25,12 +24,6 @@ return function(problemSpec)
 		plan : opt.Plan
 		parameters : problemSpec:ParameterType()
 		scratchF : &float
-		debugDumpImage : &float
-		debugCostImage : &float
-		debugJTJImage : &float
-		debugJTFImage : &float
-		debugPreImage : &float
-
 
 		delta : TUnknownType	--current linear update to be computed -> num vars
 		r : TUnknownType		--residuals -> num vars	--TODO this needs to be a 'residual type'
