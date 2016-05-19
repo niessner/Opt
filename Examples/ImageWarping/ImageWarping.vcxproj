@@ -82,11 +82,19 @@
       <PtxAsOptionV>false</PtxAsOptionV>
     </CudaCompile>
     <PreBuildEvent>
-      <Command>call "../../API/common/optMake.bat" "$(ProjectDir)/../../../terra" "../../API/"
-xcopy /Y /D "..\..\API\release\include\*.h" "."
+      <Command>call "..\..\API\common\optMake.bat" "$(ProjectDir)\..\..\..\terra\" "..\..\API" "false"
 xcopy /Y /D "..\..\API\release\bin\*.dll" "."
-xcopy /Y /D "..\..\API\release\lib\*.lib" "."</Command>
+xcopy /Y /D "..\..\API\release\lib\*.lib" "."
+xcopy /Y /D "..\..\API\release\include\*.h" "."</Command>
     </PreBuildEvent>
+    <CustomBuildStep>
+      <Command>
+      </Command>
+    </CustomBuildStep>
+    <CustomBuildStep>
+      <Outputs>
+      </Outputs>
+    </CustomBuildStep>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
     <ClCompile>
@@ -124,11 +132,19 @@ xcopy /Y /D "..\..\API\release\lib\*.lib" "."</Command>
       <Optimization>O3</Optimization>
     </CudaCompile>
     <PreBuildEvent>
-      <Command>call "../../API/common/optMake.bat" "$(ProjectDir)/../../../terra" "../../API/"
-xcopy /Y /D "..\..\API\release\include\*.h" "."
+      <Command>call "..\..\API\common\optMake.bat" "$(ProjectDir)\..\..\..\terra\" "..\..\API" "false"
 xcopy /Y /D "..\..\API\release\bin\*.dll" "."
-xcopy /Y /D "..\..\API\release\lib\*.lib" "."</Command>
+xcopy /Y /D "..\..\API\release\lib\*.lib" "."
+xcopy /Y /D "..\..\API\release\include\*.h" "."</Command>
     </PreBuildEvent>
+    <CustomBuildStep>
+      <Command>
+      </Command>
+    </CustomBuildStep>
+    <CustomBuildStep>
+      <Outputs>
+      </Outputs>
+    </CustomBuildStep>
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClCompile Include="src\CeresSolverImageWarping.cpp" />

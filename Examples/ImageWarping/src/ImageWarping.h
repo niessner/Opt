@@ -12,7 +12,7 @@
 #include "CeresSolverImageWarping.h"
 
 
-static bool useCUDA = true;
+static bool useCUDA = false;
 static bool useTerra = false;
 static bool useAD = true;
 static bool useCeres = false;
@@ -126,8 +126,10 @@ public:
 		if (useTerra)
 		  m_warpingSolverTerra = new TerraSolverWarping(m_image.getWidth(), m_image.getHeight(), "ImageWarping.t", "gaussNewtonGPU");
 
-		if (useAD)
-		  m_warpingSolverTerraAD = new TerraSolverWarping(m_image.getWidth(), m_image.getHeight(), "ImageWarpingAD.t", "gaussNewtonGPU");
+		if (useAD) {
+
+			//m_warpingSolverTerraAD = new TerraSolverWarping(m_image.getWidth(), m_image.getHeight(), "ImageWarpingAD.t", "gaussNewtonGPU");
+		}
 
         if (useCeres)
             m_warpingSolverCeres = new CeresSolverWarping(m_image.getWidth(), m_image.getHeight());
