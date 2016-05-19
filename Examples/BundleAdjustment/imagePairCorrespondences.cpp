@@ -7,7 +7,7 @@ vec3f BundlerFrame::localPos(const vec2i &depthPixel) const
         return vec3f(numeric_limits<float>::infinity(), numeric_limits<float>::infinity(), numeric_limits<float>::infinity());
 
     const float depth = depthImage(depthPixel);
-    if (!depthImage.isValidValue(depth))
+    if (!depthImage.isValidValue(depth) || depth <= 1e-6 || depth >= constants::maxDepth)
         return vec3f(numeric_limits<float>::infinity(), numeric_limits<float>::infinity(), numeric_limits<float>::infinity());
 
     const vec4f world = depthIntrinsicInverse * vec4f((float)depthPixel.x * depth, (float)depthPixel.y * depth, depth, 0.0f);
@@ -120,7 +120,7 @@ void ImagePairCorrespondences::estimateTransform()
     if (allCorr.size() < constants::minCorrespondenceCount)
     {
         transformInliers = 0;
-        cout << "Too few correspondences: " << allCorr.size() << endl;
+        //cout << "Too few correspondences: " << allCorr.size() << endl;
         return;
     }
 
@@ -151,7 +151,9 @@ void ImagePairCorrespondences::estimateTransform()
             if (bestStats.inlierCount >= constants::RANSACEarlyInlierMin)
                 break;
             else
-                cout << "Best inlier count insufficient, running more RANSAC: " << bestStats.inlierCount << endl;
+            {
+                //cout << "Best inlier count insufficient, running more RANSAC: " << bestStats.inlierCount << endl;
+            }
         }
     }
 
@@ -182,16 +184,16 @@ void ImagePairCorrespondences::estimateTransform()
 
     if (transformInliers < 4)
     {
-        cout << "Too few inliers to compute transform (" << transformInliers << "): " << imageA->index << "-" << imageB->index << endl;
-        cout << bestTransform << endl;
-        cout << "Best inliers: " << bestStats.inlierCount << endl;
+        //cout << "Too few inliers to compute transform (" << transformInliers << "): " << imageA->index << "-" << imageB->index << endl;
+        //cout << bestTransform << endl;
+        //cout << "Best inliers: " << bestStats.inlierCount << endl;
         //visualize(constants::debugDir + to_string(imageA->index) + "_" + to_string(imageB->index) + "/");
         //cin.get();
     }
     else
         transformAToB = estimateTransform(inlierIndices);
 
-    cout << "inliers: " << transformInliers << " / " << allCorr.size() << ", error: " << transformInlierError << endl;
+    //cout << "inliers: " << transformInliers << " / " << allCorr.size() << ", error: " << transformInlierError << endl;
 }
 
 mat4f ImagePairCorrespondences::estimateTransform(const set<int> &indices)
