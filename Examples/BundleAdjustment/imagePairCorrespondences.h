@@ -27,9 +27,9 @@ struct BundlerFrame
         return translation * rotation;
     }
 
-    void updateTransforms()
+    void updateTransforms(const mat4f &globalAlignment)
     {
-        frameToWorld = makeFrameToWorld();
+        frameToWorld = globalAlignment * makeFrameToWorld();
         worldToFrame = frameToWorld.getInverse();
 
         debugCamera = Cameraf(frameToWorld, 60.0f, 1.0f, 0.01f, 100.0f);
@@ -54,6 +54,8 @@ struct BundlerFrame
     mat4f worldToFrame;
     Cameraf debugCamera;
     vec3f debugColor;
+
+    Cameraf groundTruthCamera;
 };
 
 struct ImageCorrespondence
@@ -102,6 +104,10 @@ struct ImagePairCorrespondences
 
     void visualize(const string &dir) const;
 
+    void estimateTransform();
+    mat4f estimateTransform(const set<int> &indices);
+    TransformResult computeTransformResult(const mat4f &transform);
+
     BundlerFrame *imageA;
     BundlerFrame *imageB;
 
@@ -110,10 +116,6 @@ struct ImagePairCorrespondences
     int transformOutliers;
     int transformInliers;
     double transformInlierError;
-
-    void estimateTransform();
-    mat4f estimateTransform(const set<int> &indices);
-    TransformResult computeTransformResult(const mat4f &transform);
 
     vector<ImageCorrespondence> allCorr;
     vector<ImageCorrespondence> inlierCorr;

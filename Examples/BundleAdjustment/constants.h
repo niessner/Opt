@@ -21,6 +21,8 @@ namespace constants
     const string dataDir = R"(..\data\)";
     const string debugDir = dataDir + "debug/";
 
+    const double maxDepth = 3.0;
+
     //const int debugMaxFrameCount = 20;
     const int debugMaxFrameCount = numeric_limits<int>::max();
 

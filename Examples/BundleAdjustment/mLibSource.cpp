@@ -3,3 +3,4 @@
 
 #include "mLibCore.cpp"
 #include "mLibLodePNG.cpp"
+#include "mLibDepthCamera.cpp"
