@@ -29,6 +29,7 @@
   </ItemGroup>
   <ItemGroup>
     <None Include="bundleAdjustment.t" />
+    <None Include="bundleAdjustmentBroken.t" />
   </ItemGroup>
   <PropertyGroup Label="Globals">
     <ProjectGuid>{F25CC672-B37B-4B36-8130-84A78E86890A}</ProjectGuid>

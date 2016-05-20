@@ -274,10 +274,10 @@ void BundlerManager::solveOpt()
 
     optimizerState = Opt_NewState();
     //LMGPU, gaussNewtonGPU
-    problem = Opt_ProblemDefine(optimizerState, "bundleAdjustment.t", "gaussNewtonGPU");
+    problem = Opt_ProblemDefine(optimizerState, "bundleAdjustmentBroken.t", "gaussNewtonGPU");
     plan = Opt_ProblemPlan(optimizerState, problem, dims);
 
-    unsigned int nonLinearIterations = 1000;
+    unsigned int nonLinearIterations = 10;
     unsigned int linearIterations = 1;
     unsigned int blockIterations = 1;	//not used
 

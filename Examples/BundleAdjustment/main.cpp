@@ -33,11 +33,11 @@ void App::go()
 
         bundler.solveOpt();
 
-        for (auto &f : bundler.frames)
+        /*for (auto &f : bundler.frames)
             for (int i = 0; i < 6; i++)
                 f.camera[i] = 0.0;
 
-        bundler.solveCeres(1e-20);
+        bundler.solveCeres(1e-20);*/
         
 
         const string suffix = util::zeroPad((int)threshold.index, 1);
