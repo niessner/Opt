@@ -12,6 +12,7 @@ void App::go()
 {
     //bundler.loadSensorFileA(constants::dataDir + "/sensors/sample.sensor");
     bundler.loadSensorFileB(constants::dataDir + "/sensors/fr3_office.sens", 10);
+    bundler.frames.resize(2);
     //bundler.loadSensorFileB(constants::dataDir + "/sensors/fr1_desk.sens", 10);
     bundler.computeKeypoints();
     bundler.addAllCorrespondences(16);
