@@ -31,8 +31,14 @@ void App::go()
         if (threshold.value > 0.0)
             bundler.thresholdCorrespondences(threshold.value);
 
-        //bundler.solveCeres(1e-20);
         bundler.solveOpt();
+
+        /*for (auto &f : bundler.frames)
+            for (int i = 0; i < 6; i++)
+                f.camera[i] = 0.0;
+
+        bundler.solveCeres(1e-20);*/
+        
 
         const string suffix = util::zeroPad((int)threshold.index, 1);
         bundler.saveKeypointCloud(constants::debugDir + "result" + suffix + ".ply");
