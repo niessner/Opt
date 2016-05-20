@@ -19,23 +19,21 @@ local function cross(ptA, ptB)
 				   ptA(0) * ptB(1) - ptA(1) * ptB(0) )
 end
 
-local function breakCodeVec(axisAngle, pt)
+local function breakCodeFloat(a1, a2, b0)
 	
-	local theta2 = axisAngle:dot(axisAngle)
+	local theta2 = a1
 	local theta = sqrt(theta2)
 	local thetaInverse = 1.0 / theta
 
-	local w = axisAngle * thetaInverse
-	local crossWPt = cross(w, pt)
+	local crossWPt = a1 * thetaInverse - thetaInverse
 	
-	return Select(greatereq(theta2, 1e-6),crossWPt,pt)
+	return Select(greatereq(theta2, 1e-6), crossWPt, b0)
 end
-
 
 UsePreconditioner(true)
 
 local cameraA = cameras(G.cameraA)
-local valueA = breakCodeVec( Vector(cameraA(0), cameraA(1), cameraA(2)), Vector(cameraA(3), cameraA(4), cameraA(5)))
+local valueA = breakCodeFloat(cameraA(1), cameraA(2), cameraA(3))
 Energy(valueA)
 
 --
@@ -43,14 +41,3 @@ Energy(valueA)
 --
 Energy(cameras(0))
 
-local function breakCodeFloat(a0, a1, a2, b0, b1, b2)
-	
-	local theta2 = a0 * a0 + a1 * a1 + a2 * a2
-	local theta = sqrt(theta2)
-	local thetaInverse = 1.0 / theta
-
-	local w = Vector(a0, a1, a2) * thetaInverse
-	local crossWPt = cross(w, Vector(b0, b1, b2))
-	
-	return Select(greatereq(theta2, 1e-6), crossWPt, Vector(b0, b1, b2))
-end
