@@ -277,7 +277,7 @@ void BundlerManager::solveOpt()
     problem = Opt_ProblemDefine(optimizerState, "bundleAdjustment.t", "gaussNewtonGPU");
     plan = Opt_ProblemPlan(optimizerState, problem, dims);
 
-    unsigned int nonLinearIterations = 100;
+    unsigned int nonLinearIterations = 25;
     unsigned int linearIterations = 1000;
     unsigned int blockIterations = 1;	//not used
 
