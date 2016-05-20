@@ -34,7 +34,7 @@ local function rotatePoint(axisAngle, pt)
 	local full = pt * cosTheta + crossWPt * sinTheta + w * tmp
 	local simple = pt + cross(axisAngle, pt)
 
-	return Select(theta2 > 1e-10,full,simple)
+	return Select(greatereq(theta2, 1e-6),full,simple)
 end
 
 local function apply(camera, pt)

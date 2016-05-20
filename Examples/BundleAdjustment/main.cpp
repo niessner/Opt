@@ -22,7 +22,8 @@ void App::go()
 
     ofstream alignmentFile(constants::debugDir + "alignmentError.csv");
     
-    const vector<double> thresholds = { -1.0, 0.1, 0.05, 0.02, 0.01, 0.005 };
+    //const vector<double> thresholds = { -1.0, 0.1, 0.05, 0.02, 0.01, 0.005 };
+    const vector<double> thresholds = { -1.0 };
 
     for (auto &threshold : iterate(thresholds))
     {

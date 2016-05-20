@@ -392,3 +392,9 @@ Examples/ShapeFromShadingSimple/shapefromshading
 /Examples/ImageWarping/Opt.exp
 /Examples/ImageWarping/x64/Debug/CeresSolverImageWarping.obj
 /Examples/ImageWarping/x64/Debug/ImageWarping.Build.CppClean.log
+/Examples/BundleAdjustment/anchorWeights.txt
+/Examples/BundleAdjustment/cameraAIndices.txt
+/Examples/BundleAdjustment/cameraBIndices.txt
+/Examples/BundleAdjustment/cameras.txt
+/Examples/BundleAdjustment/correspondenceIndices.txt
+/Examples/BundleAdjustment/correspondences.txt

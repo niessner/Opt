@@ -239,7 +239,17 @@ void BundlerManager::solveCeres(double tolerance)
     updateResiduals();
 }
 
-template <class type> type* createDeviceBuffer(const vector<type>& v) {
+template <class type> type* createDeviceBuffer(const vector<type>& v, const string &bufferName) {
+
+    const bool debugBuffers = true;
+    if (debugBuffers)
+    {
+        static int debugCounter = 0;
+        ofstream file(bufferName + ".txt");
+        for (auto &e : v)
+            file << e << endl;
+    }
+
     type* d_ptr;
     cutilSafeCall(cudaMalloc(&d_ptr, sizeof(type)*v.size()));
     cutilSafeCall(cudaMemcpy(d_ptr, v.data(), sizeof(type)*v.size(), cudaMemcpyHostToDevice));
@@ -273,7 +283,7 @@ void BundlerManager::solveOpt()
     void* solverParams[] = { &nonLinearIterations, &linearIterations, &blockIterations };
 
     vector<float> cameras(cameraCount * 6, 0.0f);
-    float *d_cameras = createDeviceBuffer(cameras);
+    float *d_cameras = createDeviceBuffer(cameras, "cameras");
 
     vector<vec3f> correspondences;
     vector<int> cameraAIndices, cameraBIndices, correspondenceIndices;
@@ -288,14 +298,14 @@ void BundlerManager::solveOpt()
             correspondenceIndices.push_back((int)correspondenceIndices.size());
         }
     }
-    vec3f *d_correspondences = createDeviceBuffer(correspondences);
+    vec3f *d_correspondences = createDeviceBuffer(correspondences, "correspondences");
 
     vector<float> anchorWeights(cameraCount, 0.0f);
     anchorWeights[0] = 100.0f;
-    float *d_anchorWeights = createDeviceBuffer(anchorWeights);
-    int *d_cameraAIndices = createDeviceBuffer(cameraAIndices);
-    int *d_cameraBIndices = createDeviceBuffer(cameraBIndices);
-    int *d_correspondenceIndices = createDeviceBuffer(correspondenceIndices);
+    float *d_anchorWeights = createDeviceBuffer(anchorWeights, "anchorWeights");
+    int *d_cameraAIndices = createDeviceBuffer(cameraAIndices, "cameraAIndices");
+    int *d_cameraBIndices = createDeviceBuffer(cameraBIndices, "cameraBIndices");
+    int *d_correspondenceIndices = createDeviceBuffer(correspondenceIndices, "correspondenceIndices");
 
     void* problemParams[] = { d_cameras, d_correspondences, d_anchorWeights, &correspondenceCount, d_cameraAIndices, d_cameraBIndices, d_correspondenceIndices };
     
