@@ -274,11 +274,11 @@ void BundlerManager::solveOpt()
 
     optimizerState = Opt_NewState();
     //LMGPU, gaussNewtonGPU
-    problem = Opt_ProblemDefine(optimizerState, "bundleAdjustmentBroken.t", "gaussNewtonGPU");
+    problem = Opt_ProblemDefine(optimizerState, "bundleAdjustment.t", "gaussNewtonGPU");
     plan = Opt_ProblemPlan(optimizerState, problem, dims);
 
-    unsigned int nonLinearIterations = 10;
-    unsigned int linearIterations = 1;
+    unsigned int nonLinearIterations = 100;
+    unsigned int linearIterations = 1000;
     unsigned int blockIterations = 1;	//not used
 
     void* solverParams[] = { &nonLinearIterations, &linearIterations, &blockIterations };
@@ -311,6 +311,8 @@ void BundlerManager::solveOpt()
     void* problemParams[] = { d_cameras, d_correspondences, d_anchorWeights, &correspondenceCount, d_cameraAIndices, d_cameraBIndices, d_correspondenceIndices };
     
     Opt_ProblemSolve(optimizerState, plan, problemParams, solverParams);
+
+    cutilSafeCall(cudaMemcpy(cameras.data(), d_cameras, sizeof(float)*cameras.size(), cudaMemcpyDeviceToHost));
 
     for (BundlerFrame &f : frames)
     {

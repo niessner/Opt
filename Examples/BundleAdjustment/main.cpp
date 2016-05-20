@@ -12,7 +12,7 @@ void App::go()
 {
     //bundler.loadSensorFileA(constants::dataDir + "/sensors/sample.sensor");
     bundler.loadSensorFileB(constants::dataDir + "/sensors/fr3_office.sens", 10);
-    bundler.frames.resize(2);
+    //bundler.frames.resize(2);
     //bundler.loadSensorFileB(constants::dataDir + "/sensors/fr1_desk.sens", 10);
     bundler.computeKeypoints();
     bundler.addAllCorrespondences(16);
@@ -31,13 +31,19 @@ void App::go()
         if (threshold.value > 0.0)
             bundler.thresholdCorrespondences(threshold.value);
 
-        bundler.solveOpt();
+        //bundler.solveOpt();
 
         /*for (auto &f : bundler.frames)
+        {
             for (int i = 0; i < 6; i++)
-                f.camera[i] = 0.0;
+            {
+                //cout << f.camera[i] << " ";
+                //f.camera[i] = 0.0;
+            }
+            //cout << endl;
+        }*/
 
-        bundler.solveCeres(1e-20);*/
+        bundler.solveCeres(1e-20);
         
 
         const string suffix = util::zeroPad((int)threshold.index, 1);

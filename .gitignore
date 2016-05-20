@@ -398,3 +398,6 @@ Examples/ShapeFromShadingSimple/shapefromshading
 /Examples/BundleAdjustment/cameras.txt
 /Examples/BundleAdjustment/correspondenceIndices.txt
 /Examples/BundleAdjustment/correspondences.txt
+/API/Opt.dll
+/API/Opt.exp
+/API/Opt.lib
