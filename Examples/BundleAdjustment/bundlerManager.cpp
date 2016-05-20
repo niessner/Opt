@@ -273,11 +273,12 @@ void BundlerManager::solveOpt()
     unsigned int dims[] = { cameraCount, correspondenceCount };
 
     optimizerState = Opt_NewState();
+    //LMGPU, gaussNewtonGPU
     problem = Opt_ProblemDefine(optimizerState, "bundleAdjustment.t", "gaussNewtonGPU");
     plan = Opt_ProblemPlan(optimizerState, problem, dims);
 
-    unsigned int nonLinearIterations = 10;
-    unsigned int linearIterations = 100;
+    unsigned int nonLinearIterations = 1000;
+    unsigned int linearIterations = 1;
     unsigned int blockIterations = 1;	//not used
 
     void* solverParams[] = { &nonLinearIterations, &linearIterations, &blockIterations };
@@ -333,7 +334,9 @@ void BundlerManager::alignToGroundTruth()
         target.push_back(f.groundTruthCamera.getEye());
     }
 
-    const mat4f globalAlignmentTransform = EigenWrapperf::kabsch(source, target, eigenvalues);
+    mat4f globalAlignmentTransform = mat4f::identity();
+    if (frames.size() >= 3)
+        globalAlignmentTransform = EigenWrapperf::kabsch(source, target, eigenvalues);
 
     for (BundlerFrame &f : frames)
         f.updateTransforms(globalAlignmentTransform);
