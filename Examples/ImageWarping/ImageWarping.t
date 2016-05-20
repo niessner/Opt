@@ -14,6 +14,7 @@ local w_regSqrt = P:Param("w_regSqrt", float, 6)
 
 P:Stencil(2)
 P:UsePreconditioner(true)
+P:Dia
 
 local WH = opt.toispace {W,H}
 

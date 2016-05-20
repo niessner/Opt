@@ -12,12 +12,12 @@
 #include "CeresSolverImageWarping.h"
 
 
-static bool useCUDA = true;
-static bool useTerra = true;
+static bool useCUDA = false;
+static bool useTerra = false;
 static bool useAD = true;
 static bool useCeres = false;
 
-static bool earlyOut = true;
+static bool earlyOut = false;
 
 
 static bool
@@ -87,7 +87,7 @@ PointInTriangleLK(float x0, float y0, float w0,
     float d12 = X[1]*Y[2] - Y[1]*X[2];
     float d20 = X[2]*Y[0] - Y[2]*X[0];
 
-    if (d01 < 0 & d12 < 0 & d20 < 0) {
+	if ((d01 < 0) & (d12 < 0) & (d20 < 0)) {
         //printf("Backfacing\n");
         // backfacing
         return false;
@@ -126,8 +126,10 @@ public:
 		if (useTerra)
 		  m_warpingSolverTerra = new TerraSolverWarping(m_image.getWidth(), m_image.getHeight(), "ImageWarping.t", "gaussNewtonGPU");
 
-		if (useAD)
-		  m_warpingSolverTerraAD = new TerraSolverWarping(m_image.getWidth(), m_image.getHeight(), "ImageWarpingAD.t", "gaussNewtonGPU");
+		if (useAD) {
+
+			//m_warpingSolverTerraAD = new TerraSolverWarping(m_image.getWidth(), m_image.getHeight(), "ImageWarpingAD.t", "gaussNewtonGPU");
+		}
 
         if (useCeres)
             m_warpingSolverCeres = new CeresSolverWarping(m_image.getWidth(), m_image.getHeight());
@@ -338,7 +340,7 @@ public:
                     float b0, b1, b2;
                     if (PointInTriangleLK(t0.x, t0.y, 1.0f,
                         t1.x, t1.y, 1.0f,
-                        t2.x, t2.y, 1.0f, x, y, &b0, &b1, &b2)) {
+                        t2.x, t2.y, 1.0f, (float)x, (float)y, &b0, &b1, &b2)) {
                         vec3f color = c0*b0 + c1*b1 + c2*b2;
                         m_resultColor(x, y) = color;
                     }
