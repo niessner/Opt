@@ -17,4 +17,7 @@
     <ClInclude Include="main.h" />
     <ClInclude Include="mLibInclude.h" />
   </ItemGroup>
+  <ItemGroup>
+    <None Include="bundleAdjustment.t" />
+  </ItemGroup>
 </Project>

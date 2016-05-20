@@ -1,6 +1,8 @@
 ﻿
 #include <intrin.h>
 
+#include <cuda_runtime.h>
+
 #include "ceres/ceres.h"
 #include "ceres/rotation.h"
 #include "glog/logging.h"

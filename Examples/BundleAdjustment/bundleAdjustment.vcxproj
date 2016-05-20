@@ -27,6 +27,9 @@
     <ClInclude Include="main.h" />
     <ClInclude Include="mLibInclude.h" />
   </ItemGroup>
+  <ItemGroup>
+    <None Include="bundleAdjustment.t" />
+  </ItemGroup>
   <PropertyGroup Label="Globals">
     <ProjectGuid>{F25CC672-B37B-4B36-8130-84A78E86890A}</ProjectGuid>
     <RootNamespace>curve_fitting</RootNamespace>
@@ -59,13 +62,13 @@
   <PropertyGroup Label="UserMacros" />
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
     <IntDir>$(Platform)\$(Configuration)\$(ProjectName)\</IntDir>
-    <LibraryPath>$(ProjectDir)\..\..\..\..\mLibExternal\libsWindows\lib64;$(LibraryPath)</LibraryPath>
-    <IncludePath>$(ProjectDir);$(IncludePath)</IncludePath>
+    <LibraryPath>$(ProjectDir)\..\..\..\..\mLibExternal\libsWindows\lib64;$(ProjectDir)\..\..\API\build\;$(CUDA_PATH)/lib/x64/;$(LibraryPath)</LibraryPath>
+    <IncludePath>$(ProjectDir);..\..\API\release\include;$(CUDA_PATH)/include;$(IncludePath)</IncludePath>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release NoOpt|x64'">
     <IntDir>$(Platform)\$(Configuration)\$(ProjectName)\</IntDir>
-    <LibraryPath>$(ProjectDir)\..\..\..\..\mLibExternal\libsWindows\lib64;$(LibraryPath)</LibraryPath>
-    <IncludePath>$(ProjectDir);$(IncludePath)</IncludePath>
+    <LibraryPath>$(ProjectDir)\..\..\..\..\mLibExternal\libsWindows\lib64;$(ProjectDir)\..\..\API\build\;$(CUDA_PATH)/lib/x64/;$(LibraryPath)</LibraryPath>
+    <IncludePath>$(ProjectDir);..\..\API\release\include;$(CUDA_PATH)/include;$(IncludePath)</IncludePath>
   </PropertyGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
     <ClCompile>
@@ -87,7 +90,7 @@
       <EnableCOMDATFolding>true</EnableCOMDATFolding>
       <OptimizeReferences>true</OptimizeReferences>
       <SubSystem>Console</SubSystem>
-      <AdditionalDependencies>zlib64.lib;opencv_world310.lib;opencv_xfeatures2d310.lib;libglog_static.lib;ceres.lib;kernel32.lib;user32.lib;gdi32.lib;winspool.lib;comdlg32.lib;advapi32.lib;shell32.lib;ole32.lib;oleaut32.lib;uuid.lib;odbc32.lib;odbccp32.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalDependencies>opt.lib;cudart.lib;zlib64.lib;opencv_world310.lib;opencv_xfeatures2d310.lib;libglog_static.lib;ceres.lib;kernel32.lib;user32.lib;gdi32.lib;winspool.lib;comdlg32.lib;advapi32.lib;shell32.lib;ole32.lib;oleaut32.lib;uuid.lib;odbc32.lib;odbccp32.lib;%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release NoOpt|x64'">
@@ -108,7 +111,7 @@
       <EnableCOMDATFolding>true</EnableCOMDATFolding>
       <OptimizeReferences>true</OptimizeReferences>
       <SubSystem>Console</SubSystem>
-      <AdditionalDependencies>zlib64.lib;opencv_world310.lib;opencv_xfeatures2d310.lib;libglog_static.lib;ceres.lib;kernel32.lib;user32.lib;gdi32.lib;winspool.lib;comdlg32.lib;advapi32.lib;shell32.lib;ole32.lib;oleaut32.lib;uuid.lib;odbc32.lib;odbccp32.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalDependencies>opt.lib;zlib64.lib;opencv_world310.lib;opencv_xfeatures2d310.lib;libglog_static.lib;ceres.lib;kernel32.lib;user32.lib;gdi32.lib;winspool.lib;comdlg32.lib;advapi32.lib;shell32.lib;ole32.lib;oleaut32.lib;uuid.lib;odbc32.lib;odbccp32.lib;%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
   </ItemDefinitionGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />

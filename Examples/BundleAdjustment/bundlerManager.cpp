@@ -1,6 +1,12 @@
 
 #include "main.h"
 
+extern "C" {
+#include "Opt.h"
+}
+
+#define cutilSafeCall(x) (x);
+
 vec2i BundlerManager::imagePixelToDepthPixel(const vec2f &imageCoord) const
 {
     // assumes remapped sensor file!
@@ -105,7 +111,7 @@ void BundlerManager::loadSensorFileB(const string &filename, int frameSkip)
 
 void BundlerManager::computeKeypoints()
 {
-    cout << "Computing image keypoints" << endl;
+    cout << "Computing image keypoints for " << frames.size() << " frames" << endl;
     FeatureExtractor extractor;
     for (auto &i : frames)
     {
@@ -115,6 +121,7 @@ void BundlerManager::computeKeypoints()
 
 void BundlerManager::addAllCorrespondences(int maxSkip)
 {
+    maxSkip = min(maxSkip, (int)frames.size());
 #pragma omp parallel for schedule(dynamic,1) num_threads(8)
     for (int skip = 1; skip < maxSkip; skip++)
     {
@@ -183,7 +190,7 @@ void BundlerManager::addCorrespondences(int frameAIndex, int frameBIndex, vector
         result.push_back(correspondences);
 }
 
-void BundlerManager::solve(double tolerance)
+void BundlerManager::solveCeres(double tolerance)
 {
     ceres::Problem problem;
     int totalCorrespondences = 0;
@@ -232,9 +239,81 @@ void BundlerManager::solve(double tolerance)
     updateResiduals();
 }
 
+template <class type> type* createDeviceBuffer(const vector<type>& v) {
+    type* d_ptr;
+    cutilSafeCall(cudaMalloc(&d_ptr, sizeof(type)*v.size()));
+    cutilSafeCall(cudaMemcpy(d_ptr, v.data(), sizeof(type)*v.size(), cudaMemcpyHostToDevice));
+    return d_ptr;
+}
+
+void BundlerManager::solveOpt()
+{
+    Opt_State*		optimizerState;
+    Opt_Problem*	problem;
+    Opt_Plan*		plan;
+
+    int correspondenceCount = 0;
+    for (const ImagePairCorrespondences &iCorr : allCorrespondences)
+        for (const ImageCorrespondence &c : iCorr.inlierCorr)
+            correspondenceCount++;
+
+    cout << "Total correspondences: " << correspondenceCount << endl;
+
+    const int cameraCount = (int)frames.size();
+    unsigned int dims[] = { cameraCount, correspondenceCount };
+
+    optimizerState = Opt_NewState();
+    problem = Opt_ProblemDefine(optimizerState, "bundleAdjustment.t", "gaussNewtonGPU");
+    plan = Opt_ProblemPlan(optimizerState, problem, dims);
+
+    unsigned int nonLinearIterations = 10;
+    unsigned int linearIterations = 100;
+    unsigned int blockIterations = 1;	//not used
+
+    void* solverParams[] = { &nonLinearIterations, &linearIterations, &blockIterations };
+
+    vector<float> cameras(cameraCount * 6, 0.0f);
+    float *d_cameras = createDeviceBuffer(cameras);
+
+    vector<vec3f> correspondences;
+    vector<int> cameraAIndices, cameraBIndices, correspondenceIndices;
+    for (const ImagePairCorrespondences &iCorr : allCorrespondences)
+    {
+        for (const ImageCorrespondence &c : iCorr.inlierCorr)
+        {
+            correspondences.push_back(c.ptALocal);
+            correspondences.push_back(c.ptBLocal);
+            cameraAIndices.push_back(c.imageA);
+            cameraBIndices.push_back(c.imageB);
+            correspondenceIndices.push_back((int)correspondenceIndices.size());
+        }
+    }
+    vec3f *d_correspondences = createDeviceBuffer(correspondences);
+
+    vector<float> anchorWeights(cameraCount, 0.0f);
+    anchorWeights[0] = 100.0f;
+    float *d_anchorWeights = createDeviceBuffer(anchorWeights);
+    int *d_cameraAIndices = createDeviceBuffer(cameraAIndices);
+    int *d_cameraBIndices = createDeviceBuffer(cameraBIndices);
+    int *d_correspondenceIndices = createDeviceBuffer(correspondenceIndices);
+
+    void* problemParams[] = { d_cameras, d_correspondences, d_anchorWeights, &correspondenceCount, d_cameraAIndices, d_cameraBIndices, d_correspondenceIndices };
+    
+    Opt_ProblemSolve(optimizerState, plan, problemParams, solverParams);
+
+    for (BundlerFrame &f : frames)
+    {
+        for (int i = 0; i < 6; i++)
+            f.camera[i] = cameras[f.index * 6 + i];
+        f.updateTransforms(mat4f::identity());
+    }
+
+    alignToGroundTruth();
+    updateResiduals();
+}
+
 void BundlerManager::alignToGroundTruth()
 {
-    
     vector<vec3f> source, target;
     vec3f eigenvalues;
 
