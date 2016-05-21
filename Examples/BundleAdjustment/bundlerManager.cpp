@@ -51,7 +51,7 @@ void BundlerManager::loadSensorFileA(const string &filename)
     }
 }
 
-void BundlerManager::loadSensorFileB(const string &filename, int frameSkip)
+void BundlerManager::loadSensorFileB(const string &filename, unsigned int frameSkip, unsigned int maxNumFrames)
 {
     cout << "Reading sensor file (new format)" << endl;
     SensorData data(filename);
@@ -62,11 +62,11 @@ void BundlerManager::loadSensorFileB(const string &filename, int frameSkip)
         return;
     }
 
-    const int width = data.m_colorWidth;
-    const int height = data.m_colorHeight;
-    const int pixelCount = width * height;
-    const int baseFrameCount = (int)data.m_frames.size();
-    const int newFrameCount = baseFrameCount / frameSkip;
+    const unsigned int width = data.m_colorWidth;
+    const unsigned int height = data.m_colorHeight;
+    const unsigned int pixelCount = width * height;
+    const unsigned int baseFrameCount = (int)data.m_frames.size();
+    const unsigned int newFrameCount = baseFrameCount / frameSkip;
 
     cout << "Creating frames" << endl;
     frames.resize(newFrameCount);
@@ -86,24 +86,16 @@ void BundlerManager::loadSensorFileB(const string &filename, int frameSkip)
         vec3uc* colorDataVec3uc = data.decompressColorAlloc(baseFrameIndex);
         
         unsigned short* depthDataUShort = data.decompressDepthAlloc(baseFrameIndex);
-        
-        float *depthDataFloat = new float[pixelCount];
-        vec4uc* colorDataVec4uc = new vec4uc[pixelCount];
+ 
 
-        for (int i = 0; i < pixelCount; i++)
+        for (unsigned int i = 0; i < pixelCount; i++)
         {
-            depthDataFloat[i] = (float)depthDataUShort[i] / data.m_depthShift;
-            colorDataVec4uc[i] = vec4uc(colorDataVec3uc[i], 255);
-        }
-        
-        //auto colorData = data.decompressColorAlloc()
-        memcpy(frame.value.colorImage.getData(), colorDataVec4uc, sizeof(vec4uc) * pixelCount);
-        memcpy(frame.value.depthImage.getData(), depthDataFloat, sizeof(float) * pixelCount);
-        
+			frame.value.depthImage.getData()[i] = (float)depthDataUShort[i] / data.m_depthShift;
+			frame.value.colorImage.getData()[i] = vec4uc(colorDataVec3uc[i], 255);
+        }        
+
         std::free(colorDataVec3uc);
         std::free(depthDataUShort);
-        delete colorDataVec4uc;
-        delete depthDataFloat;
 
         baseFrameIndex += frameSkip;
     }
