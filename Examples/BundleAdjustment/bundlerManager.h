@@ -2,7 +2,7 @@
 struct BundlerManager
 {
     void loadSensorFileA(const string &filename);
-    void loadSensorFileB(const string &filename, int frameSkip);
+    void loadSensorFileB(const string &filename, unsigned int frameSkip, unsigned int maxNumFrames = 0);
 
     vec2i imagePixelToDepthPixel(const vec2f &imageCoord) const;
 

@@ -66,9 +66,10 @@ void BundlerManager::loadSensorFileB(const string &filename, unsigned int frameS
     const unsigned int height = data.m_colorHeight;
     const unsigned int pixelCount = width * height;
     const unsigned int baseFrameCount = (int)data.m_frames.size();
-    const unsigned int newFrameCount = baseFrameCount / frameSkip;
+    unsigned int newFrameCount = baseFrameCount / frameSkip;
 
     cout << "Creating frames" << endl;
+	if (maxNumFrames != 0) newFrameCount = std::min(maxNumFrames, newFrameCount);
     frames.resize(newFrameCount);
     
     int baseFrameIndex = 0;
@@ -81,12 +82,10 @@ void BundlerManager::loadSensorFileB(const string &filename, unsigned int frameS
 
         auto &sensorFrame = data.m_frames[baseFrameIndex];
         
-        frame.value.groundTruthCamera = Cameraf(sensorFrame.getCameraToWorld(), 60.0f, 1.0f, 0.01f, 100.0f);
-        
-        vec3uc* colorDataVec3uc = data.decompressColorAlloc(baseFrameIndex);
-        
-        unsigned short* depthDataUShort = data.decompressDepthAlloc(baseFrameIndex);
- 
+        frame.value.groundTruthCamera = Cameraf(sensorFrame.getCameraToWorld(), 60.0f, 1.0f, 0.01f, 100.0f);        
+
+        vec3uc* colorDataVec3uc = data.decompressColorAlloc(baseFrameIndex);        
+        unsigned short* depthDataUShort = data.decompressDepthAlloc(baseFrameIndex); 
 
         for (unsigned int i = 0; i < pixelCount; i++)
         {
@@ -129,7 +128,7 @@ void BundlerManager::addAllCorrespondences(int maxSkip)
 
 void BundlerManager::computeCorrespondences(int forwardSkip, vector<ImagePairCorrespondences> &result)
 {
-    cout << "Adding correspondesnces (skip=" << forwardSkip << ")" << endl;
+    cout << "Adding correspondences (skip=" << forwardSkip << ")" << endl;
     for (auto &startImage : frames)
     {
         addCorrespondences(startImage.index, startImage.index + forwardSkip, result);

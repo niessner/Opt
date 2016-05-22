@@ -11,7 +11,7 @@ struct App
 void App::go()
 {
     //bundler.loadSensorFileA(constants::dataDir + "/sensors/sample.sensor");
-    bundler.loadSensorFileB(constants::dataDir + "/sensors/fr3_office.sens", 10);
+    bundler.loadSensorFileB(constants::dataDir + "/sensors/fr3_office.sens", 12, 170);
     //bundler.frames.resize(2);
     //bundler.loadSensorFileB(constants::dataDir + "/sensors/fr1_desk.sens", 10);
     bundler.computeKeypoints();
@@ -43,7 +43,7 @@ void App::go()
             //cout << endl;
         }*/
 
-       bundler.solveCeres(1e-6);
+		bundler.solveCeres(1e-6);
         
 
         const string suffix = util::zeroPad((int)threshold.index, 1);
