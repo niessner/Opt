@@ -247,7 +247,7 @@ template <class type> type* createDeviceBuffer(const vector<type>& v, const stri
     return d_ptr;
 }
 
-void BundlerManager::solveOpt()
+void BundlerManager::solveOpt(int linearIterations, int nonLinearIterations)
 {
     Opt_State*		optimizerState;
     Opt_Problem*	problem;
@@ -268,14 +268,18 @@ void BundlerManager::solveOpt()
     problem = Opt_ProblemDefine(optimizerState, "bundleAdjustment.t", "gaussNewtonGPU");
     plan = Opt_ProblemPlan(optimizerState, problem, dims);
 
-    unsigned int nonLinearIterations = 25;
-    unsigned int linearIterations = 1000;
     unsigned int blockIterations = 1;	//not used
 
     void* solverParams[] = { &nonLinearIterations, &linearIterations, &blockIterations };
 
-    vector<float> cameras(cameraCount * 6, 0.0f);
+    vector<float> cameras(cameraCount * 6);
+    for (BundlerFrame &f : frames)
+    {
+        for (int i = 0; i < 6; i++)
+            cameras[f.index * 6 + i] = (float)f.camera[i];
+    }
     float *d_cameras = createDeviceBuffer(cameras, "cameras");
+    
 
     vector<vec3f> correspondences;
     vector<int> cameraAIndices, cameraBIndices, correspondenceIndices;

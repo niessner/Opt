@@ -15,7 +15,7 @@ struct BundlerManager
     void visualize(const string &dir, int imageAIndex, int imageBIndex) const;
 
     void solveCeres(double tolerance);
-    void solveOpt();
+    void solveOpt(int linearIterations, int nonLinearIterations);
     void alignToGroundTruth();
     void updateResiduals();
     void thresholdCorrespondences(double cutoff);

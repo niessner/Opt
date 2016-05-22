@@ -31,8 +31,6 @@ void App::go()
         if (threshold.value > 0.0)
             bundler.thresholdCorrespondences(threshold.value);
 
-        //bundler.solveOpt();
-
         /*for (auto &f : bundler.frames)
         {
             for (int i = 0; i < 6; i++)
@@ -44,6 +42,8 @@ void App::go()
         }*/
 
 		bundler.solveCeres(1e-6);
+
+        bundler.solveOpt(1000, 25);
         
 
         const string suffix = util::zeroPad((int)threshold.index, 1);
