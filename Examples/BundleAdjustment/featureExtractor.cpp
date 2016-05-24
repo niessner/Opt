@@ -1,7 +1,7 @@
 
 #include "main.h"
 
-#include "opencv_3_1/opencv2/xfeatures2d.hpp"
+#include "opencv2/xfeatures2d.hpp"
 
 using namespace cv;
 using namespace cv::xfeatures2d;
@@ -25,7 +25,7 @@ FeatureExtractor::FeatureExtractor()
 vector<Keypoint> FeatureExtractor::detectAndDescribe(const Bitmap &bmp)
 {
     Mat cvImage(bmp.getDimY(), bmp.getDimX(), CV_8UC1);
-    for (auto &p : bmp)
+    for (const auto &p : bmp)
     {
         const BYTE c = util::boundToByte(((float)p.value.x + (float)p.value.y + (float)p.value.z) / 3.0f);
         cvImage.at<BYTE>((int)p.y, (int)p.x) = c;

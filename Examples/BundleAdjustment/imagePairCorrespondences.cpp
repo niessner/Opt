@@ -86,7 +86,7 @@ void ImagePairCorrespondences::visualize(const string &dir) const
     }
 
     const int stride = 2;
-    for (auto &p : imageA->depthImage)
+    for (const auto &p : imageA->depthImage)
     {
         const vec3f pos = imageA->localPos(vec2i((int)p.x, (int)p.y));
         if (!pos.isValid())
@@ -98,7 +98,7 @@ void ImagePairCorrespondences::visualize(const string &dir) const
         meshes.push_back(makeColoredBox(pos + AOffset, AColor, 0.002f));
     }
 
-    for (auto &p : imageB->depthImage)
+    for (const auto &p : imageB->depthImage)
     {
         const vec3f pos = imageB->localPos(vec2i((int)p.x, (int)p.y));
         if (!pos.isValid())
@@ -164,7 +164,7 @@ void ImagePairCorrespondences::estimateTransform()
     transformInliers = 0;
     double inlierDistSum = 0.0;
     set<int> inlierIndices;
-    for (auto &c : iterate(allCorr))
+    for (const auto &c : iterate(allCorr))
     {
         const vec3f bPt = bestTransform * c.value.ptALocal;
         const float distSq = vec3f::distSq(bPt, c.value.ptBLocal);

@@ -36,7 +36,7 @@ void BundlerManager::loadSensorFileA(const string &filename)
     cout << "Creating frames" << endl;
     frames.resize(frameCount);
 
-    for (auto &frame : iterate(frames))
+    for (const auto &frame : iterate(frames))
     {
         frame.value.index = (int)frame.index;
         frame.value.colorImage.allocate(width, height);
@@ -72,7 +72,7 @@ void BundlerManager::loadSensorFileB(const string &filename, int frameSkip)
     frames.resize(newFrameCount);
     
     int baseFrameIndex = 0;
-    for (auto &frame : iterate(frames))
+    for (const auto &frame : iterate(frames))
     {
         frame.value.index = (int)frame.index;
         frame.value.colorImage.allocate(width, height);
@@ -270,7 +270,7 @@ void BundlerManager::solveOpt()
     cout << "Total correspondences: " << correspondenceCount << endl;
 
     const int cameraCount = (int)frames.size();
-    unsigned int dims[] = { cameraCount, correspondenceCount };
+    unsigned int dims[] = { (unsigned int)cameraCount,  (unsigned int) correspondenceCount };
 
     optimizerState = Opt_NewState();
     //LMGPU, gaussNewtonGPU
@@ -349,7 +349,7 @@ void BundlerManager::saveKeypointCloud(const string &outputFilename) const
     for (const BundlerFrame &frame : frames)
     {
         const int stride = 5;
-        for (auto &p : frame.depthImage)
+        for (const auto &p : frame.depthImage)
         {
             vec2i coord((int)p.x, (int)p.y);
             const vec3f framePos = frame.localPos(coord);

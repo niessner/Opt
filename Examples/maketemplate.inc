@@ -1,7 +1,7 @@
 CXX = clang++
 LINK = clang++
 NVCC = /usr/local/cuda/bin/nvcc
-
+SRC ?= src
 CUDAHOME += /usr/local/cuda
 TERRAHOME ?= $(HOME)/terra/release
 TERRA ?= $(HOME)/terra/terra
@@ -27,10 +27,10 @@ all: $(EXECUTABLE)
 
 OPTLIB = ../../API/release/lib/libOptDev.a
 
-build/%.o:	src/%.cpp
+build/%.o:	$(SRC)/%.cpp
 	@mkdir -p build
 	$(CXX) $(FLAGS) -MP -MD $< -c -o $@
-build/%.o:	src/%.cu
+build/%.o:	$(SRC)/%.cu
 	@mkdir -p build
 	$(NVCC) $(NVCCFLAGS) $< -c -o $@
 

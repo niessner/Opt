@@ -3,9 +3,12 @@ namespace helper
 {
     inline int countBits(UINT64 v)
     {
+        #ifdef _WIN32        
         return (int)__popcnt64(v);
+        #else
+        return __builtin_popcountll(v);
+        #endif
     }
-
     inline void splatPoint(Bitmap &bmp, int x, int y, vec4uc color)
     {
         int radius = 1;

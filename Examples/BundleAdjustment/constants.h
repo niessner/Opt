@@ -18,7 +18,7 @@ namespace constants
 
     const double CERESTolerance = 1e-8;
 
-    const string dataDir = R"(..\data\)";
+    const string dataDir = R"(../data/)";
     const string debugDir = dataDir + "debug/";
 
     const double maxDepth = 3.0;

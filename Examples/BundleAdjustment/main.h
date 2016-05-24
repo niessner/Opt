@@ -1,5 +1,4 @@
 ﻿
-#include <intrin.h>
 
 #include <cuda_runtime.h>
 

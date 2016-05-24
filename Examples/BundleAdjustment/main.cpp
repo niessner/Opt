@@ -26,7 +26,7 @@ void App::go()
     //const vector<double> thresholds = { -1.0, 0.1, 0.05, 0.02, 0.01, 0.005 };
     const vector<double> thresholds = { -1.0 };
 
-    for (auto &threshold : iterate(thresholds))
+    for (const auto &threshold : iterate(thresholds))
     {
         if (threshold.value > 0.0)
             bundler.thresholdCorrespondences(threshold.value);
