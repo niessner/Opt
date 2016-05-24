@@ -82,7 +82,7 @@
       <PtxAsOptionV>false</PtxAsOptionV>
     </CudaCompile>
     <PreBuildEvent>
-      <Command>call "..\..\API\common\optMake.bat" "$(ProjectDir)\..\..\..\terra\" "..\..\API" "false"
+      <Command>call "..\..\API\common\optMake.bat" "$(ProjectDir)\..\..\..\terra" "..\..\API" "false"
 xcopy /Y /D "..\..\API\release\bin\*.dll" "."
 xcopy /Y /D "..\..\API\release\lib\*.lib" "."
 xcopy /Y /D "..\..\API\release\include\*.h" "."</Command>

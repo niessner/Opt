@@ -2,7 +2,7 @@
 struct BundlerManager
 {
     void loadSensorFileA(const string &filename);
-    void loadSensorFileB(const string &filename, int frameSkip);
+    void loadSensorFileB(const string &filename, unsigned int frameSkip, unsigned int maxNumFrames = 0);
 
     vec2i imagePixelToDepthPixel(const vec2f &imageCoord) const;
 
@@ -15,7 +15,7 @@ struct BundlerManager
     void visualize(const string &dir, int imageAIndex, int imageBIndex) const;
 
     void solveCeres(double tolerance);
-    void solveOpt();
+    void solveOpt(int linearIterations, int nonLinearIterations);
     void alignToGroundTruth();
     void updateResiduals();
     void thresholdCorrespondences(double cutoff);

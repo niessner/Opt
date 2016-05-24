@@ -51,7 +51,7 @@ void BundlerManager::loadSensorFileA(const string &filename)
     }
 }
 
-void BundlerManager::loadSensorFileB(const string &filename, int frameSkip)
+void BundlerManager::loadSensorFileB(const string &filename, unsigned int frameSkip, unsigned int maxNumFrames)
 {
     cout << "Reading sensor file (new format)" << endl;
     SensorData data(filename);
@@ -62,13 +62,14 @@ void BundlerManager::loadSensorFileB(const string &filename, int frameSkip)
         return;
     }
 
-    const int width = data.m_colorWidth;
-    const int height = data.m_colorHeight;
-    const int pixelCount = width * height;
-    const int baseFrameCount = (int)data.m_frames.size();
-    const int newFrameCount = baseFrameCount / frameSkip;
+    const unsigned int width = data.m_colorWidth;
+    const unsigned int height = data.m_colorHeight;
+    const unsigned int pixelCount = width * height;
+    const unsigned int baseFrameCount = (int)data.m_frames.size();
+    unsigned int newFrameCount = baseFrameCount / frameSkip;
 
     cout << "Creating frames" << endl;
+	if (maxNumFrames != 0) newFrameCount = std::min(maxNumFrames, newFrameCount);
     frames.resize(newFrameCount);
     
     int baseFrameIndex = 0;
@@ -81,29 +82,19 @@ void BundlerManager::loadSensorFileB(const string &filename, int frameSkip)
 
         auto &sensorFrame = data.m_frames[baseFrameIndex];
         
-        frame.value.groundTruthCamera = Cameraf(sensorFrame.getCameraToWorld(), 60.0f, 1.0f, 0.01f, 100.0f);
-        
-        vec3uc* colorDataVec3uc = data.decompressColorAlloc(baseFrameIndex);
-        
-        unsigned short* depthDataUShort = data.decompressDepthAlloc(baseFrameIndex);
-        
-        float *depthDataFloat = new float[pixelCount];
-        vec4uc* colorDataVec4uc = new vec4uc[pixelCount];
+        frame.value.groundTruthCamera = Cameraf(sensorFrame.getCameraToWorld(), 60.0f, 1.0f, 0.01f, 100.0f);        
 
-        for (int i = 0; i < pixelCount; i++)
+        vec3uc* colorDataVec3uc = data.decompressColorAlloc(baseFrameIndex);        
+        unsigned short* depthDataUShort = data.decompressDepthAlloc(baseFrameIndex); 
+
+        for (unsigned int i = 0; i < pixelCount; i++)
         {
-            depthDataFloat[i] = (float)depthDataUShort[i] / data.m_depthShift;
-            colorDataVec4uc[i] = vec4uc(colorDataVec3uc[i], 255);
-        }
-        
-        //auto colorData = data.decompressColorAlloc()
-        memcpy(frame.value.colorImage.getData(), colorDataVec4uc, sizeof(vec4uc) * pixelCount);
-        memcpy(frame.value.depthImage.getData(), depthDataFloat, sizeof(float) * pixelCount);
-        
+			frame.value.depthImage.getData()[i] = (float)depthDataUShort[i] / data.m_depthShift;
+			frame.value.colorImage.getData()[i] = vec4uc(colorDataVec3uc[i], 255);
+        }        
+
         std::free(colorDataVec3uc);
         std::free(depthDataUShort);
-        delete colorDataVec4uc;
-        delete depthDataFloat;
 
         baseFrameIndex += frameSkip;
     }
@@ -137,7 +128,7 @@ void BundlerManager::addAllCorrespondences(int maxSkip)
 
 void BundlerManager::computeCorrespondences(int forwardSkip, vector<ImagePairCorrespondences> &result)
 {
-    cout << "Adding correspondesnces (skip=" << forwardSkip << ")" << endl;
+    cout << "Adding correspondences (skip=" << forwardSkip << ")" << endl;
     for (auto &startImage : frames)
     {
         addCorrespondences(startImage.index, startImage.index + forwardSkip, result);
@@ -256,7 +247,7 @@ template <class type> type* createDeviceBuffer(const vector<type>& v, const stri
     return d_ptr;
 }
 
-void BundlerManager::solveOpt()
+void BundlerManager::solveOpt(int linearIterations, int nonLinearIterations)
 {
     Opt_State*		optimizerState;
     Opt_Problem*	problem;
@@ -274,17 +265,21 @@ void BundlerManager::solveOpt()
 
     optimizerState = Opt_NewState();
     //LMGPU, gaussNewtonGPU
-    problem = Opt_ProblemDefine(optimizerState, "bundleAdjustmentBroken.t", "gaussNewtonGPU");
+    problem = Opt_ProblemDefine(optimizerState, "bundleAdjustment.t", "gaussNewtonGPU");
     plan = Opt_ProblemPlan(optimizerState, problem, dims);
 
-    unsigned int nonLinearIterations = 10;
-    unsigned int linearIterations = 1;
     unsigned int blockIterations = 1;	//not used
 
     void* solverParams[] = { &nonLinearIterations, &linearIterations, &blockIterations };
 
-    vector<float> cameras(cameraCount * 6, 0.0f);
+    vector<float> cameras(cameraCount * 6);
+    for (BundlerFrame &f : frames)
+    {
+        for (int i = 0; i < 6; i++)
+            cameras[f.index * 6 + i] = (float)f.camera[i];
+    }
     float *d_cameras = createDeviceBuffer(cameras, "cameras");
+    
 
     vector<vec3f> correspondences;
     vector<int> cameraAIndices, cameraBIndices, correspondenceIndices;
@@ -311,6 +306,8 @@ void BundlerManager::solveOpt()
     void* problemParams[] = { d_cameras, d_correspondences, d_anchorWeights, &correspondenceCount, d_cameraAIndices, d_cameraBIndices, d_correspondenceIndices };
     
     Opt_ProblemSolve(optimizerState, plan, problemParams, solverParams);
+
+    cutilSafeCall(cudaMemcpy(cameras.data(), d_cameras, sizeof(float)*cameras.size(), cudaMemcpyDeviceToHost));
 
     for (BundlerFrame &f : frames)
     {
