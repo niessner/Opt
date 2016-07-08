@@ -25,6 +25,7 @@ Energy(Select(valid, e_fit , 0.0))
 for i,j in Stencil { {1,0}, {-1,0}, {0,1}, {0, -1} } do
     local ARAPCost = (Offset(0,0) - Offset(i,j))
                   - Rotate2D(Angle(0,0), (UrShape(0,0) - UrShape( i,j)))
+    print(ARAPCost)
     local valid = eq(Mask(i,j),0)
     Energy(Select(valid,w_regSqrt*ARAPCost,0))
 end

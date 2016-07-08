@@ -62,24 +62,44 @@ C:Define [[
               | Load(Tensor tensor, Index* indices)
 
 
-    IndexList = (Index* indices)
+    IndexList = (any* indices)
     ReduceObj = (Op op, Index index)
 ]]
 
 local add,mul = C.Op("+"), C.Op("*")
 local i,j,k = C.Index("i"),C.Index("j"),C.Index("k")
 
-function C.Index:__concat(rhs)
-    return C.IndexList(List {self,rhs})
-end
-function C.IndexList:__concat(rhs)
-    local newlist = List()
-    newlist:insertall(self.indices)
-    newlist:insert(rhs)
-    return C.IndexList(newlist)
+
+local function indexconcat(...)
+    local r = List{}
+    for _,o in ipairs {...} do
+        if C.IndexList:isclassof(o) then
+            r:insertall(o.indices)
+        else
+            r:insert(o)
+        end
+    end
+    local il = C.IndexList(r)
+    return il
 end
 
+C.Index.__concat = indexconcat 
+C.IndexList.__concat = indexconcat
+C.ReduceObj.__concat = indexconcat
+
 function C.IndexList:__call(exp)
+    for i,idx in ipairs(self.indices) do
+        if C.ReduceObj:isclassof(idx) then
+            print(i,idx)
+            for j = #self.indices,i,-1 do
+                local ridx = self.indices[j]
+                assert(C.ReduceObj:isclassof(ridx),"reduce indices must follow map indices")
+                exp = ridx(exp)
+            end 
+            print(exp)
+            return C.MapExp(List { unpack(self.indices,1,i-1) },exp)
+        end
+    end
     return C.MapExp(self.indices,exp)
 end
 function C.Index:__call(exp)
@@ -102,11 +122,10 @@ end
 function C.Tensor:get(...)
     assert(#self.dims > 0, "empty tensor")
     local values = {...}
-    local exp = values[1]
-    assert(exp < self.dims[1],"index out of bounds")
-    for i = 2,#values do
+    local exp = 0
+    for i = 1,#values do
         assert(values[i] < self.dims[i],"index of of bounds")
-        exp = exp*self.dims[i]+values[i]
+        exp = exp*self.dims[i] + values[i]
     end
     return self.data[exp]
 end
@@ -168,8 +187,9 @@ function listeq(a,b)
     return true
 end
 
-function Empty(name)
-    return C.Tensor(name,List{},0,nil)
+function Scalar(name,value)
+    local data = terralib.new(float[1], { value or 0 } )
+    return C.Tensor(name,List{},1,data)
 end
 
 function C.Tensor:set(exp)
@@ -185,7 +205,8 @@ function C.Tensor:set(exp)
 end
 
 function C.MapExp:typecheck()
-    local indextosize = {}
+    print(self)
+    local indextosize = {} -- map from abstract index object to concrete dimension that the index maps over
     local definedindices = {}
     for _,d in ipairs(self.indices) do
         definedindices[d] = true
@@ -216,17 +237,115 @@ function C.MapExp:typecheck()
     return indextosize
 end
 
+function add:emit(x,y) return `x + y end
+add.identity = `0
+function mul:emit(x,y) return `x * y end
+mul.identity = `1
+local function indicestoaddr(dims, indices)
+    local addr = nil
+    for i = 1,#dims do
+        addr = addr and (`addr*[dims[i]] + [indices[i]]) or indices[i]
+    end
+    return addr
+end
+
 function C.MapExp:compile()
     local indextosize = self:typecheck()
-
+    local indextosym = {}
+    local syms = self.indices:map(function(index)
+        local sym = symbol(int,index.name)
+        indextosym[index] = sym
+        return sym
+    end)
+    local sizes = self.indices:map(function(i) return indextosize[i] end)
+    
+    local function emit(exp)
+        if "Constant" == exp.kind then return `exp.c
+        elseif "Apply" == exp.kind then
+            local args = exp.expressions:map(emit)
+            return exp.op:emit(unpack(args))
+        elseif "Load" == exp.kind then
+            local isyms = exp.indices:map(function(x) return indextosym[x] end)
+            local sizes = exp.indices:map(function(x) return indextosize[x] end)
+            local addr = indicestoaddr(sizes,isyms)
+            return `exp.tensor.data[addr]
+        elseif "Reduce" == exp.kind then
+            local size = indextosize[exp.index]
+            local i = symbol(int,exp.index.name)
+            indextosym[exp.index] = i
+            local e = emit(exp.exp)
+            return quote
+                var s = exp.op.identity
+                for [i] = 0,size do
+                    s = [ exp.op:emit(s, e) ]
+                end
+            in s end
+        else error("unknown kind") end
+    end
+    local value = emit(self.exp)
+    local r = symbol(&float,"r")
+    local body = quote
+        r[ [indicestoaddr(sizes,syms)] ] = value 
+    end
+    for i = #syms,1,-1 do
+        body = quote 
+            for [syms[i]] = 0,[ sizes[i] ] do
+                [ body ]
+            end
+        end
+    end
+    local terra impl([r])
+        [body]
+    end
+    impl:printpretty(false)
+    return sizes,impl
+end
+function C.Tensor:dump()
+    local idx = 0
+    local body = List {}
+    local function emitdim(i)
+        if i > #self.dims then 
+            body:insert(tostring(self.data[idx]))
+            idx = idx + 1
+        else
+            local sep = (i == #self.dims) and " " or ("\n"):rep(#self.dims - i)
+            for j = 1,self.dims[i] do
+                emitdim(i+1)
+                body:insert(sep)
+            end
+        end
+    end
+    emitdim(1)
+    body:insert("\n")
+    return body:concat()
 end
 
 local A = Iota("A",2,3)
 local x = Iota("x",3)
-local b = Iota("b",2)
+local c = Iota("b",2)
 
-local a = (i..j)(A(i,j))
-local b = (i)(sum(j)(A(i,j)*x(j))+b(i))
+print(A:dump())
 
-a:typecheck()
-b:typecheck()
+local a = (i..j)(A(i,j) + A(i,j))
+local b = (i..sum(j))(A(i,j)*x(j) + c(i))
+
+local r = Scalar("r",0)
+r:set(b)
+
+local B = Iota("B",3,4)
+
+
+
+print(A:dump())
+print(x:dump())
+print(c:dump())
+print(r:dump())
+
+print("----------")
+
+local mm = (i..j)(sum(k)(A(i,k)*B(k,j))+1)
+
+r:set(mm)
+
+print(B:dump())
+print(r:dump())
