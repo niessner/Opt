@@ -48,7 +48,7 @@ local List = asdl.List
 C = asdl:NewContext()
 C:Define [[
     
-    Tensor = (string name, number* dims, number allocatedsize, any data)
+    Tensor = (string name, number* dims, number* strides, number allocatedsize, any data)
     
     Index = (string name)
     
@@ -120,14 +120,20 @@ function C.Tensor:__call(...)
     return C.Load(self, indices)
 end
 function C.Tensor:get(...)
-    assert(#self.dims > 0, "empty tensor")
     local values = {...}
-    local exp = 0
+    local offset = 0
+    local sizes = List{}
+    local strides = List{}
     for i = 1,#values do
-        assert(values[i] < self.dims[i],"index of of bounds")
-        exp = exp*self.dims[i] + values[i]
+        if values[i] == ":" then
+            sizes:insert(self.dims[i])
+            strides:insert(self.strides[i])
+        else
+            offset = offset + self.strides[i]*values[i]
+        end
     end
-    return self.data[exp]
+    if #sizes == 0 then return self.data[offset]
+    else return C.Tensor("slice", sizes, strides, 0, self.data + offset) end
 end
 
 function requiredsize(dims)
@@ -137,15 +143,26 @@ function requiredsize(dims)
     end
     return size
 end
-    
+
+local function densestride(dims)
+    local strides = List{}
+    local s = 1
+    for i = #dims,1,-1 do
+        strides[i] = s
+        s = s * dims[i]
+    end
+    return strides
+end
+
 function Iota(name,...)
     local dims = List {...}
+    local strides = densestride(dims)
     local size = requiredsize(dims)
     local data = terralib.new(float[size])
     for i = 0,size-1 do
         data[i] = i
     end
-    return C.Tensor(name,dims,size,data)
+    return C.Tensor(name,dims,strides,size,data)
 end
 
 local function toscalar(x)
@@ -189,19 +206,19 @@ end
 
 function Scalar(name,value)
     local data = terralib.new(float[1], { value or 0 } )
-    return C.Tensor(name,List{},1,data)
+    return C.Tensor(name,List{},List{},1,data)
 end
 
 function C.Tensor:set(exp)
     assert(C.MapExp:isclassof(exp),"expected a map expression")
-    local dims,terrafn = exp:compile()
+    local dims,strides,terrafn = exp:compile()
     local newsize = requiredsize(dims)
     if self.allocatedsize < newsize then
         self.data = terralib.new(float[newsize])
         self.allocatedsize = newsize
     end
     terrafn(self.data)
-    self.dims = dims
+    self.dims,self.strides = dims,strides
 end
 
 function C.MapExp:typecheck()
@@ -241,10 +258,11 @@ function add:emit(x,y) return `x + y end
 add.identity = `0
 function mul:emit(x,y) return `x * y end
 mul.identity = `1
-local function indicestoaddr(dims, indices)
+local function indicestoaddr(strides, indices)
     local addr = nil
-    for i = 1,#dims do
-        addr = addr and (`addr*[dims[i]] + [indices[i]]) or indices[i]
+    for i = 1,#strides do
+        local ii = strides[i] == 1 and indices[i] or `[strides[i]]*[indices[i]]
+        addr = addr and (`addr + ii) or ii
     end
     return addr
 end
@@ -266,8 +284,7 @@ function C.MapExp:compile()
             return exp.op:emit(unpack(args))
         elseif "Load" == exp.kind then
             local isyms = exp.indices:map(function(x) return indextosym[x] end)
-            local sizes = exp.indices:map(function(x) return indextosize[x] end)
-            local addr = indicestoaddr(sizes,isyms)
+            local addr = indicestoaddr(exp.tensor.strides,isyms)
             return `exp.tensor.data[addr]
         elseif "Reduce" == exp.kind then
             local size = indextosize[exp.index]
@@ -275,7 +292,7 @@ function C.MapExp:compile()
             indextosym[exp.index] = i
             local e = emit(exp.exp)
             return quote
-                var s = exp.op.identity
+                var s : float = exp.op.identity
                 for [i] = 0,size do
                     s = [ exp.op:emit(s, e) ]
                 end
@@ -284,8 +301,9 @@ function C.MapExp:compile()
     end
     local value = emit(self.exp)
     local r = symbol(&float,"r")
+    local strides = densestride(sizes)
     local body = quote
-        r[ [indicestoaddr(sizes,syms)] ] = value 
+        r[ [indicestoaddr(strides,syms)] ] = value 
     end
     for i = #syms,1,-1 do
         body = quote 
@@ -298,24 +316,23 @@ function C.MapExp:compile()
         [body]
     end
     impl:printpretty(false)
-    return sizes,impl
+    return sizes,strides,impl
 end
 function C.Tensor:dump()
-    local idx = 0
     local body = List {}
-    local function emitdim(i)
+    local function emitdim(idx,i)
         if i > #self.dims then 
             body:insert(tostring(self.data[idx]))
-            idx = idx + 1
         else
             local sep = (i == #self.dims) and " " or ("\n"):rep(#self.dims - i)
             for j = 1,self.dims[i] do
-                emitdim(i+1)
+                emitdim(idx,i+1)
                 body:insert(sep)
+                idx = idx + self.strides[i]
             end
         end
     end
-    emitdim(1)
+    emitdim(0,1)
     body:insert("\n")
     return body:concat()
 end
@@ -323,11 +340,13 @@ end
 local A = Iota("A",2,3)
 local x = Iota("x",3)
 local c = Iota("b",2)
+local d = Iota("d",3)   --is sparse
 
 print(A:dump())
 
 local a = (i..j)(A(i,j) + A(i,j))
-local b = (i..sum(j))(A(i,j)*x(j) + c(i))
+
+local b = (i..sum(j))(A(i,j)*x(j) )
 
 local r = Scalar("r",0)
 r:set(b)
@@ -343,9 +362,117 @@ print(r:dump())
 
 print("----------")
 
-local mm = (i..j)(sum(k)(A(i,k)*B(k,j))+1)
+local mm = (i..j..sum(k))(A(i,k)*B(k,j))
 
 r:set(mm)
 
 print(B:dump())
 print(r:dump())
+
+
+J = Iota("J",4,5)
+local p = Iota("p",5)
+
+local jtjp = (i..sum(j)..sum(k))( J(j,i)*J(j,k)*p(k) )
+
+print(jtjp)
+r:set(jtjp)
+print(r:dump())
+
+print(J:dump())
+print(J:get(":",4):dump())
+--[[
+    TODO: 
+    separate compilation from execution
+    figure out dense/sparse iterator interaction
+
+
+(i,j,+k,+l) Im(i+k,j+l)*Filt(k,l)
+
+(i,+j,k) A(i,j)*h(k)*v(j)
+
+s = allocate (i,k)
+
+for i:
+    for j:
+        if (j == 0) s[i,k] = 0;
+        for k:
+            s[i,k] += exp(i,j,k)
+
+
+
+
+r = A*x + b
+
+a' = (i,+j)(A(i,j)*x(j))
+r = (i) a'(i) +b(i)
+
+loop = fuse(a',r)
+
+for i:
+  for j:
+    A(i,j)*x(j)
+   + b(i)
+
+
+
+(i,+k) A(i,k)*B(k)
+
+r,c ==> dense, sparse
+
+c,r ==> dense, sparse (unused)
+
+A
+
+sparse_it:
+   num_elements() -> how many non-zeros: 0 ... S
+   getelement(i) -> (0...S) -> N
+   getlocation(i) -> (0...S) -> something you can use to look up the value of A
+   
+for i (0 to N):
+    s = 0
+    sparse_it = iterator_for_row(i) -- maybe a crs data-structure
+    
+    for k (in spares_it): --num_elements determines sizehh
+       s += A(k:getlocation())*B(k:getelement(k))
+    o(i) = s
+
+
+Iterator Model:
+
+A Tensor 'A' of dim N can be turned into a tensor of dim N-1 by indexing with _any_ of dimensions.
+
+A' = A(:,i)
+B' = A(i,:) -- note: syntax here won't actually exist outside of the IR for generating loop nests.
+
+At compile time, the tensor knows the type of iterator associated with any of its remaining dimensions. The value that the
+iterator produces is what is passed to object for indexing.
+
+Whenever an iterator union or intersection happens, that operation also provides a transformation from the new iterators range
+into the range of the original iterator.
+
+Examples:
+  dense * sparse => sparse, indices for dense objects are updated to first abstract the dense index from the sparse one
+  dense + sparse => dense,  indices for sparse object are updated to find the sparse index from the dense index (which may be slow)
+  
+For prototyping, hard or slow cases can simply report 'NYI' for certain operations (e.g. union/intersection that is tricky, or for iteration of the object in the wrong order).
+
+Example:
+
+A is a CRS matrix, and x is a dense vector.
+
+(i,+j) A(i,j)*x(j)
+
+step 1: derive iterator for i:
+       r1 = A(i,j) -> dense iterator over first index
+       r2 = x(j) -> dense constant expression
+       r3 = r1*r2 -> dense iterator over first index
+       
+step 2: derive iterator for j:
+        A' = A(i,:)
+        
+       r1 = A'(j) -> sparse iterator over first index
+       r2 = x(j) -> dense iterator over first index
+       r3 = r1*r2 -> sparse iterator from r1, indexing expression for x gets updated with (sparseidxtodense(j))
+       
+]]
