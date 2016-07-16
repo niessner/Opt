@@ -18,7 +18,7 @@ F = ...
 J = jacobean(F)
 
 J' =J(X)
-
+  
 local r = (i)((+j)(2*J(j,i)*F(j)))
 
 for i = 1, 10
@@ -43,32 +43,91 @@ JTJp
 
 ]]
 
+
 asdl = require('asdl')
 local List = asdl.List
 C = asdl:NewContext()
 C:Define [[
     
-    Tensor = (string name, number* dims, number* strides, number allocatedsize, any data)
-    
+    AbstractTensor = Tensor(string name, number* dims, number* strides, number allocatedsize, any data)
+                   | DummyTensor(string name, number * dims, function generator)
     Index = (string name)
     
-    MapExp = (Index* indices, ScalarExp exp)
+    IndexDef = (number dim, Iterator iterator)
+          
+    MapExp = (Index* indices, ScalarExp exp, IndexDef* defs)
     
     Op = (string name)
     
     ScalarExp = Apply(Op op,ScalarExp* expressions)
-              | Reduce(Op op, Index index, ScalarExp exp)
+              | Reduce(Op op, Index index, ScalarExp exp, IndexDef? def)
               | Constant(number c)
-              | Load(Tensor tensor, Index* indices)
+              | Load(AbstractTensor tensor, Index* indices)
 
 
     IndexList = (any* indices)
     ReduceObj = (Op op, Index index)
+    
+    Iterator = Dense
+             | Compressed(any key) unique
+
+    Shape = (Iterator* iterators) unique # added to each ScalarExp on typechecking
 ]]
+
+local function Environment(parent)
+    return parent and setmetatable({},{__index = parent}) or {}
+end
+
+local function Copy(ref,newfields) -- copy an object, extracting any new replacement fields from newfields table
+    newfields = newfields or {}
+    local class = getmetatable(ref)
+    local fields = class.__fields
+    assert(fields,"not a asdl object?")
+    local function handlefield(i,...) -- need to do this with tail recursion rather than a loop to handle nil values
+        if i == 0 then
+            return class(...)
+        else
+            local f = fields[i]
+            local a = newfields[f.name] or ref[f.name]
+            newfields[f.name] = nil
+            return handlefield(i-1,a,...)
+        end
+    end
+    local r = handlefield(#fields)
+    for k,v in pairs(newfields) do
+        error("unused field in copy: "..tostring(k))
+    end
+    return r
+end
+
 
 local add,mul = C.Op("+"), C.Op("*")
 local i,j,k = C.Index("i"),C.Index("j"),C.Index("k")
 
+function C.Iterator:Union(rhs)
+    if self.kind == "Dense" or rhs.kind == "Dense" then return "Dense"
+    elseif self == rhs then return self
+    else error(("cannot union iterators %s and %s"):format(tostring(self),tostring(rhs))) end
+end
+function C.Iterator:Intersect(rhs)
+    if self.kind == "Dense" then return rhs
+    elseif rhs.kind == "Dense" then return self
+    elseif self == rhs then return self
+    else error(("cannot intersect iterators %s and %s"):format(tostring(self),tostring(rhs))) end
+end
+
+local function combineshapes(expressions,merge)
+    assert(#expressions > 0, "no expressions?")
+    local iterators = List {}
+    local first = expressions[1].shape
+    for i,s in ipairs(first.iterators) do
+        for j = 2,#expressions do
+            s = merge(s,expressions[j].shape.iterators[i])
+        end
+        iterators:insert(s)
+    end
+    return C.Shape(iterators)
+end
 
 local function indexconcat(...)
     local r = List{}
@@ -86,7 +145,7 @@ end
 C.Index.__concat = indexconcat 
 C.IndexList.__concat = indexconcat
 C.ReduceObj.__concat = indexconcat
-
+local empty = List {}
 function C.IndexList:__call(exp)
     for i,idx in ipairs(self.indices) do
         if C.ReduceObj:isclassof(idx) then
@@ -97,13 +156,13 @@ function C.IndexList:__call(exp)
                 exp = ridx(exp)
             end 
             print(exp)
-            return C.MapExp(List { unpack(self.indices,1,i-1) },exp)
+            return C.MapExp(List { unpack(self.indices,1,i-1) },exp, empty)
         end
     end
-    return C.MapExp(self.indices,exp)
+    return C.MapExp(self.indices,exp, empty)
 end
 function C.Index:__call(exp)
-    return C.MapExp(List{self},exp)
+    return C.MapExp(List{self},exp, emtpty)
 end
 
 local function sum(i)
@@ -114,7 +173,7 @@ function C.ReduceObj:__call(exp)
     return C.Reduce(self.op,self.index,exp)
 end
 
-function C.Tensor:__call(...)
+function C.AbstractTensor:__call(...)
     local indices = List {...}
     assert(#indices == #self.dims,"wrong dim")
     return C.Load(self, indices)
@@ -165,6 +224,10 @@ function Iota(name,...)
     return C.Tensor(name,dims,strides,size,data)
 end
 
+function Dummy(name,a,b,exp)
+    return C.DummyTensor(name,List {a,b}, exp)
+end
+
 local function toscalar(x)
     if C.ScalarExp:isclassof(x) then
         return x
@@ -193,7 +256,7 @@ function C.Apply:__tostring()
     return ("(%s %s %s)"):format(left,tostring(self.op),right)
 end
 function C.Index:__tostring() return self.name end
-function C.Tensor:__tostring() return self.name end
+function C.AbstractTensor:__tostring() return self.name end
 function C.MapExp:__tostring() return ("(%s)(%s)"):format(self.indices:map(tostring):concat(","),tostring(self.exp)) end
 
 function listeq(a,b)
@@ -221,37 +284,99 @@ function C.Tensor:set(exp)
     self.dims,self.strides = dims,strides
 end
 
-function C.MapExp:typecheck()
-    print(self)
-    local indextosize = {} -- map from abstract index object to concrete dimension that the index maps over
-    local definedindices = {}
-    for _,d in ipairs(self.indices) do
-        definedindices[d] = true
+function C.ScalarExp:withshape(shape)
+    self.shape = shape
+    return self
+end
+function C.Shape:afterreduce()
+    return C.Shape( List {unpack(self.iterators,1,#self.iterators-1)} )
+end
+
+function C.Tensor:iteratorkindsfornesting(depths)
+    return depths:map(function(d) return C.Dense end)
+end
+
+local EveryOther = {}
+
+function EveryOther:indexterratype() return int end
+function EveryOther:todense(sym) return `sym end
+
+function C.DummyTensor:iteratorkindsfornesting(depths)
+    assert(#depths == 2)
+    if depths[1] < depths[2] then
+        return List { C.Dense, C.Compressed(EveryOther) }
+    else
+        return List { C.Compressed(EveryOther), C.Dense }
     end
+end
+
+
+local function rep(v,n)
+    local r = List{}
+    for i = 1,n do r[i] = v end
+    return r
+end
+add.merge = function(a,b) return a:Union(b) end
+mul.merge = function(a,b) return a:Intersect(b) end
+
+function C.MapExp:typecheck()
+    
+    local indextodepth = Environment()
+    local currentdims = List {}
+    
+    local function defineindex(i)
+        currentdims:insert("undefined")
+        indextodepth[i] = #currentdims
+    end
+    
     local function check(exp)
         if "Constant" == exp.kind then
+            return Copy(exp):withshape(rep(C.Dense,#currentdims))
         elseif "Apply" == exp.kind then
-            exp.expressions:map(check)
+            local nexp = exp.expressions:map(check)
+            local nshape = combineshapes(nexp,exp.op.merge)
+            return Copy(exp,{expressions = nexp}):withshape(nshape)
         elseif "Load" == exp.kind then
+            local depths = List {}
             for dimidx,i in ipairs(exp.indices) do
-                assert(definedindices[i],"free index found")
-                indextosize[i] = indextosize[i] or exp.tensor.dims[dimidx]
-                assert(indextosize[i] == exp.tensor.dims[dimidx],"indices do not match dimension")
+                local depth = assert(indextodepth[i],"free index found")
+                if currentdims[depth] == "undefined" then
+                    currentdims[depth] = exp.tensor.dims[dimidx]
+                end
+                assert(currentdims[depth] == exp.tensor.dims[dimidx],"indices do not match dimension")
+                depths:insert(depth)
             end
+            local iteratorsfortensor = exp.tensor:iteratorkindsfornesting(depths)
+            local iterators = rep(C.Dense,#currentdims)
+            for i,d in ipairs(depths) do
+                iterators[d] = iteratorsfortensor[i]
+            end
+            local shape = C.Shape(iterators)
+            return Copy(exp):withshape(shape)
         elseif "Reduce" == exp.kind then
-            assert(not definedindices[exp.index], "index already in use")
-            definedindices[exp.index] = true
-            check(exp.exp)
-            assert(indextosize[exp.index],"size of reduction index not defined")
+            local oindextodepth = indextodepth
+            indextodepth = Environment(indextodepth)
+            defineindex(exp.index)
+            local nexp = check(exp.exp)
+            local dim = currentdims:remove()
+            assert(dim ~= "undefined","unused dimension")
+            indextodepth = oindextodepth
+            local def = C.IndexDef(dim,nexp.shape.iterators[#currentdims+1])
+            return Copy(exp,{ exp = nexp, def = def }):withshape(nexp.shape:afterreduce())
         else error("unknown kind") end
     end 
     
-    check(self.exp)
-    for _,d in ipairs(self.indices) do
-        assert(indextosize[d], "size of map index not defined")
+    for _,i in ipairs(self.indices) do
+        defineindex(i)
     end
-    for k,v in pairs(indextosize) do print(k,v) end
-    return indextosize
+    local nexp = check(self.exp)
+    local defs = List{}
+    for i,d in ipairs(currentdims) do
+        assert(d ~= "undefined", "unused dimension")
+        defs:insert(C.IndexDef(d,nexp.shape.iterators[i]))
+    end
+    
+    return Copy(self,{ exp = nexp, defs = defs })
 end
 
 function add:emit(x,y) return `x + y end
@@ -267,45 +392,106 @@ local function indicestoaddr(strides, indices)
     return addr
 end
 
+function C.Iterator:indexterratype()
+    if self.kind == "Dense" then return int
+    elseif self.kind == "Compressed" then return self.key:indexterratype() end
+end
+
+function C.Iterator:transformindex(fromiterator,fromindex)
+    if self == C.Dense and fromiterator.kind == "Compressed" then
+        return fromiterator.key:todense(fromindex)
+    end
+    error("NYI - transform iterator")
+end
+
+function C.Tensor:access(isyms)
+    local addr = indicestoaddr(self.strides,isyms)
+    return `self.data[ addr ]
+end
+function C.DummyTensor:access(isyms)
+    return self.generator(unpack(isyms))
+end
+
+function C.Dense:generateloop(dim,sym,body)
+    return quote for [sym] = 0,dim do body end end
+end
+function C.Compressed:generateloop(dim,sym,body)
+    return self.key:generateloop(dim,sym,body)
+end
+function EveryOther:generateloop(dim,sym,body)
+    return quote for [sym] = 0,dim,2 do body end end
+end
+
 function C.MapExp:compile()
-    local indextosize = self:typecheck()
-    local indextosym = {}
-    local syms = self.indices:map(function(index)
-        local sym = symbol(int,index.name)
-        indextosym[index] = sym
-        return sym
-    end)
-    local sizes = self.indices:map(function(i) return indextosize[i] end)
-    
+    local indexstack = List {}
+    local indextosym = Environment()
+    local typedexp = self:typecheck()
     local function emit(exp)
         if "Constant" == exp.kind then return `exp.c
         elseif "Apply" == exp.kind then
-            local args = exp.expressions:map(emit)
+            local args = exp.expressions:map(function(e)
+                if e.shape == exp.shape then
+                    return emit(e)
+                end
+                local oindex = indextosym
+                indextosym = Environment(indextosym)
+                -- adjust indices for new shape
+                local newindices = List {}
+                for i,it in ipairs(e.shape.iterators) do
+                    if it ~= exp.shape.iterators[i] then
+                        local index = indexstack[i]
+                        local sym = symbol(it:indexterratype(),index.name)
+                        local oldsym = assert(indextosym[index],"index not defined?")
+                        indextosym[index] = sym
+                        newindices:insert quote
+                            var [sym] = [ it:transformindex(exp.shape.iterators[i],oldsym) ]
+                        end
+                    end
+                end
+                local body = emit(e)
+                indextosym = oindex
+                return quote
+                    [newindices]
+                in body end
+            end)
             return exp.op:emit(unpack(args))
         elseif "Load" == exp.kind then
             local isyms = exp.indices:map(function(x) return indextosym[x] end)
-            local addr = indicestoaddr(exp.tensor.strides,isyms)
-            return `exp.tensor.data[addr]
+            return exp.tensor:access(isyms)
         elseif "Reduce" == exp.kind then
-            local size = indextosize[exp.index]
-            local i = symbol(int,exp.index.name)
-            indextosym[exp.index] = i
+            local oindex = indextosym
+            local sym = symbol(exp.def.iterator:indexterratype(),exp.index.name)
+            indextosym = Environment(indextosym)
+            indextosym[exp.index] = sym
+            indexstack:insert(exp.index)
             local e = emit(exp.exp)
-            return quote
+            
+            local result = quote
                 var s : float = exp.op.identity
-                for [i] = 0,size do
-                    s = [ exp.op:emit(s, e) ]
-                end
+                [ exp.def.iterator:generateloop(exp.def.dim,sym, quote s = [ exp.op:emit(s,e)] end) ]
             in s end
+            
+            indextosym = oindex
+            indexstack:remove()
+            return result
         else error("unknown kind") end
     end
-    local value = emit(self.exp)
-    local r = symbol(&float,"r")
-    local strides = densestride(sizes)
-    local body = quote
-        r[ [indicestoaddr(strides,syms)] ] = value 
+    
+    -- TODO: support sparse output dimensions.
+    for _,index in ipairs(typedexp.indices) do
+        indextosym[index] = symbol(int,index.name)
+        indexstack:insert(index)
     end
-    for i = #syms,1,-1 do
+    local value = emit(typedexp.exp)
+    local r = symbol(&float,"r")
+    local sizes = typedexp.defs:map("dim")
+    local strides = densestride(sizes)
+    local syms = indexstack:map(function(i) return indextosym[i] end)
+    local addr = indicestoaddr(strides,syms)
+    local body = quote
+        r[addr] = value 
+    end
+    for i = #typedexp.indices,1,-1 do 
         body = quote 
             for [syms[i]] = 0,[ sizes[i] ] do
                 [ body ]
@@ -381,6 +567,27 @@ print(r:dump())
 
 print(J:dump())
 print(J:get(":",4):dump())
+
+
+-- Iterator tests:
+
+local d = C.Dense
+local s1 = C.Compressed(1)
+print(d:Union(s1))
+print(d:Union(d))
+print(s1:Union(d))
+print(d:Intersect(s1))
+print(d:Intersect(d))
+print(s1:Intersect(d))
+
+local A = Dummy("A",2,4,function(x,y) return `x*1000+y end)
+local x = Iota("p",4)
+
+local exp = (i..sum(j))(A(i,j)*x(j))
+
+r:set(exp)
+print(r:dump())
+
 --[[
     TODO: 
     separate compilation from execution
@@ -462,6 +669,16 @@ Example:
 A is a CRS matrix, and x is a dense vector.
 
 (i,+j) A(i,j)*x(j)
+
+A -> (Dense,Compressed(1))
+x -> (Dense,Dense)
+
+A*x -> (Dense,Compressed(i))
+
+
+Dense,Compressed(1),Dense
+Compressed(1),Dense,Compressed(2)
+
 
 step 1: derive iterator for i:
        r1 = A(i,j) -> dense iterator over first index
