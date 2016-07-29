@@ -2038,7 +2038,7 @@ local function createjtjgraph(PS,ES)
     return A.FunctionSpec(ES.kind,"applyJTJ", List {"P", "Ap_X"}, List { result }, scatters)
 end
 
--- the same as createjtfgraph but computing p'J'Jp and without computing the preconditioner
+-- the same as createjtfgraph but computing -p'J'Jp and without computing the preconditioner
 local function createjtjgraphsimple(PS,ES)
     local P = PS:UnknownArgument(1)
 
@@ -2057,7 +2057,7 @@ local function createjtjgraphsimple(PS,ES)
             local u = unknownsupport[i]
             local jtjp = Jp*partial
 
-            result = result + P[u.image.name](u.index,u.channel)*jtjp
+            result = result - P[u.image.name](u.index,u.channel)*jtjp
         end
     end
 
@@ -2295,18 +2295,14 @@ function ProblemSpecAD:Cost(...)
             functionspecs:insert(createjtjcentered(self,energyspec))
             functionspecs:insert(createjtfcentered(self,energyspec))
 
-            if self:UsesLambda() then
-                functionspecs:insert(createjtjcenteredsimple(self,energyspec))
-                functionspecs:insert(createjtfcenteredsimple(self,energyspec))
-            end
+            functionspecs:insert(createjtjcenteredsimple(self,energyspec))
+            functionspecs:insert(createjtfcenteredsimple(self,energyspec))
         else
             functionspecs:insert(createjtjgraph(self,energyspec))
             functionspecs:insert(createjtfgraph(self,energyspec))
 
-            if self:UsesLambda() then
-                functionspecs:insert(createjtjgraphsimple(self,energyspec))
-                functionspecs:insert(createjtfgraphsimple(self,energyspec))
-            end
+            functionspecs:insert(createjtjgraphsimple(self,energyspec))
+            functionspecs:insert(createjtfgraphsimple(self,energyspec))
         end
     end
     functionspecs:insertall(createprecomputed(self,self.precomputed))

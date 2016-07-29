@@ -460,7 +460,7 @@ return function(problemSpec)
 
                     var min_relative_decrease = 1e-3f
 
-                    if relative_decrease < min_relative_decrease then	--in this case we revert
+                    if cost_change < 0 or relative_decrease < min_relative_decrease then	--in this case we revert
                         gpu.PCGLinearUpdateRevert(pd)
 
                         -- lambda = lambda * nu
