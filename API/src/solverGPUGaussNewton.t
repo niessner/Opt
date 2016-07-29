@@ -239,15 +239,15 @@ return function(problemSpec)
             if idx:initFromCUDAParams() then
         
                 -- grad_F = - 2J'F                           
-                var residuum : unknownElement = 0.0f
+                var g : unknownElement = 0.0f
             
                 if not fmap.exclude(idx,pd.parameters) then 
-                    residuum = fmap.evalJTFsimple(idx, pd.parameters)
-                    residuum = -residuum
+                    g = fmap.evalJTFsimple(idx, pd.parameters)  -- 2J'F  
+                    -- g = -g
                 end        
                 if not isGraph then
                     var dd = pd.delta(idx)
-                    d = residuum:dot(dd)  -- delta'(-2J'F) 
+                    d = g:dot(dd)  -- delta'(-2J'F) 
                 end
             end
             if not isGraph then
@@ -274,11 +274,11 @@ return function(problemSpec)
             var d = 0.0f -- init for out of bounds lanes
             var idx : Index
             if idx:initFromCUDAParams() and not fmap.exclude(idx,pd.parameters) then
-                var tmp : unknownElement = 0.0f
+                var jtjd : unknownElement = 0.0f
  
-                tmp = fmap.applyJTJsimple(idx, pd.parameters, pd.delta)   -- J'J delta
-                tmp = -tmp
-                d = pd.delta(idx):dot(tmp)			 -- delta'(-J'J delta) 
+                jtjd = fmap.applyJTJsimple(idx, pd.parameters, pd.delta)   -- J'J delta
+                -- jtjd = -jtjd
+                d = pd.delta(idx):dot(jtjd)			 -- delta'(-J'J delta) 
             end
             d = util.warpReduce(d)
             if (util.laneid() == 0) then
@@ -369,6 +369,24 @@ return function(problemSpec)
         return f
     end
 
+    local terra computeModelCostChange(pd : &PlanData) : float
+        C.cudaMemset(pd.modelCostChange, 0, sizeof(float))
+
+        -- model_cost_change = delta' * (-2 * J' * F) + delta' * (-J' * J * delta)
+        gpu.computeModelCostChangeStep1(pd)
+        gpu.computeModelCostChangeStep2(pd)
+        if isGraph then
+            gpu.computeModelCostChangeStep1_Graph(pd)	
+            gpu.computeModelCostChangeStep1_Finish(pd)
+            gpu.computeModelCostChangeStep2_Graph(pd)
+        end
+
+        var model_cost_change : float
+        C.cudaMemcpy(&model_cost_change, pd.modelCostChange, sizeof(float), C.cudaMemcpyDeviceToHost)
+
+        return model_cost_change
+    end
+
 	local terra init(data_ : &opaque, params_ : &&opaque, solverparams : &&opaque)
 	   var pd = [&PlanData](data_)
 	   pd.timer:init()
@@ -393,7 +411,7 @@ return function(problemSpec)
 			C.cudaMemset(pd.scanAlphaDenominator, 0, sizeof(float))	--scan in PCGInit1 requires reset
 			C.cudaMemset(pd.scanBetaNumerator, 0, sizeof(float))	--scan in PCGInit1 requires reset
 			C.cudaMemset(pd.scanBetaDenominator, 0, sizeof(float))	--scan in PCGInit1 requires reset
-			
+
 			gpu.PCGInit1(pd)
 			
 			if isGraph then
@@ -432,19 +450,13 @@ return function(problemSpec)
 			    emit quote
                     logSolver(" lambda=%f ",pd.parameters.lambda)
 
-                    -- model_cost_change = (-delta' * 2 * J' * F) + (-delta' * 2 * J' * J * delta)
-                    gpu.computeModelCostChangeStep1(pd)
-                    gpu.computeModelCostChangeStep2(pd)
-                    if isGraph then
-                        gpu.computeModelCostChangeStep1_Graph(pd)	
-                        gpu.computeModelCostChangeStep1_Finish(pd)
-                        gpu.computeModelCostChangeStep2_Graph(pd)
-                    end
-
-                    var model_cost_change = pd.modelCostChange[0]
-
                     var cost_change = pd.prevCost - newCost
+                    var model_cost_change = computeModelCostChange(pd)
                     var relative_decrease = cost_change / model_cost_change
+
+                    logSolver(" cost_change=%f ", cost_change)
+                    logSolver(" model_cost_change=%f ", model_cost_change)
+                    logSolver(" relative_decrease=%f ", relative_decrease)
 
                     var min_relative_decrease = 1e-3f
 
@@ -461,7 +473,7 @@ return function(problemSpec)
                     else 
                         -- lambda = lambda * max{1/3, 1 - (2 * relative_decrease - 1)^3}
                         var min_factor = 1.0f/3.0f
-                        var tmp_factor = 1.0f - util.cpuMath.pow(2.0f * relative_decrease - 1.0f, 3)
+                        var tmp_factor = 1.0f - util.cpuMath.pow(2.0f * relative_decrease - 1.0f, 3.0f)
                         pd.parameters.lambda = pd.parameters.lambda * util.cpuMath.fmax(min_factor, tmp_factor)
                         pd.parameters.lambda_increase_factor = 2.0f
 
