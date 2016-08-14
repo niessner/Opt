@@ -38,7 +38,8 @@ return function(problemSpec)
 		scanBetaNumerator : &float
 		scanBetaDenominator : &float
 
-        modelCostChange : &float    -- modelCostChange = L(0) - L(delta) where L(h) = F' F + 2 h' J' F + h' J' J h 
+        modelCostChange : &float    -- modelCostChange = L(0) - L(delta) where L(h) = F' F + 2 h' J' F + h' J' J h
+        maxDiagJTJ : &float    -- maximum value in the diagonal of JTJ 
 		
 		timer : Timer
 		endSolver : util.TimerEvent
@@ -86,7 +87,7 @@ return function(problemSpec)
                     end
                 end        
             
-                if not isGraph then				
+                if not isGraph then		
                     pre = guardedInvert(pre)
                     var p = pre*residuum	-- apply pre-conditioner M^-1			   
                     pd.p(idx) = p
@@ -98,7 +99,7 @@ return function(problemSpec)
             
             end 
             if not isGraph then
-                d = util.warpReduce(d)	
+                d = util.warpReduce(d)
                 if (util.laneid() == 0) then				
                     util.atomicAdd(pd.scanAlphaNumerator, d)
                 end
@@ -285,7 +286,28 @@ return function(problemSpec)
                 util.atomicAdd(pd.modelCostChange, d)
             end
         end
-        
+        terra kernels.LMLambdaInit(pd : PlanData)
+            var maxJTJ = 0.0f -- maximum diag(JTJ)
+            var idx : Index
+            if idx:initFromCUDAParams() then	
+                var pre : unknownElement = 1.0f	
+                
+                if not fmap.exclude(idx,pd.parameters) then 
+                    pre = fmap.evalDiagJTJ(idx, pd.parameters)
+                end
+
+                if not isGraph then
+                    maxJTJ = pre:max()
+                end
+            end
+
+            if not isGraph then
+                maxJTJ = util.warpMaxReduce(maxJTJ)	
+                if (util.laneid() == 0) then				
+                    util.atomicMax(pd.maxDiagJTJ, maxJTJ)
+                end
+            end
+        end
 	    return kernels
 	end
 	
@@ -337,6 +359,12 @@ return function(problemSpec)
                 util.atomicAdd(pd.modelCostChange, d)
             end
         end
+        -- terra kernels.LMLambdaInit_Graph(pd : PlanData)
+        --     var tIdx = 0
+        --     if util.getValidGraphElement(pd,[graphname],&tIdx) then
+        --         fmap.evalJTF(tIdx, pd.parameters, pd.preconditioner)
+        --     end
+        -- end   
 	    return kernels
 	end
 	
@@ -352,6 +380,7 @@ return function(problemSpec)
                                                                         "computeModelCostChangeStep1",
                                                                         "computeModelCostChangeStep1_Finish",
                                                                         "computeModelCostChangeStep2",
+                                                                        "LMLambdaInit",
                                                                         "PCGInit1_Graph",
                                                                         "PCGStep1_Graph",
                                                                         "computeCost_Graph",
@@ -387,6 +416,18 @@ return function(problemSpec)
         return model_cost_change
     end
 
+    local terra initLambda(pd : &PlanData)
+        -- Init lambda based on the maximum value on the diagonal of JTJ
+        C.cudaMemset(pd.maxDiagJTJ, 0, sizeof(float))
+
+        -- lambda = tau * max{a_ii} where A = JTJ
+        var tau = 1e-6f
+        gpu.LMLambdaInit(pd);
+        var maxDiagJTJ : float
+        C.cudaMemcpy(&maxDiagJTJ, pd.maxDiagJTJ, sizeof(float), C.cudaMemcpyDeviceToHost)
+        pd.parameters.lambda = tau * maxDiagJTJ
+    end
+
 	local terra init(data_ : &opaque, params_ : &&opaque, solverparams : &&opaque)
 	   var pd = [&PlanData](data_)
 	   pd.timer:init()
@@ -396,7 +437,10 @@ return function(problemSpec)
 	   pd.nIterations = @[&int](solverparams[0])
 	   pd.lIterations = @[&int](solverparams[1])
        escape if problemSpec:UsesLambda() then
-	      emit quote pd.parameters.lambda = 0.001f end
+	    --   emit quote pd.parameters.lambda = 0.001f end
+          emit quote 
+            initLambda(pd)
+          end
           emit quote pd.parameters.lambda_increase_factor = 2.0f end
 	   end end
 	   gpu.precompute(pd)
@@ -520,6 +564,7 @@ return function(problemSpec)
 		C.cudaMalloc([&&opaque](&(pd.scanAlphaDenominator)), sizeof(float))
 		C.cudaMalloc([&&opaque](&(pd.scanBetaDenominator)), sizeof(float))
 		C.cudaMalloc([&&opaque](&(pd.modelCostChange)), sizeof(float))
+		C.cudaMalloc([&&opaque](&(pd.maxDiagJTJ)), sizeof(float))
 		
 		C.cudaMalloc([&&opaque](&(pd.scratchF)), sizeof(float))
 		return &pd.plan
