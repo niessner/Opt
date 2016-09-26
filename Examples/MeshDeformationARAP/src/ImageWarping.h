@@ -1,11 +1,11 @@
 #pragma once
 
-#define RUN_CUDA 1
-#define RUN_TERRA 1
+#define RUN_CUDA 0
+#define RUN_TERRA 0
 #define RUN_OPT 1
 #define RUN_CERES 0
 
-#define EARLY_OUT 1
+#define EARLY_OUT 0
 
 
 #include "mLibInclude.h"
@@ -159,7 +159,7 @@ class ImageWarping
 			//unsigned int linearIter = 50;
 
 			unsigned int numIter = 32;
-			unsigned int nonLinearIter = 1;
+			unsigned int nonLinearIter = 2;
             unsigned int linearIter = 4000;			
 #			if RUN_CUDA
 			m_result = m_initial;
