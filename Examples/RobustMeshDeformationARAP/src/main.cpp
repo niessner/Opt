@@ -16,8 +16,8 @@ static SimpleMesh* createMesh(std::string filename) {
 
 int main(int argc, const char * argv[])
 {
-	std::string source_filename = "Armadillo20k.ply";
-    std::string target_filename = "Armadillo20k.ply";
+	std::string source_filename = "mesh_0084.obj";
+    std::string target_filename = "mesh_0085.obj";
 
 	if (argc >= 2) {
         source_filename = argv[1];
