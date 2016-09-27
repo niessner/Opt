@@ -33,16 +33,24 @@ class ImageWarping
 			resetGPUMemory();   
 
             m_rnd       = std::mt19937(230948);
-            m_uniform   = std::uniform_real_distribution<>(0,1);
-		
+
+            float spuriousProbability = 0.0f;
+
+            std::uniform_int_distribution<> sourceDistribution(0, N - 1);
+            std::uniform_int_distribution<> targetDistribution(0, targetMesh->n_vertices() - 1);
+            int spuriousCount = int(N*spuriousProbability);
+            for (int i = 0; i < spuriousCount; ++i) {
+                m_spuriousIndexPairs.push_back(make_int2(sourceDistribution(m_rnd), targetDistribution(m_rnd)));
+            }
+
             m_optWarpingSolver = new TerraWarpingSolver(N, 2 * E, d_neighbourIdx, d_neighbourOffset, "MeshDeformationAD.t", "gaussNewtonGPU");
 		} 
 
-        void setConstraints(float threshold = std::numeric_limits<float>::infinity(), float spuriousProbability = 0.1f)
+
+        void setConstraints(float threshold = std::numeric_limits<float>::infinity())
 		{
             
 			unsigned int N = (unsigned int)m_result.n_vertices();
-            std::uniform_int_distribution<> indexDistribution(0, N - 1);
 			std::vector<float3> h_vertexPosTargetFloat3(N);
             float3 invalidPt = make_float3(-std::numeric_limits<float>::infinity(), -std::numeric_limits<float>::infinity(), -std::numeric_limits<float>::infinity());
             for (unsigned int i = 0; i < N; i++) {
@@ -50,20 +58,18 @@ class ImageWarping
                 uint indexOfNearest = m_targetAccelerationStructure->nearest(currentPt.data());
                 const Vec3f target = m_target.point(VertexHandle(indexOfNearest));
 
-                bool spurious = m_uniform(m_rnd) < spuriousProbability;
-                if (spurious) {
-                    int spuriousIndex = indexDistribution(m_rnd);
-                    const Vec3f spuriousTarget = m_target.point(VertexHandle(spuriousIndex));
-                    h_vertexPosTargetFloat3[i] = make_float3(spuriousTarget[0], spuriousTarget[1], spuriousTarget[2]);
-                } else {
-                    if ((target - currentPt).length() < threshold) {
-                        h_vertexPosTargetFloat3[i] = make_float3(target[0], target[1], target[2]);
-                    }
-                    else {
-                        h_vertexPosTargetFloat3[i] = invalidPt;
-                    }
+                if ((target - currentPt).length() < threshold) {
+                    h_vertexPosTargetFloat3[i] = make_float3(target[0], target[1], target[2]);
+                }
+                else {
+                    h_vertexPosTargetFloat3[i] = invalidPt;
                 }
 			}
+
+            for (int2 iPair : m_spuriousIndexPairs) {
+                const Vec3f spuriousTarget = m_target.point(VertexHandle(iPair.y));
+                h_vertexPosTargetFloat3[iPair.x] = make_float3(spuriousTarget[0], spuriousTarget[1], spuriousTarget[2]);
+            }
 
 			cutilSafeCall(cudaMemcpy(d_vertexPosTargetFloat3, h_vertexPosTargetFloat3.data(), sizeof(float3)*N, cudaMemcpyHostToDevice));
 		}
@@ -156,16 +162,16 @@ class ImageWarping
 			
 			//float weightFit = 6.0f;
             //float weightReg = 0.5f;
-			float weightFit = 3.0f;
-			float weightReg = 80.0f; //0.000001f;
+			float weightFit = 1.0f;
+			float weightReg = 8.0f; //0.000001f;
 		
 			//unsigned int numIter = 10;
 			//unsigned int nonLinearIter = 20;
 			//unsigned int linearIter = 50;
 
-			unsigned int numIter = 6;
+			unsigned int numIter = 20;
 			unsigned int nonLinearIter = 4;
-            unsigned int linearIter = 1000;			
+            unsigned int linearIter = 4000;			
 
 			m_result = m_initial;
 			resetGPUMemory();
@@ -173,14 +179,11 @@ class ImageWarping
 			{
 				std::cout << "//////////// ITERATION" << i << "  (OPT) ///////////////" << std::endl;
 				setConstraints();
-
                 m_optWarpingSolver->solveGN(d_vertexPosFloat3, d_anglesFloat3, d_robustWeights, d_vertexPosFloat3Urshape, d_vertexPosTargetFloat3, nonLinearIter, linearIter, weightFit, weightReg);
-                                #if EARLY_OUT
-				break;
-				#endif
+                // TODO: faster method to set constraints
+                copyResultToCPUFromFloat3();
 
-			}
-			copyResultToCPUFromFloat3();		
+			}	
 			return &m_result;
 		}
 
@@ -217,7 +220,7 @@ class ImageWarping
         std::unique_ptr<ml::NearestNeighborSearchFLANN<float>> m_targetAccelerationStructure;
 
         std::mt19937 m_rnd;
-        std::uniform_real_distribution<> m_uniform;
+        std::vector<int2> m_spuriousIndexPairs;
 
 		SimpleMesh m_result;
 		SimpleMesh m_initial;

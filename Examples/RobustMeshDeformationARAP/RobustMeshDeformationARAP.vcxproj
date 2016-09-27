@@ -135,10 +135,8 @@ xcopy /Y /D "..\..\API\release\include\*.h" "."</Command>
   <ItemGroup>
     <ClInclude Include="src\ImageWarping.h" />
     <ClInclude Include="src\OpenMesh.h" />
-    <ClInclude Include="src\RotationHelper.h" />
     <ClInclude Include="src\main.h" />
     <ClInclude Include="src\mLibInclude.h" />
-    <ClInclude Include="src\SolverUtil.h" />
     <ClInclude Include="src\TerraWarpingSolver.h" />
   </ItemGroup>
   <ItemGroup>
