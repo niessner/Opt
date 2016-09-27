@@ -34,7 +34,7 @@ class ImageWarping
 
             m_rnd       = std::mt19937(230948);
 
-            float spuriousProbability = 0.0f;
+            float spuriousProbability = 0.05f;
 
             std::uniform_int_distribution<> sourceDistribution(0, N - 1);
             std::uniform_int_distribution<> targetDistribution(0, targetMesh->n_vertices() - 1);
@@ -162,8 +162,8 @@ class ImageWarping
 			
 			//float weightFit = 6.0f;
             //float weightReg = 0.5f;
-			float weightFit = 1.0f;
-			float weightReg = 8.0f; //0.000001f;
+			float weightFit = 10.0f;
+			float weightReg = 160.0f; //0.000001f;
 		
 			//unsigned int numIter = 10;
 			//unsigned int nonLinearIter = 20;
