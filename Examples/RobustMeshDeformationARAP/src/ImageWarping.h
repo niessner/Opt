@@ -178,10 +178,17 @@ class ImageWarping
 			for (unsigned int i = 0; i < numIter; i++)
 			{
 				std::cout << "//////////// ITERATION" << i << "  (OPT) ///////////////" << std::endl;
+                m_timer.start();
 				setConstraints();
+                m_timer.stop();
+                double setConstraintsTime = m_timer.getElapsedTime();
                 m_optWarpingSolver->solveGN(d_vertexPosFloat3, d_anglesFloat3, d_robustWeights, d_vertexPosFloat3Urshape, d_vertexPosTargetFloat3, nonLinearIter, linearIter, weightFit, weightReg);
                 // TODO: faster method to set constraints
+                m_timer.start();
                 copyResultToCPUFromFloat3();
+                m_timer.stop();
+                double copyTime = m_timer.getElapsedTime();
+                std::cout << "-- Set Constraints: " << setConstraintsTime << "s -- Copy to CPU: " << copyTime << "s " << std::endl;
 
 			}	
 			return &m_result;
@@ -216,7 +223,7 @@ class ImageWarping
             return nnData;
         }
 
-
+        ml::Timer m_timer;
         std::unique_ptr<ml::NearestNeighborSearchFLANN<float>> m_targetAccelerationStructure;
 
         std::mt19937 m_rnd;
