@@ -129,26 +129,17 @@ xcopy /Y /D "..\..\API\release\include\*.h" "."</Command>
     </PreBuildEvent>
   </ItemDefinitionGroup>
   <ItemGroup>
-    <ClCompile Include="src\CeresWarpingSolver.cpp" />
-    <ClCompile Include="src\CUDAWarpingSolver.cpp" />
     <ClCompile Include="src\main.cpp" />
     <ClCompile Include="src\mLibSource.cpp" />
   </ItemGroup>
   <ItemGroup>
-    <ClInclude Include="src\CeresWarpingSolver.h" />
-    <ClInclude Include="src\CUDATimer.h" />
-    <ClInclude Include="src\CUDAWarpingSolver.h" />
     <ClInclude Include="src\ImageWarping.h" />
     <ClInclude Include="src\OpenMesh.h" />
     <ClInclude Include="src\RotationHelper.h" />
-    <ClInclude Include="src\TerraWarpingSolver.h" />
-    <ClInclude Include="src\WarpingSolverEquations.h" />
-    <ClInclude Include="src\WarpingSolverParameters.h" />
-    <ClInclude Include="src\WarpingSolverState.h" />
-    <ClInclude Include="src\WarpingSolverUtil.h" />
     <ClInclude Include="src\main.h" />
     <ClInclude Include="src\mLibInclude.h" />
     <ClInclude Include="src\SolverUtil.h" />
+    <ClInclude Include="src\TerraWarpingSolver.h" />
   </ItemGroup>
   <ItemGroup>
     <Reference Include="System" />
@@ -158,11 +149,10 @@ xcopy /Y /D "..\..\API\release\include\*.h" "."</Command>
     <Reference Include="System.Xml" />
   </ItemGroup>
   <ItemGroup>
-    <CudaCompile Include="src\TerraWarpingSolver.cu" />
-    <CudaCompile Include="src\WarpingSolver.cu" />
+    <None Include="MeshDeformationAD.t" />
   </ItemGroup>
   <ItemGroup>
-    <None Include="MeshDeformationAD.t" />
+    <CudaCompile Include="src\TerraWarpingSolver.cu" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

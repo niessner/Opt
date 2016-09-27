@@ -104,6 +104,7 @@ public:
 	void solveGN(
 		float3* d_vertexPosFloat3,
 		float3* d_anglesFloat3,
+        float* d_robustWeights,
 		float3* d_vertexPosFloat3Urshape,
 		//int* d_numNeighbours,
 		//int* d_neighbourIdx,
@@ -122,7 +123,7 @@ public:
 		float weightRegSqrt = sqrt(weightReg);
 		
 		int * d_zeros = d_headY;		
-		void* problemParams[] = { &weightFitSqrt, &weightRegSqrt, d_vertexPosFloat3, d_anglesFloat3, d_vertexPosFloat3Urshape, d_vertexPosTargetFloat3, &edgeCount,  d_headX, d_headY, d_tailX, d_tailY };
+        void* problemParams[] = { &weightFitSqrt, &weightRegSqrt, d_vertexPosFloat3, d_anglesFloat3, d_robustWeights, d_vertexPosFloat3Urshape, d_vertexPosTargetFloat3, &edgeCount, d_headX, d_headY, d_tailX, d_tailY };
 
 		Opt_ProblemSolve(m_optimizerState, m_plan, problemParams, solverParams);
 	}

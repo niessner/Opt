@@ -5,12 +5,20 @@ local N = opt.Dim("N",0)
 
 local w_fitSqrt = adP:Param("w_fitSqrt", float, 0)
 local w_regSqrt = adP:Param("w_regSqrt", float, 1)
+
+-- TODO: pass in
+local w_confSqrt = 1.0
+
 local Offset = 			adP:Unknown("Offset", opt.float3,{N},2)			--vertex.xyz, rotation.xyz <- unknown
-local Angle = 			adP:Unknown("Angle", opt.float3,{N},3)			--vertex.xyz, rotation.xyz <- unknown
-local UrShape = 	adP:Image("UrShape", opt.float3, {N},4)		--urshape: vertex.xyz
-local Constraints = adP:Image("Constraints", opt.float3,{N},5)	--constraints
-local G = adP:Graph("G", 6, "v0", {N}, 7, "v1", {N}, 9)
+local Angle = 			adP:Unknown("Angle", opt.float3,{N},3)			--vertex.xyz, rotation.xyz <- unknown		
+local RobustWeights = adP:Unknown("RobustWeights", float,{N},4)	
+local UrShape = 	adP:Image("UrShape", opt.float3, {N},5)		--urshape: vertex.xyz
+local Constraints = adP:Image("Constraints", opt.float3,{N},6)	--constraints
+local G = adP:Graph("G", 7, "v0", {N}, 8, "v1", {N}, 10)
+
 P:UsePreconditioner(true)
+
+local make_robust = true
 
 function evalRot(CosAlpha, CosBeta, CosGamma, SinAlpha, SinBeta, SinGamma)
 	return ad.Vector(
@@ -41,16 +49,28 @@ local terms = terralib.newlist()
 --fitting
 local x_fit = Offset(0)	--vertex-unknown : float3
 local constraint = Constraints(0)						--target : float3
+local robustWeight = RobustWeights(0)
 local e_fit = x_fit - constraint
 e_fit = ad.select(ad.greatereq(constraint(0), -999999.9), e_fit, ad.Vector(0.0, 0.0, 0.0))
-terms:insert(w_fitSqrt*e_fit)
+if make_robust then
+    terms:insert(w_fitSqrt*robustWeight*e_fit)
+else
+    terms:insert(w_fitSqrt*e_fit)
+end
+
+
+--RobustWeight Penalty
+if make_robust then
+    local e_conf = 1-robustWeight*robustWeight
+    terms:insert(w_confSqrt*e_conf)
+end
 
 --regularization
 local x = Offset(G.v0)	--vertex-unknown : float3
 local a = Angle(G.v0)  --rotation(alpha,beta,gamma) : float3
 local R = evalR(a(0), a(1), a(2))			--rotation : float3x3
 local xHat = UrShape(G.v0)					--uv-urshape : float3
-	
+
 local n = Offset(G.v1)
 local ARAPCost = (x - n) - mul(R, (xHat - UrShape(G.v1)))
 
