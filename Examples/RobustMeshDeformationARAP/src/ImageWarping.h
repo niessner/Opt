@@ -7,6 +7,7 @@
 
 #include "TerraWarpingSolver.h"
 #include "OpenMesh.h"
+#include "CudaArray.h"
 
 class ImageWarping
 {
@@ -20,15 +21,14 @@ class ImageWarping
             unsigned int N = (unsigned int)sourceMesh->n_vertices();
             unsigned int E = (unsigned int)sourceMesh->n_edges();
 
-			cutilSafeCall(cudaMalloc(&d_vertexPosTargetFloat3, sizeof(float3)*N));
-
-            cutilSafeCall(cudaMalloc(&d_robustWeights, sizeof(float)*N));
-			cutilSafeCall(cudaMalloc(&d_vertexPosFloat3, sizeof(float3)*N));
-			cutilSafeCall(cudaMalloc(&d_vertexPosFloat3Urshape, sizeof(float3)*N));
-			cutilSafeCall(cudaMalloc(&d_anglesFloat3, sizeof(float3)*N));
-			cutilSafeCall(cudaMalloc(&d_numNeighbours, sizeof(int)*N));
-			cutilSafeCall(cudaMalloc(&d_neighbourIdx, sizeof(int)*2*E));
-			cutilSafeCall(cudaMalloc(&d_neighbourOffset, sizeof(int)*(N+1)));
+            d_vertexPosTargetFloat3.alloc(N);
+            d_robustWeights.alloc(N);
+            d_vertexPosFloat3.alloc(N);
+            d_vertexPosFloat3Urshape.alloc(N);
+            d_anglesFloat3.alloc(N);
+            d_numNeighbours.alloc(N);
+            d_neighbourIdx.alloc(2*E);
+            d_neighbourOffset.alloc(N + 1);
             m_targetAccelerationStructure = generateAccelerationStructure(m_target);
 			resetGPUMemory();   
 
@@ -43,7 +43,7 @@ class ImageWarping
                 m_spuriousIndexPairs.push_back(make_int2(sourceDistribution(m_rnd), targetDistribution(m_rnd)));
             }
 
-            m_optWarpingSolver = new TerraWarpingSolver(N, 2 * E, d_neighbourIdx, d_neighbourOffset, "MeshDeformationAD.t", "gaussNewtonGPU");
+            m_optWarpingSolver = new TerraWarpingSolver(N, 2 * E, d_neighbourIdx.data(), d_neighbourOffset.data(), "MeshDeformationAD.t", "gaussNewtonGPU");
 		} 
 
 
@@ -70,8 +70,7 @@ class ImageWarping
                 const Vec3f spuriousTarget = m_target.point(VertexHandle(iPair.y));
                 h_vertexPosTargetFloat3[iPair.x] = make_float3(spuriousTarget[0], spuriousTarget[1], spuriousTarget[2]);
             }
-
-			cutilSafeCall(cudaMemcpy(d_vertexPosTargetFloat3, h_vertexPosTargetFloat3.data(), sizeof(float3)*N, cudaMemcpyHostToDevice));
+            d_vertexPosTargetFloat3.update(h_vertexPosTargetFloat3.data(), N);
 		}
 
 		void resetGPUMemory()
@@ -79,11 +78,11 @@ class ImageWarping
 			unsigned int N = (unsigned int)m_initial.n_vertices();
 			unsigned int E = (unsigned int)m_initial.n_edges();
 
-			float3* h_vertexPosFloat3 = new float3[N];
-			int*	h_numNeighbours   = new int[N];
-			int*	h_neighbourIdx	  = new int[2*E];
-			int*	h_neighbourOffset = new int[N+1];
-            float*  h_robustWeights = new float[N];
+            std::vector<float3> h_vertexPosFloat3(N);
+            std::vector<int>	h_numNeighbours(N);
+			std::vector<int>	h_neighbourIdx(2*E);
+			std::vector<int>	h_neighbourOffset(N+1);
+            std::vector<float>  h_robustWeights(N);
 
 			for (unsigned int i = 0; i < N; i++)
 			{
@@ -119,41 +118,22 @@ class ImageWarping
 
 
 			// Angles
-			float3* h_angles = new float3[N];
+			std::vector<float3> h_angles(N);
 			for (unsigned int i = 0; i < N; i++)
 			{
 				h_angles[i] = make_float3(0.0f, 0.0f, 0.0f);
 			}
-			cutilSafeCall(cudaMemcpy(d_anglesFloat3, h_angles, sizeof(float3)*N, cudaMemcpyHostToDevice));
-			delete [] h_angles;
-			
-			cutilSafeCall(cudaMemcpy(d_vertexPosFloat3, h_vertexPosFloat3, sizeof(float3)*N, cudaMemcpyHostToDevice));
-			cutilSafeCall(cudaMemcpy(d_vertexPosFloat3Urshape, h_vertexPosFloat3, sizeof(float3)*N, cudaMemcpyHostToDevice));
-			cutilSafeCall(cudaMemcpy(d_numNeighbours, h_numNeighbours, sizeof(int)*N, cudaMemcpyHostToDevice));
-			cutilSafeCall(cudaMemcpy(d_neighbourIdx, h_neighbourIdx, sizeof(int)* 2 * E, cudaMemcpyHostToDevice));
-			cutilSafeCall(cudaMemcpy(d_neighbourOffset, h_neighbourOffset, sizeof(int)*(N + 1), cudaMemcpyHostToDevice));
-            cutilSafeCall(cudaMemcpy(d_robustWeights, h_robustWeights, sizeof(float)*N, cudaMemcpyHostToDevice));
-
-            delete [] h_robustWeights;
-			delete [] h_vertexPosFloat3;
-			delete [] h_numNeighbours;
-			delete [] h_neighbourIdx;
-			delete [] h_neighbourOffset;
+            d_anglesFloat3.update(h_angles.data(), N);
+            d_vertexPosFloat3.update(h_vertexPosFloat3.data(), N);
+            d_vertexPosFloat3Urshape.update(h_vertexPosFloat3.data(), N);
+            d_numNeighbours.update(h_numNeighbours.data(), N);
+            d_neighbourIdx.update(h_neighbourIdx.data(), 2 * E);
+            d_neighbourOffset.update(h_neighbourOffset.data(), N + 1);
+            d_robustWeights.update(h_robustWeights.data(), N);
 		}
 
 		~ImageWarping()
 		{
-			cutilSafeCall(cudaFree(d_anglesFloat3));
-
-            cutilSafeCall(cudaFree(d_robustWeights));
-
-			cutilSafeCall(cudaFree(d_vertexPosTargetFloat3));
-			cutilSafeCall(cudaFree(d_vertexPosFloat3));
-			cutilSafeCall(cudaFree(d_vertexPosFloat3Urshape));
-			cutilSafeCall(cudaFree(d_numNeighbours));
-			cutilSafeCall(cudaFree(d_neighbourIdx));
-			cutilSafeCall(cudaFree(d_neighbourOffset));
-
 			SAFE_DELETE(m_optWarpingSolver);
 		}
 
@@ -182,7 +162,7 @@ class ImageWarping
 				setConstraints();
                 m_timer.stop();
                 double setConstraintsTime = m_timer.getElapsedTime();
-                m_optWarpingSolver->solveGN(d_vertexPosFloat3, d_anglesFloat3, d_robustWeights, d_vertexPosFloat3Urshape, d_vertexPosTargetFloat3, nonLinearIter, linearIter, weightFit, weightReg);
+                m_optWarpingSolver->solveGN(d_vertexPosFloat3.data(), d_anglesFloat3.data(), d_robustWeights.data(), d_vertexPosFloat3Urshape.data(), d_vertexPosTargetFloat3.data(), nonLinearIter, linearIter, weightFit, weightReg);
                 // TODO: faster method to set constraints
                 m_timer.start();
                 copyResultToCPUFromFloat3();
@@ -197,15 +177,13 @@ class ImageWarping
 		void copyResultToCPUFromFloat3()
 		{
 			unsigned int N = (unsigned int)m_result.n_vertices();
-			float3* h_vertexPosFloat3 = new float3[N];
-			cutilSafeCall(cudaMemcpy(h_vertexPosFloat3, d_vertexPosFloat3, sizeof(float3)*N, cudaMemcpyDeviceToHost));
+            std::vector<float3> h_vertexPosFloat3(N);
+			cutilSafeCall(cudaMemcpy(h_vertexPosFloat3.data(), d_vertexPosFloat3.data(), sizeof(float3)*N, cudaMemcpyDeviceToHost));
 
 			for (unsigned int i = 0; i < N; i++)
 			{
 				m_result.set_point(VertexHandle(i), Vec3f(h_vertexPosFloat3[i].x, h_vertexPosFloat3[i].y, h_vertexPosFloat3[i].z));
 			}
-
-			delete [] h_vertexPosFloat3;
 		}
 
 	private:
@@ -233,14 +211,14 @@ class ImageWarping
 		SimpleMesh m_initial;
         SimpleMesh m_target;
 	
-		float3* d_anglesFloat3;
-		float3*	d_vertexPosTargetFloat3;
-		float3*	d_vertexPosFloat3;
-		float3*	d_vertexPosFloat3Urshape;
-        float*  d_robustWeights;
-		int*	d_numNeighbours;
-		int*	d_neighbourIdx;
-		int* 	d_neighbourOffset;
+		CudaArray<float3> d_anglesFloat3;
+		CudaArray<float3>	d_vertexPosTargetFloat3;
+		CudaArray<float3>	d_vertexPosFloat3;
+		CudaArray<float3>	d_vertexPosFloat3Urshape;
+        CudaArray<float>  d_robustWeights;
+		CudaArray<int>	d_numNeighbours;
+		CudaArray<int>	d_neighbourIdx;
+		CudaArray<int> 	d_neighbourOffset;
 
 		TerraWarpingSolver* m_optWarpingSolver;
 };
