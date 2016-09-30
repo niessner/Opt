@@ -1,5 +1,5 @@
 
-local timeIndividualKernels = true
+local timeIndividualKernels = false
 
 
 local S = require("std")
@@ -287,6 +287,11 @@ terra Timer:init()
 end
 
 terra Timer:cleanup()
+    for i = 0,self.timingInfo:size() do
+        var eventInfo = self.timingInfo(i);
+        C.cudaEventDestroy(eventInfo.startEvent);
+        C.cudaEventDestroy(eventInfo.endEvent);
+    end
 	self.timingInfo:delete()
 end 
 
@@ -334,15 +339,15 @@ terra Timer:evaluate()
 	    	C.printf(	"----------------------+----------+-----------+----------\n")
 			C.printf(" %-20s |   %4d   | %8.3fms| %7.4fms\n", aggregateTimingNames(i), aggregateTimingInfo(i)._1, aggregateTimingInfo(i)._0, aggregateTimingInfo(i)._0/aggregateTimingInfo(i)._1)
 	    end
-	    C.printf(		"--------------------------------------------------------\n")
-            C.printf("TIMING ")
-            for i = 0, aggregateTimingNames:size() do
-		var n = aggregateTimingNames(i)
-                if isprefix("PCGInit1",n) or isprefix("PCGStep1",n) or isprefix("overall",n) then
-                    C.printf("%f ",aggregateTimingInfo(i)._0)
-                end
+        C.printf(		"--------------------------------------------------------\n")
+        C.printf("TIMING ")
+        for i = 0, aggregateTimingNames:size() do
+	        var n = aggregateTimingNames(i)
+            if isprefix("PCGInit1",n) or isprefix("PCGStep1",n) or isprefix("overall",n) then
+                C.printf("%f ",aggregateTimingInfo(i)._0)
             end
-            C.printf("\n")
+        end
+        C.printf("\n")
 	end
     
 end
