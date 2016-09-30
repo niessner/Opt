@@ -51,11 +51,11 @@ public:
 		d_headY = createDeviceBuffer(yCoords);
 		d_tailY = createDeviceBuffer(yCoords);
 
-		int* h_offsets = (int*)malloc(sizeof(int)*(vertexCount + 1));
-		cutilSafeCall(cudaMemcpy(h_offsets, d_offsets, sizeof(int)*(vertexCount + 1), cudaMemcpyDeviceToHost));
+        std::vector<int> h_offsets(vertexCount + 1);
+		cutilSafeCall(cudaMemcpy(h_offsets.data(), d_offsets, sizeof(int)*(vertexCount + 1), cudaMemcpyDeviceToHost));
 
-		int* h_xCoords = (int*)malloc(sizeof(int)*(edgeCount + 1));
-		cutilSafeCall(cudaMemcpy(h_xCoords, d_xCoords, sizeof(int)*(edgeCount), cudaMemcpyDeviceToHost));
+        std::vector<int> h_xCoords(edgeCount + 1);
+        cutilSafeCall(cudaMemcpy(h_xCoords.data(), d_xCoords, sizeof(int)*(edgeCount), cudaMemcpyDeviceToHost));
 		h_xCoords[edgeCount] = vertexCount;
 
 		// Convert to our edge format
@@ -110,6 +110,7 @@ public:
 		//int* d_neighbourIdx,
 		//int* d_neighbourOffset,
 		float3* d_vertexPosTargetFloat3,
+        float3* d_vertexNormalTargetFloat3,
 		unsigned int nNonLinearIterations,
 		unsigned int nLinearIterations,
 		float weightFit,
@@ -123,7 +124,7 @@ public:
 		float weightRegSqrt = sqrt(weightReg);
 		
 		int * d_zeros = d_headY;		
-        void* problemParams[] = { &weightFitSqrt, &weightRegSqrt, d_vertexPosFloat3, d_anglesFloat3, d_robustWeights, d_vertexPosFloat3Urshape, d_vertexPosTargetFloat3, &edgeCount, d_headX, d_headY, d_tailX, d_tailY };
+        void* problemParams[] = { &weightFitSqrt, &weightRegSqrt, d_vertexPosFloat3, d_anglesFloat3, d_robustWeights, d_vertexPosFloat3Urshape, d_vertexPosTargetFloat3, d_vertexNormalTargetFloat3, &edgeCount, d_headX, d_headY, d_tailX, d_tailY };
 
 		Opt_ProblemSolve(m_optimizerState, m_plan, problemParams, solverParams);
 	}

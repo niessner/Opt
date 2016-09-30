@@ -14,7 +14,8 @@ local Angle = 			adP:Unknown("Angle", opt.float3,{N},3)			--vertex.xyz, rotation
 local RobustWeights = adP:Unknown("RobustWeights", float,{N},4)	
 local UrShape = 	adP:Image("UrShape", opt.float3, {N},5)		--urshape: vertex.xyz
 local Constraints = adP:Image("Constraints", opt.float3,{N},6)	--constraints
-local G = adP:Graph("G", 7, "v0", {N}, 8, "v1", {N}, 10)
+local ConstraintNormals = adP:Image("ConstraintNormals", opt.float3,{N},7)
+local G = adP:Graph("G", 8, "v0", {N}, 9, "v1", {N}, 11)
 
 P:UsePreconditioner(true)
 
@@ -50,7 +51,8 @@ local terms = terralib.newlist()
 local x_fit = Offset(0)	--vertex-unknown : float3
 local constraint = Constraints(0)						--target : float3
 local robustWeight = RobustWeights(0)
-local e_fit = x_fit - constraint
+local normal = ConstraintNormals(0)
+local e_fit = normal:dot(x_fit - constraint)
 e_fit = ad.select(ad.greatereq(constraint(0), -999999.9), e_fit, ad.Vector(0.0, 0.0, 0.0))
 if make_robust then
     terms:insert(w_fitSqrt*robustWeight*e_fit)

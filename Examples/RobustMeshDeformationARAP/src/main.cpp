@@ -16,28 +16,31 @@ static SimpleMesh* createMesh(std::string filename) {
 
 int main(int argc, const char * argv[])
 {
-	std::string source_filename = "mesh_0084.obj";
-    std::string target_filename = "mesh_0085.obj";
-
-	if (argc >= 2) {
-        source_filename = argv[1];
-	}
-    if (argc >= 3) {
-        target_filename = argv[2];
-    }
+    std::string sourceDirectory = "handstand";
+    std::vector<std::string> allFiles = ml::Directory::enumerateFiles(sourceDirectory);
+    std::string source_filename = sourceDirectory + "/" + allFiles[0];
 
     SimpleMesh* sourceMesh = createMesh(source_filename);
-    SimpleMesh* targetMesh = createMesh(target_filename);
-
-    ImageWarping warping(sourceMesh, targetMesh);
+    std::vector<SimpleMesh*> targetMeshes;
+    for (int i = 1; i < 20/*allFiles.size()*/; ++i) {
+        targetMeshes.push_back(createMesh(sourceDirectory + "/" + allFiles[i]));
+    }
+    std::cout << "All meshes now in memory" << std::endl;
+    ImageWarping warping(sourceMesh, targetMeshes);
     SimpleMesh* res = warping.solve();
-
+    
 	if (!OpenMesh::IO::write_mesh(*res, "out.ply"))
 	{
 	        std::cerr << "Error -> File: " << __FILE__ << " Line: " << __LINE__ << " Function: " << __FUNCTION__ << std::endl;
 		std::cout << "out.off" << std::endl;
 		exit(1);
 	}
+    
+    for (SimpleMesh* mesh : targetMeshes) {
+        delete mesh;
+    }
+    delete sourceMesh;
+
 #ifdef _WIN32
 	getchar();
 #endif
