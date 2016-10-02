@@ -232,82 +232,83 @@ return function(problemSpec)
                 end
             end
         end
-
-        terra kernels.computeModelCostChangeStep1(pd : PlanData)
-            var d = 0.0f -- init for out of bounds lanes
+        if problemSpec:UsesLambda() then
+            terra kernels.computeModelCostChangeStep1(pd : PlanData)
+                var d = 0.0f -- init for out of bounds lanes
         
-            var idx : Index
-            if idx:initFromCUDAParams() then
+                var idx : Index
+                if idx:initFromCUDAParams() then
         
-                -- grad_F = - 2J'F                           
-                var g : unknownElement = 0.0f
+                    -- grad_F = - 2J'F                           
+                    var g : unknownElement = 0.0f
             
-                if not fmap.exclude(idx,pd.parameters) then 
-                    g = fmap.evalJTFsimple(idx, pd.parameters)  -- 2J'F  
-                    -- g = -g
-                end        
+                    if not fmap.exclude(idx,pd.parameters) then 
+                        g = fmap.evalJTFsimple(idx, pd.parameters)  -- 2J'F  
+                        -- g = -g
+                    end        
+                    if not isGraph then
+                        var dd = pd.delta(idx)
+                        d = g:dot(dd)  -- delta'(-2J'F) 
+                    end
+                end
                 if not isGraph then
-                    var dd = pd.delta(idx)
-                    d = g:dot(dd)  -- delta'(-2J'F) 
+                    d = util.warpReduce(d)	
+                    if (util.laneid() == 0) then				
+                        util.atomicAdd(pd.modelCostChange, d)
+                    end
                 end
             end
-            if not isGraph then
+            terra kernels.computeModelCostChangeStep1_Finish(pd : PlanData)	--only called for graphs
+                var d = 0.0f -- init for out of bounds lanes
+                var idx : Index
+                if idx:initFromCUDAParams() then
+                    var gradF = pd.g(idx)   -- gradF = -2J'F
+                    var dd = pd.delta(idx)
+                    d = gradF:dot(dd) -- delta'(-2J'F) 
+                end
                 d = util.warpReduce(d)	
-                if (util.laneid() == 0) then				
+                if (util.laneid() == 0) then
                     util.atomicAdd(pd.modelCostChange, d)
                 end
             end
-        end
-        terra kernels.computeModelCostChangeStep1_Finish(pd : PlanData)	--only called for graphs
-            var d = 0.0f -- init for out of bounds lanes
-            var idx : Index
-            if idx:initFromCUDAParams() then
-                var gradF = pd.g(idx)   -- gradF = -2J'F
-                var dd = pd.delta(idx)
-                d = gradF:dot(dd) -- delta'(-2J'F) 
-            end
-            d = util.warpReduce(d)	
-            if (util.laneid() == 0) then
-                util.atomicAdd(pd.modelCostChange, d)
-            end
-        end
-        terra kernels.computeModelCostChangeStep2(pd : PlanData)
-            var d = 0.0f -- init for out of bounds lanes
-            var idx : Index
-            if idx:initFromCUDAParams() and not fmap.exclude(idx,pd.parameters) then
-                var jtjd : unknownElement = 0.0f
+            terra kernels.computeModelCostChangeStep2(pd : PlanData)
+                var d = 0.0f -- init for out of bounds lanes
+                var idx : Index
+                if idx:initFromCUDAParams() and not fmap.exclude(idx,pd.parameters) then
+                    var jtjd : unknownElement = 0.0f
  
-                jtjd = fmap.applyJTJsimple(idx, pd.parameters, pd.delta)   -- J'J delta
-                -- jtjd = -jtjd
-                d = pd.delta(idx):dot(jtjd)			 -- delta'(-J'J delta) 
+                    jtjd = fmap.applyJTJsimple(idx, pd.parameters, pd.delta)   -- J'J delta
+                    -- jtjd = -jtjd
+                    d = pd.delta(idx):dot(jtjd)			 -- delta'(-J'J delta) 
+                end
+                d = util.warpReduce(d)
+                if (util.laneid() == 0) then
+                    util.atomicAdd(pd.modelCostChange, d)
+                end
             end
-            d = util.warpReduce(d)
-            if (util.laneid() == 0) then
-                util.atomicAdd(pd.modelCostChange, d)
-            end
-        end
-        terra kernels.LMLambdaInit(pd : PlanData)
-            var maxJTJ = 0.0f -- maximum diag(JTJ)
-            var idx : Index
-            if idx:initFromCUDAParams() then	
-                var pre : unknownElement = 1.0f	
+            terra kernels.LMLambdaInit(pd : PlanData)
+                var maxJTJ = 0.0f -- maximum diag(JTJ)
+                var idx : Index
+                if idx:initFromCUDAParams() then	
+                    var pre : unknownElement = 1.0f	
                 
-                if not fmap.exclude(idx,pd.parameters) then 
-                    pre = fmap.evalDiagJTJ(idx, pd.parameters)
+                    if not fmap.exclude(idx,pd.parameters) then 
+                        pre = fmap.evalDiagJTJ(idx, pd.parameters)
+                    end
+
+                    if not isGraph then
+                        maxJTJ = pre:max()
+                    end
                 end
 
                 if not isGraph then
-                    maxJTJ = pre:max()
+                    maxJTJ = util.warpMaxReduce(maxJTJ)	
+                    if (util.laneid() == 0) then				
+                        util.atomicMax(pd.maxDiagJTJ, maxJTJ)
+                    end
                 end
             end
-
-            if not isGraph then
-                maxJTJ = util.warpMaxReduce(maxJTJ)	
-                if (util.laneid() == 0) then				
-                    util.atomicMax(pd.maxDiagJTJ, maxJTJ)
-                end
-            end
-        end
+        end -- :UsesLambda()
 	    return kernels
 	end
 	
@@ -342,29 +343,31 @@ return function(problemSpec)
                 util.atomicAdd(pd.scratchF, cost)
             end
         end
-        terra kernels.computeModelCostChangeStep1_Graph(pd : PlanData)
-            var tIdx = 0
-            if util.getValidGraphElement(pd,[graphname],&tIdx) then
-                fmap.evalJTFsimple(tIdx, pd.parameters, pd.g)
+        if problemSpec:UsesLambda() then
+            terra kernels.computeModelCostChangeStep1_Graph(pd : PlanData)
+                var tIdx = 0
+                if util.getValidGraphElement(pd,[graphname],&tIdx) then
+                    fmap.evalJTFsimple(tIdx, pd.parameters, pd.g)
+                end
+            end   
+            terra kernels.computeModelCostChangeStep2_Graph(pd : PlanData)
+                var d = 0.0f
+                var tIdx = 0 
+                if util.getValidGraphElement(pd,[graphname],&tIdx) then
+                   d = d + fmap.applyJTJsimple(tIdx, pd.parameters, pd.delta)
+                end 
+                d = util.warpReduce(d)
+                if (util.laneid() == 0) then
+                    util.atomicAdd(pd.modelCostChange, d)
+                end
             end
-        end   
-    	terra kernels.computeModelCostChangeStep2_Graph(pd : PlanData)
-            var d = 0.0f
-            var tIdx = 0 
-            if util.getValidGraphElement(pd,[graphname],&tIdx) then
-               d = d + fmap.applyJTJsimple(tIdx, pd.parameters, pd.delta)
-            end 
-            d = util.warpReduce(d)
-            if (util.laneid() == 0) then
-                util.atomicAdd(pd.modelCostChange, d)
-            end
+            -- terra kernels.LMLambdaInit_Graph(pd : PlanData)
+            --     var tIdx = 0
+            --     if util.getValidGraphElement(pd,[graphname],&tIdx) then
+            --         fmap.evalJTF(tIdx, pd.parameters, pd.preconditioner)
+            --     end
+            -- end
         end
-        -- terra kernels.LMLambdaInit_Graph(pd : PlanData)
-        --     var tIdx = 0
-        --     if util.getValidGraphElement(pd,[graphname],&tIdx) then
-        --         fmap.evalJTF(tIdx, pd.parameters, pd.preconditioner)
-        --     end
-        -- end   
 	    return kernels
 	end
 	
@@ -388,7 +391,6 @@ return function(problemSpec)
                                                                         "computeModelCostChangeStep2_Graph"
                                                                         })
 
-    
     local terra computeCost(pd : &PlanData) : float
         C.cudaMemset(pd.scratchF, 0, sizeof(float))
         gpu.computeCost(pd)
@@ -398,34 +400,37 @@ return function(problemSpec)
         return f
     end
 
-    local terra computeModelCostChange(pd : &PlanData) : float
-        C.cudaMemset(pd.modelCostChange, 0, sizeof(float))
+    local initLambda,computeModelCostChange
+    
+    if problemSpec:UsesLambda() then
+        terra computeModelCostChange(pd : &PlanData) : float
+            C.cudaMemset(pd.modelCostChange, 0, sizeof(float))
 
-        -- model_cost_change = delta' * (-2 * J' * F) + delta' * (-J' * J * delta)
-        gpu.computeModelCostChangeStep1(pd)
-        gpu.computeModelCostChangeStep2(pd)
-        if isGraph then
-            gpu.computeModelCostChangeStep1_Graph(pd)	
-            gpu.computeModelCostChangeStep1_Finish(pd)
-            gpu.computeModelCostChangeStep2_Graph(pd)
+            -- model_cost_change = delta' * (-2 * J' * F) + delta' * (-J' * J * delta)
+            gpu.computeModelCostChangeStep1(pd)
+            gpu.computeModelCostChangeStep2(pd)
+            if isGraph then
+                gpu.computeModelCostChangeStep1_Graph(pd)	
+                gpu.computeModelCostChangeStep1_Finish(pd)
+                gpu.computeModelCostChangeStep2_Graph(pd)
+            end
+
+            var model_cost_change : float
+            C.cudaMemcpy(&model_cost_change, pd.modelCostChange, sizeof(float), C.cudaMemcpyDeviceToHost)
+
+            return model_cost_change
         end
+        terra initLambda(pd : &PlanData)
+            -- Init lambda based on the maximum value on the diagonal of JTJ
+            C.cudaMemset(pd.maxDiagJTJ, 0, sizeof(float))
 
-        var model_cost_change : float
-        C.cudaMemcpy(&model_cost_change, pd.modelCostChange, sizeof(float), C.cudaMemcpyDeviceToHost)
-
-        return model_cost_change
-    end
-
-    local terra initLambda(pd : &PlanData)
-        -- Init lambda based on the maximum value on the diagonal of JTJ
-        C.cudaMemset(pd.maxDiagJTJ, 0, sizeof(float))
-
-        -- lambda = tau * max{a_ii} where A = JTJ
-        var tau = 1e-6f
-        gpu.LMLambdaInit(pd);
-        var maxDiagJTJ : float
-        C.cudaMemcpy(&maxDiagJTJ, pd.maxDiagJTJ, sizeof(float), C.cudaMemcpyDeviceToHost)
-        pd.parameters.lambda = tau * maxDiagJTJ
+            -- lambda = tau * max{a_ii} where A = JTJ
+            var tau = 1e-6f
+            gpu.LMLambdaInit(pd);
+            var maxDiagJTJ : float
+            C.cudaMemcpy(&maxDiagJTJ, pd.maxDiagJTJ, sizeof(float), C.cudaMemcpyDeviceToHost)
+            pd.parameters.lambda = tau * maxDiagJTJ
+        end
     end
 
 	local terra init(data_ : &opaque, params_ : &&opaque, solverparams : &&opaque)

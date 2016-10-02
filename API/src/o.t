@@ -2357,17 +2357,21 @@ function ProblemSpecAD:Cost(...)
         if energyspec.kind.kind == "CenteredFunction" then
             functionspecs:insert(createjtjcentered(self,energyspec))
             functionspecs:insert(createjtfcentered(self,energyspec))
-
-            functionspecs:insert(createjtjcenteredsimple(self,energyspec))
-            functionspecs:insert(createjtfcenteredsimple(self,energyspec))
-            functionspecs:insert(creatediagjtjcentered(self,energyspec))
+            
+            if self.P:UsesLambda() then
+                functionspecs:insert(createjtjcenteredsimple(self,energyspec))
+                functionspecs:insert(createjtfcenteredsimple(self,energyspec))
+                functionspecs:insert(creatediagjtjcentered(self,energyspec))
+            end
         else
             functionspecs:insert(createjtjgraph(self,energyspec))
             functionspecs:insert(createjtfgraph(self,energyspec))
 
-            functionspecs:insert(createjtjgraphsimple(self,energyspec))
-            functionspecs:insert(createjtfgraphsimple(self,energyspec))
-            -- functionspecs:insert(creatediagjtjgraph(self,energyspec))            
+            if self.P:UsesLambda() then
+                functionspecs:insert(createjtjgraphsimple(self,energyspec))
+                functionspecs:insert(createjtfgraphsimple(self,energyspec))
+                -- functionspecs:insert(creatediagjtjgraph(self,energyspec))            
+            end
         end
     end
     functionspecs:insertall(createprecomputed(self,self.precomputed))
