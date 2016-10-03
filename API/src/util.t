@@ -132,6 +132,18 @@ util.Vector = terralib.memoize(function(typ,N)
         end
         return c
     end
+    terra VecType:max()
+        var c : typ = 0
+        if N > 0 then
+            c = self.data[0]
+        end
+        for i = 1,N do
+            if self.data[i] > c then
+                c = self.data[i]
+            end
+        end
+        return c
+    end
 	terra VecType:size()
         return N
     end
@@ -358,6 +370,44 @@ local terra atomicAdd(sum : &float, value : float)
 end
 util.atomicAdd = atomicAdd
 
+struct IntFloat {
+    union {
+        a : int;
+        b : float;
+    }
+}
+
+local terra __float_as_int(v : float)
+    var u : IntFloat
+    u.b = v;
+
+    return u.a;
+end
+
+local terra __int_as_float(v : int)
+    var u : IntFloat
+    u.a = v;
+
+    return u.b;
+end
+
+local terra atomicMax(max_value : &float, value : float)
+    var address_as_i : &int = [&int] (max_value);
+    var old : int = address_as_i[0];
+    var assumed : int;
+
+    repeat
+        assumed = old;
+        old = terralib.asm(int,"atom.global.cas.b32 $0,[$1],$2,$3;", 
+            "=r,l,r,r", true, address_as_i, assumed, 
+            __float_as_int( util.gpuMath.fmax(value, __int_as_float(assumed)) )
+            );
+    until assumed == old;
+
+    max_value[0] = __int_as_float(old);
+end
+util.atomicMax = atomicMax
+
 local terra __shfl_down(v : float, delta : uint, width : int)
 	var ret : float;
     var c : int;
@@ -386,6 +436,22 @@ local terra warpReduce(val : float)
 
 end
 util.warpReduce = warpReduce
+
+local terra warpMaxReduce(val : float) 
+
+  var offset = warpSize >> 1
+  while offset > 0 do 
+    var temp = __shfl_down(val, offset, warpSize);
+    if temp > val then
+        val = temp
+    end
+    offset =  offset >> 1
+  end
+-- Is unrolling worth it?
+  return val;
+
+end
+util.warpMaxReduce = warpMaxReduce
 
 __syncthreads = cudalib.nvvm_barrier0
 
@@ -570,7 +636,7 @@ function util.makeGPUFunctions(problemSpec, PlanData, delegate, names)
         else
             local graphname = problemfunction.typ.graphname
             local ks = delegate.GraphFunctions(graphname,problemfunction.functionmap)
-            for name,func in pairs(ks) do
+            for name,func in pairs(ks) do            
                 kernelFunctions[getkname(name,problemfunction.typ)] = { kernel = func , annotations = { {"maxntidx", 256}, {"minctasm",1} } }
             end
         end
