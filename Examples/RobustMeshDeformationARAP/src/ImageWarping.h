@@ -15,6 +15,8 @@ static bool operator==(const float3& v0, const float3& v1) {
 static bool operator!=(const float3& v0, const float3& v1) {
     return !(v0 == v1);
 }
+#define MAX_K 100
+
 
 class ImageWarping
 {
@@ -97,25 +99,34 @@ class ImageWarping
 
             uint thrownOutCorrespondenceCount = 0;
             float3 invalidPt = make_float3(-std::numeric_limits<float>::infinity(), -std::numeric_limits<float>::infinity(), -std::numeric_limits<float>::infinity());
+            std::vector<uint> neigbors(MAX_K);
             for (unsigned int i = 0; i < N; i++) {
                 auto currentPt = m_result.point(VertexHandle(i));
-                uint indexOfNearest = m_targetAccelerationStructure->nearest(currentPt.data());
-                const Vec3f target = m_targets[targetIndex].point(VertexHandle(indexOfNearest));
-                auto tNormal = m_targets[targetIndex].normal(VertexHandle(indexOfNearest));
-                auto targetNormal = make_float3(tNormal[0], tNormal[1], tNormal[2]);
                 auto sNormal = m_result.normal(VertexHandle(i));
                 auto sourceNormal = make_float3(sNormal[0], sNormal[1], sNormal[2]);
-                float dist = (target - currentPt).length();
-                if (dist < positionThreshold && dist < smallestDist[indexOfNearest] &&
-                    dot(targetNormal, sourceNormal) > cosNormalThreshold) {
-                    smallestDist[indexOfNearest] = dist; // Comment out to allow multiple points to target the same mesh
-                    h_vertexPosTargetFloat3[i] = make_float3(target[0], target[1], target[2]);
-                } else {
+                m_targetAccelerationStructure->kNearest(currentPt.data(), MAX_K, 0.0f, neigbors);
+                bool validTargetFound = false;
+                for (uint indexOfNearest : neigbors) {
+                    const Vec3f target = m_targets[targetIndex].point(VertexHandle(indexOfNearest));
+                    auto tNormal = m_targets[targetIndex].normal(VertexHandle(indexOfNearest));
+                    auto targetNormal = make_float3(tNormal[0], tNormal[1], tNormal[2]);
+                    float dist = (target - currentPt).length();
+
+                    if (dist > positionThreshold || dist > smallestDist[indexOfNearest]) {
+                        break;
+                    }
+                    if (dot(targetNormal, sourceNormal) > cosNormalThreshold) {
+                        smallestDist[indexOfNearest] = dist; // Comment out to allow multiple points to target the same mesh
+                        h_vertexPosTargetFloat3[i] = make_float3(target[0], target[1], target[2]);
+                        h_vertexNormalTargetFloat3[i] = targetNormal;
+                        validTargetFound = true;
+                        break;
+                    }
+                }
+                if (!validTargetFound) {
                     ++thrownOutCorrespondenceCount;
                     h_vertexPosTargetFloat3[i] = invalidPt;
                 }
-                
-                h_vertexNormalTargetFloat3[i] = targetNormal;
 			}
 
             for (int2 iPair : m_spuriousIndexPairs) {
@@ -216,7 +227,7 @@ class ImageWarping
 			//float weightFit = 6.0f;
             //float weightReg = 0.5f;
 			float weightFit = 10.0f;
-			float weightReg = 160.0f; //0.000001f;
+			float weightReg = 160.0f; 
 		
 			//unsigned int numIter = 10;
 			//unsigned int nonLinearIter = 20;
@@ -243,7 +254,7 @@ class ImageWarping
                     std::cout << "//////////// ITERATION" << i << "  (OPT) ///////////////" << std::endl;
 
                     m_timer.start();
-                    int newConstraintCount = setConstraints(targetIndex, m_averageEdgeLength*3.0f);
+                    int newConstraintCount = setConstraints(targetIndex, m_averageEdgeLength*5.0f);
                     m_timer.stop();
                     double setConstraintsTime = m_timer.getElapsedTime();
                     
@@ -287,7 +298,7 @@ class ImageWarping
 	private:
 
         std::unique_ptr<ml::NearestNeighborSearchFLANN<float>> generateAccelerationStructure(const SimpleMesh& mesh) {
-            auto nnData = std::make_unique<ml::NearestNeighborSearchFLANN<float>>(50, 1);
+            auto nnData = std::make_unique<ml::NearestNeighborSearchFLANN<float>>(max(50, 4 * MAX_K), 1);
             unsigned int N = (unsigned int)mesh.n_vertices();
 
             std::vector<const float*> flannPoints(N);
@@ -295,9 +306,10 @@ class ImageWarping
             {   
                 flannPoints[i] = mesh.point(VertexHandle(i)).data();
             }
-            nnData->init(flannPoints, 3, 1);
+            nnData->init(flannPoints, 3, MAX_K);
             return nnData;
         }
+
 
         ml::Timer m_timer;
         std::unique_ptr<ml::NearestNeighborSearchFLANN<float>> m_targetAccelerationStructure;
