@@ -28,7 +28,7 @@ public:
     }
 
     size_t size() const {
-        return size;
+        return m_size;
     }
 
     T* data() const {

@@ -65,7 +65,7 @@ void App::onInit() {
 	original->setFrame(CFrame(Point3(0, 0, 1.0)));
 	m_articulatedModelSequences.append(original);
 
-	const String& comparisonDirectory = "D:\\Projects\\DSL\\Opt\\Examples\\RobustMeshDeformationARAP\\noRobust";
+	const String& comparisonDirectory = "D:\\Projects\\DSL\\Opt\\Examples\\RobustMeshDeformationARAP\\bestattemptMon";
 	auto comparison = ArticulatedModelSequence::create(comparisonDirectory, "warped");
 	comparison->setFrame(CFrame(Point3(0, 0, -1.0)));
 	m_articulatedModelSequences.append(comparison);

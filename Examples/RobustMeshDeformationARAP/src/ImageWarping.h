@@ -20,18 +20,20 @@ static bool operator!=(const float3& v0, const float3& v1) {
 
 class ImageWarping
 {
+
 	public:
-        ImageWarping(const SimpleMesh* sourceMesh, const std::vector<SimpleMesh*>& targetMeshes)
+        ImageWarping(const SimpleMesh* sourceMesh, const std::vector<SimpleMesh*>& targetMeshes, const std::vector<int4>& sourceTetIndices = std::vector<int4>())
 		{
             m_result = *sourceMesh;
 			m_initial = m_result;
+            m_sourceTetIndices = sourceTetIndices;
 
             for (SimpleMesh* mesh : targetMeshes) {
                 m_targets.push_back(*mesh);
             }
 
-            unsigned int N = (unsigned int)sourceMesh->n_vertices();
-            unsigned int E = (unsigned int)sourceMesh->n_edges();
+            uint N = (uint)sourceMesh->n_vertices();
+            uint E = (uint)sourceMesh->n_edges();
             
             double sumEdgeLength = 0.0f;
             for (auto edgeHandle : m_initial.edges()) {
@@ -47,9 +49,6 @@ class ImageWarping
             d_vertexPosFloat3.alloc(N);
             d_vertexPosFloat3Urshape.alloc(N);
             d_anglesFloat3.alloc(N);
-            d_numNeighbours.alloc(N);
-            d_neighbourIdx.alloc(2*E);
-            d_neighbourOffset.alloc(N + 1);
             
 			resetGPUMemory();   
 
@@ -64,7 +63,7 @@ class ImageWarping
                 m_spuriousIndexPairs.push_back(make_int2(sourceDistribution(m_rnd), targetDistribution(m_rnd)));
             }
 
-            m_optWarpingSolver = new TerraWarpingSolver(N, 2 * E, d_neighbourIdx.data(), d_neighbourOffset.data(), "MeshDeformationAD.t", "gaussNewtonGPU");
+            m_optWarpingSolver = new TerraWarpingSolver(N, d_neighbourIdx.size(), d_neighbourIdx.data(), d_neighbourOffset.data(), "MeshDeformationAD.t", "gaussNewtonGPU");
 		} 
 
 
@@ -163,44 +162,74 @@ class ImageWarping
             return constraintsUpdated;
 		}
 
+        void generateOptEdges(std::vector<int>& h_numNeighbours, std::vector<int>&	h_neighbourIdx, std::vector<int>& h_neighbourOffset) {
+            uint N = (uint)m_initial.n_vertices();
+            h_numNeighbours.resize(N);
+            h_neighbourOffset.resize(N + 1);
+            if (m_sourceTetIndices.size() == 0) {
+                uint E = (uint)m_initial.n_edges();
+                h_neighbourIdx.resize(2 * E);
+                
+
+
+                unsigned int count = 0;
+                unsigned int offset = 0;
+                h_neighbourOffset[0] = 0;
+                for (SimpleMesh::VertexIter v_it = m_initial.vertices_begin(); v_it != m_initial.vertices_end(); ++v_it)
+                {
+                    VertexHandle c_vh(v_it.handle());
+                    unsigned int valence = m_initial.valence(c_vh);
+                    h_numNeighbours[count] = valence;
+                    for (SimpleMesh::VertexVertexIter vv_it = m_initial.vv_iter(c_vh); vv_it; vv_it++)
+                    {
+                        VertexHandle v_vh(vv_it.handle());
+                        h_neighbourIdx[offset] = v_vh.idx();
+                        offset++;
+                    }
+
+                    h_neighbourOffset[count + 1] = offset;
+
+                    count++;
+                }
+            } else {
+                // Potentially very inefficient. I don't care right now
+                std::vector<std::set<int>> neighbors(N);
+                for (int4 tet : m_sourceTetIndices) {
+                    int* t = (int*)&tet;
+                    for (int i = 0; i < 4; ++i) {
+                        for (int j = 1; j < 4; ++j) {
+                            neighbors[t[i]].insert(t[(i + j) % 4]);
+                        }
+                    }
+                }
+                uint offset = 0;
+                h_neighbourOffset[0] = 0;
+                for (int i = 0; i < N; ++i) {
+                    int valence = neighbors[i].size();
+                    h_numNeighbours[i] = valence;
+                    for (auto n : neighbors[i]) {
+                        h_neighbourIdx.push_back(n);
+                        ++offset;
+                    }
+                    h_neighbourOffset[i+1] = offset;
+
+                }
+            }
+            printf("Total Edge count = %d\n", h_neighbourIdx.size());
+        }
+
 		void resetGPUMemory()
 		{
-			unsigned int N = (unsigned int)m_initial.n_vertices();
-			unsigned int E = (unsigned int)m_initial.n_edges();
-
+            std::vector<int> h_numNeighbours, h_neighbourIdx, h_neighbourOffset;
+            generateOptEdges(h_numNeighbours, h_neighbourIdx, h_neighbourOffset);
+            uint N = (uint)m_initial.n_vertices();
             std::vector<float3> h_vertexPosFloat3(N);
-            std::vector<int>	h_numNeighbours(N);
-			std::vector<int>	h_neighbourIdx(2*E);
-			std::vector<int>	h_neighbourOffset(N+1);
 
 			for (unsigned int i = 0; i < N; i++)
 			{
 				const Vec3f& pt = m_initial.point(VertexHandle(i));
 				h_vertexPosFloat3[i] = make_float3(pt[0], pt[1], pt[2]);
 			}
-
-			unsigned int count = 0;
-			unsigned int offset = 0;
-			h_neighbourOffset[0] = 0;
-			for (SimpleMesh::VertexIter v_it = m_initial.vertices_begin(); v_it != m_initial.vertices_end(); ++v_it)
-			{
-			    VertexHandle c_vh(v_it.handle());
-				unsigned int valance = m_initial.valence(c_vh);
-				h_numNeighbours[count] = valance;
-
-				for (SimpleMesh::VertexVertexIter vv_it = m_initial.vv_iter(c_vh); vv_it; vv_it++)
-				{
-					VertexHandle v_vh(vv_it.handle());
-
-					h_neighbourIdx[offset] = v_vh.idx();
-					offset++;
-				}
-
-				h_neighbourOffset[count + 1] = offset;
-
-				count++;
-			}
-
 
 			// Angles
 			std::vector<float3> h_angles(N);
@@ -211,8 +240,9 @@ class ImageWarping
             d_anglesFloat3.update(h_angles.data(), N);
             d_vertexPosFloat3.update(h_vertexPosFloat3.data(), N);
             d_vertexPosFloat3Urshape.update(h_vertexPosFloat3.data(), N);
+
             d_numNeighbours.update(h_numNeighbours.data(), N);
-            d_neighbourIdx.update(h_neighbourIdx.data(), 2 * E);
+            d_neighbourIdx.update(h_neighbourIdx.data(), h_neighbourIdx.size());
             d_neighbourOffset.update(h_neighbourOffset.data(), N + 1);
 		}
 
@@ -227,7 +257,7 @@ class ImageWarping
 			//float weightFit = 6.0f;
             //float weightReg = 0.5f;
 			float weightFit = 10.0f;
-			float weightReg = 160.0f; 
+			float weightReg = 16.0f; 
 		
 			//unsigned int numIter = 10;
 			//unsigned int nonLinearIter = 20;
@@ -321,7 +351,8 @@ class ImageWarping
 		SimpleMesh m_initial;
         std::vector<SimpleMesh> m_targets;
         std::vector<float3> m_previousConstraints;
-	
+        std::vector<int4> m_sourceTetIndices;
+
         double m_averageEdgeLength;
 
 		CudaArray<float3> d_anglesFloat3;
