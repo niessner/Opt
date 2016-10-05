@@ -1,7 +1,6 @@
 ﻿#include "main.h"
 #include "ImageWarping.h"
 #include "OpenMesh.h"
-#include "LandMarkSet.h"
 
 int main(int argc, const char * argv[])
 {

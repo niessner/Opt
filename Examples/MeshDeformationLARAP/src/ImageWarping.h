@@ -6,7 +6,11 @@
 #include <cudaUtil.h>
 
 #include "CUDAWarpingSolver.h"
+#include "TerraSolverWarping.h"
 #include "OpenMesh.h"
+
+static bool useCUDA = true;
+static bool useTerra = true;
 
 class ImageWarping
 {
@@ -30,9 +34,10 @@ class ImageWarping
 			m_relativeCoords = new float3[N];
 
 			resetGPUMemory();
-
-			m_warpingSolver = new CUDAWarpingSolver(m_nNodes);
-		} 
+			
+			if (useCUDA)  m_warpingSolver = new CUDAWarpingSolver(m_nNodes);
+			if (useTerra) m_warpingSolverTerra = new TerraSolverWarping(m_dims.x+1, m_dims.y+1, m_dims.z+1, "ImageWarpingAD.t", "gaussNewtonGPU");
+		}
 
 		void setConstraints(float alpha)
 		{
@@ -49,9 +54,9 @@ class ImageWarping
 						vec3f min(m_min.x, m_min.y, m_min.z);
 						vec3f v = min + fac*delta;
 
-						if (j == 0) h_gridPosTargetFloat3[index] = make_float3(v.x, v.y, v.z);
-						else if (j == m_dims.y)	{ mat3f f = mat3f::diag(m_dims.x / 2.0f, m_dims.y, m_dims.z / 2.0f); vec3f mid = vec3f(m_min.x, m_min.y, m_min.z) + f*delta; mat3f R = ml::mat3f::rotationZ(-90.0f); v = R*(v - mid) + mid + vec3f(4.5f, -2.5f, 0.0f); h_gridPosTargetFloat3[index] = make_float3(v.x, v.y, v.z); }
-						else h_gridPosTargetFloat3[index] = make_float3(-std::numeric_limits<float>::infinity(), -std::numeric_limits<float>::infinity(), -std::numeric_limits<float>::infinity());
+						if (j == 0) { h_gridPosTargetFloat3[index] = make_float3(v.x, v.y, v.z); }
+						else if (j == m_dims.y)	{ mat3f f = mat3f::diag(m_dims.x / 2.0f, (float)m_dims.y, m_dims.z / 2.0f); vec3f mid = vec3f(m_min.x, m_min.y, m_min.z) + f*delta; mat3f R = ml::mat3f::rotationZ(-90.0f); v = R*(v - mid) + mid + vec3f(4.5f, -2.5f, 0.0f); h_gridPosTargetFloat3[index] = make_float3(v.x, v.y, v.z); }
+						else { h_gridPosTargetFloat3[index] = make_float3(-std::numeric_limits<float>::infinity(), -std::numeric_limits<float>::infinity(), -std::numeric_limits<float>::infinity()); }
 					}
 				}
 			}
@@ -218,7 +223,8 @@ class ImageWarping
 
 		~ImageWarping()
 		{
-			SAFE_DELETE(m_warpingSolver);
+			if (useCUDA)  SAFE_DELETE(m_warpingSolver);
+			if (useTerra) SAFE_DELETE(m_warpingSolverTerra);
 
 			cutilSafeCall(cudaFree(d_gridPosTargetFloat3));
 			cutilSafeCall(cudaFree(d_gridPosFloat3));
@@ -238,12 +244,25 @@ class ImageWarping
 			unsigned int nonLinearIter = 100;
             unsigned int linearIter = 20;
 
-			m_result = m_initial;
-			resetGPUMemory();
+			if (useCUDA)
+			{
+				m_result = m_initial;
+				resetGPUMemory();
+				std::cout << "//////////// (CUDA) ///////////////" << std::endl;
+				m_warpingSolver->solveGN(m_dims, d_gridPosFloat3, d_gridAnglesFloat3, d_gridPosFloat3Urshape, d_gridPosTargetFloat3, nonLinearIter, linearIter, weightFit, weightReg);
 
-			m_warpingSolver->solveGN(m_dims, d_gridPosFloat3, d_gridAnglesFloat3, d_gridPosFloat3Urshape, d_gridPosTargetFloat3, nonLinearIter, linearIter, weightFit, weightReg);
-	
-			copyResultToCPUFromFloat3();
+				copyResultToCPUFromFloat3();
+			}
+
+			if (useTerra)
+			{
+				m_result = m_initial;
+				resetGPUMemory();
+				std::cout << "//////////// (TERRA) ///////////////" << std::endl;
+				m_warpingSolverTerra->solve(d_gridPosFloat3, d_gridAnglesFloat3, d_gridPosFloat3Urshape, d_gridPosTargetFloat3, nonLinearIter, linearIter, 1, weightFit, weightReg);
+
+				copyResultToCPUFromFloat3();
+			}
 						
 			return &m_result;
 		}
@@ -339,4 +358,5 @@ class ImageWarping
 		float3* d_gridAnglesFloat3;
 
 		CUDAWarpingSolver*	m_warpingSolver;
+		TerraSolverWarping*	m_warpingSolverTerra;
 };
