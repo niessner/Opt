@@ -58,12 +58,11 @@ for iii ,o in ipairs(offsets) do
 	    local n = Offset(i,j,k)
 
 		local ARAPCost = (x - xHat) - ad.Vector(1.0, 0.0, 0.0)
-		local ARAPCostF = ad.select(opt.InBounds(i,j,999999), ARAPCost, ad.Vector(0.0, 0.0, 0.0))
+		local ARAPCostF = ad.select(opt.InBound(i,j,999999), ARAPCost, ad.Vector(0.0, 0.0, 0.0))
 		terms:insert(w_regSqrt*ARAPCostF)
 
 --     local ARAPCost = (x - n) - mul(R, (xHat - UrShape(i,j,k)))
 --	   local ARAPCostF = ad.select(opt.InBounds(0,0,0),	ad.select(opt.InBounds(i,j,k), ARAPCost, ad.Vector(0.0, 0.0, 0.0)), ad.Vector(0.0, 0.0, 0.0))
---     terms:insert(w_regSqrt*ARAPCostF)
 end
 
 return S:Cost(unpack(terms))
