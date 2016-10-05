@@ -4,7 +4,7 @@
 
 int main(int argc, const char * argv[])
 {
-    std::string filename = "long.ply";
+    std::string filename = "meshes/long.ply";
 	if (argc >= 2) {
 		filename = argv[1];
 	}

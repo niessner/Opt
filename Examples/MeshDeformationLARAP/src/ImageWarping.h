@@ -275,14 +275,14 @@ class ImageWarping
 		void saveGraphResults()
 		{
 			SimpleMesh meshSphere;
-			if (!OpenMesh::IO::read_mesh(meshSphere, "sphere.ply"))
+			if (!OpenMesh::IO::read_mesh(meshSphere, "meshes/sphere.ply"))
 			{
 				std::cerr << "Error -> File: " << __FILE__ << " Line: " << __LINE__ << " Function: " << __FUNCTION__ << std::endl;
 				exit(1);
 			}
 
 			SimpleMesh meshCone;
-			if (!OpenMesh::IO::read_mesh(meshCone, "cone.ply"))
+			if (!OpenMesh::IO::read_mesh(meshCone, "meshes/cone.ply"))
 			{
 				std::cerr << "Error -> File: " << __FILE__ << " Line: " << __LINE__ << " Function: " << __FUNCTION__ << std::endl;
 				exit(1);
