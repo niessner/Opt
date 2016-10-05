@@ -6,6 +6,7 @@
 #include <cudaUtil.h>
 
 #include "CUDAWarpingSolver.h"
+#include "TerraSolver.h"
 
 class ImageWarping
 {
@@ -21,6 +22,7 @@ class ImageWarping
 			resetGPUMemory();
 
 			m_warpingSolver = new CUDAWarpingSolver(m_image.getWidth(), m_image.getHeight());
+            m_terraSolver = new TerraSolver(m_image.getWidth(), m_image.getHeight(), "SmoothingLaplacianFloat3AD.t", "gaussNewtonGPU");
 		}
 
 		void resetGPUMemory()
@@ -63,6 +65,11 @@ class ImageWarping
 			resetGPUMemory();
 			m_warpingSolver->solveGN(d_imageFloat3, d_targetFloat3, nonLinearIter, linearIter, weightFit, weightReg, pNorm);
 			copyResultToCPUFromFloat3();
+
+            std::cout << "\n\nOPT" << std::endl;
+            resetGPUMemory();
+            m_terraSolver->solve(d_imageFloat3, d_targetFloat3, nonLinearIter, linearIter, 0, weightFit, weightReg, pNorm);
+            copyResultToCPUFromFloat3();
 			
 			return &m_result;
 		}
@@ -95,4 +102,6 @@ class ImageWarping
 		float3* d_targetFloat3;
 	
 		CUDAWarpingSolver*		m_warpingSolver;
+        TerraSolver* m_terraSolver;
+        
 };
