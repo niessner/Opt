@@ -31,9 +31,10 @@ static std::vector<int4> getSourceTetIndices(std::string filename) {
 
 int main(int argc, const char * argv[])
 {
-    std::string sourceDirectory = "handstand";
+    int startIndex = 0;
+    std::string sourceDirectory = "squat";
     std::vector<std::string> allFiles = ml::Directory::enumerateFiles(sourceDirectory);
-    std::string source_filename = sourceDirectory + "/" + allFiles[0];
+    std::string source_filename = sourceDirectory + "/" + allFiles[startIndex];
 
 
     std::vector<int4> sourceTetIndices = getSourceTetIndices(sourceDirectory + "_tet/" + "mesh_0000.1.ele");
@@ -42,11 +43,11 @@ int main(int argc, const char * argv[])
 
 
     std::vector<SimpleMesh*> targetMeshes;
-    for (int i = 1; i < allFiles.size(); ++i) {
+    for (int i = startIndex + 1; i < 50/*allFiles.size()*/; i += 3) {
         targetMeshes.push_back(createMesh(sourceDirectory + "/" + allFiles[i]));
     }
     std::cout << "All meshes now in memory" << std::endl;
-    ImageWarping warping(sourceMesh, targetMeshes, sourceTetIndices);
+    ImageWarping warping(sourceMesh, targetMeshes, sourceTetIndices, startIndex);
     SimpleMesh* res = warping.solve();
     
 	if (!OpenMesh::IO::write_mesh(*res, "out.ply"))

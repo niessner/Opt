@@ -19,7 +19,7 @@ local G = adP:Graph("G", 8, "v0", {N}, 9, "v1", {N}, 11)
 
 P:UsePreconditioner(true)
 
-local make_robust = true
+local make_robust = false
 
 function evalRot(CosAlpha, CosBeta, CosGamma, SinAlpha, SinBeta, SinGamma)
 	return ad.Vector(

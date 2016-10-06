@@ -60,12 +60,12 @@ void App::onInit() {
     // Call setScene(shared_ptr<Scene>()) or setScene(MyScene::create()) to replace
     // the default scene here.
     
-	const String& originalDirectory = "D:\\Projects\\DSL\\Opt\\Examples\\RobustMeshDeformationARAP\\handstand";
+	const String& originalDirectory = "D:\\Projects\\DSL\\Opt\\Examples\\RobustMeshDeformationARAP\\noisySquat";
 	auto original = ArticulatedModelSequence::create(originalDirectory, "original");
 	original->setFrame(CFrame(Point3(0, 0, 1.0)));
 	m_articulatedModelSequences.append(original);
 
-	const String& comparisonDirectory = "D:\\Projects\\DSL\\Opt\\Examples\\RobustMeshDeformationARAP\\bestattemptMon";
+	const String& comparisonDirectory = "D:\\Projects\\DSL\\Opt\\Examples\\RobustMeshDeformationARAP\\bestSquatWed";
 	auto comparison = ArticulatedModelSequence::create(comparisonDirectory, "warped");
 	comparison->setFrame(CFrame(Point3(0, 0, -1.0)));
 	m_articulatedModelSequences.append(comparison);

@@ -127,7 +127,64 @@ public:
         void* problemParams[] = { &weightFitSqrt, &weightRegSqrt, d_vertexPosFloat3, d_anglesFloat3, d_robustWeights, d_vertexPosFloat3Urshape, d_vertexPosTargetFloat3, d_vertexNormalTargetFloat3, &edgeCount, d_headX, d_headY, d_tailX, d_tailY };
 
 		Opt_ProblemSolve(m_optimizerState, m_plan, problemParams, solverParams);
+        
 	}
+
+    void initGN(
+        float3* d_vertexPosFloat3,
+        float3* d_anglesFloat3,
+        float* d_robustWeights,
+        float3* d_vertexPosFloat3Urshape,
+        //int* d_numNeighbours,
+        //int* d_neighbourIdx,
+        //int* d_neighbourOffset,
+        float3* d_vertexPosTargetFloat3,
+        float3* d_vertexNormalTargetFloat3,
+        unsigned int nNonLinearIterations,
+        unsigned int nLinearIterations,
+        float weightFit,
+        float weightReg)
+    {
+        unsigned int nBlockIterations = 1;	//invalid just as a dummy;
+
+        void* solverParams[] = { &nNonLinearIterations, &nLinearIterations, &nBlockIterations };
+
+        float weightFitSqrt = sqrt(weightFit);
+        float weightRegSqrt = sqrt(weightReg);
+
+        int * d_zeros = d_headY;
+        void* problemParams[] = { &weightFitSqrt, &weightRegSqrt, d_vertexPosFloat3, d_anglesFloat3, d_robustWeights, d_vertexPosFloat3Urshape, d_vertexPosTargetFloat3, d_vertexNormalTargetFloat3, &edgeCount, d_headX, d_headY, d_tailX, d_tailY };
+
+        Opt_ProblemInit(m_optimizerState, m_plan, problemParams, solverParams);
+    }
+
+    void stepGN(
+        float3* d_vertexPosFloat3,
+        float3* d_anglesFloat3,
+        float* d_robustWeights,
+        float3* d_vertexPosFloat3Urshape,
+        //int* d_numNeighbours,
+        //int* d_neighbourIdx,
+        //int* d_neighbourOffset,
+        float3* d_vertexPosTargetFloat3,
+        float3* d_vertexNormalTargetFloat3,
+        unsigned int nNonLinearIterations,
+        unsigned int nLinearIterations,
+        float weightFit,
+        float weightReg)
+    {
+        unsigned int nBlockIterations = 1;	//invalid just as a dummy;
+
+        void* solverParams[] = { &nNonLinearIterations, &nLinearIterations, &nBlockIterations };
+
+        float weightFitSqrt = sqrt(weightFit);
+        float weightRegSqrt = sqrt(weightReg);
+
+        int * d_zeros = d_headY;
+        void* problemParams[] = { &weightFitSqrt, &weightRegSqrt, d_vertexPosFloat3, d_anglesFloat3, d_robustWeights, d_vertexPosFloat3Urshape, d_vertexPosTargetFloat3, d_vertexNormalTargetFloat3, &edgeCount, d_headX, d_headY, d_tailX, d_tailY };
+
+        Opt_ProblemStep(m_optimizerState, m_plan, problemParams, solverParams);
+    }
 
 private:
 	Opt_State*	m_optimizerState;
