@@ -4,6 +4,7 @@
 int main(int argc, const char * argv[])
 {
 	const std::string inputImage = "MonaSource1_rec.png";
+    //const std::string inputImage = "Mo.png";
 	//const std::string inputImage = "test_noise.png";
 	
 	ColorImageR8G8B8A8	   image = LodePNG::load(inputImage);

@@ -65,7 +65,7 @@ class ImageWarping
 			resetGPUMemory();
 			m_warpingSolver->solveGN(d_imageFloat3, d_targetFloat3, nonLinearIter, linearIter, weightFit, weightReg, pNorm);
 			copyResultToCPUFromFloat3();
-
+            
             std::cout << "\n\nOPT" << std::endl;
             resetGPUMemory();
             m_terraSolver->solve(d_imageFloat3, d_targetFloat3, nonLinearIter, linearIter, 0, weightFit, weightReg, pNorm);

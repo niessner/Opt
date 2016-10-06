@@ -13,7 +13,7 @@ local terms = terralib.newlist()
 
 local offsets = { {1,0}, {-1,0}, {0,1}, {0,-1} }
 
-local useL_p = false
+local useL_p = true
 
 for j,o in ipairs(offsets) do
     local x,y = unpack(o)
@@ -22,12 +22,12 @@ for j,o in ipairs(offsets) do
     if useL_p then
     	local diff_const = X_const(0,0) - X_const(x,y)
     	local sqDist = diff_const:dot(diff_const)
-    	local C = ad.pow(sqDist,(pNorm-2)*0.5)
+        local eps = 0.0000001
+    	local C = ad.pow(ad.sqrt(sqDist)+eps,(pNorm-2))
     	local sqrtC = ad.sqrt(C)
     	local sqrtCImage = S:ComputedImage("sqrtC_"..tostring(j),{W,H},sqrtC)
     	laplacianCost = sqrtCImage(0,0)*diff
     end
-
     local laplacianCostF = ad.select(opt.InBounds(0,0),ad.select(opt.InBounds(x,y), laplacianCost,0),0)
     terms:insert(w_regSqrt*laplacianCostF)
 end
