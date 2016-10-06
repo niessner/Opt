@@ -365,19 +365,25 @@ function IndexSpace:indextype()
     terra Index:tooffset()
         return [genoffset(self)]
     end
-    local function genbounds(self,e,bmins,bmaxs)
+    local function genbounds(self,bmins,bmaxs)
         local valid
         for i = 1, #dims do
             local n = fieldnames[i]
-            local bmin,bmax = bmins and bmins[i] or 0, bmaxs and bmaxs[i] or 0
-            local v = `int(self.[n] >= -bmin) and int(self.[n] < [dims[i].size] - bmax)
+            local bmin,bmax = 0,0
+            if bmins then
+                bmin = assert(bmins[i])
+            end
+            if bmaxs then
+                bmax = assert(bmaxs[i])
+            end
+            local v = `self.[n] >= -[bmin] and self.[n] < [dims[i].size] - [bmax]
             if valid then
-                valid = `valid and int(v)
+                valid = `valid and v
             else
-                valid = `int(v)
+                valid = v
             end
         end
-        return valid ~= 0
+        return valid
     end
     terra Index:InBounds() return [ genbounds(self) ] end
     
