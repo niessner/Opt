@@ -10,12 +10,22 @@
 #include "WarpingSolverState.h"
 #include "WarpingSolverParameters.h"
 
+
+__inline__ __device__ float powNorm3(float3 m, float p)
+{
+	const float eps = 0.0000001f;
+    return powf(sqrtf(fabs(m.x*m.x + m.y*m.y + m.z*m.z)) + eps, p);
+}
+
+
+
+
 ////////////////////////////////////////
 // evalF
 ////////////////////////////////////////
 __inline__ __device__ float evalFDevice(unsigned int variableIdx, SolverInput& input, SolverState& state, SolverParameters& parameters)
 {
-	float3 e = make_float3(0.0f, 0.0F, 0.0f);
+	float3 e = make_float3(0.0f, 0.0f, 0.0f);
 
 	// E_fit
 	float3 targetDepth = state.d_target[variableIdx];
@@ -31,20 +41,14 @@ __inline__ __device__ float evalFDevice(unsigned int variableIdx, SolverInput& i
 
 	float3 p = state.d_x[get1DIdx(i, j, input.width, input.height)];
 	float e_reg = 0.0f;
-	if (validN0){ float3 q = state.d_x[get1DIdx(n0_i, n0_j, input.width, input.height)]; float3 v = (p - q); e_reg += powf(sqrtf(v.x*v.x + v.y*v.y + v.z*v.z), parameters.pNorm); }
-	if (validN1){ float3 q = state.d_x[get1DIdx(n1_i, n1_j, input.width, input.height)]; float3 v = (p - q); e_reg += powf(sqrtf(v.x*v.x + v.y*v.y + v.z*v.z), parameters.pNorm); }
-	if (validN2){ float3 q = state.d_x[get1DIdx(n2_i, n2_j, input.width, input.height)]; float3 v = (p - q); e_reg += powf(sqrtf(v.x*v.x + v.y*v.y + v.z*v.z), parameters.pNorm); }
-	if (validN3){ float3 q = state.d_x[get1DIdx(n3_i, n3_j, input.width, input.height)]; float3 v = (p - q); e_reg += powf(sqrtf(v.x*v.x + v.y*v.y + v.z*v.z), parameters.pNorm); }
+	if (validN0){ float3 q = state.d_x[get1DIdx(n0_i, n0_j, input.width, input.height)]; float3 v = (p - q); e_reg += dot(v, v) * powNorm3(v, parameters.pNorm - 2); }
+    if (validN1){ float3 q = state.d_x[get1DIdx(n1_i, n1_j, input.width, input.height)]; float3 v = (p - q); e_reg += dot(v, v) * powNorm3(v, parameters.pNorm - 2); }
+    if (validN2){ float3 q = state.d_x[get1DIdx(n2_i, n2_j, input.width, input.height)]; float3 v = (p - q); e_reg += dot(v, v) * powNorm3(v, parameters.pNorm - 2); }
+    if (validN3){ float3 q = state.d_x[get1DIdx(n3_i, n3_j, input.width, input.height)]; float3 v = (p - q); e_reg += dot(v, v) * powNorm3(v, parameters.pNorm - 2); }
 	
 	float res = e.x + e.y + e.z + parameters.weightRegularizer*e_reg;
 
 	return res;
-}
-
-__inline__ __device__ float powNorm3(mat3x1 m, float p)
-{
-	const float eps = 0.0000001f;
-	return powf(sqrtf(fabs(m(0)*m(0) + m(1)*m(1) + m(2)*m(2))) + eps, p);
 }
 
 ////////////////////////////////////////
@@ -71,10 +75,10 @@ __inline__ __device__ float3 evalMinusJTFDevice(unsigned int variableIdx, Solver
 	// reg/pos
 	float3 p = state.d_x[get1DIdx(i, j, input.width, input.height)];
 	float3 e_reg = make_float3(0.0f, 0.0f, 0.0f);
-	if (validN0){ float3 q = state.d_x[get1DIdx(n0_i, n0_j, input.width, input.height)]; float c = powNorm3(mat3x1(p - q), parameters.pNorm - 2); e_reg += 2.0f*c*(p - q); pre += 4.0f*parameters.weightRegularizer*c*make_float3(1.0f, 1.0f, 1.0f); }
-	if (validN1){ float3 q = state.d_x[get1DIdx(n1_i, n1_j, input.width, input.height)]; float c = powNorm3(mat3x1(p - q), parameters.pNorm - 2); e_reg += 2.0f*c*(p - q); pre += 4.0f*parameters.weightRegularizer*c*make_float3(1.0f, 1.0f, 1.0f); }
-	if (validN2){ float3 q = state.d_x[get1DIdx(n2_i, n2_j, input.width, input.height)]; float c = powNorm3(mat3x1(p - q), parameters.pNorm - 2); e_reg += 2.0f*c*(p - q); pre += 4.0f*parameters.weightRegularizer*c*make_float3(1.0f, 1.0f, 1.0f); }
-	if (validN3){ float3 q = state.d_x[get1DIdx(n3_i, n3_j, input.width, input.height)]; float c = powNorm3(mat3x1(p - q), parameters.pNorm - 2); e_reg += 2.0f*c*(p - q); pre += 4.0f*parameters.weightRegularizer*c*make_float3(1.0f, 1.0f, 1.0f); }
+	if (validN0){ float3 q = state.d_x[get1DIdx(n0_i, n0_j, input.width, input.height)]; float c = powNorm3(p - q, parameters.pNorm - 2); e_reg += 2.0f*c*(p - q); pre += 4.0f*parameters.weightRegularizer*c*make_float3(1.0f, 1.0f, 1.0f); }
+	if (validN1){ float3 q = state.d_x[get1DIdx(n1_i, n1_j, input.width, input.height)]; float c = powNorm3(p - q, parameters.pNorm - 2); e_reg += 2.0f*c*(p - q); pre += 4.0f*parameters.weightRegularizer*c*make_float3(1.0f, 1.0f, 1.0f); }
+	if (validN2){ float3 q = state.d_x[get1DIdx(n2_i, n2_j, input.width, input.height)]; float c = powNorm3(p - q, parameters.pNorm - 2); e_reg += 2.0f*c*(p - q); pre += 4.0f*parameters.weightRegularizer*c*make_float3(1.0f, 1.0f, 1.0f); }
+	if (validN3){ float3 q = state.d_x[get1DIdx(n3_i, n3_j, input.width, input.height)]; float c = powNorm3(p - q, parameters.pNorm - 2); e_reg += 2.0f*c*(p - q); pre += 4.0f*parameters.weightRegularizer*c*make_float3(1.0f, 1.0f, 1.0f); }
 	b += -2.0f*parameters.weightRegularizer*e_reg;
 
 	pre = make_float3(0.0f, 0.0f, 0.0f); // preconditioner leads to problems here
@@ -109,10 +113,10 @@ __inline__ __device__ float3 applyJTJDevice(unsigned int variableIdx, SolverInpu
 
 	// pos/reg
 	float3 e_reg = make_float3(0.0f, 0.0f, 0.0f);
-	if (validN0){ float3 xq = state.d_x[get1DIdx(n0_i, n0_j, input.width, input.height)]; float c = powNorm3(mat3x1(xp - xq), parameters.pNorm - 2); e_reg += 2.0f*c*(p - state.d_p[get1DIdx(n0_i, n0_j, input.width, input.height)]); }
-	if (validN1){ float3 xq = state.d_x[get1DIdx(n1_i, n1_j, input.width, input.height)]; float c = powNorm3(mat3x1(xp - xq), parameters.pNorm - 2); e_reg += 2.0f*c*(p - state.d_p[get1DIdx(n1_i, n1_j, input.width, input.height)]); }
-	if (validN2){ float3 xq = state.d_x[get1DIdx(n2_i, n2_j, input.width, input.height)]; float c = powNorm3(mat3x1(xp - xq), parameters.pNorm - 2); e_reg += 2.0f*c*(p - state.d_p[get1DIdx(n2_i, n2_j, input.width, input.height)]); }
-	if (validN3){ float3 xq = state.d_x[get1DIdx(n3_i, n3_j, input.width, input.height)]; float c = powNorm3(mat3x1(xp - xq), parameters.pNorm - 2); e_reg += 2.0f*c*(p - state.d_p[get1DIdx(n3_i, n3_j, input.width, input.height)]); }
+	if (validN0){ float3 xq = state.d_x[get1DIdx(n0_i, n0_j, input.width, input.height)]; float c = powNorm3(xp - xq, parameters.pNorm - 2); e_reg += 2.0f*c*(p - state.d_p[get1DIdx(n0_i, n0_j, input.width, input.height)]); }
+	if (validN1){ float3 xq = state.d_x[get1DIdx(n1_i, n1_j, input.width, input.height)]; float c = powNorm3(xp - xq, parameters.pNorm - 2); e_reg += 2.0f*c*(p - state.d_p[get1DIdx(n1_i, n1_j, input.width, input.height)]); }
+	if (validN2){ float3 xq = state.d_x[get1DIdx(n2_i, n2_j, input.width, input.height)]; float c = powNorm3(xp - xq, parameters.pNorm - 2); e_reg += 2.0f*c*(p - state.d_p[get1DIdx(n2_i, n2_j, input.width, input.height)]); }
+	if (validN3){ float3 xq = state.d_x[get1DIdx(n3_i, n3_j, input.width, input.height)]; float c = powNorm3(xp - xq, parameters.pNorm - 2); e_reg += 2.0f*c*(p - state.d_p[get1DIdx(n3_i, n3_j, input.width, input.height)]); }
 	b += 2.0f*parameters.weightRegularizer*e_reg;
 
 	return b;
