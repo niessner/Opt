@@ -7,7 +7,7 @@ local w_fitSqrt = adP:Param("w_fitSqrt", float, 0)
 local w_regSqrt = adP:Param("w_regSqrt", float, 1)
 
 -- TODO: pass in
-local w_confSqrt = 1.0
+local w_confSqrt = 0.1
 
 local Offset = 			adP:Unknown("Offset", opt.float3,{N},2)			--vertex.xyz, rotation.xyz <- unknown
 local Angle = 			adP:Unknown("Angle", opt.float3,{N},3)			--vertex.xyz, rotation.xyz <- unknown		
@@ -19,7 +19,7 @@ local G = adP:Graph("G", 8, "v0", {N}, 9, "v1", {N}, 11)
 
 P:UsePreconditioner(true)
 
-local make_robust = false
+local make_robust = true
 
 function evalRot(CosAlpha, CosBeta, CosGamma, SinAlpha, SinBeta, SinGamma)
 	return ad.Vector(
@@ -53,17 +53,20 @@ local constraint = Constraints(0)						--target : float3
 local robustWeight = RobustWeights(0)
 local normal = ConstraintNormals(0)
 local e_fit = normal:dot(x_fit - constraint)
-e_fit = ad.select(ad.greatereq(constraint(0), -999999.9), e_fit, ad.Vector(0.0, 0.0, 0.0))
+
 if make_robust then
-    terms:insert(w_fitSqrt*robustWeight*e_fit)
-else
-    terms:insert(w_fitSqrt*e_fit)
+    e_fit = e_fit*robustWeight
 end
+
+local validConstraint = ad.greatereq(constraint(0), -999999.9)
+e_fit = ad.select(validConstraint, e_fit, ad.Vector(0.0, 0.0, 0.0))
+terms:insert(w_fitSqrt*e_fit)
 
 
 --RobustWeight Penalty
 if make_robust then
-    local e_conf = 1-robustWeight*robustWeight
+    local e_conf = 1-(robustWeight*robustWeight)
+    e_conf = ad.select(validConstraint, e_conf, ad.Vector(0.0, 0.0, 0.0))
     terms:insert(w_confSqrt*e_conf)
 end
 

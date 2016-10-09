@@ -41,9 +41,8 @@ int main(int argc, const char * argv[])
 
     SimpleMesh* sourceMesh = createMesh(source_filename);
 
-
     std::vector<SimpleMesh*> targetMeshes;
-    for (int i = startIndex + 1; i < 50/*allFiles.size()*/; i += 3) {
+    for (int i = startIndex + 1; i < 50/*allFiles.size()*/; i += 1) {
         targetMeshes.push_back(createMesh(sourceDirectory + "/" + allFiles[i]));
     }
     std::cout << "All meshes now in memory" << std::endl;

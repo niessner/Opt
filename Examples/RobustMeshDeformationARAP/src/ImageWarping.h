@@ -55,7 +55,7 @@ class ImageWarping
 
             m_rnd       = std::mt19937(230948);
 
-            float spuriousProbability = 0.3f;
+            float spuriousProbability = 0.05f;
 
             std::uniform_int_distribution<> targetDistribution(0, m_targets[0].n_vertices() - 1);
             float noiseModifier = 10.0f;
@@ -65,13 +65,49 @@ class ImageWarping
                 m_spuriousIndices.push_back(targetDistribution(m_rnd));
                 m_noisyOffsets.push_back(make_float3(normalDistribution(m_rnd), normalDistribution(m_rnd), normalDistribution(m_rnd)));
             }
-            float3 v = m_noisyOffsets[spuriousCount - 1];
-            printf("Last Offset %f, %f, %f\n", v.x, v.y, v.z);
+
+
+            if (!m_result.has_vertex_colors()) {
+                m_result.request_vertex_colors();
+            }
+            for (unsigned int i = 0; i < N; i++)
+            {
+                uchar w = 255;
+                m_result.set_color(VertexHandle(i), Vec3uc(w, w, w));
+            }
+            for (int index : m_spuriousIndices) {
+                uchar w = 0;
+                m_result.set_color(VertexHandle(index), Vec3uc(w, w, w));
+            }
+
+            OpenMesh::IO::Options options = OpenMesh::IO::Options::VertexColor;
+            int failure = OpenMesh::IO::write_mesh(m_result, "out_noisetemplate.ply", options);
+            assert(failure);
+
+
 
             m_optWarpingSolver = new TerraWarpingSolver(N, d_neighbourIdx.size(), d_neighbourIdx.data(), d_neighbourOffset.data(), "MeshDeformationAD.t", "gaussNewtonGPU");
 		} 
 
-
+        void saveCurrentMesh(std::string filename) {
+            { // Save intermediate mesh
+                unsigned int N = (unsigned int)m_result.n_vertices();
+                std::vector<float> h_vertexWeightFloat(N);
+                cutilSafeCall(cudaMemcpy(h_vertexWeightFloat.data(), d_robustWeights.data(), sizeof(float)*N, cudaMemcpyDeviceToHost));
+                for (unsigned int i = 0; i < N; i++)
+                {
+                    uchar w = (uchar)(255 * h_vertexWeightFloat[i]);
+                    m_result.set_color(VertexHandle(i), Vec3uc(w, w, w));
+                    if (h_vertexWeightFloat[i] < 0.9f || h_vertexWeightFloat[i] > 1.0f) {
+                        printf("Interesting robustWeight[%d]: %f\n", i, h_vertexWeightFloat[i]);
+                    }
+                }
+                
+                OpenMesh::IO::Options options = OpenMesh::IO::Options::VertexColor;
+                int failure = OpenMesh::IO::write_mesh(m_result, filename, options);
+                assert(failure);
+            }
+        }
 
 
         int setConstraints(int targetIndex, float positionThreshold = std::numeric_limits<float>::infinity(), float cosNormalThreshold = 0.7f)
@@ -112,12 +148,16 @@ class ImageWarping
                     auto tNormal = m_targets[targetIndex].normal(VertexHandle(indexOfNearest));
                     auto targetNormal = make_float3(tNormal[0], tNormal[1], tNormal[2]);
                     float dist = (target - currentPt).length();
+                    if (dist > positionThreshold) {
+                        break;
+                    }
                     if (dot(targetNormal, sourceNormal) > cosNormalThreshold) {
                         h_vertexPosTargetFloat3[i] = make_float3(target[0], target[1], target[2]);
                         h_vertexNormalTargetFloat3[i] = targetNormal;
                         validTargetFound = true;
                         break;
                     }
+                    
                 }
                 if (!validTargetFound) {
                     ++thrownOutCorrespondenceCount;
@@ -143,7 +183,7 @@ class ImageWarping
                         const Vec3f target = Vec3f(v.x, v.y, v.z);
                         float dist = (target - currentPt).length();
                         float weight = (positionThreshold - dist) / positionThreshold;
-                        h_robustWeights[i] = fmaxf(0.1f, weight*0.9f+0.5f);
+                        h_robustWeights[i] = fmaxf(0.1f, weight*0.9f+0.05f);
                     }
                 }
             }
@@ -249,18 +289,18 @@ class ImageWarping
 			//float weightFit = 6.0f;
             //float weightReg = 0.5f;
 			float weightFit = 10.0f;
-			float weightRegMax = 512.0f; 
+			float weightRegMax = 64.0f; 
 
+            float weightRegMin = 4.0f;
+            float weightRegFactor = 0.95f;
 
-
-            float weightRegMin = 16.0f;
-            float weightRegFactor = 0.99f;
+            float costEqualityEpsilon = 0.00001f;
 		
 			//unsigned int numIter = 10;
 			//unsigned int nonLinearIter = 20;
 			//unsigned int linearIter = 50;
 
-			uint numIter = 30;
+			uint numIter = 15;
 			uint nonLinearIter = 8;
             uint linearIter = 250;			
             unsigned int N = (unsigned int)m_initial.n_vertices();
@@ -283,28 +323,60 @@ class ImageWarping
                     
                     m_timer.start();
                     int newConstraintCount = setConstraints(targetIndex, m_averageEdgeLength*5.0f);
+
+
                     m_timer.stop();
                     double setConstraintsTime = m_timer.getElapsedTime();
                     
                     std::cout << " -------- New constraints: " << newConstraintCount << std::endl;
+                    if (newConstraintCount <= 5) {
+                        std::cout << " -------- Few New Constraints" << std::endl;
+                        if (weightReg != weightRegMin) {
+                            std::cout << " -------- Skipping to min reg weight" << std::endl;
+                            weightReg = weightRegMin;
+                            m_optWarpingSolver->initGN(d_vertexPosFloat3.data(), d_anglesFloat3.data(), d_robustWeights.data(), d_vertexPosFloat3Urshape.data(), d_vertexPosTargetFloat3.data(), d_vertexNormalTargetFloat3.data(), nonLinearIter, linearIter, weightFit, weightReg);
+                            float currentCost = m_optWarpingSolver->currentCost();
+                            for (int nlIter = 0; nlIter < nonLinearIter; ++nlIter) {
+                                m_optWarpingSolver->stepGN(d_vertexPosFloat3.data(), d_anglesFloat3.data(), d_robustWeights.data(), d_vertexPosFloat3Urshape.data(), d_vertexPosTargetFloat3.data(), d_vertexNormalTargetFloat3.data(), nonLinearIter, linearIter, weightFit, weightReg);
+                                float newCost = m_optWarpingSolver->currentCost();
+                                if ((currentCost - newCost) < costEqualityEpsilon) {
+                                    std::cout << " -------- NO SIGNIFICANT COST CHANGE, FINISHING OUTER-ITER EARLY" << std::endl;
+                                    break;
+                                }
+                                else {
+                                    currentCost = newCost;
+                                }
+                            }
+                        }
+                        break;
+                    }
                     m_optWarpingSolver->initGN(d_vertexPosFloat3.data(), d_anglesFloat3.data(), d_robustWeights.data(), d_vertexPosFloat3Urshape.data(), d_vertexPosTargetFloat3.data(), d_vertexNormalTargetFloat3.data(), nonLinearIter, linearIter, weightFit, weightReg);
+                    float currentCost = m_optWarpingSolver->currentCost();
                     for (int nlIter = 0; nlIter < nonLinearIter; ++nlIter) {
                         m_optWarpingSolver->stepGN(d_vertexPosFloat3.data(), d_anglesFloat3.data(), d_robustWeights.data(), d_vertexPosFloat3Urshape.data(), d_vertexPosTargetFloat3.data(), d_vertexNormalTargetFloat3.data(), nonLinearIter, linearIter, weightFit, weightReg);
-                        weightReg = max(weightRegMin, weightReg*weightRegFactor);
+                        float newCost = m_optWarpingSolver->currentCost();
+                        if ((currentCost - newCost) < costEqualityEpsilon) {
+                            std::cout << " -------- NO SIGNIFICANT COST CHANGE, FINISHING OUTER-ITER EARLY" << std::endl;
+                            break;
+                        } else {
+                            currentCost = newCost;
+                        }
+                        weightReg = fmaxf(weightRegMin, weightReg*weightRegFactor);
                     }
                     m_timer.start();
                     copyResultToCPUFromFloat3();
                     m_timer.stop();
                     double copyTime = m_timer.getElapsedTime();
                     std::cout << "-- Set Constraints: " << setConstraintsTime << "s -- Copy to CPU: " << copyTime << "s " << std::endl;
-
+                   /* if (targetIndex + m_startIndex + 1 == 13) {
+                        char buff[100];
+                        sprintf(buff, "out_%04d_%02d.ply", 13, i);
+                        saveCurrentMesh(buff);
+                    }*/
                 }
-                { // Save intermediate mesh
-                    char buff[100];
-                    sprintf(buff, "out_%04d.ply", targetIndex + m_startIndex + 1);
-                    int failure = OpenMesh::IO::write_mesh(m_result, buff);
-                    assert(failure);
-                }
+                char buff[100];
+                sprintf(buff, "out_%04d.ply", targetIndex + m_startIndex + 1);
+                saveCurrentMesh(buff);
             }
 			return &m_result;
 		}
@@ -314,7 +386,7 @@ class ImageWarping
 			unsigned int N = (unsigned int)m_result.n_vertices();
             std::vector<float3> h_vertexPosFloat3(N);
 			cutilSafeCall(cudaMemcpy(h_vertexPosFloat3.data(), d_vertexPosFloat3.data(), sizeof(float3)*N, cudaMemcpyDeviceToHost));
-
+           
 			for (unsigned int i = 0; i < N; i++)
 			{
 				m_result.set_point(VertexHandle(i), Vec3f(h_vertexPosFloat3[i].x, h_vertexPosFloat3[i].y, h_vertexPosFloat3[i].z));
@@ -362,10 +434,10 @@ class ImageWarping
         double m_averageEdgeLength;
 
 		CudaArray<float3> d_anglesFloat3;
-		CudaArray<float3>	d_vertexPosTargetFloat3;
-        CudaArray<float3>	d_vertexNormalTargetFloat3;
-		CudaArray<float3>	d_vertexPosFloat3;
-		CudaArray<float3>	d_vertexPosFloat3Urshape;
+		CudaArray<float3> d_vertexPosTargetFloat3;
+        CudaArray<float3> d_vertexNormalTargetFloat3;
+		CudaArray<float3> d_vertexPosFloat3;
+		CudaArray<float3> d_vertexPosFloat3Urshape;
         CudaArray<float>  d_robustWeights;
 		CudaArray<int>	d_numNeighbours;
 		CudaArray<int>	d_neighbourIdx;

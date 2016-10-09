@@ -100,6 +100,10 @@ public:
 
 	}
 
+    float currentCost() const {
+        return Opt_ProblemCurrentCost(m_optimizerState, m_plan);
+    }
+
 	//void solve(float3* d_unknown, float3* d_target, unsigned int nNonLinearIterations, unsigned int nLinearIterations, unsigned int nBlockIterations, float weightFit, float weightReg)
 	void solveGN(
 		float3* d_vertexPosFloat3,
