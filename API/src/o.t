@@ -118,6 +118,7 @@ end
 struct opt.Plan(S.Object) {
     init : {&opaque,&&opaque,&&opaque} -> {} -- plan.data,params,solverparams
     step : {&opaque,&&opaque,&&opaque} -> int
+    cost : {&opaque} -> float
     data : &opaque
 } 
 
@@ -2472,6 +2473,10 @@ end
 terra opt.ProblemSolve(plan : &opt.Plan, params : &&opaque, solverparams : &&opaque)
    opt.ProblemInit(plan, params, solverparams)
    while opt.ProblemStep(plan, params, solverparams) ~= 0 do end
+end
+
+terra opt.ProblemCurrentCost(plan : &opt.Plan) : float
+    return plan.cost(plan.data)
 end
 
 return opt

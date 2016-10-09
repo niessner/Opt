@@ -551,10 +551,15 @@ return function(problemSpec)
 		end
 	end
 
+    local terra cost(data_ : &opaque) : float
+        var pd = [&PlanData](data_)
+        return pd.prevCost
+    end
+
 	local terra makePlan() : &opt.Plan
 		var pd = PlanData.alloc()
 		pd.plan.data = pd
-		pd.plan.init,pd.plan.step = init,step
+		pd.plan.init,pd.plan.step,pd.plan.cost = init,step,cost
 
 		pd.delta:initGPU()
 		pd.r:initGPU()
