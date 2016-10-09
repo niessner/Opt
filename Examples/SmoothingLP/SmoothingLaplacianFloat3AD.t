@@ -1,10 +1,12 @@
 require("helper")
 
+local unknownType = opt.double3
+
 local w_fitSqrt = S:Param("w_fitSqrt", float, 0)
 local w_regSqrt = S:Param("w_regSqrt", float, 1)
 local pNorm = S:Param("pNorm", float, 2)
-local X = S:Unknown("X", opt.float3,{W,H},3)
-local X_const = S:Image("X_const", opt.float3,{W,H},3)
+local X = S:Unknown("X", unknownType,{W,H},3)
+local X_const = S:Image("X_const", unknownType,{W,H},3)
 local A = S:Image("A", opt.float3,{W,H},4)
 
 local terms = terralib.newlist()

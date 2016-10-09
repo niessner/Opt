@@ -3,7 +3,7 @@ local timeIndividualKernels = false
 
 
 local S = require("std")
-
+require("precision")
 local util = {}
 
 util.C = terralib.includecstring [[
@@ -49,13 +49,22 @@ util.cpuMath = {}
 for k,v in pairs(mathParamCount) do
 	local params = {}
 	for i = 1,v do
-		params[i] = float
+		params[i] = opt_float
 	end
-	util.gpuMath[k] = extern(("__nv_%sf"):format(k), params -> float)
-    util.cpuMath[k] = C[k.."f"]
+    if (opt_float == float) then
+        util.gpuMath[k] = extern(("__nv_%sf"):format(k), params -> opt_float)
+        util.cpuMath[k] = C[k.."f"]
+    else
+        util.gpuMath[k] = extern(("__nv_%s"):format(k), params -> opt_float)
+        util.cpuMath[k] = C[k]
+    end
 end
-util.cpuMath["abs"] = C["fabsf"]
-util.gpuMath["abs"] = terra (x : float)
+if (opt_float == float) then
+    util.cpuMath["abs"] = C["fabsf"]
+else
+    util.cpuMath["abs"] = C["fabs"]
+end
+util.gpuMath["abs"] = terra (x : opt_float)
 	if x < 0 then
 		x = -x
 	end
@@ -365,66 +374,153 @@ terra Timer:evaluate()
 end
 
 
-local terra atomicAdd(sum : &float, value : float)
-	terralib.asm(terralib.types.unit,"red.global.add.f32 [$0],$1;","l,f", true, sum, value)
-end
-util.atomicAdd = atomicAdd
-
-struct IntFloat {
-    union {
-        a : int;
-        b : float;
-    }
-}
-
-local terra __float_as_int(v : float)
-    var u : IntFloat
-    u.b = v;
-
-    return u.a;
-end
-
-local terra __int_as_float(v : int)
-    var u : IntFloat
-    u.a = v;
-
-    return u.b;
-end
-
-local terra atomicMax(max_value : &float, value : float)
-    var address_as_i : &int = [&int] (max_value);
-    var old : int = address_as_i[0];
-    var assumed : int;
-
-    repeat
-        assumed = old;
-        old = terralib.asm(int,"atom.global.cas.b32 $0,[$1],$2,$3;", 
-            "=r,l,r,r", true, address_as_i, assumed, 
-            __float_as_int( util.gpuMath.fmax(value, __int_as_float(assumed)) )
-            );
-    until assumed == old;
-
-    max_value[0] = __int_as_float(old);
-end
-util.atomicMax = atomicMax
-
-local terra __shfl_down(v : float, delta : uint, width : int)
-	var ret : float;
-    var c : int;
-	c = ((warpSize-width) << 8) or 0x1F;
-	ret = terralib.asm(float,"shfl.down.b32 $0, $1, $2, $3;","=f,f,r,r", true, v, delta, c)
-	return ret;
-end
-
 local terra laneid()
     var laneid : int;
-	laneid = terralib.asm(int,"mov.u32 $0, %laneid;","=r", true)
-	return laneid;
+    laneid = terralib.asm(int,"mov.u32 $0, %laneid;","=r", true)
+    return laneid;
 end
 util.laneid = laneid
 
+__syncthreads = cudalib.nvvm_barrier0
+
+
+local __shfl_down 
+
+if opt_float == float then
+
+    local terra atomicAdd(sum : &float, value : float)
+    	terralib.asm(terralib.types.unit,"red.global.add.f32 [$0],$1;","l,f", true, sum, value)
+    end
+    util.atomicAdd = atomicAdd
+
+    struct IntFloat {
+        union {
+            a : int;
+            b : float;
+        }
+    }
+
+    local terra __float_as_int(v : float)
+        var u : IntFloat
+        u.b = v;
+
+        return u.a;
+    end
+
+    local terra __int_as_float(v : int)
+        var u : IntFloat
+        u.a = v;
+
+        return u.b;
+    end
+
+    local terra atomicMax(max_value : &float, value : float)
+        var address_as_i : &int = [&int] (max_value);
+        var old : int = address_as_i[0];
+        var assumed : int;
+
+        repeat
+            assumed = old;
+            old = terralib.asm(int,"atom.global.cas.b32 $0,[$1],$2,$3;", 
+                "=r,l,r,r", true, address_as_i, assumed, 
+                __float_as_int( util.gpuMath.fmax(value, __int_as_float(assumed)) )
+                );
+        until assumed == old;
+
+        return __int_as_float(old);
+    end
+    util.atomicMax = atomicMax
+
+    terra __shfl_down(v : float, delta : uint, width : int)
+    	var ret : float;
+        var c : int;
+    	c = ((warpSize-width) << 8) or 0x1F;
+    	ret = terralib.asm(float,"shfl.down.b32 $0, $1, $2, $3;","=f,f,r,r", true, v, delta, c)
+    	return ret;
+    end
+else
+
+    struct ULLDouble {
+        union {
+            a : uint64;
+            b : double;
+        }
+    }
+
+    struct uint2 {
+        x : uint32;
+        y : uint32;
+    }
+
+    struct uint2Double {
+        union {
+            u2 : uint2;
+            d: double;
+        }
+    }
+
+    local terra __double_as_ull(v : double)
+        var u : ULLDouble
+        u.b = v;
+
+        return u.a;
+    end
+
+    local terra __ull_as_double(v : uint64)
+        var u : ULLDouble
+        u.a = v;
+
+        return u.b;
+    end
+
+    local terra atomicAdd(sum : &double, value : double)
+        var address_as_i : &uint64 = [&uint64] (sum);
+        var old : uint64 = address_as_i[0];
+        var assumed : uint64;
+
+        repeat
+            assumed = old;
+            old = terralib.asm(uint64,"atom.global.cas.b64 $0,[$1],$2,$3;", 
+                "=l,l,l,l", true, address_as_i, assumed, 
+                __double_as_ull( value + __ull_as_double(assumed) )
+                );
+        until assumed == old;
+
+        return __ull_as_double(old);
+    end
+    util.atomicAdd = atomicAdd
+
+    local terra atomicMax(max_value : &double, value : double)
+        var address_as_i : &uint64 = [&uint64] (max_value);
+        var old : uint64 = address_as_i[0];
+        var assumed : uint64;
+
+        repeat
+            assumed = old;
+            old = terralib.asm(uint64,"atom.global.cas.b64 $0,[$1],$2,$3;", 
+                "=l,l,l,l", true, address_as_i, assumed, 
+                __double_as_ull( util.gpuMath.fmax(value, __ull_as_double(assumed)) )
+                );
+        until assumed == old;
+
+        return __ull_as_double(old);
+    end
+    util.atomicMax = atomicMax
+
+    terra __shfl_down(v : double, delta : uint, width : int)
+        var ret : uint2Double;
+        var init : uint2Double;
+        init.d = v
+        var c : int;
+        c = ((warpSize-width) << 8) or 0x1F;
+        ret.u2.x = terralib.asm(uint32,"shfl.down.b32 $0, $1, $2, $3;","=f,f,r,r", true, init.u2.x, delta, c)
+        ret.u2.y = terralib.asm(uint32,"shfl.down.b32 $0, $1, $2, $3;","=f,f,r,r", true, init.u2.y, delta, c)
+        return ret.d;
+    end
+end
+
 -- Using the "Kepler Shuffle", see http://devblogs.nvidia.com/parallelforall/faster-parallel-reductions-kepler/
-local terra warpReduce(val : float) 
+local terra warpReduce(val : opt_float) 
 
   var offset = warpSize >> 1
   while offset > 0 do 
@@ -437,7 +533,7 @@ local terra warpReduce(val : float)
 end
 util.warpReduce = warpReduce
 
-local terra warpMaxReduce(val : float) 
+local terra warpMaxReduce(val : opt_float) 
 
   var offset = warpSize >> 1
   while offset > 0 do 
@@ -453,11 +549,9 @@ local terra warpMaxReduce(val : float)
 end
 util.warpMaxReduce = warpMaxReduce
 
-__syncthreads = cudalib.nvvm_barrier0
-
 -- Straightforward implementation of: http://devblogs.nvidia.com/parallelforall/faster-parallel-reductions-kepler/
 -- sdata must be a block of 128 bytes of shared memory we are free to trash
-local terra blockReduce(val : float, sdata : &float, threadIdx : int, threadsPerBlock : uint)
+local terra blockReduce(val : opt_float, sdata : &opt_float, threadIdx : int, threadsPerBlock : uint)
 	var lane = laneid()
   	var wid = threadIdx / 32 -- TODO: check if this is right for 2D domains
 

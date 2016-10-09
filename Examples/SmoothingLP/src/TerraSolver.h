@@ -1,5 +1,6 @@
 #pragma once
 
+#include "PrecisionUtil.h"
 #include <cassert>
 
 #include "cutil.h"
@@ -37,7 +38,7 @@ public:
 
 	}
 
-	void solve(float3* d_unknown, float3* d_target, unsigned int nNonLinearIterations, unsigned int nLinearIterations, unsigned int nBlockIterations, float weightFit, float weightReg, float pNorm)
+    void solve(UNKNOWN_TYPE* d_unknown, UNKNOWN_TYPE* d_target, unsigned int nNonLinearIterations, unsigned int nLinearIterations, unsigned int nBlockIterations, float weightFit, float weightReg, float pNorm)
 	{
 
 		void* solverParams[] = { &nNonLinearIterations, &nLinearIterations, &nBlockIterations };

@@ -1,7 +1,7 @@
 local ad = {}
 local C = terralib.includec("math.h")
 local A = require("asdl").NewContext()
-
+require("precision")
 local use_simplify = true
 local use_condition_factoring = true
 local use_polysimplify = true
@@ -75,7 +75,7 @@ function Apply:children() return self.args end
 function Reduce:children() return self.args end
 
 function Exp:type() 
-    assert(self.type_ == bool or self.type_ == float) 
+    assert(self.type_ == bool or self.type_ == opt_float) 
     return self.type_ 
 end
 function Exp:shape()
@@ -87,11 +87,11 @@ function Const:__tostring() return tostring(self.v) end
 function Var:init()
     local key = self.key_
     self.id = allocid()
-    self.type_ = float
+    self.type_ = opt_float
     if type(key) == "table" and type(key.type) == "function" then
         self.type_ = key:type()
     end 
-    assert(self.type_ == float or self.type_ == bool, "variable with key exists with a different type")
+    assert(self.type_ == opt_float or self.type_ == bool, "variable with key exists with a different type")
     self.shape_ = ad.scalar
     if type(key) == "table" and type(key.shape) == "function" then
         self.shape_ = key:shape()
@@ -107,7 +107,7 @@ end
 
 function Const:init()
     self.id = allocid()
-    self.type_ = float
+    self.type_ = opt_float
     self.shape_ = ad.scalar
 end
 
@@ -429,12 +429,12 @@ function Op:define(fn,...)
     
     local syms,vars = terralib.newlist(),terralib.newlist()
     for i = 1,self.nparams do
-        syms:insert(symbol(float))
+        syms:insert(symbol(opt_float))
         vars:insert(ad.v[i])
     end
     local cpropexpression = self(unpack(vars))
     local r = self:generate(cpropexpression,syms)
-    terra self.impl([syms]) return float(r) end    
+    terra self.impl([syms]) return opt_float(r) end    
     
     return self
 end
@@ -454,7 +454,7 @@ end
     
 function Op:propagatetype(args) --returns a 2: <returntype>, <castedargumenttypes>
     -- default is 'float', special ops will override this
-    return float, rep(#args,float)
+    return opt_float, rep(#args,opt_float)
 end
 
 
@@ -806,8 +806,8 @@ end
 ad.prod.hasconst = true
 
 local genpow = terralib.memoize(function(N)
-    local terra pow(a : float) : float
-        var r : float = 1.f
+    local terra pow(a : opt_float) : opt_float
+        var r : opt_float = [opt_float](1.f)
         for i = 0,N do
             r = r*a
         end
@@ -855,10 +855,10 @@ ad.sqrt:define(function(x) return `C.sqrt(x) end, 1.0/(2.0*ad.sqrt(x)))
 ad.tan:define(function(x) return `C.tan(x) end, 1.0 + ad.tan(x)*ad.tan(x))
 ad.tanh:define(function(x) return `C.tanh(x) end, 1.0/(ad.cosh(x)*ad.cosh(x)))
 
-function ad.select:propagatetype(args) return float, {bool,float,float} end
+function ad.select:propagatetype(args) return opt_float, {bool,opt_float,opt_float} end
 ad.select:define(function(x,y,z) 
     return quote
-        var r : float
+        var r : opt_float
         if x then
             r = y
         else    
@@ -876,7 +876,7 @@ ad.or_:define(function(x,y) return `x or y end, 0, 0)
 
 local comparisons = { "less", "greater", "lesseq", "greatereq", "eq" }
 for i,c in ipairs(comparisons) do
-    ad[c].propagatetype = function(self,args) return bool, {float,float} end
+    ad[c].propagatetype = function(self,args) return bool, {opt_float,opt_float} end
 end 
 
 ad.eq:define(function(x,y) return `x == y end, 0,0)

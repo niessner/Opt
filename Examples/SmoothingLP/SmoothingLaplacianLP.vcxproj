@@ -137,6 +137,7 @@ xcopy /Y /D "..\..\API\release\include\*.h" "."</Command>
     <ClInclude Include="src\ImageWarping.h" />
     <ClInclude Include="src\main.h" />
     <ClInclude Include="src\mLibInclude.h" />
+    <ClInclude Include="src\PrecisionUtil.h" />
     <ClInclude Include="src\SolverUtil.h" />
     <ClInclude Include="src\TerraSolver.h" />
     <ClInclude Include="src\WarpingSolverEquations.h" />

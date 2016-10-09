@@ -4,6 +4,7 @@ local ffi = require("ffi")
 local util = require("util")
 local optlib = require("lib")
 ad = require("ad")
+require("precision")
 local A = ad.classes
 
 local C = util.C
@@ -35,7 +36,7 @@ local function createbuffer(args)
     for i,e in ipairs(args) do
         local typ = e:gettype()
         local field = "_"..tonumber(i)
-        typ = typ == float and double or typ
+        typ = typ == opt_float and double or typ
         table.insert(Buf.entries,{field,typ})
     end
     return quote
@@ -527,7 +528,7 @@ function ImageType:terratype()
         end
     end
 
-    if scalartype == float then    
+    if scalartype == float or scalartype == double then    
         terra Image:atomicAddChannel(idx : Index, c : int32, v : scalartype)
             var addr : &scalartype = &self.data[idx:tooffset()].data[c]
             util.atomicAdd(addr,v)
@@ -548,10 +549,10 @@ function ImageType:terratype()
     end
     -- lerps for 2D images only
     if 2 == #self.ispace.dims then
-        local terra lerp(v0 : vectortype, v1 : vectortype, t : float)
-            return (1.f - t)*v0 + t*v1
+        local terra lerp(v0 : vectortype, v1 : vectortype, t : opt_float)
+            return ([opt_float](1.) - t)*v0 + t*v1
         end
-        terra Image:sample(x : float, y : float)
+        terra Image:sample(x : opt_float, y : opt_float)
             var x0 : int, x1 : int = opt.math.floor(x),opt.math.ceil(x)
             var y0 : int, y1 : int = opt.math.floor(y),opt.math.ceil(y)
             var xn,yn = x - x0,y - y0
@@ -611,7 +612,7 @@ end
 
 function UnknownType:init()
     self.ispaces,self.ispacetoimages = MapAndGroupBy(self.images, function(ip)
-        assert(ip.imagetype.scalartype == float, "unknowns must be floating point numbers")
+        assert(ip.imagetype.scalartype == opt_float, "unknowns must be floating point numbers")
         return ip.imagetype.ispace, ip
     end)
     self.ispacesizes = {}
@@ -628,7 +629,7 @@ function UnknownType:IndexSpaces()
 end
 function UnknownType:VectorSizeForIndexSpace(ispace) return assert(self.ispacesizes[ispace],"unused ispace") end 
 function UnknownType:VectorTypeForIndexSpace(ispace)
-    return util.Vector(float,self:VectorSizeForIndexSpace(ispace))
+    return util.Vector(opt_float,self:VectorSizeForIndexSpace(ispace))
 end
 function UnknownType:UnknownIteratorForIndexSpace(ispace)
     local images = self.ispacetoimages[ispace]
@@ -831,8 +832,8 @@ function ad.ProblemSpec()
     local ps = ProblemSpecAD()
     ps.P,ps.nametoimage,ps.precomputed,ps.extraarguments,ps.excludeexps = opt.ProblemSpec(), {}, List(), List(), List()
     if ps.P:UsesLambda() then
-        ps.lambda = ps:Param("lambda",float,-1)
-        ps.lambda_increase_factor = ps:Param("lambda_increase_factor",float,-1)
+        ps.lambda = ps:Param("lambda",opt_float,-1)
+        ps.lambda_increase_factor = ps:Param("lambda_increase_factor",opt_float,-1)
     end
     return ps
 end
@@ -843,7 +844,7 @@ end
 
 function ProblemSpecAD:Image(name,typ,dims,idx,isunknown)
     if not terralib.types.istype(typ) then
-        typ,dims,idx,isunknown = float,typ,dims,idx --shift arguments left
+        typ,dims,idx,isunknown = opt_float,typ,dims,idx --shift arguments left
     end
     isunknown = isunknown and true or false
     local ispace = toispace(dims)
@@ -868,8 +869,8 @@ function ProblemSpecAD:UnknownArgument(argpos)
 end
 
 function ProblemSpecAD:ImageTemporary(name,ispace)
-    self.P:Image(name,float,ispace,"alloc",false)
-    local r = Image(name,self.P:ImageType(float,ispace),true,A.StateLocation)
+    self.P:Image(name,opt_float,ispace,"alloc",false)
+    local r = Image(name,self.P:ImageType(opt_float,ispace),true,A.StateLocation)
     self.nametoimage[name] = r
     return r
 end
@@ -1141,8 +1142,8 @@ local function createfunction(problemspec,name,Index,arguments,results,scatters)
     local irmap
     
     local function tofloat(ir,exp)
-        if ir.type ~= float then
-            return `float(exp)
+        if ir.type ~= opt_float then
+            return `opt_float(exp)
         else
             return exp
         end
@@ -1162,11 +1163,11 @@ local function createfunction(problemspec,name,Index,arguments,results,scatters)
             n = ad.prod(n.const,unpack(factors))
             cond = Condition:create(conditions)
         end
-        return A.reduce(op,List{vardecl,irmap(n)},float,vardecl.shape,cond)
+        return A.reduce(op,List{vardecl,irmap(n)},opt_float,vardecl.shape,cond)
     end
     irmap = terralib.memoize(function(e)
         if ad.ExpVector:isclassof(e) then
-            return A.vectorconstruct(e.data:map(irmap),util.Vector(float,#e.data),ad.scalar)
+            return A.vectorconstruct(e.data:map(irmap),util.Vector(opt_float,#e.data),ad.scalar)
         elseif "Var" == e.kind then
             local a = e:key()
             if "ImageAccess" == a.kind then
@@ -1184,9 +1185,9 @@ local function createfunction(problemspec,name,Index,arguments,results,scatters)
             return A.const(e.v,e:type(),ad.scalar)
         elseif "Apply" == e.kind then
             if use_split_sums and (e.op.name == "sum") and #e:children() > 2 then
-                local vardecl = A.vardecl(e.const,float,e:shape())
+                local vardecl = A.vardecl(e.const,opt_float,e:shape())
                 local children = List { vardecl }
-                local varuse = A.varuse(children,float,e:shape())
+                local varuse = A.varuse(children,opt_float,e:shape())
                 for i,c in ipairs(e:children()) do
                     children:insert(createreduce(e.op.name,vardecl,c))
                 end
@@ -1587,7 +1588,7 @@ local function createfunction(problemspec,name,Index,arguments,results,scatters)
     end
     local function createexp(ir)        
         if "const" == ir.kind then
-            return `float(ir.value)
+            return `opt_float(ir.value)
         elseif "intrinsic" == ir.kind then
             local a = ir.value
             if "BoundsAccess" == a.kind then--bounds calculation
@@ -1596,7 +1597,7 @@ local function createfunction(problemspec,name,Index,arguments,results,scatters)
                 local n = "d"..tostring(a.dim)
                 return `idx.[n] + a.shift_ 
             else assert("ParamValue" == a.kind)
-                return `float(P.[a.name])
+                return `opt_float(P.[a.name])
             end
         elseif "load" == ir.kind then
             local a = ir.value
@@ -1640,7 +1641,7 @@ local function createfunction(problemspec,name,Index,arguments,results,scatters)
             return `v(ir.channel)
         elseif "vectorconstruct" == ir.kind then
             local exps = ir.children:map(emit)
-            return `[util.Vector(float,#exps)]{ array(exps) }
+            return `[util.Vector(opt_float,#exps)]{ array(exps) }
         elseif "sampleimage" == ir.kind then
             local im = imageref(ir.image)
             local exps = ir.children:map(emit)
@@ -1653,7 +1654,7 @@ local function createfunction(problemspec,name,Index,arguments,results,scatters)
             local exps = ir.children:map(emit)
             return ir.generator(exps)
         elseif "vardecl" == ir.kind then
-            return `float(ir.constant)
+            return `opt_float(ir.constant)
         elseif "varuse" == ir.kind then
             local children = ir.children:map(emit)
             return children[1] -- return the variable declaration, which is the first child
@@ -2435,6 +2436,10 @@ end
 
 for i = 2,12 do
     opt["float"..tostring(i)] = util.Vector(float,i)
+end
+
+for i = 2,12 do
+    opt["double"..tostring(i)] = util.Vector(double,i)
 end
 
 opt.Dot = util.Dot

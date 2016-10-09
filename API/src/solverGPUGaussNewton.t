@@ -1,6 +1,7 @@
 local S = require("std")
 local util = require("util")
 local dbg = require("dbg")
+require("precision")
 local C = util.C
 local Timer = util.Timer
 
@@ -11,7 +12,7 @@ local gpuMath = util.gpuMath
 opt.BLOCK_SIZE = 16
 local BLOCK_SIZE =  opt.BLOCK_SIZE
 
-local FLOAT_EPSILON = `0.000001f 
+local FLOAT_EPSILON = `[opt_float](0.000001) 
 -- GAUSS NEWTON (non-block version)
 return function(problemSpec)
 
@@ -23,7 +24,7 @@ return function(problemSpec)
     local struct PlanData(S.Object) {
 		plan : opt.Plan
 		parameters : problemSpec:ParameterType()
-		scratchF : &float
+		scratchF : &opt_float
 
 		delta : TUnknownType	--current linear update to be computed -> num vars
 		r : TUnknownType		--residuals -> num vars	--TODO this needs to be a 'residual type'
@@ -33,20 +34,20 @@ return function(problemSpec)
 		preconditioner : TUnknownType --pre-conditioner for linear system -> num vars
 		g : TUnknownType		--gradient of F(x): g = -2J'F -> num vars
 		
-		scanAlphaNumerator : &float
-		scanAlphaDenominator : &float
-		scanBetaNumerator : &float
-		scanBetaDenominator : &float
+		scanAlphaNumerator : &opt_float
+		scanAlphaDenominator : &opt_float
+		scanBetaNumerator : &opt_float
+		scanBetaDenominator : &opt_float
 
-        modelCostChange : &float    -- modelCostChange = L(0) - L(delta) where L(h) = F' F + 2 h' J' F + h' J' J h
-        maxDiagJTJ : &float    -- maximum value in the diagonal of JTJ 
+        modelCostChange : &opt_float    -- modelCostChange = L(0) - L(delta) where L(h) = F' F + 2 h' J' F + h' J' J h
+        maxDiagJTJ : &opt_float    -- maximum value in the diagonal of JTJ 
 		
 		timer : Timer
 		endSolver : util.TimerEvent
 		nIter : int				--current non-linear iter counter
 		nIterations : int		--non-linear iterations
 		lIterations : int		--linear iterations
-	    prevCost : float
+	    prevCost : opt_float
 	}
 	
 	local delegate = {}
@@ -59,7 +60,7 @@ return function(problemSpec)
         local terra guardedInvert(p : unknownElement)
             var invp = p
             for i = 0, invp:size() do
-                invp(i) = terralib.select(invp(i) > FLOAT_EPSILON, 1.f / invp(i),invp(i))
+                invp(i) = terralib.select(invp(i) > FLOAT_EPSILON, [opt_float](1.f) / invp(i),invp(i))
             end
             return invp
         end
@@ -145,15 +146,15 @@ return function(problemSpec)
             end
         end
         terra kernels.PCGStep2(pd : PlanData)
-            var b = 0.0f 
+            var b = opt_float(0.0f) 
             var idx : Index
             if idx:initFromCUDAParams() and not fmap.exclude(idx,pd.parameters) then
                 -- sum over block results to compute denominator of alpha
-                var alphaDenominator : float = pd.scanAlphaDenominator[0]
-                var alphaNumerator : float = pd.scanAlphaNumerator[0]
+                var alphaDenominator : opt_float = pd.scanAlphaDenominator[0]
+                var alphaNumerator : opt_float = pd.scanAlphaNumerator[0]
                     
                 -- update step size alpha
-                var alpha = 0.0f
+                var alpha = opt_float(0.0f)
                 if alphaDenominator > FLOAT_EPSILON then 
                     alpha = alphaNumerator/alphaDenominator 
                 end 
@@ -165,7 +166,7 @@ return function(problemSpec)
     
                 var pre = pd.preconditioner(idx)
                 if not problemSpec.usepreconditioner then
-                    pre = 1.0f
+                    pre = opt_float(1.0f)
                 end
         
                 if isGraph then
@@ -186,10 +187,10 @@ return function(problemSpec)
             var idx : Index
             if idx:initFromCUDAParams() and not fmap.exclude(idx,pd.parameters) then
             
-                var rDotzNew : float = pd.scanBetaNumerator[0]				-- get new numerator
-                var rDotzOld : float = pd.scanAlphaNumerator[0]				-- get old denominator
+                var rDotzNew : opt_float = pd.scanBetaNumerator[0]				-- get new numerator
+                var rDotzOld : opt_float = pd.scanAlphaNumerator[0]				-- get old denominator
 
-                var beta : float = 0.0f		                    
+                var beta : opt_float = [opt_float](0.0f)		                    
                 if rDotzOld > FLOAT_EPSILON then beta = rDotzNew/rDotzOld end	-- update step size beta
                 pd.p(idx) = pd.z(idx)+beta*pd.p(idx)							-- update decent direction
 
@@ -211,11 +212,11 @@ return function(problemSpec)
         end	
 
         terra kernels.computeCost(pd : PlanData)			
-            var cost : float = 0.0f
+            var cost : opt_float = [opt_float](0.0f)
             var idx : Index
             if idx:initFromCUDAParams() and not fmap.exclude(idx,pd.parameters) then
                 var params = pd.parameters				
-                cost = cost + [float](fmap.cost(idx, params))
+                cost = cost + [opt_float](fmap.cost(idx, params))
             end
 
             cost = util.warpReduce(cost)
@@ -333,7 +334,7 @@ return function(problemSpec)
             end
         end
         terra kernels.computeCost_Graph(pd : PlanData)			
-            var cost : float = 0.0f
+            var cost : opt_float = [opt_float](0.0f)
             var tIdx = 0
             if util.getValidGraphElement(pd,[graphname],&tIdx) then
                 cost = cost + fmap.cost(tIdx, pd.parameters)
@@ -391,20 +392,20 @@ return function(problemSpec)
                                                                         "computeModelCostChangeStep2_Graph"
                                                                         })
 
-    local terra computeCost(pd : &PlanData) : float
-        C.cudaMemset(pd.scratchF, 0, sizeof(float))
+    local terra computeCost(pd : &PlanData) : opt_float
+        C.cudaMemset(pd.scratchF, 0, sizeof(opt_float))
         gpu.computeCost(pd)
         gpu.computeCost_Graph(pd)
-        var f : float
-        C.cudaMemcpy(&f, pd.scratchF, sizeof(float), C.cudaMemcpyDeviceToHost)
+        var f : opt_float
+        C.cudaMemcpy(&f, pd.scratchF, sizeof(opt_float), C.cudaMemcpyDeviceToHost)
         return f
     end
 
     local initLambda,computeModelCostChange
     
     if problemSpec:UsesLambda() then
-        terra computeModelCostChange(pd : &PlanData) : float
-            C.cudaMemset(pd.modelCostChange, 0, sizeof(float))
+        terra computeModelCostChange(pd : &PlanData) : opt_float
+            C.cudaMemset(pd.modelCostChange, 0, sizeof(opt_float))
 
             -- model_cost_change = delta' * (-2 * J' * F) + delta' * (-J' * J * delta)
             gpu.computeModelCostChangeStep1(pd)
@@ -415,20 +416,20 @@ return function(problemSpec)
                 gpu.computeModelCostChangeStep2_Graph(pd)
             end
 
-            var model_cost_change : float
-            C.cudaMemcpy(&model_cost_change, pd.modelCostChange, sizeof(float), C.cudaMemcpyDeviceToHost)
+            var model_cost_change : opt_float
+            C.cudaMemcpy(&model_cost_change, pd.modelCostChange, sizeof(opt_float), C.cudaMemcpyDeviceToHost)
 
             return model_cost_change
         end
         terra initLambda(pd : &PlanData)
             -- Init lambda based on the maximum value on the diagonal of JTJ
-            C.cudaMemset(pd.maxDiagJTJ, 0, sizeof(float))
+            C.cudaMemset(pd.maxDiagJTJ, 0, sizeof(opt_float))
 
             -- lambda = tau * max{a_ii} where A = JTJ
             var tau = 1e-6f
             gpu.LMLambdaInit(pd);
-            var maxDiagJTJ : float
-            C.cudaMemcpy(&maxDiagJTJ, pd.maxDiagJTJ, sizeof(float), C.cudaMemcpyDeviceToHost)
+            var maxDiagJTJ : opt_float
+            C.cudaMemcpy(&maxDiagJTJ, pd.maxDiagJTJ, sizeof(opt_float), C.cudaMemcpyDeviceToHost)
             pd.parameters.lambda = tau * maxDiagJTJ
         end
     end
@@ -456,10 +457,10 @@ return function(problemSpec)
 		var pd = [&PlanData](data_)
 		[util.initParameters(`pd.parameters,problemSpec, params_,false)]
 		if pd.nIter < pd.nIterations then
-			C.cudaMemset(pd.scanAlphaNumerator, 0, sizeof(float))	--scan in PCGInit1 requires reset
-			C.cudaMemset(pd.scanAlphaDenominator, 0, sizeof(float))	--scan in PCGInit1 requires reset
-			C.cudaMemset(pd.scanBetaNumerator, 0, sizeof(float))	--scan in PCGInit1 requires reset
-			C.cudaMemset(pd.scanBetaDenominator, 0, sizeof(float))	--scan in PCGInit1 requires reset
+			C.cudaMemset(pd.scanAlphaNumerator, 0, sizeof(opt_float))	--scan in PCGInit1 requires reset
+			C.cudaMemset(pd.scanAlphaDenominator, 0, sizeof(opt_float))	--scan in PCGInit1 requires reset
+			C.cudaMemset(pd.scanBetaNumerator, 0, sizeof(opt_float))	--scan in PCGInit1 requires reset
+			C.cudaMemset(pd.scanBetaDenominator, 0, sizeof(opt_float))	--scan in PCGInit1 requires reset
 
 			gpu.PCGInit1(pd)
 			
@@ -470,7 +471,7 @@ return function(problemSpec)
 
 			for lIter = 0, pd.lIterations do				
 
-                C.cudaMemset(pd.scanAlphaDenominator, 0, sizeof(float))
+                C.cudaMemset(pd.scanAlphaDenominator, 0, sizeof(opt_float))
 				
 				gpu.PCGStep1(pd)
 
@@ -478,13 +479,13 @@ return function(problemSpec)
 					gpu.PCGStep1_Graph(pd)	
 				end
 				
-				C.cudaMemset(pd.scanBetaNumerator, 0, sizeof(float))
+				C.cudaMemset(pd.scanBetaNumerator, 0, sizeof(opt_float))
 				
 				gpu.PCGStep2(pd)
 				gpu.PCGStep3(pd)
 
 				-- save new rDotz for next iteration
-				C.cudaMemcpy(pd.scanAlphaNumerator, pd.scanBetaNumerator, sizeof(float), C.cudaMemcpyDeviceToDevice)	
+				C.cudaMemcpy(pd.scanAlphaNumerator, pd.scanBetaNumerator, sizeof(opt_float), C.cudaMemcpyDeviceToDevice)	
 				
 			end
 			
@@ -553,7 +554,7 @@ return function(problemSpec)
 
     local terra cost(data_ : &opaque) : float
         var pd = [&PlanData](data_)
-        return pd.prevCost
+        return [float](pd.prevCost)
     end
 
 	local terra makePlan() : &opt.Plan
@@ -569,14 +570,14 @@ return function(problemSpec)
 		pd.preconditioner:initGPU()
 		pd.g:initGPU()
 		[util.initPrecomputedImages(`pd.parameters,problemSpec)]	
-		C.cudaMalloc([&&opaque](&(pd.scanAlphaNumerator)), sizeof(float))
-		C.cudaMalloc([&&opaque](&(pd.scanBetaNumerator)), sizeof(float))
-		C.cudaMalloc([&&opaque](&(pd.scanAlphaDenominator)), sizeof(float))
-		C.cudaMalloc([&&opaque](&(pd.scanBetaDenominator)), sizeof(float))
-		C.cudaMalloc([&&opaque](&(pd.modelCostChange)), sizeof(float))
-		C.cudaMalloc([&&opaque](&(pd.maxDiagJTJ)), sizeof(float))
+		C.cudaMalloc([&&opaque](&(pd.scanAlphaNumerator)), sizeof(opt_float))
+		C.cudaMalloc([&&opaque](&(pd.scanBetaNumerator)), sizeof(opt_float))
+		C.cudaMalloc([&&opaque](&(pd.scanAlphaDenominator)), sizeof(opt_float))
+		C.cudaMalloc([&&opaque](&(pd.scanBetaDenominator)), sizeof(opt_float))
+		C.cudaMalloc([&&opaque](&(pd.modelCostChange)), sizeof(opt_float))
+		C.cudaMalloc([&&opaque](&(pd.maxDiagJTJ)), sizeof(opt_float))
 		
-		C.cudaMalloc([&&opaque](&(pd.scratchF)), sizeof(float))
+		C.cudaMalloc([&&opaque](&(pd.scratchF)), sizeof(opt_float))
 		return &pd.plan
 	end
 	return makePlan
