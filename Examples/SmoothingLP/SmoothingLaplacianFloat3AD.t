@@ -7,7 +7,7 @@ local w_regSqrt = S:Param("w_regSqrt", float, 1)
 local pNorm = S:Param("pNorm", float, 2)
 local X = S:Unknown("X", unknownType,{W,H},3)
 local X_const = S:Image("X_const", unknownType,{W,H},3)
-local A = S:Image("A", opt.float3,{W,H},4)
+local A = S:Image("A", unknownType,{W,H},4)
 
 local terms = terralib.newlist()
 
