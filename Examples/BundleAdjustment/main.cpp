@@ -8,10 +8,39 @@ struct App
     BundlerManager bundler;
 };
 
+struct Settings {
+    vector<double> thresholds;
+    std::string sensorFile;
+    uint sensorFrameSkip;
+    uint sensorMaxNumFrames;
+    static Settings defaultSettings() {
+        Settings s;
+        s.thresholds = { -1.0, 0.1, 0.05, 0.02, 0.01, 0.005 };
+        s.sensorFile = "/sensors/fr3_office.sens";
+        s.sensorFrameSkip = 12;
+        s.sensorMaxNumFrames = 0;
+        return s;
+    }
+
+    static Settings fastSettings() {
+        Settings s;
+        s.thresholds = { -1.0 };
+        s.sensorFile = "/sensors/fr3_office.sens";
+        s.sensorFrameSkip = 12;
+        s.sensorMaxNumFrames = 170;
+        return s;
+    }
+    
+    
+};
+
+static Settings s_settings = Settings::fastSettings();
+
+
 void App::go()
 {
     //bundler.loadSensorFileA(constants::dataDir + "/sensors/sample.sensor");
-    bundler.loadSensorFileB(constants::dataDir + "/sensors/fr3_office.sens", 12, 170);
+    bundler.loadSensorFileB(constants::dataDir + s_settings.sensorFile, s_settings.sensorFrameSkip, s_settings.sensorMaxNumFrames);
     //bundler.frames.resize(2);
     //bundler.loadSensorFileB(constants::dataDir + "/sensors/fr1_desk.sens", 10);
     bundler.computeKeypoints();
@@ -22,11 +51,9 @@ void App::go()
     bundler.allCorrespondences[0].visualize(constants::debugDir + "0_1/");
 
     ofstream alignmentFile(constants::debugDir + "alignmentError.csv");
-    
-    //const vector<double> thresholds = { -1.0, 0.1, 0.05, 0.02, 0.01, 0.005 };
-    const vector<double> thresholds = { -1.0 };
 
-    for (const auto &threshold : iterate(thresholds))
+
+    for (const auto &threshold : iterate(s_settings.thresholds))
     {
         if (threshold.value > 0.0)
             bundler.thresholdCorrespondences(threshold.value);
@@ -41,7 +68,7 @@ void App::go()
             //cout << endl;
         }*/
 
-		bundler.solveCeres(1e-6);
+		//bundler.solveCeres(1e-6);
 
         bundler.solveOpt(1000, 25);
         

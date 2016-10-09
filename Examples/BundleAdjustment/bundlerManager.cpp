@@ -170,8 +170,8 @@ void BundlerManager::addCorrespondences(int frameAIndex, int frameBIndex, vector
 
         corr.residual = -1.0f;
 
-        if (corr.ptALocal.isValid() &&
-            corr.ptBLocal.isValid())
+        if (corr.ptALocal.isFinite() &&
+            corr.ptBLocal.isFinite())
             correspondences.allCorr.push_back(corr);
     }
 
@@ -201,7 +201,7 @@ void BundlerManager::solveCeres(double tolerance)
     for (const Keypoint &keypt : frames[0].keypoints)
     {
         const vec3f framePos = frames[0].localPos(keypt.pt);
-        if (!framePos.isValid())
+        if (!framePos.isFinite())
             continue;
 
         ceres::CostFunction* costFunction = AnchorCostFunc::Create(framePos, 100.0f);
@@ -350,7 +350,7 @@ void BundlerManager::saveKeypointCloud(const string &outputFilename) const
         {
             vec2i coord((int)p.x, (int)p.y);
             const vec3f framePos = frame.localPos(coord);
-            if (!framePos.isValid())
+            if (!framePos.isFinite())
                 continue;
 
             if (p.x % stride != 0 || p.y % stride != 0)

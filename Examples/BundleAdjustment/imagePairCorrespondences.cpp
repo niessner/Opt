@@ -89,7 +89,7 @@ void ImagePairCorrespondences::visualize(const string &dir) const
     for (const auto &p : imageA->depthImage)
     {
         const vec3f pos = imageA->localPos(vec2i((int)p.x, (int)p.y));
-        if (!pos.isValid())
+        if (!pos.isFinite())
             continue;
 
         if (p.x % stride != 0 || p.y % stride != 0)
@@ -101,7 +101,7 @@ void ImagePairCorrespondences::visualize(const string &dir) const
     for (const auto &p : imageB->depthImage)
     {
         const vec3f pos = imageB->localPos(vec2i((int)p.x, (int)p.y));
-        if (!pos.isValid())
+        if (!pos.isFinite())
             continue;
 
         if (p.x % stride != 0 || p.y % stride != 0)
