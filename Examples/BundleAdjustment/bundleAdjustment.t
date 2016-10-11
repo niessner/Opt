@@ -2,11 +2,12 @@
 local cameraCount = Dim("cameraCount", 0)
 local correspondenceCount = Dim("correspondenceCount", 1)
 
---local anchorWeight = Param("anchorWeight", float, XX)
+local unknownType = double6
+local weightType = double
 
-local cameras =         Unknown("cameras", float6, {cameraCount}, 0) -- translation.xyz, rotation.xyz
-local correspondences =	Image("correspondences", float6, {correspondenceCount}, 1) -- ptA.xyz, ptB.xyz
-local anchorWeights =   Image("anchorWeights", float, {cameraCount}, 2)
+local cameras =         Unknown("cameras", unknownType, {cameraCount}, 0) -- translation.xyz, rotation.xyz
+local correspondences =	Image("correspondences", unknownType, {correspondenceCount}, 1) -- ptA.xyz, ptB.xyz
+local anchorWeights =   Image("anchorWeights", weightType, {cameraCount}, 2)
 
 local G = Graph("G", 3,
                 "cameraA", {cameraCount}, 4, 

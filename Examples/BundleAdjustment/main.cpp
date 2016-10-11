@@ -70,7 +70,7 @@ void App::go()
 
 		//bundler.solveCeres(1e-6);
 
-        bundler.solveOpt(1000, 25);
+        bundler.solveOpt(5000, 64);
         
 
         const string suffix = util::zeroPad((int)threshold.index, 1);
@@ -87,6 +87,6 @@ int main(int argc, char** argv)
 
     App app;
     app.go();
-
+    getchar();
     return 0;
 }

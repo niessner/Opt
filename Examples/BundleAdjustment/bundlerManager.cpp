@@ -1,6 +1,14 @@
 
 #include "main.h"
 
+#define DOUBLE_PRECISION_OPT 1
+
+#if DOUBLE_PRECISION_OPT
+#define OPT_FLOAT double
+#else
+#define OPT_FLOAT float
+#endif
+
 extern "C" {
 #include "Opt.h"
 }
@@ -272,16 +280,18 @@ void BundlerManager::solveOpt(int linearIterations, int nonLinearIterations)
 
     void* solverParams[] = { &nonLinearIterations, &linearIterations, &blockIterations };
 
-    vector<float> cameras(cameraCount * 6);
+
+
+    vector<OPT_FLOAT> cameras(cameraCount * 6);
     for (BundlerFrame &f : frames)
     {
         for (int i = 0; i < 6; i++)
-            cameras[f.index * 6 + i] = (float)f.camera[i];
+            cameras[f.index * 6 + i] = (OPT_FLOAT)f.camera[i];
     }
-    float *d_cameras = createDeviceBuffer(cameras, "cameras");
+    OPT_FLOAT *d_cameras = createDeviceBuffer(cameras, "cameras");
     
 
-    vector<vec3f> correspondences;
+    vector<ml::vec3<OPT_FLOAT>> correspondences;
     vector<int> cameraAIndices, cameraBIndices, correspondenceIndices;
     for (const ImagePairCorrespondences &iCorr : allCorrespondences)
     {
@@ -294,11 +304,11 @@ void BundlerManager::solveOpt(int linearIterations, int nonLinearIterations)
             correspondenceIndices.push_back((int)correspondenceIndices.size());
         }
     }
-    vec3f *d_correspondences = createDeviceBuffer(correspondences, "correspondences");
+    ml::vec3<OPT_FLOAT> *d_correspondences = createDeviceBuffer(correspondences, "correspondences");
 
-    vector<float> anchorWeights(cameraCount, 0.0f);
-    anchorWeights[0] = 100.0f;
-    float *d_anchorWeights = createDeviceBuffer(anchorWeights, "anchorWeights");
+    vector<OPT_FLOAT> anchorWeights(cameraCount, (OPT_FLOAT)0.0f);
+    anchorWeights[0] = (OPT_FLOAT)100.0f;
+    OPT_FLOAT *d_anchorWeights = createDeviceBuffer(anchorWeights, "anchorWeights");
     int *d_cameraAIndices = createDeviceBuffer(cameraAIndices, "cameraAIndices");
     int *d_cameraBIndices = createDeviceBuffer(cameraBIndices, "cameraBIndices");
     int *d_correspondenceIndices = createDeviceBuffer(correspondenceIndices, "correspondenceIndices");
@@ -307,7 +317,7 @@ void BundlerManager::solveOpt(int linearIterations, int nonLinearIterations)
     
     Opt_ProblemSolve(optimizerState, plan, problemParams, solverParams);
 
-    cutilSafeCall(cudaMemcpy(cameras.data(), d_cameras, sizeof(float)*cameras.size(), cudaMemcpyDeviceToHost));
+    cutilSafeCall(cudaMemcpy(cameras.data(), d_cameras, sizeof(OPT_FLOAT)*cameras.size(), cudaMemcpyDeviceToHost));
 
     for (BundlerFrame &f : frames)
     {
