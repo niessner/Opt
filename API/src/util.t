@@ -403,8 +403,6 @@ local terra atomicMax(max_value : &float, value : float)
             __float_as_int( util.gpuMath.fmax(value, __int_as_float(assumed)) )
             );
     until assumed == old;
-
-    max_value[0] = __int_as_float(old);
 end
 util.atomicMax = atomicMax
 
