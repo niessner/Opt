@@ -159,7 +159,7 @@ FunctionKind = CenteredFunction(IndexSpace ispace) unique
 ResidualTemplate = (Exp expression, ImageAccess* unknowns)
 EnergySpec = (FunctionKind kind, ResidualTemplate* residuals)
 
-FunctionSpec = (FunctionKind kind, string name, string* arguments, ExpLike* results, Scatter* scatters)
+FunctionSpec = (FunctionKind kind, string name, string* arguments, ExpLike* results, Scatter* scatters, EnergySpec? derivedfrom)
 
 Scatter = (Image image,Index index, number channel, Exp expression, string kind)
 Condition = (IRNode* members)
@@ -265,7 +265,9 @@ function A.GraphFunction:__tostring() return tostring(self.graphname) end
 function ProblemSpec:Functions(ft, functions)
     self:Stage "functions"
     for k,v in pairs(functions) do
-        v:gettype() -- check they typecheck now
+        if k ~= "derivedfrom" then
+            v:gettype() -- check they typecheck now
+        end
     end
     
     -- support by-hand interface
@@ -1803,6 +1805,10 @@ function ProblemSpecAD:AddFunctions(functionspecs)
         end
         assert(not fm[fs.name],"function already defined!")
         fm[fs.name] = self:CompileFunctionSpec(fs)
+        if fm.derivedfrom and fs.derivedfrom then
+            assert(fm.derivedfrom == fs.derivedfrom, "not same energy spec?")
+        end
+        fm.derivedfrom = fm.derivedfrom or fs.derivedfrom
     end
     for _,k in ipairs(kinds) do
         local fm = kind_to_functionmap[k]
@@ -1949,7 +1955,7 @@ local function createjtjcentered(PS,ES)
     P_hat = ad.polysimplify(P_hat)
     dprint("JTJ[poly] = ", ad.tostrings(P_hat))
     local r = ad.Vector(unpack(P_hat))
-    local result = A.FunctionSpec(ES.kind,"applyJTJ", List {"P"}, List{r}, EMPTY)
+    local result = A.FunctionSpec(ES.kind,"applyJTJ", List {"P"}, List{r}, EMPTY,ES)
     return result
 end
 
@@ -2001,7 +2007,7 @@ local function createjtjcenteredsimple(PS,ES)
     P_hat = ad.polysimplify(P_hat)
     dprint("JTJ[poly] = ", ad.tostrings(P_hat))
     local r = ad.Vector(unpack(P_hat))
-    local result = A.FunctionSpec(ES.kind,"applyJTJsimple", List {"P"}, List{r}, EMPTY)
+    local result = A.FunctionSpec(ES.kind,"applyJTJsimple", List {"P"}, List{r}, EMPTY,ES)
     return result
 end
 
@@ -2043,7 +2049,7 @@ local function createjtjgraph(PS,ES)
         end
     end
 
-    return A.FunctionSpec(ES.kind,"applyJTJ", List {"P", "Ap_X"}, List { result }, scatters)
+    return A.FunctionSpec(ES.kind,"applyJTJ", List {"P", "Ap_X"}, List { result }, scatters, ES)
 end
 
 -- the same as createjtfgraph but computing -p'J'Jp and without computing the preconditioner
@@ -2069,7 +2075,7 @@ local function createjtjgraphsimple(PS,ES)
         end
     end
 
-    return A.FunctionSpec(ES.kind,"applyJTJsimple", List {"P"}, List { result }, EMPTY)
+    return A.FunctionSpec(ES.kind,"applyJTJsimple", List {"P"}, List { result }, EMPTY,ES)
 end
 
 local function createjtfcentered(PS,ES)
@@ -2116,7 +2122,7 @@ local function createjtfcentered(PS,ES)
 	    F_hat[i] = ad.polysimplify(2.0*F_hat[i])
 	end
 	dprint("JTF =", ad.tostrings({F_hat[1], F_hat[2], F_hat[3]}))
-    return A.FunctionSpec(ES.kind,"evalJTF", EMPTY, List{ ad.Vector(unpack(F_hat)), ad.Vector(unpack(P_hat)) }, EMPTY)
+    return A.FunctionSpec(ES.kind,"evalJTF", EMPTY, List{ ad.Vector(unpack(F_hat)), ad.Vector(unpack(P_hat)) }, EMPTY,ES)
 end
 
 -- the same as createjtfcentered but without computing the preconditioner
@@ -2154,7 +2160,7 @@ local function createjtfcenteredsimple(PS,ES)
 	    F_hat[i] = ad.polysimplify(2.0*F_hat[i])
 	end
 	dprint("JTF =", ad.tostrings({F_hat[1], F_hat[2], F_hat[3]}))
-    return A.FunctionSpec(ES.kind,"evalJTFsimple", EMPTY, List{ ad.Vector(unpack(F_hat)) }, EMPTY)
+    return A.FunctionSpec(ES.kind,"evalJTFsimple", EMPTY, List{ ad.Vector(unpack(F_hat)) }, EMPTY,ES)
 end
 
 local function creatediagjtjcentered(PS,ES)
@@ -2190,7 +2196,7 @@ local function creatediagjtjcentered(PS,ES)
         P_hat[i] = ad.polysimplify(P_hat[i])
 	end
 
-    return A.FunctionSpec(ES.kind,"evalDiagJTJ", EMPTY, List{ ad.Vector(unpack(P_hat)) }, EMPTY)
+    return A.FunctionSpec(ES.kind,"evalDiagJTJ", EMPTY, List{ ad.Vector(unpack(P_hat)) }, EMPTY,ES)
 end
 
 local function createjtfgraph(PS,ES)
@@ -2218,7 +2224,7 @@ local function createjtfgraph(PS,ES)
             addscatter(Pre,u,2.0*partial*partial)
         end
     end
-    return A.FunctionSpec(ES.kind, "evalJTF", List { "R", "Pre" }, EMPTY, scatters)
+    return A.FunctionSpec(ES.kind, "evalJTF", List { "R", "Pre" }, EMPTY, scatters,ES)
 end
 
 -- the same as createjtfgraph but without computing the preconditioner
@@ -2246,7 +2252,7 @@ local function createjtfgraphsimple(PS,ES)
             addscatter(R,u,-2.0*partial*F)
         end
     end
-    return A.FunctionSpec(ES.kind, "evalJTFsimple", List { "R" }, EMPTY, scatters)
+    return A.FunctionSpec(ES.kind, "evalJTFsimple", List { "R" }, EMPTY, scatters,ES)
 end
 
 -- local function creatediagjtjgraph(PS,ES)
@@ -2275,6 +2281,35 @@ end
 --     end
 --     return A.FunctionSpec(ES.kind, "evalDiagJTJ", EMPTY, List, scatters)
 -- end
+
+local function createdumpjcentered(PS,ES)
+   local UnknownType = PS.P:UnknownType()
+   local ispace = ES.kind.ispace
+   local N = UnknownType:VectorSizeForIndexSpace(ispace)
+
+    local outputs = List{}
+
+    for ridx,residual in ipairs(ES.residuals) do
+        local F, unknownsupport = residual.expression,residual.unknowns
+        lprintf(0,"-------------")
+        lprintf(1,"R[%d] = %s",ridx,tostring(F))
+        for i,unknown in ipairs(unknownsupport) do
+            outputs:insert(F:d(ad.v[unknown]))
+        end
+    end
+    return A.FunctionSpec(ES.kind,"dumpJ", EMPTY, outputs, EMPTY,ES)
+end
+local function createdumpjgraph(PS,ES)
+    local outputs = List{}
+    for i,term in ipairs(ES.residuals) do
+        local F,unknownsupport = term.expression,term.unknowns
+        for i,unknown in ipairs(unknownsupport) do
+            outputs:insert(F:d(ad.v[unknown]))
+        end
+    end
+    return A.FunctionSpec(ES.kind, "dumpJ", EMPTY, outputs, EMPTY,ES)
+end
+
 
 local lastTime = nil
 function timeSinceLast(name)
@@ -2314,7 +2349,7 @@ local function createcost(ES)
         return sum
     end
     local exp = sumsquared(ES.residuals:map("expression"))
-    return A.FunctionSpec(ES.kind,"cost", EMPTY, List{exp}, EMPTY) 
+    return A.FunctionSpec(ES.kind,"cost", EMPTY, List{exp}, EMPTY,ES) 
 end
 
 function createprecomputed(self,precomputedimages)
@@ -2365,6 +2400,7 @@ function ProblemSpecAD:Cost(...)
         if energyspec.kind.kind == "CenteredFunction" then
             functionspecs:insert(createjtjcentered(self,energyspec))
             functionspecs:insert(createjtfcentered(self,energyspec))
+            functionspecs:insert(createdumpjcentered(self,energyspec))
             
             if self.P:UsesLambda() then
                 functionspecs:insert(createjtjcenteredsimple(self,energyspec))
@@ -2374,6 +2410,7 @@ function ProblemSpecAD:Cost(...)
         else
             functionspecs:insert(createjtjgraph(self,energyspec))
             functionspecs:insert(createjtfgraph(self,energyspec))
+            functionspecs:insert(createdumpjgraph(self,energyspec))
 
             if self.P:UsesLambda() then
                 functionspecs:insert(createjtjgraphsimple(self,energyspec))
@@ -2389,7 +2426,7 @@ function ProblemSpecAD:Cost(...)
     end
     
     self:AddFunctions(functionspecs)
-    
+    self.P.energyspecs = energyspecs
     return self.P
 end
 

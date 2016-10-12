@@ -15,10 +15,45 @@ local BLOCK_SIZE =  opt.BLOCK_SIZE
 local FLOAT_EPSILON = `[opt_float](0.000001) 
 -- GAUSS NEWTON (non-block version)
 return function(problemSpec)
-
     local UnknownType = problemSpec:UnknownType()
 	local TUnknownType = UnknownType:terratype()	
 	
+    local imagename_to_unknown_offset = {}
+    local energyspec_to_residual_offset_exp = {}
+    local energyspec_to_rowidx_offset_exp = {}
+    local nUnknowns,nResidualsExp,nnzExp = 0,`0,`0
+    local parametersSym = symbol(problemSpec:ParameterType(),"parameters")
+    local function numberofelements(ES)
+        if ES.kind.kind == "CenteredFunction" then
+            return ES.kind.ispace:cardinality()
+        else
+            return `parametersSym.[ES.kind.graphname].N
+        end
+    end
+    if problemSpec.energyspecs then
+        for i,image in ipairs(UnknownType.images) do
+            imagename_to_unknown_offset[image.name] = nUnknowns
+            print(("image %s has offset %d"):format(image.name,nUnknowns))
+            nUnknowns = nUnknowns + image.imagetype.ispace:cardinality()*image.imagetype.channelcount
+        end
+        for i,es in ipairs(problemSpec.energyspecs) do
+            print("ES",i,nResidualsExp,nnzExp)
+            energyspec_to_residual_offset_exp[es] = nResidualsExp
+            energyspec_to_rowidx_offset_exp[es] = nnzExp
+            
+            local residuals_per_element = #es.residuals
+            nResidualsExp = `nResidualsExp + [numberofelements(es)]*residuals_per_element
+            local nentries = 0
+            for i,r in ipairs(es.residuals) do
+                nentries = nentries + #r.unknowns
+            end
+            nnzExp = `nnzExp + [numberofelements(es)]*nentries
+        end
+        print("nUnknowns = ",nUnknowns)
+        print("nResiduals = ",nResidualsExp)
+        print("nnz = ",nnzExp)
+    end
+    
     local isGraph = problemSpec:UsesGraphs() 
     
     local struct PlanData(S.Object) {
@@ -48,11 +83,15 @@ return function(problemSpec)
 		nIterations : int		--non-linear iterations
 		lIterations : int		--linear iterations
 	    prevCost : opt_float
+	    
+	    J_values : &opt_float
+	    J_colindex : &int
+	    J_rowptr : &int
 	}
 	
 	local delegate = {}
-	
 	function delegate.CenterFunctions(UnknownIndexSpace,fmap)
+	    --print("ES",fmap.derivedfrom)
 	    local kernels = {}
 	    local unknownElement = UnknownType:VectorTypeForIndexSpace(UnknownIndexSpace)
 	    local Index = UnknownIndexSpace:indextype()
@@ -224,6 +263,57 @@ return function(problemSpec)
                 util.atomicAdd(pd.scratchF, cost)
             end
         end
+        if not fmap.dumpJ then
+            terra kernels.saveJToCRS(pd : PlanData)
+            end
+        else
+            terra kernels.saveJToCRS(pd : PlanData)
+                var idx : Index
+                var [parametersSym] = pd.parameters
+                if idx:initFromCUDAParams() and not fmap.exclude(idx,pd.parameters) then
+                    var rhs = fmap.dumpJ(idx,pd.parameters)
+                    escape
+                        local ES = fmap.derivedfrom
+                        local nnz_per_entry = 0
+                        for i,r in ipairs(ES.residuals) do
+                            nnz_per_entry = nnz_per_entry + #r.unknowns
+                        end
+                        local nnz = 0
+                        local residual = 0
+                        local base_rowidx = energyspec_to_rowidx_offset_exp[ES]
+                        local base_residual = energyspec_to_residual_offset_exp[ES]
+                        local local_rowidx = `base_rowidx + idx:tooffset()*nnz_per_entry
+                        local local_residual = `base_residual + idx:tooffset()*[#ES.residuals]
+                        
+                        for i,r in ipairs(ES.residuals) do
+                            emit quote
+                                pd.J_rowptr[local_residual+residual] = local_rowidx + nnz
+                            end
+                            for i,u in ipairs(r.unknowns) do
+                                local image_offset = imagename_to_unknown_offset[u.image.name]
+                                local nchannels = u.image.type.channelcount
+                                local uidx = `idx([{unpack(u.index.data)}]):tooffset()
+                                local unknown_index = `image_offset + nchannels*uidx + u.channel
+                                local set = quote
+                                    pd.J_values[local_rowidx + nnz] = rhs.["_"..tostring(nnz)]
+                                    pd.J_colindex[local_rowidx + nnz] = unknown_index
+                                end
+                                emit(set)
+                                nnz = nnz + 1
+                            end
+                            residual = residual + 1
+                            -- write next entry as well to ensure the final entry is correct
+                            -- wasteful but less chance for error
+                            emit quote
+                                pd.J_rowptr[local_residual+residual] = local_rowidx + nnz
+                            end
+                        end
+                    end
+                end
+            end
+            print(kernels.saveJToCRS)
+        end
+    
 
         if fmap.precompute then
             terra kernels.precompute(pd : PlanData)
@@ -313,7 +403,8 @@ return function(problemSpec)
 	    return kernels
 	end
 	
-	function delegate.GraphFunctions(graphname,fmap)
+	function delegate.GraphFunctions(graphname,fmap,ES)
+	    --print("ES-graph",fmap.derivedfrom)
 	    local kernels = {}
         terra kernels.PCGInit1_Graph(pd : PlanData)
             var tIdx = 0
@@ -389,7 +480,8 @@ return function(problemSpec)
                                                                         "PCGStep1_Graph",
                                                                         "computeCost_Graph",
                                                                         "computeModelCostChangeStep1_Graph",
-                                                                        "computeModelCostChangeStep2_Graph"
+                                                                        "computeModelCostChangeStep2_Graph",
+                                                                        "saveJToCRS"
                                                                         })
 
     local terra computeCost(pd : &PlanData) : opt_float
@@ -463,7 +555,7 @@ return function(problemSpec)
 			C.cudaMemset(pd.scanBetaDenominator, 0, sizeof(opt_float))	--scan in PCGInit1 requires reset
 
 			gpu.PCGInit1(pd)
-			
+			--gpu.saveJToCRS(pd)
 			if isGraph then
 				gpu.PCGInit1_Graph(pd)	
 				gpu.PCGInit1_Finish(pd)	

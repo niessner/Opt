@@ -106,7 +106,9 @@ local terra NewState() : &LibraryState
     C.luaL_openlibs(L)
     var o  = C.terra_Options { verbose = 0, debug = 1, usemcjit = 1 }
     
-    C.terra_initwithoptions(L,&o)
+    if C.terra_initwithoptions(L,&o) ~= 0 then
+        doerror(L)
+    end
     
     setupsigsegv(L)
     C.lua_getfield(L,LUA_GLOBALSINDEX,"package")
