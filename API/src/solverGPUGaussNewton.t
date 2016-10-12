@@ -53,6 +53,7 @@ return function(problemSpec)
 	local delegate = {}
 	
 	function delegate.CenterFunctions(UnknownIndexSpace,fmap)
+	    --print("ES",fmap.derivedfrom)
 	    local kernels = {}
 	    local unknownElement = UnknownType:VectorTypeForIndexSpace(UnknownIndexSpace)
 	    local Index = UnknownIndexSpace:indextype()
@@ -313,7 +314,8 @@ return function(problemSpec)
 	    return kernels
 	end
 	
-	function delegate.GraphFunctions(graphname,fmap)
+	function delegate.GraphFunctions(graphname,fmap,ES)
+	    --print("ES-graph",fmap.derivedfrom)
 	    local kernels = {}
         terra kernels.PCGInit1_Graph(pd : PlanData)
             var tIdx = 0
