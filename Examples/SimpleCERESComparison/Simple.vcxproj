@@ -168,6 +168,6 @@ xcopy /Y /D "..\..\API\release\include\*.h" "."</Command>
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">
-    <Import Project="$(VCTargetsPath)\BuildCustomizations\CUDA 6.5.targets" />
+    <Import Project="$(VCTargetsPath)\BuildCustomizations\CUDA 7.0.targets" />
   </ImportGroup>
 </Project>

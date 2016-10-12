@@ -82,7 +82,7 @@ void CeresSolver::solve(
 
     //options.min_linear_solver_iterations = linearIterationMin;
     options.max_num_iterations = 10000;
-    options.function_tolerance = 0.1;
+    options.function_tolerance = 0.00001;
     options.gradient_tolerance = 1e-4 * options.function_tolerance;
 
     //options.min_lm_diagonal = 1.0f;

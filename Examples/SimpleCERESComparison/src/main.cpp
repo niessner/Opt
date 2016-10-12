@@ -1,10 +1,10 @@
 ﻿
 #include "CombinedSolver.h"
 #include <random>
-
+#include <iostream>
 int main(int argc, const char * argv[]) {
-    int N = 16;
-    double2 generatorParams = { 131.0, 83.1 };
+    int N = 512;
+    double2 generatorParams = { 100.0, 102.0 };
     std::vector<double2> dataPoints(N);
     double a = generatorParams.x;
     double b = generatorParams.y;
@@ -15,15 +15,17 @@ int main(int argc, const char * argv[]) {
         double x = double(i)*2.0*3.141592653589 / N;
         double y = (a*cos(b*x) + b*sin(a*x));
         // Add in noise
-        y += dis(gen);
+        //y += dis(gen);
         dataPoints[i].x = x;
         dataPoints[i].y = y;
 
     }
-    // Generate data
-    CombinedSolver solver(generatorParams, dataPoints);
-    solver.solve();
+    double2 initalGuess = { 99.5, 102.5 };
 
+    // Generate data
+    CombinedSolver solver(initalGuess, dataPoints);
+    double2 finalResult = solver.solve();
+    std::cout << "Final Result: " << finalResult.x << ", " << finalResult.y << std::endl;
 
     #ifdef _WIN32
  	    getchar();

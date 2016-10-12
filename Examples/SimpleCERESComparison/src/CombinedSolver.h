@@ -25,7 +25,7 @@ public:
 
 
         if (useOpt) {
-            m_solverOpt = new TerraSolver(dataPoints.size(), "curveFitting.t", "gaussNewtonGPU");
+            m_solverOpt = new TerraSolver((uint32_t)dataPoints.size(), "curveFitting.t", "gaussNewtonGPU");
 		}
 
         if (useCeres) {
