@@ -30,3 +30,6 @@ void Opt_ProblemInit(Opt_State* state, Opt_Plan* plan, void** problemparams, voi
 // perform one outer iteration of the solver loop and return to the user.
 // a zero return value indicates that the solver is finished according to its parameters
 int Opt_ProblemStep(Opt_State* state, Opt_Plan* plan, void** problemparams, void** solverparams);
+
+// Return the result of the cost function evaluated on the current unknowns
+float Opt_ProblemCurrentCost(Opt_State* state, Opt_Plan* plan);
