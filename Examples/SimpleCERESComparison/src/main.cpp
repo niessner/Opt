@@ -14,6 +14,7 @@ int main(int argc, const char * argv[]) {
     for (int i = 0; i < dataPoints.size(); ++i) {
         double x = double(i)*2.0*3.141592653589 / N;
         double y = (a*cos(b*x) + b*sin(a*x));
+        //y = a*x + b;
         // Add in noise
         //y += dis(gen);
         dataPoints[i].x = x;
