@@ -60,7 +60,7 @@ public:
 	}
 
 
-	void solve(float2* d_x, float2* d_data, unsigned int nNonLinearIterations, unsigned int nLinearIterations)
+    void solve(OPT_FLOAT2* d_x, OPT_FLOAT2* d_data, unsigned int nNonLinearIterations, unsigned int nLinearIterations)
 	{
         unsigned int nBlockIterations = 0;
 		void* solverParams[] = { &nNonLinearIterations, &nLinearIterations, &nBlockIterations };

@@ -15,10 +15,10 @@ public:
     CombinedSolver(double2 functionParameterGuess, std::vector<double2> dataPoints) {
         m_ceresDataPoints = dataPoints;
         m_functionParametersGuess = functionParameterGuess;
-        std::vector<float2> dataPointsFloat(dataPoints.size());
+        std::vector<OPT_FLOAT2> dataPointsFloat(dataPoints.size());
         for (int i = 0; i < dataPoints.size(); ++i) {
-            dataPointsFloat[i].x = (float)dataPoints[i].x;
-            dataPointsFloat[i].y = (float)dataPoints[i].y;
+            dataPointsFloat[i].x = (OPT_FLOAT)dataPoints[i].x;
+            dataPointsFloat[i].y = (OPT_FLOAT)dataPoints[i].y;
         }
         d_dataPoints.update(dataPointsFloat);
 		resetGPU();
@@ -35,14 +35,14 @@ public:
 	}
 
 	void resetGPU() {
-        std::vector<float2> unknowns(1);
-        unknowns[0].x = (float)m_functionParametersGuess.x;
-        unknowns[0].y = (float)m_functionParametersGuess.y;
+        std::vector<OPT_FLOAT2> unknowns(1);
+        unknowns[0].x = (OPT_FLOAT)m_functionParametersGuess.x;
+        unknowns[0].y = (OPT_FLOAT)m_functionParametersGuess.y;
         d_functionParameters.update(unknowns);
 	}
 
     void copyResultToCPU() {
-        std::vector<float2> unknowns;
+        std::vector<OPT_FLOAT2> unknowns;
         d_functionParameters.readBack(unknowns);
         m_functionParameters.x = unknowns[0].x;
         m_functionParameters.y = unknowns[0].y;
@@ -71,8 +71,8 @@ private:
     double2 m_functionParameters;
 
     double2 m_functionParametersGuess;
-    CudaArray<float2> d_dataPoints;
-    CudaArray<float2> d_functionParameters;
+    CudaArray<OPT_FLOAT2> d_dataPoints;
+    CudaArray<OPT_FLOAT2> d_functionParameters;
 	
 
 	TerraSolver*		m_solverOpt;
