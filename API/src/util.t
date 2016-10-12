@@ -418,7 +418,6 @@ if opt_float == float then
         var address_as_i : &int = [&int] (max_value);
         var old : int = address_as_i[0];
         var assumed : int;
-
         repeat
             assumed = old;
             old = terralib.asm(int,"atom.global.cas.b32 $0,[$1],$2,$3;", 
@@ -439,7 +438,6 @@ if opt_float == float then
     	return ret;
     end
 else
-
     struct ULLDouble {
         union {
             a : uint64;

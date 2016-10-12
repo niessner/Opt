@@ -19,10 +19,10 @@ class ImageWarping
 			cutilSafeCall(cudaMalloc(&d_targetFloat3, sizeof(float3)*m_image.getWidth()*m_image.getHeight()));
 			cutilSafeCall(cudaMalloc(&d_imageFloat3Albedo,  sizeof(float3)*m_image.getWidth()*m_image.getHeight()));
 			cutilSafeCall(cudaMalloc(&d_imageFloatIllumination, sizeof(float)*m_image.getWidth()*m_image.getHeight()));
-			
+						
 			resetGPUMemory();
 
-            m_terraSolver = new TerraSolver(m_image.getWidth(), m_image.getHeight(), "SmoothingLaplacianFloat3AD.t", "gaussNewtonGPU");
+			m_terraSolver = new TerraSolver(m_image.getWidth(), m_image.getHeight(), "SmoothingLaplacianFloat3AD.t", "gaussNewtonGPU");
 		}
 
 		void resetGPUMemory()
@@ -31,7 +31,7 @@ class ImageWarping
 			float3* h_imageFloat3 = new float3[m_image.getWidth()*m_image.getHeight()];
 			float3* h_imageFloat3Albedo = new float3[m_image.getWidth()*m_image.getHeight()];
 			float*  h_imageFloatIllumination = new float[m_image.getWidth()*m_image.getHeight()];
-
+			
 			for (unsigned int i = 0; i < m_image.getHeight(); i++)
 			{
 				for (unsigned int j = 0; j < m_image.getWidth(); j++)
