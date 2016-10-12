@@ -58,6 +58,7 @@ public:
 		}
 
 		if (useCeres) {
+            m_functionParameters = m_functionParametersGuess;
             m_solverCeres->solve(&m_functionParameters, m_ceresDataPoints.data());
 		}
 
