@@ -5,7 +5,7 @@
 int main(int argc, const char * argv[]) {
     int N = 16;
     double2 generatorParams = { 131.0, 83.1 };
-    std::vector<double2> dataPoints;
+    std::vector<double2> dataPoints(N);
     double a = generatorParams.x;
     double b = generatorParams.y;
     std::random_device rd;
@@ -16,6 +16,9 @@ int main(int argc, const char * argv[]) {
         double y = (a*cos(b*x) + b*sin(a*x));
         // Add in noise
         y += dis(gen);
+        dataPoints[i].x = x;
+        dataPoints[i].y = y;
+
     }
     // Generate data
     CombinedSolver solver(generatorParams, dataPoints);
