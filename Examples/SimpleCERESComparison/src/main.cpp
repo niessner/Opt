@@ -21,8 +21,8 @@ int main(int argc, const char * argv[]) {
 
     }
     double2 initalGuess = { 99.5, 102.5 };
-
-    // Generate data
+    //initalGuess = generatorParams;
+ 
     CombinedSolver solver(initalGuess, dataPoints);
     double2 finalResult = solver.solve();
     std::cout << "Final Result: " << finalResult.x << ", " << finalResult.y << std::endl;

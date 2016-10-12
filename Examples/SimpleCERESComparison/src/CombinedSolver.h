@@ -36,8 +36,8 @@ public:
 
 	void resetGPU() {
         std::vector<float2> unknowns(1);
-        unknowns[0].x = m_functionParametersGuess.x;
-        unknowns[0].y = m_functionParametersGuess.y;
+        unknowns[0].x = (float)m_functionParametersGuess.x;
+        unknowns[0].y = (float)m_functionParametersGuess.y;
         d_functionParameters.update(unknowns);
 	}
 
@@ -49,8 +49,8 @@ public:
     }
 
 	double2 solve() {
-        uint nonLinearIter = 100;
-        uint linearIter = 100;
+        uint nonLinearIter = 10;
+        uint linearIter = 1000;
 		if (useOpt) {
 			resetGPU();
             m_solverOpt->solve(d_functionParameters.data(), d_dataPoints.data(), nonLinearIter, linearIter);
