@@ -89,6 +89,60 @@ return function(problemSpec)
 	    J_rowptr : &int
 	}
 	
+    local function generateDumpJ(ES,dumpJ,idx,pd)
+        local nnz_per_entry = 0
+        for i,r in ipairs(ES.residuals) do
+            nnz_per_entry = nnz_per_entry + #r.unknowns
+        end
+        local base_rowidx = energyspec_to_rowidx_offset_exp[ES]
+        local base_residual = energyspec_to_residual_offset_exp[ES]
+        local idx_offset
+        print(terralib.type(idx))
+        if idx.type == int then
+            idx_offset = idx
+        else    
+            idx_offset = `idx:tooffset()
+        end
+        local local_rowidx = `base_rowidx + idx_offset*nnz_per_entry
+        local local_residual = `base_residual + idx_offset*[#ES.residuals]
+        local function GetOffset(idx,index)
+            if index.kind == "Offset" then
+                return `idx([{unpack(index.data)}]):tooffset()
+            else
+                return `parametersSym.[index.graph.name].[index.element][idx]:tooffset()
+            end
+        end
+        return quote
+            var rhs = dumpJ(idx,pd.parameters)
+            escape                
+                local nnz = 0
+                local residual = 0
+                for i,r in ipairs(ES.residuals) do
+                    emit quote
+                        pd.J_rowptr[local_residual+residual] = local_rowidx + nnz
+                    end
+                    for i,u in ipairs(r.unknowns) do
+                        local image_offset = imagename_to_unknown_offset[u.image.name]
+                        local nchannels = u.image.type.channelcount
+                        local uidx = GetOffset(idx,u.index)
+                        local unknown_index = `image_offset + nchannels*uidx + u.channel
+                        emit quote
+                            pd.J_values[local_rowidx + nnz] = rhs.["_"..tostring(nnz)]
+                            pd.J_colindex[local_rowidx + nnz] = unknown_index
+                        end
+                        nnz = nnz + 1
+                    end
+                    residual = residual + 1
+                    -- write next entry as well to ensure the final entry is correct
+                    -- wasteful but less chance for error
+                    emit quote
+                        pd.J_rowptr[local_residual+residual] = local_rowidx + nnz
+                    end
+                end
+            end
+        end
+	end
+	
 	local delegate = {}
 	function delegate.CenterFunctions(UnknownIndexSpace,fmap)
 	    --print("ES",fmap.derivedfrom)
@@ -271,44 +325,7 @@ return function(problemSpec)
                 var idx : Index
                 var [parametersSym] = pd.parameters
                 if idx:initFromCUDAParams() and not fmap.exclude(idx,pd.parameters) then
-                    var rhs = fmap.dumpJ(idx,pd.parameters)
-                    escape
-                        local ES = fmap.derivedfrom
-                        local nnz_per_entry = 0
-                        for i,r in ipairs(ES.residuals) do
-                            nnz_per_entry = nnz_per_entry + #r.unknowns
-                        end
-                        local nnz = 0
-                        local residual = 0
-                        local base_rowidx = energyspec_to_rowidx_offset_exp[ES]
-                        local base_residual = energyspec_to_residual_offset_exp[ES]
-                        local local_rowidx = `base_rowidx + idx:tooffset()*nnz_per_entry
-                        local local_residual = `base_residual + idx:tooffset()*[#ES.residuals]
-                        
-                        for i,r in ipairs(ES.residuals) do
-                            emit quote
-                                pd.J_rowptr[local_residual+residual] = local_rowidx + nnz
-                            end
-                            for i,u in ipairs(r.unknowns) do
-                                local image_offset = imagename_to_unknown_offset[u.image.name]
-                                local nchannels = u.image.type.channelcount
-                                local uidx = `idx([{unpack(u.index.data)}]):tooffset()
-                                local unknown_index = `image_offset + nchannels*uidx + u.channel
-                                local set = quote
-                                    pd.J_values[local_rowidx + nnz] = rhs.["_"..tostring(nnz)]
-                                    pd.J_colindex[local_rowidx + nnz] = unknown_index
-                                end
-                                emit(set)
-                                nnz = nnz + 1
-                            end
-                            residual = residual + 1
-                            -- write next entry as well to ensure the final entry is correct
-                            -- wasteful but less chance for error
-                            emit quote
-                                pd.J_rowptr[local_residual+residual] = local_rowidx + nnz
-                            end
-                        end
-                    end
+                    [generateDumpJ(fmap.derivedfrom,fmap.dumpJ,idx,pd)]
                 end
             end
             print(kernels.saveJToCRS)
@@ -435,6 +452,19 @@ return function(problemSpec)
                 util.atomicAdd(pd.scratchF, cost)
             end
         end
+        if not fmap.dumpJ then
+            terra kernels.saveJToCRS_Graph(pd : PlanData)
+            end
+        else
+            terra kernels.saveJToCRS_Graph(pd : PlanData)
+                var tIdx = 0
+                var [parametersSym] = pd.parameters
+                if util.getValidGraphElement(pd,[graphname],&tIdx) then
+                    [generateDumpJ(fmap.derivedfrom,fmap.dumpJ,tIdx,pd)]
+                end
+            end
+            print(kernels.saveJToCRS_Graph)
+        end
         if problemSpec:UsesLambda() then
             terra kernels.computeModelCostChangeStep1_Graph(pd : PlanData)
                 var tIdx = 0
@@ -481,7 +511,8 @@ return function(problemSpec)
                                                                         "computeCost_Graph",
                                                                         "computeModelCostChangeStep1_Graph",
                                                                         "computeModelCostChangeStep2_Graph",
-                                                                        "saveJToCRS"
+                                                                        "saveJToCRS",
+                                                                        "saveJToCRS_Graph"
                                                                         })
 
     local terra computeCost(pd : &PlanData) : opt_float
