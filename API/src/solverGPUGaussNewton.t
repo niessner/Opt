@@ -619,6 +619,181 @@ return function(problemSpec)
 			logSolver("\t%d: prev=%f new=%f ", pd.nIter, pd.prevCost,newCost)
 			
 			escape if problemSpec:UsesLambda() then
+
+
+                --[[
+                Init()
+                    model_cost_change_ = 0.0;
+                new TrustRegionStepEvaluator(x_cost_, ...
+                    minimum_cost_(initial_cost),
+                    current_cost_(initial_cost),
+                    reference_cost_(initial_cost),
+                    candidate_cost_(initial_cost),
+                    accumulated_reference_model_cost_change_(0.0),
+                    accumulated_candidate_model_cost_change_(0.0),
+
+
+   
+                  // Compute a scaling vector that is used to improve the
+                  // conditioning of the Jacobian.
+                  //
+                  // jacobian_scaling_ = diag(J'J)^{-1}
+                  jacobian_->SquaredColumnNorm(jacobian_scaling_.data());
+                  for (int i = 0; i < jacobian_->num_cols(); ++i) {
+                    // Add one to the denominator to prevent division by zero.
+                    jacobian_scaling_[i] = 1.0 / (1.0 + sqrt(jacobian_scaling_[i]));
+                  }
+
+
+                Loop
+
+                      
+
+                        // jacobian = jacobian * diag(J'J) ^{-1}
+                        jacobian_->ScaleColumns(jacobian_scaling_.data());
+
+
+
+                    ComputeTrustRegionStep()
+
+                        jacobian->SquaredColumnNorm(diagonal_.data());
+                        for (int i = 0; i < num_parameters; ++i) {
+                          diagonal_[i] = std::min(std::max(diagonal_[i], min_diagonal_),
+                                                  max_diagonal_);
+                        }
+                        lm_diagonal_ = (diagonal_ / radius_).array().sqrt();
+                        solve_options.D = lm_diagonal_.data();
+                        q_tolerance = eta = 0.1?
+
+            
+                        LinearSolver::Summary linear_solver_summary =
+                              linear_solver_->Solve(jacobian, residuals, solve_options, step);
+                            // A = jacobian, b = residuals
+                            // Solve (AtA + DtD)x = z (= Atb).
+                        step *= -1.0f;
+
+                    ComputeCandidatePointAndEvaluateCost()
+                        This is our ApplyLinearUpdate, but stores result in "candidate" result
+
+                    Two termination checks
+                    ParameterToleranceReached() {
+                      // Compute the norm of the step in the ambient space.
+                      iteration_summary_.step_norm = (x_ - candidate_x_).norm();
+                          options_.parameter_tolerance * (x_norm_ + options_.parameter_tolerance);
+
+                      if (iteration_summary_.step_norm > step_size_tolerance) {
+                        return false;
+                      }
+                    FunctionToleranceReached() {
+                      iteration_summary_.cost_change = x_cost_ - candidate_cost_;
+                      const double absolute_function_tolerance =
+                          options_.function_tolerance * x_cost_;
+
+                      if (fabs(iteration_summary_.cost_change) > absolute_function_tolerance) {
+                        return false;
+                      }
+
+
+                    IsStepSuccessful() {
+                      iteration_summary_.relative_decrease =
+                          step_evaluator_->StepQuality(candidate_cost_, model_cost_change_);
+
+                            double TrustRegionStepEvaluator::StepQuality(
+                                const double cost,
+                                const double model_cost_change) const {
+                              const double relative_decrease = (current_cost_ - cost) / model_cost_change;
+                              const double historical_relative_decrease =
+                                  (reference_cost_ - cost) /
+                                  (accumulated_reference_model_cost_change_ + model_cost_change);
+                              return std::max(relative_decrease, historical_relative_decrease);
+                            }
+
+                      return iteration_summary_.relative_decrease > options_.min_relative_decrease;
+                    
+                    HandleSuccessfulStep() {
+                      x_ = candidate_x_;
+                      x_norm_ = x_.norm();
+
+                      if (!EvaluateGradientAndJacobian()) {
+                        return false;
+                      }
+
+                      iteration_summary_.step_is_successful = true;
+                      strategy_->StepAccepted(iteration_summary_.relative_decrease);
+                      step_evaluator_->StepAccepted(candidate_cost_, model_cost_change_);
+                      return true;
+                    }
+                        void LevenbergMarquardtStrategy::StepAccepted(double step_quality) {
+                          CHECK_GT(step_quality, 0.0);
+                          radius_ = radius_ / std::max(1.0 / 3.0,
+                                                       1.0 - pow(2.0 * step_quality - 1.0, 3));
+                          radius_ = std::min(max_radius_, radius_);
+                          decrease_factor_ = 2.0;
+                          reuse_diagonal_ = false;
+                        }
+
+                        void TrustRegionStepEvaluator::StepAccepted(
+                            const double cost,
+                            const double model_cost_change) {
+                          // Algorithm 10.1.2 from Trust Region Methods by Conn, Gould &
+                          // Toint.
+                          //
+                          // Step 3a
+                          current_cost_ = cost;
+                          accumulated_candidate_model_cost_change_ += model_cost_change;
+                          accumulated_reference_model_cost_change_ += model_cost_change;
+
+                          // Step 3b.
+                          if (current_cost_ < minimum_cost_) {
+                            minimum_cost_ = current_cost_;
+                            num_consecutive_nonmonotonic_steps_ = 0;
+                            candidate_cost_ = current_cost_;
+                            accumulated_candidate_model_cost_change_ = 0.0;
+                          } else {
+                            // Step 3c.
+                            ++num_consecutive_nonmonotonic_steps_;
+                            if (current_cost_ > candidate_cost_) {
+                              candidate_cost_ = current_cost_;
+                              accumulated_candidate_model_cost_change_ = 0.0;
+                            }
+                          }
+
+                          // Step 3d.
+                          //
+                          // At this point we have made too many non-monotonic steps and
+                          // we are going to reset the value of the reference iterate so
+                          // as to force the algorithm to descend.
+                          //
+                          // Note: In the original algorithm by Toint, this step was only
+                          // executed if the step was non-monotonic, but that would not handle
+                          // the case of max_consecutive_nonmonotonic_steps = 0. The small
+                          // modification of doing this always handles that corner case
+                          // correctly.
+                          if (num_consecutive_nonmonotonic_steps_ ==
+                              max_consecutive_nonmonotonic_steps_) {
+                            reference_cost_ = candidate_cost_;
+                            accumulated_reference_model_cost_change_ =
+                                accumulated_candidate_model_cost_change_;
+                          }
+                        }
+
+                    HandleUnsuccessfulStep() {
+                      iteration_summary_.step_is_successful = false;
+                      strategy_->StepRejected(iteration_summary_.relative_decrease);
+                      iteration_summary_.cost = candidate_cost_ + solver_summary_->fixed_cost;
+                    }
+                        void LevenbergMarquardtStrategy::StepRejected(double step_quality) {
+                          radius_ = radius_ / decrease_factor_;
+                          decrease_factor_ *= 2.0;
+                          reuse_diagonal_ = true;
+                        }
+
+
+                --]]
+
+
+
+
 			    -- lm version
 			    emit quote
                     logSolver(" lambda=%f ",pd.parameters.lambda)
@@ -664,6 +839,13 @@ return function(problemSpec)
                     pd.prevCost = newCost 
                 end
             end end
+
+            --[[ 
+            To match CERES we would check for termination:
+            iteration_summary_.gradient_max_norm <= options_.gradient_tolerance
+            iteration_summary_.trust_region_radius <= options_.min_trust_region_radius
+            ]]
+
 			pd.nIter = pd.nIter + 1
 			return 1
 		else

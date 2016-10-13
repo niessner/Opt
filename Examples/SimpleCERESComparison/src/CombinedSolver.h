@@ -9,6 +9,7 @@
 #include <vector>
 static bool useOpt = true;
 static bool useCeres = true;
+static bool useOptLM = true;
 
 class CombinedSolver {
 public:
@@ -25,7 +26,7 @@ public:
 
 
         if (useOpt) {
-            m_solverOpt = new TerraSolver((uint32_t)dataPoints.size(), "curveFitting.t", "gaussNewtonGPU");
+            m_solverOpt = new TerraSolver((uint32_t)dataPoints.size(), "curveFitting.t", useOptLM ? "LMGPU" : "gaussNewtonGPU");
 		}
 
         if (useCeres) {
@@ -58,6 +59,7 @@ public:
 		}
 
 		if (useCeres) {
+            m_functionParameters = m_functionParametersGuess;
             m_solverCeres->solve(&m_functionParameters, m_ceresDataPoints.data());
 		}
 

@@ -85,9 +85,14 @@ void CeresSolver::solve(
     options.function_tolerance = 0.00001;
     options.gradient_tolerance = 1e-4 * options.function_tolerance;
 
-    //options.min_lm_diagonal = 1.0f;
-    //options.min_lm_diagonal = options.max_lm_diagonal;
-    //options.max_lm_diagonal = 10000000.0;
+    // Default values, reproduced here for clarity
+    options.trust_region_strategy_type = ceres::TrustRegionStrategyType::LEVENBERG_MARQUARDT;
+    options.initial_trust_region_radius = 1e4;
+    options.max_trust_region_radius = 1e16;
+    options.min_trust_region_radius = 1e-32;
+    options.min_relative_decrease = 1e-3;
+    options.min_lm_diagonal = 1e-6;
+    options.max_lm_diagonal = 1e32;
 
     //problem.Evaluate(Problem::EvaluateOptions(), &cost, nullptr, nullptr, nullptr);
     //cout << "Cost*2 start: " << cost << endl;
