@@ -591,18 +591,7 @@ return function(problemSpec)
 
 
                 --[[
-                Init()
-                    model_cost_change_ = 0.0;
-                new TrustRegionStepEvaluator(x_cost_, ...
-                    minimum_cost_(initial_cost),
-                    current_cost_(initial_cost),
-                    reference_cost_(initial_cost),
-                    candidate_cost_(initial_cost),
-                    accumulated_reference_model_cost_change_(0.0),
-                    accumulated_candidate_model_cost_change_(0.0),
-
-
-   
+                
                   // Compute a scaling vector that is used to improve the
                   // conditioning of the Jacobian.
                   //
@@ -632,14 +621,41 @@ return function(problemSpec)
                         }
                         lm_diagonal_ = (diagonal_ / radius_).array().sqrt();
                         solve_options.D = lm_diagonal_.data();
-                        q_tolerance = eta = 0.1?
+                        q_tolerance = eta = 0.1 // Used for termination in the CG steps 
 
             
                         LinearSolver::Summary linear_solver_summary =
                               linear_solver_->Solve(jacobian, residuals, solve_options, step);
+                            preconditioner_->Update(*A, per_solve_options.D);
                             // A = jacobian, b = residuals
                             // Solve (AtA + DtD)x = z (= Atb).
                         step *= -1.0f;
+                        // trust_region_step_ = step
+                        
+                          // new_model_cost
+                          //  = 1/2 [f + J * step]^2
+                          //  = 1/2 [ f'f + 2f'J * step + step' * J' * J * step ]
+                          // model_cost_change
+                          //  = cost - new_model_cost
+                          //  = f'f/2  - 1/2 [ f'f + 2f'J * step + step' * J' * J * step]
+                          //  = -f'J * step - step' * J' * J * step / 2
+                          //  = -(J * step)'(f + J * step / 2)
+                          model_residuals_.setZero();
+                          jacobian_->RightMultiply(trust_region_step_.data(), model_residuals_.data());
+                          model_cost_change_ =
+                              -model_residuals_.dot(residuals_ + model_residuals_ / 2.0);
+
+                          // TODO(sameeragarwal)
+                          //
+                          //  1. What happens if model_cost_change_ = 0
+                          //  2. What happens if -epsilon <= model_cost_change_ < 0 for some
+                          //     small epsilon due to round off error.
+                          iteration_summary_.step_is_valid = (model_cost_change_ > 0.0);
+                          if (iteration_summary_.step_is_valid) {
+                            // Undo the Jacobian column scaling.
+                            delta_ = (trust_region_step_.array() * jacobian_scaling_.array()).matrix();
+                            num_consecutive_invalid_steps_ = 0;
+                          }
 
                     ComputeCandidatePointAndEvaluateCost()
                         This is our ApplyLinearUpdate, but stores result in "candidate" result
