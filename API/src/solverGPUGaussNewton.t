@@ -6,7 +6,7 @@ local C = util.C
 local Timer = util.Timer
 
 local getValidUnknown = util.getValidUnknown
-local use_dump_j = true
+local use_dump_j = false
 
 local gpuMath = util.gpuMath
 
@@ -675,7 +675,7 @@ return function(problemSpec)
                         LinearSolver::Summary linear_solver_summary =
                               linear_solver_->Solve(jacobian, residuals, solve_options, step);
                             preconditioner_->Update(*A, per_solve_options.D);
-                            // A = jacobian, b = residuals
+                            // A = jacobian, b = residuals, x = step
                             // Solve (AtA + DtD)x = z (= Atb).
                         step *= -1.0f;
                         // trust_region_step_ = step

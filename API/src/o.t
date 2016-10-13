@@ -2433,7 +2433,7 @@ function ProblemSpecAD:Cost(...)
         if energyspec.kind.kind == "CenteredFunction" then
             functionspecs:insert(createjtjcentered(self,energyspec))
             functionspecs:insert(createjtfcentered(self,energyspec))
-            functionspecs:insert(createdumpjcentered(self,energyspec))
+            --functionspecs:insert(createdumpjcentered(self,energyspec))
             
             if self.P:UsesLambda() then
                 functionspecs:insert(createjtjcenteredsimple(self,energyspec))
@@ -2443,7 +2443,7 @@ function ProblemSpecAD:Cost(...)
         else
             functionspecs:insert(createjtjgraph(self,energyspec))
             functionspecs:insert(createjtfgraph(self,energyspec))
-            functionspecs:insert(createdumpjgraph(self,energyspec))
+            --functionspecs:insert(createdumpjgraph(self,energyspec))
 
             if self.P:UsesLambda() then
                 functionspecs:insert(createjtjgraphsimple(self,energyspec))
