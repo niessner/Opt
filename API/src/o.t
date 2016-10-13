@@ -1955,6 +1955,9 @@ local function createjtjcentered(PS,ES)
 
                     if uv == x and PS:UsesLambda() then -- on the diagonal
                         exp = exp*(1 + PS.lambda)
+                        -- LM
+                        -- diagVal = D(unknownIndex)
+                        -- exp = exp + diagVal*diagVal
                     end
 
                     lprintf(2,"term:\ndr%d_%s/dx%s[%d] = %s",rn,tostring(r),tostring(u.index),u.chan,tostring(drdx_u))
@@ -2068,6 +2071,8 @@ local function createjtjgraph(PS,ES)
 
             if PS:UsesLambda() then
                 jtjp = jtjp + 2*partial*partial*PS.lambda*P[u.image.name](u.index,u.channel)
+                -- diagVal = D(unknownIndex)
+                -- jtjp = jtjp + diagVal*diagVal
             end
 
             result = result + P[u.image.name](u.index,u.channel)*jtjp
@@ -2248,6 +2253,8 @@ local function createjtfgraph(PS,ES)
             assert(GraphElement:isclassof(u.index))
             addscatter(R,u,-2.0*partial*F)
             addscatter(Pre,u,2.0*partial*partial)
+            -- LM
+            --addscatter(D,u,partial*partial*Pre(u)*Pre(u)*inv_sqrt_radius))
         end
     end
     return A.FunctionSpec(ES.kind, "evalJTF", List { "R", "Pre" }, EMPTY, scatters,ES)

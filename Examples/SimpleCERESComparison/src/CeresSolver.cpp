@@ -91,8 +91,9 @@ void CeresSolver::solve(
     options.max_trust_region_radius = 1e16;
     options.min_trust_region_radius = 1e-32;
     options.min_relative_decrease = 1e-3;
-    options.min_lm_diagonal = 1e-6;
-    options.max_lm_diagonal = 1e32;
+    // Disable to match Opt
+    options.min_lm_diagonal = 0.0;
+    options.max_lm_diagonal = std::numeric_limits<double>::infinity();
 
     //problem.Evaluate(Problem::EvaluateOptions(), &cost, nullptr, nullptr, nullptr);
     //cout << "Cost*2 start: " << cost << endl;
