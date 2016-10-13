@@ -6,7 +6,7 @@ local C = util.C
 local Timer = util.Timer
 
 local getValidUnknown = util.getValidUnknown
-local use_dump_j = false
+local use_dump_j = true
 
 local gpuMath = util.gpuMath
 
@@ -563,6 +563,15 @@ return function(problemSpec)
 	   pd.timer:init()
 	   pd.timer:startEvent("overall",nil,&pd.endSolver)
        [util.initParameters(`pd.parameters,problemSpec,params_,true)]
+       var [parametersSym] = &pd.parameters
+        if use_dump_j and pd.J_values == nil then
+            logSolver("nnz = %s\n",[tostring(nnzExp)])
+            logSolver("nResiduals = %s\n",[tostring(nResidualsExp)])
+            logSolver("nnz = %d, nResiduals = %d\n",int(nnzExp),int(nResidualsExp))
+            C.cudaMalloc([&&opaque](&(pd.J_values)), sizeof(opt_float)*nnzExp)
+            C.cudaMalloc([&&opaque](&(pd.J_colindex)), sizeof(int)*nnzExp)
+            C.cudaMalloc([&&opaque](&(pd.J_rowptr)), sizeof(int)*(nResidualsExp+1))
+        end
 	   pd.nIter = 0
 	   pd.nIterations = @[&int](solverparams[0])
 	   pd.lIterations = @[&int](solverparams[1])
@@ -892,14 +901,7 @@ return function(problemSpec)
 		C.cudaMalloc([&&opaque](&(pd.maxDiagJTJ)), sizeof(opt_float))
 		
 		C.cudaMalloc([&&opaque](&(pd.scratchF)), sizeof(opt_float))
-		
-		var [parametersSym] = &pd.parameters
-		if use_dump_j then
-		    logSolver("nnz = %d, nResiduals = %d\n",nnzExp,nResidualsExp)
-            C.cudaMalloc([&&opaque](&(pd.J_values)), sizeof(opt_float)*nnzExp)
-            C.cudaMalloc([&&opaque](&(pd.J_colindex)), sizeof(int)*nnzExp)
-            C.cudaMalloc([&&opaque](&(pd.J_rowptr)), sizeof(int)*(nResidualsExp+1))
-		end
+		pd.J_values = nil
 		return &pd.plan
 	end
 	return makePlan
