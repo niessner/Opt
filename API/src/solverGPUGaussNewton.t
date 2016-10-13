@@ -6,6 +6,7 @@ local C = util.C
 local Timer = util.Timer
 
 local getValidUnknown = util.getValidUnknown
+local use_dump_j = false
 
 local gpuMath = util.gpuMath
 
@@ -22,7 +23,7 @@ return function(problemSpec)
     local energyspec_to_residual_offset_exp = {}
     local energyspec_to_rowidx_offset_exp = {}
     local nUnknowns,nResidualsExp,nnzExp = 0,`0,`0
-    local parametersSym = symbol(problemSpec:ParameterType(),"parameters")
+    local parametersSym = symbol(&problemSpec:ParameterType(),"parameters")
     local function numberofelements(ES)
         if ES.kind.kind == "CenteredFunction" then
             return ES.kind.ispace:cardinality()
@@ -323,7 +324,7 @@ return function(problemSpec)
         else
             terra kernels.saveJToCRS(pd : PlanData)
                 var idx : Index
-                var [parametersSym] = pd.parameters
+                var [parametersSym] = &pd.parameters
                 if idx:initFromCUDAParams() and not fmap.exclude(idx,pd.parameters) then
                     [generateDumpJ(fmap.derivedfrom,fmap.dumpJ,idx,pd)]
                 end
@@ -458,7 +459,7 @@ return function(problemSpec)
         else
             terra kernels.saveJToCRS_Graph(pd : PlanData)
                 var tIdx = 0
-                var [parametersSym] = pd.parameters
+                var [parametersSym] = &pd.parameters
                 if util.getValidGraphElement(pd,[graphname],&tIdx) then
                     [generateDumpJ(fmap.derivedfrom,fmap.dumpJ,tIdx,pd)]
                 end
@@ -591,8 +592,15 @@ return function(problemSpec)
 				gpu.PCGInit1_Graph(pd)	
 				gpu.PCGInit1_Finish(pd)	
 			end
-
-			for lIter = 0, pd.lIterations do				
+            if use_dump_j then
+                logSolver("saving J\n")
+                gpu.saveJToCRS(pd)
+                if isGraph then
+                    gpu.saveJToCRS_Graph(pd)
+                end
+                logSolver("saving J2\n")
+            end
+            for lIter = 0, pd.lIterations do				
 
                 C.cudaMemset(pd.scanAlphaDenominator, 0, sizeof(opt_float))
 				
@@ -874,6 +882,7 @@ return function(problemSpec)
 		pd.Ap_X:initGPU()
 		pd.preconditioner:initGPU()
 		pd.g:initGPU()
+		
 		[util.initPrecomputedImages(`pd.parameters,problemSpec)]	
 		C.cudaMalloc([&&opaque](&(pd.scanAlphaNumerator)), sizeof(opt_float))
 		C.cudaMalloc([&&opaque](&(pd.scanBetaNumerator)), sizeof(opt_float))
@@ -883,6 +892,14 @@ return function(problemSpec)
 		C.cudaMalloc([&&opaque](&(pd.maxDiagJTJ)), sizeof(opt_float))
 		
 		C.cudaMalloc([&&opaque](&(pd.scratchF)), sizeof(opt_float))
+		
+		var [parametersSym] = &pd.parameters
+		if use_dump_j then
+		    logSolver("nnz = %d, nResiduals = %d\n",nnzExp,nResidualsExp)
+            C.cudaMalloc([&&opaque](&(pd.J_values)), sizeof(opt_float)*nnzExp)
+            C.cudaMalloc([&&opaque](&(pd.J_colindex)), sizeof(int)*nnzExp)
+            C.cudaMalloc([&&opaque](&(pd.J_rowptr)), sizeof(int)*(nResidualsExp+1))
+		end
 		return &pd.plan
 	end
 	return makePlan
