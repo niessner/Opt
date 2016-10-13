@@ -6,6 +6,7 @@ local C = util.C
 local Timer = util.Timer
 
 local getValidUnknown = util.getValidUnknown
+local use_dump_j = true
 
 local gpuMath = util.gpuMath
 
@@ -22,7 +23,7 @@ return function(problemSpec)
     local energyspec_to_residual_offset_exp = {}
     local energyspec_to_rowidx_offset_exp = {}
     local nUnknowns,nResidualsExp,nnzExp = 0,`0,`0
-    local parametersSym = symbol(problemSpec:ParameterType(),"parameters")
+    local parametersSym = symbol(&problemSpec:ParameterType(),"parameters")
     local function numberofelements(ES)
         if ES.kind.kind == "CenteredFunction" then
             return ES.kind.ispace:cardinality()
@@ -88,6 +89,60 @@ return function(problemSpec)
 	    J_colindex : &int
 	    J_rowptr : &int
 	}
+	
+    local function generateDumpJ(ES,dumpJ,idx,pd)
+        local nnz_per_entry = 0
+        for i,r in ipairs(ES.residuals) do
+            nnz_per_entry = nnz_per_entry + #r.unknowns
+        end
+        local base_rowidx = energyspec_to_rowidx_offset_exp[ES]
+        local base_residual = energyspec_to_residual_offset_exp[ES]
+        local idx_offset
+        print(terralib.type(idx))
+        if idx.type == int then
+            idx_offset = idx
+        else    
+            idx_offset = `idx:tooffset()
+        end
+        local local_rowidx = `base_rowidx + idx_offset*nnz_per_entry
+        local local_residual = `base_residual + idx_offset*[#ES.residuals]
+        local function GetOffset(idx,index)
+            if index.kind == "Offset" then
+                return `idx([{unpack(index.data)}]):tooffset()
+            else
+                return `parametersSym.[index.graph.name].[index.element][idx]:tooffset()
+            end
+        end
+        return quote
+            var rhs = dumpJ(idx,pd.parameters)
+            escape                
+                local nnz = 0
+                local residual = 0
+                for i,r in ipairs(ES.residuals) do
+                    emit quote
+                        pd.J_rowptr[local_residual+residual] = local_rowidx + nnz
+                    end
+                    for i,u in ipairs(r.unknowns) do
+                        local image_offset = imagename_to_unknown_offset[u.image.name]
+                        local nchannels = u.image.type.channelcount
+                        local uidx = GetOffset(idx,u.index)
+                        local unknown_index = `image_offset + nchannels*uidx + u.channel
+                        emit quote
+                            pd.J_values[local_rowidx + nnz] = rhs.["_"..tostring(nnz)]
+                            pd.J_colindex[local_rowidx + nnz] = unknown_index
+                        end
+                        nnz = nnz + 1
+                    end
+                    residual = residual + 1
+                    -- write next entry as well to ensure the final entry is correct
+                    -- wasteful but less chance for error
+                    emit quote
+                        pd.J_rowptr[local_residual+residual] = local_rowidx + nnz
+                    end
+                end
+            end
+        end
+	end
 	
 	local delegate = {}
 	function delegate.CenterFunctions(UnknownIndexSpace,fmap)
@@ -269,46 +324,9 @@ return function(problemSpec)
         else
             terra kernels.saveJToCRS(pd : PlanData)
                 var idx : Index
-                var [parametersSym] = pd.parameters
+                var [parametersSym] = &pd.parameters
                 if idx:initFromCUDAParams() and not fmap.exclude(idx,pd.parameters) then
-                    var rhs = fmap.dumpJ(idx,pd.parameters)
-                    escape
-                        local ES = fmap.derivedfrom
-                        local nnz_per_entry = 0
-                        for i,r in ipairs(ES.residuals) do
-                            nnz_per_entry = nnz_per_entry + #r.unknowns
-                        end
-                        local nnz = 0
-                        local residual = 0
-                        local base_rowidx = energyspec_to_rowidx_offset_exp[ES]
-                        local base_residual = energyspec_to_residual_offset_exp[ES]
-                        local local_rowidx = `base_rowidx + idx:tooffset()*nnz_per_entry
-                        local local_residual = `base_residual + idx:tooffset()*[#ES.residuals]
-                        
-                        for i,r in ipairs(ES.residuals) do
-                            emit quote
-                                pd.J_rowptr[local_residual+residual] = local_rowidx + nnz
-                            end
-                            for i,u in ipairs(r.unknowns) do
-                                local image_offset = imagename_to_unknown_offset[u.image.name]
-                                local nchannels = u.image.type.channelcount
-                                local uidx = `idx([{unpack(u.index.data)}]):tooffset()
-                                local unknown_index = `image_offset + nchannels*uidx + u.channel
-                                local set = quote
-                                    pd.J_values[local_rowidx + nnz] = rhs.["_"..tostring(nnz)]
-                                    pd.J_colindex[local_rowidx + nnz] = unknown_index
-                                end
-                                emit(set)
-                                nnz = nnz + 1
-                            end
-                            residual = residual + 1
-                            -- write next entry as well to ensure the final entry is correct
-                            -- wasteful but less chance for error
-                            emit quote
-                                pd.J_rowptr[local_residual+residual] = local_rowidx + nnz
-                            end
-                        end
-                    end
+                    [generateDumpJ(fmap.derivedfrom,fmap.dumpJ,idx,pd)]
                 end
             end
             print(kernels.saveJToCRS)
@@ -435,6 +453,19 @@ return function(problemSpec)
                 util.atomicAdd(pd.scratchF, cost)
             end
         end
+        if not fmap.dumpJ then
+            terra kernels.saveJToCRS_Graph(pd : PlanData)
+            end
+        else
+            terra kernels.saveJToCRS_Graph(pd : PlanData)
+                var tIdx = 0
+                var [parametersSym] = &pd.parameters
+                if util.getValidGraphElement(pd,[graphname],&tIdx) then
+                    [generateDumpJ(fmap.derivedfrom,fmap.dumpJ,tIdx,pd)]
+                end
+            end
+            print(kernels.saveJToCRS_Graph)
+        end
         if problemSpec:UsesLambda() then
             terra kernels.computeModelCostChangeStep1_Graph(pd : PlanData)
                 var tIdx = 0
@@ -481,7 +512,8 @@ return function(problemSpec)
                                                                         "computeCost_Graph",
                                                                         "computeModelCostChangeStep1_Graph",
                                                                         "computeModelCostChangeStep2_Graph",
-                                                                        "saveJToCRS"
+                                                                        "saveJToCRS",
+                                                                        "saveJToCRS_Graph"
                                                                         })
 
     local terra computeCost(pd : &PlanData) : opt_float
@@ -531,6 +563,15 @@ return function(problemSpec)
 	   pd.timer:init()
 	   pd.timer:startEvent("overall",nil,&pd.endSolver)
        [util.initParameters(`pd.parameters,problemSpec,params_,true)]
+       var [parametersSym] = &pd.parameters
+        if use_dump_j and pd.J_values == nil then
+            logSolver("nnz = %s\n",[tostring(nnzExp)])
+            logSolver("nResiduals = %s\n",[tostring(nResidualsExp)])
+            logSolver("nnz = %d, nResiduals = %d\n",int(nnzExp),int(nResidualsExp))
+            C.cudaMalloc([&&opaque](&(pd.J_values)), sizeof(opt_float)*nnzExp)
+            C.cudaMalloc([&&opaque](&(pd.J_colindex)), sizeof(int)*nnzExp)
+            C.cudaMalloc([&&opaque](&(pd.J_rowptr)), sizeof(int)*(nResidualsExp+1))
+        end
 	   pd.nIter = 0
 	   pd.nIterations = @[&int](solverparams[0])
 	   pd.lIterations = @[&int](solverparams[1])
@@ -560,8 +601,15 @@ return function(problemSpec)
 				gpu.PCGInit1_Graph(pd)	
 				gpu.PCGInit1_Finish(pd)	
 			end
-
-			for lIter = 0, pd.lIterations do				
+            if use_dump_j then
+                logSolver("saving J\n")
+                gpu.saveJToCRS(pd)
+                if isGraph then
+                    gpu.saveJToCRS_Graph(pd)
+                end
+                logSolver("saving J2\n")
+            end
+            for lIter = 0, pd.lIterations do				
 
                 C.cudaMemset(pd.scanAlphaDenominator, 0, sizeof(opt_float))
 				
@@ -859,6 +907,7 @@ return function(problemSpec)
 		pd.Ap_X:initGPU()
 		pd.preconditioner:initGPU()
 		pd.g:initGPU()
+		
 		[util.initPrecomputedImages(`pd.parameters,problemSpec)]	
 		C.cudaMalloc([&&opaque](&(pd.scanAlphaNumerator)), sizeof(opt_float))
 		C.cudaMalloc([&&opaque](&(pd.scanBetaNumerator)), sizeof(opt_float))
@@ -868,6 +917,7 @@ return function(problemSpec)
 		C.cudaMalloc([&&opaque](&(pd.maxDiagJTJ)), sizeof(opt_float))
 		
 		C.cudaMalloc([&&opaque](&(pd.scratchF)), sizeof(opt_float))
+		pd.J_values = nil
 		return &pd.plan
 	end
 	return makePlan

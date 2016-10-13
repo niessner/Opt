@@ -15,6 +15,7 @@ local use_split_sums = true
 local use_condition_scheduling = true
 local use_register_minimization = true
 local use_conditionalization = true
+local use_contiguous_allocation = true
 
 if false then
     local fileHandle = C.fopen("crap.txt", 'w')
@@ -655,10 +656,35 @@ function UnknownType:terratype()
     for i,ip in ipairs(images) do
         T.entries:insert { ip.name, ip.imagetype:terratype() }
     end
-    terra T:initGPU()
-        escape
-            for i,ip in ipairs(images) do
-                emit quote self.[ip.name]:initGPU() end
+    if use_contiguous_allocation then
+        terra T:initGPU()
+            var size = 0
+            escape
+                for i,ip in ipairs(images) do
+                    emit quote 
+                        size = size + self.[ip.name]:totalbytes()
+                    end
+                end
+            end
+            var data : &uint8
+            C.cudaMalloc([&&opaque](&data), size)
+            C.cudaMemset([&opaque](data), 0, size)
+            size = 0
+            escape
+                for i,ip in ipairs(images) do
+                    emit quote 
+                        self.[ip.name]:initFromGPUptr(data+size)
+                        size = size + self.[ip.name]:totalbytes() 
+                    end
+                end
+            end
+        end
+    else
+        terra T:initGPU()
+            escape
+                for i,ip in ipairs(images) do
+                    emit quote self.[ip.name]:initGPU() end
+                end
             end
         end
     end
