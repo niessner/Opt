@@ -67,6 +67,7 @@ return function(problemSpec)
 		z : TUnknownType		--preconditioned residuals -> num vars	--TODO this needs to be a 'residual type'
 		p : TUnknownType		--descent direction -> num vars
 		Ap_X : TUnknownType	--cache values for next kernel call after A = J^T x J x p -> num vars
+        D : TUnknownType -- The diagonal matrix D for the inner linear solve (A'A+D'D)x = A'b (A = J, b = residuals). Used only by LM
 		preconditioner : TUnknownType --pre-conditioner for linear system -> num vars
 		g : TUnknownType		--gradient of F(x): g = -2J'F -> num vars
 		
@@ -224,13 +225,14 @@ return function(problemSpec)
                 util.atomicAdd(pd.scanAlphaNumerator, d)
             end
         end
+
         terra kernels.PCGStep1(pd : PlanData)
             var d = 0.0f
             var idx : Index
             if idx:initFromCUDAParams() and not fmap.exclude(idx,pd.parameters) then
                 var tmp : unknownElement = 0.0f
                  -- A x p_k  => J^T x J x p_k 
-                tmp = fmap.applyJTJ(idx, pd.parameters, pd.p)
+                tmp = fmap.applyJTJ(idx, pd.parameters, pd.p, pd.D)
                 pd.Ap_X(idx) = tmp					 -- store for next kernel call
                 d = pd.p(idx):dot(tmp)			 -- x-th term of denominator of alpha
             end
@@ -342,6 +344,20 @@ return function(problemSpec)
             end
         end
         if problemSpec:UsesLambda() then
+            terra kernels.PCGComputeD(pd : PlanData)
+                var idx : Index
+                if idx:initFromCUDAParams() then
+                    -- residuum = J^T x -F - A x delta_0  => J^T x -F, since A x x_0 == 0                            
+                    var D : unknownElement = 0.0f
+                
+                    if not fmap.exclude(idx,pd.parameters) then 
+                        pd.delta(idx) = 0.0f    
+                        D = fmap.computeD(idx, pd.parameters, pd.preconditioner)
+                        pd.D(idx) = D
+                    end        
+                end 
+            end
+            --[[
             terra kernels.computeModelCostChangeStep1(pd : PlanData)
                 var d = 0.0f -- init for out of bounds lanes
         
@@ -367,6 +383,7 @@ return function(problemSpec)
                     end
                 end
             end
+
             terra kernels.computeModelCostChangeStep1_Finish(pd : PlanData)	--only called for graphs
                 var d = 0.0f -- init for out of bounds lanes
                 var idx : Index
@@ -417,6 +434,7 @@ return function(problemSpec)
                     end
                 end
             end
+            --]]
         end -- :UsesLambda()
 	    return kernels
 	end
@@ -435,7 +453,7 @@ return function(problemSpec)
             var d = 0.0f
             var tIdx = 0 
             if util.getValidGraphElement(pd,[graphname],&tIdx) then
-               d = d + fmap.applyJTJ(tIdx, pd.parameters, pd.p, pd.Ap_X)
+               d = d + fmap.applyJTJ(tIdx, pd.parameters, pd.p, pd.Ap_X, pd.D)
             end 
             d = util.warpReduce(d)
             if (util.laneid() == 0) then
@@ -467,6 +485,13 @@ return function(problemSpec)
             print(kernels.saveJToCRS_Graph)
         end
         if problemSpec:UsesLambda() then
+            terra kernels.PCGComputeD_Graph(pd : PlanData)
+                var tIdx = 0
+                if util.getValidGraphElement(pd,[graphname],&tIdx) then
+                    fmap.computeD(tIdx, pd.parameters, pd.preconditioner, pd.D)
+                end
+            end    
+   --[[
             terra kernels.computeModelCostChangeStep1_Graph(pd : PlanData)
                 var tIdx = 0
                 if util.getValidGraphElement(pd,[graphname],&tIdx) then
@@ -490,12 +515,15 @@ return function(problemSpec)
             --         fmap.evalJTF(tIdx, pd.parameters, pd.preconditioner)
             --     end
             -- end
+                    --]]
         end
+
 	    return kernels
 	end
 	
 	local gpu = util.makeGPUFunctions(problemSpec, PlanData, delegate, {"PCGInit1",
                                                                         "PCGInit1_Finish",
+                                                                        "PCGComputeD",
                                                                         "PCGStep1",
                                                                         "PCGStep2",
                                                                         "PCGStep3",
@@ -508,6 +536,7 @@ return function(problemSpec)
                                                                         "computeModelCostChangeStep2",
                                                                         "LMLambdaInit",
                                                                         "PCGInit1_Graph",
+                                                                        "PCGComputeD_Graph",
                                                                         "PCGStep1_Graph",
                                                                         "computeCost_Graph",
                                                                         "computeModelCostChangeStep1_Graph",
@@ -528,6 +557,7 @@ return function(problemSpec)
     local initLambda,computeModelCostChange
     
     if problemSpec:UsesLambda() then
+        --[[
         terra computeModelCostChange(pd : &PlanData) : opt_float
             C.cudaMemset(pd.modelCostChange, 0, sizeof(opt_float))
 
@@ -545,8 +575,11 @@ return function(problemSpec)
 
             return model_cost_change
         end
+                    --]]
         terra initLambda(pd : &PlanData)
+            pd.parameters.trust_region_radius = 1e4
             -- Init lambda based on the maximum value on the diagonal of JTJ
+            --[[
             C.cudaMemset(pd.maxDiagJTJ, 0, sizeof(opt_float))
 
             -- lambda = tau * max{a_ii} where A = JTJ
@@ -555,7 +588,9 @@ return function(problemSpec)
             var maxDiagJTJ : opt_float
             C.cudaMemcpy(&maxDiagJTJ, pd.maxDiagJTJ, sizeof(opt_float), C.cudaMemcpyDeviceToHost)
             pd.parameters.lambda = tau * maxDiagJTJ
+        --]]
         end
+
     end
 
 	local terra init(data_ : &opaque, params_ : &&opaque, solverparams : &&opaque)
@@ -575,13 +610,15 @@ return function(problemSpec)
 	   pd.nIter = 0
 	   pd.nIterations = @[&int](solverparams[0])
 	   pd.lIterations = @[&int](solverparams[1])
-       escape if problemSpec:UsesLambda() then
-	    --   emit quote pd.parameters.lambda = 0.001f end
-          emit quote 
-            initLambda(pd)
-          end
-          emit quote pd.parameters.lambda_increase_factor = 2.0f end
-	   end end
+       escape 
+            if problemSpec:UsesLambda() then
+    	       --   emit quote pd.parameters.lambda = 0.001f end
+              emit quote 
+                initLambda(pd)
+              end
+              emit quote pd.parameters.radius_decrease_factor = 2.0f end
+	        end 
+       end
 	   gpu.precompute(pd)
 	   pd.prevCost = computeCost(pd)
 	end
@@ -601,6 +638,14 @@ return function(problemSpec)
 				gpu.PCGInit1_Graph(pd)	
 				gpu.PCGInit1_Finish(pd)	
 			end
+            escape 
+                if problemSpec:UsesLambda() then
+                    emit quote
+                        gpu.PCGComputeD(pd)
+                        gpu.PCGComputeD_Graph(pd)
+                    end
+                end
+            end
             if use_dump_j then
                 logSolver("saving J\n")
                 gpu.saveJToCRS(pd)
@@ -635,9 +680,8 @@ return function(problemSpec)
 			
 			logSolver("\t%d: prev=%f new=%f ", pd.nIter, pd.prevCost,newCost)
 			
-			escape if problemSpec:UsesLambda() then
-
-
+			escape 
+                if problemSpec:UsesLambda() then
                 --[[
                 
                   // Compute a scaling vector that is used to improve the
@@ -650,6 +694,41 @@ return function(problemSpec)
                     jacobian_scaling_[i] = 1.0 / (1.0 + sqrt(jacobian_scaling_[i]));
                   }
 
+
+                    // A linear operator which takes a matrix A and a diagonal vector D and
+                    // performs products of the form
+                    //
+                    //   (A^T A + D^T D)x
+                    //
+                    // This is used to implement iterative general sparse linear solving with
+                    // conjugate gradients, where A is the Jacobian and D is a regularizing
+                    // parameter. A brief proof that D^T D is the correct regularizer:
+                    //
+                    // Given a regularized least squares problem:
+                    //
+                    //   min  ||Ax - b||^2 + ||Dx||^2
+                    //    x
+                    //
+                    // First expand into matrix notation:
+                    //
+                    //   (Ax - b)^T (Ax - b) + xD^TDx
+                    //
+                    // Then multiply out to get:
+                    //
+                    //   = xA^TAx - 2b^T Ax + b^Tb + xD^TDx
+                    //
+                    // Take the derivative:
+                    //
+                    //   0 = 2A^TAx - 2A^T b + 2 D^TDx
+                    //   0 = A^TAx - A^T b + D^TDx
+                    //   0 = (A^TA + D^TD)x - A^T b
+                    //
+                    // Thus, the symmetric system we need to solve for CGNR is
+                    //
+                    //   Sx = z
+                    //
+                    // with S = A^TA + D^TD
+                    //  and z = A^T b
 
                 Loop
 
@@ -828,8 +907,9 @@ return function(problemSpec)
 
 
 			    -- lm version
-			    emit quote
-                    logSolver(" lambda=%f ",pd.parameters.lambda)
+
+                --[[
+                    logSolver(" trust_region_radius=%f ",pd.parameters.trust_region_radius)
 
                     var cost_change = pd.prevCost - newCost
                     var model_cost_change = computeModelCostChange(pd)
@@ -845,33 +925,43 @@ return function(problemSpec)
                         gpu.PCGLinearUpdateRevert(pd)
 
                         -- lambda = lambda * nu
-                        pd.parameters.lambda = pd.parameters.lambda * pd.parameters.lambda_increase_factor
+                        pd.parameters.trust_region_radius = pd.parameters.trust_region_radius / pd.parameters.radius_decrease_factor
                         -- nu = 2 * nu
-                        pd.parameters.lambda_increase_factor = 2.0f * pd.parameters.lambda_increase_factor
+                        pd.parameters.radius_decrease_factor = 2.0f * pd.parameters.radius_decrease_factor
 
                         logSolver("REVERT\n")
                         gpu.precompute(pd)
                     else 
-                        -- lambda = lambda * max{1/3, 1 - (2 * relative_decrease - 1)^3}
+                        --]]
+
+
+                        --FOR NOW, ASSUME ALWAYS ACCEPT
+
+--[[
+                        radius_ = radius_ / std::max(1.0 / 3.0,
+                                                       1.0 - pow(2.0 * step_quality - 1.0, 3));
+                      radius_ = std::min(max_radius_, radius_);
+                      decrease_factor_ = 2.0;
+--]]
+                    emit quote
+                        -- TODO: compute relative_decrease 
+                        var relative_decrease = 1.0f
                         var min_factor = 1.0f/3.0f
                         var tmp_factor = 1.0f - util.cpuMath.pow(2.0f * relative_decrease - 1.0f, 3.0f)
-                        pd.parameters.lambda = pd.parameters.lambda * util.cpuMath.fmax(min_factor, tmp_factor)
-                        pd.parameters.lambda_increase_factor = 2.0f
+                        pd.parameters.trust_region_radius = pd.parameters.trust_region_radius / util.cpuMath.fmax(min_factor, tmp_factor)
+                        pd.parameters.radius_decrease_factor = 2.0f
 
                         logSolver("\n")
                         pd.prevCost = newCost
+
                     end
-                    var min_lm_diagonal = 1e-6f
-                    var max_lm_diagonal = 1e32f
-                    pd.parameters.lambda = util.cpuMath.fmax(min_lm_diagonal, pd.parameters.lambda)
-                    pd.parameters.lambda = util.cpuMath.fmin(max_lm_diagonal, pd.parameters.lambda)
-                end
-            else
-                emit quote
-                    logSolver("\n")
-                    pd.prevCost = newCost 
-                end
-            end end
+                else
+                    emit quote
+                        logSolver("\n")
+                        pd.prevCost = newCost 
+                    end
+                end 
+            end
 
             --[[ 
             To match CERES we would check for termination:
@@ -890,6 +980,7 @@ return function(problemSpec)
 		end
 	end
 
+
     local terra cost(data_ : &opaque) : float
         var pd = [&PlanData](data_)
         return [float](pd.prevCost)
@@ -905,6 +996,7 @@ return function(problemSpec)
 		pd.z:initGPU()
 		pd.p:initGPU()
 		pd.Ap_X:initGPU()
+        pd.D:initGPU()
 		pd.preconditioner:initGPU()
 		pd.g:initGPU()
 		
