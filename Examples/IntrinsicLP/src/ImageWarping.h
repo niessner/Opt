@@ -36,27 +36,39 @@ class ImageWarping
 			{
 				for (unsigned int j = 0; j < m_image.getWidth(); j++)
 				{
-					float EPS = 0.0f;
+					float EPS = 0.01f;
 
 					ml::vec4f v = m_image(j, i);
 					v = v / 255.0f;
 
-					// color space
+					//// color space
 					float intensity = (v.x + v.y + v.z) / 3.0f;
 					ml::vec4f chroma = v / intensity;
-
+					//
 					// log domain
 					ml::vec4f t = m_image(j, i);
 					t = t / 255.0f;
+
 					t.x = log2(t.x + EPS);
 					t.y = log2(t.y + EPS);
 					t.z = log2(t.z + EPS);
-
+					t.w = 0.0f;
+					
 					intensity = log2(intensity + EPS);
-
+					
 					chroma.x = log2(chroma.x + EPS);
 					chroma.y = log2(chroma.y + EPS);
 					chroma.z = log2(chroma.z + EPS);
+
+										
+					//ml::vec4f chroma;
+					//chroma.x = t.x / 2.0f;
+					//chroma.y = t.y / 2.0f;
+					//chroma.z = t.z / 2.0f;
+					//chroma.w = 0.0f;
+
+					//float intensity = 1.0f;// chroma.length();
+
 
 					h_input[i*m_image.getWidth() + j] = make_float3(v.x, v.y, v.z);
 					h_imageFloat3[i*m_image.getWidth() + j] = make_float3(t.x, t.y, t.z);
@@ -127,9 +139,9 @@ class ImageWarping
 				for (unsigned int j = 0; j < m_image.getWidth(); j++)
 				{
 					float3 v = h_imageFloat3[i*m_image.getWidth() + j];
-					v.x = exp2(v.x)/2;
-					v.y = exp2(v.y)/2;
-					v.z = exp2(v.z)/2;
+					v.x = exp2(v.x) / 1.5f;
+					v.y = exp2(v.y) / 1.5f;
+					v.z = exp2(v.z) / 1.5f;
 					m_result(j, i) = vec4f(v.x, v.y, v.z, 1.0f);
 				}
 			}
