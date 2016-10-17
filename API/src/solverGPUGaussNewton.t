@@ -641,6 +641,7 @@ return function(problemSpec)
             escape 
                 if problemSpec:UsesLambda() then
                     emit quote
+                        logSolver(" trust_region_radius=%f ",pd.parameters.trust_region_radius)
                         gpu.PCGComputeD(pd)
                         gpu.PCGComputeD_Graph(pd)
                     end
