@@ -2250,7 +2250,6 @@ local function createjtfgraph(PS,ES)
         local F,unknownsupport = term.expression,term.unknowns
         local unknownvars = unknownsupport:map(function(x) return ad.v[x] end)
         local partials = F:gradient(unknownvars)
-        local Jp = ad.toexp(0)
         for i,partial in ipairs(partials) do
             local u = unknownsupport[i]
             assert(GraphElement:isclassof(u.index))
@@ -2286,8 +2285,7 @@ local function computeDcentered(PS,ES)
                 local dfdx00 = F_x:d(x)     -- entry of J^T
                 local dfdx00Sq = dfdx00*dfdx00  -- entry of Diag(J^TJ)
 
-                -- TODO: put in PS.trust_region_radius
-                local inv_sqrt_radius = 1.0 / PS.trust_region_radius
+                local inv_sqrt_radius = 1.0 / ad.sqrt(PS.trust_region_radius)
                 local D_entry = dfdx00Sq*preconditioner*preconditioner*inv_sqrt_radius 
                 --local D_entry = dfdx00Sq*inv_sqrt_radius
                 D_hat[idx+1] = D_hat[idx+1] + D_entry
@@ -2305,10 +2303,12 @@ local function computeDgraph(PS,ES)
     local D,Pre = PS:UnknownArgument(1),PS:UnknownArgument(2)
     local scatters = List() 
     local scattermap = { [D] = {}}
+
     local function addscatter(im,u,exp)
         local s = scattermap[im][u]
         if not s then
             s =  Scatter(im[u.image.name],u.index,u.channel,ad.toexp(0),"add")
+            print("Creating ComputeD Graph Scatter")
             scattermap[im][u] = s
             scatters:insert(s)
         end
@@ -2318,14 +2318,14 @@ local function computeDgraph(PS,ES)
         local F,unknownsupport = term.expression,term.unknowns
         local unknownvars = unknownsupport:map(function(x) return ad.v[x] end)
         local partials = F:gradient(unknownvars)
-        local Jp = ad.toexp(0)
         for i,partial in ipairs(partials) do
             local u = unknownsupport[i]
             assert(GraphElement:isclassof(u.index))
             local preconditioner = Pre[u.image.name](u.index,u.channel)
-            -- TODO: put in PS.trust_region_radius
-            local inv_sqrt_radius = 1.0 / PS.trust_region_radius
-            addscatter(D,u,partial*partial*preconditioner*preconditioner*inv_sqrt_radius)
+            local inv_sqrt_radius = 1.0 / ad.sqrt(PS.trust_region_radius)
+            addscatter(D,u,partial*partial*preconditioner*preconditioner)
+            --addscatter(D,u,partial*partial*preconditioner*preconditioner*inv_sqrt_radius)
+            --addscatter(D,u,1.0)
         end
     end
     return A.FunctionSpec(ES.kind, "computeD", List { "D", "Pre" }, EMPTY, scatters, ES)

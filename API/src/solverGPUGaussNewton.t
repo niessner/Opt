@@ -255,7 +255,7 @@ return function(problemSpec)
                     alpha = alphaNumerator/alphaDenominator 
                 end 
     
-                pd.delta(idx) = pd.delta(idx)+alpha*pd.p(idx)		-- do a decent step
+                pd.delta(idx) = pd.delta(idx)+alpha*pd.p(idx)		-- do a descent step
         
                 var r = pd.r(idx)-alpha*pd.Ap_X(idx)				-- update residuum
                 pd.r(idx) = r										-- store for next kernel call
@@ -357,6 +357,15 @@ return function(problemSpec)
                     end        
                 end 
             end
+
+            terra kernels.DebugDumpD(pd : PlanData)
+                var idx : Index
+                if idx:initFromCUDAParams() then                         
+                    var D : unknownElement = pd.D(idx)
+                    printf("\nD: %d: %f %f\n", idx, D(0), D(1))
+                end 
+            end
+
             --[[
             terra kernels.computeModelCostChangeStep1(pd : PlanData)
                 var d = 0.0f -- init for out of bounds lanes
@@ -488,7 +497,7 @@ return function(problemSpec)
             terra kernels.PCGComputeD_Graph(pd : PlanData)
                 var tIdx = 0
                 if util.getValidGraphElement(pd,[graphname],&tIdx) then
-                    fmap.computeD(tIdx, pd.parameters, pd.preconditioner, pd.D)
+                    fmap.computeD(tIdx, pd.parameters, pd.D, pd.preconditioner)
                 end
             end    
    --[[
@@ -542,6 +551,7 @@ return function(problemSpec)
                                                                         "computeModelCostChangeStep1_Graph",
                                                                         "computeModelCostChangeStep2_Graph",
                                                                         "saveJToCRS",
+                                                                        "DebugDumpD",
                                                                         "saveJToCRS_Graph"
                                                                         })
 
@@ -578,6 +588,9 @@ return function(problemSpec)
                     --]]
         terra initLambda(pd : &PlanData)
             pd.parameters.trust_region_radius = 1e4
+            -- TODO: remove. Just for testing
+            pd.parameters.trust_region_radius = 1.0
+
             -- Init lambda based on the maximum value on the diagonal of JTJ
             --[[
             C.cudaMemset(pd.maxDiagJTJ, 0, sizeof(opt_float))
@@ -644,6 +657,7 @@ return function(problemSpec)
                         logSolver(" trust_region_radius=%f ",pd.parameters.trust_region_radius)
                         gpu.PCGComputeD(pd)
                         gpu.PCGComputeD_Graph(pd)
+                        gpu.DebugDumpD(pd)
                     end
                 end
             end
