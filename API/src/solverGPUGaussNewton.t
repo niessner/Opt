@@ -215,7 +215,8 @@ return function(problemSpec)
                     pre = 1.0f
                 end
             
-                var p = pre*residuum	-- apply pre-conditioner M^-1			   
+                var p = pre*residuum	-- apply pre-conditioner M^-1	
+                pd.preconditioner(idx) = pre		   
                 pd.p(idx) = p
                 d = residuum:dot(p)
             end
@@ -263,10 +264,6 @@ return function(problemSpec)
                 var pre = pd.preconditioner(idx)
                 if not problemSpec.usepreconditioner then
                     pre = opt_float(1.0f)
-                end
-        
-                if isGraph then
-                    pre = guardedInvert(pre)
                 end
         
                 var z = pre*r										-- apply pre-conditioner M^-1
