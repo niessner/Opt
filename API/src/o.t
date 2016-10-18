@@ -2286,8 +2286,8 @@ local function computeDtDcentered(PS,ES)
 
                 local inv_radius = 1.0 / PS.trust_region_radius
                 local D_entry = 0.0--2.0*dfdx00Sq*preconditioner*inv_radius 
-                D_hat[idx+1] = D_hat[idx+1] + D_entry
-                --D_hat[idx+1] = inv_sqrt_radius
+                --D_hat[idx+1] = D_hat[idx+1] + D_entry
+                D_hat[idx+1] = 0.0
             end
 
         end
@@ -2323,8 +2323,8 @@ local function computeDtDgraph(PS,ES)
             local preconditioner = Pre[u.image.name](u.index,u.channel)
             local inv_radius = 1.0 / PS.trust_region_radius
             --addscatter(DtD,u,2.0*partial*partial*preconditioner*inv_sqrt_radius)
-            addscatter(DtD,u,partial*partial*inv_radius/(2.0*preconditioner))
-            --addscatter(DtD,u,0.0)
+            --addscatter(DtD,u,partial*partial*inv_radius/(2.0*preconditioner))
+            addscatter(DtD,u,0.0)
         end
     end
     return A.FunctionSpec(ES.kind, "computeDtD", List { "DtD", "Pre" }, EMPTY, scatters, ES)
