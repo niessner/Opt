@@ -1,6 +1,6 @@
 #pragma once
 
-#define OPT_DOUBLE_PRECISION 0
+#define OPT_DOUBLE_PRECISION 1
 
 #if OPT_DOUBLE_PRECISION
 #   define OPT_FLOAT double

@@ -2286,9 +2286,9 @@ local function computeDcentered(PS,ES)
                 local dfdx00Sq = dfdx00*dfdx00  -- entry of Diag(J^TJ)
 
                 local inv_sqrt_radius = 1.0 / ad.sqrt(PS.trust_region_radius)
-                local D_entry = dfdx00Sq*preconditioner*preconditioner*inv_sqrt_radius 
-                --local D_entry = dfdx00Sq*inv_sqrt_radius
-                D_hat[idx+1] = D_hat[idx+1] + D_entry
+                --local D_entry = 2.0*dfdx00Sq*preconditioner*inv_sqrt_radius 
+                --D_hat[idx+1] = D_hat[idx+1] + D_entry
+                D_hat[idx+1] = inv_sqrt_radius
             end
 
         end
@@ -2323,9 +2323,8 @@ local function computeDgraph(PS,ES)
             assert(GraphElement:isclassof(u.index))
             local preconditioner = Pre[u.image.name](u.index,u.channel)
             local inv_sqrt_radius = 1.0 / ad.sqrt(PS.trust_region_radius)
-            addscatter(D,u,partial*partial*preconditioner*preconditioner)
-            --addscatter(D,u,partial*partial*preconditioner*preconditioner*inv_sqrt_radius)
-            --addscatter(D,u,1.0)
+            --addscatter(D,u,2.0*partial*partial*preconditioner*inv_sqrt_radius)
+            addscatter(D,u,0.0)
         end
     end
     return A.FunctionSpec(ES.kind, "computeD", List { "D", "Pre" }, EMPTY, scatters, ES)

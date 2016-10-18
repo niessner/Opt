@@ -1,4 +1,4 @@
-local OPT_FLOAT2 = float2
+local OPT_FLOAT2 = double2
 
 local N,U = opt.Dim("N",0), opt.Dim("U",1)
 local funcParams =   Unknown("funcParams", OPT_FLOAT2, {U}, 0) -- a,b
@@ -8,7 +8,7 @@ local G = Graph("G", 2,
                 "d", {N}, 3, 
 				"ab", {U}, 5)
 
-UsePreconditioner(true)
+UsePreconditioner(false)
 
 local d = data(G.d)
 local ab = funcParams(G.ab)

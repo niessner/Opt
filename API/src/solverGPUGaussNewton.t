@@ -152,12 +152,28 @@ return function(problemSpec)
 	    local unknownElement = UnknownType:VectorTypeForIndexSpace(UnknownIndexSpace)
 	    local Index = UnknownIndexSpace:indextype()
 
+        local CERES_style_guardedInvert = true
         local terra guardedInvert(p : unknownElement)
-            var invp = p
-            for i = 0, invp:size() do
-                invp(i) = terralib.select(invp(i) > FLOAT_EPSILON, [opt_float](1.f) / invp(i),invp(i))
+            escape 
+                if CERES_style_guardedInvert then
+                    emit quote
+                        var invp = p
+                        for i = 0, invp:size() do
+                            invp(i) = [opt_float](1.f) / ([opt_float](1.f) + 2*util.gpuMath.sqrt(invp(i)) + invp(i))
+                            --invp(i) = [opt_float](1.f) / ([opt_float](1.f) + invp(i))
+                        end
+                        return invp
+                    end
+                else
+                    emit quote
+                        var invp = p
+                        for i = 0, invp:size() do
+                            invp(i) = terralib.select(invp(i) > FLOAT_EPSILON, [opt_float](1.f) / invp(i),invp(i))
+                        end
+                        return invp
+                    end
+                end
             end
-            return invp
         end
 	
         terra kernels.PCGInit1(pd : PlanData)
@@ -294,6 +310,7 @@ return function(problemSpec)
             var idx : Index
             if idx:initFromCUDAParams() and not fmap.exclude(idx,pd.parameters) then
                 pd.parameters.X(idx) = pd.parameters.X(idx) + pd.delta(idx)
+                printf("delta: %f %f\n", pd.delta(idx)(0), pd.delta(idx)(1))
             end
         end	
         
@@ -584,9 +601,10 @@ return function(problemSpec)
         end
                     --]]
         terra initLambda(pd : &PlanData)
-            pd.parameters.trust_region_radius = 1e4
+            pd.parameters.trust_region_radius = 1e-16
             -- TODO: remove. Just for testing
-            pd.parameters.trust_region_radius = 1.0
+            pd.parameters.trust_region_radius = 1e-10
+            --pd.parameters.trust_region_radius = 0.33333333333333333
 
             -- Init lambda based on the maximum value on the diagonal of JTJ
             --[[

@@ -96,10 +96,7 @@ void CeresSolver::solve(
     options.max_lm_diagonal = std::numeric_limits<double>::infinity();
 
 
-    options.initial_trust_region_radius = 1.0;
-
-    //problem.Evaluate(Problem::EvaluateOptions(), &cost, nullptr, nullptr, nullptr);
-    //cout << "Cost*2 start: " << cost << endl;
+    options.initial_trust_region_radius = 1e-10;
 
 
     Solve(options, &problem, &summary);
