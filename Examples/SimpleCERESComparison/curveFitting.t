@@ -8,7 +8,7 @@ local G = Graph("G", 2,
                 "d", {N}, 3, 
 				"ab", {U}, 5)
 
-UsePreconditioner(false)
+UsePreconditioner(true)
 
 local d = data(G.d)
 local ab = funcParams(G.ab)

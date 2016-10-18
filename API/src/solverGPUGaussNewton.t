@@ -67,7 +67,7 @@ return function(problemSpec)
 		z : TUnknownType		--preconditioned residuals -> num vars	--TODO this needs to be a 'residual type'
 		p : TUnknownType		--descent direction -> num vars
 		Ap_X : TUnknownType	--cache values for next kernel call after A = J^T x J x p -> num vars
-        D : TUnknownType -- The diagonal matrix D for the inner linear solve (A'A+D'D)x = A'b (A = J, b = residuals). Used only by LM
+        DtD : TUnknownType -- The diagonal matrix D'D for the inner linear solve (A'A+D'D)x = A'b (A = J, b = residuals). Used only by LM
 		preconditioner : TUnknownType --pre-conditioner for linear system -> num vars
 		g : TUnknownType		--gradient of F(x): g = -2J'F -> num vars
 		
@@ -249,7 +249,7 @@ return function(problemSpec)
             if idx:initFromCUDAParams() and not fmap.exclude(idx,pd.parameters) then
                 var tmp : unknownElement = 0.0f
                  -- A x p_k  => J^T x J x p_k 
-                tmp = fmap.applyJTJ(idx, pd.parameters, pd.p, pd.D)
+                tmp = fmap.applyJTJ(idx, pd.parameters, pd.p, pd.DtD)
                 pd.Ap_X(idx) = tmp					 -- store for next kernel call
                 d = pd.p(idx):dot(tmp)			 -- x-th term of denominator of alpha
             end
@@ -358,25 +358,25 @@ return function(problemSpec)
             end
         end
         if problemSpec:UsesLambda() then
-            terra kernels.PCGComputeD(pd : PlanData)
+            terra kernels.PCGComputeDtD(pd : PlanData)
                 var idx : Index
                 if idx:initFromCUDAParams() then
                     -- residuum = J^T x -F - A x delta_0  => J^T x -F, since A x x_0 == 0                            
-                    var D : unknownElement = 0.0f
+                    var DtD : unknownElement = 0.0f
                 
                     if not fmap.exclude(idx,pd.parameters) then 
                         pd.delta(idx) = 0.0f    
-                        D = fmap.computeD(idx, pd.parameters, pd.preconditioner)
-                        pd.D(idx) = D
+                        DtD = fmap.computeDtD(idx, pd.parameters, pd.preconditioner)
+                        pd.DtD(idx) = DtD
                     end        
                 end 
             end
 
-            terra kernels.DebugDumpD(pd : PlanData)
+            terra kernels.DebugDumpDtD(pd : PlanData)
                 var idx : Index
                 if idx:initFromCUDAParams() then                         
-                    var D : unknownElement = pd.D(idx)
-                    printf("\nD: %d: %f %f\n", idx, D(0), D(1))
+                    var DtD : unknownElement = pd.DtD(idx)
+                    printf("\nD: %d: %f %f\n", idx, DtD(0), DtD(1))
                 end 
             end
 
@@ -476,7 +476,7 @@ return function(problemSpec)
             var d = 0.0f
             var tIdx = 0 
             if util.getValidGraphElement(pd,[graphname],&tIdx) then
-               d = d + fmap.applyJTJ(tIdx, pd.parameters, pd.p, pd.Ap_X, pd.D)
+               d = d + fmap.applyJTJ(tIdx, pd.parameters, pd.p, pd.Ap_X, pd.DtD)
             end 
             d = util.warpReduce(d)
             if (util.laneid() == 0) then
@@ -508,10 +508,10 @@ return function(problemSpec)
             print(kernels.saveJToCRS_Graph)
         end
         if problemSpec:UsesLambda() then
-            terra kernels.PCGComputeD_Graph(pd : PlanData)
+            terra kernels.PCGComputeDtD_Graph(pd : PlanData)
                 var tIdx = 0
                 if util.getValidGraphElement(pd,[graphname],&tIdx) then
-                    fmap.computeD(tIdx, pd.parameters, pd.D, pd.preconditioner)
+                    fmap.computeDtD(tIdx, pd.parameters, pd.DtD, pd.preconditioner)
                 end
             end    
    --[[
@@ -546,7 +546,7 @@ return function(problemSpec)
 	
 	local gpu = util.makeGPUFunctions(problemSpec, PlanData, delegate, {"PCGInit1",
                                                                         "PCGInit1_Finish",
-                                                                        "PCGComputeD",
+                                                                        "PCGComputeDtD",
                                                                         "PCGStep1",
                                                                         "PCGStep2",
                                                                         "PCGStep3",
@@ -559,13 +559,13 @@ return function(problemSpec)
                                                                         "computeModelCostChangeStep2",
                                                                         "LMLambdaInit",
                                                                         "PCGInit1_Graph",
-                                                                        "PCGComputeD_Graph",
+                                                                        "PCGComputeDtD_Graph",
                                                                         "PCGStep1_Graph",
                                                                         "computeCost_Graph",
                                                                         "computeModelCostChangeStep1_Graph",
                                                                         "computeModelCostChangeStep2_Graph",
                                                                         "saveJToCRS",
-                                                                        "DebugDumpD",
+                                                                        "DebugDumpDtD",
                                                                         "saveJToCRS_Graph"
                                                                         })
 
@@ -603,7 +603,7 @@ return function(problemSpec)
         terra initLambda(pd : &PlanData)
             pd.parameters.trust_region_radius = 1e-16
             -- TODO: remove. Just for testing
-            pd.parameters.trust_region_radius = 1e-10
+            pd.parameters.trust_region_radius = 1e-3
             --pd.parameters.trust_region_radius = 0.33333333333333333
 
             -- Init lambda based on the maximum value on the diagonal of JTJ
@@ -670,9 +670,9 @@ return function(problemSpec)
                 if problemSpec:UsesLambda() then
                     emit quote
                         logSolver(" trust_region_radius=%f ",pd.parameters.trust_region_radius)
-                        gpu.PCGComputeD(pd)
-                        gpu.PCGComputeD_Graph(pd)
-                        gpu.DebugDumpD(pd)
+                        gpu.PCGComputeDtD(pd)
+                        gpu.PCGComputeDtD_Graph(pd)
+                        gpu.DebugDumpDtD(pd)
                     end
                 end
             end
@@ -1026,7 +1026,7 @@ return function(problemSpec)
 		pd.z:initGPU()
 		pd.p:initGPU()
 		pd.Ap_X:initGPU()
-        pd.D:initGPU()
+        pd.DtD:initGPU()
 		pd.preconditioner:initGPU()
 		pd.g:initGPU()
 		

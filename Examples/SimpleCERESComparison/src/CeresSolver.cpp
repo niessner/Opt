@@ -96,7 +96,8 @@ void CeresSolver::solve(
     options.max_lm_diagonal = std::numeric_limits<double>::infinity();
 
 
-    options.initial_trust_region_radius = 1e-10;
+    options.initial_trust_region_radius = 1e-3;
+
 
 
     Solve(options, &problem, &summary);

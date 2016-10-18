@@ -1933,7 +1933,7 @@ local function createjtjcentered(PS,ES)
     local ispace = ES.kind.ispace
     local N = UnknownType:VectorSizeForIndexSpace(ES.kind.ispace)
     local P = PS:UnknownArgument(1)
-    local D = PS:UnknownArgument(2)
+    local DtD = PS:UnknownArgument(2)
     local P_hat_c = {}
     local conditions = terralib.newlist()
     for rn,residual in ipairs(ES.residuals) do
@@ -1956,8 +1956,8 @@ local function createjtjcentered(PS,ES)
 
                     if uv == x and PS:UsesLambda() then -- on the diagonal
                         -- LM
-                        local diagVal = D[u.image.name](u.index,u.channel)
-                        exp = exp + diagVal*diagVal
+                        local diagVal = DtD[u.image.name](u.index,u.channel)
+                        exp = exp + diagVal
                     end
 
                     lprintf(2,"term:\ndr%d_%s/dx%s[%d] = %s",rn,tostring(r),tostring(u.index),u.chan,tostring(drdx_u))
@@ -1984,7 +1984,7 @@ local function createjtjcentered(PS,ES)
     P_hat = ad.polysimplify(P_hat)
     dprint("JTJ[poly] = ", ad.tostrings(P_hat))
     local r = ad.Vector(unpack(P_hat))
-    local result = A.FunctionSpec(ES.kind,"applyJTJ", List {"P", "D"}, List{r}, EMPTY,ES)
+    local result = A.FunctionSpec(ES.kind,"applyJTJ", List {"P", "DtD"}, List{r}, EMPTY,ES)
     return result
 end
 
@@ -2044,7 +2044,7 @@ local function createjtjcenteredsimple(PS,ES)
 end
 
 local function createjtjgraph(PS,ES)
-    local P,Ap_X,D = PS:UnknownArgument(1),PS:UnknownArgument(2),PS:UnknownArgument(3)
+    local P,Ap_X,DtD = PS:UnknownArgument(1),PS:UnknownArgument(2),PS:UnknownArgument(3)
 
     local result = ad.toexp(0)
     local scatters = List() 
@@ -2074,16 +2074,15 @@ local function createjtjgraph(PS,ES)
 
             if PS:UsesLambda() then
                 --jtjp = jtjp + 2*partial*partial*PS.lambda*P[u.image.name](u.index,u.channel)
-                local diagVal = D[u.image.name](u.index,u.channel)
-                jtjp = jtjp + diagVal*diagVal
+                local diagVal = DtD[u.image.name](u.index,u.channel)
+                jtjp = jtjp + diagVal
             end
-
             result = result + P[u.image.name](u.index,u.channel)*jtjp
             addscatter(u,jtjp)
         end
     end
 
-    return A.FunctionSpec(ES.kind,"applyJTJ", List {"P", "Ap_X", "D"}, List { result }, scatters, ES)
+    return A.FunctionSpec(ES.kind,"applyJTJ", List {"P", "Ap_X", "DtD"}, List { result }, scatters, ES)
 end
 
 -- the same as createjtfgraph but computing -p'J'Jp and without computing the preconditioner
@@ -2260,7 +2259,7 @@ local function createjtfgraph(PS,ES)
     return A.FunctionSpec(ES.kind, "evalJTF", List { "R", "Pre" }, EMPTY, scatters,ES)
 end
 
-local function computeDcentered(PS,ES)
+local function computeDtDcentered(PS,ES)
    local UnknownType = PS.P:UnknownType()
    local ispace = ES.kind.ispace
    local N = UnknownType:VectorSizeForIndexSpace(ispace)
@@ -2285,10 +2284,10 @@ local function computeDcentered(PS,ES)
                 local dfdx00 = F_x:d(x)     -- entry of J^T
                 local dfdx00Sq = dfdx00*dfdx00  -- entry of Diag(J^TJ)
 
-                local inv_sqrt_radius = 1.0 / ad.sqrt(PS.trust_region_radius)
-                --local D_entry = 2.0*dfdx00Sq*preconditioner*inv_sqrt_radius 
-                --D_hat[idx+1] = D_hat[idx+1] + D_entry
-                D_hat[idx+1] = inv_sqrt_radius
+                local inv_radius = 1.0 / PS.trust_region_radius
+                local D_entry = 0.0--2.0*dfdx00Sq*preconditioner*inv_radius 
+                D_hat[idx+1] = D_hat[idx+1] + D_entry
+                --D_hat[idx+1] = inv_sqrt_radius
             end
 
         end
@@ -2296,13 +2295,13 @@ local function computeDcentered(PS,ES)
     for i = 1,N do
         D_hat[i] = ad.polysimplify(D_hat[i])
     end
-    return A.FunctionSpec(ES.kind,"computeD", List { "Pre" }, List{ ad.Vector(unpack(D_hat)) }, EMPTY,ES)
+    return A.FunctionSpec(ES.kind,"computeDtD", List { "Pre" }, List{ ad.Vector(unpack(D_hat)) }, EMPTY,ES)
 end
 
-local function computeDgraph(PS,ES)
-    local D,Pre = PS:UnknownArgument(1),PS:UnknownArgument(2)
+local function computeDtDgraph(PS,ES)
+    local DtD,Pre = PS:UnknownArgument(1),PS:UnknownArgument(2)
     local scatters = List() 
-    local scattermap = { [D] = {}}
+    local scattermap = { [DtD] = {}}
 
     local function addscatter(im,u,exp)
         local s = scattermap[im][u]
@@ -2322,12 +2321,13 @@ local function computeDgraph(PS,ES)
             local u = unknownsupport[i]
             assert(GraphElement:isclassof(u.index))
             local preconditioner = Pre[u.image.name](u.index,u.channel)
-            local inv_sqrt_radius = 1.0 / ad.sqrt(PS.trust_region_radius)
-            --addscatter(D,u,2.0*partial*partial*preconditioner*inv_sqrt_radius)
-            addscatter(D,u,0.0)
+            local inv_radius = 1.0 / PS.trust_region_radius
+            --addscatter(DtD,u,2.0*partial*partial*preconditioner*inv_sqrt_radius)
+            addscatter(DtD,u,partial*partial*inv_radius/(2.0*preconditioner))
+            --addscatter(DtD,u,0.0)
         end
     end
-    return A.FunctionSpec(ES.kind, "computeD", List { "D", "Pre" }, EMPTY, scatters, ES)
+    return A.FunctionSpec(ES.kind, "computeDtD", List { "DtD", "Pre" }, EMPTY, scatters, ES)
 end
 
 -- the same as createjtfgraph but without computing the preconditioner
@@ -2506,7 +2506,7 @@ function ProblemSpecAD:Cost(...)
             --functionspecs:insert(createdumpjcentered(self,energyspec))
             
             if self.P:UsesLambda() then
-                functionspecs:insert(computeDcentered(self,energyspec))
+                functionspecs:insert(computeDtDcentered(self,energyspec))
                 --functionspecs:insert(createjtjcenteredsimple(self,energyspec))
                 --functionspecs:insert(createjtfcenteredsimple(self,energyspec))
                 --functionspecs:insert(creatediagjtjcentered(self,energyspec))
@@ -2517,7 +2517,7 @@ function ProblemSpecAD:Cost(...)
             --functionspecs:insert(createdumpjgraph(self,energyspec))
             
             if self.P:UsesLambda() then
-                functionspecs:insert(computeDgraph(self,energyspec))
+                functionspecs:insert(computeDtDgraph(self,energyspec))
                 --functionspecs:insert(createjtjgraphsimple(self,energyspec))
                 --functionspecs:insert(createjtfgraphsimple(self,energyspec))
                 -- functionspecs:insert(creatediagjtjgraph(self,energyspec))            
