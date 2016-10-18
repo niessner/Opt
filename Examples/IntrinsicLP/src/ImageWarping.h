@@ -6,6 +6,7 @@
 #include <cudaUtil.h>
 
 #include "TerraSolver.h"
+#include "CUDATimer.h"
 
 class ImageWarping
 {
@@ -41,11 +42,9 @@ class ImageWarping
 					ml::vec4f v = m_image(j, i);
 					v = v / 255.0f;
 
-					//// color space
 					float intensity = (v.x + v.y + v.z) / 3.0f;
 					ml::vec4f chroma = v / intensity;
-					//
-					// log domain
+
 					ml::vec4f t = m_image(j, i);
 					t = t / 255.0f;
 
@@ -59,17 +58,7 @@ class ImageWarping
 					chroma.x = log2(chroma.x + EPS);
 					chroma.y = log2(chroma.y + EPS);
 					chroma.z = log2(chroma.z + EPS);
-
-										
-					//ml::vec4f chroma;
-					//chroma.x = t.x / 2.0f;
-					//chroma.y = t.y / 2.0f;
-					//chroma.z = t.z / 2.0f;
-					//chroma.w = 0.0f;
-
-					//float intensity = 1.0f;// chroma.length();
-
-
+	
 					h_input[i*m_image.getWidth() + j] = make_float3(v.x, v.y, v.z);
 					h_imageFloat3[i*m_image.getWidth() + j] = make_float3(t.x, t.y, t.z);
 					h_imageFloat3Albedo[i*m_image.getWidth() + j] = make_float3(chroma.x, chroma.y, chroma.z);
@@ -104,15 +93,21 @@ class ImageWarping
 			float weightRegAlbedo  = 500.0f;
 			float weightRegShading = 1000.0f;
 			float weightRegChroma  = 200.0f;
-			float pNorm = 1.0f;
+			float pNorm = 0.8f;
 
-			unsigned int nonLinearIter = 50;
-			unsigned int linearIter = 40;
+			unsigned int nonLinearIter = 5;
+			unsigned int linearIter = 5;
 	            
             std::cout << "\n\nOPT" << std::endl;
             resetGPUMemory();
+
+			CUDATimer timer;
+			timer.startEvent("opt");
 			m_terraSolver->solve(d_imageFloat3Albedo, d_imageFloatIllumination, d_targetFloat3, d_input, nonLinearIter, linearIter, 0, weightFit, weightRegAlbedo, weightRegShading, weightRegChroma, pNorm);
-            copyResultToCPUFromFloat3();
+			timer.endEvent();
+			timer.evaluate();
+
+			copyResultToCPUFromFloat3();
 			
 			return &m_result;
 		}
