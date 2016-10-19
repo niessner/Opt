@@ -1,7 +1,8 @@
 #pragma once
 
-
 #include <cuda_runtime.h>
+
+#include "config.h"
 
 
 #include "CeresSolver.h"
@@ -17,12 +18,9 @@ using ceres::Solver;
 using ceres::Solve;
 using namespace std;
 
-
-
-
-struct TheTerm
+struct TermDefault
 {
-    TheTerm(double x, double y)
+	TermDefault(double x, double y)
         : x(x), y(y) {}
 
     template <typename T>
@@ -35,15 +33,35 @@ struct TheTerm
 
     static ceres::CostFunction* Create(double x, double y)
     {
-        return (new ceres::AutoDiffCostFunction<TheTerm, 1, 2>(
-            new TheTerm(x, y)));
+		return (new ceres::AutoDiffCostFunction<TermDefault, 1, 2>(
+			new TermDefault(x, y)));
     }
 
     double x;
     double y;
 };
 
+struct TermMirsa
+{
+	TermMirsa(double x, double y)
+		: x(x), y(y) {}
 
+	template <typename T>
+	bool operator()(const T* const funcParams, T* residuals) const
+	{
+		residuals[0] = y - funcParams[0] * ((T)1.0 - exp(-funcParams[1] * x));
+		return true;
+	}
+
+	static ceres::CostFunction* Create(double x, double y)
+	{
+		return (new ceres::AutoDiffCostFunction<TermMirsa, 1, 2>(
+			new TermMirsa(x, y)));
+	}
+
+	double x;
+	double y;
+};
 
 void CeresSolver::solve(
     double2* funcParameters,
@@ -59,8 +77,17 @@ void CeresSolver::solve(
     Problem problem;
     for (int i = 0; i < functionData.size(); i++)
     {
-        ceres::CostFunction* costFunction = TheTerm::Create(functionData[i].x, functionData[i].y);
-        problem.AddResidualBlock(costFunction, NULL, (double*)funcParameters);
+		ceres::CostFunction* costFunction = nullptr;
+
+		if (useProblemDefault) costFunction = TermDefault::Create(functionData[i].x, functionData[i].y);
+		if (useProblemMisra) costFunction = TermMirsa::Create(functionData[i].x, functionData[i].y);
+
+		if (costFunction == nullptr)
+		{
+			cout << "No problem specified!" << endl;
+			cin.get();
+		}
+		problem.AddResidualBlock(costFunction, NULL, (double*)funcParameters);
     }
 
     cout << "Solving..." << endl;

@@ -7,9 +7,9 @@
 #include "TerraSolver.h"
 #include "CeresSolver.h"
 #include <vector>
-static bool useOpt = true;
+static bool useOpt = false;
 static bool useCeres = true;
-static bool useOptLM = true;
+static bool useOptLM = false;
 
 class CombinedSolver {
 public:

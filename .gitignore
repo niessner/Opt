@@ -401,3 +401,25 @@ Examples/ShapeFromShadingSimple/shapefromshading
 /API/Opt.dll
 /API/Opt.exp
 /API/Opt.lib
+/Examples/SimpleCERESComparison/x64/Debug
+/Examples/SimpleCERESComparison/x64/Release
+/Examples/ImageWarping/x64/Release NoOpt
+/Examples/ImageWarping/.vs/ImageWarping/v14/.suo
+/Examples/ImageWarping/ImageWarping.VC.db
+/Examples/ImageWarping/x64/Debug/ImageWarping.tlog/link-cvtres.read.1.tlog
+/Examples/ImageWarping/x64/Debug/ImageWarping.tlog/link-cvtres.write.1.tlog
+/Examples/ImageWarping/x64/Debug/ImageWarping.tlog/link-mt.read.1.tlog
+/Examples/ImageWarping/x64/Debug/ImageWarping.tlog/link-mt.write.1.tlog
+/Examples/ImageWarping/x64/Debug/ImageWarping.tlog/link-rc.read.1.tlog
+/Examples/ImageWarping/x64/Debug/ImageWarping.tlog/link-rc.write.1.tlog
+/Examples/ImageWarping/x64/Debug/ImageWarping.tlog/unsuccessfulbuild
+/Examples/MeshDeformationARAP/MeshDeformationARAP.v12.suo
+/Examples/MeshDeformationARAP/Opt.exp
+/Examples/MeshDeformationARAP/x64/Debug/MeshDeformation.Build.CppClean.log
+/Examples/SimpleCERESComparison/Opt.dll
+/Examples/SimpleCERESComparison/Opt.exp
+/Examples/SimpleCERESComparison/Opt.h
+/Examples/SimpleCERESComparison/Opt.lib
+/Examples/SimpleCERESComparison/Simple.opensdf
+/Examples/SimpleCERESComparison/Simple.sdf
+/Examples/SimpleCERESComparison/Simple.v12.suo
