@@ -603,7 +603,7 @@ return function(problemSpec)
         terra initLambda(pd : &PlanData)
             pd.parameters.trust_region_radius = 1e-16
             -- TODO: remove. Just for testing
-            pd.parameters.trust_region_radius = 1e-3
+            pd.parameters.trust_region_radius = 10
             --pd.parameters.trust_region_radius = 0.33333333333333333
 
             -- Init lambda based on the maximum value on the diagonal of JTJ

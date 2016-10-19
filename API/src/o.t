@@ -2075,7 +2075,7 @@ local function createjtjgraph(PS,ES)
             if PS:UsesLambda() then
                 --jtjp = jtjp + 2*partial*partial*PS.lambda*P[u.image.name](u.index,u.channel)
                 local diagVal = DtD[u.image.name](u.index,u.channel)
-                jtjp = jtjp + diagVal
+                jtjp = jtjp + 2*diagVal*partial
             end
             result = result + P[u.image.name](u.index,u.channel)*jtjp
             addscatter(u,jtjp)
@@ -2323,7 +2323,7 @@ local function computeDtDgraph(PS,ES)
             local preconditioner = Pre[u.image.name](u.index,u.channel)
             local inv_radius = 1.0 / PS.trust_region_radius
             --addscatter(DtD,u,2.0*partial*partial*preconditioner*inv_sqrt_radius)
-            addscatter(DtD,u,partial*partial*inv_radius*preconditioner)
+            addscatter(DtD,u,partial*partial*inv_radius)
             --addscatter(DtD,u,0.0)
         end
     end

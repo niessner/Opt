@@ -98,11 +98,17 @@ $$d_{ii} = \sqrt{\frac{1}{1+\sqrt{(J^TJ)_{ii}}}^2(J^TJ)_{ii}/\mbox{radius}}$$
 
 $$d_{ii} = \frac{1}{\sqrt{\mbox{radius}}}\sqrt{\frac{(J^TJ)_{ii}}{(1+\sqrt{(J^TJ)_{ii}})^2}}$$
 
+$$d_{ii} = \frac{1}{\sqrt{\mbox{radius}}}\frac{\sqrt{(J^TJ)_{ii}}}{(1+\sqrt{(J^TJ)_{ii}})}$$
+
+This is off from being the proposed value of $ D_{ii} $ by a factor of $\sqrt{(J^TJ)_{ii}}$. Solving for CERES value of 
+$ c_{ii} $
+
+$$c_{ii} = \frac{d_ii}{s_ii} = \frac{1}{\sqrt{\mbox{radius}}}\frac{\sqrt{(J^TJ)_{ii}}}{(1+\sqrt{(J^TJ)_{ii}})}(1+\sqrt{(J^TJ)_{ii}})$$
+
+$$c_{ii} = \frac{\sqrt{(J^TJ)_{ii}}}{\sqrt{\mbox{radius}}}$$
 
 
-
-
-
+So each element of $C^TC$ will just be $ctc_{ii} = \frac{(J^TJ)_{ii}}{\mbox{radius}}$
 
 
 
