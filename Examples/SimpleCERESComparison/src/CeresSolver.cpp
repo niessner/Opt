@@ -137,7 +137,7 @@ void CeresSolver::solve(
     {
         iterationTotalTime += i.iteration_time_in_seconds;
         totalLinearItereations += i.linear_solver_iterations;
-        cout << "Iteration: " << i.linear_solver_iterations << " " << i.iteration_time_in_seconds * 1000.0 << "ms" << endl;
+        //cout << "Iteration: " << i.linear_solver_iterations << " " << i.iteration_time_in_seconds * 1000.0 << "ms" << endl;
     }
 
     cout << "Total iteration time: " << iterationTotalTime << endl;
