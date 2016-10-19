@@ -91,9 +91,9 @@ class ImageWarping
 		{
 			float weightFit  = 500.0f;
 			float weightRegAlbedo  = 1000.0f;
-			float weightRegShading = 1000.0f;
+			float weightRegShading = 10000.0f;
 			float weightRegChroma  = 100.0f;
-			float pNorm = 1.0f;
+			float pNorm = 1.0;
 
 			unsigned int nonLinearIter = 7;
 			unsigned int linearIter = 10;
