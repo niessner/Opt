@@ -1,0 +1,36 @@
+                <meta charset="utf-8" emacsmode="-*- markdown -*-">
+                            **CERES vs Opt**
+
+
+Analyzing CERES
+===============================================================================
+
+The following uses notation from:
+https://en.wikipedia.org/wiki/Conjugate_gradient_method
+
+CERES directly modifies the Jacobian by multiplying it with a scaling matrix S.
+S is a diagonal matrix where each entry 
+
+$$s_i = \frac{1}{1+\sqrt{(J^tJ)_{ii}}}$$
+
+We can write this without resorting to entry-wise notation if we let
+
+$$Q = \mbox{diag}(J^tJ)$$
+
+and $U$ be the matrix such that
+
+$$Q = U^tU$$
+
+Then $S$ is just
+
+$$S = (U + I)^{-1}$$
+
+
+
+
+
+
+
+
+
+<!-- Markdeep: --><style class="fallback">body{visibility:hidden;white-space:pre;font-family:monospace}</style><script src="markdeep.min.js"></script><script src="https://casual-effects.com/markdeep/latest/markdeep.min.js"></script><script>window.alreadyProcessedMarkdeep||(document.body.style.visibility="visible")</script>
