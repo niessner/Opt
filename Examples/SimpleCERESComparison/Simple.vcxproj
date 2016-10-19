@@ -170,6 +170,7 @@ xcopy /Y /D "..\..\API\release\include\*.h" "."</Command>
   </ItemGroup>
   <ItemGroup>
     <None Include="curveFitting.t" />
+    <None Include="misra.t" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

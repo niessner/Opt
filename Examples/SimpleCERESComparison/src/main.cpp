@@ -74,7 +74,11 @@ void runTestB()
 
 	CombinedSolver solver(initialGuess, dataPoints);
 	double2 finalResult = solver.solve();
-	std::cout << "Final Result: " << finalResult.x << ", " << finalResult.y << std::endl;
+	//std::cout << "Final Result: " << finalResult.x << ", " << finalResult.y << std::endl;
+
+
+	cout << "Ceres solution: " << solver.m_ceresResult.x << " " << solver.m_ceresResult.y << endl;
+	cout << "Opt solution: " << solver.m_optResult.x << " " << solver.m_optResult.y << endl;
 }
 
 int main(int argc, const char * argv[]) {

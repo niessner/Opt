@@ -7,13 +7,18 @@
 #include "TerraSolver.h"
 #include "CeresSolver.h"
 #include <vector>
-static bool useOpt = false;
+static bool useOpt = true;
 static bool useCeres = true;
 static bool useOptLM = false;
 
 class CombinedSolver {
 public:
     CombinedSolver(double2 functionParameterGuess, std::vector<double2> dataPoints) {
+
+		std::string optProblemFilename = "none";
+		if (useProblemDefault) optProblemFilename = "curveFitting.t";
+		if (useProblemMisra) optProblemFilename = "misra.t";
+
         m_ceresDataPoints = dataPoints;
         m_functionParametersGuess = functionParameterGuess;
         std::vector<OPT_FLOAT2> dataPointsFloat(dataPoints.size());
@@ -24,9 +29,8 @@ public:
         d_dataPoints.update(dataPointsFloat);
 		resetGPU();
 
-
         if (useOpt) {
-            m_solverOpt = new TerraSolver((uint32_t)dataPoints.size(), "curveFitting.t", useOptLM ? "LMGPU" : "gaussNewtonGPU");
+			m_solverOpt = new TerraSolver((uint32_t)dataPoints.size(), optProblemFilename, useOptLM ? "LMGPU" : "gaussNewtonGPU");
 		}
 
         if (useCeres) {
@@ -56,17 +60,20 @@ public:
 			resetGPU();
             m_solverOpt->solve(d_functionParameters.data(), d_dataPoints.data(), nonLinearIter, linearIter);
 			copyResultToCPU();
+			m_optResult = m_functionParameters;
 		}
 
 		if (useCeres) {
             m_functionParameters = m_functionParametersGuess;
             m_solverCeres->solve(&m_functionParameters, m_ceresDataPoints.data());
+			m_ceresResult = m_functionParameters;
 		}
 
         return m_functionParameters;
 	}
 
-	
+	double2 m_optResult;
+	double2 m_ceresResult;
 
 private:
     std::vector<double2> m_ceresDataPoints;
