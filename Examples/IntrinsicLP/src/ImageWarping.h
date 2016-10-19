@@ -89,14 +89,14 @@ class ImageWarping
 
 		ColorImageR32G32B32A32* solve()
 		{
-			float weightFit  = 1000.0f;
-			float weightRegAlbedo  = 500.0f;
+			float weightFit  = 500.0f;
+			float weightRegAlbedo  = 1000.0f;
 			float weightRegShading = 1000.0f;
-			float weightRegChroma  = 200.0f;
-			float pNorm = 0.8f;
+			float weightRegChroma  = 100.0f;
+			float pNorm = 1.0f;
 
-			unsigned int nonLinearIter = 5;
-			unsigned int linearIter = 5;
+			unsigned int nonLinearIter = 7;
+			unsigned int linearIter = 10;
 	            
             std::cout << "\n\nOPT" << std::endl;
             resetGPUMemory();
