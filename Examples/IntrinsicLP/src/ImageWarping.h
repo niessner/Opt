@@ -6,6 +6,7 @@
 #include <cudaUtil.h>
 
 #include "TerraSolver.h"
+#include "CUDATimer.h"
 
 class ImageWarping
 {
@@ -36,28 +37,28 @@ class ImageWarping
 			{
 				for (unsigned int j = 0; j < m_image.getWidth(); j++)
 				{
-					float EPS = 0.0f;
+					float EPS = 0.01f;
 
 					ml::vec4f v = m_image(j, i);
 					v = v / 255.0f;
 
-					// color space
 					float intensity = (v.x + v.y + v.z) / 3.0f;
 					ml::vec4f chroma = v / intensity;
 
-					// log domain
 					ml::vec4f t = m_image(j, i);
 					t = t / 255.0f;
+
 					t.x = log2(t.x + EPS);
 					t.y = log2(t.y + EPS);
 					t.z = log2(t.z + EPS);
-
+					t.w = 0.0f;
+					
 					intensity = log2(intensity + EPS);
-
+					
 					chroma.x = log2(chroma.x + EPS);
 					chroma.y = log2(chroma.y + EPS);
 					chroma.z = log2(chroma.z + EPS);
-
+	
 					h_input[i*m_image.getWidth() + j] = make_float3(v.x, v.y, v.z);
 					h_imageFloat3[i*m_image.getWidth() + j] = make_float3(t.x, t.y, t.z);
 					h_imageFloat3Albedo[i*m_image.getWidth() + j] = make_float3(chroma.x, chroma.y, chroma.z);
@@ -88,19 +89,25 @@ class ImageWarping
 
 		ColorImageR32G32B32A32* solve()
 		{
-			float weightFit  = 1000.0f;
-			float weightRegAlbedo  = 500.0f;
-			float weightRegShading = 1000.0f;
-			float weightRegChroma  = 200.0f;
-			float pNorm = 1.0f;
+			float weightFit  = 500.0f;
+			float weightRegAlbedo  = 1000.0f;
+			float weightRegShading = 10000.0f;
+			float weightRegChroma  = 100.0f;
+			float pNorm = 1.0;
 
-			unsigned int nonLinearIter = 50;
-			unsigned int linearIter = 40;
+			unsigned int nonLinearIter = 7;
+			unsigned int linearIter = 10;
 	            
             std::cout << "\n\nOPT" << std::endl;
             resetGPUMemory();
+
+			CUDATimer timer;
+			timer.startEvent("opt");
 			m_terraSolver->solve(d_imageFloat3Albedo, d_imageFloatIllumination, d_targetFloat3, d_input, nonLinearIter, linearIter, 0, weightFit, weightRegAlbedo, weightRegShading, weightRegChroma, pNorm);
-            copyResultToCPUFromFloat3();
+			timer.endEvent();
+			timer.evaluate();
+
+			copyResultToCPUFromFloat3();
 			
 			return &m_result;
 		}
@@ -127,9 +134,9 @@ class ImageWarping
 				for (unsigned int j = 0; j < m_image.getWidth(); j++)
 				{
 					float3 v = h_imageFloat3[i*m_image.getWidth() + j];
-					v.x = exp2(v.x)/2;
-					v.y = exp2(v.y)/2;
-					v.z = exp2(v.z)/2;
+					v.x = exp2(v.x) / 1.5f;
+					v.y = exp2(v.y) / 1.5f;
+					v.z = exp2(v.z) / 1.5f;
 					m_result(j, i) = vec4f(v.x, v.y, v.z, 1.0f);
 				}
 			}

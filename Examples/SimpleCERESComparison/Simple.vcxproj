@@ -148,15 +148,18 @@ xcopy /Y /D "..\..\API\release\include\*.h" "."</Command>
   <ItemGroup>
     <ClCompile Include="src\CeresSolver.cpp" />
     <ClCompile Include="src\main.cpp" />
+    <ClCompile Include="src\util.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="src\CeresSolver.h" />
+    <ClInclude Include="src\config.h" />
     <ClInclude Include="src\CudaArray.h" />
     <ClInclude Include="src\cudaUtil.h" />
     <ClInclude Include="src\CombinedSolver.h" />
     <ClInclude Include="src\Precision.h" />
     <ClInclude Include="src\TerraSolver.h" />
     <ClInclude Include="src\SolverUtil.h" />
+    <ClInclude Include="src\util.h" />
   </ItemGroup>
   <ItemGroup>
     <Reference Include="System" />
@@ -167,6 +170,7 @@ xcopy /Y /D "..\..\API\release\include\*.h" "."</Command>
   </ItemGroup>
   <ItemGroup>
     <None Include="curveFitting.t" />
+    <None Include="misra.t" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">
