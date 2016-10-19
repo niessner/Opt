@@ -2323,8 +2323,8 @@ local function computeDtDgraph(PS,ES)
             local preconditioner = Pre[u.image.name](u.index,u.channel)
             local inv_radius = 1.0 / PS.trust_region_radius
             --addscatter(DtD,u,2.0*partial*partial*preconditioner*inv_sqrt_radius)
-            --addscatter(DtD,u,partial*partial*inv_radius/(2.0*preconditioner))
-            addscatter(DtD,u,0.0)
+            addscatter(DtD,u,partial*partial*inv_radius*preconditioner)
+            --addscatter(DtD,u,0.0)
         end
     end
     return A.FunctionSpec(ES.kind, "computeDtD", List { "DtD", "Pre" }, EMPTY, scatters, ES)

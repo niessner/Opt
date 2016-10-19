@@ -5,25 +5,102 @@
 Analyzing CERES
 ===============================================================================
 
-The following uses notation from:
-https://en.wikipedia.org/wiki/Conjugate_gradient_method
 
 CERES directly modifies the Jacobian by multiplying it with a scaling matrix S.
 S is a diagonal matrix where each entry 
 
-$$s_i = \frac{1}{1+\sqrt{(J^tJ)_{ii}}}$$
+$$s_{ii} = \frac{1}{1+\sqrt{(J^TJ)_{ii}}}$$
 
 We can write this without resorting to entry-wise notation if we let
 
-$$Q = \mbox{diag}(J^tJ)$$
+$$Q = \mbox{diag}(J^TJ)$$
 
 and $U$ be the matrix such that
 
-$$Q = U^tU$$
+$$Q = U^TU$$
 
 Then $S$ is just
 
 $$S = (U + I)^{-1}$$
+
+The following uses notation from:
+https://en.wikipedia.org/wiki/Conjugate_gradient_method (The preconditioned conjugate gradient method)
+
+Opt uses this notation internally (and uses a PCG solver), so this will be helpful to align our thoughts.
+
+Using the preconditioner $M$, the preconditioned conjugate gradient solver is equivalent to solving:
+
+$$E^{-1}A(E^{-1})^T\hat{x} = E^{-1}b$$
+
+where $EE^T=M$ and $\hat{x} = E^Tx$.
+
+I propose that CERES is solving exactly this system (and transforming $\hat{x}$ appropriately after solving), for:
+
+$E^{-1} = S$, $A = J^TJ + \lambda I$, $\lambda = 1/\mbox{radius}$, $b = J^Tr$
+
+CERES claims to be solving the system 
+$$(J^TJ + D^TD)\hat{x} = J^Tr$$
+
+but their J has already been multiplied by $S$, so the system really is 
+
+$$((JS)^T(JS) + D^TD)\hat{x} = (JS)^Tr$$
+
+Let $C$ be the matrix such that $D = CS$ ($S$ and $D$ are positive diagonal matrices, so such a $C$ is guaranteed to exist).
+
+$$((JS)^T(JS) + (CS)^T(CS))\hat{x} = (JS)^Tr$$
+
+since $(AB)^T = A^TB^T$, we have
+
+$$(S^TJ^TJS + S^TC^TCS)\hat{x} = S^TJ^Tr$$
+
+by distributivity:
+
+$$S^T(J^TJ + C^TC)S\hat{x} = S^TJ^Tr$$
+
+$S$ is again, diagonal, so $S^T = S$, thus:
+
+$$S(J^TJ + C^TC)S^T\hat{x} = SJ^Tr$$
+
+So CERES is solving the system $E^{-1}A(E^{-1})^T\hat{x} = E^{-1}b$
+
+with $E^{-1} = S$, $A = J^TJ + C^TC$, and $b = J^Tr$.
+
+This is close to what I proposed; they would be equivalent if $C^TC = I/\mbox{radius}$.
+
+Let's see if this is indeed the case. Assume $C^TC = I/\mbox{radius}$.
+
+We know each (diagonal) entry of $C^TC$ is $1/\mbox{radius}$, thus each diagonal entry of $C$ is $1/\sqrt{\mbox{radius}}$.
+
+$CS = D$ and $s_{ii} = \frac{1}{1+\sqrt{(J^TJ)_{ii}}}$, then:
+
+
+$$d_{ii} = c_{ii}s_{ii} = \frac{1}{\sqrt{\mbox{radius}}} \frac{1}{1+\sqrt{(J^TJ)_{ii}}}$$
+
+$$d_{ii} = \frac{1}{\sqrt{\mbox{radius}}(1+\sqrt{(J^TJ)_{ii}})}$$
+
+Let's take a look at CERES internals to see how it actually calculates $d_{ii}$.
+
+It calculates:
+
+$$K = diag((JS)^T(JS))$$
+
+which is equivalently
+
+$$K = diag(S^T(J^TJ)S)$$
+
+Then
+
+$$k_{ii} = s_{ii}^2(J^TJ)_{ii}$$
+
+$$d_{ii} = \sqrt{k_{ii}/\mbox{radius}} = \sqrt{s_{ii}^2(J^TJ)_{ii}/\mbox{radius}}$$
+
+$$d_{ii} = \sqrt{\frac{1}{1+\sqrt{(J^TJ)_{ii}}}^2(J^TJ)_{ii}/\mbox{radius}}$$
+
+$$d_{ii} = \frac{1}{\sqrt{\mbox{radius}}}\sqrt{\frac{(J^TJ)_{ii}}{(1+\sqrt{(J^TJ)_{ii}})^2}}$$
+
+
+
+
 
 
 
