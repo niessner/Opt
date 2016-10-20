@@ -148,15 +148,18 @@ xcopy /Y /D "..\..\API\release\include\*.h" "."</Command>
   <ItemGroup>
     <ClCompile Include="src\CeresSolver.cpp" />
     <ClCompile Include="src\main.cpp" />
+    <ClCompile Include="src\util.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="src\CeresSolver.h" />
+    <ClInclude Include="src\config.h" />
     <ClInclude Include="src\CudaArray.h" />
     <ClInclude Include="src\cudaUtil.h" />
     <ClInclude Include="src\CombinedSolver.h" />
     <ClInclude Include="src\Precision.h" />
     <ClInclude Include="src\TerraSolver.h" />
     <ClInclude Include="src\SolverUtil.h" />
+    <ClInclude Include="src\util.h" />
   </ItemGroup>
   <ItemGroup>
     <Reference Include="System" />
@@ -166,7 +169,15 @@ xcopy /Y /D "..\..\API\release\include\*.h" "."</Command>
     <Reference Include="System.Xml" />
   </ItemGroup>
   <ItemGroup>
+    <None Include="bennet5.t" />
+    <None Include="chwirut1.t" />
     <None Include="curveFitting.t" />
+    <None Include="misra.t" />
+  </ItemGroup>
+  <ItemGroup>
+    <Text Include="data\bennet5.txt" />
+    <Text Include="data\chwirut1.txt" />
+    <Text Include="data\misra.txt" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

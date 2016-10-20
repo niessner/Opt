@@ -2,13 +2,14 @@
 #include <vector>
 class CeresSolver {
 public:
-	CeresSolver(int N)
+	CeresSolver(size_t N)
 	{
         functionData.resize(N);
 	}
 
     void CeresSolver::solve(
-        double2* funcParameters,
+		const NLLSProblem &problem,
+        UNKNOWNS* funcParameters,
         double2* funcData);
 
 private:
