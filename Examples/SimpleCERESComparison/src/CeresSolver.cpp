@@ -98,7 +98,7 @@ void CeresSolver::solve(
 
     options.initial_trust_region_radius = 10;
 
-
+    options.jacobi_scaling = false;
 
     Solve(options, &problem, &summary);
 
