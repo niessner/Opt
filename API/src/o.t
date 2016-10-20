@@ -2073,8 +2073,9 @@ local function createjtjgraph(PS,ES)
             local jtjp = 2*Jp*partial
 
             if PS:UsesLambda() then
+                -- TODO: Verify that nothing is the right thing to do here
                 --jtjp = jtjp + 2*partial*partial*PS.lambda*P[u.image.name](u.index,u.channel)
-                local diagVal = DtD[u.image.name](u.index,u.channel)
+                --local diagVal = DtD[u.image.name](u.index,u.channel)
                 --jtjp = jtjp + 2*diagVal*partial
             end
             result = result + P[u.image.name](u.index,u.channel)*jtjp
@@ -2504,7 +2505,7 @@ function ProblemSpecAD:Cost(...)
         if energyspec.kind.kind == "CenteredFunction" then
             functionspecs:insert(createjtjcentered(self,energyspec))
             functionspecs:insert(createjtfcentered(self,energyspec))
-            --functionspecs:insert(createdumpjcentered(self,energyspec))
+            functionspecs:insert(createdumpjcentered(self,energyspec))
             
             if self.P:UsesLambda() then
                 functionspecs:insert(computeDtDcentered(self,energyspec))
@@ -2515,7 +2516,7 @@ function ProblemSpecAD:Cost(...)
         else
             functionspecs:insert(createjtjgraph(self,energyspec))
             functionspecs:insert(createjtfgraph(self,energyspec))
-            --functionspecs:insert(createdumpjgraph(self,energyspec))
+            functionspecs:insert(createdumpjgraph(self,energyspec))
             
             if self.P:UsesLambda() then
                 functionspecs:insert(computeDtDgraph(self,energyspec))

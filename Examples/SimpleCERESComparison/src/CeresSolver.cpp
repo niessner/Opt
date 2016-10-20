@@ -180,7 +180,7 @@ void CeresSolver::solve(
     cout << "Minimizer iters: " << summary.iterations.size() << endl;
 
     double iterationTotalTime = 0.0;
-    int totalLinearItereations = 0;  
+    int totalLinearItereations = 0;
     for (auto &i : summary.iterations)
     {
         iterationTotalTime += i.iteration_time_in_seconds;
