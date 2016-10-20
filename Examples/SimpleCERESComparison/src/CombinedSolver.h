@@ -15,15 +15,13 @@ static bool useOptLM = false;
 
 class CombinedSolver {
 public:
-    CombinedSolver(UNKNOWNS functionParameterGuess, std::vector<double2> dataPoints) {
+	CombinedSolver(const NLLSProblem &problem, std::vector<double2> dataPoints) {
 
-		std::string optProblemFilename = "none";
+		std::string optProblemFilename = problem.baseName + ".t";
 		if (useProblemDefault) optProblemFilename = "curveFitting.t";
-		if (useProblemMisra) optProblemFilename = "misra.t";
-		if (useProblemBennet5) optProblemFilename = "bennet5.t";
-
+		
         m_ceresDataPoints = dataPoints;
-        m_functionParametersGuess = functionParameterGuess;
+        m_functionParametersGuess = problem.startingPoint;
         std::vector<OPT_FLOAT2> dataPointsFloat(dataPoints.size());
         for (int i = 0; i < dataPoints.size(); ++i) {
             dataPointsFloat[i].x = (OPT_FLOAT)dataPoints[i].x;
@@ -44,7 +42,7 @@ public:
 
 	void resetGPU() {
         std::vector<OPT_UNKNOWNS> unknowns(1);
-		for (int i = 0; i < unknownCount; i++)
+		for (int i = 0; i < maxUnknownCount; i++)
 		{
 			*((OPT_FLOAT*)&unknowns[0] + i) = (OPT_FLOAT)((double*)&m_functionParametersGuess + i)[0];
 		}
@@ -56,7 +54,7 @@ public:
     void copyResultToCPU() {
 		std::vector<OPT_UNKNOWNS> unknowns;
         d_functionParameters.readBack(unknowns);
-		for (int i = 0; i < unknownCount; i++)
+		for (int i = 0; i < maxUnknownCount; i++)
 		{
 			*((double*)&m_functionParameters + i) = ((OPT_FLOAT*)&unknowns[0] + i)[0];
 		}
@@ -64,7 +62,7 @@ public:
         //m_functionParameters.y = unknowns[0].y;
     }
 
-	UNKNOWNS solve() {
+	UNKNOWNS solve(const NLLSProblem &problem) {
         uint nonLinearIter = 25;
         uint linearIter = 1000;
 		if (useOpt) {
@@ -76,7 +74,7 @@ public:
 
 		if (useCeres) {
             m_functionParameters = m_functionParametersGuess;
-            m_solverCeres->solve(&m_functionParameters, m_ceresDataPoints.data());
+			m_solverCeres->solve(problem, &m_functionParameters, m_ceresDataPoints.data());
 			m_ceresResult = m_functionParameters;
 		}
 

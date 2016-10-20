@@ -12,6 +12,17 @@
 
 using namespace std;
 
+vector<NLLSProblem> makeProblems()
+{
+	vector<NLLSProblem> problems;
+
+	problems.push_back(NLLSProblem("misra", 2, { 2.3894212918E+02, 5.5015643181E-04, 0.0 }, { 2.3894212918E+02, 5.5015643181E-04, 0.0 }));
+	problems.push_back(NLLSProblem("bennet5", 2, { -200, 50.0, 0.8 }, { -2.5235e3, 4.6736e1, 9.32184e-1 }));
+	problems.push_back(NLLSProblem("chwirut1", 2, { 1e-1, 1e-2, 2e-2 }, { 1.9027818370E-01, 6.1314004477E-03, 1.0530908399E-02 }));
+
+	return problems;
+}
+
 vector<double2> loadFile(const string &filename)
 {
 	vector<double2> result;
@@ -28,6 +39,7 @@ vector<double2> loadFile(const string &filename)
 
 void runTestA()
 {
+
 	int N = 512;
 	double2 generatorParams = { 100.0, 102.0 };
 	std::vector<double2> dataPoints(N);
@@ -46,42 +58,36 @@ void runTestA()
 		dataPoints[i].y = y;
 
 	}
-	UNKNOWNS initalGuess = { 99.5, 102.5, 0.0 };
-	//initalGuess = generatorParams;
-
-	CombinedSolver solver(initalGuess, dataPoints);
-	UNKNOWNS finalResult = solver.solve();
+	
+	NLLSProblem problem("curveFitting", 2, { 99.5, 102.5, 0.0 }, { 100.0, 102.0, 0.0 });
+	
+	CombinedSolver solver(problem, dataPoints);
+	UNKNOWNS finalResult = solver.solve(problem);
 	std::cout << "Final Result: " << finalResult.x << ", " << finalResult.y << std::endl;
+}
+
+ofstream resultFile("results.txt");
+void runProblem(const NLLSProblem &problem)
+{
+	auto dataPoints = loadFile("data/" + problem.baseName + ".txt");
+
+	CombinedSolver solver(problem, dataPoints);
+	UNKNOWNS finalResult = solver.solve(problem);
+	//std::cout << "Final Result: " << finalResult.x << ", " << finalResult.y << std::endl;
+
+	resultFile << "Problem: " << problem.baseName << endl;
+	resultFile << "True solution: " << problem.trueSolution.x << " " << problem.trueSolution.y << " " << problem.trueSolution.z << endl;
+	resultFile << "Ceres solution: " << solver.m_ceresResult.x << " " << solver.m_ceresResult.y << " " << solver.m_ceresResult.z << endl;
+	resultFile << "Opt solution: " << solver.m_optResult.x << " " << solver.m_optResult.y << " " << solver.m_optResult.z << endl << endl;
 }
 
 void runTestB()
 {
-	string problemDataFilename = "none";
-	if (useProblemMisra) problemDataFilename = "misra.txt";
-	if (useProblemBennet5) problemDataFilename = "bennet5.txt";
-
-	auto dataPoints = loadFile("data/" + problemDataFilename);
-
-	UNKNOWNS initialGuess = { 0.0, 0.0, 0.0 };
-	if (useProblemMisra) initialGuess = { 500.0, 1e-4, 0.0 };
-	if (useProblemBennet5) initialGuess = {-2.0e3, 50.0, 0.8};
-
-	if (initialGuess.x == 0.0)
+	for (auto &p : makeProblems())
 	{
-		cout << "problem not specified" << endl;
-		cin.get();
+		runProblem(p);
 	}
-
-	CombinedSolver solver(initialGuess, dataPoints);
-	UNKNOWNS finalResult = solver.solve();
-	//std::cout << "Final Result: " << finalResult.x << ", " << finalResult.y << std::endl;
-
-
-	cout << "Ceres solution: " << solver.m_ceresResult.x << " " << solver.m_ceresResult.y << " " << solver.m_ceresResult.z << endl;
-	cout << "Opt solution: " << solver.m_optResult.x << " " << solver.m_optResult.y << " " << solver.m_optResult.z << endl;
 	
-	if (useProblemMisra) cout << "True solution: " << misraSolution.x << " " << misraSolution.y << " " << misraSolution.z << endl;
-	if (useProblemBennet5) cout << "True solution: " << bennet5Solution.x << " " << bennet5Solution.y << " " << bennet5Solution.z << endl;
 }
 
 int main(int argc, const char * argv[]) {
@@ -100,6 +106,7 @@ int main(int argc, const char * argv[]) {
 		runTestB();
 	}
 
+	cout << "See results.txt" << endl;
     #ifdef _WIN32
  	    getchar();
     #else

@@ -84,7 +84,30 @@ struct TermBennet5
 	double y;
 };
 
+struct TermChwirut1
+{
+	TermChwirut1(double x, double y)
+		: x(x), y(y) {}
+
+	template <typename T>
+	bool operator()(const T* const funcParams, T* residuals) const
+	{
+		residuals[0] = y - exp(-funcParams[0] * x) / (funcParams[1] + funcParams[2] * x);
+		return true;
+	}
+
+	static ceres::CostFunction* Create(double x, double y)
+	{
+		return (new ceres::AutoDiffCostFunction<TermChwirut1, 1, 3>(
+			new TermChwirut1(x, y)));
+	}
+
+	double x;
+	double y;
+};
+
 void CeresSolver::solve(
+	const NLLSProblem &problemInfo,
     UNKNOWNS* funcParameters,
     double2* funcData)
 {
@@ -101,8 +124,9 @@ void CeresSolver::solve(
 		ceres::CostFunction* costFunction = nullptr;
 
 		if (useProblemDefault) costFunction = TermDefault::Create(functionData[i].x, functionData[i].y);
-		if (useProblemMisra) costFunction = TermMirsa::Create(functionData[i].x, functionData[i].y);
-		if (useProblemBennet5) costFunction = TermBennet5::Create(functionData[i].x, functionData[i].y);
+		if (problemInfo.baseName == "misra") costFunction = TermMirsa::Create(functionData[i].x, functionData[i].y);
+		if (problemInfo.baseName == "bennet5") costFunction = TermBennet5::Create(functionData[i].x, functionData[i].y);
+		if (problemInfo.baseName == "chwirut1") costFunction = TermChwirut1::Create(functionData[i].x, functionData[i].y);
 
 		if (costFunction == nullptr)
 		{
