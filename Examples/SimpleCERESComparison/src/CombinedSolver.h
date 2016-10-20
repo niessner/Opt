@@ -4,6 +4,8 @@
 #include <cuda_runtime.h>
 #include <cudaUtil.h>
 
+#include "config.h"
+
 #include "TerraSolver.h"
 #include "CeresSolver.h"
 #include <vector>
@@ -13,14 +15,13 @@ static bool useOptLM = false;
 
 class CombinedSolver {
 public:
-    CombinedSolver(double2 functionParameterGuess, std::vector<double2> dataPoints) {
+	CombinedSolver(const NLLSProblem &problem, std::vector<double2> dataPoints) {
 
-		std::string optProblemFilename = "none";
+		std::string optProblemFilename = problem.baseName + ".t";
 		if (useProblemDefault) optProblemFilename = "curveFitting.t";
-		if (useProblemMisra) optProblemFilename = "misra.t";
-
+		
         m_ceresDataPoints = dataPoints;
-        m_functionParametersGuess = functionParameterGuess;
+        m_functionParametersGuess = problem.startingPoint;
         std::vector<OPT_FLOAT2> dataPointsFloat(dataPoints.size());
         for (int i = 0; i < dataPoints.size(); ++i) {
             dataPointsFloat[i].x = (OPT_FLOAT)dataPoints[i].x;
@@ -40,21 +41,29 @@ public:
 	}
 
 	void resetGPU() {
-        std::vector<OPT_FLOAT2> unknowns(1);
-        unknowns[0].x = (OPT_FLOAT)m_functionParametersGuess.x;
-        unknowns[0].y = (OPT_FLOAT)m_functionParametersGuess.y;
+        std::vector<OPT_UNKNOWNS> unknowns(1);
+		for (int i = 0; i < maxUnknownCount; i++)
+		{
+			*((OPT_FLOAT*)&unknowns[0] + i) = (OPT_FLOAT)((double*)&m_functionParametersGuess + i)[0];
+		}
+        //unknowns[0].x = (OPT_FLOAT)m_functionParametersGuess.x;
+        //unknowns[0].y = (OPT_FLOAT)m_functionParametersGuess.y;
         d_functionParameters.update(unknowns);
 	}
 
     void copyResultToCPU() {
-        std::vector<OPT_FLOAT2> unknowns;
+		std::vector<OPT_UNKNOWNS> unknowns;
         d_functionParameters.readBack(unknowns);
-        m_functionParameters.x = unknowns[0].x;
-        m_functionParameters.y = unknowns[0].y;
+		for (int i = 0; i < maxUnknownCount; i++)
+		{
+			*((double*)&m_functionParameters + i) = ((OPT_FLOAT*)&unknowns[0] + i)[0];
+		}
+        //m_functionParameters.x = unknowns[0].x;
+        //m_functionParameters.y = unknowns[0].y;
     }
 
-	double2 solve() {
-        uint nonLinearIter = 10;
+	UNKNOWNS solve(const NLLSProblem &problem) {
+        uint nonLinearIter = 25;
         uint linearIter = 1000;
 		if (useOpt) {
 			resetGPU();
@@ -65,23 +74,23 @@ public:
 
 		if (useCeres) {
             m_functionParameters = m_functionParametersGuess;
-            m_solverCeres->solve(&m_functionParameters, m_ceresDataPoints.data());
+			m_solverCeres->solve(problem, &m_functionParameters, m_ceresDataPoints.data());
 			m_ceresResult = m_functionParameters;
 		}
 
         return m_functionParameters;
 	}
 
-	double2 m_optResult;
-	double2 m_ceresResult;
+	UNKNOWNS m_optResult;
+	UNKNOWNS m_ceresResult;
 
 private:
     std::vector<double2> m_ceresDataPoints;
-    double2 m_functionParameters;
+	UNKNOWNS m_functionParameters;
 
-    double2 m_functionParametersGuess;
+	UNKNOWNS m_functionParametersGuess;
     CudaArray<OPT_FLOAT2> d_dataPoints;
-    CudaArray<OPT_FLOAT2> d_functionParameters;
+	CudaArray<OPT_UNKNOWNS> d_functionParameters;
 	
 
 	TerraSolver*		m_solverOpt;

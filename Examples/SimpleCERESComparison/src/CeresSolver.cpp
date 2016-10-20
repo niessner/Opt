@@ -4,7 +4,6 @@
 
 #include "config.h"
 
-
 #include "CeresSolver.h"
 
 #include "ceres/ceres.h"
@@ -63,8 +62,53 @@ struct TermMirsa
 	double y;
 };
 
+struct TermBennet5
+{
+	TermBennet5(double x, double y)
+		: x(x), y(y) {}
+
+	template <typename T>
+	bool operator()(const T* const funcParams, T* residuals) const
+	{
+		residuals[0] = y - funcParams[0] * pow(funcParams[1] + x, -1.0 / funcParams[2]);
+		return true;
+	}
+
+	static ceres::CostFunction* Create(double x, double y)
+	{
+		return (new ceres::AutoDiffCostFunction<TermBennet5, 1, 3>(
+			new TermBennet5(x, y)));
+	}
+
+	double x;
+	double y;
+};
+
+struct TermChwirut1
+{
+	TermChwirut1(double x, double y)
+		: x(x), y(y) {}
+
+	template <typename T>
+	bool operator()(const T* const funcParams, T* residuals) const
+	{
+		residuals[0] = y - exp(-funcParams[0] * x) / (funcParams[1] + funcParams[2] * x);
+		return true;
+	}
+
+	static ceres::CostFunction* Create(double x, double y)
+	{
+		return (new ceres::AutoDiffCostFunction<TermChwirut1, 1, 3>(
+			new TermChwirut1(x, y)));
+	}
+
+	double x;
+	double y;
+};
+
 void CeresSolver::solve(
-    double2* funcParameters,
+	const NLLSProblem &problemInfo,
+    UNKNOWNS* funcParameters,
     double2* funcData)
 {
     for (int i = 0; i < functionData.size(); i++)
@@ -80,7 +124,9 @@ void CeresSolver::solve(
 		ceres::CostFunction* costFunction = nullptr;
 
 		if (useProblemDefault) costFunction = TermDefault::Create(functionData[i].x, functionData[i].y);
-		if (useProblemMisra) costFunction = TermMirsa::Create(functionData[i].x, functionData[i].y);
+		if (problemInfo.baseName == "misra") costFunction = TermMirsa::Create(functionData[i].x, functionData[i].y);
+		if (problemInfo.baseName == "bennet5") costFunction = TermBennet5::Create(functionData[i].x, functionData[i].y);
+		if (problemInfo.baseName == "chwirut1") costFunction = TermChwirut1::Create(functionData[i].x, functionData[i].y);
 
 		if (costFunction == nullptr)
 		{
@@ -109,8 +155,8 @@ void CeresSolver::solve(
 
     //options.min_linear_solver_iterations = linearIterationMin;
     options.max_num_iterations = 10000;
-    options.function_tolerance = 0.00001;
-    options.gradient_tolerance = 1e-4 * options.function_tolerance;
+    options.function_tolerance = 1e-20;
+    options.gradient_tolerance = 1e-10 * options.function_tolerance;
 
     // Default values, reproduced here for clarity
     options.trust_region_strategy_type = ceres::TrustRegionStrategyType::LEVENBERG_MARQUARDT;
