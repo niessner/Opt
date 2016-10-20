@@ -1,5 +1,4 @@
 ﻿
-#include "config.h"
 #include "CombinedSolver.h"
 #include <random>
 #include <iostream>
@@ -47,11 +46,11 @@ void runTestA()
 		dataPoints[i].y = y;
 
 	}
-	double2 initalGuess = { 99.5, 102.5 };
+	UNKNOWNS initalGuess = { 99.5, 102.5, 0.0 };
 	//initalGuess = generatorParams;
 
 	CombinedSolver solver(initalGuess, dataPoints);
-	double2 finalResult = solver.solve();
+	UNKNOWNS finalResult = solver.solve();
 	std::cout << "Final Result: " << finalResult.x << ", " << finalResult.y << std::endl;
 }
 
@@ -59,12 +58,13 @@ void runTestB()
 {
 	string problemDataFilename = "none";
 	if (useProblemMisra) problemDataFilename = "misra.txt";
+	if (useProblemBennet5) problemDataFilename = "bennet5.txt";
 
 	auto dataPoints = loadFile("data/" + problemDataFilename);
 
-	double2 initialGuess = { 0.0, 0.0 };
-	if (useProblemMisra) initialGuess = { 500.0, 1e-4 };
-	//if (useProblemMisra) initialGuess = { 2.389e2, 5.501e-4 };
+	UNKNOWNS initialGuess = { 0.0, 0.0, 0.0 };
+	if (useProblemMisra) initialGuess = { 500.0, 1e-4, 0.0 };
+	if (useProblemBennet5) initialGuess = {-2.0e3, 50.0, 0.8};
 
 	if (initialGuess.x == 0.0)
 	{
@@ -73,12 +73,15 @@ void runTestB()
 	}
 
 	CombinedSolver solver(initialGuess, dataPoints);
-	double2 finalResult = solver.solve();
+	UNKNOWNS finalResult = solver.solve();
 	//std::cout << "Final Result: " << finalResult.x << ", " << finalResult.y << std::endl;
 
 
-	cout << "Ceres solution: " << solver.m_ceresResult.x << " " << solver.m_ceresResult.y << endl;
-	cout << "Opt solution: " << solver.m_optResult.x << " " << solver.m_optResult.y << endl;
+	cout << "Ceres solution: " << solver.m_ceresResult.x << " " << solver.m_ceresResult.y << " " << solver.m_ceresResult.z << endl;
+	cout << "Opt solution: " << solver.m_optResult.x << " " << solver.m_optResult.y << " " << solver.m_optResult.z << endl;
+	
+	if (useProblemMisra) cout << "True solution: " << misraSolution.x << " " << misraSolution.y << " " << misraSolution.z << endl;
+	if (useProblemMisra) cout << "True solution: " << bennet5Solution.x << " " << bennet5Solution.y << " " << bennet5Solution.z << endl;
 }
 
 int main(int argc, const char * argv[]) {
@@ -87,8 +90,15 @@ int main(int argc, const char * argv[]) {
 	GetCurrentDirectoryA(1000, cwd);
 	//cout << "current dir: " << cwd << endl;
 #endif
-	//runTestA();
-	runTestB();
+
+	if (useProblemDefault)
+	{
+		runTestA();
+	}
+	else
+	{
+		runTestB();
+	}
 
     #ifdef _WIN32
  	    getchar();

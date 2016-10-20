@@ -169,6 +169,7 @@ xcopy /Y /D "..\..\API\release\include\*.h" "."</Command>
     <Reference Include="System.Xml" />
   </ItemGroup>
   <ItemGroup>
+    <None Include="bennet5.t" />
     <None Include="curveFitting.t" />
     <None Include="misra.t" />
   </ItemGroup>

@@ -4,6 +4,8 @@
 #include <cuda_runtime.h>
 #include <cudaUtil.h>
 
+#include "config.h"
+
 #include "TerraSolver.h"
 #include "CeresSolver.h"
 #include <vector>
@@ -13,11 +15,12 @@ static bool useOptLM = false;
 
 class CombinedSolver {
 public:
-    CombinedSolver(double2 functionParameterGuess, std::vector<double2> dataPoints) {
+    CombinedSolver(UNKNOWNS functionParameterGuess, std::vector<double2> dataPoints) {
 
 		std::string optProblemFilename = "none";
 		if (useProblemDefault) optProblemFilename = "curveFitting.t";
 		if (useProblemMisra) optProblemFilename = "misra.t";
+		if (useProblemBennet5) optProblemFilename = "bennet5.t";
 
         m_ceresDataPoints = dataPoints;
         m_functionParametersGuess = functionParameterGuess;
@@ -61,8 +64,8 @@ public:
         //m_functionParameters.y = unknowns[0].y;
     }
 
-	double2 solve() {
-        uint nonLinearIter = 10;
+	UNKNOWNS solve() {
+        uint nonLinearIter = 25;
         uint linearIter = 1000;
 		if (useOpt) {
 			resetGPU();

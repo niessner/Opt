@@ -8,7 +8,7 @@ public:
 	}
 
     void CeresSolver::solve(
-        double2* funcParameters,
+        UNKNOWNS* funcParameters,
         double2* funcData);
 
 private:
