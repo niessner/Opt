@@ -2075,7 +2075,7 @@ local function createjtjgraph(PS,ES)
             if PS:UsesLambda() then
                 --jtjp = jtjp + 2*partial*partial*PS.lambda*P[u.image.name](u.index,u.channel)
                 local diagVal = DtD[u.image.name](u.index,u.channel)
-                jtjp = jtjp + 2*diagVal*partial
+                --jtjp = jtjp + 2*diagVal*partial
             end
             result = result + P[u.image.name](u.index,u.channel)*jtjp
             addscatter(u,jtjp)
@@ -2151,6 +2151,7 @@ local function createjtfcentered(PS,ES)
 	    else
 		    P_hat[i] = 2.0*P_hat[i]
 		    P_hat[i] = ad.polysimplify(P_hat[i])
+            P_hat[i] = 100000.0 --TODO:Remove
 	    end
 	    F_hat[i] = ad.polysimplify(2.0*F_hat[i])
 	end
@@ -2253,7 +2254,8 @@ local function createjtfgraph(PS,ES)
             local u = unknownsupport[i]
             assert(GraphElement:isclassof(u.index))
             addscatter(R,u,-2.0*partial*F)
-            addscatter(Pre,u,2.0*partial*partial)
+            -- TODO: check on preconditioner. Removed *2 for LM matching CERES
+            --addscatter(Pre,u,partial*partial)
         end
     end
     return A.FunctionSpec(ES.kind, "evalJTF", List { "R", "Pre" }, EMPTY, scatters,ES)
@@ -2275,7 +2277,7 @@ local function computeDtDcentered(PS,ES)
             local unknown = PS:ImageWithName(unknownname) 
             local x = unknown(ispace:ZeroOffset(),chan)
 
-            local preconditioner = Pre[unknownname](ispace:ZeroOffset(),chan)
+            --local preconditioner = Pre[unknownname](ispace:ZeroOffset(),chan)
 
             local residuals = residualsincludingX00(unknownsupport,unknown,chan)
             local sum = 0
@@ -2320,10 +2322,10 @@ local function computeDtDgraph(PS,ES)
         for i,partial in ipairs(partials) do
             local u = unknownsupport[i]
             assert(GraphElement:isclassof(u.index))
-            local preconditioner = Pre[u.image.name](u.index,u.channel)
+            --local preconditioner = Pre[u.image.name](u.index,u.channel)
             local inv_radius = 1.0 / PS.trust_region_radius
             --addscatter(DtD,u,2.0*partial*partial*preconditioner*inv_sqrt_radius)
-            addscatter(DtD,u,partial*partial*inv_radius)
+            addscatter(DtD,u,partial*partial*inv_radius) --TODO: doesn't the scattering here screw additivity up?
             --addscatter(DtD,u,0.0)
         end
     end

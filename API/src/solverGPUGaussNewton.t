@@ -284,7 +284,7 @@ return function(problemSpec)
         
                 var z = pre*r										-- apply pre-conditioner M^-1
                 pd.z(idx) = z;										-- save for next kernel call
-        
+
                 b = z:dot(r)									-- compute x-th term of the numerator of beta
             end
             b = util.warpReduce(b)
@@ -310,7 +310,7 @@ return function(problemSpec)
             var idx : Index
             if idx:initFromCUDAParams() and not fmap.exclude(idx,pd.parameters) then
                 pd.parameters.X(idx) = pd.parameters.X(idx) + pd.delta(idx)
-                printf("delta: %f %f\n", pd.delta(idx)(0), pd.delta(idx)(1))
+                printf("delta*10000: %f %f\n", pd.delta(idx)(0)*10000, pd.delta(idx)(1)*10000)
             end
         end	
         
@@ -372,11 +372,23 @@ return function(problemSpec)
                 end 
             end
 
+            local terra square(x : opt_float) : opt_float
+                return x*x
+            end
+
             terra kernels.DebugDumpDtD(pd : PlanData)
+
                 var idx : Index
                 if idx:initFromCUDAParams() then                         
-                    var DtD : unknownElement = pd.DtD(idx)
-                    printf("\nD: %d: %f %f\n", idx, DtD(0), DtD(1))
+                    var CtC : unknownElement = pd.DtD(idx)
+                    printf("\nC'C: %d: %f %f\n", idx, CtC(0), CtC(1))
+                    var JtJ_ii : unknownElement = pd.DtD(idx) * pd.parameters.trust_region_radius
+                    printf("\nJ'J_ii: %d, %f %f\n", idx, JtJ_ii(0), JtJ_ii(1))
+                    var DtD : unknownElement = CtC * pd.preconditioner(idx)
+                    printf("\nD'D: %d: %f %f\n", idx, DtD(0), DtD(1))
+                    var M1 : unknownElement = pd.preconditioner(idx)
+                    printf("\nE^-1*100: %d: %f %f\n", idx, util.gpuMath.sqrt(M1(0))*100, util.gpuMath.sqrt(M1(1))*100)
+                    printf("\nM^-1*10000: %d: %f %f\n", idx, M1(0)*10000, M1(1)*10000)
                 end 
             end
 
@@ -603,7 +615,7 @@ return function(problemSpec)
         terra initLambda(pd : &PlanData)
             pd.parameters.trust_region_radius = 1e-16
             -- TODO: remove. Just for testing
-            pd.parameters.trust_region_radius = 10
+            pd.parameters.trust_region_radius = 1.0
             --pd.parameters.trust_region_radius = 0.33333333333333333
 
             -- Init lambda based on the maximum value on the diagonal of JTJ
