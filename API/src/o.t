@@ -2151,7 +2151,6 @@ local function createjtfcentered(PS,ES)
 	    else
 		    P_hat[i] = 2.0*P_hat[i]
 		    P_hat[i] = ad.polysimplify(P_hat[i])
-            P_hat[i] = 100000.0 --TODO:Remove
 	    end
 	    F_hat[i] = ad.polysimplify(2.0*F_hat[i])
 	end
@@ -2255,7 +2254,7 @@ local function createjtfgraph(PS,ES)
             assert(GraphElement:isclassof(u.index))
             addscatter(R,u,-2.0*partial*F)
             -- TODO: check on preconditioner. Removed *2 for LM matching CERES
-            --addscatter(Pre,u,partial*partial)
+            addscatter(Pre,u,partial*partial)
         end
     end
     return A.FunctionSpec(ES.kind, "evalJTF", List { "R", "Pre" }, EMPTY, scatters,ES)

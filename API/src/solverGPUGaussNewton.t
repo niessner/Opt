@@ -613,10 +613,7 @@ return function(problemSpec)
         end
                     --]]
         terra initLambda(pd : &PlanData)
-            pd.parameters.trust_region_radius = 1e-16
-            -- TODO: remove. Just for testing
-            pd.parameters.trust_region_radius = 1.0
-            --pd.parameters.trust_region_radius = 0.33333333333333333
+            pd.parameters.trust_region_radius = 1e4
 
             -- Init lambda based on the maximum value on the diagonal of JTJ
             --[[
@@ -684,7 +681,7 @@ return function(problemSpec)
                         logSolver(" trust_region_radius=%f ",pd.parameters.trust_region_radius)
                         gpu.PCGComputeDtD(pd)
                         gpu.PCGComputeDtD_Graph(pd)
-                        gpu.DebugDumpDtD(pd)
+                        --gpu.DebugDumpDtD(pd)
                     end
                 end
             end

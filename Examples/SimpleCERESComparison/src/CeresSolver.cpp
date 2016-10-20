@@ -96,7 +96,7 @@ void CeresSolver::solve(
     options.max_lm_diagonal = std::numeric_limits<double>::infinity();
 
 
-    options.initial_trust_region_radius = 1.0;
+    options.initial_trust_region_radius = 1e4;
 
     options.jacobi_scaling = true;
 
