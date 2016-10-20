@@ -96,9 +96,9 @@ void CeresSolver::solve(
     options.max_lm_diagonal = std::numeric_limits<double>::infinity();
 
 
-    options.initial_trust_region_radius = 10;
+    options.initial_trust_region_radius = 1.0;
 
-    options.jacobi_scaling = false;
+    options.jacobi_scaling = true;
 
     Solve(options, &problem, &summary);
 
@@ -107,7 +107,7 @@ void CeresSolver::solve(
     cout << "Minimizer iters: " << summary.iterations.size() << endl;
 
     double iterationTotalTime = 0.0;
-    int totalLinearItereations = 0;
+    int totalLinearItereations = 0;  
     for (auto &i : summary.iterations)
     {
         iterationTotalTime += i.iteration_time_in_seconds;

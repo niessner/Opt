@@ -108,7 +108,10 @@ $$c_{ii} = \frac{d_ii}{s_ii} = \frac{1}{\sqrt{\mbox{radius}}}\frac{\sqrt{(J^TJ)_
 $$c_{ii} = \frac{\sqrt{(J^TJ)_{ii}}}{\sqrt{\mbox{radius}}}$$
 
 
-So each element of $C^TC$ will just be $ctc_{ii} = \frac{(J^TJ)_{ii}}{\mbox{radius}}$
+So each element of $C^TC$ will just be $ctc_{ii} = \frac{(J^TJ)_{ii}}{\mbox{radius}}$. This is *not* dependent on the preconditioner S.
+
+
+Residuals are computed in CERES *before* Jacobian scaling.
 
 
 
