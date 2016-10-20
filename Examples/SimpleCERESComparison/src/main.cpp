@@ -81,7 +81,7 @@ void runTestB()
 	cout << "Opt solution: " << solver.m_optResult.x << " " << solver.m_optResult.y << " " << solver.m_optResult.z << endl;
 	
 	if (useProblemMisra) cout << "True solution: " << misraSolution.x << " " << misraSolution.y << " " << misraSolution.z << endl;
-	if (useProblemMisra) cout << "True solution: " << bennet5Solution.x << " " << bennet5Solution.y << " " << bennet5Solution.z << endl;
+	if (useProblemBennet5) cout << "True solution: " << bennet5Solution.x << " " << bennet5Solution.y << " " << bennet5Solution.z << endl;
 }
 
 int main(int argc, const char * argv[]) {
