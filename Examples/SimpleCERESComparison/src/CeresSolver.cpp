@@ -153,12 +153,12 @@ void CeresSolver::solve(
 			cout << "No problem specified!" << endl;
 			cin.get();
 		}
-		//problem.AddResidualBlock(costFunction, NULL, (double*)funcParameters);
+		problem.AddResidualBlock(costFunction, NULL, (double*)funcParameters);
     }
-
+    /*
     ceres::CostFunction* regCostFunction = HackRegularizerTerm::Create(10000.0);
     problem.AddResidualBlock(regCostFunction, NULL, (double*)funcParameters);
-
+    */
     cout << "Solving..." << endl;
 
     Solver::Options options;

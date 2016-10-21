@@ -1,4 +1,4 @@
-local OPT_FLOAT2 = double2
+require("opt_precision")
 
 local N,U = opt.Dim("N",0), opt.Dim("U",1)
 local funcParams =   Unknown("funcParams", OPT_FLOAT2, {U}, 0) -- a,b

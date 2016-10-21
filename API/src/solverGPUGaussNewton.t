@@ -265,7 +265,7 @@ return function(problemSpec)
                 -- sum over block results to compute denominator of alpha
                 var alphaDenominator : opt_float = pd.scanAlphaDenominator[0]
                 var alphaNumerator : opt_float = pd.scanAlphaNumerator[0]
-                    
+
                 -- update step size alpha
                 var alpha = opt_float(0.0f)
                 if alphaDenominator > FLOAT_EPSILON then 
@@ -310,8 +310,7 @@ return function(problemSpec)
             var idx : Index
             if idx:initFromCUDAParams() and not fmap.exclude(idx,pd.parameters) then
                 pd.parameters.X(idx) = pd.parameters.X(idx) + pd.delta(idx)
-                printf("delta*10000: %f %f\n", pd.delta(idx)(0)*10000, pd.delta(idx)(1)*10000)
-            end
+                --printf("delta*10000: %f %f\n", pd.delta(idx)(0)*10000, pd.delta(idx)(1)*10000)            end
         end	
         
         terra kernels.PCGLinearUpdateRevert(pd : PlanData)
@@ -614,7 +613,7 @@ return function(problemSpec)
                     --]]
         terra initLambda(pd : &PlanData)
             pd.parameters.trust_region_radius = 1e4
-
+            --pd.parameters.trust_region_radius = 1e-10
             -- Init lambda based on the maximum value on the diagonal of JTJ
             --[[
             C.cudaMemset(pd.maxDiagJTJ, 0, sizeof(opt_float))
@@ -681,7 +680,7 @@ return function(problemSpec)
                         logSolver(" trust_region_radius=%f ",pd.parameters.trust_region_radius)
                         gpu.PCGComputeDtD(pd)
                         gpu.PCGComputeDtD_Graph(pd)
-                        gpu.DebugDumpDtD(pd)
+                        --gpu.DebugDumpDtD(pd)
                     end
                 end
             end

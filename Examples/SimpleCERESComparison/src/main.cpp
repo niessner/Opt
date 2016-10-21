@@ -16,9 +16,9 @@ vector<NLLSProblem> makeProblems()
 {
 	vector<NLLSProblem> problems;
 
-	problems.push_back(NLLSProblem("misra", 2, { 2.3894212918E+02, 5.5015643181E-04, 0.0 }, { 2.3894212918E+02, 5.5015643181E-04, 0.0 }));
+	//problems.push_back(NLLSProblem("misra", 2, { 2.3894212918E+02, 5.5015643181E-04, 0.0 }, { 2.3894212918E+02, 5.5015643181E-04, 0.0 }));
 	problems.push_back(NLLSProblem("bennet5", 2, { -200, 50.0, 0.8 }, { -2.5235e3, 4.6736e1, 9.32184e-1 }));
-	problems.push_back(NLLSProblem("chwirut1", 2, { 1e-1, 1e-2, 2e-2 }, { 1.9027818370E-01, 6.1314004477E-03, 1.0530908399E-02 }));
+	//problems.push_back(NLLSProblem("chwirut1", 2, { 1e-1, 1e-2, 2e-2 }, { 1.9027818370E-01, 6.1314004477E-03, 1.0530908399E-02 }));
 
 	return problems;
 }
