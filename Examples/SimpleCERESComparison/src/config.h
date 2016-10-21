@@ -17,7 +17,7 @@ struct NLLSProblem
 	double3 startingPoint, trueSolution;
 };
 
-const bool useProblemDefault = false; //2 unknowns -- Michael's original curveFitting.t code
+const bool useProblemDefault = true; //2 unknowns -- Michael's original curveFitting.t code
 
 const int maxUnknownCount = 3;
 

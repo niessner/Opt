@@ -2140,7 +2140,6 @@ local function createjtfcentered(PS,ES)
 
                 local dfdx00Sq = dfdx00*dfdx00	-- entry of Diag(J^TJ)
                 P_hat[idx+1] = P_hat[idx+1] + dfdx00Sq			-- summing the pre-conditioner up
-                --sum = sum + dfdx00F
                 lprintf(2,"dR[%d]_%s/dx[%d] = %s",ridx,tostring(f),chan,tostring(dfdx00F))
             end
 
@@ -2505,7 +2504,7 @@ function ProblemSpecAD:Cost(...)
         if energyspec.kind.kind == "CenteredFunction" then
             functionspecs:insert(createjtjcentered(self,energyspec))
             functionspecs:insert(createjtfcentered(self,energyspec))
-            functionspecs:insert(createdumpjcentered(self,energyspec))
+            --functionspecs:insert(createdumpjcentered(self,energyspec))
             
             if self.P:UsesLambda() then
                 functionspecs:insert(computeDtDcentered(self,energyspec))
@@ -2516,7 +2515,7 @@ function ProblemSpecAD:Cost(...)
         else
             functionspecs:insert(createjtjgraph(self,energyspec))
             functionspecs:insert(createjtfgraph(self,energyspec))
-            functionspecs:insert(createdumpjgraph(self,energyspec))
+            --functionspecs:insert(createdumpjgraph(self,energyspec))
             
             if self.P:UsesLambda() then
                 functionspecs:insert(computeDtDgraph(self,energyspec))

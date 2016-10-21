@@ -6,7 +6,7 @@ local C = util.C
 local Timer = util.Timer
 
 local getValidUnknown = util.getValidUnknown
-local use_dump_j = true
+local use_dump_j = false
 
 local gpuMath = util.gpuMath
 
@@ -310,7 +310,7 @@ return function(problemSpec)
             var idx : Index
             if idx:initFromCUDAParams() and not fmap.exclude(idx,pd.parameters) then
                 pd.parameters.X(idx) = pd.parameters.X(idx) + pd.delta(idx)
-                --printf("delta*10000: %f %f\n", pd.delta(idx)(0)*10000, pd.delta(idx)(1)*10000)
+                printf("delta*10000: %f %f\n", pd.delta(idx)(0)*10000, pd.delta(idx)(1)*10000)
             end
         end	
         
@@ -681,7 +681,7 @@ return function(problemSpec)
                         logSolver(" trust_region_radius=%f ",pd.parameters.trust_region_radius)
                         gpu.PCGComputeDtD(pd)
                         gpu.PCGComputeDtD_Graph(pd)
-                        --gpu.DebugDumpDtD(pd)
+                        gpu.DebugDumpDtD(pd)
                     end
                 end
             end

@@ -1,4 +1,4 @@
-local OPT_FLOAT2 = float2
+local OPT_FLOAT2 = double2
 
 local N,U = opt.Dim("N",0), opt.Dim("U",1)
 local funcParams =   Unknown("funcParams", OPT_FLOAT2, {U}, 0) -- a,b
@@ -17,8 +17,10 @@ local y_i = d(1)
 local a = ab(0)
 local b = ab(1)
 
-Energy(y_i - (a*cos(b*x_i)+b*sin(a*x_i)))
+--Energy(y_i - (a*cos(b*x_i)+b*sin(a*x_i)))
 -- Hack to get example to work with no image domain energy
-local zero = 0.0
-local zeroIm = ComputedImage("zero",{U},zero)
-Energy(zeroIm(0)*(funcParams(0)(0) - funcParams(0)(1)))
+--local zero = 0.0
+--local zeroIm = ComputedImage("zero",{U},zero)
+--Energy(zeroIm(0)*(funcParams(0)(0) - funcParams(0)(1)))
+-- Closeness regularizer
+Energy((funcParams(0)(0) - funcParams(0)(1))*10000)
