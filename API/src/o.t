@@ -2149,7 +2149,7 @@ local function createjtfcentered(PS,ES)
 	    if not PS.P.usepreconditioner then
 		    P_hat[i] = ad.toexp(1.0)
 	    else
-		    P_hat[i] = 2.0*P_hat[i]
+		    P_hat[i] = P_hat[i]
 		    P_hat[i] = ad.polysimplify(P_hat[i])
 	    end
 	    F_hat[i] = ad.polysimplify(2.0*F_hat[i])
@@ -2276,8 +2276,6 @@ local function computeDtDcentered(PS,ES)
             local unknown = PS:ImageWithName(unknownname) 
             local x = unknown(ispace:ZeroOffset(),chan)
 
-            --local preconditioner = Pre[unknownname](ispace:ZeroOffset(),chan)
-
             local residuals = residualsincludingX00(unknownsupport,unknown,chan)
             local sum = 0
             for _,f in ipairs(residuals) do
@@ -2320,11 +2318,8 @@ local function computeDtDgraph(PS,ES)
         for i,partial in ipairs(partials) do
             local u = unknownsupport[i]
             assert(GraphElement:isclassof(u.index))
-            --local preconditioner = Pre[u.image.name](u.index,u.channel)
             local inv_radius = 1.0 / PS.trust_region_radius
-            --addscatter(DtD,u,2.0*partial*partial*preconditioner*inv_sqrt_radius)
-            addscatter(DtD,u,partial*partial*inv_radius) --TODO: doesn't the scattering here screw additivity up?
-            --addscatter(DtD,u,0.0)
+            addscatter(DtD,u,partial*partial*inv_radius)
         end
     end
     return A.FunctionSpec(ES.kind, "computeDtD", List { "DtD", "Pre" }, EMPTY, scatters, ES)
