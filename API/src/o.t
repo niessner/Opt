@@ -2286,9 +2286,8 @@ local function computeDtDcentered(PS,ES)
                 local dfdx00Sq = dfdx00*dfdx00  -- entry of Diag(J^TJ)
 
                 local inv_radius = 1.0 / PS.trust_region_radius
-                local D_entry = 0.0--2.0*dfdx00Sq*preconditioner*inv_radius 
-                --D_hat[idx+1] = D_hat[idx+1] + D_entry
-                D_hat[idx+1] = 0.0
+                local D_entry = 2.0*dfdx00Sq*inv_radius 
+                D_hat[idx+1] = D_hat[idx+1] + D_entry
             end
 
         end
