@@ -8,6 +8,7 @@ public:
 	}
 
     void CeresSolver::solve(
+		const NLLSProblem &problem,
         UNKNOWNS* funcParameters,
         double2* funcData);
 
