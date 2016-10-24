@@ -310,7 +310,8 @@ return function(problemSpec)
             var idx : Index
             if idx:initFromCUDAParams() and not fmap.exclude(idx,pd.parameters) then
                 pd.parameters.X(idx) = pd.parameters.X(idx) + pd.delta(idx)
-                --printf("delta*10000: %f %f\n", pd.delta(idx)(0)*10000, pd.delta(idx)(1)*10000)            end
+                --printf("delta*10000: %f %f\n", pd.delta(idx)(0)*10000, pd.delta(idx)(1)*10000)            
+            end
         end	
         
         terra kernels.PCGLinearUpdateRevert(pd : PlanData)
@@ -391,84 +392,20 @@ return function(problemSpec)
                 end 
             end
 
-            --[[
-            terra kernels.computeModelCostChangeStep1(pd : PlanData)
-                var d = 0.0f -- init for out of bounds lanes
-        
-                var idx : Index
-                if idx:initFromCUDAParams() then
-        
-                    -- grad_F = - 2J'F                           
-                    var g : unknownElement = 0.0f
-            
-                    if not fmap.exclude(idx,pd.parameters) then 
-                        g = fmap.evalJTFsimple(idx, pd.parameters)  -- 2J'F  
-                        -- g = -g
-                    end        
-                    if not isGraph then
-                        var dd = pd.delta(idx)
-                        d = g:dot(dd)  -- delta'(-2J'F) 
-                    end
-                end
-                if not isGraph then
-                    d = util.warpReduce(d)	
-                    if (util.laneid() == 0) then				
-                        util.atomicAdd(pd.modelCostChange, d)
-                    end
-                end
-            end
-
-            terra kernels.computeModelCostChangeStep1_Finish(pd : PlanData)	--only called for graphs
-                var d = 0.0f -- init for out of bounds lanes
-                var idx : Index
-                if idx:initFromCUDAParams() then
-                    var gradF = pd.g(idx)   -- gradF = -2J'F
-                    var dd = pd.delta(idx)
-                    d = gradF:dot(dd) -- delta'(-2J'F) 
-                end
-                d = util.warpReduce(d)	
-                if (util.laneid() == 0) then
-                    util.atomicAdd(pd.modelCostChange, d)
-                end
-            end
-            terra kernels.computeModelCostChangeStep2(pd : PlanData)
-                var d = 0.0f -- init for out of bounds lanes
+            terra kernels.computeModelCost(pd : PlanData)            
+                var cost : opt_float = [opt_float](0.0f)
                 var idx : Index
                 if idx:initFromCUDAParams() and not fmap.exclude(idx,pd.parameters) then
-                    var jtjd : unknownElement = 0.0f
- 
-                    jtjd = fmap.applyJTJsimple(idx, pd.parameters, pd.delta)   -- J'J delta
-                    -- jtjd = -jtjd
-                    d = pd.delta(idx):dot(jtjd)			 -- delta'(-J'J delta) 
+                    var params = pd.parameters              
+                    cost = cost + [opt_float](fmap.modelcost(idx, params, pd.delta))
                 end
-                d = util.warpReduce(d)
+
+                cost = util.warpReduce(cost)
                 if (util.laneid() == 0) then
-                    util.atomicAdd(pd.modelCostChange, d)
+                    util.atomicAdd(pd.scratchF, cost)
                 end
             end
-            terra kernels.LMLambdaInit(pd : PlanData)
-                var maxJTJ = 0.0f -- maximum diag(JTJ)
-                var idx : Index
-                if idx:initFromCUDAParams() then	
-                    var pre : unknownElement = 1.0f	
-                
-                    if not fmap.exclude(idx,pd.parameters) then 
-                        pre = fmap.evalDiagJTJ(idx, pd.parameters)
-                    end
 
-                    if not isGraph then
-                        maxJTJ = pre:max()
-                    end
-                end
-
-                if not isGraph then
-                    maxJTJ = util.warpMaxReduce(maxJTJ)	
-                    if (util.laneid() == 0) then				
-                        util.atomicMax(pd.maxDiagJTJ, maxJTJ)
-                    end
-                end
-            end
-            --]]
         end -- :UsesLambda()
 	    return kernels
 	end
@@ -525,31 +462,18 @@ return function(problemSpec)
                     fmap.computeDtD(tIdx, pd.parameters, pd.DtD, pd.preconditioner)
                 end
             end    
-   --[[
-            terra kernels.computeModelCostChangeStep1_Graph(pd : PlanData)
+
+            terra kernels.computeModelCost_Graph(pd : PlanData)          
+                var cost : opt_float = [opt_float](0.0f)
                 var tIdx = 0
                 if util.getValidGraphElement(pd,[graphname],&tIdx) then
-                    fmap.evalJTFsimple(tIdx, pd.parameters, pd.g)
-                end
-            end   
-            terra kernels.computeModelCostChangeStep2_Graph(pd : PlanData)
-                var d = 0.0f
-                var tIdx = 0 
-                if util.getValidGraphElement(pd,[graphname],&tIdx) then
-                   d = d + fmap.applyJTJsimple(tIdx, pd.parameters, pd.delta)
+                    cost = cost + fmap.modelcost(tIdx, pd.parameters, pd.delta)
                 end 
-                d = util.warpReduce(d)
+                cost = util.warpReduce(cost)
                 if (util.laneid() == 0) then
-                    util.atomicAdd(pd.modelCostChange, d)
+                    util.atomicAdd(pd.scratchF, cost)
                 end
             end
-            -- terra kernels.LMLambdaInit_Graph(pd : PlanData)
-            --     var tIdx = 0
-            --     if util.getValidGraphElement(pd,[graphname],&tIdx) then
-            --         fmap.evalJTF(tIdx, pd.parameters, pd.preconditioner)
-            --     end
-            -- end
-                    --]]
         end
 
 	    return kernels
@@ -565,16 +489,13 @@ return function(problemSpec)
                                                                         "PCGLinearUpdateRevert",
                                                                         "computeCost",
                                                                         "precompute",
-                                                                        "computeModelCostChangeStep1",
-                                                                        "computeModelCostChangeStep1_Finish",
-                                                                        "computeModelCostChangeStep2",
                                                                         "LMLambdaInit",
                                                                         "PCGInit1_Graph",
                                                                         "PCGComputeDtD_Graph",
                                                                         "PCGStep1_Graph",
                                                                         "computeCost_Graph",
-                                                                        "computeModelCostChangeStep1_Graph",
-                                                                        "computeModelCostChangeStep2_Graph",
+                                                                        "computeModelCost",
+                                                                        "computeModelCost_Graph",
                                                                         "saveJToCRS",
                                                                         "DebugDumpDtD",
                                                                         "saveJToCRS_Graph"
@@ -589,32 +510,32 @@ return function(problemSpec)
         return f
     end
 
+    local terra computeModelCost(pd : &PlanData) : opt_float
+        C.cudaMemset(pd.scratchF, 0, sizeof(opt_float))
+        gpu.computeModelCost(pd)
+        gpu.computeModelCost_Graph(pd)
+        var f : opt_float
+        C.cudaMemcpy(&f, pd.scratchF, sizeof(opt_float), C.cudaMemcpyDeviceToHost)
+        return f
+    end
+
     local initLambda,computeModelCostChange
     
     if problemSpec:UsesLambda() then
-        --[[
+        
         terra computeModelCostChange(pd : &PlanData) : opt_float
-            C.cudaMemset(pd.modelCostChange, 0, sizeof(opt_float))
-
-            -- model_cost_change = delta' * (-2 * J' * F) + delta' * (-J' * J * delta)
-            gpu.computeModelCostChangeStep1(pd)
-            gpu.computeModelCostChangeStep2(pd)
-            if isGraph then
-                gpu.computeModelCostChangeStep1_Graph(pd)	
-                gpu.computeModelCostChangeStep1_Finish(pd)
-                gpu.computeModelCostChangeStep2_Graph(pd)
-            end
-
-            var model_cost_change : opt_float
-            C.cudaMemcpy(&model_cost_change, pd.modelCostChange, sizeof(opt_float), C.cudaMemcpyDeviceToHost)
-
+            var cost = computeCost(pd)
+            var model_cost = computeModelCost(pd)
+            logSolver(" cost=%f \n",cost)
+            logSolver(" model_cost=%f \n",model_cost)
+            var model_cost_change = cost - model_cost
+            logSolver(" model_cost_change=%f \n",model_cost_change)
             return model_cost_change
         end
-                    --]]
+
         terra initLambda(pd : &PlanData)
             pd.parameters.trust_region_radius = 1e4
-            --pd.parameters.trust_region_radius = 1e-10
-            -- Init lambda based on the maximum value on the diagonal of JTJ
+            --pd.parameters.trust_region_radius = 1e-10 
             --[[
             C.cudaMemset(pd.maxDiagJTJ, 0, sizeof(opt_float))
 
@@ -712,6 +633,16 @@ return function(problemSpec)
 				
 			end
 			
+
+            var model_cost_change : opt_float
+            escape 
+                if problemSpec:UsesLambda() then
+                    emit quote
+                        model_cost_change = computeModelCostChange(pd)
+                    end
+                end
+            end
+
 			gpu.PCGLinearUpdate(pd)    
 			gpu.precompute(pd)
 			var newCost = computeCost(pd)
@@ -946,52 +877,45 @@ return function(problemSpec)
 
 			    -- lm version
 
-                --[[
-                    logSolver(" trust_region_radius=%f ",pd.parameters.trust_region_radius)
-
-                    var cost_change = pd.prevCost - newCost
-                    var model_cost_change = computeModelCostChange(pd)
-                    var relative_decrease = cost_change / model_cost_change
-
-                    logSolver(" cost_change=%f ", cost_change)
-                    logSolver(" model_cost_change=%f ", model_cost_change)
-                    logSolver(" relative_decrease=%f ", relative_decrease)
-
-                    var min_relative_decrease = 1e-3f
-
-                    if cost_change < 0 or relative_decrease < min_relative_decrease then	--in this case we revert
-                        gpu.PCGLinearUpdateRevert(pd)
-
-                        -- lambda = lambda * nu
-                        pd.parameters.trust_region_radius = pd.parameters.trust_region_radius / pd.parameters.radius_decrease_factor
-                        -- nu = 2 * nu
-                        pd.parameters.radius_decrease_factor = 2.0f * pd.parameters.radius_decrease_factor
-
-                        logSolver("REVERT\n")
-                        gpu.precompute(pd)
-                    else 
-                        --]]
-
-
-                        --FOR NOW, ASSUME ALWAYS ACCEPT
-
---[[
-                        radius_ = radius_ / std::max(1.0 / 3.0,
-                                                       1.0 - pow(2.0 * step_quality - 1.0, 3));
-                      radius_ = std::min(max_radius_, radius_);
-                      decrease_factor_ = 2.0;
---]]
                     emit quote
-                        -- TODO: compute relative_decrease 
-                        var relative_decrease = 1.0f
-                        var min_factor = 1.0f/3.0f
-                        var tmp_factor = 1.0f - util.cpuMath.pow(2.0f * relative_decrease - 1.0f, 3.0f)
-                        pd.parameters.trust_region_radius = pd.parameters.trust_region_radius / util.cpuMath.fmax(min_factor, tmp_factor)
-                        pd.parameters.radius_decrease_factor = 2.0f
+                        logSolver(" trust_region_radius=%f ",pd.parameters.trust_region_radius)
 
-                        logSolver("\n")
-                        pd.prevCost = newCost
+                        var cost_change = pd.prevCost - newCost
+                        
+                        
+                        -- See TrustRegionStepEvaluator::StepAccepted() for a more complicated version of this
+                        var relative_decrease = cost_change / model_cost_change
 
+                        logSolver(" cost_change=%f ", cost_change)
+                        logSolver(" model_cost_change=%f ", model_cost_change)
+                        logSolver(" relative_decrease=%f ", relative_decrease)
+                        --TODO: make parameter
+                        var min_relative_decrease = 1e-3f
+
+                        if cost_change < 0 or relative_decrease < min_relative_decrease then	--in this case we revert
+                            gpu.PCGLinearUpdateRevert(pd)
+
+                            pd.parameters.trust_region_radius = pd.parameters.trust_region_radius / pd.parameters.radius_decrease_factor
+                            pd.parameters.radius_decrease_factor = 2.0f * pd.parameters.radius_decrease_factor
+
+                            logSolver("REVERT\n")
+                            gpu.precompute(pd)
+                        else 
+                            --[[
+                                radius_ = radius_ / std::max(1.0 / 3.0,
+                                                           1.0 - pow(2.0 * step_quality - 1.0, 3));
+                                radius_ = std::min(max_radius_, radius_);
+                                decrease_factor_ = 2.0;
+                            --]]
+                            var step_quality = relative_decrease
+                            var min_factor = 1.0/3.0
+                            var tmp_factor = 1.0 - util.cpuMath.pow(2.0 * step_quality - 1.0, 3.0)
+                            pd.parameters.trust_region_radius = pd.parameters.trust_region_radius / util.cpuMath.fmax(min_factor, tmp_factor)
+                            pd.parameters.radius_decrease_factor = 2.0
+
+                            logSolver("\n")
+                            pd.prevCost = newCost
+                        end
                     end
                 else
                     emit quote
