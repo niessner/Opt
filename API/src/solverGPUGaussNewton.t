@@ -310,7 +310,7 @@ return function(problemSpec)
             var idx : Index
             if idx:initFromCUDAParams() and not fmap.exclude(idx,pd.parameters) then
                 pd.parameters.X(idx) = pd.parameters.X(idx) + pd.delta(idx)
-                --printf("delta*10000: %f %f\n", pd.delta(idx)(0)*10000, pd.delta(idx)(1)*10000)            
+                printf("delta*10000: %f %f\n", pd.delta(idx)(0)*10000, pd.delta(idx)(1)*10000)            
             end
         end	
         
@@ -381,14 +381,14 @@ return function(problemSpec)
                 var idx : Index
                 if idx:initFromCUDAParams() then                         
                     var CtC : unknownElement = pd.DtD(idx)
-                    printf("\nC'C: %d: %f %f\n", idx, CtC(0), CtC(1))
+                    printf("\nC'C: %d: %f %f %f\n", idx, CtC(0), CtC(1), CtC(2))
                     var JtJ_ii : unknownElement = pd.DtD(idx) * pd.parameters.trust_region_radius
-                    printf("\nJ'J_ii: %d, %f %f\n", idx, JtJ_ii(0), JtJ_ii(1))
+                    printf("\nJ'J_ii: %d, %f %f %f\n", idx, JtJ_ii(0), JtJ_ii(1), JtJ_ii(2))
                     var DtD : unknownElement = CtC * pd.preconditioner(idx)
-                    printf("\nD'D: %d: %f %f\n", idx, DtD(0), DtD(1))
+                    printf("\nD'D: %d: %f %f %f\n", idx, DtD(0), DtD(1), DtD(2))
                     var M1 : unknownElement = pd.preconditioner(idx)
-                    printf("\nE^-1*100: %d: %f %f\n", idx, util.gpuMath.sqrt(M1(0))*100, util.gpuMath.sqrt(M1(1))*100)
-                    printf("\nM^-1*10000: %d: %f %f\n", idx, M1(0)*10000, M1(1)*10000)
+                    printf("\nE^-1*100: %d: %f %f %f\n", idx, util.gpuMath.sqrt(M1(0))*100, util.gpuMath.sqrt(M1(1))*100, util.gpuMath.sqrt(M1(2))*100)
+                    printf("\nM^-1*10000: %d: %f %f %f\n", idx, M1(0)*10000, M1(1)*10000, M1(2)*10000)
                 end 
             end
 
@@ -535,6 +535,7 @@ return function(problemSpec)
 
         terra initLambda(pd : &PlanData)
             pd.parameters.trust_region_radius = 1e4
+            pd.parameters.trust_region_radius = 0.305
             --pd.parameters.trust_region_radius = 1e-10 
             --[[
             C.cudaMemset(pd.maxDiagJTJ, 0, sizeof(opt_float))
@@ -601,7 +602,7 @@ return function(problemSpec)
                         logSolver(" trust_region_radius=%f ",pd.parameters.trust_region_radius)
                         gpu.PCGComputeDtD(pd)
                         gpu.PCGComputeDtD_Graph(pd)
-                        --gpu.DebugDumpDtD(pd)
+                        gpu.DebugDumpDtD(pd)
                     end
                 end
             end
@@ -651,232 +652,6 @@ return function(problemSpec)
 			
 			escape 
                 if problemSpec:UsesLambda() then
-                --[[
-                
-                  // Compute a scaling vector that is used to improve the
-                  // conditioning of the Jacobian.
-                  //
-                  // jacobian_scaling_ = diag(J'J)^{-1}
-                  jacobian_->SquaredColumnNorm(jacobian_scaling_.data());
-                  for (int i = 0; i < jacobian_->num_cols(); ++i) {
-                    // Add one to the denominator to prevent division by zero.
-                    jacobian_scaling_[i] = 1.0 / (1.0 + sqrt(jacobian_scaling_[i]));
-                  }
-
-
-                    // A linear operator which takes a matrix A and a diagonal vector D and
-                    // performs products of the form
-                    //
-                    //   (A^T A + D^T D)x
-                    //
-                    // This is used to implement iterative general sparse linear solving with
-                    // conjugate gradients, where A is the Jacobian and D is a regularizing
-                    // parameter. A brief proof that D^T D is the correct regularizer:
-                    //
-                    // Given a regularized least squares problem:
-                    //
-                    //   min  ||Ax - b||^2 + ||Dx||^2
-                    //    x
-                    //
-                    // First expand into matrix notation:
-                    //
-                    //   (Ax - b)^T (Ax - b) + xD^TDx
-                    //
-                    // Then multiply out to get:
-                    //
-                    //   = xA^TAx - 2b^T Ax + b^Tb + xD^TDx
-                    //
-                    // Take the derivative:
-                    //
-                    //   0 = 2A^TAx - 2A^T b + 2 D^TDx
-                    //   0 = A^TAx - A^T b + D^TDx
-                    //   0 = (A^TA + D^TD)x - A^T b
-                    //
-                    // Thus, the symmetric system we need to solve for CGNR is
-                    //
-                    //   Sx = z
-                    //
-                    // with S = A^TA + D^TD
-                    //  and z = A^T b
-
-                Loop
-
-                      
-
-                        // jacobian = jacobian * diag(J'J) ^{-1}
-                        jacobian_->ScaleColumns(jacobian_scaling_.data());
-
-
-
-                    ComputeTrustRegionStep()
-
-                        jacobian->SquaredColumnNorm(diagonal_.data());
-                        for (int i = 0; i < num_parameters; ++i) {
-                          diagonal_[i] = std::min(std::max(diagonal_[i], min_diagonal_),
-                                                  max_diagonal_);
-                        }
-                        lm_diagonal_ = (diagonal_ / radius_).array().sqrt();
-                        solve_options.D = lm_diagonal_.data();
-                        q_tolerance = eta = 0.1 // Used for termination in the CG steps 
-
-            
-                        LinearSolver::Summary linear_solver_summary =
-                              linear_solver_->Solve(jacobian, residuals, solve_options, step);
-                            preconditioner_->Update(*A, per_solve_options.D);
-                            // A = jacobian, b = residuals, x = step
-                            // Solve (AtA + DtD)x = z (= Atb).
-                        step *= -1.0f;
-                        // trust_region_step_ = step
-                        
-                          // new_model_cost
-                          //  = 1/2 [f + J * step]^2
-                          //  = 1/2 [ f'f + 2f'J * step + step' * J' * J * step ]
-                          // model_cost_change
-                          //  = cost - new_model_cost
-                          //  = f'f/2  - 1/2 [ f'f + 2f'J * step + step' * J' * J * step]
-                          //  = -f'J * step - step' * J' * J * step / 2
-                          //  = -(J * step)'(f + J * step / 2)
-                          model_residuals_.setZero();
-                          jacobian_->RightMultiply(trust_region_step_.data(), model_residuals_.data());
-                          model_cost_change_ =
-                              -model_residuals_.dot(residuals_ + model_residuals_ / 2.0);
-
-                          // TODO(sameeragarwal)
-                          //
-                          //  1. What happens if model_cost_change_ = 0
-                          //  2. What happens if -epsilon <= model_cost_change_ < 0 for some
-                          //     small epsilon due to round off error.
-                          iteration_summary_.step_is_valid = (model_cost_change_ > 0.0);
-                          if (iteration_summary_.step_is_valid) {
-                            // Undo the Jacobian column scaling.
-                            delta_ = (trust_region_step_.array() * jacobian_scaling_.array()).matrix();
-                            num_consecutive_invalid_steps_ = 0;
-                          }
-
-                    ComputeCandidatePointAndEvaluateCost()
-                        This is our ApplyLinearUpdate, but stores result in "candidate" result
-
-                    Two termination checks
-                    ParameterToleranceReached() {
-                      // Compute the norm of the step in the ambient space.
-                      iteration_summary_.step_norm = (x_ - candidate_x_).norm();
-                          options_.parameter_tolerance * (x_norm_ + options_.parameter_tolerance);
-
-                      if (iteration_summary_.step_norm > step_size_tolerance) {
-                        return false;
-                      }
-                    FunctionToleranceReached() {
-                      iteration_summary_.cost_change = x_cost_ - candidate_cost_;
-                      const double absolute_function_tolerance =
-                          options_.function_tolerance * x_cost_;
-
-                      if (fabs(iteration_summary_.cost_change) > absolute_function_tolerance) {
-                        return false;
-                      }
-
-
-                    IsStepSuccessful() {
-                      iteration_summary_.relative_decrease =
-                          step_evaluator_->StepQuality(candidate_cost_, model_cost_change_);
-
-                            double TrustRegionStepEvaluator::StepQuality(
-                                const double cost,
-                                const double model_cost_change) const {
-                              const double relative_decrease = (current_cost_ - cost) / model_cost_change;
-                              const double historical_relative_decrease =
-                                  (reference_cost_ - cost) /
-                                  (accumulated_reference_model_cost_change_ + model_cost_change);
-                              return std::max(relative_decrease, historical_relative_decrease);
-                            }
-
-                      return iteration_summary_.relative_decrease > options_.min_relative_decrease;
-                    
-                    HandleSuccessfulStep() {
-                      x_ = candidate_x_;
-                      x_norm_ = x_.norm();
-
-                      if (!EvaluateGradientAndJacobian()) {
-                        return false;
-                      }
-
-                      iteration_summary_.step_is_successful = true;
-                      strategy_->StepAccepted(iteration_summary_.relative_decrease);
-                      step_evaluator_->StepAccepted(candidate_cost_, model_cost_change_);
-                      return true;
-                    }
-                        void LevenbergMarquardtStrategy::StepAccepted(double step_quality) {
-                          CHECK_GT(step_quality, 0.0);
-                          radius_ = radius_ / std::max(1.0 / 3.0,
-                                                       1.0 - pow(2.0 * step_quality - 1.0, 3));
-                          radius_ = std::min(max_radius_, radius_);
-                          decrease_factor_ = 2.0;
-                          reuse_diagonal_ = false;
-                        }
-
-                        void TrustRegionStepEvaluator::StepAccepted(
-                            const double cost,
-                            const double model_cost_change) {
-                          // Algorithm 10.1.2 from Trust Region Methods by Conn, Gould &
-                          // Toint.
-                          //
-                          // Step 3a
-                          current_cost_ = cost;
-                          accumulated_candidate_model_cost_change_ += model_cost_change;
-                          accumulated_reference_model_cost_change_ += model_cost_change;
-
-                          // Step 3b.
-                          if (current_cost_ < minimum_cost_) {
-                            minimum_cost_ = current_cost_;
-                            num_consecutive_nonmonotonic_steps_ = 0;
-                            candidate_cost_ = current_cost_;
-                            accumulated_candidate_model_cost_change_ = 0.0;
-                          } else {
-                            // Step 3c.
-                            ++num_consecutive_nonmonotonic_steps_;
-                            if (current_cost_ > candidate_cost_) {
-                              candidate_cost_ = current_cost_;
-                              accumulated_candidate_model_cost_change_ = 0.0;
-                            }
-                          }
-
-                          // Step 3d.
-                          //
-                          // At this point we have made too many non-monotonic steps and
-                          // we are going to reset the value of the reference iterate so
-                          // as to force the algorithm to descend.
-                          //
-                          // Note: In the original algorithm by Toint, this step was only
-                          // executed if the step was non-monotonic, but that would not handle
-                          // the case of max_consecutive_nonmonotonic_steps = 0. The small
-                          // modification of doing this always handles that corner case
-                          // correctly.
-                          if (num_consecutive_nonmonotonic_steps_ ==
-                              max_consecutive_nonmonotonic_steps_) {
-                            reference_cost_ = candidate_cost_;
-                            accumulated_reference_model_cost_change_ =
-                                accumulated_candidate_model_cost_change_;
-                          }
-                        }
-
-                    HandleUnsuccessfulStep() {
-                      iteration_summary_.step_is_successful = false;
-                      strategy_->StepRejected(iteration_summary_.relative_decrease);
-                      iteration_summary_.cost = candidate_cost_ + solver_summary_->fixed_cost;
-                    }
-                        void LevenbergMarquardtStrategy::StepRejected(double step_quality) {
-                          radius_ = radius_ / decrease_factor_;
-                          decrease_factor_ *= 2.0;
-                          reuse_diagonal_ = true;
-                        }
-
-
-                --]]
-
-
-
-
-			    -- lm version
-
                     emit quote
                         logSolver(" trust_region_radius=%f ",pd.parameters.trust_region_radius)
 

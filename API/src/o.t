@@ -2188,8 +2188,7 @@ local function createmodelcost(PS,ES)
 
         end
     end
-    result = ad.polysimplify(result)
-
+    result = ad.polysimplify(result)*0.0 -- TODO: Remove
     return A.FunctionSpec(ES.kind,"modelcost", List {"Delta"}, List{ result }, EMPTY,ES)
 end
 
@@ -2200,14 +2199,20 @@ local function createmodelcostgraph(PS,ES)
         local F,unknownsupport = term.expression,term.unknowns
         local unknownvars = unknownsupport:map(function(x) return ad.v[x] end)
         local partials = F:gradient(unknownvars)
+
+        local JTdelta = 0.0
+
         for i,partial in ipairs(partials) do
             local u = unknownsupport[i]
             assert(GraphElement:isclassof(u.index))
             local delta = Delta[u.image.name](u.index,u.channel)
-            local residual_m = F - (partial * delta)
-            result = result + residual_m*residual_m -- summing it up to get sumsq(model_residuals)
+            JTdelta = JTdelta + (partial * delta)
+            --local residual_m = F - (partial * delta)
+            --result = result + residual_m*residual_m -- summing it up to get sumsq(model_residuals)
             --addscatter(Delta,u,residual_m*residual_m)
         end
+        local residual_m = F + JTdelta
+        result = result + (residual_m*residual_m)
     end
     return A.FunctionSpec(ES.kind, "modelcost", List { "Delta" }, List{ result }, EMPTY,ES)
 end
