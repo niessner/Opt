@@ -1,8 +1,8 @@
-                <meta charset="utf-8" emacsmode="-*- markdown -*-">
+﻿                <meta charset="utf-8" emacsmode="-*- markdown -*-">
                             **CERES vs Opt**
 
 
-Analyzing CERES
+One Iteration, CERES vs. Opt
 ===============================================================================
 
 
@@ -103,12 +103,16 @@ $$d_{ii} = \frac{1}{\sqrt{\mbox{radius}}}\frac{\sqrt{(J^TJ)_{ii}}}{(1+\sqrt{(J^T
 This is off from being the proposed value of $ D_{ii} $ by a factor of $\sqrt{(J^TJ)_{ii}}$. Solving for CERES value of 
 $ c_{ii} $
 
-$$c_{ii} = \frac{d_ii}{s_ii} = \frac{1}{\sqrt{\mbox{radius}}}\frac{\sqrt{(J^TJ)_{ii}}}{(1+\sqrt{(J^TJ)_{ii}})}(1+\sqrt{(J^TJ)_{ii}})$$
+$$c_{ii} = \frac{d_{ii}}{s_{ii}} = \frac{1}{\sqrt{\mbox{radius}}}\frac{\sqrt{(J^TJ)_{ii}}}{(1+\sqrt{(J^TJ)_{ii}})}(1+\sqrt{(J^TJ)_{ii}})$$
 
 $$c_{ii} = \frac{\sqrt{(J^TJ)_{ii}}}{\sqrt{\mbox{radius}}}$$
 
 
 So each element of $C^TC$ will just be $ctc_{ii} = \frac{(J^TJ)_{ii}}{\mbox{radius}}$. This is *not* dependent on the preconditioner S.
+
+
+Adjusting the trust region radius, CERES vs. Opt
+===============================================================================
 
 CERES uses model_cost_change (lets call it $\delta_m$) to update the trust region radius at every LM step. Let cost = $c$ and new_model_cost = $c_m$. Let 
 
@@ -141,7 +145,28 @@ $$\delta_m = -(2f + (J\delta))^T(J\delta)$$
 No matter how we slice it, we'll need to implement $J\delta$, which has residual-sized output. This is different from the other operations in Opt, which have unknown-sized output.
 
 
+Minor Differences, CERES vs. Opt
+===============================================================================
+
+CERES controls when it stops the linear solver based on some protocol that cannot be directly transferred over to Opt, since we aren't solving the normal equations like CERES is.
+
+initial_trust_region_radius is an important parameter that should be set the same for both CERES and Opt
+
+min_relative_decrease is also important to keep the same.
+
+max_trust_region_radius and min_trust_region_radius are not yet implemented in Opt, but are straightforward
+
+function_tolerance and gradient_tolerance are useful options for CERES that should be looked at for integration into Opt, as it allows us to early-exit
+
+min_lm_diagonal and max_lm_diagonal are the last known discrepency between Opt and CERES, for now we just set them to extreme values for CERES and hope never to hit it.
+
+Those two parameters operate on individual elements of $D$. Since we use $C'C$ where $D = CS$, 
+to apply this we would need to clamp $c_{ii}$ to $\mbox{min_lm_diagonal}/s_{ii}$, which is clamping $ctc_{ii}$ to $\mbox{min_lm_diagonal}^2/s_{ii}^2$. This isn't terribly difficult and so should be implemented for parity with CERES.
 
 
+Important Note
+===============================================================================
+
+Opt requires that all unknowns have some image-based residual (make a dummy one for now!); otherwise the diagonal matrix is not properly added!
 
 <!-- Markdeep: --><style class="fallback">body{visibility:hidden;white-space:pre;font-family:monospace}</style><script src="markdeep.min.js"></script><script src="https://casual-effects.com/markdeep/latest/markdeep.min.js"></script><script>window.alreadyProcessedMarkdeep||(document.body.style.visibility="visible")</script>
