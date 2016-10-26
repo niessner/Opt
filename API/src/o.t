@@ -2149,7 +2149,6 @@ local function createjtfcentered(PS,ES)
 	    if not PS.P.usepreconditioner then
 		    P_hat[i] = ad.toexp(1.0)
 	    else
-		    P_hat[i] = P_hat[i]
 		    P_hat[i] = ad.polysimplify(P_hat[i])
 	    end
 	    F_hat[i] = ad.polysimplify(2.0*F_hat[i])
@@ -2171,6 +2170,19 @@ local function createmodelcost(PS,ES)
         local F, unknownsupport = residual.expression,residual.unknowns
         lprintf(0,"-------------")
         lprintf(1,"R[%d] = %s",ridx,tostring(F))
+        local unknownvars = unknownsupport:map(function(x) return ad.v[x] end)
+        local partials = F:gradient(unknownvars)
+
+        local JTdelta = 0.0
+
+        for i,partial in ipairs(partials) do
+            local u = unknownsupport[i]
+            local delta = Delta[u.image.name](u.index,u.channel)
+            JTdelta = JTdelta + (partial * delta)
+        end
+        local residual_m = F + JTdelta
+        result = result + (residual_m*residual_m)
+        --[[
         for idx,unknownname,chan in UnknownType:UnknownIteratorForIndexSpace(ispace) do
             local unknown = PS:ImageWithName(unknownname) 
             local x = unknown(ispace:ZeroOffset(),chan)
@@ -2187,8 +2199,9 @@ local function createmodelcost(PS,ES)
             end
 
         end
+        --]]
     end
-    result = ad.polysimplify(result)*0.0 -- TODO: Remove
+    result = ad.polysimplify(result)
     return A.FunctionSpec(ES.kind,"modelcost", List {"Delta"}, List{ result }, EMPTY,ES)
 end
 
@@ -2207,9 +2220,6 @@ local function createmodelcostgraph(PS,ES)
             assert(GraphElement:isclassof(u.index))
             local delta = Delta[u.image.name](u.index,u.channel)
             JTdelta = JTdelta + (partial * delta)
-            --local residual_m = F - (partial * delta)
-            --result = result + residual_m*residual_m -- summing it up to get sumsq(model_residuals)
-            --addscatter(Delta,u,residual_m*residual_m)
         end
         local residual_m = F + JTdelta
         result = result + (residual_m*residual_m)
@@ -2239,7 +2249,6 @@ local function createjtfgraph(PS,ES)
             local u = unknownsupport[i]
             assert(GraphElement:isclassof(u.index))
             addscatter(R,u,-2.0*partial*F)
-            -- TODO: check on preconditioner. Removed *2 for LM matching CERES
             addscatter(Pre,u,partial*partial)
         end
     end
@@ -2270,7 +2279,7 @@ local function computeDtDcentered(PS,ES)
                 local dfdx00Sq = dfdx00*dfdx00  -- entry of Diag(J^TJ)
 
                 local inv_radius = 1.0 / PS.trust_region_radius
-                local D_entry = 2.0*dfdx00Sq*inv_radius 
+                local D_entry = dfdx00Sq*inv_radius 
                 D_hat[idx+1] = D_hat[idx+1] + D_entry
             end
 

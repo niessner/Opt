@@ -273,7 +273,7 @@ return function(problemSpec)
                 end 
     
                 pd.delta(idx) = pd.delta(idx)+alpha*pd.p(idx)		-- do a descent step
-        
+
                 var r = pd.r(idx)-alpha*pd.Ap_X(idx)				-- update residuum
                 pd.r(idx) = r										-- store for next kernel call
     
@@ -310,7 +310,7 @@ return function(problemSpec)
             var idx : Index
             if idx:initFromCUDAParams() and not fmap.exclude(idx,pd.parameters) then
                 pd.parameters.X(idx) = pd.parameters.X(idx) + pd.delta(idx)
-                printf("delta*10000: %f %f\n", pd.delta(idx)(0)*10000, pd.delta(idx)(1)*10000)            
+                printf("delta*10000: %f %f %f\n", pd.delta(idx)(0)*10000, pd.delta(idx)(1)*10000, pd.delta(idx)(2)*10000)            
             end
         end	
         
