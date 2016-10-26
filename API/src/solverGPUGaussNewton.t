@@ -13,7 +13,7 @@ local gpuMath = util.gpuMath
 opt.BLOCK_SIZE = 16
 local BLOCK_SIZE =  opt.BLOCK_SIZE
 
-local FLOAT_EPSILON = `[opt_float](0.000001) 
+local FLOAT_EPSILON = `[opt_float](0.0) 
 -- GAUSS NEWTON (non-block version)
 return function(problemSpec)
     local UnknownType = problemSpec:UnknownType()
@@ -71,6 +71,8 @@ return function(problemSpec)
 		preconditioner : TUnknownType --pre-conditioner for linear system -> num vars
 		g : TUnknownType		--gradient of F(x): g = -2J'F -> num vars
 		
+        prevX : TUnknownType -- Place to copy unknowns to before speculatively updating. Avoids hassle when (X + delta) - delta != X 
+
 		scanAlphaNumerator : &opt_float
 		scanAlphaDenominator : &opt_float
 		scanBetaNumerator : &opt_float
@@ -305,7 +307,7 @@ return function(problemSpec)
                 if rDotzOld > FLOAT_EPSILON then 
                     beta = rDotzNew/rDotzOld 
                 else
-                    --printf("WARNING: Invalid rDotzOld: %f\n", alphaDenominator)
+                    --printf("WARNING: Invalid rDotzOld: %f\n", rDotzOld)
                 end	-- update step size beta
                 pd.p(idx) = pd.z(idx)+beta*pd.p(idx)							-- update decent direction
 
@@ -320,12 +322,19 @@ return function(problemSpec)
             end
         end	
         
-        terra kernels.PCGLinearUpdateRevert(pd : PlanData)
+        terra kernels.revertUpdate(pd : PlanData)
             var idx : Index
             if idx:initFromCUDAParams() and not fmap.exclude(idx,pd.parameters) then
-                pd.parameters.X(idx) = pd.parameters.X(idx) - pd.delta(idx)
+                pd.parameters.X(idx) = pd.prevX(idx)
             end
         end	
+
+        terra kernels.savePreviousUnknowns(pd : PlanData)
+            var idx : Index
+            if idx:initFromCUDAParams() and not fmap.exclude(idx,pd.parameters) then
+                pd.prevX(idx) = pd.parameters.X(idx)
+            end
+        end 
 
         terra kernels.computeCost(pd : PlanData)			
             var cost : opt_float = [opt_float](0.0f)
@@ -492,7 +501,8 @@ return function(problemSpec)
                                                                         "PCGStep2",
                                                                         "PCGStep3",
                                                                         "PCGLinearUpdate",
-                                                                        "PCGLinearUpdateRevert",
+                                                                        "revertUpdate",
+                                                                        "savePreviousUnknowns",
                                                                         "computeCost",
                                                                         "precompute",
                                                                         "LMLambdaInit",
@@ -644,6 +654,7 @@ return function(problemSpec)
                 if problemSpec:UsesLambda() then
                     emit quote
                         model_cost_change = computeModelCostChange(pd)
+                        gpu.savePreviousUnknowns(pd)
                     end
                 end
             end
@@ -687,7 +698,7 @@ return function(problemSpec)
                             logSolver("\n")
                             pd.prevCost = newCost
                         else 
-                            gpu.PCGLinearUpdateRevert(pd)
+                            gpu.revertUpdate(pd)
 
                             pd.parameters.trust_region_radius = pd.parameters.trust_region_radius / pd.parameters.radius_decrease_factor
                             pd.parameters.radius_decrease_factor = 2.0f * pd.parameters.radius_decrease_factor
@@ -739,6 +750,7 @@ return function(problemSpec)
         pd.DtD:initGPU()
 		pd.preconditioner:initGPU()
 		pd.g:initGPU()
+        pd.prevX:initGPU()
 		
 		[util.initPrecomputedImages(`pd.parameters,problemSpec)]	
 		C.cudaMalloc([&&opaque](&(pd.scanAlphaNumerator)), sizeof(opt_float))

@@ -63,7 +63,7 @@ public:
     }
 
 	UNKNOWNS solve(const NLLSProblem &problem) {
-        uint nonLinearIter = 30;
+        uint nonLinearIter = 1000;
         uint linearIter = 1000;
 		if (useOpt) {
 			resetGPU();
