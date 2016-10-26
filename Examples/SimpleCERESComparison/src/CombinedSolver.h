@@ -11,7 +11,7 @@
 #include <vector>
 static bool useOpt = true;
 static bool useCeres = true;
-static bool useOptLM = false;
+static bool useOptLM = true;
 
 class CombinedSolver {
 public:

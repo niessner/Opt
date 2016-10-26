@@ -1,5 +1,12 @@
-local OPT_FLOAT2 = float2
-local OPT_FLOAT3 = float3
+require("opt_precision")
+
+if OPT_DOUBLE_PRECISION then
+    OPT_FLOAT2 = double2
+    OPT_FLOAT3 = double3
+else
+    OPT_FLOAT2 = float2
+    OPT_FLOAT3 = float3
+end
 
 local N,U = opt.Dim("N",0), opt.Dim("U",1)
 local funcParams =   Unknown("funcParams", OPT_FLOAT3, {U}, 0) -- a,b,c
@@ -20,9 +27,12 @@ local b = abc(1)
 local c = abc(2)
 
 --Energy(y_i - (a*cos(b*x_i)+b*sin(a*x_i))) -- works
-Energy(y_i - ad.pow(2.7182818284590452353603, -a * x_i) / (b + c * x_i))
+--Energy(y_i - ad.pow(2.7182818284590452353603, -a * x_i) / (b + c * x_i))
 
 -- Hack to get example to work with no image domain energy
 local zero = 0.0
 local zeroIm = ComputedImage("zero",{U},zero)
-Energy(zeroIm(0)*(funcParams(0)(0) - funcParams(0)(1)))
+--Energy(zeroIm(0)*(funcParams(0)(0) - funcParams(0)(1)))
+
+-- Closeness regularizer
+Energy((funcParams(0)(0)*funcParams(0)(2) - funcParams(0)(1)))

@@ -173,6 +173,7 @@ xcopy /Y /D "..\..\API\release\include\*.h" "."</Command>
     <None Include="chwirut1.t" />
     <None Include="curveFitting.t" />
     <None Include="misra.t" />
+    <None Include="opt_precision.t" />
   </ItemGroup>
   <ItemGroup>
     <Text Include="data\bennet5.txt" />

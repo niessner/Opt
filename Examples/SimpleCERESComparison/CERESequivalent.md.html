@@ -110,8 +110,35 @@ $$c_{ii} = \frac{\sqrt{(J^TJ)_{ii}}}{\sqrt{\mbox{radius}}}$$
 
 So each element of $C^TC$ will just be $ctc_{ii} = \frac{(J^TJ)_{ii}}{\mbox{radius}}$. This is *not* dependent on the preconditioner S.
 
+CERES uses model_cost_change (lets call it $\delta_m$) to update the trust region radius at every LM step. Let cost = $c$ and new_model_cost = $c_m$. Let 
 
-Residuals are computed in CERES *before* Jacobian scaling.
+$$\delta_m = c - c_m$$
+
+$$c = f^Tf$$
+
+According to CERES:
+
+$$c_m = (f + J \mbox{step})^2$$
+
+but recall CERES has prebaked $S$ into $J$, and calculates the final $\delta$ as $\delta=S\mbox{step}$. So this is really:
+
+$$c_m = (f + JS \mbox{step})^2 = (f + J\delta)^2$$
+
+So model cost change is equal to:
+
+$$\delta_m = f^Tf - (f + J\delta)^2$$
+
+$$\delta_m = f^Tf - (f^Tf + 2f^TJ\delta + \delta^TJ^TJ\delta)$$
+
+$$\delta_m = -(2f^TJ\delta + \delta^TJ^TJ\delta)$$
+
+$$\delta_m = -(2f^T + \delta^TJ^T)(J\delta)$$
+
+$$\delta_m = -(2f^T + (J\delta)^T)(J\delta)$$
+
+$$\delta_m = -(2f + (J\delta))^T(J\delta)$$
+
+No matter how we slice it, we'll need to implement $J\delta$, which has residual-sized output. This is different from the other operations in Opt, which have unknown-sized output.
 
 
 

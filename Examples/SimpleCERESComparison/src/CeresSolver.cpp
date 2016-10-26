@@ -40,6 +40,26 @@ struct TermDefault
     double y;
 };
 
+struct HackRegularizerTerm
+{
+    HackRegularizerTerm(double weight) : m_weight(weight) {}
+
+    template <typename T>
+    bool operator()(const T* const funcParams, T* residuals) const
+    {
+
+        residuals[0] = (funcParams[0]*funcParams[2] - funcParams[1]) * m_weight;
+        return true;
+    }
+
+    static ceres::CostFunction* Create(double weight)
+    {
+        return (new ceres::AutoDiffCostFunction<HackRegularizerTerm, 1, 3>(
+            new HackRegularizerTerm(weight)));
+    }
+    double m_weight;
+};
+
 struct TermMirsa
 {
 	TermMirsa(double x, double y)
@@ -133,9 +153,12 @@ void CeresSolver::solve(
 			cout << "No problem specified!" << endl;
 			cin.get();
 		}
-		problem.AddResidualBlock(costFunction, NULL, (double*)funcParameters);
+		//problem.AddResidualBlock(costFunction, NULL, (double*)funcParameters);
     }
-
+    
+    ceres::CostFunction* regCostFunction = HackRegularizerTerm::Create(1.0);
+    problem.AddResidualBlock(regCostFunction, NULL, (double*)funcParameters);
+    
     cout << "Solving..." << endl;
 
     Solver::Options options;
@@ -170,6 +193,8 @@ void CeresSolver::solve(
 
 
     options.initial_trust_region_radius = 1e4;
+
+    options.initial_trust_region_radius = 0.305;
 
     options.jacobi_scaling = true;
 
