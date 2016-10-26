@@ -30,7 +30,7 @@ local b = ab(1)
 --Energy(y_i - (a*cos(b*x_i)+b*sin(a*x_i))) -- works
 --Energy(y_i - ad.cos(x_i)) -- works
 --Energy(y_i - ad.exp(x_i)) -- doesn't work
-Energy(y_i - a*(1.0 - ad.pow(2.7182818284590452353603, -b*x_i))) 
+Energy(y_i - a*(1.0 - ad.pow(2.7182818284590452353603, -b*x_i)))
 
 -- Hack to get example to work with no image domain energy
 local zero = 0.0

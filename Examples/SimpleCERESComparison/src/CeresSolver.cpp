@@ -153,11 +153,11 @@ void CeresSolver::solve(
 			cout << "No problem specified!" << endl;
 			cin.get();
 		}
-		//problem.AddResidualBlock(costFunction, NULL, (double*)funcParameters);
+		problem.AddResidualBlock(costFunction, NULL, (double*)funcParameters);
     }
     
-    ceres::CostFunction* regCostFunction = HackRegularizerTerm::Create(1.0);
-    problem.AddResidualBlock(regCostFunction, NULL, (double*)funcParameters);
+    //ceres::CostFunction* regCostFunction = HackRegularizerTerm::Create(1.0);
+    //problem.AddResidualBlock(regCostFunction, NULL, (double*)funcParameters);
     
     cout << "Solving..." << endl;
 
@@ -193,8 +193,6 @@ void CeresSolver::solve(
 
 
     options.initial_trust_region_radius = 1e4;
-
-    options.initial_trust_region_radius = 0.305;
 
     options.jacobi_scaling = true;
 

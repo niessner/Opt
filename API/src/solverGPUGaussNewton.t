@@ -541,8 +541,6 @@ return function(problemSpec)
 
         terra initLambda(pd : &PlanData)
             pd.parameters.trust_region_radius = 1e4
-            pd.parameters.trust_region_radius = 0.305
-            --pd.parameters.trust_region_radius = 1e-10 
             --[[
             C.cudaMemset(pd.maxDiagJTJ, 0, sizeof(opt_float))
 
