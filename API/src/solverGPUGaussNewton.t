@@ -270,6 +270,8 @@ return function(problemSpec)
                 var alpha = opt_float(0.0f)
                 if alphaDenominator > FLOAT_EPSILON then 
                     alpha = alphaNumerator/alphaDenominator 
+                else
+                    --printf("WARNING: Invalid alphaDenominator: %f\n", alphaDenominator)
                 end 
     
                 pd.delta(idx) = pd.delta(idx)+alpha*pd.p(idx)		-- do a descent step
@@ -300,7 +302,11 @@ return function(problemSpec)
                 var rDotzOld : opt_float = pd.scanAlphaNumerator[0]				-- get old denominator
 
                 var beta : opt_float = [opt_float](0.0f)		                    
-                if rDotzOld > FLOAT_EPSILON then beta = rDotzNew/rDotzOld end	-- update step size beta
+                if rDotzOld > FLOAT_EPSILON then 
+                    beta = rDotzNew/rDotzOld 
+                else
+                    --printf("WARNING: Invalid rDotzOld: %f\n", alphaDenominator)
+                end	-- update step size beta
                 pd.p(idx) = pd.z(idx)+beta*pd.p(idx)							-- update decent direction
 
             end
@@ -310,7 +316,7 @@ return function(problemSpec)
             var idx : Index
             if idx:initFromCUDAParams() and not fmap.exclude(idx,pd.parameters) then
                 pd.parameters.X(idx) = pd.parameters.X(idx) + pd.delta(idx)
-                printf("delta*10000: %f %f %f\n", pd.delta(idx)(0)*10000, pd.delta(idx)(1)*10000, pd.delta(idx)(2)*10000)            
+                --printf("delta*10000: %f %f %f\n", pd.delta(idx)(0)*10000, pd.delta(idx)(1)*10000, pd.delta(idx)(2)*10000)            
             end
         end	
         
@@ -526,10 +532,10 @@ return function(problemSpec)
         terra computeModelCostChange(pd : &PlanData) : opt_float
             var cost = computeCost(pd)
             var model_cost = computeModelCost(pd)
-            logSolver(" cost=%f \n",cost)
-            logSolver(" model_cost=%f \n",model_cost)
+            --logSolver(" cost=%f \n",cost)
+            --logSolver(" model_cost=%f \n",model_cost)
             var model_cost_change = cost - model_cost
-            logSolver(" model_cost_change=%f \n",model_cost_change)
+            --logSolver(" model_cost_change=%f \n",model_cost_change)
             return model_cost_change
         end
 
@@ -599,10 +605,10 @@ return function(problemSpec)
             escape 
                 if problemSpec:UsesLambda() then
                     emit quote
-                        logSolver(" trust_region_radius=%f ",pd.parameters.trust_region_radius)
+                        --logSolver(" trust_region_radius=%f ",pd.parameters.trust_region_radius)
                         gpu.PCGComputeDtD(pd)
                         gpu.PCGComputeDtD_Graph(pd)
-                        gpu.DebugDumpDtD(pd)
+                        --gpu.DebugDumpDtD(pd)
                     end
                 end
             end
@@ -667,15 +673,7 @@ return function(problemSpec)
                         --TODO: make parameter
                         var min_relative_decrease = 1e-3f
 
-                        if cost_change < 0 or relative_decrease < min_relative_decrease then	--in this case we revert
-                            gpu.PCGLinearUpdateRevert(pd)
-
-                            pd.parameters.trust_region_radius = pd.parameters.trust_region_radius / pd.parameters.radius_decrease_factor
-                            pd.parameters.radius_decrease_factor = 2.0f * pd.parameters.radius_decrease_factor
-
-                            logSolver("REVERT\n")
-                            gpu.precompute(pd)
-                        else 
+                        if cost_change >= 0 and relative_decrease > min_relative_decrease then	--in this case we revert
                             --[[
                                 radius_ = radius_ / std::max(1.0 / 3.0,
                                                            1.0 - pow(2.0 * step_quality - 1.0, 3));
@@ -690,6 +688,14 @@ return function(problemSpec)
 
                             logSolver("\n")
                             pd.prevCost = newCost
+                        else 
+                            gpu.PCGLinearUpdateRevert(pd)
+
+                            pd.parameters.trust_region_radius = pd.parameters.trust_region_radius / pd.parameters.radius_decrease_factor
+                            pd.parameters.radius_decrease_factor = 2.0f * pd.parameters.radius_decrease_factor
+
+                            logSolver("REVERT\n")
+                            gpu.precompute(pd)
                         end
                     end
                 else
