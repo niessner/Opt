@@ -161,7 +161,15 @@ function_tolerance and gradient_tolerance are useful options for CERES that shou
 min_lm_diagonal and max_lm_diagonal are the last known discrepency between Opt and CERES, for now we just set them to extreme values for CERES and hope never to hit it.
 
 Those two parameters operate on individual elements of $D$. Since we use $C'C$ where $D = CS$, 
-to apply this we would need to clamp $c_{ii}$ to $\mbox{min_lm_diagonal}/s_{ii}$, which is clamping $ctc_{ii}$ to $\mbox{min_lm_diagonal}^2/s_{ii}^2$. This isn't terribly difficult and so should be implemented for parity with CERES.
+to apply this we would need to clamp $c_{ii}$ to:
+
+$$\frac{\mbox{min_lm_diagonal}}{s_{ii}} \le c_{ii} \le \frac{\mbox{max_lm_diagonal}}{s_{ii}}$$
+
+which is clamping 
+
+$$\frac{\mbox{min_lm_diagonal}^2}{s_{ii}^2} \le \mbox{ctc}_{ii} \le \frac{\mbox{max_lm_diagonal}^2}{s_{ii}^2}$$
+
+ This isn't terribly difficult and so should be implemented for parity with CERES.
 
 
 Important Note
