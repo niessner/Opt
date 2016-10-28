@@ -1,5 +1,10 @@
 #pragma once
 
+// To change Opt's precision:
+// set OPT_DOUBLE_PRECISION to 0 or 1
+// opt_precision.t true/false
+// precision.t double/float
+
 #define OPT_DOUBLE_PRECISION 1
 
 #if OPT_DOUBLE_PRECISION

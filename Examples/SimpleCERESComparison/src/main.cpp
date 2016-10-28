@@ -10,13 +10,15 @@
 #include <Windows.h>
 #endif
 
+//http://www.itl.nist.gov/div898/strd/nls/nls_main.shtml
+
 using namespace std;
 
 vector<NLLSProblem> makeProblems()
 {
 	vector<NLLSProblem> problems;
 
-	problems.push_back(NLLSProblem("misra", 2, { 2.3894212918E+02, 5.5015643181E-04, 0.0 }, { 2.3894212918E+02, 5.5015643181E-04, 0.0 }));
+	problems.push_back(NLLSProblem("misra", 2, { 5e2, 1e-4, 0.0 }, { 2.3894212918E+02, 5.5015643181E-04, 0.0 }));
 	problems.push_back(NLLSProblem("bennet5", 2, { -200, 50.0, 0.8 }, { -2.5235e3, 4.6736e1, 9.32184e-1 }));
 	problems.push_back(NLLSProblem("chwirut1", 2, { 1e-1, 1e-2, 2e-2 }, { 1.9027818370E-01, 6.1314004477E-03, 1.0530908399E-02 }));
 
@@ -66,6 +68,14 @@ void runTestA()
 	std::cout << "Final Result: " << finalResult.x << ", " << finalResult.y << std::endl;
 }
 
+template<class T>
+const T& clampedRead(const std::vector<T> &v, int index)
+{
+	if (index < 0) return v[0];
+	if (index >= v.size()) return v[v.size() - 1];
+	return v[index];
+}
+
 ofstream resultFile("results.txt");
 void runProblem(const NLLSProblem &problem)
 {
@@ -79,6 +89,12 @@ void runProblem(const NLLSProblem &problem)
 	resultFile << "True solution: " << problem.trueSolution.x << " " << problem.trueSolution.y << " " << problem.trueSolution.z << endl;
 	resultFile << "Ceres solution: " << solver.m_ceresResult.x << " " << solver.m_ceresResult.y << " " << solver.m_ceresResult.z << endl;
 	resultFile << "Opt solution: " << solver.m_optResult.x << " " << solver.m_optResult.y << " " << solver.m_optResult.z << endl << endl;
+
+	resultFile << "Iter\tCeres\tOpt" << endl;
+	for (int i = 0; i < (int)max(solver.m_ceresIters.size(), solver.m_optIters.size()); i++)
+	{
+		resultFile << i << "\t" << clampedRead(solver.m_ceresIters, i).cost << "\t" << clampedRead(solver.m_optIters, i).cost << endl;
+	}
 }
 
 void runTestB()

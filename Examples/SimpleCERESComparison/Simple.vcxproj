@@ -169,6 +169,7 @@ xcopy /Y /D "..\..\API\release\include\*.h" "."</Command>
     <Reference Include="System.Xml" />
   </ItemGroup>
   <ItemGroup>
+    <None Include="..\..\API\src\precision.t" />
     <None Include="bennet5.t" />
     <None Include="chwirut1.t" />
     <None Include="curveFitting.t" />
@@ -179,6 +180,7 @@ xcopy /Y /D "..\..\API\release\include\*.h" "."</Command>
     <Text Include="data\bennet5.txt" />
     <Text Include="data\chwirut1.txt" />
     <Text Include="data\misra.txt" />
+    <Text Include="results.txt" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

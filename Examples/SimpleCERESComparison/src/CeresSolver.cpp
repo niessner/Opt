@@ -126,7 +126,7 @@ struct TermChwirut1
 	double y;
 };
 
-void CeresSolver::solve(
+std::vector<SolverIteration> CeresSolver::solve(
 	const NLLSProblem &problemInfo,
     UNKNOWNS* funcParameters,
     double2* funcData)
@@ -174,7 +174,8 @@ void CeresSolver::solve(
 
     //slower methods
     //options.linear_solver_type = ceres::LinearSolverType::ITERATIVE_SCHUR; //40.6s
-    options.linear_solver_type = ceres::LinearSolverType::CGNR; //46.9s
+    //options.linear_solver_type = ceres::LinearSolverType::CGNR; //46.9s
+	options.linear_solver_type = ceres::LinearSolverType::DENSE_NORMAL_CHOLESKY;
 
     //options.min_linear_solver_iterations = linearIterationMin;
     options.max_num_iterations = 10000;
@@ -198,6 +199,13 @@ void CeresSolver::solve(
 
     Solve(options, &problem, &summary);
 
+	std::vector<SolverIteration> result;
+	for (auto &i : summary.iterations)
+	{
+		SolverIteration iter;
+		iter.cost = i.cost * 2.0;
+		result.push_back(iter);
+	}
 
     cout << "Solver used: " << summary.linear_solver_type_used << endl;
     cout << "Minimizer iters: " << summary.iterations.size() << endl;
@@ -219,5 +227,7 @@ void CeresSolver::solve(
     cout << "Cost*2 end: " << cost * 2 << endl;
 
     cout << summary.FullReport() << endl;
+
+	return result;
 }
 

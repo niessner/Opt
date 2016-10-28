@@ -7,7 +7,7 @@ public:
         functionData.resize(N);
 	}
 
-    void CeresSolver::solve(
+	std::vector<SolverIteration> CeresSolver::solve(
 		const NLLSProblem &problem,
         UNKNOWNS* funcParameters,
         double2* funcData);

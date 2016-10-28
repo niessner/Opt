@@ -32,6 +32,9 @@
     <None Include="opt_precision.t">
       <Filter>opt</Filter>
     </None>
+    <None Include="..\..\API\src\precision.t">
+      <Filter>opt</Filter>
+    </None>
   </ItemGroup>
   <ItemGroup>
     <Filter Include="opt">
@@ -49,6 +52,9 @@
       <Filter>data</Filter>
     </Text>
     <Text Include="data\bennet5.txt">
+      <Filter>data</Filter>
+    </Text>
+    <Text Include="results.txt">
       <Filter>data</Filter>
     </Text>
   </ItemGroup>
