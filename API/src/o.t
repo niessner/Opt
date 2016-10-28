@@ -16,6 +16,7 @@ local use_condition_scheduling = true
 local use_register_minimization = true
 local use_conditionalization = true
 local use_contiguous_allocation = true
+local use_cost_speculate = false -- takes a lot of time and doesn't do much
 
 if false then
     local fileHandle = C.fopen("crap.txt", 'w')
@@ -1455,7 +1456,11 @@ local function createfunction(problemspec,name,Index,arguments,results,scatters)
             end
             if use_register_minimization then
                 table.insert(c, vardeclcost(ir))
-                table.insert(c, costspeculate(1,ir))
+                if use_cost_speculate then
+                    table.insert(c, costspeculate(1,ir))
+                else
+                    table.insert(c, costspeculate(0,ir))
+                end
             end
             return c
         end
