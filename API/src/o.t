@@ -16,6 +16,7 @@ local use_condition_scheduling = true
 local use_register_minimization = true
 local use_conditionalization = true
 local use_contiguous_allocation = true
+local use_cost_speculate = false -- takes a lot of time and doesn't do much
 
 if false then
     local fileHandle = C.fopen("crap.txt", 'w')
@@ -862,6 +863,8 @@ function ad.ProblemSpec()
     if ps.P:UsesLambda() then
         ps.trust_region_radius = ps:Param("trust_region_radius",opt_float,-1)
         ps.radius_decrease_factor = ps:Param("radius_decrease_factor",opt_float,-1)
+        ps.min_lm_diagonal = ps:Param("min_lm_diagonal",opt_float,-1)
+        ps.max_lm_diagonal = ps:Param("max_lm_diagonal",opt_float,-1)
     end
     return ps
 end
@@ -1455,7 +1458,11 @@ local function createfunction(problemspec,name,Index,arguments,results,scatters)
             end
             if use_register_minimization then
                 table.insert(c, vardeclcost(ir))
-                table.insert(c, costspeculate(1,ir))
+                if use_cost_speculate then
+                    table.insert(c, costspeculate(1,ir))
+                else
+                    table.insert(c, costspeculate(0,ir))
+                end
             end
             return c
         end
@@ -1934,6 +1941,7 @@ local function createjtjcentered(PS,ES)
     local N = UnknownType:VectorSizeForIndexSpace(ES.kind.ispace)
     local P = PS:UnknownArgument(1)
     local DtD = PS:UnknownArgument(2)
+    --local Pre = PS:UnknownArgument(3)
     local P_hat_c = {}
     local conditions = terralib.newlist()
     for rn,residual in ipairs(ES.residuals) do
@@ -1957,6 +1965,13 @@ local function createjtjcentered(PS,ES)
                     if uv == x and PS:UsesLambda() then -- on the diagonal
                         -- LM
                         local diagVal = DtD[u.image.name](u.index,u.channel)
+                        -- comment out for slightly higher perf, but diverging from CERES
+                        --local s_ii = Pre[u.image.name](u.index,u.channel)
+                        --local invPreSq = 1.0 / s_ii*s_ii
+                        --local minDiag = PS.min_lm_diagonal*PS.min_lm_diagonal*invPreSq
+                        --local maxDiag = PS.max_lm_diagonal*PS.max_lm_diagonal*invPreSq
+                        --diagVal = ad.select(diagVal > minDiag, diagVal, minDiag)
+                        --diagVal = ad.select(diagVal < maxDiag, diagVal, maxDiag)
                         exp = exp + diagVal
                     end
 
@@ -1989,60 +2004,6 @@ local function createjtjcentered(PS,ES)
 end
 
 
-
-
--- the same as createjtfcentered but computing J'Jp and without computing the preconditioner
-local function createjtjcenteredsimple(PS,ES)
-    local UnknownType = PS.P:UnknownType()
-    local ispace = ES.kind.ispace
-    local N = UnknownType:VectorSizeForIndexSpace(ES.kind.ispace)
-    local P = PS:UnknownArgument(1)
-    local P_hat_c = {}
-    local conditions = terralib.newlist()
-    for rn,residual in ipairs(ES.residuals) do
-        local F,unknownsupport = residual.expression,residual.unknowns
-        lprintf(0,"\n\n\n\n\n##################################################")
-        lprintf(0,"r%d = %s",rn,F)
-        for idx,unknownname,chan in UnknownType:UnknownIteratorForIndexSpace(ispace) do 
-            local unknown = PS:ImageWithName(unknownname) 
-            local x = unknown(ispace:ZeroOffset(),chan)
-            local residuals = residualsincludingX00(unknownsupport,unknown,chan)
-            for _,r in ipairs(residuals) do
-                local rexp = shiftexp(F,r)
-                local condition,drdx00 = ad.splitcondition(rexp:d(x))
-                lprintf(1,"instance:\ndr%d_%s/dx00[%d] = %s",rn,tostring(r),chan,tostring(drdx00))
-                local unknowns = unknownsforresidual(r,unknownsupport)
-                for _,u in ipairs(unknowns) do
-                    local uv = ad.v[u]
-                    local condition2, drdx_u = ad.splitcondition(rexp:d(uv))
-                    local exp = drdx00*drdx_u
-
-                    lprintf(2,"term:\ndr%d_%s/dx%s[%d] = %s",rn,tostring(r),tostring(u.index),u.chan,tostring(drdx_u))
-                    local conditionmerged = condition*condition2
-                    if not P_hat_c[conditionmerged] then
-                        conditions:insert(conditionmerged)
-                        P_hat_c[conditionmerged] = createzerolist(N)
-                    end
-                    P_hat_c[conditionmerged][idx+1] = P_hat_c[conditionmerged][idx+1] + P[u.image.name](u.index,u.channel)*exp
-                end
-            end
-        end
-    end
-    local P_hat = createzerolist(N)
-    for _,c in ipairs(conditions) do
-        for i = 1,N do
-            P_hat[i] = P_hat[i] + c*P_hat_c[c][i]
-        end
-    end
-
-    dprint("JTJ[nopoly] = ", ad.tostrings(P_hat))
-    P_hat = ad.polysimplify(P_hat)
-    dprint("JTJ[poly] = ", ad.tostrings(P_hat))
-    local r = ad.Vector(unpack(P_hat))
-    local result = A.FunctionSpec(ES.kind,"applyJTJsimple", List {"P"}, List{r}, EMPTY,ES)
-    return result
-end
-
 local function createjtjgraph(PS,ES)
     local P,Ap_X,DtD = PS:UnknownArgument(1),PS:UnknownArgument(2),PS:UnknownArgument(3)
 
@@ -2071,13 +2032,6 @@ local function createjtjgraph(PS,ES)
         for i,partial in ipairs(partials) do
             local u = unknownsupport[i]
             local jtjp = 2*Jp*partial
-
-            if PS:UsesLambda() then
-                -- TODO: Verify that nothing is the right thing to do here
-                --jtjp = jtjp + 2*partial*partial*PS.lambda*P[u.image.name](u.index,u.channel)
-                --local diagVal = DtD[u.image.name](u.index,u.channel)
-                --jtjp = jtjp + 2*diagVal*partial
-            end
             result = result + P[u.image.name](u.index,u.channel)*jtjp
             addscatter(u,jtjp)
         end
@@ -2086,31 +2040,6 @@ local function createjtjgraph(PS,ES)
     return A.FunctionSpec(ES.kind,"applyJTJ", List {"P", "Ap_X", "DtD"}, List { result }, scatters, ES)
 end
 
--- the same as createjtfgraph but computing -p'J'Jp and without computing the preconditioner
-local function createjtjgraphsimple(PS,ES)
-    local P = PS:UnknownArgument(1)
-
-    local result = ad.toexp(0)
-    for i,term in ipairs(ES.residuals) do
-        local F,unknownsupport = term.expression,term.unknowns
-        local unknownvars = unknownsupport:map(function(x) return ad.v[x] end)
-        local partials = F:gradient(unknownvars)
-        local Jp = ad.toexp(0)
-        for i,partial in ipairs(partials) do
-            local u = unknownsupport[i]
-            assert(GraphElement:isclassof(u.index))
-            Jp = Jp + partial*P[u.image.name](u.index,u.channel)
-        end
-        for i,partial in ipairs(partials) do
-            local u = unknownsupport[i]
-            local jtjp = Jp*partial
-
-            result = result - P[u.image.name](u.index,u.channel)*jtjp
-        end
-    end
-
-    return A.FunctionSpec(ES.kind,"applyJTJsimple", List {"P"}, List { result }, EMPTY,ES)
-end
 
 local function createjtfcentered(PS,ES)
    local UnknownType = PS.P:UnknownType()
@@ -2182,24 +2111,6 @@ local function createmodelcost(PS,ES)
         end
         local residual_m = F + JTdelta
         result = result + (residual_m*residual_m)
-        --[[
-        for idx,unknownname,chan in UnknownType:UnknownIteratorForIndexSpace(ispace) do
-            local unknown = PS:ImageWithName(unknownname) 
-            local x = unknown(ispace:ZeroOffset(),chan)
-            local deltax00 = Delta[unknownname](ispace:ZeroOffset(),chan)
-            local residuals = residualsincludingX00(unknownsupport,unknown,chan)
-
-            local sum = 0
-            for _,f in ipairs(residuals) do
-                local F_x = shiftexp(F,f)
-                -- TODO: check this is right...
-                local dfdx00 = F_x:d(x)     -- entry of J^T
-                local residual_m = F_x + dfdx00 * deltax00 -- entry of model residuals == (f - J^T\delta)
-                result = result + residual_m*residual_m -- summing it up to get sumsq(model_residuals)
-            end
-
-        end
-        --]]
     end
     result = ad.polysimplify(result)
     return A.FunctionSpec(ES.kind,"modelcost", List {"Delta"}, List{ result }, EMPTY,ES)

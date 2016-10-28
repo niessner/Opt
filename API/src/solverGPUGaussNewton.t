@@ -64,6 +64,8 @@ return function(problemSpec)
 
 		delta : TUnknownType	--current linear update to be computed -> num vars
 		r : TUnknownType		--residuals -> num vars	--TODO this needs to be a 'residual type'
+        b : TUnknownType        --J^TF. Constant during inner iterations, only used to recompute r to counteract drift -> num vars --TODO this needs to be a 'residual type'
+        Adelta : TUnknownType       -- (A'A+D'D)delta TODO this needs to be a 'residual type'
 		z : TUnknownType		--preconditioned residuals -> num vars	--TODO this needs to be a 'residual type'
 		p : TUnknownType		--descent direction -> num vars
 		Ap_X : TUnknownType	--cache values for next kernel call after A = J^T x J x p -> num vars
@@ -79,7 +81,6 @@ return function(problemSpec)
 		scanBetaDenominator : &opt_float
 
         modelCostChange : &opt_float    -- modelCostChange = L(0) - L(delta) where L(h) = F' F + 2 h' J' F + h' J' J h
-        maxDiagJTJ : &opt_float    -- maximum value in the diagonal of JTJ 
 		
 		timer : Timer
 		endSolver : util.TimerEvent
@@ -329,6 +330,33 @@ return function(problemSpec)
             end
         end	
 
+        terra kernels.copyResidualsToB(pd : PlanData)
+            var idx : Index
+            if idx:initFromCUDAParams() and not fmap.exclude(idx,pd.parameters) then
+                pd.b(idx) = pd.r(idx)
+            end
+        end
+
+        terra kernels.computeAdelta(pd : PlanData)
+            var idx : Index
+            if idx:initFromCUDAParams() and not fmap.exclude(idx,pd.parameters) then
+                pd.Adelta(idx) = fmap.applyJTJ(idx, pd.parameters, pd.delta, pd.DtD)
+            end
+        end
+
+        terra kernels.recomputeResiduals(pd : PlanData)
+            var d = 0.0f
+            var idx : Index
+            if idx:initFromCUDAParams() and not fmap.exclude(idx,pd.parameters) then
+                var Ax = pd.Adelta(idx)
+                var b = pd.b(idx)
+                var newR = b - Ax
+                --var diff = newR - pd.r(idx)
+                --printf("\ndiff*10000: %f %f %f\n", diff(0)*10000, diff(1)*10000, diff(2)*10000)
+                pd.r(idx) = newR
+            end
+        end
+
         terra kernels.savePreviousUnknowns(pd : PlanData)
             var idx : Index
             if idx:initFromCUDAParams() and not fmap.exclude(idx,pd.parameters) then
@@ -375,12 +403,9 @@ return function(problemSpec)
         if problemSpec:UsesLambda() then
             terra kernels.PCGComputeDtD(pd : PlanData)
                 var idx : Index
-                if idx:initFromCUDAParams() then
-                    -- residuum = J^T x -F - A x delta_0  => J^T x -F, since A x x_0 == 0                            
+                if idx:initFromCUDAParams() then                         
                     var DtD : unknownElement = 0.0f
-                
                     if not fmap.exclude(idx,pd.parameters) then 
-                        pd.delta(idx) = 0.0f    
                         DtD = fmap.computeDtD(idx, pd.parameters, pd.preconditioner)
                         pd.DtD(idx) = DtD
                     end        
@@ -446,6 +471,14 @@ return function(problemSpec)
                 util.atomicAdd(pd.scanAlphaDenominator, d)
             end
         end
+
+        terra kernels.computeAdelta_Graph(pd : PlanData)
+            var tIdx = 0 
+            if util.getValidGraphElement(pd,[graphname],&tIdx) then
+                fmap.applyJTJ(tIdx, pd.parameters, pd.delta, pd.Adelta, pd.DtD)
+            end
+        end
+
         terra kernels.computeCost_Graph(pd : PlanData)			
             var cost : opt_float = [opt_float](0.0f)
             var tIdx = 0
@@ -505,7 +538,10 @@ return function(problemSpec)
                                                                         "savePreviousUnknowns",
                                                                         "computeCost",
                                                                         "precompute",
-                                                                        "LMLambdaInit",
+                                                                        "copyResidualsToB",
+                                                                        "computeAdelta",
+                                                                        "computeAdelta_Graph",
+                                                                        "recomputeResiduals",
                                                                         "PCGInit1_Graph",
                                                                         "PCGComputeDtD_Graph",
                                                                         "PCGStep1_Graph",
@@ -551,6 +587,7 @@ return function(problemSpec)
 
         terra initLambda(pd : &PlanData)
             pd.parameters.trust_region_radius = 1e4
+
             --[[
             C.cudaMemset(pd.maxDiagJTJ, 0, sizeof(opt_float))
 
@@ -584,18 +621,28 @@ return function(problemSpec)
 	   pd.lIterations = @[&int](solverparams[1])
        escape 
             if problemSpec:UsesLambda() then
-    	       --   emit quote pd.parameters.lambda = 0.001f end
               emit quote 
                 initLambda(pd)
+                pd.parameters.radius_decrease_factor = 2.0
+                pd.parameters.min_lm_diagonal = 1e-32
+                pd.parameters.max_lm_diagonal = [ math.huge ]
               end
-              emit quote pd.parameters.radius_decrease_factor = 2.0f end
 	        end 
        end
 	   gpu.precompute(pd)
 	   pd.prevCost = computeCost(pd)
 	end
+
 	
 	local terra step(data_ : &opaque, params_ : &&opaque, solverparams : &&opaque)
+
+
+        --TODO: make parameters
+        var residual_reset_period = 10
+        var min_relative_decrease = 1e-3f
+        var min_trust_region_radius = 1e-32;
+        var max_trust_region_radius = 1e16;
+
 		var pd = [&PlanData](data_)
 		[util.initParameters(`pd.parameters,problemSpec, params_,false)]
 		if pd.nIter < pd.nIterations then
@@ -617,6 +664,8 @@ return function(problemSpec)
                         gpu.PCGComputeDtD(pd)
                         gpu.PCGComputeDtD_Graph(pd)
                         --gpu.DebugDumpDtD(pd)
+                        gpu.copyResidualsToB(pd)
+                        --gpu.recomputeResiduals(pd)
                     end
                 end
             end
@@ -642,6 +691,15 @@ return function(problemSpec)
 				
 				gpu.PCGStep2(pd)
 				gpu.PCGStep3(pd)
+
+                if ((lIter + 1) % residual_reset_period) == 0 then
+                    gpu.computeAdelta(pd)
+                    -- TODO: merge these?
+                    gpu.computeAdelta_Graph(pd)
+                    --TODO: Should we redo then end of step 2 (thats where the residual is changed regularly)
+                    gpu.recomputeResiduals(pd)
+                end
+
 
 				-- save new rDotz for next iteration
 				C.cudaMemcpy(pd.scanAlphaNumerator, pd.scanBetaNumerator, sizeof(opt_float), C.cudaMemcpyDeviceToDevice)	
@@ -679,8 +737,6 @@ return function(problemSpec)
                         logSolver(" cost_change=%f ", cost_change)
                         logSolver(" model_cost_change=%f ", model_cost_change)
                         logSolver(" relative_decrease=%f ", relative_decrease)
-                        --TODO: make parameter
-                        var min_relative_decrease = 1e-3f
 
                         if cost_change >= 0 and relative_decrease > min_relative_decrease then	--in this case we revert
                             --[[
@@ -693,6 +749,7 @@ return function(problemSpec)
                             var min_factor = 1.0/3.0
                             var tmp_factor = 1.0 - util.cpuMath.pow(2.0 * step_quality - 1.0, 3.0)
                             pd.parameters.trust_region_radius = pd.parameters.trust_region_radius / util.cpuMath.fmax(min_factor, tmp_factor)
+                            pd.parameters.trust_region_radius = util.cpuMath.fmin(pd.parameters.trust_region_radius, max_trust_region_radius)
                             pd.parameters.radius_decrease_factor = 2.0
 
                             logSolver("\n")
@@ -702,7 +759,9 @@ return function(problemSpec)
 
                             pd.parameters.trust_region_radius = pd.parameters.trust_region_radius / pd.parameters.radius_decrease_factor
                             pd.parameters.radius_decrease_factor = 2.0f * pd.parameters.radius_decrease_factor
-
+                            if pd.parameters.trust_region_radius <= min_trust_region_radius then
+                                logSolver("WARNING: trust_region_radius is less than the min")
+                            end
                             logSolver("REVERT\n")
                             gpu.precompute(pd)
                         end
@@ -744,6 +803,8 @@ return function(problemSpec)
 
 		pd.delta:initGPU()
 		pd.r:initGPU()
+        pd.b:initGPU()
+        pd.Adelta:initGPU()
 		pd.z:initGPU()
 		pd.p:initGPU()
 		pd.Ap_X:initGPU()
@@ -758,7 +819,6 @@ return function(problemSpec)
 		C.cudaMalloc([&&opaque](&(pd.scanAlphaDenominator)), sizeof(opt_float))
 		C.cudaMalloc([&&opaque](&(pd.scanBetaDenominator)), sizeof(opt_float))
 		C.cudaMalloc([&&opaque](&(pd.modelCostChange)), sizeof(opt_float))
-		C.cudaMalloc([&&opaque](&(pd.maxDiagJTJ)), sizeof(opt_float))
 		
 		C.cudaMalloc([&&opaque](&(pd.scratchF)), sizeof(opt_float))
 		pd.J_values = nil

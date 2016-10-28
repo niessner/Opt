@@ -128,31 +128,17 @@ but recall CERES has prebaked $S$ into $J$, and calculates the final $\delta$ as
 
 $$c_m = (f + JS \mbox{step})^2 = (f + J\delta)^2$$
 
-So model cost change is equal to:
-
-$$\delta_m = f^Tf - (f + J\delta)^2$$
-
-$$\delta_m = f^Tf - (f^Tf + 2f^TJ\delta + \delta^TJ^TJ\delta)$$
-
-$$\delta_m = -(2f^TJ\delta + \delta^TJ^TJ\delta)$$
-
-$$\delta_m = -(2f^T + \delta^TJ^T)(J\delta)$$
-
-$$\delta_m = -(2f^T + (J\delta)^T)(J\delta)$$
-
-$$\delta_m = -(2f + (J\delta))^T(J\delta)$$
-
-No matter how we slice it, we'll need to implement $J\delta$, which has residual-sized output. This is different from the other operations in Opt, which have unknown-sized output.
+This is now implemented in Opt.
 
 
-Minor Differences, CERES vs. Opt
+Known Outstanding Differences, CERES vs. Opt
 ===============================================================================
 
 CERES controls when it stops the linear solver based on some protocol that cannot be directly transferred over to Opt, since we aren't solving the normal equations like CERES is.
 
-initial_trust_region_radius is an important parameter that should be set the same for both CERES and Opt
+initial_trust_region_radius is an important parameter that should be set the same for both CERES and Opt; it is hardcoded for Opt.
 
-min_relative_decrease is also important to keep the same.
+min_relative_decrease is also important to keep the same, and is hardcoded for Opt.
 
 max_trust_region_radius and min_trust_region_radius are not yet implemented in Opt, but are straightforward
 
@@ -170,6 +156,26 @@ which is clamping
 $$\frac{\mbox{min_lm_diagonal}^2}{s_{ii}^2} \le \mbox{ctc}_{ii} \le \frac{\mbox{max_lm_diagonal}^2}{s_{ii}^2}$$
 
  This isn't terribly difficult and so should be implemented for parity with CERES.
+
+
+Opt has the user set the number of linear iterations for each PCG solve. CERES, on the other hand, terminates using a $q_\mbox{tolerance}$ value, which defaults to $0.1$. 
+
+From comments in the CERES source code:
+
+For PSD matrices $A$, let
+
+$$Q(x) = x^TAx - 2b^Tx$$
+
+be the cost of the quadratic function defined by $A$ and $b$. Then,
+the solver terminates at iteration $i$ if:
+
+$$i \frac{ Q(x_i) - Q(x_i-1)}{Q(x_i)} < q_\mbox{tolerance}$$
+
+The CERES linear solver is solving the equations: $A = ((JS)^T(JS) + D^TD)$ and $B=(JS)^Tr$$.
+
+They explicitly don't do $r_\mbox{tolerance}$ checking since "As Nash and Sofer show, r_tolerance based termination is essentially useless in Truncated Newton methods."
+
+The CERES solver also explicitly recomputes the residual directly ($Ax-b$) every residual_reset_period iterations (which defaults to 10), to prevent drift from round off error. Opt never does this.
 
 
 Important Note
