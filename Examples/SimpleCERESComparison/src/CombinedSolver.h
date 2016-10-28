@@ -3,6 +3,7 @@
 #include "Precision.h"
 #include <cuda_runtime.h>
 #include <cudaUtil.h>
+#include <iostream>
 
 #include "config.h"
 
@@ -63,18 +64,19 @@ public:
     }
 
 	UNKNOWNS solve(const NLLSProblem &problem) {
+		std::cout << "*** Solving " << problem.baseName << std::endl;
         uint nonLinearIter = 1000;
-        uint linearIter = 1000;
+        uint linearIter = 500;
 		if (useOpt) {
 			resetGPU();
-            m_solverOpt->solve(d_functionParameters.data(), d_dataPoints.data(), nonLinearIter, linearIter);
+			m_optIters = m_solverOpt->solve(d_functionParameters.data(), d_dataPoints.data(), nonLinearIter, linearIter);
 			copyResultToCPU();
 			m_optResult = m_functionParameters;
 		}
 
 		if (useCeres) {
             m_functionParameters = m_functionParametersGuess;
-			m_solverCeres->solve(problem, &m_functionParameters, m_ceresDataPoints.data());
+			m_ceresIters = m_solverCeres->solve(problem, &m_functionParameters, m_ceresDataPoints.data());
 			m_ceresResult = m_functionParameters;
 		}
 
@@ -83,6 +85,9 @@ public:
 
 	UNKNOWNS m_optResult;
 	UNKNOWNS m_ceresResult;
+
+	std::vector<SolverIteration> m_ceresIters;
+	std::vector<SolverIteration> m_optIters; // no good idea how to get at these yet
 
 private:
     std::vector<double2> m_ceresDataPoints;

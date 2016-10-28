@@ -17,6 +17,13 @@ struct NLLSProblem
 	double3 startingPoint, trueSolution;
 };
 
+struct SolverIteration
+{
+	SolverIteration() {}
+	SolverIteration(double _cost) { cost = _cost; }
+	double cost;
+};
+
 const bool useProblemDefault = false; //2 unknowns -- Michael's original curveFitting.t code
 
 const int maxUnknownCount = 3;

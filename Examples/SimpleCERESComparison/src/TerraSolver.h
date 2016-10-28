@@ -60,13 +60,26 @@ public:
 	}
 
 
-    void solve(OPT_UNKNOWNS* d_x, OPT_FLOAT2* d_data, unsigned int nNonLinearIterations, unsigned int nLinearIterations)
+	std::vector<SolverIteration> solve(OPT_UNKNOWNS* d_x, OPT_FLOAT2* d_data, unsigned int nNonLinearIterations, unsigned int nLinearIterations)
 	{
         unsigned int nBlockIterations = 0;
 		void* solverParams[] = { &nNonLinearIterations, &nLinearIterations, &nBlockIterations };
         void* problemParams[] = { d_x, d_data, &m_edgeCount, d_headX.data(), d_headY.data(), d_tailX.data(), d_tailY.data() };
 		
-		Opt_ProblemSolve(m_optimizerState, m_plan, problemParams, solverParams);
+		//Opt_ProblemSolve(m_optimizerState, m_plan, problemParams, solverParams);
+
+		std::vector<SolverIteration> result;
+
+		Opt_ProblemInit(m_optimizerState, m_plan, problemParams, solverParams);
+		
+		for (int i = 0; i < (int)nNonLinearIterations; i++)
+		{
+			result.push_back(SolverIteration(Opt_ProblemCurrentCost(m_optimizerState, m_plan)));
+
+			Opt_ProblemStep(m_optimizerState, m_plan, problemParams, solverParams);
+		}
+
+		return result;
 	}
 
 	Opt_State*		m_optimizerState;
