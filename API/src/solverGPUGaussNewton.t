@@ -178,6 +178,14 @@ return function(problemSpec)
                 end
             end
         end
+
+        local terra clamp(x : unknownElement, minVal : unknownElement, maxVal : unknownElement) : unknownElement
+            var result = x
+            for i = 0, result:size() do
+                result(i) = util.gpuMath.fmin(util.gpuMath.fmax(x(i), minVal(i)), maxVal(i))
+            end
+            return result
+        end
 	
         terra kernels.PCGInit1(pd : PlanData)
             var d = 0.0f -- init for out of bounds lanes
@@ -404,9 +412,8 @@ return function(problemSpec)
             terra kernels.PCGComputeDtD(pd : PlanData)
                 var idx : Index
                 if idx:initFromCUDAParams() then                         
-                    var DtD : unknownElement = 0.0f
                     if not fmap.exclude(idx,pd.parameters) then 
-                        DtD = fmap.computeDtD(idx, pd.parameters, pd.preconditioner)
+                        var DtD = fmap.computeDtD(idx, pd.parameters, pd.preconditioner)
                         pd.DtD(idx) = DtD
                     end        
                 end 
@@ -414,6 +421,19 @@ return function(problemSpec)
 
             local terra square(x : opt_float) : opt_float
                 return x*x
+            end
+
+            terra kernels.PCGClampDiagonal(pd : PlanData)
+                var idx : Index
+                if idx:initFromCUDAParams() then
+                    if not fmap.exclude(idx,pd.parameters) then 
+                        var DtD = pd.DtD(idx)        
+                        var invS_iiSq = 1.0 / pd.preconditioner(idx)
+                        var minVal = square(pd.parameters.min_lm_diagonal) * invS_iiSq
+                        var maxVal = square(pd.parameters.max_lm_diagonal) * invS_iiSq
+                        pd.DtD(idx) = clamp(DtD, minVal, maxVal)
+                    end        
+                end 
             end
 
             terra kernels.DebugDumpDtD(pd : PlanData)
@@ -530,6 +550,7 @@ return function(problemSpec)
 	local gpu = util.makeGPUFunctions(problemSpec, PlanData, delegate, {"PCGInit1",
                                                                         "PCGInit1_Finish",
                                                                         "PCGComputeDtD",
+                                                                        "PCGClampDiagonal",
                                                                         "PCGStep1",
                                                                         "PCGStep2",
                                                                         "PCGStep3",
@@ -663,6 +684,7 @@ return function(problemSpec)
                         --logSolver(" trust_region_radius=%f ",pd.parameters.trust_region_radius)
                         gpu.PCGComputeDtD(pd)
                         gpu.PCGComputeDtD_Graph(pd)
+                        gpu.PCGClampDiagonal(pd)
                         --gpu.DebugDumpDtD(pd)
                         gpu.copyResidualsToB(pd)
                         --gpu.recomputeResiduals(pd)
@@ -760,7 +782,7 @@ return function(problemSpec)
                             pd.parameters.trust_region_radius = pd.parameters.trust_region_radius / pd.parameters.radius_decrease_factor
                             pd.parameters.radius_decrease_factor = 2.0f * pd.parameters.radius_decrease_factor
                             if pd.parameters.trust_region_radius <= min_trust_region_radius then
-                                logSolver("WARNING: trust_region_radius is less than the min")
+                                logSolver("\nWARNING: trust_region_radius is less than the min\n")
                             end
                             logSolver("REVERT\n")
                             gpu.precompute(pd)

@@ -1960,13 +1960,6 @@ local function createjtjcentered(PS,ES)
                     if uv == x and PS:UsesLambda() then -- on the diagonal
                         -- LM
                         local diagVal = DtD[u.image.name](u.index,u.channel)
-                        -- comment out for slightly higher perf, but diverging from CERES
-                        --local s_ii = Pre[u.image.name](u.index,u.channel)
-                        --local invPreSq = 1.0 / s_ii*s_ii
-                        --local minDiag = PS.min_lm_diagonal*PS.min_lm_diagonal*invPreSq
-                        --local maxDiag = PS.max_lm_diagonal*PS.max_lm_diagonal*invPreSq
-                        --diagVal = ad.select(diagVal > minDiag, diagVal, minDiag)
-                        --diagVal = ad.select(diagVal < maxDiag, diagVal, maxDiag)
                         exp = exp + diagVal
                     end
 
