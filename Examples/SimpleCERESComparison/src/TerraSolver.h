@@ -71,13 +71,11 @@ public:
 		std::vector<SolverIteration> result;
 
 		Opt_ProblemInit(m_optimizerState, m_plan, problemParams, solverParams);
-		
-		for (int i = 0; i < (int)nNonLinearIterations; i++)
-		{
-			result.push_back(SolverIteration(Opt_ProblemCurrentCost(m_optimizerState, m_plan)));
+        result.push_back(SolverIteration(Opt_ProblemCurrentCost(m_optimizerState, m_plan)));
 
-			Opt_ProblemStep(m_optimizerState, m_plan, problemParams, solverParams);
-		}
+        while (Opt_ProblemStep(m_optimizerState, m_plan, problemParams, solverParams)) {
+            result.push_back(SolverIteration(Opt_ProblemCurrentCost(m_optimizerState, m_plan)));
+        }
 
 		return result;
 	}

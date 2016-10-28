@@ -645,8 +645,8 @@ return function(problemSpec)
               emit quote 
                 initLambda(pd)
                 pd.parameters.radius_decrease_factor = 2.0
-                pd.parameters.min_lm_diagonal = 1e-32
-                pd.parameters.max_lm_diagonal = [ math.huge ]
+                pd.parameters.min_lm_diagonal = 1e-6;
+                pd.parameters.max_lm_diagonal = 1e32;
               end
 	        end 
        end
@@ -782,7 +782,12 @@ return function(problemSpec)
                             pd.parameters.trust_region_radius = pd.parameters.trust_region_radius / pd.parameters.radius_decrease_factor
                             pd.parameters.radius_decrease_factor = 2.0f * pd.parameters.radius_decrease_factor
                             if pd.parameters.trust_region_radius <= min_trust_region_radius then
-                                logSolver("\nWARNING: trust_region_radius is less than the min\n")
+                                logSolver("\nTrust_region_radius is less than the min, exiting\n")
+                                logSolver("final cost=%f\n", pd.prevCost)
+                                pd.timer:endEvent(nil,pd.endSolver)
+                                pd.timer:evaluate()
+                                pd.timer:cleanup()
+                                return 0
                             end
                             logSolver("REVERT\n")
                             gpu.precompute(pd)

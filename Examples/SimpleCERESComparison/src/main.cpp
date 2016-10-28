@@ -2,7 +2,7 @@
 #include "CombinedSolver.h"
 #include <random>
 #include <iostream>
-
+#include <iomanip>
 #include "util.h"
 
 #ifdef _WIN32
@@ -84,7 +84,7 @@ void runProblem(const NLLSProblem &problem)
 	CombinedSolver solver(problem, dataPoints);
 	UNKNOWNS finalResult = solver.solve(problem);
 	//std::cout << "Final Result: " << finalResult.x << ", " << finalResult.y << std::endl;
-
+    resultFile << std::setprecision(20);
 	resultFile << "Problem: " << problem.baseName << endl;
 	resultFile << "True solution: " << problem.trueSolution.x << " " << problem.trueSolution.y << " " << problem.trueSolution.z << endl;
 	resultFile << "Ceres solution: " << solver.m_ceresResult.x << " " << solver.m_ceresResult.y << " " << solver.m_ceresResult.z << endl;

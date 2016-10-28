@@ -189,8 +189,8 @@ std::vector<SolverIteration> CeresSolver::solve(
     options.min_trust_region_radius = 1e-32;
     options.min_relative_decrease = 1e-3;
     // Disable to match Opt
-    options.min_lm_diagonal = 1e-32;
-    options.max_lm_diagonal = std::numeric_limits<double>::infinity();
+    //options.min_lm_diagonal = 1e-32;
+    //options.max_lm_diagonal = std::numeric_limits<double>::infinity();
 
 
     options.initial_trust_region_radius = 1e4;

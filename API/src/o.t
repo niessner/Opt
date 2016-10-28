@@ -2204,7 +2204,6 @@ local function computeDtDgraph(PS,ES)
         local s = scattermap[im][u]
         if not s then
             s =  Scatter(im[u.image.name],u.index,u.channel,ad.toexp(0),"add")
-            print("Creating ComputeD Graph Scatter")
             scattermap[im][u] = s
             scatters:insert(s)
         end
