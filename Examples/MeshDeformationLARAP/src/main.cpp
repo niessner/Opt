@@ -4,7 +4,8 @@
 
 int main(int argc, const char * argv[])
 {
-    std::string filename = "meshes/long.ply";
+	std::string filename = "meshes/neptune.ply";
+    //std::string filename = "meshes/long.ply";
 	if (argc >= 2) {
 		filename = argv[1];
 	}

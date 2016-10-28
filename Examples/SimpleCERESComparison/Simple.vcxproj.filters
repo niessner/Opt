@@ -1,0 +1,55 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup>
+    <ClCompile Include="src\CeresSolver.cpp" />
+    <ClCompile Include="src\main.cpp" />
+    <ClCompile Include="src\util.cpp" />
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="src\CeresSolver.h" />
+    <ClInclude Include="src\config.h" />
+    <ClInclude Include="src\CudaArray.h" />
+    <ClInclude Include="src\cudaUtil.h" />
+    <ClInclude Include="src\CombinedSolver.h" />
+    <ClInclude Include="src\Precision.h" />
+    <ClInclude Include="src\TerraSolver.h" />
+    <ClInclude Include="src\SolverUtil.h" />
+    <ClInclude Include="src\util.h" />
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="bennet5.t">
+      <Filter>opt</Filter>
+    </None>
+    <None Include="chwirut1.t">
+      <Filter>opt</Filter>
+    </None>
+    <None Include="curveFitting.t">
+      <Filter>opt</Filter>
+    </None>
+    <None Include="misra.t">
+      <Filter>opt</Filter>
+    </None>
+    <None Include="opt_precision.t">
+      <Filter>opt</Filter>
+    </None>
+  </ItemGroup>
+  <ItemGroup>
+    <Filter Include="opt">
+      <UniqueIdentifier>{ca705ef0-588d-4d45-ac2c-8d0094c7563f}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="data">
+      <UniqueIdentifier>{78d1700e-d69c-4097-9175-eed776f1dfb7}</UniqueIdentifier>
+    </Filter>
+  </ItemGroup>
+  <ItemGroup>
+    <Text Include="data\chwirut1.txt">
+      <Filter>data</Filter>
+    </Text>
+    <Text Include="data\misra.txt">
+      <Filter>data</Filter>
+    </Text>
+    <Text Include="data\bennet5.txt">
+      <Filter>data</Filter>
+    </Text>
+  </ItemGroup>
+</Project>

@@ -861,8 +861,10 @@ function ad.ProblemSpec()
     local ps = ProblemSpecAD()
     ps.P,ps.nametoimage,ps.precomputed,ps.extraarguments,ps.excludeexps = opt.ProblemSpec(), {}, List(), List(), List()
     if ps.P:UsesLambda() then
-        ps.lambda = ps:Param("lambda",opt_float,-1)
-        ps.lambda_increase_factor = ps:Param("lambda_increase_factor",opt_float,-1)
+        ps.trust_region_radius = ps:Param("trust_region_radius",opt_float,-1)
+        ps.radius_decrease_factor = ps:Param("radius_decrease_factor",opt_float,-1)
+        ps.min_lm_diagonal = ps:Param("min_lm_diagonal",opt_float,-1)
+        ps.max_lm_diagonal = ps:Param("max_lm_diagonal",opt_float,-1)
     end
     return ps
 end
@@ -1938,6 +1940,8 @@ local function createjtjcentered(PS,ES)
     local ispace = ES.kind.ispace
     local N = UnknownType:VectorSizeForIndexSpace(ES.kind.ispace)
     local P = PS:UnknownArgument(1)
+    local DtD = PS:UnknownArgument(2)
+    --local Pre = PS:UnknownArgument(3)
     local P_hat_c = {}
     local conditions = terralib.newlist()
     for rn,residual in ipairs(ES.residuals) do
@@ -1959,7 +1963,16 @@ local function createjtjcentered(PS,ES)
                     local exp = drdx00*drdx_u
 
                     if uv == x and PS:UsesLambda() then -- on the diagonal
-                        exp = exp*(1 + PS.lambda)
+                        -- LM
+                        local diagVal = DtD[u.image.name](u.index,u.channel)
+                        -- comment out for slightly higher perf, but diverging from CERES
+                        --local s_ii = Pre[u.image.name](u.index,u.channel)
+                        --local invPreSq = 1.0 / s_ii*s_ii
+                        --local minDiag = PS.min_lm_diagonal*PS.min_lm_diagonal*invPreSq
+                        --local maxDiag = PS.max_lm_diagonal*PS.max_lm_diagonal*invPreSq
+                        --diagVal = ad.select(diagVal > minDiag, diagVal, minDiag)
+                        --diagVal = ad.select(diagVal < maxDiag, diagVal, maxDiag)
+                        exp = exp + diagVal
                     end
 
                     lprintf(2,"term:\ndr%d_%s/dx%s[%d] = %s",rn,tostring(r),tostring(u.index),u.chan,tostring(drdx_u))
@@ -1986,64 +1999,13 @@ local function createjtjcentered(PS,ES)
     P_hat = ad.polysimplify(P_hat)
     dprint("JTJ[poly] = ", ad.tostrings(P_hat))
     local r = ad.Vector(unpack(P_hat))
-    local result = A.FunctionSpec(ES.kind,"applyJTJ", List {"P"}, List{r}, EMPTY,ES)
+    local result = A.FunctionSpec(ES.kind,"applyJTJ", List {"P", "DtD"}, List{r}, EMPTY,ES)
     return result
 end
 
--- the same as createjtfcentered but computing J'Jp and without computing the preconditioner
-local function createjtjcenteredsimple(PS,ES)
-    local UnknownType = PS.P:UnknownType()
-    local ispace = ES.kind.ispace
-    local N = UnknownType:VectorSizeForIndexSpace(ES.kind.ispace)
-    local P = PS:UnknownArgument(1)
-    local P_hat_c = {}
-    local conditions = terralib.newlist()
-    for rn,residual in ipairs(ES.residuals) do
-        local F,unknownsupport = residual.expression,residual.unknowns
-        lprintf(0,"\n\n\n\n\n##################################################")
-        lprintf(0,"r%d = %s",rn,F)
-        for idx,unknownname,chan in UnknownType:UnknownIteratorForIndexSpace(ispace) do 
-            local unknown = PS:ImageWithName(unknownname) 
-            local x = unknown(ispace:ZeroOffset(),chan)
-            local residuals = residualsincludingX00(unknownsupport,unknown,chan)
-            for _,r in ipairs(residuals) do
-                local rexp = shiftexp(F,r)
-                local condition,drdx00 = ad.splitcondition(rexp:d(x))
-                lprintf(1,"instance:\ndr%d_%s/dx00[%d] = %s",rn,tostring(r),chan,tostring(drdx00))
-                local unknowns = unknownsforresidual(r,unknownsupport)
-                for _,u in ipairs(unknowns) do
-                    local uv = ad.v[u]
-                    local condition2, drdx_u = ad.splitcondition(rexp:d(uv))
-                    local exp = drdx00*drdx_u
-
-                    lprintf(2,"term:\ndr%d_%s/dx%s[%d] = %s",rn,tostring(r),tostring(u.index),u.chan,tostring(drdx_u))
-                    local conditionmerged = condition*condition2
-                    if not P_hat_c[conditionmerged] then
-                        conditions:insert(conditionmerged)
-                        P_hat_c[conditionmerged] = createzerolist(N)
-                    end
-                    P_hat_c[conditionmerged][idx+1] = P_hat_c[conditionmerged][idx+1] + P[u.image.name](u.index,u.channel)*exp
-                end
-            end
-        end
-    end
-    local P_hat = createzerolist(N)
-    for _,c in ipairs(conditions) do
-        for i = 1,N do
-            P_hat[i] = P_hat[i] + c*P_hat_c[c][i]
-        end
-    end
-
-    dprint("JTJ[nopoly] = ", ad.tostrings(P_hat))
-    P_hat = ad.polysimplify(P_hat)
-    dprint("JTJ[poly] = ", ad.tostrings(P_hat))
-    local r = ad.Vector(unpack(P_hat))
-    local result = A.FunctionSpec(ES.kind,"applyJTJsimple", List {"P"}, List{r}, EMPTY,ES)
-    return result
-end
 
 local function createjtjgraph(PS,ES)
-    local P,Ap_X = PS:UnknownArgument(1),PS:UnknownArgument(2)
+    local P,Ap_X,DtD = PS:UnknownArgument(1),PS:UnknownArgument(2),PS:UnknownArgument(3)
 
     local result = ad.toexp(0)
     local scatters = List() 
@@ -2070,44 +2032,14 @@ local function createjtjgraph(PS,ES)
         for i,partial in ipairs(partials) do
             local u = unknownsupport[i]
             local jtjp = 2*Jp*partial
-
-            if PS:UsesLambda() then
-                jtjp = jtjp + 2*partial*partial*PS.lambda*P[u.image.name](u.index,u.channel)
-            end
-
             result = result + P[u.image.name](u.index,u.channel)*jtjp
             addscatter(u,jtjp)
         end
     end
 
-    return A.FunctionSpec(ES.kind,"applyJTJ", List {"P", "Ap_X"}, List { result }, scatters, ES)
+    return A.FunctionSpec(ES.kind,"applyJTJ", List {"P", "Ap_X", "DtD"}, List { result }, scatters, ES)
 end
 
--- the same as createjtfgraph but computing -p'J'Jp and without computing the preconditioner
-local function createjtjgraphsimple(PS,ES)
-    local P = PS:UnknownArgument(1)
-
-    local result = ad.toexp(0)
-    for i,term in ipairs(ES.residuals) do
-        local F,unknownsupport = term.expression,term.unknowns
-        local unknownvars = unknownsupport:map(function(x) return ad.v[x] end)
-        local partials = F:gradient(unknownvars)
-        local Jp = ad.toexp(0)
-        for i,partial in ipairs(partials) do
-            local u = unknownsupport[i]
-            assert(GraphElement:isclassof(u.index))
-            Jp = Jp + partial*P[u.image.name](u.index,u.channel)
-        end
-        for i,partial in ipairs(partials) do
-            local u = unknownsupport[i]
-            local jtjp = Jp*partial
-
-            result = result - P[u.image.name](u.index,u.channel)*jtjp
-        end
-    end
-
-    return A.FunctionSpec(ES.kind,"applyJTJsimple", List {"P"}, List { result }, EMPTY,ES)
-end
 
 local function createjtfcentered(PS,ES)
    local UnknownType = PS.P:UnknownType()
@@ -2137,7 +2069,6 @@ local function createjtfcentered(PS,ES)
 
                 local dfdx00Sq = dfdx00*dfdx00	-- entry of Diag(J^TJ)
                 P_hat[idx+1] = P_hat[idx+1] + dfdx00Sq			-- summing the pre-conditioner up
-                --sum = sum + dfdx00F
                 lprintf(2,"dR[%d]_%s/dx[%d] = %s",ridx,tostring(f),chan,tostring(dfdx00F))
             end
 
@@ -2147,7 +2078,6 @@ local function createjtfcentered(PS,ES)
 	    if not PS.P.usepreconditioner then
 		    P_hat[i] = ad.toexp(1.0)
 	    else
-		    P_hat[i] = 2.0*P_hat[i]
 		    P_hat[i] = ad.polysimplify(P_hat[i])
 	    end
 	    F_hat[i] = ad.polysimplify(2.0*F_hat[i])
@@ -2156,79 +2086,58 @@ local function createjtfcentered(PS,ES)
     return A.FunctionSpec(ES.kind,"evalJTF", EMPTY, List{ ad.Vector(unpack(F_hat)), ad.Vector(unpack(P_hat)) }, EMPTY,ES)
 end
 
--- the same as createjtfcentered but without computing the preconditioner
-local function createjtfcenteredsimple(PS,ES)
-   local UnknownType = PS.P:UnknownType()
-   local ispace = ES.kind.ispace
-   local N = UnknownType:VectorSizeForIndexSpace(ispace)
-   
-   local F_hat = createzerolist(N) --gradient
+local function createmodelcost(PS,ES)
+    local UnknownType = PS.P:UnknownType()
+    local ispace = ES.kind.ispace
+    local N = UnknownType:VectorSizeForIndexSpace(ispace)
+
+
+    local Delta = PS:UnknownArgument(1)
+    local result = 0.0 --model residuals squared (and summed among unknowns...)
     
     for ridx,residual in ipairs(ES.residuals) do
         local F, unknownsupport = residual.expression,residual.unknowns
         lprintf(0,"-------------")
         lprintf(1,"R[%d] = %s",ridx,tostring(F))
-    
-        for idx,unknownname,chan in UnknownType:UnknownIteratorForIndexSpace(ispace) do
-            local unknown = PS:ImageWithName(unknownname) 
-            local x = unknown(ispace:ZeroOffset(),chan)
-            
-            local residuals = residualsincludingX00(unknownsupport,unknown,chan)
-            
-            local sum = 0
-            for _,f in ipairs(residuals) do
-                local F_x = shiftexp(F,f)
-                local dfdx00 = F_x:d(x)		-- entry of J^T
-                local dfdx00F = dfdx00*F_x	-- entry of \gradF == J^TF
-                F_hat[idx+1] = F_hat[idx+1] + dfdx00F			-- summing it up to get \gradF
-    
-                lprintf(2,"dR[%d]_%s/dx[%d] = %s",ridx,tostring(f),chan,tostring(dfdx00F))
-            end
-            
+        local unknownvars = unknownsupport:map(function(x) return ad.v[x] end)
+        local partials = F:gradient(unknownvars)
+
+        local JTdelta = 0.0
+
+        for i,partial in ipairs(partials) do
+            local u = unknownsupport[i]
+            local delta = Delta[u.image.name](u.index,u.channel)
+            JTdelta = JTdelta + (partial * delta)
         end
+        local residual_m = F + JTdelta
+        result = result + (residual_m*residual_m)
     end
-	for i = 1,N do
-	    F_hat[i] = ad.polysimplify(2.0*F_hat[i])
-	end
-	dprint("JTF =", ad.tostrings({F_hat[1], F_hat[2], F_hat[3]}))
-    return A.FunctionSpec(ES.kind,"evalJTFsimple", EMPTY, List{ ad.Vector(unpack(F_hat)) }, EMPTY,ES)
+    result = ad.polysimplify(result)
+    return A.FunctionSpec(ES.kind,"modelcost", List {"Delta"}, List{ result }, EMPTY,ES)
 end
 
-local function creatediagjtjcentered(PS,ES)
-   local UnknownType = PS.P:UnknownType()
-   local ispace = ES.kind.ispace
-   local N = UnknownType:VectorSizeForIndexSpace(ispace)
+local function createmodelcostgraph(PS,ES)
+    local Delta = PS:UnknownArgument(1)
+    local result = 0.0 --model residuals squared (and summed among unknowns...)
+    for i,term in ipairs(ES.residuals) do
+        local F,unknownsupport = term.expression,term.unknowns
+        local unknownvars = unknownsupport:map(function(x) return ad.v[x] end)
+        local partials = F:gradient(unknownvars)
 
-   local P_hat = createzerolist(N) --preconditioner
-    
-    for ridx,residual in ipairs(ES.residuals) do
-        local F, unknownsupport = residual.expression,residual.unknowns
-        lprintf(0,"-------------")
-        lprintf(1,"R[%d] = %s",ridx,tostring(F))
+        local JTdelta = 0.0
 
-        for idx,unknownname,chan in UnknownType:UnknownIteratorForIndexSpace(ispace) do
-            local unknown = PS:ImageWithName(unknownname) 
-            local x = unknown(ispace:ZeroOffset(),chan)
-            
-            local residuals = residualsincludingX00(unknownsupport,unknown,chan)
-
-            local sum = 0
-            for _,f in ipairs(residuals) do
-                local F_x = shiftexp(F,f)
-                local dfdx00 = F_x:d(x)		-- entry of J^T
-                local dfdx00Sq = dfdx00*dfdx00	-- entry of Diag(J^TJ)
-                P_hat[idx+1] = P_hat[idx+1] + dfdx00Sq  -- summing the Diag(J^TJ) up
-            end
-
+        for i,partial in ipairs(partials) do
+            local u = unknownsupport[i]
+            assert(GraphElement:isclassof(u.index))
+            local delta = Delta[u.image.name](u.index,u.channel)
+            JTdelta = JTdelta + (partial * delta)
         end
+        local residual_m = F + JTdelta
+        result = result + (residual_m*residual_m)
     end
-	for i = 1,N do
-        -- P_hat[i] = 2.0*P_hat[i]
-        P_hat[i] = ad.polysimplify(P_hat[i])
-	end
-
-    return A.FunctionSpec(ES.kind,"evalDiagJTJ", EMPTY, List{ ad.Vector(unpack(P_hat)) }, EMPTY,ES)
+    return A.FunctionSpec(ES.kind, "modelcost", List { "Delta" }, List{ result }, EMPTY,ES)
 end
+
 
 local function createjtfgraph(PS,ES)
     local R,Pre = PS:UnknownArgument(1),PS:UnknownArgument(2)
@@ -2247,26 +2156,62 @@ local function createjtfgraph(PS,ES)
         local F,unknownsupport = term.expression,term.unknowns
         local unknownvars = unknownsupport:map(function(x) return ad.v[x] end)
         local partials = F:gradient(unknownvars)
-        local Jp = ad.toexp(0)
         for i,partial in ipairs(partials) do
             local u = unknownsupport[i]
             assert(GraphElement:isclassof(u.index))
             addscatter(R,u,-2.0*partial*F)
-            addscatter(Pre,u,2.0*partial*partial)
+            addscatter(Pre,u,partial*partial)
         end
     end
     return A.FunctionSpec(ES.kind, "evalJTF", List { "R", "Pre" }, EMPTY, scatters,ES)
 end
 
--- the same as createjtfgraph but without computing the preconditioner
-local function createjtfgraphsimple(PS,ES) 
-    local R = PS:UnknownArgument(1)
+local function computeDtDcentered(PS,ES)
+   local UnknownType = PS.P:UnknownType()
+   local ispace = ES.kind.ispace
+   local N = UnknownType:VectorSizeForIndexSpace(ispace)
+   local Pre = PS:UnknownArgument(1)
+   local D_hat = createzerolist(N) --gradient
+    
+    for ridx,residual in ipairs(ES.residuals) do
+        local F, unknownsupport = residual.expression,residual.unknowns
+        lprintf(0,"-------------")
+        lprintf(1,"R[%d] = %s",ridx,tostring(F))
+
+        for idx,unknownname,chan in UnknownType:UnknownIteratorForIndexSpace(ispace) do
+            local unknown = PS:ImageWithName(unknownname) 
+            local x = unknown(ispace:ZeroOffset(),chan)
+
+            local residuals = residualsincludingX00(unknownsupport,unknown,chan)
+            local sum = 0
+            for _,f in ipairs(residuals) do
+                local F_x = shiftexp(F,f)
+                local dfdx00 = F_x:d(x)     -- entry of J^T
+                local dfdx00Sq = dfdx00*dfdx00  -- entry of Diag(J^TJ)
+
+                local inv_radius = 1.0 / PS.trust_region_radius
+                local D_entry = dfdx00Sq*inv_radius 
+                D_hat[idx+1] = D_hat[idx+1] + D_entry
+            end
+
+        end
+    end
+    for i = 1,N do
+        D_hat[i] = ad.polysimplify(D_hat[i])
+    end
+    return A.FunctionSpec(ES.kind,"computeDtD", List { "Pre" }, List{ ad.Vector(unpack(D_hat)) }, EMPTY,ES)
+end
+
+local function computeDtDgraph(PS,ES)
+    local DtD,Pre = PS:UnknownArgument(1),PS:UnknownArgument(2)
     local scatters = List() 
-    local scattermap = { [R] = {} }
+    local scattermap = { [DtD] = {}}
+
     local function addscatter(im,u,exp)
         local s = scattermap[im][u]
         if not s then
             s =  Scatter(im[u.image.name],u.index,u.channel,ad.toexp(0),"add")
+            print("Creating ComputeD Graph Scatter")
             scattermap[im][u] = s
             scatters:insert(s)
         end
@@ -2276,42 +2221,43 @@ local function createjtfgraphsimple(PS,ES)
         local F,unknownsupport = term.expression,term.unknowns
         local unknownvars = unknownsupport:map(function(x) return ad.v[x] end)
         local partials = F:gradient(unknownvars)
-        local Jp = ad.toexp(0)
         for i,partial in ipairs(partials) do
             local u = unknownsupport[i]
             assert(GraphElement:isclassof(u.index))
-            addscatter(R,u,-2.0*partial*F)
+            local inv_radius = 1.0 / PS.trust_region_radius
+            addscatter(DtD,u,partial*partial*inv_radius)
         end
     end
-    return A.FunctionSpec(ES.kind, "evalJTFsimple", List { "R" }, EMPTY, scatters,ES)
+    return A.FunctionSpec(ES.kind, "computeDtD", List { "DtD", "Pre" }, EMPTY, scatters, ES)
 end
 
--- local function creatediagjtjgraph(PS,ES)
---     local Pre = PS:UnknownArgument(2)
---     local scatters = List() 
---     local scattermap = { [Pre] = {}}
---     local function addscatter(im,u,exp)
---         local s = scattermap[im][u]
---         if not s then
---             s =  Scatter(im[u.image.name],u.index,u.channel,ad.toexp(0),"add")
---             scattermap[im][u] = s
---             scatters:insert(s)
---         end
---         s.expression = s.expression + exp
---     end
---     for i,term in ipairs(ES.residuals) do
---         local F,unknownsupport = term.expression,term.unknowns
---         local unknownvars = unknownsupport:map(function(x) return ad.v[x] end)
---         local partials = F:gradient(unknownvars)
---         local Jp = ad.toexp(0)
---         for i,partial in ipairs(partials) do
---             local u = unknownsupport[i]
---             assert(GraphElement:isclassof(u.index))
---             addscatter(Pre,u,partial*partial)
---         end
---     end
---     return A.FunctionSpec(ES.kind, "evalDiagJTJ", EMPTY, List, scatters)
--- end
+local function createdumpjcentered(PS,ES)
+   local UnknownType = PS.P:UnknownType()
+   local ispace = ES.kind.ispace
+   local N = UnknownType:VectorSizeForIndexSpace(ispace)
+
+    local outputs = List{}
+
+    for ridx,residual in ipairs(ES.residuals) do
+        local F, unknownsupport = residual.expression,residual.unknowns
+        lprintf(0,"-------------")
+        lprintf(1,"R[%d] = %s",ridx,tostring(F))
+        for i,unknown in ipairs(unknownsupport) do
+            outputs:insert(F:d(ad.v[unknown]))
+        end
+    end
+    return A.FunctionSpec(ES.kind,"dumpJ", EMPTY, outputs, EMPTY,ES)
+end
+local function createdumpjgraph(PS,ES)
+    local outputs = List{}
+    for i,term in ipairs(ES.residuals) do
+        local F,unknownsupport = term.expression,term.unknowns
+        for i,unknown in ipairs(unknownsupport) do
+            outputs:insert(F:d(ad.v[unknown]))
+        end
+    end
+    return A.FunctionSpec(ES.kind, "dumpJ", EMPTY, outputs, EMPTY,ES)
+end
 
 local function createdumpjcentered(PS,ES)
    local UnknownType = PS.P:UnknownType()
@@ -2431,22 +2377,20 @@ function ProblemSpecAD:Cost(...)
         if energyspec.kind.kind == "CenteredFunction" then
             functionspecs:insert(createjtjcentered(self,energyspec))
             functionspecs:insert(createjtfcentered(self,energyspec))
-            functionspecs:insert(createdumpjcentered(self,energyspec))
+            --functionspecs:insert(createdumpjcentered(self,energyspec))
             
             if self.P:UsesLambda() then
-                functionspecs:insert(createjtjcenteredsimple(self,energyspec))
-                functionspecs:insert(createjtfcenteredsimple(self,energyspec))
-                functionspecs:insert(creatediagjtjcentered(self,energyspec))
+                functionspecs:insert(computeDtDcentered(self,energyspec))
+                functionspecs:insert(createmodelcost(self,energyspec))
             end
         else
             functionspecs:insert(createjtjgraph(self,energyspec))
             functionspecs:insert(createjtfgraph(self,energyspec))
-            functionspecs:insert(createdumpjgraph(self,energyspec))
-
+            --functionspecs:insert(createdumpjgraph(self,energyspec))
+            
             if self.P:UsesLambda() then
-                functionspecs:insert(createjtjgraphsimple(self,energyspec))
-                functionspecs:insert(createjtfgraphsimple(self,energyspec))
-                -- functionspecs:insert(creatediagjtjgraph(self,energyspec))            
+                functionspecs:insert(computeDtDgraph(self,energyspec))
+                functionspecs:insert(createmodelcostgraph(self,energyspec))         
             end
         end
     end

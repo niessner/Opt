@@ -27,7 +27,7 @@ public:
 		
 		m_warpingSolver	    = new CUDAWarpingSolver(m_image.getWidth(), m_image.getHeight());
 		m_terraSolverFloat4 = new TerraSolverWarpingFloat4(m_image.getWidth(), m_image.getHeight(), "smoothingLaplacianFloat4Graph.t", "gaussNewtonGPU");
-		m_optSolver = new TerraSolverWarpingFloat4(m_image.getWidth(), m_image.getHeight(), "smoothingLaplacianFloat4AD.t", "gaussNewtonGPU");
+		m_optSolver = new TerraSolverWarpingFloat4(m_image.getWidth(), m_image.getHeight(), "smoothingLaplacianFloat4AD.t", "LMGPU");
 		
 	}
 
@@ -87,18 +87,18 @@ public:
 		m_warpingSolver->solveGN(d_imageFloat4, d_targetFloat4, nonLinearIter, linearIter, weightFit, weightReg);
 		copyResultToCPUFromFloat4();
 		
-
+        /*
 		std::cout << "\n\nOPT (Graph)" << std::endl;
 		resetGPUMemory();
 		m_terraSolverFloat4->solve(d_imageFloat4, d_targetFloat4, nonLinearIter, linearIter, patchIter, weightFit, weightReg);
 		copyResultToCPUFromFloat4();
-
+        */
 		
 		std::cout << "\n\nOPT" << std::endl;
 		resetGPUMemory();
 		m_optSolver->solve(d_imageFloat4, d_targetFloat4, nonLinearIter, linearIter, patchIter, weightFit, weightReg);
 		copyResultToCPUFromFloat4();
-		
+
 #ifdef USE_CERES
         std::cout << "\n\nCERES" << std::endl;
         CeresSolverSmoothingLaplacianFloat4 *ceres = new CeresSolverSmoothingLaplacianFloat4();

@@ -55,7 +55,12 @@ class ImageWarping
 						vec3f v = min + fac*delta;
 
 						if (j == 0) { h_gridPosTargetFloat3[index] = make_float3(v.x, v.y, v.z); }
-						else if (j == m_dims.y)	{ mat3f f = mat3f::diag(m_dims.x / 2.0f, (float)m_dims.y, m_dims.z / 2.0f); vec3f mid = vec3f(m_min.x, m_min.y, m_min.z) + f*delta; mat3f R = ml::mat3f::rotationZ(-90.0f); v = R*(v - mid) + mid + vec3f(4.5f, -2.5f, 0.0f); h_gridPosTargetFloat3[index] = make_float3(v.x, v.y, v.z); }
+						else if (j == m_dims.y)	{
+							mat3f f = mat3f::diag(m_dims.x / 2.0f, (float)m_dims.y, m_dims.z / 2.0f);
+							vec3f mid = vec3f(m_min.x, m_min.y, m_min.z) + f*delta; mat3f R = ml::mat3f::rotationZ(-90.0f);
+							v = R*(v - mid) + mid + vec3f(2.5f, -2.5f, 0.0f);
+							h_gridPosTargetFloat3[index] = make_float3(v.x, v.y, v.z);
+						}
 						else { h_gridPosTargetFloat3[index] = make_float3(-std::numeric_limits<float>::infinity(), -std::numeric_limits<float>::infinity(), -std::numeric_limits<float>::infinity()); }
 					}
 				}
@@ -290,12 +295,12 @@ class ImageWarping
 
 			float3* h_gridPosUrshapeFloat3 = new float3[m_nNodes];
 			cutilSafeCall(cudaMemcpy(h_gridPosUrshapeFloat3, d_gridPosFloat3Urshape, sizeof(float3)*m_nNodes, cudaMemcpyDeviceToHost));
-			saveGraph("grid.ply", h_gridPosUrshapeFloat3, m_nNodes, 0.1f, meshSphere, meshCone);
+			saveGraph("grid.ply", h_gridPosUrshapeFloat3, m_nNodes, 0.05f, meshSphere, meshCone);
 			delete[] h_gridPosUrshapeFloat3;
 
 			float3* h_gridPosFloat3 = new float3[m_nNodes];
 			cutilSafeCall(cudaMemcpy(h_gridPosFloat3, d_gridPosFloat3, sizeof(float3)*m_nNodes, cudaMemcpyDeviceToHost));
-			saveGraph("gridOut.ply", h_gridPosFloat3, m_nNodes, 0.1f, meshSphere, meshCone);
+			saveGraph("gridOut.ply", h_gridPosFloat3, m_nNodes, 0.05f, meshSphere, meshCone);
 			delete[] h_gridPosFloat3;
 		}
 
