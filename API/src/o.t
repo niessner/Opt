@@ -658,6 +658,7 @@ function UnknownType:terratype()
         T.entries:insert { ip.name, ip.imagetype:terratype() }
     end
     if use_contiguous_allocation then
+        T.entries:insert { "_contiguousallocation", &opaque }
         terra T:initGPU()
             var size = 0
             escape
@@ -669,6 +670,7 @@ function UnknownType:terratype()
             end
             var data : &uint8
             C.cudaMalloc([&&opaque](&data), size)
+            self._contiguousallocation = data
             C.cudaMemset([&opaque](data), 0, size)
             size = 0
             escape
@@ -2340,7 +2342,7 @@ function ProblemSpecAD:Cost(...)
         if energyspec.kind.kind == "CenteredFunction" then
             functionspecs:insert(createjtjcentered(self,energyspec))
             functionspecs:insert(createjtfcentered(self,energyspec))
-            --functionspecs:insert(createdumpjcentered(self,energyspec))
+            functionspecs:insert(createdumpjcentered(self,energyspec))
             
             if self.P:UsesLambda() then
                 functionspecs:insert(computeDtDcentered(self,energyspec))
@@ -2349,7 +2351,7 @@ function ProblemSpecAD:Cost(...)
         else
             functionspecs:insert(createjtjgraph(self,energyspec))
             functionspecs:insert(createjtfgraph(self,energyspec))
-            --functionspecs:insert(createdumpjgraph(self,energyspec))
+            functionspecs:insert(createdumpjgraph(self,energyspec))
             
             if self.P:UsesLambda() then
                 functionspecs:insert(computeDtDgraph(self,energyspec))
