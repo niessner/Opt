@@ -714,7 +714,7 @@ return function(problemSpec)
 				gpu.PCGStep2(pd)
 				gpu.PCGStep3(pd)
 
-                if ((lIter + 1) % residual_reset_period) == 0 then
+                if [problemSpec:UsesLambda()] and ((lIter + 1) % residual_reset_period) == 0 then
                     gpu.computeAdelta(pd)
                     -- TODO: merge these?
                     gpu.computeAdelta_Graph(pd)
