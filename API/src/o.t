@@ -121,7 +121,7 @@ end
 struct opt.Plan(S.Object) {
     init : {&opaque,&&opaque,&&opaque} -> {} -- plan.data,params,solverparams
     step : {&opaque,&&opaque,&&opaque} -> int
-    cost : {&opaque} -> float
+    cost : {&opaque} -> double
     data : &opaque
 } 
 
@@ -2342,7 +2342,7 @@ function ProblemSpecAD:Cost(...)
         if energyspec.kind.kind == "CenteredFunction" then
             functionspecs:insert(createjtjcentered(self,energyspec))
             functionspecs:insert(createjtfcentered(self,energyspec))
-            functionspecs:insert(createdumpjcentered(self,energyspec))
+            --functionspecs:insert(createdumpjcentered(self,energyspec))
             
             if self.P:UsesLambda() then
                 functionspecs:insert(computeDtDcentered(self,energyspec))
@@ -2351,7 +2351,7 @@ function ProblemSpecAD:Cost(...)
         else
             functionspecs:insert(createjtjgraph(self,energyspec))
             functionspecs:insert(createjtfgraph(self,energyspec))
-            functionspecs:insert(createdumpjgraph(self,energyspec))
+            --functionspecs:insert(createdumpjgraph(self,energyspec))
             
             if self.P:UsesLambda() then
                 functionspecs:insert(computeDtDgraph(self,energyspec))
@@ -2457,7 +2457,7 @@ terra opt.ProblemSolve(plan : &opt.Plan, params : &&opaque, solverparams : &&opa
    while opt.ProblemStep(plan, params, solverparams) ~= 0 do end
 end
 
-terra opt.ProblemCurrentCost(plan : &opt.Plan) : float
+terra opt.ProblemCurrentCost(plan : &opt.Plan) : double
     return plan.cost(plan.data)
 end
 

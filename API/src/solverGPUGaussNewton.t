@@ -38,8 +38,7 @@ local FLOAT_EPSILON = `[opt_float](0.0)
 -- GAUSS NEWTON (non-block version)
 return function(problemSpec)
     local UnknownType = problemSpec:UnknownType()
-	local TUnknownType = UnknownType:terratype()	
-	
+    local TUnknownType = UnknownType:terratype()	
     -- start of the unknowns that correspond to this image
     -- for each entry there are a constant number of unknowns
     -- corresponds to the col dim of the J matrix
@@ -234,14 +233,19 @@ return function(problemSpec)
 	    local Index = UnknownIndexSpace:indextype()
 
         local CERES_style_guardedInvert = true
+
+        local terra square(x : opt_float) : opt_float
+            return x*x
+        end
+
         local terra guardedInvert(p : unknownElement)
             escape 
                 if CERES_style_guardedInvert then
                     emit quote
                         var invp = p
                         for i = 0, invp:size() do
-                            invp(i) = [opt_float](1.f) / ([opt_float](1.f) + 2*util.gpuMath.sqrt(invp(i)) + invp(i))
-                            --invp(i) = [opt_float](1.f) / ([opt_float](1.f) + invp(i))
+                            --invp(i) = [opt_float](1.f) / ([opt_float](1.f) + 2*util.gpuMath.sqrt(invp(i)) + invp(i))
+                            invp(i) = [opt_float](1.f) / square([opt_float](1.f) + util.gpuMath.sqrt(invp(i)))
                         end
                         return invp
                     end
@@ -383,6 +387,46 @@ return function(problemSpec)
                 util.atomicAdd(pd.scanBetaNumerator, b)
             end
         end
+
+        terra kernels.PCGStep2_1stHalf(pd : PlanData)
+            var idx : Index
+            if idx:initFromCUDAParams() and not fmap.exclude(idx,pd.parameters) then
+                -- sum over block results to compute denominator of alpha
+                var alphaDenominator : opt_float = pd.scanAlphaDenominator[0]
+                var alphaNumerator : opt_float = pd.scanAlphaNumerator[0]
+
+                -- update step size alpha
+                var alpha = opt_float(0.0f)
+                if alphaDenominator > FLOAT_EPSILON then 
+                    alpha = alphaNumerator/alphaDenominator 
+                else
+                    --printf("WARNING: Invalid alphaDenominator: %f\n", alphaDenominator)
+                end 
+    
+                pd.delta(idx) = pd.delta(idx)+alpha*pd.p(idx)       -- do a descent step
+            end
+        end
+
+        terra kernels.PCGStep2_2ndHalf(pd : PlanData)
+            var b = opt_float(0.0f) 
+            var idx : Index
+            if idx:initFromCUDAParams() and not fmap.exclude(idx,pd.parameters) then
+                var r = pd.r(idx)
+                var pre = pd.preconditioner(idx)
+                if not problemSpec.usepreconditioner then
+                    pre = opt_float(1.0f)
+                end
+                var z = pre*r                                       -- apply pre-conditioner M^-1
+                pd.z(idx) = z;                                      -- save for next kernel call
+                b = z:dot(r)                                    -- compute x-th term of the numerator of beta
+            end
+            b = util.warpReduce(b)
+            if (util.laneid() == 0) then
+                util.atomicAdd(pd.scanBetaNumerator, b)
+            end
+        end
+
+
         terra kernels.PCGStep3(pd : PlanData)			
             var idx : Index
             if idx:initFromCUDAParams() and not fmap.exclude(idx,pd.parameters) then
@@ -496,9 +540,6 @@ return function(problemSpec)
                 end 
             end
 
-            local terra square(x : opt_float) : opt_float
-                return x*x
-            end
 
             terra kernels.PCGClampDiagonal(pd : PlanData)
                 var idx : Index
@@ -629,6 +670,8 @@ return function(problemSpec)
                                                                         "PCGClampDiagonal",
                                                                         "PCGStep1",
                                                                         "PCGStep2",
+                                                                        "PCGStep2_1stHalf",
+                                                                        "PCGStep2_2ndHalf",
                                                                         "PCGStep3",
                                                                         "PCGLinearUpdate",
                                                                         "revertUpdate",
@@ -675,8 +718,8 @@ return function(problemSpec)
         terra computeModelCostChange(pd : &PlanData) : opt_float
             var cost = computeCost(pd)
             var model_cost = computeModelCost(pd)
-            --logSolver(" cost=%f \n",cost)
-            --logSolver(" model_cost=%f \n",model_cost)
+            logSolver(" cost=%f \n",cost)
+            logSolver(" model_cost=%f \n",model_cost)
             var model_cost_change = cost - model_cost
             --logSolver(" model_cost_change=%f \n",model_cost_change)
             return model_cost_change
@@ -917,9 +960,42 @@ return function(problemSpec)
             end
             cusparseOuter(pd)
             for lIter = 0, pd.lIterations do				
+--[[
+                var v : double[3]
+
+                C.cudaMemcpy(&v, pd.r.funcParams.data, sizeof(double)*3, C.cudaMemcpyDeviceToHost)
+                logSolver("\nlinIter: %d\n\t r %f %f %f\n", lIter, v[0], v[1], v[2])
+
+                C.cudaMemcpy(&v, pd.z.funcParams.data, sizeof(double)*3, C.cudaMemcpyDeviceToHost)
+                logSolver("\t z %f %f %f\n", v[0], v[1], v[2])
+
+                C.cudaMemcpy(&v, pd.p.funcParams.data, sizeof(double)*3, C.cudaMemcpyDeviceToHost)
+                logSolver("\t p %f %f %f\n", v[0], v[1], v[2])
+
+                C.cudaMemcpy(&v, pd.Ap_X.funcParams.data, sizeof(double)*3, C.cudaMemcpyDeviceToHost)
+                logSolver("\t Ap_X %f %f %f\n", v[0], v[1], v[2])
+
+
+                C.cudaMemcpy(&v, pd.delta.funcParams.data, sizeof(double)*3, C.cudaMemcpyDeviceToHost)
+                logSolver("\tdelta %f %f %f\n", v[0], v[1], v[2])
+
+                C.cudaMemcpy(&v, pd.scanAlphaNumerator, sizeof(double), C.cudaMemcpyDeviceToHost)
+                logSolver("\tscanAlphaNumerator %f\n", v[0])
+                C.cudaMemcpy(&v, pd.scanAlphaDenominator, sizeof(double), C.cudaMemcpyDeviceToHost)
+                logSolver("\tscanAlphaDenominator %f\n", v[0])
+
+                var numerator : double
+                C.cudaMemcpy(&numerator, pd.scanAlphaNumerator, sizeof(double), C.cudaMemcpyDeviceToHost)
+                logSolver("\talpha %f\n", numerator/v[0])
+
+
+                C.cudaMemcpy(&v, pd.scanBetaNumerator, sizeof(double), C.cudaMemcpyDeviceToHost)
+                logSolver("\tscanBetaNumerator %f\n", v[0])
+--]]
+
 
                 C.cudaMemset(pd.scanAlphaDenominator, 0, sizeof(opt_float))
-				
+
 				gpu.PCGStep1(pd)
 
 				if isGraph then
@@ -931,16 +1007,18 @@ return function(problemSpec)
 				
 				C.cudaMemset(pd.scanBetaNumerator, 0, sizeof(opt_float))
 				
-				gpu.PCGStep2(pd)
-				gpu.PCGStep3(pd)
-
-                if [problemSpec:UsesLambda()] and ((lIter + 1) % residual_reset_period) == 0 then
+				if [problemSpec:UsesLambda()] and ((lIter + 1) % residual_reset_period) == 0 then
+                    gpu.PCGStep2_1stHalf(pd)
                     gpu.computeAdelta(pd)
                     -- TODO: merge these?
                     gpu.computeAdelta_Graph(pd)
                     --TODO: Should we redo then end of step 2 (thats where the residual is changed regularly)
                     gpu.recomputeResiduals(pd)
+                    gpu.PCGStep2_2ndHalf(pd)
+                else
+                    gpu.PCGStep2(pd)
                 end
+                gpu.PCGStep3(pd)
 
 
 				-- save new rDotz for next iteration
@@ -965,6 +1043,49 @@ return function(problemSpec)
 			
 			logSolver("\t%d: prev=%f new=%f ", pd.nIter, pd.prevCost,newCost)
 			
+            --[[ TODO: Remove
+            if newCost > 1000000 then
+                logSolver("Shitty cost!")  
+                var v : double[3]
+
+                C.cudaMemcpy(&v, pd.r.funcParams.data, sizeof(double)*3, C.cudaMemcpyDeviceToHost)
+                logSolver("\t r %f %f %f\n", v[0], v[1], v[2])
+
+                C.cudaMemcpy(&v, pd.z.funcParams.data, sizeof(double)*3, C.cudaMemcpyDeviceToHost)
+                logSolver("\t z %f %f %f\n", v[0], v[1], v[2])
+
+                C.cudaMemcpy(&v, pd.p.funcParams.data, sizeof(double)*3, C.cudaMemcpyDeviceToHost)
+                logSolver("\t p %f %f %f\n", v[0], v[1], v[2])
+
+                C.cudaMemcpy(&v, pd.Ap_X.funcParams.data, sizeof(double)*3, C.cudaMemcpyDeviceToHost)
+                logSolver("\t Ap_X %f %f %f\n", v[0], v[1], v[2])
+
+                C.cudaMemcpy(&v, pd.preconditioner.funcParams.data, sizeof(double)*3, C.cudaMemcpyDeviceToHost)
+                logSolver("\t preconditioner %f %f %f\n", v[0], v[1], v[2])
+
+                C.cudaMemcpy(&v, pd.delta.funcParams.data, sizeof(double)*3, C.cudaMemcpyDeviceToHost)
+                logSolver("\tdelta %f %f %f\n", v[0], v[1], v[2])
+
+                C.cudaMemcpy(&v, pd.parameters.X.funcParams.data, sizeof(double)*3, C.cudaMemcpyDeviceToHost)
+                logSolver("\tunknown %f %f %f\n", v[0], v[1], v[2])
+                
+
+                C.cudaMemcpy(&v, pd.scanAlphaNumerator, sizeof(double), C.cudaMemcpyDeviceToHost)
+                logSolver("\tscanAlphaNumerator %f\n", v[0])
+                C.cudaMemcpy(&v, pd.scanAlphaDenominator, sizeof(double), C.cudaMemcpyDeviceToHost)
+                logSolver("\tscanAlphaDenominator %f\n", v[0])
+
+                var numerator : double
+                C.cudaMemcpy(&numerator, pd.scanAlphaNumerator, sizeof(double), C.cudaMemcpyDeviceToHost)
+                logSolver("\talpha %f\n", numerator/v[0])
+
+
+                C.cudaMemcpy(&v, pd.scanBetaNumerator, sizeof(double), C.cudaMemcpyDeviceToHost)
+                logSolver("\tscanBetaNumerator %f\n", v[0])
+                
+                return 0
+            end
+--]]
 			escape 
                 if problemSpec:UsesLambda() then
                     emit quote
@@ -1038,9 +1159,9 @@ return function(problemSpec)
 		end
 	end
 
-    local terra cost(data_ : &opaque) : float
+    local terra cost(data_ : &opaque) : double
         var pd = [&PlanData](data_)
-        return [float](pd.prevCost)
+        return [double](pd.prevCost)
     end
 
 	local terra makePlan() : &opt.Plan

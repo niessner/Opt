@@ -32,4 +32,4 @@ void Opt_ProblemInit(Opt_State* state, Opt_Plan* plan, void** problemparams, voi
 int Opt_ProblemStep(Opt_State* state, Opt_Plan* plan, void** problemparams, void** solverparams);
 
 // Return the result of the cost function evaluated on the current unknowns
-float Opt_ProblemCurrentCost(Opt_State* state, Opt_Plan* plan);
+double Opt_ProblemCurrentCost(Opt_State* state, Opt_Plan* plan);
