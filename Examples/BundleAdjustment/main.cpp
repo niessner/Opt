@@ -68,9 +68,9 @@ void App::go()
             //cout << endl;
         }*/
 
-		//bundler.solveCeres(1e-6);
+		bundler.solveCeres(1e-6);
 
-        bundler.solveOpt(5000, 64);
+        //bundler.solveOpt(5000, 128);
         
 
         const string suffix = util::zeroPad((int)threshold.index, 1);
