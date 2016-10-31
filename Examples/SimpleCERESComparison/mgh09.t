@@ -30,8 +30,7 @@ local c = abcd(2)
 local d = abcd(3)
 
 
---Energy(y_i - ad.pow(2.7182818284590452353603, -a * x_i) / (b + c * x_i))
-Energy(a * ( x_i * x_i + x_i * b) / (x_i * x_i + x_i * c + d) )
+Energy(y_i - a * ( x_i * x_i + x_i * b) / (x_i * x_i + x_i * c + d) )
 
 -- Hack to get example to work with no image domain energy
 local zero = 0.0
