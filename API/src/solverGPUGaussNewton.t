@@ -1043,11 +1043,9 @@ return function(problemSpec)
 			
 			logSolver("\t%d: prev=%f new=%f ", pd.nIter, pd.prevCost,newCost)
 			
-            -- TODO: Remove
+            --[[ TODO: Remove
             if newCost > 1000000 then
-                logSolver("Shitty cost!")
-
-                
+                logSolver("Shitty cost!")  
                 var v : double[3]
 
                 C.cudaMemcpy(&v, pd.r.funcParams.data, sizeof(double)*3, C.cudaMemcpyDeviceToHost)
@@ -1084,10 +1082,10 @@ return function(problemSpec)
 
                 C.cudaMemcpy(&v, pd.scanBetaNumerator, sizeof(double), C.cudaMemcpyDeviceToHost)
                 logSolver("\tscanBetaNumerator %f\n", v[0])
-                --]]
+                
                 return 0
             end
-
+--]]
 			escape 
                 if problemSpec:UsesLambda() then
                     emit quote
