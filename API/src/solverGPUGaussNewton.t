@@ -146,76 +146,6 @@ return function(problemSpec)
             swapCol(pd,i,minidx)
         end
 	end
-    local cusparseInner
-    local terra GetToHost(ptr : &opaque, N : int) : &int
-        var r = [&int](C.malloc(sizeof(int)*N))
-        C.cudaMemcpy(r,ptr,N*sizeof(int),C.cudaMemcpyDeviceToHost)
-        return r
-    end
-    if use_dump_j then
-        terra cusparseInner(pd : &PlanData)
-            var [parametersSym] = &pd.parameters
-            
-            if false then
-                C.printf("begin debug dump\n")
-                var J_csrColIndA = GetToHost(pd.J_csrColIndA,nnzExp)
-                var J_csrRowPtrA = GetToHost(pd.J_csrRowPtrA,nResidualsExp + 1)
-                for i = 0,nResidualsExp do
-                    var b,e = J_csrRowPtrA[i],J_csrRowPtrA[i+1]
-                    if b >= e or b < 0 or b >= nnzExp or e < 0 or e > nnzExp then
-                        C.printf("ERROR: %d %d %d (total = %d)\n",i,b,e,nResidualsExp)
-                    end
-                    --C.printf("residual %d -> {%d,%d}\n",i,b,e)
-                    for j = b,e do
-                        if J_csrColIndA[j] < 0 or J_csrColIndA[j] >= nnzExp then
-                            C.printf("ERROR: j %d (total = %d)\n",j,J_csrColIndA[j])
-                        end
-                        if j ~= b and J_csrColIndA[j-1] >= J_csrColIndA[j] then
-                            C.printf("ERROR: sort j[%d] = %d, j[%d] = %d\n",j-1,J_csrColIndA[j-1],j,J_csrColIndA[j])
-                        end
-                        --C.printf("colindex: %d\n",J_csrColIndA[j])
-                    end
-                end
-                C.printf("end debug dump\n")
-            end
-            
-            var consts = array(0.f,1.f,2.f)
-            cd(C.cudaMemset(pd.Ap_X._contiguousallocation, -1, sizeof(float)*nUnknowns))
-            var endJp : util.TimerEvent
-            pd.timer:startEvent("Jp",nil,&endJp)
-            cd(CUsp.cusparseScsrmv(
-                        pd.handle, CUsp.CUSPARSE_OPERATION_NON_TRANSPOSE,
-                        nResidualsExp, nUnknowns,nnzExp,
-                        &consts[1], pd.desc,
-                        pd.J_csrValA, 
-                        pd.J_csrRowPtrA, pd.J_csrColIndA,
-                        [&float](pd.p._contiguousallocation),
-                        &consts[0], pd.Jp
-                    ))
-            pd.timer:endEvent(nil,endJp)
-            var endJT : util.TimerEvent
-            pd.timer:startEvent("J^T",nil,&endJT)
-            cd(CUsp.cusparseScsrmv(
-                        pd.handle, CUsp.CUSPARSE_OPERATION_TRANSPOSE,
-                        nResidualsExp, nUnknowns,nnzExp,
-                        &consts[2], pd.desc,
-                        pd.J_csrValA, 
-                        pd.J_csrRowPtrA, pd.J_csrColIndA,
-                        pd.Jp,
-                        &consts[0],[&float](pd.Ap_X._contiguousallocation) 
-                    ))
-            pd.timer:endEvent(nil,endJT)
-            --cd(C.cudaThreadSynchronize())
-            --gpu.DebugDump(pd)
-            --
-            --C.abort()
-            --C.printf("DONE CALL\n")
-            --cd(C.cudaThreadSynchronize())
-            --C.printf("DONE SYNC\n")
-        end
-    else
-        terra cusparseInner(pd : &PlanData) end
-    end
     local terra wrap(c : int, v : float)
         if c < 0 then
             if v ~= 0.f then
@@ -760,6 +690,86 @@ return function(problemSpec)
 
     end
 
+    local terra GetToHost(ptr : &opaque, N : int) : &int
+        var r = [&int](C.malloc(sizeof(int)*N))
+        C.cudaMemcpy(r,ptr,N*sizeof(int),C.cudaMemcpyDeviceToHost)
+        return r
+    end
+    local cusparseInner,cusparseOuter
+    if use_dump_j then
+        terra cusparseOuter(pd : &PlanData)
+            logSolver("saving J...\n")
+            gpu.saveJToCRS(pd)
+            if isGraph then
+                gpu.saveJToCRS_Graph(pd)
+            end
+            logSolver("... done\n")
+        end
+        terra cusparseInner(pd : &PlanData)
+            var [parametersSym] = &pd.parameters
+            
+            if false then
+                C.printf("begin debug dump\n")
+                var J_csrColIndA = GetToHost(pd.J_csrColIndA,nnzExp)
+                var J_csrRowPtrA = GetToHost(pd.J_csrRowPtrA,nResidualsExp + 1)
+                for i = 0,nResidualsExp do
+                    var b,e = J_csrRowPtrA[i],J_csrRowPtrA[i+1]
+                    if b >= e or b < 0 or b >= nnzExp or e < 0 or e > nnzExp then
+                        C.printf("ERROR: %d %d %d (total = %d)\n",i,b,e,nResidualsExp)
+                    end
+                    --C.printf("residual %d -> {%d,%d}\n",i,b,e)
+                    for j = b,e do
+                        if J_csrColIndA[j] < 0 or J_csrColIndA[j] >= nnzExp then
+                            C.printf("ERROR: j %d (total = %d)\n",j,J_csrColIndA[j])
+                        end
+                        if j ~= b and J_csrColIndA[j-1] >= J_csrColIndA[j] then
+                            C.printf("ERROR: sort j[%d] = %d, j[%d] = %d\n",j-1,J_csrColIndA[j-1],j,J_csrColIndA[j])
+                        end
+                        --C.printf("colindex: %d\n",J_csrColIndA[j])
+                    end
+                end
+                C.printf("end debug dump\n")
+            end
+            
+            var consts = array(0.f,1.f,2.f)
+            cd(C.cudaMemset(pd.Ap_X._contiguousallocation, -1, sizeof(float)*nUnknowns))
+            var endJp : util.TimerEvent
+            pd.timer:startEvent("Jp",nil,&endJp)
+            cd(CUsp.cusparseScsrmv(
+                        pd.handle, CUsp.CUSPARSE_OPERATION_NON_TRANSPOSE,
+                        nResidualsExp, nUnknowns,nnzExp,
+                        &consts[1], pd.desc,
+                        pd.J_csrValA, 
+                        pd.J_csrRowPtrA, pd.J_csrColIndA,
+                        [&float](pd.p._contiguousallocation),
+                        &consts[0], pd.Jp
+                    ))
+            pd.timer:endEvent(nil,endJp)
+            var endJT : util.TimerEvent
+            pd.timer:startEvent("J^T",nil,&endJT)
+            cd(CUsp.cusparseScsrmv(
+                        pd.handle, CUsp.CUSPARSE_OPERATION_TRANSPOSE,
+                        nResidualsExp, nUnknowns,nnzExp,
+                        &consts[2], pd.desc,
+                        pd.J_csrValA, 
+                        pd.J_csrRowPtrA, pd.J_csrColIndA,
+                        pd.Jp,
+                        &consts[0],[&float](pd.Ap_X._contiguousallocation) 
+                    ))
+            pd.timer:endEvent(nil,endJT)
+            --cd(C.cudaThreadSynchronize())
+            --gpu.DebugDump(pd)
+            --
+            --C.abort()
+            --C.printf("DONE CALL\n")
+            --cd(C.cudaThreadSynchronize())
+            --C.printf("DONE SYNC\n")
+        end
+    else
+        terra cusparseInner(pd : &PlanData) end
+        terra cusparseOuter(pd : &PlanData) end
+    end
+
 	local terra init(data_ : &opaque, params_ : &&opaque, solverparams : &&opaque)
 	   var pd = [&PlanData](data_)
 	   pd.timer:init()
@@ -841,14 +851,7 @@ return function(problemSpec)
                     end
                 end
             end
-            if use_dump_j then
-                logSolver("saving J...\n")
-                gpu.saveJToCRS(pd)
-                if isGraph then
-                    gpu.saveJToCRS_Graph(pd)
-                end
-                logSolver("... done\n")
-            end
+            cusparseOuter(pd)
             for lIter = 0, pd.lIterations do				
 
                 C.cudaMemset(pd.scanAlphaDenominator, 0, sizeof(opt_float))
