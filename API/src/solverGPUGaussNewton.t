@@ -8,16 +8,7 @@ local Timer = util.Timer
 local getValidUnknown = util.getValidUnknown
 local use_dump_j = true
 
-local cd
-if use_dump_j then
-    local cusparsepath = "/usr/local/cuda"
-    terralib.linklibrary(cusparsepath.."/lib/libcusparse.dylib")
-    terralib.includepath = terralib.includepath..";"..
-                           cusparsepath.."/include/"
-    CUsp = terralib.includecstring [[
-        #include <cusparse_v2.h>
-    ]]
-    cd = macro(function(apicall) return quote
+local cd = macro(function(apicall) return quote
         var r = apicall
         if r ~= 0 then  
             C.printf("Cuda reported error %d: %s\n",r, C.cudaGetErrorString(r))
@@ -26,6 +17,14 @@ if use_dump_j then
     in
         r
     end end)
+if use_dump_j then
+    local cusparsepath = "/usr/local/cuda"
+    terralib.linklibrary(cusparsepath.."/lib64/libcusparse.so")
+    terralib.includepath = terralib.includepath..";"..
+                           cusparsepath.."/include/"
+    CUsp = terralib.includecstring [[
+        #include <cusparse_v2.h>
+    ]]
 end
 
 
@@ -147,9 +146,38 @@ return function(problemSpec)
         end
 	end
     local cusparseInner
+    local terra GetToHost(ptr : &opaque, N : int) : &int
+        var r = [&int](C.malloc(sizeof(int)*N))
+        C.cudaMemcpy(r,ptr,N*sizeof(int),C.cudaMemcpyDeviceToHost)
+        return r
+    end
     if use_dump_j then
         terra cusparseInner(pd : &PlanData)
             var [parametersSym] = &pd.parameters
+            
+            if false then
+                C.printf("begin debug dump\n")
+                var J_colindex = GetToHost(pd.J_colindex,nnzExp)
+                var J_rowptr = GetToHost(pd.J_rowptr,nResidualsExp + 1)
+                for i = 0,nResidualsExp do
+                    var b,e = J_rowptr[i],J_rowptr[i+1]
+                    if b >= e or b < 0 or b >= nnzExp or e < 0 or e > nnzExp then
+                        C.printf("ERROR: %d %d %d (total = %d)\n",i,b,e,nResidualsExp)
+                    end
+                    --C.printf("residual %d -> {%d,%d}\n",i,b,e)
+                    for j = b,e do
+                        if J_colindex[j] < 0 or J_colindex[j] >= nnzExp then
+                            C.printf("ERROR: j %d (total = %d)\n",j,J_colindex[j])
+                        end
+                        if j ~= b and J_colindex[j-1] >= J_colindex[j] then
+                            C.printf("ERROR: sort j[%d] = %d, j[%d] = %d\n",j-1,J_colindex[j-1],j,J_colindex[j])
+                        end
+                        --C.printf("colindex: %d\n",J_colindex[j])
+                    end
+                end
+                C.printf("end debug dump\n")
+            end
+            
             var desc : CUsp.cusparseMatDescr_t
     
             cd(CUsp.cusparseCreateMatDescr( &desc ))
@@ -160,8 +188,7 @@ return function(problemSpec)
             --gpu.DebugDump(pd)
             --C.cudaThreadSynchronize()
             var consts = array(0.f,1.f,2.f)
-            C.cudaMemset(pd.Ap_X._contiguousallocation, -1, sizeof(float)*nUnknowns)
-            C.printf("start CuSparse\n")
+            cd(C.cudaMemset(pd.Ap_X._contiguousallocation, -1, sizeof(float)*nUnknowns))
             var endJp : util.TimerEvent
             pd.timer:startEvent("Jp",nil,&endJp)
             cd(CUsp.cusparseScsrmv(
@@ -186,8 +213,7 @@ return function(problemSpec)
                         &consts[0],[&float](pd.Ap_X._contiguousallocation) 
                     ))
             pd.timer:endEvent(nil,endJT)
-            C.cudaThreadSynchronize()
-            C.printf("end CuSparse\n")
+            --cd(C.cudaThreadSynchronize())
             --gpu.DebugDump(pd)
             --
             --C.abort()
@@ -197,6 +223,21 @@ return function(problemSpec)
         end
     else
         terra cusparseInner(pd : &PlanData) end
+    end
+    local terra wrap(c : int, v : float)
+        if c < 0 then
+            if v ~= 0.f then
+                printf("wrap a non-zero? %d %f\n",c,v)
+            end
+            c = c + nUnknowns
+        end
+        if c >= nUnknowns then
+            if v ~= 0.f then
+                printf("wrap a non-zero? %d %f\n",c,v)
+            end
+            c = c - nUnknowns
+        end
+        return c
     end
     local function generateDumpJ(ES,dumpJ,idx,pd)
         local nnz_per_entry = 0
@@ -230,6 +271,7 @@ return function(problemSpec)
                     emit quote
                         pd.J_rowptr[local_residual+residual] = local_rowidx + nnz
                     end
+                    local begincolumns = nnz
                     for i,u in ipairs(r.unknowns) do
                         local image_offset = imagename_to_unknown_offset[u.image.name]
                         local nchannels = u.image.type.channelcount
@@ -237,18 +279,15 @@ return function(problemSpec)
                         local unknown_index = `image_offset + nchannels*uidx + u.channel
                         emit quote
                             pd.J_values[local_rowidx + nnz] = rhs.["_"..tostring(nnz)]
-                            pd.J_colindex[local_rowidx + nnz] = unknown_index
+                            pd.J_colindex[local_rowidx + nnz] = wrap(unknown_index,rhs.["_"..tostring(nnz)])
                         end
                         nnz = nnz + 1
                     end
-                    residual = residual + 1
-                    -- 1. sort the columns
-                    -- 2. write next entry as well to ensure the final entry is correct
-                    -- wasteful but less chance for error
+                    -- sort the columns
                     emit quote
-                        sortCol(&pd, local_rowidx, local_rowidx + nnz)
-                        pd.J_rowptr[local_residual+residual] = local_rowidx + nnz
+                        sortCol(&pd, local_rowidx + begincolumns, local_rowidx + nnz)
                     end
+                    residual = residual + 1
                 end
             end
         end
@@ -735,16 +774,23 @@ return function(problemSpec)
 	   pd.timer:startEvent("overall",nil,&pd.endSolver)
        [util.initParameters(`pd.parameters,problemSpec,params_,true)]
        var [parametersSym] = &pd.parameters
-        if use_dump_j and pd.J_values == nil then
-            logSolver("nnz = %s\n",[tostring(nnzExp)])
-            logSolver("nResiduals = %s\n",[tostring(nResidualsExp)])
-            logSolver("nnz = %d, nResiduals = %d\n",int(nnzExp),int(nResidualsExp))
-            C.cudaMalloc([&&opaque](&(pd.J_values)), sizeof(opt_float)*nnzExp)
-            C.cudaMalloc([&&opaque](&(pd.J_colindex)), sizeof(int)*nnzExp)
-            C.cudaMalloc([&&opaque](&(pd.J_rowptr)), sizeof(int)*(nResidualsExp+1))
-            cd(C.cudaMalloc([&&opaque](&pd.Jp), nResidualsExp*sizeof(float)))
-            cd(CUsp.cusparseCreate( &pd.handle ))
-        end
+        escape if use_dump_j then emit quote
+            if pd.J_values == nil then
+                logSolver("nnz = %s\n",[tostring(nnzExp)])
+                logSolver("nResiduals = %s\n",[tostring(nResidualsExp)])
+                logSolver("nnz = %d, nResiduals = %d\n",int(nnzExp),int(nResidualsExp))
+                C.cudaMalloc([&&opaque](&(pd.J_values)), sizeof(opt_float)*nnzExp)
+                C.cudaMalloc([&&opaque](&(pd.J_colindex)), sizeof(int)*nnzExp)
+                C.cudaMemset(pd.J_colindex,-1,sizeof(int)*nnzExp)
+                C.cudaMalloc([&&opaque](&(pd.J_rowptr)), sizeof(int)*(nResidualsExp+1))
+                cd(C.cudaMalloc([&&opaque](&pd.Jp), nResidualsExp*sizeof(float)))
+            
+                cd(CUsp.cusparseCreate( &pd.handle ))
+                var nnz = nnzExp
+                C.printf("setting rowptr[%d] = %d\n",nResidualsExp,nnz)
+                C.cudaMemcpy(&pd.J_rowptr[nResidualsExp],&nnz,sizeof(int),C.cudaMemcpyHostToDevice)
+            end
+        end end end
 	   pd.nIter = 0
 	   pd.nIterations = @[&int](solverparams[0])
 	   pd.lIterations = @[&int](solverparams[1])
@@ -799,12 +845,12 @@ return function(problemSpec)
                 end
             end
             if use_dump_j then
-                logSolver("saving J\n")
+                logSolver("saving J...\n")
                 gpu.saveJToCRS(pd)
                 if isGraph then
                     gpu.saveJToCRS_Graph(pd)
                 end
-                logSolver("saving J2\n")
+                logSolver("... done\n")
             end
             for lIter = 0, pd.lIterations do				
 
