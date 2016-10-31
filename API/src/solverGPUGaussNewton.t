@@ -1159,9 +1159,9 @@ return function(problemSpec)
 		end
 	end
 
-    local terra cost(data_ : &opaque) : float
+    local terra cost(data_ : &opaque) : double
         var pd = [&PlanData](data_)
-        return [float](pd.prevCost)
+        return [double](pd.prevCost)
     end
 
 	local terra makePlan() : &opt.Plan
