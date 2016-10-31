@@ -126,6 +126,71 @@ struct TermChwirut1
 	double y;
 };
 
+struct TermEckerle4
+{
+	TermEckerle4(double x, double y) : x(x), y(y) {}
+	template <typename T>
+	bool operator()(const T* const funcParams, T* residuals) const
+	{
+		//y_i - a / b * ad.exp(-(x_i - c)*(x_i - c) / (2.0 * b * b))
+		T a = funcParams[0];
+		T b = funcParams[1];
+		T c = funcParams[2];
+		residuals[0] = y - a / b * exp(-(x - c)*(x - c) / ((T)2.0 * b * b));
+		return true;
+	}
+	static ceres::CostFunction* Create(double x, double y)
+	{
+		return (new ceres::AutoDiffCostFunction<TermEckerle4, 1, 3>(
+			new TermEckerle4(x, y)));
+	}
+	double x, y;
+};
+
+struct TermMGH09
+{
+	TermMGH09(double x, double y) : x(x), y(y) {}
+	template <typename T>
+	bool operator()(const T* const funcParams, T* residuals) const
+	{
+		//a * ( x_i * x_i + x_i * b) / (x_i * x_i + x_i * c + d)
+		T a = funcParams[0];
+		T b = funcParams[1];
+		T c = funcParams[2];
+		T d = funcParams[3];
+		residuals[0] = y - a * (x * x + x * b) / (x * x + x * c + d);
+		return true;
+	}
+	static ceres::CostFunction* Create(double x, double y)
+	{
+		return (new ceres::AutoDiffCostFunction<TermMGH09, 1, 4>(
+			new TermMGH09(x, y)));
+	}
+	double x, y;
+};
+
+struct TermRat42
+{
+	TermRat42(double x, double y) : x(x), y(y) {}
+	template <typename T>
+	bool operator()(const T* const funcParams, T* residuals) const
+	{
+		T a = funcParams[0];
+		T b = funcParams[1];
+		T c = funcParams[2];
+		//y_i - a / (1.0 + ad.exp(b - c * x_i))
+		residuals[0] = y - a / ((T)1.0 + exp(b - c * x));
+		return true;
+	}
+	static ceres::CostFunction* Create(double x, double y)
+	{
+		return (new ceres::AutoDiffCostFunction<TermRat42, 1, 3>(
+			new TermRat42(x, y)));
+	}
+	double x, y;
+};
+
+
 std::vector<SolverIteration> CeresSolver::solve(
 	const NLLSProblem &problemInfo,
     UNKNOWNS* funcParameters,
@@ -147,6 +212,9 @@ std::vector<SolverIteration> CeresSolver::solve(
 		if (problemInfo.baseName == "misra") costFunction = TermMirsa::Create(functionData[i].x, functionData[i].y);
 		if (problemInfo.baseName == "bennet5") costFunction = TermBennet5::Create(functionData[i].x, functionData[i].y);
 		if (problemInfo.baseName == "chwirut1") costFunction = TermChwirut1::Create(functionData[i].x, functionData[i].y);
+		if (problemInfo.baseName == "eckerle4") costFunction = TermEckerle4::Create(functionData[i].x, functionData[i].y);
+		if (problemInfo.baseName == "mgh09") costFunction = TermMGH09::Create(functionData[i].x, functionData[i].y);
+		if (problemInfo.baseName == "rat42") costFunction = TermRat42::Create(functionData[i].x, functionData[i].y);
 
 		if (costFunction == nullptr)
 		{

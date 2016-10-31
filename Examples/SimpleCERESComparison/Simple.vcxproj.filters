@@ -35,6 +35,21 @@
     <None Include="..\..\API\src\precision.t">
       <Filter>opt</Filter>
     </None>
+    <None Include="eckerle4.t">
+      <Filter>opt</Filter>
+    </None>
+    <None Include="rat42.t">
+      <Filter>opt</Filter>
+    </None>
+    <None Include="mgh09.t">
+      <Filter>opt</Filter>
+    </None>
+    <None Include="roszman1.t">
+      <Filter>TODOs</Filter>
+    </None>
+    <None Include="lanczos2.t">
+      <Filter>TODOs</Filter>
+    </None>
   </ItemGroup>
   <ItemGroup>
     <Filter Include="opt">
@@ -42,6 +57,9 @@
     </Filter>
     <Filter Include="data">
       <UniqueIdentifier>{78d1700e-d69c-4097-9175-eed776f1dfb7}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="TODOs">
+      <UniqueIdentifier>{ced860df-ef70-4295-99ad-681fcd1d3023}</UniqueIdentifier>
     </Filter>
   </ItemGroup>
   <ItemGroup>
@@ -55,6 +73,21 @@
       <Filter>data</Filter>
     </Text>
     <Text Include="results.txt">
+      <Filter>data</Filter>
+    </Text>
+    <Text Include="data\eckerle4.txt">
+      <Filter>data</Filter>
+    </Text>
+    <Text Include="data\rat42.txt">
+      <Filter>data</Filter>
+    </Text>
+    <Text Include="data\roszman1.txt">
+      <Filter>TODOs</Filter>
+    </Text>
+    <Text Include="data\lanczos2.txt">
+      <Filter>TODOs</Filter>
+    </Text>
+    <Text Include="data\mgh09.txt">
       <Filter>data</Filter>
     </Text>
   </ItemGroup>
