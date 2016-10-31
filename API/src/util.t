@@ -1,5 +1,5 @@
 
-local timeIndividualKernels = false
+local timeIndividualKernels = true
 
 
 local S = require("std")

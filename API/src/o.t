@@ -658,6 +658,7 @@ function UnknownType:terratype()
         T.entries:insert { ip.name, ip.imagetype:terratype() }
     end
     if use_contiguous_allocation then
+        T.entries:insert { "_contiguousallocation", &opaque }
         terra T:initGPU()
             var size = 0
             escape
@@ -669,6 +670,7 @@ function UnknownType:terratype()
             end
             var data : &uint8
             C.cudaMalloc([&&opaque](&data), size)
+            self._contiguousallocation = data
             C.cudaMemset([&opaque](data), 0, size)
             size = 0
             escape
@@ -2251,35 +2253,6 @@ local function createdumpjgraph(PS,ES)
     return A.FunctionSpec(ES.kind, "dumpJ", EMPTY, outputs, EMPTY,ES)
 end
 
-local function createdumpjcentered(PS,ES)
-   local UnknownType = PS.P:UnknownType()
-   local ispace = ES.kind.ispace
-   local N = UnknownType:VectorSizeForIndexSpace(ispace)
-
-    local outputs = List{}
-
-    for ridx,residual in ipairs(ES.residuals) do
-        local F, unknownsupport = residual.expression,residual.unknowns
-        lprintf(0,"-------------")
-        lprintf(1,"R[%d] = %s",ridx,tostring(F))
-        for i,unknown in ipairs(unknownsupport) do
-            outputs:insert(F:d(ad.v[unknown]))
-        end
-    end
-    return A.FunctionSpec(ES.kind,"dumpJ", EMPTY, outputs, EMPTY,ES)
-end
-local function createdumpjgraph(PS,ES)
-    local outputs = List{}
-    for i,term in ipairs(ES.residuals) do
-        local F,unknownsupport = term.expression,term.unknowns
-        for i,unknown in ipairs(unknownsupport) do
-            outputs:insert(F:d(ad.v[unknown]))
-        end
-    end
-    return A.FunctionSpec(ES.kind, "dumpJ", EMPTY, outputs, EMPTY,ES)
-end
-
-
 local lastTime = nil
 function timeSinceLast(name)
     local currentTime = terralib.currenttimeinseconds()
@@ -2369,7 +2342,7 @@ function ProblemSpecAD:Cost(...)
         if energyspec.kind.kind == "CenteredFunction" then
             functionspecs:insert(createjtjcentered(self,energyspec))
             functionspecs:insert(createjtfcentered(self,energyspec))
-            --functionspecs:insert(createdumpjcentered(self,energyspec))
+            functionspecs:insert(createdumpjcentered(self,energyspec))
             
             if self.P:UsesLambda() then
                 functionspecs:insert(computeDtDcentered(self,energyspec))
@@ -2378,7 +2351,7 @@ function ProblemSpecAD:Cost(...)
         else
             functionspecs:insert(createjtjgraph(self,energyspec))
             functionspecs:insert(createjtfgraph(self,energyspec))
-            --functionspecs:insert(createdumpjgraph(self,energyspec))
+            functionspecs:insert(createdumpjgraph(self,energyspec))
             
             if self.P:UsesLambda() then
                 functionspecs:insert(computeDtDgraph(self,energyspec))

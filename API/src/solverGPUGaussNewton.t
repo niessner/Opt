@@ -7,6 +7,27 @@ local Timer = util.Timer
 
 local getValidUnknown = util.getValidUnknown
 local use_dump_j = false
+local use_fused_jtj = false
+
+local cd = macro(function(apicall) return quote
+        var r = apicall
+        if r ~= 0 then  
+            C.printf("Cuda reported error %d: %s\n",r, C.cudaGetErrorString(r))
+            C.exit(r)
+        end
+    in
+        r
+    end end)
+if use_dump_j then
+    local cusparsepath = "/usr/local/cuda"
+    terralib.linklibrary(cusparsepath.."/lib64/libcusparse.so")
+    terralib.includepath = terralib.includepath..";"..
+                           cusparsepath.."/include/"
+    CUsp = terralib.includecstring [[
+        #include <cusparse_v2.h>
+    ]]
+end
+
 
 local gpuMath = util.gpuMath
 
@@ -18,9 +39,19 @@ local FLOAT_EPSILON = `[opt_float](0.0)
 return function(problemSpec)
     local UnknownType = problemSpec:UnknownType()
     local TUnknownType = UnknownType:terratype()	
+    -- start of the unknowns that correspond to this image
+    -- for each entry there are a constant number of unknowns
+    -- corresponds to the col dim of the J matrix
     local imagename_to_unknown_offset = {}
+    
+    -- start of the rows of residuals for this energy spec
+    -- corresponds to the row dim of the J matrix
     local energyspec_to_residual_offset_exp = {}
+    
+    -- start of the block of non-zero entries that correspond to this energy spec
+    -- the total dimension here adds up to the number of non-zeros
     local energyspec_to_rowidx_offset_exp = {}
+    
     local nUnknowns,nResidualsExp,nnzExp = 0,`0,`0
     local parametersSym = symbol(&problemSpec:ParameterType(),"parameters")
     local function numberofelements(ES)
@@ -33,11 +64,11 @@ return function(problemSpec)
     if problemSpec.energyspecs then
         for i,image in ipairs(UnknownType.images) do
             imagename_to_unknown_offset[image.name] = nUnknowns
-            print(("image %s has offset %d"):format(image.name,nUnknowns))
+            --print(("image %s has offset %d"):format(image.name,nUnknowns))
             nUnknowns = nUnknowns + image.imagetype.ispace:cardinality()*image.imagetype.channelcount
         end
         for i,es in ipairs(problemSpec.energyspecs) do
-            print("ES",i,nResidualsExp,nnzExp)
+            --print("ES",i,nResidualsExp,nnzExp)
             energyspec_to_residual_offset_exp[es] = nResidualsExp
             energyspec_to_rowidx_offset_exp[es] = nnzExp
             
@@ -56,7 +87,7 @@ return function(problemSpec)
     
     local isGraph = problemSpec:UsesGraphs() 
     
-    local struct PlanData(S.Object) {
+    local struct PlanData {
 		plan : opt.Plan
 		parameters : problemSpec:ParameterType()
 		scratchF : &opt_float
@@ -88,11 +119,59 @@ return function(problemSpec)
 		lIterations : int		--linear iterations
 	    prevCost : opt_float
 	    
-	    J_values : &opt_float
-	    J_colindex : &int
-	    J_rowptr : &int
+	    J_csrValA : &opt_float
+	    J_csrColIndA : &int
+	    J_csrRowPtrA : &int
+	    
+	    JT_csrValA : &float
+		JT_csrRowPtrA : &int
+		JT_csrColIndA : &int
+		
+		JTJ_csrValA : &float
+		JTJ_csrRowPtrA : &int
+		JTJ_csrColIndA : &int
+		
+		JTJ_nnz : int
+	    
+	    Jp : &float
 	}
-	
+	if use_dump_j then
+	    PlanData.entries:insert {"handle", CUsp.cusparseHandle_t }
+	    PlanData.entries:insert {"desc", CUsp.cusparseMatDescr_t }
+	end
+	S.Object(PlanData)
+	local terra swapCol(pd : &PlanData, a : int, b : int)
+	    pd.J_csrValA[a],pd.J_csrColIndA[a],pd.J_csrValA[b],pd.J_csrColIndA[b] =
+	        pd.J_csrValA[b],pd.J_csrColIndA[b],pd.J_csrValA[a],pd.J_csrColIndA[a]
+	end
+	local terra sortCol(pd : &PlanData, s : int, e : int)
+	    for i = s,e do
+            var minidx = i
+            var min = pd.J_csrColIndA[i]
+            for j = i+1,e do
+                if pd.J_csrColIndA[j] < min then
+                    min = pd.J_csrColIndA[j]
+                    minidx = j
+                end
+            end
+            swapCol(pd,i,minidx)
+        end
+	end
+    local terra wrap(c : int, v : float)
+        if c < 0 then
+            if v ~= 0.f then
+                printf("wrap a non-zero? %d %f\n",c,v)
+            end
+            c = c + nUnknowns
+        end
+        if c >= nUnknowns then
+            if v ~= 0.f then
+                printf("wrap a non-zero? %d %f\n",c,v)
+            end
+            c = c - nUnknowns
+        end
+        return c
+    end
     local function generateDumpJ(ES,dumpJ,idx,pd)
         local nnz_per_entry = 0
         for i,r in ipairs(ES.residuals) do
@@ -101,7 +180,6 @@ return function(problemSpec)
         local base_rowidx = energyspec_to_rowidx_offset_exp[ES]
         local base_residual = energyspec_to_residual_offset_exp[ES]
         local idx_offset
-        print(terralib.type(idx))
         if idx.type == int then
             idx_offset = idx
         else    
@@ -123,25 +201,25 @@ return function(problemSpec)
                 local residual = 0
                 for i,r in ipairs(ES.residuals) do
                     emit quote
-                        pd.J_rowptr[local_residual+residual] = local_rowidx + nnz
+                        pd.J_csrRowPtrA[local_residual+residual] = local_rowidx + nnz
                     end
+                    local begincolumns = nnz
                     for i,u in ipairs(r.unknowns) do
                         local image_offset = imagename_to_unknown_offset[u.image.name]
                         local nchannels = u.image.type.channelcount
                         local uidx = GetOffset(idx,u.index)
                         local unknown_index = `image_offset + nchannels*uidx + u.channel
                         emit quote
-                            pd.J_values[local_rowidx + nnz] = rhs.["_"..tostring(nnz)]
-                            pd.J_colindex[local_rowidx + nnz] = unknown_index
+                            pd.J_csrValA[local_rowidx + nnz] = rhs.["_"..tostring(nnz)]
+                            pd.J_csrColIndA[local_rowidx + nnz] = wrap(unknown_index,rhs.["_"..tostring(nnz)])
                         end
                         nnz = nnz + 1
                     end
-                    residual = residual + 1
-                    -- write next entry as well to ensure the final entry is correct
-                    -- wasteful but less chance for error
+                    -- sort the columns
                     emit quote
-                        pd.J_rowptr[local_residual+residual] = local_rowidx + nnz
+                        sortCol(&pd, local_rowidx + begincolumns, local_rowidx + nnz)
                     end
+                    residual = residual + 1
                 end
             end
         end
@@ -440,7 +518,6 @@ return function(problemSpec)
                     [generateDumpJ(fmap.derivedfrom,fmap.dumpJ,idx,pd)]
                 end
             end
-            print(kernels.saveJToCRS)
         end
     
 
@@ -562,7 +639,6 @@ return function(problemSpec)
                     [generateDumpJ(fmap.derivedfrom,fmap.dumpJ,tIdx,pd)]
                 end
             end
-            print(kernels.saveJToCRS_Graph)
         end
         if problemSpec:UsesLambda() then
             terra kernels.PCGComputeDtD_Graph(pd : PlanData)
@@ -666,20 +742,169 @@ return function(problemSpec)
 
     end
 
+    local terra GetToHost(ptr : &opaque, N : int) : &int
+        var r = [&int](C.malloc(sizeof(int)*N))
+        C.cudaMemcpy(r,ptr,N*sizeof(int),C.cudaMemcpyDeviceToHost)
+        return r
+    end
+    local cusparseInner,cusparseOuter
+    if use_dump_j then
+        terra cusparseOuter(pd : &PlanData)
+            var [parametersSym] = &pd.parameters
+            --logSolver("saving J...\n")
+            gpu.saveJToCRS(pd)
+            if isGraph then
+                gpu.saveJToCRS_Graph(pd)
+            end
+            --logSolver("... done\n")
+            if pd.JTJ_csrRowPtrA == nil then
+                --allocate row
+                --C.printf("alloc JTJ\n")
+                var numrows = nUnknowns + 1
+                cd(C.cudaMalloc([&&opaque](&pd.JTJ_csrRowPtrA),sizeof(int)*numrows))
+                var endJTJalloc : util.TimerEvent
+                pd.timer:startEvent("J^TJ alloc",nil,&endJTJalloc)
+                cd(CUsp.cusparseXcsrgemmNnz(pd.handle, CUsp.CUSPARSE_OPERATION_TRANSPOSE, CUsp.CUSPARSE_OPERATION_NON_TRANSPOSE,
+                                      nUnknowns,nUnknowns,nResidualsExp,
+                                      pd.desc,nnzExp,pd.J_csrRowPtrA,pd.J_csrColIndA,
+                                      pd.desc,nnzExp,pd.J_csrRowPtrA,pd.J_csrColIndA,
+                                      pd.desc,pd.JTJ_csrRowPtrA, &pd.JTJ_nnz))
+                pd.timer:endEvent(nil,endJTJalloc)
+                
+                cd(C.cudaMalloc([&&opaque](&pd.JTJ_csrColIndA), sizeof(int)*pd.JTJ_nnz))
+                cd(C.cudaMalloc([&&opaque](&pd.JTJ_csrValA), sizeof(float)*pd.JTJ_nnz))
+                cd(C.cudaThreadSynchronize())
+            end
+            
+            var endJTJmm : util.TimerEvent
+            pd.timer:startEvent("JTJ multiply",nil,&endJTJmm)
+    
+            cd(CUsp.cusparseScsrgemm(pd.handle, CUsp.CUSPARSE_OPERATION_TRANSPOSE, CUsp.CUSPARSE_OPERATION_NON_TRANSPOSE,
+           nUnknowns,nUnknowns,nResidualsExp,
+           pd.desc,nnzExp,pd.J_csrValA,pd.J_csrRowPtrA,pd.J_csrColIndA,
+           pd.desc,nnzExp,pd.J_csrValA,pd.J_csrRowPtrA,pd.J_csrColIndA,
+           pd.desc, pd.JTJ_csrValA, pd.JTJ_csrRowPtrA,pd.JTJ_csrColIndA ))
+           pd.timer:endEvent(nil,endJTJmm)
+           
+            var endJtranspose : util.TimerEvent
+            pd.timer:startEvent("J_transpose",nil,&endJtranspose)
+            cd(CUsp.cusparseScsr2csc(pd.handle,nResidualsExp, nUnknowns,nnzExp,
+                                 pd.J_csrValA,pd.J_csrRowPtrA,pd.J_csrColIndA,
+                                 pd.JT_csrValA,pd.JT_csrColIndA,pd.JT_csrRowPtrA,
+                                 CUsp.CUSPARSE_ACTION_NUMERIC,CUsp.CUSPARSE_INDEX_BASE_ZERO))
+            pd.timer:endEvent(nil,endJtranspose)
+        end
+        terra cusparseInner(pd : &PlanData)
+            var [parametersSym] = &pd.parameters
+            
+            if false then
+                C.printf("begin debug dump\n")
+                var J_csrColIndA = GetToHost(pd.J_csrColIndA,nnzExp)
+                var J_csrRowPtrA = GetToHost(pd.J_csrRowPtrA,nResidualsExp + 1)
+                for i = 0,nResidualsExp do
+                    var b,e = J_csrRowPtrA[i],J_csrRowPtrA[i+1]
+                    if b >= e or b < 0 or b >= nnzExp or e < 0 or e > nnzExp then
+                        C.printf("ERROR: %d %d %d (total = %d)\n",i,b,e,nResidualsExp)
+                    end
+                    --C.printf("residual %d -> {%d,%d}\n",i,b,e)
+                    for j = b,e do
+                        if J_csrColIndA[j] < 0 or J_csrColIndA[j] >= nnzExp then
+                            C.printf("ERROR: j %d (total = %d)\n",j,J_csrColIndA[j])
+                        end
+                        if j ~= b and J_csrColIndA[j-1] >= J_csrColIndA[j] then
+                            C.printf("ERROR: sort j[%d] = %d, j[%d] = %d\n",j-1,J_csrColIndA[j-1],j,J_csrColIndA[j])
+                        end
+                        --C.printf("colindex: %d\n",J_csrColIndA[j])
+                    end
+                end
+                C.printf("end debug dump\n")
+            end
+            
+            var consts = array(0.f,1.f,2.f)
+            cd(C.cudaMemset(pd.Ap_X._contiguousallocation, -1, sizeof(float)*nUnknowns))
+            
+            if use_fused_jtj then
+                var endJTJp : util.TimerEvent
+                pd.timer:startEvent("J^TJp",nil,&endJTJp)
+                cd(CUsp.cusparseScsrmv(
+                            pd.handle, CUsp.CUSPARSE_OPERATION_NON_TRANSPOSE,
+                            nUnknowns, nUnknowns,pd.JTJ_nnz,
+                            &consts[2], pd.desc,
+                            pd.JTJ_csrValA, 
+                            pd.JTJ_csrRowPtrA, pd.JTJ_csrColIndA,
+                            [&float](pd.p._contiguousallocation),
+                            &consts[0], [&float](pd.Ap_X._contiguousallocation)
+                        ))
+                pd.timer:endEvent(nil,endJTJp)
+            else
+                var endJp : util.TimerEvent
+                pd.timer:startEvent("Jp",nil,&endJp)
+                cd(CUsp.cusparseScsrmv(
+                            pd.handle, CUsp.CUSPARSE_OPERATION_NON_TRANSPOSE,
+                            nResidualsExp, nUnknowns,nnzExp,
+                            &consts[1], pd.desc,
+                            pd.J_csrValA, 
+                            pd.J_csrRowPtrA, pd.J_csrColIndA,
+                            [&float](pd.p._contiguousallocation),
+                            &consts[0], pd.Jp
+                        ))
+                pd.timer:endEvent(nil,endJp)
+                var endJT : util.TimerEvent
+                pd.timer:startEvent("J^T",nil,&endJT)
+                cd(CUsp.cusparseScsrmv(
+                            pd.handle, CUsp.CUSPARSE_OPERATION_NON_TRANSPOSE,
+                            nUnknowns, nResidualsExp, nnzExp,
+                            &consts[2], pd.desc,
+                            pd.JT_csrValA, 
+                            pd.JT_csrRowPtrA, pd.JT_csrColIndA,
+                            pd.Jp,
+                            &consts[0],[&float](pd.Ap_X._contiguousallocation) 
+                        ))
+                pd.timer:endEvent(nil,endJT)
+            end
+        end
+    else
+        terra cusparseInner(pd : &PlanData) end
+        terra cusparseOuter(pd : &PlanData) end
+    end
+
 	local terra init(data_ : &opaque, params_ : &&opaque, solverparams : &&opaque)
 	   var pd = [&PlanData](data_)
 	   pd.timer:init()
 	   pd.timer:startEvent("overall",nil,&pd.endSolver)
        [util.initParameters(`pd.parameters,problemSpec,params_,true)]
        var [parametersSym] = &pd.parameters
-        if use_dump_j and pd.J_values == nil then
-            logSolver("nnz = %s\n",[tostring(nnzExp)])
-            logSolver("nResiduals = %s\n",[tostring(nResidualsExp)])
-            logSolver("nnz = %d, nResiduals = %d\n",int(nnzExp),int(nResidualsExp))
-            C.cudaMalloc([&&opaque](&(pd.J_values)), sizeof(opt_float)*nnzExp)
-            C.cudaMalloc([&&opaque](&(pd.J_colindex)), sizeof(int)*nnzExp)
-            C.cudaMalloc([&&opaque](&(pd.J_rowptr)), sizeof(int)*(nResidualsExp+1))
-        end
+        escape if use_dump_j then emit quote
+            if pd.J_csrValA == nil then
+                cd(CUsp.cusparseCreateMatDescr( &pd.desc ))
+                cd(CUsp.cusparseSetMatType( pd.desc,CUsp.CUSPARSE_MATRIX_TYPE_GENERAL ))
+                cd(CUsp.cusparseSetMatIndexBase( pd.desc,CUsp.CUSPARSE_INDEX_BASE_ZERO ))
+                cd(CUsp.cusparseCreate( &pd.handle ))
+                
+                logSolver("nnz = %s\n",[tostring(nnzExp)])
+                logSolver("nResiduals = %s\n",[tostring(nResidualsExp)])
+                logSolver("nnz = %d, nResiduals = %d\n",int(nnzExp),int(nResidualsExp))
+                
+                -- J alloc
+                C.cudaMalloc([&&opaque](&(pd.J_csrValA)), sizeof(opt_float)*nnzExp)
+                C.cudaMalloc([&&opaque](&(pd.J_csrColIndA)), sizeof(int)*nnzExp)
+                C.cudaMemset(pd.J_csrColIndA,-1,sizeof(int)*nnzExp)
+                C.cudaMalloc([&&opaque](&(pd.J_csrRowPtrA)), sizeof(int)*(nResidualsExp+1))
+                
+                -- J^T alloc
+                C.cudaMalloc([&&opaque](&pd.JT_csrValA), nnzExp*sizeof(float))
+                C.cudaMalloc([&&opaque](&pd.JT_csrColIndA), nnzExp*sizeof(int))
+                C.cudaMalloc([&&opaque](&pd.JT_csrRowPtrA), (nUnknowns + 1) *sizeof(int))
+                
+                -- Jp alloc
+                cd(C.cudaMalloc([&&opaque](&pd.Jp), nResidualsExp*sizeof(float)))
+                
+                -- write J_csrRowPtrA end
+                var nnz = nnzExp
+                C.printf("setting rowptr[%d] = %d\n",nResidualsExp,nnz)
+                C.cudaMemcpy(&pd.J_csrRowPtrA[nResidualsExp],&nnz,sizeof(int),C.cudaMemcpyHostToDevice)
+            end
+        end end end
 	   pd.nIter = 0
 	   pd.nIterations = @[&int](solverparams[0])
 	   pd.lIterations = @[&int](solverparams[1])
@@ -716,7 +941,6 @@ return function(problemSpec)
 			C.cudaMemset(pd.scanBetaDenominator, 0, sizeof(opt_float))	--scan in PCGInit1 requires reset
 
 			gpu.PCGInit1(pd)
-			--gpu.saveJToCRS(pd)
 			if isGraph then
 				gpu.PCGInit1_Graph(pd)	
 				gpu.PCGInit1_Finish(pd)	
@@ -734,14 +958,7 @@ return function(problemSpec)
                     end
                 end
             end
-            if use_dump_j then
-                logSolver("saving J\n")
-                gpu.saveJToCRS(pd)
-                if isGraph then
-                    gpu.saveJToCRS_Graph(pd)
-                end
-                logSolver("saving J2\n")
-            end
+            cusparseOuter(pd)
             for lIter = 0, pd.lIterations do				
 --[[
                 var v : double[3]
@@ -785,11 +1002,12 @@ return function(problemSpec)
 					gpu.PCGStep1_Graph(pd)	
 				end
 				
+				-- only does anything if use_dump_j is true
+				cusparseInner(pd)
+				
 				C.cudaMemset(pd.scanBetaNumerator, 0, sizeof(opt_float))
 				
-				
-
-                if [problemSpec:UsesLambda()] and ((lIter + 1) % residual_reset_period) == 0 then
+				if [problemSpec:UsesLambda()] and ((lIter + 1) % residual_reset_period) == 0 then
                     gpu.PCGStep2_1stHalf(pd)
                     gpu.computeAdelta(pd)
                     -- TODO: merge these?
@@ -973,7 +1191,8 @@ return function(problemSpec)
 		C.cudaMalloc([&&opaque](&(pd.modelCostChange)), sizeof(opt_float))
 		
 		C.cudaMalloc([&&opaque](&(pd.scratchF)), sizeof(opt_float))
-		pd.J_values = nil
+		pd.J_csrValA = nil
+		pd.JTJ_csrRowPtrA = nil
 		return &pd.plan
 	end
 	return makePlan
