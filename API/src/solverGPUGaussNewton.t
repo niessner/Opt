@@ -119,26 +119,27 @@ return function(problemSpec)
 		lIterations : int		--linear iterations
 	    prevCost : opt_float
 	    
-	    J_values : &opt_float
-	    J_colindex : &int
-	    J_rowptr : &int
+	    J_csrValA : &opt_float
+	    J_csrColIndA : &int
+	    J_csrRowPtrA : &int
 	    Jp : &float
 	}
 	if use_dump_j then
 	    PlanData.entries:insert {"handle", CUsp.cusparseHandle_t }
+	    PlanData.entries:insert {"desc", CUsp.cusparseMatDescr_t }
 	end
 	S.Object(PlanData)
 	local terra swapCol(pd : &PlanData, a : int, b : int)
-	    pd.J_values[a],pd.J_colindex[a],pd.J_values[b],pd.J_colindex[b] =
-	        pd.J_values[b],pd.J_colindex[b],pd.J_values[a],pd.J_colindex[a]
+	    pd.J_csrValA[a],pd.J_csrColIndA[a],pd.J_csrValA[b],pd.J_csrColIndA[b] =
+	        pd.J_csrValA[b],pd.J_csrColIndA[b],pd.J_csrValA[a],pd.J_csrColIndA[a]
 	end
 	local terra sortCol(pd : &PlanData, s : int, e : int)
 	    for i = s,e do
             var minidx = i
-            var min = pd.J_colindex[i]
+            var min = pd.J_csrColIndA[i]
             for j = i+1,e do
-                if pd.J_colindex[j] < min then
-                    min = pd.J_colindex[j]
+                if pd.J_csrColIndA[j] < min then
+                    min = pd.J_csrColIndA[j]
                     minidx = j
                 end
             end
@@ -157,36 +158,27 @@ return function(problemSpec)
             
             if false then
                 C.printf("begin debug dump\n")
-                var J_colindex = GetToHost(pd.J_colindex,nnzExp)
-                var J_rowptr = GetToHost(pd.J_rowptr,nResidualsExp + 1)
+                var J_csrColIndA = GetToHost(pd.J_csrColIndA,nnzExp)
+                var J_csrRowPtrA = GetToHost(pd.J_csrRowPtrA,nResidualsExp + 1)
                 for i = 0,nResidualsExp do
-                    var b,e = J_rowptr[i],J_rowptr[i+1]
+                    var b,e = J_csrRowPtrA[i],J_csrRowPtrA[i+1]
                     if b >= e or b < 0 or b >= nnzExp or e < 0 or e > nnzExp then
                         C.printf("ERROR: %d %d %d (total = %d)\n",i,b,e,nResidualsExp)
                     end
                     --C.printf("residual %d -> {%d,%d}\n",i,b,e)
                     for j = b,e do
-                        if J_colindex[j] < 0 or J_colindex[j] >= nnzExp then
-                            C.printf("ERROR: j %d (total = %d)\n",j,J_colindex[j])
+                        if J_csrColIndA[j] < 0 or J_csrColIndA[j] >= nnzExp then
+                            C.printf("ERROR: j %d (total = %d)\n",j,J_csrColIndA[j])
                         end
-                        if j ~= b and J_colindex[j-1] >= J_colindex[j] then
-                            C.printf("ERROR: sort j[%d] = %d, j[%d] = %d\n",j-1,J_colindex[j-1],j,J_colindex[j])
+                        if j ~= b and J_csrColIndA[j-1] >= J_csrColIndA[j] then
+                            C.printf("ERROR: sort j[%d] = %d, j[%d] = %d\n",j-1,J_csrColIndA[j-1],j,J_csrColIndA[j])
                         end
-                        --C.printf("colindex: %d\n",J_colindex[j])
+                        --C.printf("colindex: %d\n",J_csrColIndA[j])
                     end
                 end
                 C.printf("end debug dump\n")
             end
             
-            var desc : CUsp.cusparseMatDescr_t
-    
-            cd(CUsp.cusparseCreateMatDescr( &desc ))
-            cd(CUsp.cusparseSetMatType( desc,
-                                        CUsp.CUSPARSE_MATRIX_TYPE_GENERAL ))
-            cd(CUsp.cusparseSetMatIndexBase( desc,
-                                             CUsp.CUSPARSE_INDEX_BASE_ZERO ))
-            --gpu.DebugDump(pd)
-            --C.cudaThreadSynchronize()
             var consts = array(0.f,1.f,2.f)
             cd(C.cudaMemset(pd.Ap_X._contiguousallocation, -1, sizeof(float)*nUnknowns))
             var endJp : util.TimerEvent
@@ -194,9 +186,9 @@ return function(problemSpec)
             cd(CUsp.cusparseScsrmv(
                         pd.handle, CUsp.CUSPARSE_OPERATION_NON_TRANSPOSE,
                         nResidualsExp, nUnknowns,nnzExp,
-                        &consts[1], desc,
-                        pd.J_values, 
-                        pd.J_rowptr, pd.J_colindex,
+                        &consts[1], pd.desc,
+                        pd.J_csrValA, 
+                        pd.J_csrRowPtrA, pd.J_csrColIndA,
                         [&float](pd.p._contiguousallocation),
                         &consts[0], pd.Jp
                     ))
@@ -206,9 +198,9 @@ return function(problemSpec)
             cd(CUsp.cusparseScsrmv(
                         pd.handle, CUsp.CUSPARSE_OPERATION_TRANSPOSE,
                         nResidualsExp, nUnknowns,nnzExp,
-                        &consts[2], desc,
-                        pd.J_values, 
-                        pd.J_rowptr, pd.J_colindex,
+                        &consts[2], pd.desc,
+                        pd.J_csrValA, 
+                        pd.J_csrRowPtrA, pd.J_csrColIndA,
                         pd.Jp,
                         &consts[0],[&float](pd.Ap_X._contiguousallocation) 
                     ))
@@ -269,7 +261,7 @@ return function(problemSpec)
                 local residual = 0
                 for i,r in ipairs(ES.residuals) do
                     emit quote
-                        pd.J_rowptr[local_residual+residual] = local_rowidx + nnz
+                        pd.J_csrRowPtrA[local_residual+residual] = local_rowidx + nnz
                     end
                     local begincolumns = nnz
                     for i,u in ipairs(r.unknowns) do
@@ -278,8 +270,8 @@ return function(problemSpec)
                         local uidx = GetOffset(idx,u.index)
                         local unknown_index = `image_offset + nchannels*uidx + u.channel
                         emit quote
-                            pd.J_values[local_rowidx + nnz] = rhs.["_"..tostring(nnz)]
-                            pd.J_colindex[local_rowidx + nnz] = wrap(unknown_index,rhs.["_"..tostring(nnz)])
+                            pd.J_csrValA[local_rowidx + nnz] = rhs.["_"..tostring(nnz)]
+                            pd.J_csrColIndA[local_rowidx + nnz] = wrap(unknown_index,rhs.["_"..tostring(nnz)])
                         end
                         nnz = nnz + 1
                     end
@@ -775,20 +767,25 @@ return function(problemSpec)
        [util.initParameters(`pd.parameters,problemSpec,params_,true)]
        var [parametersSym] = &pd.parameters
         escape if use_dump_j then emit quote
-            if pd.J_values == nil then
+            if pd.J_csrValA == nil then
+                cd(CUsp.cusparseCreateMatDescr( &pd.desc ))
+                cd(CUsp.cusparseSetMatType( pd.desc,CUsp.CUSPARSE_MATRIX_TYPE_GENERAL ))
+                cd(CUsp.cusparseSetMatIndexBase( pd.desc,CUsp.CUSPARSE_INDEX_BASE_ZERO ))
+            
                 logSolver("nnz = %s\n",[tostring(nnzExp)])
                 logSolver("nResiduals = %s\n",[tostring(nResidualsExp)])
                 logSolver("nnz = %d, nResiduals = %d\n",int(nnzExp),int(nResidualsExp))
-                C.cudaMalloc([&&opaque](&(pd.J_values)), sizeof(opt_float)*nnzExp)
-                C.cudaMalloc([&&opaque](&(pd.J_colindex)), sizeof(int)*nnzExp)
-                C.cudaMemset(pd.J_colindex,-1,sizeof(int)*nnzExp)
-                C.cudaMalloc([&&opaque](&(pd.J_rowptr)), sizeof(int)*(nResidualsExp+1))
+                
+                C.cudaMalloc([&&opaque](&(pd.J_csrValA)), sizeof(opt_float)*nnzExp)
+                C.cudaMalloc([&&opaque](&(pd.J_csrColIndA)), sizeof(int)*nnzExp)
+                C.cudaMemset(pd.J_csrColIndA,-1,sizeof(int)*nnzExp)
+                C.cudaMalloc([&&opaque](&(pd.J_csrRowPtrA)), sizeof(int)*(nResidualsExp+1))
                 cd(C.cudaMalloc([&&opaque](&pd.Jp), nResidualsExp*sizeof(float)))
             
                 cd(CUsp.cusparseCreate( &pd.handle ))
                 var nnz = nnzExp
                 C.printf("setting rowptr[%d] = %d\n",nResidualsExp,nnz)
-                C.cudaMemcpy(&pd.J_rowptr[nResidualsExp],&nnz,sizeof(int),C.cudaMemcpyHostToDevice)
+                C.cudaMemcpy(&pd.J_csrRowPtrA[nResidualsExp],&nnz,sizeof(int),C.cudaMemcpyHostToDevice)
             end
         end end end
 	   pd.nIter = 0
@@ -1004,7 +1001,7 @@ return function(problemSpec)
 		C.cudaMalloc([&&opaque](&(pd.modelCostChange)), sizeof(opt_float))
 		
 		C.cudaMalloc([&&opaque](&(pd.scratchF)), sizeof(opt_float))
-		pd.J_values = nil
+		pd.J_csrValA = nil
 		return &pd.plan
 	end
 	return makePlan
