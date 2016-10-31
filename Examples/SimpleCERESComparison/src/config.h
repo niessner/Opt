@@ -5,7 +5,7 @@
 
 struct NLLSProblem
 {
-	NLLSProblem(std::string _baseName, int _unknownCount, double3 _startingPoint, double3 _trueSolution)
+	NLLSProblem(std::string _baseName, int _unknownCount, double4 _startingPoint, double4 _trueSolution)
 	{
 		baseName = _baseName;
 		unknownCount = _unknownCount;
@@ -14,7 +14,7 @@ struct NLLSProblem
 	}
 	std::string baseName;
 	int unknownCount;
-	double3 startingPoint, trueSolution;
+	double4 startingPoint, trueSolution;
 };
 
 struct SolverIteration
@@ -26,10 +26,10 @@ struct SolverIteration
 
 const bool useProblemDefault = false; //2 unknowns -- Michael's original curveFitting.t code
 
-const int maxUnknownCount = 3;
+const int maxUnknownCount = 4;
 
 //#define OPT_UNKNOWNS OPT_FLOAT2
-#define OPT_UNKNOWNS OPT_FLOAT3
+#define OPT_UNKNOWNS OPT_FLOAT4
 
 //#define UNKNOWNS double2
-#define UNKNOWNS double3
+#define UNKNOWNS double4

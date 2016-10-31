@@ -173,13 +173,23 @@ xcopy /Y /D "..\..\API\release\include\*.h" "."</Command>
     <None Include="bennet5.t" />
     <None Include="chwirut1.t" />
     <None Include="curveFitting.t" />
+    <None Include="eckerle4.t" />
+    <None Include="lanczos2.t" />
+    <None Include="mgh09.t" />
     <None Include="misra.t" />
     <None Include="opt_precision.t" />
+    <None Include="rat42.t" />
+    <None Include="roszman1.t" />
   </ItemGroup>
   <ItemGroup>
     <Text Include="data\bennet5.txt" />
     <Text Include="data\chwirut1.txt" />
+    <Text Include="data\eckerle4.txt" />
+    <Text Include="data\lanczos2.txt" />
+    <Text Include="data\mgh09.txt" />
     <Text Include="data\misra.txt" />
+    <Text Include="data\rat42.txt" />
+    <Text Include="data\roszman1.txt" />
     <Text Include="results.txt" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />

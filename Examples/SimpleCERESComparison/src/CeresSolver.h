@@ -13,7 +13,6 @@ public:
         double2* funcData);
 
 private:
-    double2 functionParameters;
     std::vector<double2> functionData;
 };
 
