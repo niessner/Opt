@@ -36,10 +36,10 @@ where $EE^T=M$ and $\hat{x} = E^Tx$.
 
 I propose that CERES is solving exactly this system (and transforming $\hat{x}$ appropriately after solving), for:
 
-$E^{-1} = S$, $A = J^TJ + \lambda I$, $\lambda = 1/\mbox{radius}$, $b = J^Tr$
+$E^{-1} = S$, $A = J^TJ + \lambda I$, $\lambda = 1/\mbox{radius}$, $b = J^TF$
 
 CERES claims to be solving the system 
-$$(J^TJ + D^TD)\hat{x} = J^Tr$$
+$$(J^TJ + D^TD)\hat{x} = J^TF$$
 
 but their J has already been multiplied by $S$, so the system really is 
 
@@ -51,19 +51,19 @@ $$((JS)^T(JS) + (CS)^T(CS))\hat{x} = (JS)^Tr$$
 
 since $(AB)^T = A^TB^T$, we have
 
-$$(S^TJ^TJS + S^TC^TCS)\hat{x} = S^TJ^Tr$$
+$$(S^TJ^TJS + S^TC^TCS)\hat{x} = S^TJ^TF$$
 
 by distributivity:
 
-$$S^T(J^TJ + C^TC)S\hat{x} = S^TJ^Tr$$
+$$S^T(J^TJ + C^TC)S\hat{x} = S^TJ^TF$$
 
 $S$ is again, diagonal, so $S^T = S$, thus:
 
-$$S(J^TJ + C^TC)S^T\hat{x} = SJ^Tr$$
+$$S(J^TJ + C^TC)S^T\hat{x} = SJ^TF$$
 
 So CERES is solving the system $E^{-1}A(E^{-1})^T\hat{x} = E^{-1}b$
 
-with $E^{-1} = S$, $A = J^TJ + C^TC$, and $b = J^Tr$.
+with $E^{-1} = S$, $A = J^TJ + C^TC$, and $b = J^TF$.
 
 This is close to what I proposed; they would be equivalent if $C^TC = I/\mbox{radius}$.
 
@@ -108,7 +108,75 @@ $$c_{ii} = \frac{d_{ii}}{s_{ii}} = \frac{1}{\sqrt{\mbox{radius}}}\frac{\sqrt{(J^
 $$c_{ii} = \frac{\sqrt{(J^TJ)_{ii}}}{\sqrt{\mbox{radius}}}$$
 
 
-So each element of $C^TC$ will just be $ctc_{ii} = \frac{(J^TJ)_{ii}}{\mbox{radius}}$. This is *not* dependent on the preconditioner S.
+So each element of $C^TC$ will just be $ctc_{ii} = \frac{(J^TJ)_{ii}}{\mbox{radius}}$. This is *not* dependent on the preconditioner $S$.
+
+Double preconditioning
+===============================================================================
+
+Upon closer inspection, CERES actually has a second layer of preconditioning.
+By default, it not only scales the Jacobian before any solving takes place,
+it also then runs PCG on the resulting system, using the Jacobi preconditioner:
+
+$$A\hat{x} = b$$
+
+with $A = (JS)^T(JS) + D^TD$, $b = (JS)^TF$, $\hat{x} = S^{-1}\delta$.
+
+
+The preconditioner is `diag(A)`, which we will call $K$ for now. Let $LL^T = K$
+
+This is equivalent to solving the system:
+
+$$L^{-1}AL^{-1T}\hat{x_c} = L^{-1}b$$
+
+where $\hat{x_c} = L^T\hat{x}$
+
+$$L^{-1}S(J^TJ + C^TC)S^TL^{-1T}\hat{x_c} = L^{-1}SJ^TF$$
+
+and $\hat{x_c} = L^TS^{-1}\delta$.
+
+This is itself equivalent to solving the system
+
+$$(J^TJ + C^TC)\delta = J^TF$$
+
+using PCG with 
+
+$$M^{-1}=(L^{-1}S)^T(L^{-1}S)$$.
+
+Each element of $M^{-1}$:
+
+$$m^{-1}_{ii} = (\ell^{-1}_{ii})^2 (s_{ii})^2$$
+
+Since $LL^T = K$, and both are diagonals, then $(\ell^{-1}_{ii})^2=k^{-1}_{ii}$,
+
+so 
+
+$$m^{-1}_{ii} = k^{-1}_{ii} (s_{ii})^2$$
+
+Each element of $K$, 
+
+$$k_{ii} = ((JS)^T(JS) + D^TD)_{ii}$$ 
+
+$$k_{ii} = (S(J^TJ + C^TC)S^T)_{ii}$$ 
+
+$$k_{ii} = s_{ii}^2(jtj_{ii} + ctc_{ii})$$
+
+So:
+
+
+$$m^{-1}_{ii} = \frac{1}{s_{ii}^2(jtj_{ii} + ctc_{ii})} s_{ii}^2$$
+
+$$m^{-1}_{ii} = \frac{s_{ii}^2}{s_{ii}^2(jtj_{ii} + ctc_{ii})}$$
+
+$$m^{-1}_{ii} = \frac{1}{(jtj_{ii} + ctc_{ii})}$$
+
+Recall that $ctc_{ii} = \frac{(J^TJ)_{ii}}{\mbox{radius}}$, so the new preconditioner can be calculated as 
+
+$$m^{-1}_{ii} = \frac{1}{((\mbox{radius})ctc_{ii} + ctc_{ii})}$$
+
+$$m^{-1}_{ii} = \frac{1}{(1+\mbox{radius})ctc_{ii}}$$
+
+
+
 
 
 Adjusting the trust region radius, CERES vs. Opt
@@ -171,11 +239,52 @@ the solver terminates at iteration $i$ if:
 
 $$i \frac{ Q(x_i) - Q(x_i-1)}{Q(x_i)} < q_\mbox{tolerance}$$
 
-The CERES linear solver is solving the equations: $A = ((JS)^T(JS) + D^TD)$ and $B=(JS)^Tr$$.
+The CERES linear solver is solving the equations: $A = ((JS)^T(JS) + D^TD)$ and $b=(JS)^TF$.
+
+CERES computes $Q(x_i)$ in the following line of code.
+
+`double Q0 = -1.0 * xref.dot(bref + r);`
+
+`bref` is $b=(JS)^TF$. `xref` is $\hat{x}=S^{-1}\delta$. `r` is $b-A\hat{x}$.
+
+`double Q0 = -1.0 * xref.dot(bref + r);` is then $Q_0 = -\hat{x}\cdot (b + b-A\hat{x})$.
+
+$$Q_0 = -\hat{x}\cdot (b + b-A\hat{x})$$
+
+$$Q_0 = -\hat{x}\cdot (2b-A\hat{x})$$
+
+$$Q_0 = -\hat{x}\cdot (2(JS)^TF-((JS)^T(JS) + D^TD)\hat{x})$$
+
+$$Q_0 = -\hat{x}\cdot (2(JS)^TF-((JS)^T(JS) + (CS)^T(CS))\hat{x})$$
+
+$$Q_0 = -(S^{-1}\delta) \cdot (2(JS)^TF-((JS)^T(JS) + (CS)^T(CS))S^{-1}\delta)$$
+
+$$Q_0 = -(S^{-1}\delta)\cdot (2S^TJ^TF-(S^TJ^TJS + S^TC^TCS)S^{-1}\delta)$$
+
+$$Q_0 = -(S^{-1}\delta)\cdot (S^T(2J^TF)-S^T((J^TJ + C^TC)SS^{-1}\delta))$$
+
+$$Q_0 = -(S^{-1}\delta)\cdot S^T((2J^TF)-((J^TJ + C^TC)\delta))$$
+
+$$Q_0 = -(S^{-1}\delta)\cdot S^T((2J^TF)-((J^TJ + C^TC)\delta))$$
+
+
+Each element of the dot product is then:
+
+$$s_i^{-1}\delta_i s_i ((2J^TF)-((J^TJ + C^TC)\delta))_i = \delta_i((2J^TF)-((J^TJ + C^TC)\delta))_i$$
+
+This means
+
+$$Q_0 = -\delta\cdot((2J^TF)-((J^TJ + C^TC)\delta))$$
+
+In Opt, $J^TF$ is stored in `b`, `r` stores `b-Adelta`, which is equivalent to $J^TF-(J^TJ + C^TC)\delta$, so, we can compute 
+
+`Q0 = delta.dot(r + b)
+
 
 They explicitly don't do $r_\mbox{tolerance}$ checking since "As Nash and Sofer show, r_tolerance based termination is essentially useless in Truncated Newton methods."
 
-The CERES solver also explicitly recomputes the residual directly ($Ax-b$) every residual_reset_period iterations (which defaults to 10), to prevent drift from round off error. Opt never does this.
+
+The CERES solver also explicitly recomputes the residual directly ($Ax-b$) every `residual_reset_period` iterations (which defaults to 10), to prevent drift from round off error. Opt never does this.
 
 
 Important Note
