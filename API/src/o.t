@@ -1988,7 +1988,7 @@ local function createjtjcentered(PS,ES)
         end
     end
     for i,p in ipairs(P_hat) do
-        P_hat[i] = 2.0 * p
+        P_hat[i] = 1.0 * p
     end
     dprint("JTJ[nopoly] = ", ad.tostrings(P_hat))
     P_hat = ad.polysimplify(P_hat)
@@ -2026,7 +2026,7 @@ local function createjtjgraph(PS,ES)
         end
         for i,partial in ipairs(partials) do
             local u = unknownsupport[i]
-            local jtjp = 2.0*Jp*partial
+            local jtjp = 1.0 * Jp*partial
             result = result + P[u.image.name](u.index,u.channel)*jtjp
             addscatter(u,jtjp)
         end
@@ -2075,7 +2075,7 @@ local function createjtfcentered(PS,ES)
 	    else
 		    P_hat[i] = ad.polysimplify(P_hat[i])
 	    end
-	    F_hat[i] = ad.polysimplify(2.0*F_hat[i])
+	    F_hat[i] = ad.polysimplify(1.0 * F_hat[i])
 	end
 	dprint("JTF =", ad.tostrings({F_hat[1], F_hat[2], F_hat[3]}))
     return A.FunctionSpec(ES.kind,"evalJTF", EMPTY, List{ ad.Vector(unpack(F_hat)), ad.Vector(unpack(P_hat)) }, EMPTY,ES)
@@ -2107,7 +2107,7 @@ local function createmodelcost(PS,ES)
         local residual_m = F + JTdelta
         result = result + (residual_m*residual_m)
     end
-    result = ad.polysimplify(result)
+    result = ad.polysimplify(0.5*result)
     return A.FunctionSpec(ES.kind,"modelcost", List {"Delta"}, List{ result }, EMPTY,ES)
 end
 
@@ -2130,6 +2130,7 @@ local function createmodelcostgraph(PS,ES)
         local residual_m = F + JTdelta
         result = result + (residual_m*residual_m)
     end
+    result = ad.polysimplify(0.5*result)
     return A.FunctionSpec(ES.kind, "modelcost", List { "Delta" }, List{ result }, EMPTY,ES)
 end
 
@@ -2154,7 +2155,7 @@ local function createjtfgraph(PS,ES)
         for i,partial in ipairs(partials) do
             local u = unknownsupport[i]
             assert(GraphElement:isclassof(u.index))
-            addscatter(R,u,-2.0*partial*F)
+            addscatter(R,u,-1.0*partial*F)
             addscatter(Pre,u,partial*partial)
         end
     end
@@ -2288,7 +2289,7 @@ local function createcost(ES)
         for i,t in ipairs(terms) do
             sum = sum + t*t
         end
-        return sum
+        return 0.5*sum
     end
     local exp = sumsquared(ES.residuals:map("expression"))
     return A.FunctionSpec(ES.kind,"cost", EMPTY, List{exp}, EMPTY,ES) 

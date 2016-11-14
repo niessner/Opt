@@ -175,7 +175,67 @@ $$m^{-1}_{ii} = \frac{1}{((\mbox{radius})ctc_{ii} + ctc_{ii})}$$
 
 $$m^{-1}_{ii} = \frac{1}{(1+\mbox{radius})ctc_{ii}}$$
 
+*This is not quite right*. CtC is clamped using some min and max values. In Opt we compute $m^{-1}_{ii}$ in the same kernel as we clamp CtC, so we can use the proper formula easily:
 
+ $$m^{-1}_{ii} = \frac{1}{((\mbox{radius})ctc^{unclamped}_{ii} + ctc_{ii})}$$
+
+
+
+Now let us confirm that we are actually computing what we think we are computing in both Opt and CERES.
+
+We should be able to confirm the relation between the actual values computed in Opt and CERES.
+
+Recall Opt is solving
+
+
+$$Ax = b$$
+
+where $A=(J^TJ + C^TC)$, $x=\delta$, $b=J^TF$
+
+$$(J^TJ + C^TC)\delta = J^TF$$
+
+using PCG with 
+
+$$M^{-1}=(L^{-1}S)^T(L^{-1}S)$$.
+
+So going through all of the initialization parameters:
+
+`b_Opt =` $J^TF$
+
+`r_0_Opt = b_Opt - A_Opt x_0_Opt = b_Opt  =` $J^TF$
+
+`preconditioner_Opt = `$M^{-1} = (L^{-1}S)^T(L^{-1}S)
+
+`z_0_Opt = preconditioner_Opt * r_0_Opt =` $M^{-1}J^TF = (L^{-1}S)^T(L^{-1}S)J^TF$
+
+`b_Opt =` $J^TF$
+
+`r_0_Opt = b_Opt - A_Opt x_0_Opt = b_Opt  =` $J^TF$
+
+`preconditioner_Opt = `$M^{-1} = (L^{-1}S)^T(L^{-1}S)$
+
+`z_0_Opt = preconditioner_Opt * r_0_Opt =` $M^{-1}J^TF = (L^{-1}S)^T(L^{-1}S)J^TF$
+
+
+On the other hand, CERES is solving
+
+$$Ax = b$$
+
+where $A=((JS)^T(JS) + D^TD)$, $x=\hat{x}=S^{-1}\delta$, $b=(JS)^TF$
+
+$$((JS)^T(JS) + D^TD)\hat{x} = (JS)^TF$$
+
+using PCG with 
+
+$$M^{-1}=(L^{-1})^T(L^{-1})$$.
+
+`b_CERES =` $(JS)^TF = S (J^TF) =$ `S * b_Opt`
+
+`r_0_CERES = b_CERES - A_CERES x_0_CERES = b_CERES  = S * b_Opt`
+
+`preconditioner_CERES = `$M^{-1} = (L^{-1})^T(L^{-1}) = S^{-1}S^{-1}(L^{-1}S)^T(L^{-1}S) =$ `(1/S*S) * preconditioner_Opt`
+
+`z_0_CERES = preconditioner_CERES * r_0_CERES =` $M^{-1}(JS)^TF = S^{-1}S^{-1}(L^{-1}S)^T(L^{-1}S)(JS)^TF = S^{-1}(L^{-1}S)^T(L^{-1}S)J^TF =$ `(1/S) * preconditioner_Opt * b_Opt = (1/S) * z_0_Opt`
 
 
 

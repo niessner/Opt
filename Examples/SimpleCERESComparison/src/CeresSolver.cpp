@@ -242,8 +242,8 @@ std::vector<SolverIteration> CeresSolver::solve(
 
     //slower methods
     //options.linear_solver_type = ceres::LinearSolverType::ITERATIVE_SCHUR; //40.6s
-    //options.linear_solver_type = ceres::LinearSolverType::CGNR; //46.9s
-	options.linear_solver_type = ceres::LinearSolverType::DENSE_NORMAL_CHOLESKY;
+    options.linear_solver_type = ceres::LinearSolverType::CGNR; //46.9s
+	//options.linear_solver_type = ceres::LinearSolverType::DENSE_NORMAL_CHOLESKY;
 
     //options.min_linear_solver_iterations = linearIterationMin;
     options.max_num_iterations = 10000;
@@ -259,19 +259,23 @@ std::vector<SolverIteration> CeresSolver::solve(
     // Disable to match Opt
     //options.min_lm_diagonal = 1e-32;
     //options.max_lm_diagonal = std::numeric_limits<double>::infinity();
+    //options.min_trust_region_radius = 1e-256;
 
+    //options.initial_trust_region_radius = 0.005;
 
     options.initial_trust_region_radius = 1e4;
+    options.eta = 1e-4;
 
     options.jacobi_scaling = true;
+    //options.preconditioner_type = ceres::PreconditionerType::IDENTITY;
 
     Solve(options, &problem, &summary);
 
-	std::vector<SolverIteration> result;
+	std::vector<SolverIteration> result; 
 	for (auto &i : summary.iterations)
 	{
 		SolverIteration iter;
-		iter.cost = i.cost * 2.0;
+		iter.cost = i.cost;
 		result.push_back(iter);
 	}
 
