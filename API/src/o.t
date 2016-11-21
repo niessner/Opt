@@ -2000,7 +2000,7 @@ end
 
 
 local function createjtjgraph(PS,ES)
-    local P,Ap_X,CtC = PS:UnknownArgument(1),PS:UnknownArgument(2),PS:UnknownArgument(3)
+    local P,Ap_X = PS:UnknownArgument(1),PS:UnknownArgument(2)
 
     local result = ad.toexp(0)
     local scatters = List() 
@@ -2032,7 +2032,7 @@ local function createjtjgraph(PS,ES)
         end
     end
 
-    return A.FunctionSpec(ES.kind,"applyJTJ", List {"P", "Ap_X", "CtC"}, List { result }, scatters, ES)
+    return A.FunctionSpec(ES.kind,"applyJTJ", List {"P", "Ap_X"}, List { result }, scatters, ES)
 end
 
 

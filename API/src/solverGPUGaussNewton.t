@@ -12,6 +12,8 @@ local use_fused_jtj = false
 
 local CERES_style_guardedInvert = true
 local CERES_style_preconditioning = true
+local multistep_alphaDenominator_compute = false
+
 
 local cd = macro(function(apicall) return quote
         var r = apicall
@@ -35,10 +37,12 @@ end
 
 local gpuMath = util.gpuMath
 
+local UNK_SZ = 4
+
 opt.BLOCK_SIZE = 16
 local BLOCK_SIZE =  opt.BLOCK_SIZE
 
-local FLOAT_EPSILON = `[opt_float](0.0) 
+local FLOAT_EPSILON = `[opt_float](0.0f) 
 -- GAUSS NEWTON (non-block version)
 return function(problemSpec)
     local UnknownType = problemSpec:UnknownType()
@@ -278,7 +282,7 @@ return function(problemSpec)
         end
 
         terra kernels.computeQ(pd : PlanData)
-            var q = 0.0f
+            var q : opt_float = opt_float(0.0f)
             var idx : Index
             if idx:initFromCUDAParams() and not fmap.exclude(idx,pd.parameters) then 
                 -- Right side is -2 of CERES versions, left is just negative version, 
@@ -289,7 +293,7 @@ return function(problemSpec)
         end
 	
         terra kernels.PCGInit1(pd : PlanData)
-            var d = 0.0f -- init for out of bounds lanes
+            var d : opt_float = opt_float(0.0f) -- init for out of bounds lanes
         
             var idx : Index
             if idx:initFromCUDAParams() then
@@ -300,14 +304,14 @@ return function(problemSpec)
             
                 if not fmap.exclude(idx,pd.parameters) then 
                 
-                    pd.delta(idx) = 0.0f    
+                    pd.delta(idx) = opt_float(0.0f)   
                 
                     residuum, pre = fmap.evalJTF(idx, pd.parameters)
                     residuum = -residuum
                     pd.r(idx) = residuum
                 
                     if not problemSpec.usepreconditioner then
-                        pre = 1.0f
+                        pre = opt_float(1.0f)
                     end
                 end        
             
@@ -328,7 +332,7 @@ return function(problemSpec)
         end
     
         terra kernels.PCGInit1_Finish(pd : PlanData)	--only called for graphs
-            var d = 0.0f -- init for out of bounds lanes
+            var d : opt_float = opt_float(0.0f) -- init for out of bounds lanes
             var idx : Index
             if idx:initFromCUDAParams() then
                 var residuum = pd.r(idx)			
@@ -337,7 +341,7 @@ return function(problemSpec)
                 pre = guardedInvert(pre)
             
                 if not problemSpec.usepreconditioner then
-                    pre = 1.0f
+                    pre = opt_float(1.0f)
                 end
             
                 var p = pre*residuum	-- apply pre-conditioner M^-1
@@ -350,7 +354,7 @@ return function(problemSpec)
         end
 
         terra kernels.PCGStep1(pd : PlanData)
-            var d = 0.0f
+            var d : opt_float = opt_float(0.0f)
             var idx : Index
             if idx:initFromCUDAParams() and not fmap.exclude(idx,pd.parameters) then
                 var tmp : unknownElement = 0.0f
@@ -359,8 +363,19 @@ return function(problemSpec)
                 pd.Ap_X(idx) = tmp					 -- store for next kernel call
                 d = pd.p(idx):dot(tmp)			 -- x-th term of denominator of alpha
             end
-            
-            unknownWideReduction(idx,d,pd.scanAlphaDenominator)
+            if not [multistep_alphaDenominator_compute] then
+                unknownWideReduction(idx,d,pd.scanAlphaDenominator)
+            end
+        end
+        if multistep_alphaDenominator_compute then
+            terra kernels.PCGStep1_Finish(pd : PlanData)
+                var d : opt_float = opt_float(0.0f)
+                var idx : Index
+                if idx:initFromCUDAParams() and not fmap.exclude(idx,pd.parameters) then
+                    d = pd.p(idx):dot(pd.Ap_X(idx))           -- x-th term of denominator of alpha
+                end
+                unknownWideReduction(idx,d,pd.scanAlphaDenominator)
+            end
         end
 
         terra kernels.PCGStep2(pd : PlanData)
@@ -373,17 +388,13 @@ return function(problemSpec)
 
                 -- update step size alpha
                 var alpha = opt_float(0.0f)
-                if alphaDenominator > FLOAT_EPSILON then 
-                    alpha = alphaNumerator/alphaDenominator 
-                else
-                    --printf("WARNING: Invalid alphaDenominator: %f\n", alphaDenominator)
-                end 
+                alpha = alphaNumerator/alphaDenominator 
     
                 pd.delta(idx) = pd.delta(idx)+alpha*pd.p(idx)		-- do a descent step
 
                 var r = pd.r(idx)-alpha*pd.Ap_X(idx)				-- update residuum
                 pd.r(idx) = r										-- store for next kernel call
-    
+
                 var pre = pd.preconditioner(idx)
                 if not problemSpec.usepreconditioner then
                     pre = opt_float(1.0f)
@@ -406,11 +417,7 @@ return function(problemSpec)
 
                 -- update step size alpha
                 var alpha = opt_float(0.0f)
-                if alphaDenominator > FLOAT_EPSILON then 
-                    alpha = alphaNumerator/alphaDenominator 
-                else
-                    --printf("WARNING: Invalid alphaDenominator: %f\n", alphaDenominator)
-                end 
+                alpha = alphaNumerator/alphaDenominator 
     
                 pd.delta(idx) = pd.delta(idx)+alpha*pd.p(idx)       -- do a descent step
             end
@@ -440,12 +447,8 @@ return function(problemSpec)
                 var rDotzNew : opt_float = pd.scanBetaNumerator[0]				-- get new numerator
                 var rDotzOld : opt_float = pd.scanAlphaNumerator[0]				-- get old denominator
 
-                var beta : opt_float = [opt_float](0.0f)		                    
-                if rDotzOld > FLOAT_EPSILON then 
-                    beta = rDotzNew/rDotzOld 
-                else
-                    --printf("WARNING: Invalid rDotzOld: %f\n", rDotzOld)
-                end	-- update step size beta
+                var beta : opt_float = opt_float(0.0f)
+                beta = rDotzNew/rDotzOld
                 pd.p(idx) = pd.z(idx)+beta*pd.p(idx)							-- update decent direction
 
             end
@@ -455,7 +458,6 @@ return function(problemSpec)
             var idx : Index
             if idx:initFromCUDAParams() and not fmap.exclude(idx,pd.parameters) then
                 pd.parameters.X(idx) = pd.parameters.X(idx) + pd.delta(idx)
-                --printf("delta*10000: %f %f %f\n", pd.delta(idx)(0)*10000, pd.delta(idx)(1)*10000, pd.delta(idx)(2)*10000)            
             end
         end	
         
@@ -481,7 +483,7 @@ return function(problemSpec)
         end
 
         terra kernels.recomputeResiduals(pd : PlanData)
-            var d = 0.0f
+            var d : opt_float = opt_float(0.0f)
             var idx : Index
             if idx:initFromCUDAParams() and not fmap.exclude(idx,pd.parameters) then
                 var Ax = pd.Adelta(idx)
@@ -498,11 +500,11 @@ return function(problemSpec)
             end
         end 
 
-        terra kernels.computeCost(pd : PlanData)			
-            var cost : opt_float = [opt_float](0.0f)
+        terra kernels.computeCost(pd : PlanData)
+            var cost : opt_float = opt_float(0.0f)
             var idx : Index
             if idx:initFromCUDAParams() and not fmap.exclude(idx,pd.parameters) then
-                var params = pd.parameters				
+                var params = pd.parameters
                 cost = cost + [opt_float](fmap.cost(idx, params))
             end
 
@@ -547,17 +549,17 @@ return function(problemSpec)
 
             terra kernels.PCGFinalizeDiagonal(pd : PlanData)
                 var idx : Index
-                var d = [opt_float](0.0)
+                var d = [opt_float](0.0f)
                 if idx:initFromCUDAParams() then
                     if not fmap.exclude(idx,pd.parameters) then 
                         var unclampedCtC = pd.CtC(idx)
-                        var invS_iiSq = 1.0 / pd.preconditioner(idx)
+                        var invS_iiSq = opt_float(1.0f) / pd.preconditioner(idx)
                         var minVal = square(pd.parameters.min_lm_diagonal) * invS_iiSq
                         var maxVal = square(pd.parameters.max_lm_diagonal) * invS_iiSq
                         var CtC = clamp(unclampedCtC, minVal, maxVal)
                         pd.CtC(idx) = CtC
                         if [CERES_style_preconditioning] then
-                            var pre = [opt_float](1.0) / (CtC+pd.parameters.trust_region_radius*unclampedCtC) 
+                            var pre = opt_float(1.0f) / (CtC+pd.parameters.trust_region_radius*unclampedCtC) 
                             pd.preconditioner(idx) = pre
                             var residuum = pd.r(idx)
                             var p = pre*residuum    -- apply pre-conditioner M^-1
@@ -569,24 +571,8 @@ return function(problemSpec)
                 unknownWideReduction(idx,d,pd.scanAlphaNumerator)
             end
 
-            terra kernels.DebugDumpCtC(pd : PlanData)
-
-                var idx : Index
-                if idx:initFromCUDAParams() then                         
-                    var CtC : unknownElement = pd.CtC(idx)
-                    printf("\nC'C: %d: %f %f %f\n", idx, CtC(0), CtC(1), CtC(2))
-                    var JtJ_ii : unknownElement = pd.CtC(idx) * pd.parameters.trust_region_radius
-                    printf("\nJ'J_ii: %d, %f %f %f\n", idx, JtJ_ii(0), JtJ_ii(1), JtJ_ii(2))
-                    var DtD : unknownElement = CtC * pd.preconditioner(idx)
-                    printf("\nD'D: %d: %f %f %f\n", idx, DtD(0), DtD(1), DtD(2))
-                    var M1 : unknownElement = pd.preconditioner(idx)
-                    printf("\nE^-1*100: %d: %f %f %f\n", idx, util.gpuMath.sqrt(M1(0))*100, util.gpuMath.sqrt(M1(1))*100, util.gpuMath.sqrt(M1(2))*100)
-                    printf("\nM^-1*10000: %d: %f %f %f\n", idx, M1(0)*10000, M1(1)*10000, M1(2)*10000)
-                end 
-            end
-
             terra kernels.computeModelCost(pd : PlanData)            
-                var cost : opt_float = [opt_float](0.0f)
+                var cost : opt_float = opt_float(0.0f)
                 var idx : Index
                 if idx:initFromCUDAParams() and not fmap.exclude(idx,pd.parameters) then
                     var params = pd.parameters              
@@ -614,26 +600,28 @@ return function(problemSpec)
         end    
         
     	terra kernels.PCGStep1_Graph(pd : PlanData)
-            var d = [opt_float](0.0f)
+            var d = opt_float(0.0f)
             var tIdx = 0 
             if util.getValidGraphElement(pd,[graphname],&tIdx) then
-               d = d + fmap.applyJTJ(tIdx, pd.parameters, pd.p, pd.Ap_X, pd.CtC)
+               d = d + fmap.applyJTJ(tIdx, pd.parameters, pd.p, pd.Ap_X)
             end 
-            d = util.warpReduce(d)
-            if (util.laneid() == 0) then
-                util.atomicAdd(pd.scanAlphaDenominator, d)
+            if not [multistep_alphaDenominator_compute] then
+                d = util.warpReduce(d)
+                if (util.laneid() == 0) then
+                    util.atomicAdd(pd.scanAlphaDenominator, d)
+                end
             end
         end
 
         terra kernels.computeAdelta_Graph(pd : PlanData)
             var tIdx = 0 
             if util.getValidGraphElement(pd,[graphname],&tIdx) then
-                fmap.applyJTJ(tIdx, pd.parameters, pd.delta, pd.Adelta, pd.CtC)
+                fmap.applyJTJ(tIdx, pd.parameters, pd.delta, pd.Adelta)
             end
         end
 
-        terra kernels.computeCost_Graph(pd : PlanData)			
-            var cost : opt_float = [opt_float](0.0f)
+        terra kernels.computeCost_Graph(pd : PlanData)
+            var cost : opt_float = opt_float(0.0f)
             var tIdx = 0
             if util.getValidGraphElement(pd,[graphname],&tIdx) then
                 cost = cost + fmap.cost(tIdx, pd.parameters)
@@ -664,7 +652,7 @@ return function(problemSpec)
             end    
 
             terra kernels.computeModelCost_Graph(pd : PlanData)          
-                var cost : opt_float = [opt_float](0.0f)
+                var cost : opt_float = opt_float(0.0f)
                 var tIdx = 0
                 if util.getValidGraphElement(pd,[graphname],&tIdx) then
                     cost = cost + fmap.modelcost(tIdx, pd.parameters, pd.delta)
@@ -684,6 +672,7 @@ return function(problemSpec)
                                                                         "PCGComputeCtC",
                                                                         "PCGFinalizeDiagonal",
                                                                         "PCGStep1",
+                                                                        "PCGStep1_Finish",
                                                                         "PCGStep2",
                                                                         "PCGStep2_1stHalf",
                                                                         "PCGStep2_2ndHalf",
@@ -705,7 +694,6 @@ return function(problemSpec)
                                                                         "computeModelCost",
                                                                         "computeModelCost_Graph",
                                                                         "saveJToCRS",
-                                                                        "DebugDumpCtC",
                                                                         "saveJToCRS_Graph"
                                                                         })
 
@@ -737,6 +725,30 @@ return function(problemSpec)
         C.cudaMemcpy(&f, pd.scratch, sizeof(opt_float), C.cudaMemcpyDeviceToHost)
 
         return f
+    end
+
+    local terra logDoubles(vec : double[UNK_SZ], label : rawstring)
+        logSolver("\t %s", label)
+        for i=0,UNK_SZ do
+            logSolver(" %.18g", vec[i])
+        end  
+        logSolver("\n")
+    end
+
+    local terra mul(v0 : double[UNK_SZ], v1 : double[UNK_SZ]): double[UNK_SZ]
+        var result : double[UNK_SZ]
+        for i=0,UNK_SZ do
+            result[i] = v0[i] * v1[i]
+        end  
+        return result
+    end
+
+    local terra div(v0 : double[UNK_SZ], v1 : double[UNK_SZ]): double[UNK_SZ]
+        var result : double[UNK_SZ]
+        for i=0,UNK_SZ do
+            result[i] = v0[i] / v1[i]
+        end  
+        return result
     end
 
     local initLambda,computeModelCostChange
@@ -978,15 +990,18 @@ return function(problemSpec)
 				gpu.PCGInit1_Finish(pd)	
 			end
 
-            var pre : double[3]
-            var s : double[3]
-            C.cudaMemcpy(&pre, pd.preconditioner.funcParams.data, sizeof(double)*3, C.cudaMemcpyDeviceToHost)
+            var pre : double[UNK_SZ]
+            var s : double[UNK_SZ]
+            var sSq : double[UNK_SZ]
+            C.cudaMemcpy(&pre, pd.preconditioner.funcParams.data, sizeof(double)*UNK_SZ, C.cudaMemcpyDeviceToHost)
+            for i = 0,UNK_SZ do
+                s[i] = sqrtf(pre[i])
+                sSq[i] = pre[i]
+            end
             
-            s[0] = sqrtf(pre[0])
-            s[1] = sqrtf(pre[1])
-            s[2] = sqrtf(pre[2])
-            logSolver("\t S %g %g %g\n", s[0], s[1], s[2])
-            var v : double[3]
+            logDoubles(s, "S")
+            logDoubles(sSq, "S^2")
+            var v : double[UNK_SZ]
 
 
             escape 
@@ -997,104 +1012,73 @@ return function(problemSpec)
                         gpu.PCGComputeCtC(pd)
                         gpu.PCGComputeCtC_Graph(pd)
                         gpu.PCGFinalizeDiagonal(pd)
-                        --gpu.DebugDumpCtC(pd)
                         gpu.copyResidualsToB(pd)
                         --gpu.recomputeResiduals(pd)
                         Q0 = computeQ(pd)
-                        logSolver("\nQ0=%g\n", Q0)
-                        var v : double[3]
-                var pre : double[3]
+                        logSolver("\nQ0=%.18g\n", Q0)
+                var v : double[UNK_SZ]
+                var pre : double[UNK_SZ]
 
-                C.cudaMemcpy(&v, pd.preconditioner.funcParams.data, sizeof(double)*3, C.cudaMemcpyDeviceToHost)
-                logSolver("\t preconditioner %g %g %g\n", v[0], v[1], v[2])
-                logSolver("\t CERES preconditioner %g %g %g\n", v[0]/(s[0]*s[0]), v[1]/(s[1]*s[1]), v[2]/(s[2]*s[2]))
+                C.cudaMemcpy(&v, pd.preconditioner.funcParams.data, sizeof(double)*UNK_SZ, C.cudaMemcpyDeviceToHost)
+                logDoubles(v, "preconditioner")
+                logDoubles(div(v,mul(s,s)), "CERES preconditioner")
 
-
-                C.cudaMemcpy(&v, pd.r.funcParams.data, sizeof(double)*3, C.cudaMemcpyDeviceToHost)
-                logSolver("\t r %g %g %g\n", v[0], v[1], v[2])
-                logSolver("\t CERES r %g %g %g\n", -1*s[0]*v[0], -1*s[1]*v[1], -1*s[2]*v[2])
-
+                C.cudaMemcpy(&v, pd.r.funcParams.data, sizeof(double)*UNK_SZ, C.cudaMemcpyDeviceToHost)
+                logDoubles(v,"r")
+                logDoubles(mul(s,v), "CERES r")
+        
                 var rad = pd.parameters.trust_region_radius
-                C.cudaMemcpy(&v, pd.CtC.funcParams.data, sizeof(double)*3, C.cudaMemcpyDeviceToHost)
-                logSolver("\t CtC %g %g %g\n", v[0], v[1], v[2])
+                C.cudaMemcpy(&v, pd.CtC.funcParams.data, sizeof(double)*UNK_SZ, C.cudaMemcpyDeviceToHost)
+                logDoubles(v, "CtC")
 
-                var diagJtJ : double[3]
-                var diagA : double[3]
-                var altPre : double[3]
-                for i = 0,3 do
+                var diagJtJ : double[UNK_SZ]
+                var diagA : double[UNK_SZ]
+                var altPre : double[UNK_SZ]
+                for i = 0,UNK_SZ do
                     diagJtJ[i] = v[i] * rad
                     diagA[i] = (diagJtJ[i] + v[i])*s[i]*s[i]
                     altPre[i] = s[i]*s[i] / diagA[i]
                 end
                 
-                logSolver("\t diag(JtJ) %g %g %g\n", diagJtJ[0], diagJtJ[1], diagJtJ[2])
-                logSolver("\t diag(JStJS) %g %g %g\n", s[0]*s[0]*diagJtJ[0], s[1]*s[1]*diagJtJ[1], s[2]*s[2]*diagJtJ[2])
+                logDoubles(diagJtJ, "diag(JtJ)")
+                logDoubles(mul(sSq,diagJtJ), "diag(JStJS)")
+                logDoubles(mul(sSq,v), "DtD")
+                logDoubles(diagA, "K")
+                logDoubles(altPre, "altPre")
 
-                logSolver("\t DtD %g %g %g\n", s[0]*s[0]*v[0], s[1]*s[1]*v[1], s[2]*s[2]*v[2])
-                logSolver("\t K %g %g %g\n", diagA[0], diagA[1], diagA[2])
-                logSolver("\t altPre %g %g %g\n", altPre[0], altPre[1], altPre[2])
 
+                C.cudaMemcpy(&v, pd.b.funcParams.data, sizeof(double)*UNK_SZ, C.cudaMemcpyDeviceToHost)
+                logDoubles(v, "b")
+                logDoubles(mul(s,v), "CERES b")
 
-                C.cudaMemcpy(&v, pd.b.funcParams.data, sizeof(double)*3, C.cudaMemcpyDeviceToHost)
-                logSolver("\t b %g %g %g\n", v[0], v[1], v[2])
-                logSolver("\t CERES b %g %g %g\n", -1*s[0]*v[0], -1*s[1]*v[1], -1*s[2]*v[2])
+                C.cudaMemcpy(&v, pd.r.funcParams.data, sizeof(double)*UNK_SZ, C.cudaMemcpyDeviceToHost)
+                logDoubles(v, "r")
+                logDoubles(mul(s,v), "CERES r")
 
-                C.cudaMemcpy(&v, pd.r.funcParams.data, sizeof(double)*3, C.cudaMemcpyDeviceToHost)
-                logSolver("\t r %g %g %g\n", v[0], v[1], v[2])
-                logSolver("\t CERES r %g %g %g\n", -1*s[0]*v[0], -1*s[1]*v[1], -1*s[2]*v[2])
+                C.cudaMemcpy(&v, pd.delta.funcParams.data, sizeof(double)*UNK_SZ, C.cudaMemcpyDeviceToHost)
+                logDoubles(v, "delta")
+                logDoubles(div(v,s), "CERES delta")
 
-                C.cudaMemcpy(&v, pd.delta.funcParams.data, sizeof(double)*3, C.cudaMemcpyDeviceToHost)
-                logSolver("\t delta %g %g %g\n", v[0], v[1], v[2])
-                logSolver("\t CERES delta %g %g %g\n", -v[0]/s[0], -v[1]/s[1], -v[2]/s[2])
+                C.cudaMemcpy(&v, pd.p.funcParams.data, sizeof(double)*UNK_SZ, C.cudaMemcpyDeviceToHost)
+                logDoubles(v, "p")
+                logDoubles(div(v,s), "CERES p")
 
-                C.cudaMemcpy(&v, pd.p.funcParams.data, sizeof(double)*3, C.cudaMemcpyDeviceToHost)
-                logSolver("\t p %g %g %g\n", v[0], v[1], v[2])
-                logSolver("\t CERES p %g %g %g\n", -v[0]/s[0], -v[1]/s[1], -v[2]/s[2])
                     end
                 end
             end
             cusparseOuter(pd)
             for lIter = 0, pd.lIterations do				
-                var v : double[3]
-
-                C.cudaMemcpy(&v, pd.r.funcParams.data, sizeof(double)*3, C.cudaMemcpyDeviceToHost)
-                logSolver("\nlinIter: %d\n\t r %g %g %g\n", lIter, v[0], v[1], v[2])
-
-                C.cudaMemcpy(&v, pd.z.funcParams.data, sizeof(double)*3, C.cudaMemcpyDeviceToHost)
-                logSolver("\t z %g %g %g\n", v[0], v[1], v[2])
-
-                C.cudaMemcpy(&v, pd.p.funcParams.data, sizeof(double)*3, C.cudaMemcpyDeviceToHost)
-                logSolver("\t p %g %g %g\n", v[0], v[1], v[2])
-
-                C.cudaMemcpy(&v, pd.Ap_X.funcParams.data, sizeof(double)*3, C.cudaMemcpyDeviceToHost)
-                logSolver("\t Ap_X %g %g %g\n", v[0], v[1], v[2])
-
-
-                C.cudaMemcpy(&v, pd.delta.funcParams.data, sizeof(double)*3, C.cudaMemcpyDeviceToHost)
-                logSolver("\tdelta %g %g %g\n", v[0], v[1], v[2])
-
-                C.cudaMemcpy(&v, pd.scanAlphaNumerator, sizeof(double), C.cudaMemcpyDeviceToHost)
-                logSolver("\tscanAlphaNumerator %g\n", v[0])
-                C.cudaMemcpy(&v, pd.scanAlphaDenominator, sizeof(double), C.cudaMemcpyDeviceToHost)
-                logSolver("\tscanAlphaDenominator %g\n", v[0])
-
-                var numerator : double
-                C.cudaMemcpy(&numerator, pd.scanAlphaNumerator, sizeof(double), C.cudaMemcpyDeviceToHost)
-                logSolver("\talpha %g\n", numerator/v[0])
-
-
-                C.cudaMemcpy(&v, pd.scanBetaNumerator, sizeof(double), C.cudaMemcpyDeviceToHost)
-                logSolver("\tscanBetaNumerator %g\n", v[0])
-
-
 
                 C.cudaMemset(pd.scanAlphaDenominator, 0, sizeof(opt_float))
 
 				gpu.PCGStep1(pd)
 
 				if isGraph then
-					gpu.PCGStep1_Graph(pd)	
+					gpu.PCGStep1_Graph(pd)
 				end
+                if multistep_alphaDenominator_compute then
+                    gpu.PCGStep1_Finish(pd)
+                end
 				
 
 				-- only does anything if use_dump_j is true
@@ -1112,8 +1096,17 @@ return function(problemSpec)
                 else
                     gpu.PCGStep2(pd)
                 end
+                var alphaNum : double
+                var alphaDenom : double
+                var betaNum : double
+                C.cudaMemcpy(&alphaNum, pd.scanAlphaNumerator, sizeof(double), C.cudaMemcpyDeviceToHost)
+                C.cudaMemcpy(&alphaDenom, pd.scanAlphaDenominator, sizeof(double), C.cudaMemcpyDeviceToHost)
+                logSolver("alpha = %.18g/%.18g = %.18g\n", alphaNum, alphaDenom, alphaNum/alphaDenom)
+
                 gpu.PCGStep3(pd)
 
+                C.cudaMemcpy(&betaNum, pd.scanBetaNumerator, sizeof(double), C.cudaMemcpyDeviceToHost)
+                logSolver("beta = %.18g/%.18g = %.18g\n", betaNum, alphaNum, betaNum/alphaNum)
 
 				-- save new rDotz for next iteration
 				C.cudaMemcpy(pd.scanAlphaNumerator, pd.scanBetaNumerator, sizeof(opt_float), C.cudaMemcpyDeviceToDevice)	
@@ -1121,8 +1114,63 @@ return function(problemSpec)
 				if [problemSpec:UsesLambda()] then
 	                Q1 = computeQ(pd)
 	                var zeta = [opt_float](lIter+1)*(Q1 - Q0) / Q1 
-                    logSolver("Q1=%g\n", Q1 )
-                    logSolver("zeta=%g\n", zeta)
+
+
+                               var v : double[UNK_SZ]
+                var pre : double[UNK_SZ]
+
+                C.cudaMemcpy(&v, pd.preconditioner.funcParams.data, sizeof(double)*UNK_SZ, C.cudaMemcpyDeviceToHost)
+                logDoubles(v, "preconditioner")
+                logDoubles(div(v,mul(s,s)), "CERES preconditioner")
+
+                C.cudaMemcpy(&v, pd.r.funcParams.data, sizeof(double)*UNK_SZ, C.cudaMemcpyDeviceToHost)
+                logDoubles(v,"r")
+                logDoubles(mul(s,v), "CERES r")
+        
+                C.cudaMemcpy(&v, pd.Ap_X.funcParams.data, sizeof(double)*UNK_SZ, C.cudaMemcpyDeviceToHost)
+                logDoubles(v, "Ap_X")
+                logDoubles(mul(s,v), "CERES Ap_X")
+
+                var rad = pd.parameters.trust_region_radius
+                C.cudaMemcpy(&v, pd.CtC.funcParams.data, sizeof(double)*UNK_SZ, C.cudaMemcpyDeviceToHost)
+                logDoubles(v, "CtC")
+
+
+
+                var diagJtJ : double[UNK_SZ]
+                var diagA : double[UNK_SZ]
+                var altPre : double[UNK_SZ]
+                for i = 0,UNK_SZ do
+                    diagJtJ[i] = v[i] * rad
+                    diagA[i] = (diagJtJ[i] + v[i])*s[i]*s[i]
+                    altPre[i] = s[i]*s[i] / diagA[i]
+                end
+                
+                logDoubles(diagJtJ, "diag(JtJ)")
+                logDoubles(mul(sSq,diagJtJ), "diag(JStJS)")
+                logDoubles(mul(sSq,v), "DtD")
+                logDoubles(diagA, "K")
+                logDoubles(altPre, "altPre")
+
+
+                C.cudaMemcpy(&v, pd.b.funcParams.data, sizeof(double)*UNK_SZ, C.cudaMemcpyDeviceToHost)
+                logDoubles(v, "b")
+                logDoubles(mul(s,v), "CERES b")
+
+                C.cudaMemcpy(&v, pd.r.funcParams.data, sizeof(double)*UNK_SZ, C.cudaMemcpyDeviceToHost)
+                logDoubles(v, "r")
+                logDoubles(mul(s,v), "CERES r")
+
+                C.cudaMemcpy(&v, pd.delta.funcParams.data, sizeof(double)*UNK_SZ, C.cudaMemcpyDeviceToHost)
+                logDoubles(v, "delta")
+                logDoubles(div(v,s), "CERES delta")
+
+                C.cudaMemcpy(&v, pd.p.funcParams.data, sizeof(double)*UNK_SZ, C.cudaMemcpyDeviceToHost)
+                logDoubles(v, "p")
+                logDoubles(div(v,s), "CERES p")
+
+                    logSolver("Q1=%.18g\n", Q1 )
+                    logSolver("zeta=%.18g\n", zeta)
 	                if zeta < q_tolerance then
 	                    break
 	                end
@@ -1148,7 +1196,7 @@ return function(problemSpec)
 			logSolver("\t%d: prev=%f new=%f ", pd.nIter, pd.prevCost,newCost)
 			
             C.cudaMemcpy(&v, pd.prevX.funcParams.data, sizeof(double)*3, C.cudaMemcpyDeviceToHost)
-            logSolver("\tX %g %g %g\n", v[0], v[1], v[2])
+            logDoubles(v, "X")
 
             --[[ TODO: Remove
             if newCost > 1000000 then
