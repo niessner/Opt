@@ -110,6 +110,24 @@ $$c_{ii} = \frac{\sqrt{(J^TJ)_{ii}}}{\sqrt{\mbox{radius}}}$$
 
 So each element of $C^TC$ will just be $ctc_{ii} = \frac{(J^TJ)_{ii}}{\mbox{radius}}$. This is *not* dependent on the preconditioner $S$.
 
+**This only holds true if S is recalculated every iteration, but in CERES it is NOT!**
+
+To match CERES we cannot substitute in a value for $s_{ii}$ dependent on $(J^TJ)_{ii}$, since $J^TJ$ changes every non-linear iteration.
+
+$$c_{ii} = \frac{d_{ii}}{s_{ii}} = \frac{\sqrt{k_{ii}/\mbox{radius}}}{s_{ii}}$$
+
+$$c_{ii} = \frac{\sqrt{s_{ii}^2(J^TJ)_{ii}/\mbox{radius}}}{s_{ii}}$$
+
+$$c_{ii} = \frac{s_{ii}\sqrt{(J^TJ)_{ii}/\mbox{radius}}}{s_{ii}}$$
+
+$$c_{ii} = \frac{\sqrt{(J^TJ)_{ii}}}{\sqrt{\mbox{radius}}}$$
+
+which is exactly the same as before, so we are good!
+
+
+
+
+
 Double preconditioning
 ===============================================================================
 

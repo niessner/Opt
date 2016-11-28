@@ -10,8 +10,13 @@ local use_dump_j = false
 local use_fused_jtj = false
 
 
-local CERES_style_guardedInvert = true
-local CERES_style_preconditioning = true
+local GuardedInvertType = { CERES = {}, MODIFIED_CERES = {}, EPSILON_ADD = {} }
+local guardedInvertType = GuardedInvertType.CERES
+
+-- CERES default, ONCE_PER_SOLVE
+local JacobiScalingType = { NONE = {}, ONCE_PER_SOLVE = {}, EVERY_ITERATION = {}}
+local JacobiScaling = JacobiScalingType.EVERY_ITERATION
+
 local multistep_alphaDenominator_compute = false
 
 
@@ -42,7 +47,7 @@ local UNK_SZ = 4
 opt.BLOCK_SIZE = 16
 local BLOCK_SIZE =  opt.BLOCK_SIZE
 
-local FLOAT_EPSILON = `[opt_float](0.0f) 
+local FLOAT_EPSILON = `[opt_float](0.00000001f) 
 -- GAUSS NEWTON (non-block version)
 return function(problemSpec)
     local UnknownType = problemSpec:UnknownType()
@@ -109,6 +114,7 @@ return function(problemSpec)
 		Ap_X : TUnknownType	--cache values for next kernel call after A = J^T x J x p -> num vars
         CtC : TUnknownType -- The diagonal matrix C'C for the inner linear solve (J'J+C'C)x = J'F Used only by LM
 		preconditioner : TUnknownType --pre-conditioner for linear system -> num vars
+        SSq : TUnknownType -- Square of jacobi scaling diagonal
 		g : TUnknownType		--gradient of F(x): g = -2J'F -> num vars
 		
         prevX : TUnknownType -- Place to copy unknowns to before speculatively updating. Avoids hassle when (X + delta) - delta != X 
@@ -252,20 +258,27 @@ return function(problemSpec)
 
         local terra guardedInvert(p : unknownElement)
             escape 
-                if CERES_style_guardedInvert then
+                if guardedInvertType == GuardedInvertType.CERES then
                     emit quote
                         var invp = p
                         for i = 0, invp:size() do
-                            --invp(i) = [opt_float](1.f) / ([opt_float](1.f) + 2*util.gpuMath.sqrt(invp(i)) + invp(i))
-                            invp(i) = [opt_float](1.f) / square([opt_float](1.f) + util.gpuMath.sqrt(invp(i)))
+                            invp(i) = [opt_float](1.f) / square(opt_float(1.f) + util.gpuMath.sqrt(invp(i)))
                         end
                         return invp
                     end
-                else
+                elseif guardedInvertType == GuardedInvertType.MODIFIED_CERES then
                     emit quote
                         var invp = p
                         for i = 0, invp:size() do
-                            invp(i) = terralib.select(invp(i) > FLOAT_EPSILON, [opt_float](1.f) / invp(i),invp(i))
+                             invp(i) = [opt_float](1.f) / (opt_float(1.f) + invp(i))
+                        end
+                        return invp
+                    end
+                elseif guardedInvertType == GuardedInvertType.EPSILON_ADD then
+                    emit quote
+                        var invp = p
+                        for i = 0, invp:size() do
+                            invp(i) = [opt_float](1.f) / (FLOAT_EPSILON + invp(i))
                         end
                         return invp
                     end
@@ -540,12 +553,20 @@ return function(problemSpec)
                 var idx : Index
                 if idx:initFromCUDAParams() then                         
                     if not fmap.exclude(idx,pd.parameters) then 
-                        var CtC = fmap.computeCtC(idx, pd.parameters, pd.preconditioner)
+                        var CtC = fmap.computeCtC(idx, pd.parameters)
                         pd.CtC(idx) = CtC
                     end        
                 end 
             end
 
+            terra kernels.PCGSaveSSq(pd : PlanData)
+                var idx : Index
+                if idx:initFromCUDAParams() then                         
+                    if not fmap.exclude(idx,pd.parameters) then 
+                        pd.SSq(idx) = pd.preconditioner(idx)
+                    end        
+                end 
+            end
 
             terra kernels.PCGFinalizeDiagonal(pd : PlanData)
                 var idx : Index
@@ -553,19 +574,25 @@ return function(problemSpec)
                 if idx:initFromCUDAParams() then
                     if not fmap.exclude(idx,pd.parameters) then 
                         var unclampedCtC = pd.CtC(idx)
-                        var invS_iiSq = opt_float(1.0f) / pd.preconditioner(idx)
+                        var invS_iiSq : unknownElement = opt_float(1.0f)
+                        if [JacobiScaling == JacobiScalingType.ONCE_PER_SOLVE] then
+                            invS_iiSq = opt_float(1.0f) / pd.SSq(idx)
+                        elseif [JacobiScaling == JacobiScalingType.EVERY_ITERATION] then 
+                            invS_iiSq = opt_float(1.0f) / pd.preconditioner(idx)
+                        end -- else if  [JacobiScaling == JacobiScalingType.NONE] then invS_iiSq == 1
                         var minVal = square(pd.parameters.min_lm_diagonal) * invS_iiSq
                         var maxVal = square(pd.parameters.max_lm_diagonal) * invS_iiSq
                         var CtC = clamp(unclampedCtC, minVal, maxVal)
                         pd.CtC(idx) = CtC
-                        if [CERES_style_preconditioning] then
-                            var pre = opt_float(1.0f) / (CtC+pd.parameters.trust_region_radius*unclampedCtC) 
-                            pd.preconditioner(idx) = pre
-                            var residuum = pd.r(idx)
-                            var p = pre*residuum    -- apply pre-conditioner M^-1
-                            pd.p(idx) = p
-                            d = residuum:dot(p)
-                        end
+                        
+                        -- Calculate true preconditioner, taking into account the diagonal
+                        var pre = opt_float(1.0f) / (CtC+pd.parameters.trust_region_radius*unclampedCtC) 
+                        pd.preconditioner(idx) = pre
+                        var residuum = pd.r(idx)
+                        var p = pre*residuum    -- apply pre-conditioner M^-1
+                        pd.p(idx) = p
+                        d = residuum:dot(p)
+                        
                     end        
                 end    
                 unknownWideReduction(idx,d,pd.scanAlphaNumerator)
@@ -647,7 +674,7 @@ return function(problemSpec)
             terra kernels.PCGComputeCtC_Graph(pd : PlanData)
                 var tIdx = 0
                 if util.getValidGraphElement(pd,[graphname],&tIdx) then
-                    fmap.computeCtC(tIdx, pd.parameters, pd.CtC, pd.preconditioner)
+                    fmap.computeCtC(tIdx, pd.parameters, pd.CtC)
                 end
             end    
 
@@ -681,6 +708,7 @@ return function(problemSpec)
                                                                         "revertUpdate",
                                                                         "savePreviousUnknowns",
                                                                         "computeCost",
+                                                                        "PCGSaveSSq",
                                                                         "computeQ",
                                                                         "precompute",
                                                                         "copyResidualsToB",
@@ -1008,9 +1036,14 @@ return function(problemSpec)
                 if problemSpec:UsesLambda() then
                     emit quote
                         C.cudaMemset(pd.scanAlphaNumerator, 0, sizeof(opt_float))
+
+                        if [JacobiScaling == JacobiScalingType.ONCE_PER_SOLVE] and pd.nIter == 0 then
+                            gpu.PCGSaveSSq(pd)
+                        end
                         --logSolver(" trust_region_radius=%f ",pd.parameters.trust_region_radius)
                         gpu.PCGComputeCtC(pd)
                         gpu.PCGComputeCtC_Graph(pd)
+
                         gpu.PCGFinalizeDiagonal(pd)
                         gpu.copyResidualsToB(pd)
                         --gpu.recomputeResiduals(pd)
@@ -1337,6 +1370,7 @@ return function(problemSpec)
 		pd.p:initGPU()
 		pd.Ap_X:initGPU()
         pd.CtC:initGPU()
+        pd.SSq:initGPU()
 		pd.preconditioner:initGPU()
 		pd.g:initGPU()
         pd.prevX:initGPU()

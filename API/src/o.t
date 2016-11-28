@@ -2166,7 +2166,6 @@ local function computeCtCcentered(PS,ES)
    local UnknownType = PS.P:UnknownType()
    local ispace = ES.kind.ispace
    local N = UnknownType:VectorSizeForIndexSpace(ispace)
-   local Pre = PS:UnknownArgument(1)
    local D_hat = createzerolist(N) --gradient
     
     for ridx,residual in ipairs(ES.residuals) do
@@ -2195,11 +2194,11 @@ local function computeCtCcentered(PS,ES)
     for i = 1,N do
         D_hat[i] = ad.polysimplify(D_hat[i])
     end
-    return A.FunctionSpec(ES.kind,"computeCtC", List { "Pre" }, List{ ad.Vector(unpack(D_hat)) }, EMPTY,ES)
+    return A.FunctionSpec(ES.kind,"computeCtC", List { }, List{ ad.Vector(unpack(D_hat)) }, EMPTY,ES)
 end
 
 local function computeCtCgraph(PS,ES)
-    local CtC,Pre = PS:UnknownArgument(1),PS:UnknownArgument(2)
+    local CtC = PS:UnknownArgument(1),PS:UnknownArgument(2)
     local scatters = List() 
     local scattermap = { [CtC] = {}}
 
@@ -2223,7 +2222,7 @@ local function computeCtCgraph(PS,ES)
             addscatter(CtC,u,partial*partial*inv_radius)
         end
     end
-    return A.FunctionSpec(ES.kind, "computeCtC", List { "CtC", "Pre" }, EMPTY, scatters, ES)
+    return A.FunctionSpec(ES.kind, "computeCtC", List { "CtC" }, EMPTY, scatters, ES)
 end
 
 local function createdumpjcentered(PS,ES)
