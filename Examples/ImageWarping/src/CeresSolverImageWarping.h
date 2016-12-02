@@ -1,5 +1,5 @@
 #pragma once
-
+#include "Precision.h"
 class CeresSolverWarping {
 
 public:
@@ -25,7 +25,7 @@ public:
 	}
 
     // !returns total time taken for solve, in milliseconds
-    float solve(float2* h_x_float, float* h_a_float, float2* h_urshape, float2* h_constraints, float* h_mask, float weightFit, float weightReg);
+    float solve(OPT_FLOAT2* h_x_float, OPT_FLOAT* h_a_float, OPT_FLOAT2* h_urshape, OPT_FLOAT2* h_constraints, OPT_FLOAT* h_mask, float weightFit, float weightReg, std::vector<SolverIteration>& results);
 
 private:
 
@@ -34,7 +34,7 @@ private:
 	int m_width, m_height;
 };
 #ifndef USE_CERES
-inline float CeresSolverWarping::solve(float2* h_x_float, float* h_a_float, float2* h_urshape, float2* h_constraints, float* h_mask, float weightFit, float weightReg)
+inline float CeresSolverWarping::solve(OPT_FLOAT2* h_x_float, OPT_FLOAT* h_a_float, OPT_FLOAT2* h_urshape, OPT_FLOAT2* h_constraints, OPT_FLOAT* h_mask, float weightFit, float weightReg, std::vector<SolverIteration>& results)
 {
     return 0.0f;
 }

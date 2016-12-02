@@ -2,15 +2,15 @@
 
 #include <cassert>
 
+#include "SolverIteration.h"
 extern "C" {
 #include "Opt.h"
 }
 
+#include "Precision.h"
+
 #include <cuda_runtime.h>
 #include <cudaUtil.h>
-
-extern "C" void reshuffleToFloat3CUDA(float2* d_x, float* d_a, float3* d_unknown, unsigned int width, unsigned int height);
-extern "C" void reshuffleFromFloat3CUDA(float2* d_x, float* d_a, float3* d_unknown, unsigned int width, unsigned int height);
 
 class TerraSolverWarping {
 
@@ -26,18 +26,14 @@ public:
 		m_width = width;
 		m_height = height;
 
-		CUDA_SAFE_CALL(cudaMalloc(&d_unknown, sizeof(float3)*width*height));
-
 		assert(m_optimizerState);
 		assert(m_problem);
 		assert(m_plan);
-		assert(d_unknown);
+
 	}
 
 	~TerraSolverWarping()
 	{
-		CUDA_SAFE_CALL(cudaFree(d_unknown));
-
 
 		if (m_plan) {
 			Opt_PlanFree(m_optimizerState, m_plan);
@@ -50,7 +46,7 @@ public:
 	}
 
 
-	void solve(float2* d_x, float* d_a, float2* d_urshape, float2* d_constraints, float* d_mask, unsigned int nNonLinearIterations, unsigned int nLinearIterations, unsigned int nBlockIterations, float weightFit, float weightReg)
+    void solve(OPT_FLOAT2* d_x, OPT_FLOAT* d_a, OPT_FLOAT2* d_urshape, OPT_FLOAT2* d_constraints, OPT_FLOAT* d_mask, unsigned int nNonLinearIterations, unsigned int nLinearIterations, unsigned int nBlockIterations, float weightFit, float weightReg, std::vector<SolverIteration>& iterationSummary)
 	{
 		void* solverParams[] = { &nNonLinearIterations, &nLinearIterations, &nBlockIterations };
 		float weightFitSqrt = sqrt(weightFit);
@@ -58,7 +54,24 @@ public:
 		
 		void* problemParams[] = { d_x, d_a, d_urshape, d_constraints, d_mask, &weightFitSqrt, &weightRegSqrt };
 		
-		Opt_ProblemSolve(m_optimizerState, m_plan, problemParams, solverParams);
+        Timer t;
+        t.start();
+        Opt_ProblemInit(m_optimizerState, m_plan, problemParams, solverParams);
+        cudaDeviceSynchronize();
+        t.stop();
+        double cost = Opt_ProblemCurrentCost(m_optimizerState, m_plan);
+        iterationSummary.push_back(SolverIteration(cost, t.getElapsedTimeMS()));
+        
+        
+        t.start();
+        while (Opt_ProblemStep(m_optimizerState, m_plan, problemParams, solverParams)) {
+            cudaDeviceSynchronize();
+            t.stop();
+            cost = Opt_ProblemCurrentCost(m_optimizerState, m_plan);
+            iterationSummary.push_back(SolverIteration(cost, t.getElapsedTimeMS()));
+            t.start();
+        }
+        t.stop();
 	}
 
 
@@ -66,6 +79,5 @@ public:
 	Opt_Problem*	m_problem;
 	Opt_Plan*		m_plan;
 
-	float3*	d_unknown;
 	unsigned int m_width, m_height;
 };

@@ -8,6 +8,7 @@
 #ifdef _WIN32
 // for getcwd
 #include <Windows.h>
+#include <direct.h>
 #endif
 
 //http://www.itl.nist.gov/div898/strd/nls/nls_main.shtml
@@ -19,7 +20,7 @@ vector<NLLSProblem> makeProblems()
 	vector<NLLSProblem> problems;
 
 	problems.push_back(NLLSProblem("mgh09", 4, { 25.0, 39.0, 41.5, 39.0 }, { 1.9280693458E-01, 1.9128232873E-01, 1.2305650693E-01, 1.3606233068E-01 }));
-	problems.push_back(NLLSProblem("eckerle4", 3, { 1.0, 10.0, 500.0, 0.0 }, { 0.0, 0.0, 0.0, 0.0 }));
+    problems.push_back(NLLSProblem("eckerle4", 3, { 1.0, 10.0, 500.0, 0.0 }, { 1.5543827178E+00, 4.0888321754E+00, 4.5154121844E+02, 0.0 }));
 	problems.push_back(NLLSProblem("rat42", 3, { 100.0, 1.0, 0.1, 0.0 }, { 0.0, 0.0, 0.0, 0.0 }));
 
 	problems.push_back(NLLSProblem("misra", 2, { 5e2, 1e-4, 0.0, 0.0 }, { 2.3894212918E+02, 5.5015643181E-04, 0.0, 0.0 }));
@@ -36,7 +37,7 @@ vector<double2> loadFile(const string &filename)
 	for (string line : lines)
 	{
 		double2 d;
-		d.y = Utility::StringToFloat(Utility::PartitionString(line, " ")[0]);
+		d.y = Utility::StringToFloat(Utility::PartitionString(line, " ")[0]); 
 		d.x = Utility::StringToFloat(Utility::PartitionString(line, " ")[1]);
 		result.push_back(d);
 	}
@@ -80,24 +81,40 @@ const T& clampedRead(const std::vector<T> &v, int index)
 	return v[index];
 }
 
-ofstream resultFile("results.txt");
+
 void runProblem(const NLLSProblem &problem)
 {
-	auto dataPoints = loadFile("data/" + problem.baseName + ".txt");
-
+    auto dataPoints = loadFile("data/" + problem.baseName + ".txt");
 	CombinedSolver solver(problem, dataPoints);
 	UNKNOWNS finalResult = solver.solve(problem);
-	//std::cout << "Final Result: " << finalResult.x << ", " << finalResult.y << std::endl;
-    resultFile << std::setprecision(20);
-	resultFile << "Problem: " << problem.baseName << endl;
-	resultFile << "True solution: " << problem.trueSolution.x << " " << problem.trueSolution.y << " " << problem.trueSolution.z << " " << problem.trueSolution.w << endl;
-	resultFile << "Ceres solution: " << solver.m_ceresResult.x << " " << solver.m_ceresResult.y << " " << solver.m_ceresResult.z << " " << solver.m_ceresResult.w << endl;
-	resultFile << "Opt solution: " << solver.m_optResult.x << " " << solver.m_optResult.y << " " << solver.m_optResult.z << " " << solver.m_optResult.w << endl;
 
-	resultFile << "Iter\tCeres\tOpt" << endl;
+    
+    std::string resultDirectory = "results/";
+#   if OPT_DOUBLE_PRECISION
+    std::string resultSuffix = "_double";
+#   else
+    std::string resultSuffix = "_float";
+#   endif
+
+    ofstream resultFile(resultDirectory + problem.baseName + resultSuffix + ".csv");
+	//std::cout << "Final Result: " << finalResult.x << ", " << finalResult.y << std::endl;
+    resultFile << std::scientific;
+    resultFile << std::setprecision(20);
+	resultFile << "Problem, " << problem.baseName << endl;
+	resultFile << "True solution, " << problem.trueSolution.x << ", " << problem.trueSolution.y << ", " << problem.trueSolution.z << ", " << problem.trueSolution.w << endl;
+	resultFile << "Ceres solution, " << solver.m_ceresResult.x << ", " << solver.m_ceresResult.y << ", " << solver.m_ceresResult.z << ", " << solver.m_ceresResult.w << endl;
+	resultFile << "Opt solution, " << solver.m_optResult.x << ", " << solver.m_optResult.y << ", " << solver.m_optResult.z << ", " << solver.m_optResult.w << endl;
+
+	resultFile << "Iter, Ceres Error, Opt Error, Ceres Iter Time (ms), Opt Iter Time (ms), Total Ceres Time (ms), Total Opt Time (ms)" << endl;
+    double sumOptTime = 0.0;
+    double sumCeresTime = 0.0;
 	for (int i = 0; i < (int)max(solver.m_ceresIters.size(), solver.m_optIters.size()); i++)
 	{
-		resultFile << i << "\t" << clampedRead(solver.m_ceresIters, i).cost << "\t" << clampedRead(solver.m_optIters, i).cost << endl;
+        double ceresTime    = ((solver.m_ceresIters.size() > i) ? solver.m_ceresIters[i].timeInMS : 0.0);
+        double optTime = ((solver.m_optIters.size() > i) ? solver.m_optIters[i].timeInMS : 0.0);
+        sumCeresTime    += ceresTime;
+        sumOptTime      += optTime;
+        resultFile << i << ", " << clampedRead(solver.m_ceresIters, i).cost << ", " << clampedRead(solver.m_optIters, i).cost << ", " << ceresTime << ", " << optTime << ", " << sumCeresTime << ", " << sumOptTime << endl;
 	}
 }
 
@@ -126,7 +143,7 @@ int main(int argc, const char * argv[]) {
 		runTestB();
 	}
 
-	cout << "See results.txt" << endl;
+	cout << "See results/*.csv" << endl;
     #ifdef _WIN32
  	    getchar();
     #else

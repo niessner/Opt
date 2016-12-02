@@ -117,7 +117,8 @@ xcopy /Y /D "..\..\API\release\include\*.h" "."</Command>
       <EnableCOMDATFolding>true</EnableCOMDATFolding>
       <SubSystem>Console</SubSystem>
       <OptimizeReferences>true</OptimizeReferences>
-      <AdditionalLibraryDirectories>E:\Work\ceres\ceres-solver\bin\lib\Release</AdditionalLibraryDirectories>
+      <AdditionalLibraryDirectories>
+      </AdditionalLibraryDirectories>
     </Link>
     <Manifest>
       <EnableDPIAwareness>true</EnableDPIAwareness>
@@ -159,6 +160,7 @@ xcopy /Y /D "..\..\API\release\include\*.h" "."</Command>
     <ClInclude Include="src\Precision.h" />
     <ClInclude Include="src\TerraSolver.h" />
     <ClInclude Include="src\SolverUtil.h" />
+    <ClInclude Include="src\Timer.h" />
     <ClInclude Include="src\util.h" />
   </ItemGroup>
   <ItemGroup>

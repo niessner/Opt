@@ -1,5 +1,5 @@
 #pragma once
-
+#include "SolverIteration.h"
 #include "mLibInclude.h"
 //#include "/Users/zdevito/vdb/vdb.h"
 
@@ -11,14 +11,34 @@
 #include "TerraSolverWarping.h"
 #include "CeresSolverImageWarping.h"
 
+#include "Precision.h"
+#include <fstream>
 
+
+
+#if PERFORMANCE_RUN
 static bool useCUDA = false;
 static bool useTerra = false;
 static bool useAD = true;
+static bool useLMAD = true;
+static bool useCeres = true;
+static bool earlyOut = true;
+#else
+static bool useCUDA = false;
+static bool useTerra = false;
+static bool useAD = true;
+static bool useLMAD = false;
 static bool useCeres = false;
-
 static bool earlyOut = false;
+#endif
 
+template<class T>
+const T& clampedRead(const std::vector<T> &v, int index)
+{
+    if (index < 0) return v[0];
+    if (index >= v.size()) return v[v.size() - 1];
+    return v[index];
+}
 
 static bool
 PointInTriangleBarycentric(float x0, float y0, float w0,
@@ -112,11 +132,11 @@ public:
 		m_imageColor = imageColor;
 		m_imageMask = imageMask;
 
-		cutilSafeCall(cudaMalloc(&d_urshape, sizeof(float2)*m_image.getWidth()*m_image.getHeight()));
-		cutilSafeCall(cudaMalloc(&d_warpField, sizeof(float2)*m_image.getWidth()*m_image.getHeight()));
-		cutilSafeCall(cudaMalloc(&d_warpAngles, sizeof(float)*m_image.getWidth()*m_image.getHeight()));
-		cutilSafeCall(cudaMalloc(&d_constraints, sizeof(float2)*m_image.getWidth()*m_image.getHeight()));
-		cutilSafeCall(cudaMalloc(&d_mask, sizeof(float)*m_image.getWidth()*m_image.getHeight()));
+		cutilSafeCall(cudaMalloc(&d_urshape, sizeof(OPT_FLOAT2)*m_image.getWidth()*m_image.getHeight()));
+        cutilSafeCall(cudaMalloc(&d_warpField, sizeof(OPT_FLOAT2)*m_image.getWidth()*m_image.getHeight()));
+        cutilSafeCall(cudaMalloc(&d_warpAngles, sizeof(OPT_FLOAT)*m_image.getWidth()*m_image.getHeight()));
+        cutilSafeCall(cudaMalloc(&d_constraints, sizeof(OPT_FLOAT2)*m_image.getWidth()*m_image.getHeight()));
+        cutilSafeCall(cudaMalloc(&d_mask, sizeof(OPT_FLOAT)*m_image.getWidth()*m_image.getHeight()));
 
 		resetGPU();
 
@@ -127,8 +147,12 @@ public:
 			m_warpingSolverTerra = new TerraSolverWarping(m_image.getWidth(), m_image.getHeight(), "ImageWarping.t", "gaussNewtonGPU");
 
 		if (useAD) {
-			m_warpingSolverTerraAD = new TerraSolverWarping(m_image.getWidth(), m_image.getHeight(), "ImageWarpingAD.t", "gaussNewtonGPU");
+            m_warpingSolverTerraAD = new TerraSolverWarping(m_image.getWidth(), m_image.getHeight(), "ImageWarpingAD.t", "gaussNewtonGPU");
 		}
+
+        if (useLMAD) {
+            m_warpingSolverTerraLMAD = new TerraSolverWarping(m_image.getWidth(), m_image.getHeight(), "ImageWarpingAD.t", "LMGPU");
+        }
 
 		if (useCeres)
 			m_warpingSolverCeres = new CeresSolverWarping(m_image.getWidth(), m_image.getHeight());
@@ -137,37 +161,37 @@ public:
 
 	void resetGPU()
 	{
-		float2* h_urshape = new float2[m_image.getWidth()*m_image.getHeight()];
-		float*  h_mask = new float[m_image.getWidth()*m_image.getHeight()];
+        OPT_FLOAT2* h_urshape = new OPT_FLOAT2[m_image.getWidth()*m_image.getHeight()];
+        OPT_FLOAT*  h_mask = new OPT_FLOAT[m_image.getWidth()*m_image.getHeight()];
 
 		for (unsigned int y = 0; y < m_image.getHeight(); y++)
 		{
 			for (unsigned int x = 0; x < m_image.getWidth(); x++)
 			{
-				h_urshape[y*m_image.getWidth() + x] = make_float2((float)x, (float)y);
-				h_mask[y*m_image.getWidth() + x] = m_imageMask(x, y);
+                h_urshape[y*m_image.getWidth() + x] = { (OPT_FLOAT)x, (OPT_FLOAT)y };
+                h_mask[y*m_image.getWidth() + x] = (OPT_FLOAT)m_imageMask(x, y);
 			}
 		}
 
 		setConstraintImage(1.0f);
 
-		cutilSafeCall(cudaMemcpy(d_urshape, h_urshape, sizeof(float2)*m_image.getWidth()*m_image.getHeight(), cudaMemcpyHostToDevice));
-		cutilSafeCall(cudaMemcpy(d_warpField, h_urshape, sizeof(float2)*m_image.getWidth()*m_image.getHeight(), cudaMemcpyHostToDevice));
-		cutilSafeCall(cudaMemset(d_warpAngles, 0, sizeof(float)*m_image.getWidth()*m_image.getHeight()));
-		cutilSafeCall(cudaMemcpy(d_mask, h_mask, sizeof(float)*m_image.getWidth()*m_image.getHeight(), cudaMemcpyHostToDevice));
+        cutilSafeCall(cudaMemcpy(d_urshape, h_urshape, sizeof(OPT_FLOAT2)*m_image.getWidth()*m_image.getHeight(), cudaMemcpyHostToDevice));
+        cutilSafeCall(cudaMemcpy(d_warpField, h_urshape, sizeof(OPT_FLOAT2)*m_image.getWidth()*m_image.getHeight(), cudaMemcpyHostToDevice));
+        cutilSafeCall(cudaMemset(d_warpAngles, 0, sizeof(OPT_FLOAT)*m_image.getWidth()*m_image.getHeight()));
+        cutilSafeCall(cudaMemcpy(d_mask, h_mask, sizeof(OPT_FLOAT)*m_image.getWidth()*m_image.getHeight(), cudaMemcpyHostToDevice));
 		delete h_urshape;
 		delete h_mask;
 	}
 
 	void setConstraintImage(float alpha)
 	{
-		float2* h_constraints = new float2[m_image.getWidth()*m_image.getHeight()];
+        OPT_FLOAT2* h_constraints = new OPT_FLOAT2[m_image.getWidth()*m_image.getHeight()];
 		//printf("m_constraints.size() = %d\n", m_constraints.size());
 		for (unsigned int y = 0; y < m_image.getHeight(); y++)
 		{
 			for (unsigned int x = 0; x < m_image.getWidth(); x++)
 			{
-				h_constraints[y*m_image.getWidth() + x] = make_float2(-1, -1);
+                h_constraints[y*m_image.getWidth() + x] = { (OPT_FLOAT)-1.0, (OPT_FLOAT)-1.0 };
 			}
 		}
 
@@ -178,17 +202,17 @@ public:
 
 			if (m_imageMask(x, y) == 0)
 			{
-				float newX = (1.0f - alpha)*(float)x + alpha*(float)m_constraints[k][2];
-				float newY = (1.0f - alpha)*(float)y + alpha*(float)m_constraints[k][3];
+                OPT_FLOAT newX = (1.0f - alpha)*(float)x + alpha*(float)m_constraints[k][2];
+                OPT_FLOAT newY = (1.0f - alpha)*(float)y + alpha*(float)m_constraints[k][3];
 
 
-				h_constraints[y*m_image.getWidth() + x] = make_float2(newX, newY);
+                h_constraints[y*m_image.getWidth() + x] = { newX, newY };
 			}
 		}
 
 
 
-		cutilSafeCall(cudaMemcpy(d_constraints, h_constraints, sizeof(float2)*m_image.getWidth()*m_image.getHeight(), cudaMemcpyHostToDevice));
+		cutilSafeCall(cudaMemcpy(d_constraints, h_constraints, sizeof(OPT_FLOAT2)*m_image.getWidth()*m_image.getHeight(), cudaMemcpyHostToDevice));
 		delete h_constraints;
 	}
 
@@ -207,6 +231,8 @@ public:
 
 		if (useAD)
 			SAFE_DELETE(m_warpingSolverTerraAD);
+        if (useLMAD)
+            SAFE_DELETE(m_warpingSolverTerraLMAD);
 
 	}
 
@@ -214,10 +240,18 @@ public:
 		float weightFit = 100.0f;
 		float weightReg = 0.01f;
 
+
+#if PERFORMANCE_RUN
 		unsigned int numIter = 20;
-		unsigned int nonLinearIter = 3;
-		unsigned int linearIter = 200;
+		unsigned int nonLinearIter = 100;
+		unsigned int linearIter = 400;
 		unsigned int patchIter = 32;
+#else
+        unsigned int numIter = 20;
+        unsigned int nonLinearIter = 3;
+        unsigned int linearIter = 200;
+        unsigned int patchIter = 32;
+#endif
 
 		//unsigned int numIter = 20;
 		//unsigned int nonLinearIter = 32;
@@ -229,9 +263,9 @@ public:
 			for (unsigned int i = 1; i < numIter; i++)	{
 				std::cout << "//////////// ITERATION" << i << "  (CUDA) ///////////////" << std::endl;
 				setConstraintImage((float)i / (float)numIter);
-
-				m_warpingSolver->solveGN(d_urshape, d_warpField, d_warpAngles, d_constraints, d_mask, nonLinearIter, linearIter, weightFit, weightReg);
-				if (i == 2 && earlyOut) break;
+                assert(!OPT_DOUBLE_PRECISION);
+                m_warpingSolver->solveGN((float2*)d_urshape, (float2*)d_warpField, (float*)d_warpAngles, (float2*)d_constraints, (float*)d_mask, nonLinearIter, linearIter, weightFit, weightReg);
+				if (i == 1 && earlyOut) break;
 				//	std::cout << std::endl;
 			}
 			copyResultToCPU();
@@ -246,8 +280,8 @@ public:
 				std::cout << "//////////// ITERATION" << i << "  (TERRA) ///////////////" << std::endl;
 				setConstraintImage((float)i / (float)numIter);
 
-				m_warpingSolverTerra->solve(d_warpField, d_warpAngles, d_urshape, d_constraints, d_mask, nonLinearIter, linearIter, patchIter, weightFit, weightReg);
-				if (i == 2 && earlyOut) break;
+				m_warpingSolverTerra->solve(d_warpField, d_warpAngles, d_urshape, d_constraints, d_mask, nonLinearIter, linearIter, patchIter, weightFit, weightReg, m_optGNIters);
+				if (i == 1 && earlyOut) break;
 				//	std::cout << std::endl;
 			}
 			copyResultToCPU();
@@ -264,66 +298,116 @@ public:
 				std::cout << "//////////// ITERATION" << i << "  (DSL AD) ///////////////" << std::endl;
 				setConstraintImage((float)i / (float)numIter);
 
-				m_warpingSolverTerraAD->solve(d_warpField, d_warpAngles, d_urshape, d_constraints, d_mask, nonLinearIter, linearIter, patchIter, weightFit, weightReg);
+				m_warpingSolverTerraAD->solve(d_warpField, d_warpAngles, d_urshape, d_constraints, d_mask, nonLinearIter, linearIter, patchIter, weightFit, weightReg, m_optGNIters);
 				std::cout << std::endl;
-				if (i == 2 && earlyOut) break;
+				if (i == 1 && earlyOut) break;
 			}
 
 			copyResultToCPU();
 		}
+
+        if (useLMAD) {
+            resetGPU();
+
+            std::cout << std::endl << std::endl;
+
+            for (unsigned int i = 1; i < numIter; i++)	{
+
+                std::cout << "//////////// ITERATION" << i << "  (DSL LM AD) ///////////////" << std::endl;
+                setConstraintImage((float)i / (float)numIter);
+
+                m_warpingSolverTerraLMAD->solve(d_warpField, d_warpAngles, d_urshape, d_constraints, d_mask, nonLinearIter, linearIter, patchIter, weightFit, weightReg, m_optLMIters);
+                std::cout << std::endl;
+                if (i == 1 && earlyOut) break;
+            }
+
+            copyResultToCPU();
+        }
 
 		if (useCeres) {
 			resetGPU();
 
 			const int pixelCount = m_image.getWidth()*m_image.getHeight();
 
-			float2* h_warpField = new float2[pixelCount];
-			float* h_warpAngles = new float[pixelCount];
+            OPT_FLOAT2* h_warpField = new OPT_FLOAT2[pixelCount];
+            OPT_FLOAT* h_warpAngles = new OPT_FLOAT[pixelCount];
 
-			float2* h_urshape = new float2[pixelCount];
-			float*  h_mask = new float[pixelCount];
-			float2* h_constraints = new float2[pixelCount];
+            OPT_FLOAT2* h_urshape = new OPT_FLOAT2[pixelCount];
+            OPT_FLOAT*  h_mask = new OPT_FLOAT[pixelCount];
+            OPT_FLOAT2* h_constraints = new OPT_FLOAT2[pixelCount];
 
 			float totalCeresTimeMS = 0.0f;
 
-			cutilSafeCall(cudaMemcpy(h_urshape, d_urshape, sizeof(float2) * pixelCount, cudaMemcpyDeviceToHost));
-			cutilSafeCall(cudaMemcpy(h_mask, d_mask, sizeof(float) * pixelCount, cudaMemcpyDeviceToHost));
-			cutilSafeCall(cudaMemcpy(h_constraints, d_constraints, sizeof(float2) * pixelCount, cudaMemcpyDeviceToHost));
-			cutilSafeCall(cudaMemcpy(h_warpField, d_warpField, sizeof(float2) * pixelCount, cudaMemcpyDeviceToHost));
-			cutilSafeCall(cudaMemcpy(h_warpAngles, d_warpAngles, sizeof(float) * pixelCount, cudaMemcpyDeviceToHost));
+            cutilSafeCall(cudaMemcpy(h_urshape, d_urshape, sizeof(OPT_FLOAT2) * pixelCount, cudaMemcpyDeviceToHost));
+            cutilSafeCall(cudaMemcpy(h_mask, d_mask, sizeof(OPT_FLOAT) * pixelCount, cudaMemcpyDeviceToHost));
+            cutilSafeCall(cudaMemcpy(h_constraints, d_constraints, sizeof(OPT_FLOAT2) * pixelCount, cudaMemcpyDeviceToHost));
+            cutilSafeCall(cudaMemcpy(h_warpField, d_warpField, sizeof(OPT_FLOAT2) * pixelCount, cudaMemcpyDeviceToHost));
+            cutilSafeCall(cudaMemcpy(h_warpAngles, d_warpAngles, sizeof(OPT_FLOAT) * pixelCount, cudaMemcpyDeviceToHost));
 
 			std::cout << std::endl << std::endl;
 
-			for (unsigned int i = 0; i < numIter; i++)	{
+			for (unsigned int i = 1; i < numIter; i++)	{
 				std::cout << "//////////// ITERATION" << i << "  (CERES) ///////////////" << std::endl;
 				setConstraintImage((float)i / (float)numIter);
-				cutilSafeCall(cudaMemcpy(h_constraints, d_constraints, sizeof(float2) * pixelCount, cudaMemcpyDeviceToHost));
+                cutilSafeCall(cudaMemcpy(h_constraints, d_constraints, sizeof(OPT_FLOAT2) * pixelCount, cudaMemcpyDeviceToHost));
 
-				totalCeresTimeMS = m_warpingSolverCeres->solve(h_warpField, h_warpAngles, h_urshape, h_constraints, h_mask, weightFit, weightReg);
-				std::cout << std::endl;
+                totalCeresTimeMS = m_warpingSolverCeres->solve(h_warpField, h_warpAngles, h_urshape, h_constraints, h_mask, weightFit, weightReg, m_ceresIters);
+                std::cout << std::endl;
+                if (i == 1 && earlyOut) break;
 			}
 
-			cutilSafeCall(cudaMemcpy(d_warpField, h_warpField, sizeof(float2) * pixelCount, cudaMemcpyHostToDevice));
-			cutilSafeCall(cudaMemcpy(d_warpAngles, h_warpAngles, sizeof(float) * pixelCount, cudaMemcpyHostToDevice));
+            cutilSafeCall(cudaMemcpy(d_warpField, h_warpField, sizeof(OPT_FLOAT2) * pixelCount, cudaMemcpyHostToDevice));
+            cutilSafeCall(cudaMemcpy(d_warpAngles, h_warpAngles, sizeof(OPT_FLOAT) * pixelCount, cudaMemcpyHostToDevice));
 			copyResultToCPU();
 
 			std::cout << "Ceres time for final iteration: " << totalCeresTimeMS << "ms" << std::endl;
 
-			std::cout << "testing CERES cost function by calling AD..." << std::endl;
+			//std::cout << "testing CERES cost function by calling AD..." << std::endl;
 
 			//m_warpingSolverTerraAD->solve(d_warpField, d_warpAngles, d_urshape, d_constraints, d_mask, nonLinearIter, linearIter, patchIter, weightFit, weightReg);
-			m_warpingSolverCeres->solve(d_warpField, d_warpAngles, d_urshape, d_constraints, d_mask, weightFit, weightReg);
+            //m_warpingSolverCeres->solve(d_warpField, d_warpAngles, d_urshape, d_constraints, d_mask, weightFit, weightReg, m_ceresIters);
 			std::cout << std::endl;
 		}
+
+
+        std::string resultDirectory = "results/";
+#   if OPT_DOUBLE_PRECISION
+        std::string resultSuffix = "_double";
+#   else
+        std::string resultSuffix = "_float";
+#   endif
+
+        std::ofstream resultFile(resultDirectory + "results" + resultSuffix + ".csv");
+        //std::cout << "Final Result: " << finalResult.x << ", " << finalResult.y << std::endl;
+        resultFile << std::scientific;
+        resultFile << std::setprecision(20);
+
+        resultFile << "Iter, Ceres Error, Opt (GN) Error,  Opt (LM) Error, Ceres Iter Time (ms), Opt (GN) Iter Time (ms), Opt (LM) Iter Time (ms), Total Ceres Time (ms), Total Opt (GN) Time (ms), Total Opt (LM) Time (ms)" << std::endl;
+        double sumOptGNTime = 0.0;
+        double sumOptLMTime = 0.0;
+        double sumCeresTime = 0.0;
+        if (!useCeres) {
+            m_ceresIters.push_back(SolverIteration(0, 0));
+        }
+        for (int i = 0; i < (int)max(m_ceresIters.size(), max(m_optLMIters.size(), m_optGNIters.size())); i++)
+        {
+            double ceresTime = ((m_ceresIters.size() > i) ? m_ceresIters[i].timeInMS : 0.0);
+            double optGNTime = ((m_optGNIters.size() > i) ? m_optGNIters[i].timeInMS : 0.0);
+            double optLMTime = ((m_optLMIters.size() > i) ? m_optLMIters[i].timeInMS : 0.0);
+            sumCeresTime += ceresTime;
+            sumOptGNTime += optGNTime;
+            sumOptLMTime += optLMTime;
+            resultFile << i << ", " << clampedRead(m_ceresIters, i).cost << ", " << clampedRead(m_optGNIters, i).cost << ", " << clampedRead(m_optLMIters, i).cost << ", " << ceresTime << ", " << optGNTime << ", " << optLMTime << ", " << sumCeresTime << ", " << sumOptGNTime << ", " << sumOptLMTime << std::endl;
+        }
 
 		return &m_resultColor;
 	}
 
-	vec2f toVec2(float2 p) {
+    vec2f toVec2(OPT_FLOAT2 p) {
 		return vec2f(p.x, p.y);
 	}
 
-	void rasterizeTriangle(float2 p0, float2 p1, float2 p2, vec3f c0, vec3f c1, vec3f c2) {
+    void rasterizeTriangle(OPT_FLOAT2 p0, OPT_FLOAT2 p1, OPT_FLOAT2 p2, vec3f c0, vec3f c1, vec3f c2) {
 		vec2f t0 = toVec2(p0)*m_scale;
 		vec2f t1 = toVec2(p1)*m_scale;
 		vec2f t2 = toVec2(p2)*m_scale;
@@ -360,8 +444,8 @@ public:
 		m_resultColor = ColorImageR32G32B32(m_image.getWidth()*m_scale, m_image.getHeight()*m_scale);
 		m_resultColor.setPixels(vec3f(255.0f, 255.0f, 255.0f));
 
-		float2* h_warpField = new float2[m_image.getWidth()*m_image.getHeight()];
-		cutilSafeCall(cudaMemcpy(h_warpField, d_warpField, sizeof(float2)*m_image.getWidth()*m_image.getHeight(), cudaMemcpyDeviceToHost));
+        OPT_FLOAT2* h_warpField = new OPT_FLOAT2[m_image.getWidth()*m_image.getHeight()];
+        cutilSafeCall(cudaMemcpy(h_warpField, d_warpField, sizeof(OPT_FLOAT2)*m_image.getWidth()*m_image.getHeight(), cudaMemcpyDeviceToHost));
 
 		unsigned int c = 3;
 		for (unsigned int y = 0; y < m_image.getHeight(); y++)
@@ -372,10 +456,10 @@ public:
 				{
 					if (m_imageMask(x, y) == 0)
 					{
-						float2 pos00 = h_warpField[y*m_image.getWidth() + x];
-						float2 pos01 = h_warpField[y*m_image.getWidth() + (x + 1)];
-						float2 pos10 = h_warpField[(y + 1)*m_image.getWidth() + x];
-						float2 pos11 = h_warpField[(y + 1)*m_image.getWidth() + (x + 1)];
+                        OPT_FLOAT2 pos00 = h_warpField[y*m_image.getWidth() + x];
+                        OPT_FLOAT2 pos01 = h_warpField[y*m_image.getWidth() + (x + 1)];
+                        OPT_FLOAT2 pos10 = h_warpField[(y + 1)*m_image.getWidth() + x];
+                        OPT_FLOAT2 pos11 = h_warpField[(y + 1)*m_image.getWidth() + (x + 1)];
 
 						vec3f v00 = m_imageColor(x, y);
 						vec3f v01 = m_imageColor(x + 1, y);
@@ -445,17 +529,23 @@ private:
 
 	float m_scale;
 
-	float2*	d_urshape;
-	float2* d_warpField;
-	float2* d_constraints;
-	float*  d_warpAngles;
-	float*  d_mask;
+	OPT_FLOAT2*	d_urshape;
+    OPT_FLOAT2* d_warpField;
+    OPT_FLOAT2* d_constraints;
+	OPT_FLOAT*  d_warpAngles;
+    OPT_FLOAT*  d_mask;
+
+    std::vector<SolverIteration> m_ceresIters;
+    std::vector<SolverIteration> m_optGNIters;
+    std::vector<SolverIteration> m_optLMIters;
 
 	std::vector<std::vector<int>>& m_constraints;
 
 	CUDAWarpingSolver*	    m_warpingSolver;
 
 	TerraSolverWarping*		m_warpingSolverTerraAD;
+
+    TerraSolverWarping*		m_warpingSolverTerraLMAD;
 
 	TerraSolverWarping*		m_warpingSolverTerra;
 

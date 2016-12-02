@@ -3,11 +3,12 @@
 #include "main.h"
 
 #ifdef USE_CERES
-const bool performanceTest = false;
+const bool performanceTest = true;
 //const int linearIterationMin = 100;
 
 #include <cuda_runtime.h>
 
+#include "SolverIteration.h"
 #include "CeresSolverImageWarping.h"
 
 #include "ceres/ceres.h"
@@ -63,10 +64,11 @@ if(mask(i, j) == 0 && offset-in-bounds)
     cost = (x(i, j) - x(i + ox, j + oy)) - mul(R, urshape(i, j) - urshape(i + ox, j + oy)) * w_regSqrt
 */
 
-vec2f toVec(const float2 &v)
+vec2f toVec(const OPT_FLOAT2 &v)
 {
     return vec2f(v.x, v.y);
 }
+
 
 template<class T> void evalR(const T angle, T matrix[4])
 {
@@ -141,7 +143,7 @@ struct RegTerm
     float weight;
 };
 
-float CeresSolverWarping::solve(float2* h_x_float, float* h_a_float, float2* h_urshape, float2* h_constraints, float* h_mask, float weightFit, float weightReg)
+float CeresSolverWarping::solve(OPT_FLOAT2* h_x_float, OPT_FLOAT* h_a_float, OPT_FLOAT2* h_urshape, OPT_FLOAT2* h_constraints, OPT_FLOAT* h_mask, float weightFit, float weightReg, std::vector<SolverIteration>& result)
 {
     float weightFitSqrt = sqrt(weightFit);
     float weightRegSqrt = sqrt(weightReg);
@@ -207,12 +209,12 @@ float CeresSolverWarping::solve(float2* h_x_float, float* h_a_float, float2* h_u
     Solver::Options options;
     Solver::Summary summary;
 
-    options.minimizer_progress_to_stdout = !performanceTest;
+   // options.minimizer_progress_to_stdout = true;// !performanceTest;
 
     //faster methods
     options.num_threads = 8;
     options.num_linear_solver_threads = 8;
-    //options.linear_solver_type = ceres::LinearSolverType::SPARSE_NORMAL_CHOLESKY; //7.2s
+    options.linear_solver_type = ceres::LinearSolverType::SPARSE_NORMAL_CHOLESKY; //7.2s
     //options.linear_solver_type = ceres::LinearSolverType::SPARSE_SCHUR; //10.0s
     
     //slower methods
@@ -251,6 +253,14 @@ float CeresSolverWarping::solve(float2* h_x_float, float* h_a_float, float2* h_u
         iterationTotalTime += i.iteration_time_in_seconds;
         totalLinearItereations += i.linear_solver_iterations;
         cout << "Iteration: " << i.linear_solver_iterations << " " << i.iteration_time_in_seconds * 1000.0 << "ms" << endl;
+    }
+
+    for (auto &i : summary.iterations)
+    {
+        SolverIteration iter;
+        iter.cost = i.cost;
+        iter.timeInMS = i.iteration_time_in_seconds * 1000.0;
+        result.push_back(iter);
     }
 
     cout << "Total iteration time: " << iterationTotalTime << endl;

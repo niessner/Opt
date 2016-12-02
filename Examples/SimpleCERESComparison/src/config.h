@@ -20,8 +20,9 @@ struct NLLSProblem
 struct SolverIteration
 {
 	SolverIteration() {}
-	SolverIteration(double _cost) { cost = _cost; }
-	double cost;
+    SolverIteration(double _cost, double _timeInMS) { cost = _cost; timeInMS = _timeInMS; }
+	double cost = -std::numeric_limits<double>::infinity();
+    double timeInMS = -std::numeric_limits<double>::infinity();
 };
 
 const bool useProblemDefault = false; //2 unknowns -- Michael's original curveFitting.t code

@@ -232,17 +232,19 @@ std::vector<SolverIteration> CeresSolver::solve(
     Solver::Options options;
     Solver::Summary summary;
 
-    options.minimizer_progress_to_stdout = true;
+    //shut off annoying output
+    options.minimizer_progress_to_stdout = false;
+    options.logging_type = ceres::SILENT;
 
     //faster methods
-    options.num_threads = 1;
-    options.num_linear_solver_threads = 1;
-    //options.linear_solver_type = ceres::LinearSolverType::SPARSE_NORMAL_CHOLESKY; //7.2s
+    options.num_threads = 8;
+    options.num_linear_solver_threads = 8;
+    options.linear_solver_type = ceres::LinearSolverType::SPARSE_NORMAL_CHOLESKY; //7.2s
     //options.linear_solver_type = ceres::LinearSolverType::SPARSE_SCHUR; //10.0s
 
     //slower methods
     //options.linear_solver_type = ceres::LinearSolverType::ITERATIVE_SCHUR; //40.6s
-    options.linear_solver_type = ceres::LinearSolverType::CGNR; //46.9s
+   // options.linear_solver_type = ceres::LinearSolverType::CGNR; //46.9s
 	//options.linear_solver_type = ceres::LinearSolverType::DENSE_NORMAL_CHOLESKY;
 
     //options.min_linear_solver_iterations = linearIterationMin;
@@ -251,7 +253,7 @@ std::vector<SolverIteration> CeresSolver::solve(
     options.gradient_tolerance = 1e-10 * options.function_tolerance;
 
     // Default values, reproduced here for clarity
-    options.trust_region_strategy_type = ceres::TrustRegionStrategyType::LEVENBERG_MARQUARDT;
+    //options.trust_region_strategy_type = ceres::TrustRegionStrategyType::LEVENBERG_MARQUARDT;
     options.initial_trust_region_radius = 1e4;
     options.max_trust_region_radius = 1e16;
     options.min_trust_region_radius = 1e-32;
@@ -276,6 +278,7 @@ std::vector<SolverIteration> CeresSolver::solve(
 	{
 		SolverIteration iter;
 		iter.cost = i.cost;
+        iter.timeInMS = i.iteration_time_in_seconds * 1000.0;
 		result.push_back(iter);
 	}
 

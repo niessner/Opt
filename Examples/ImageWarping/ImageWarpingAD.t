@@ -1,14 +1,26 @@
+require("opt_precision")
+
+if OPT_DOUBLE_PRECISION then
+    OPT_FLOAT2 = double2
+    OPT_FLOAT3 = double3
+	OPT_FLOAT4 = double4
+else
+    OPT_FLOAT2 = float2
+    OPT_FLOAT3 = float3
+	OPT_FLOAT4 = float4
+end
+
 
 local USE_J = false
 local W,H = opt.Dim("W",0), opt.Dim("H",1)
 local S = ad.ProblemSpec()
 S:UsePreconditioner(true)
 
-local Offset = S:Unknown("Offset",opt.float2,{W,H},0)
-local Angle = S:Unknown("Angle",float,{W,H},1)
-local UrShape = 	S:Image("UrShape", opt.float2,{W,H},2)		--urshape
-local Constraints = S:Image("Constraints", opt.float2,{W,H},3)	--constraints
-local Mask = 		S:Image("Mask", float, {W,H},4)				--validity mask for constraints
+local Offset = S:Unknown("Offset",OPT_FLOAT2,{W,H},0)
+local Angle = S:Unknown("Angle",opt_float,{W,H},1)
+local UrShape = 	S:Image("UrShape", OPT_FLOAT2,{W,H},2)		--urshape
+local Constraints = S:Image("Constraints", OPT_FLOAT2,{W,H},3)	--constraints
+local Mask = 		S:Image("Mask", opt_float, {W,H},4)				--validity mask for constraints
 
 local w_fitSqrt = S:Param("w_fitSqrt", float, 5)
 local w_regSqrt = S:Param("w_regSqrt", float, 6)

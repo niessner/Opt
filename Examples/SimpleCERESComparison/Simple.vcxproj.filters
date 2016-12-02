@@ -15,6 +15,7 @@
     <ClInclude Include="src\TerraSolver.h" />
     <ClInclude Include="src\SolverUtil.h" />
     <ClInclude Include="src\util.h" />
+    <ClInclude Include="src\Timer.h" />
   </ItemGroup>
   <ItemGroup>
     <None Include="bennet5.t">

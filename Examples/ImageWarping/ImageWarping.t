@@ -1,14 +1,25 @@
+require("opt_precision")
+
+if OPT_DOUBLE_PRECISION then
+    OPT_FLOAT2 = double2
+    OPT_FLOAT3 = double3
+	OPT_FLOAT4 = double4
+else
+    OPT_FLOAT2 = float2
+    OPT_FLOAT3 = float3
+	OPT_FLOAT4 = float4
+end
 local IO = terralib.includec("stdio.h")
 
 local P = opt.ProblemSpec()
 local W = opt.Dim("W",0)
 local H = opt.Dim("H",1)
 
-local Offset = P:Unknown("Offset",opt.float2,{W,H},0)
-local Angle = P:Unknown("Angle",float,{W,H},1)
-local UrShape = 	P:Image("UrShape", opt.float2,{W,H},2)		--urshape
-local Constraints = P:Image("Constraints", opt.float2,{W,H},3)	--constraints
-local Mask = 		P:Image("Mask", float, {W,H} ,4)				--validity mask for constraints
+local Offset = P:Unknown("Offset",OPT_FLOAT2,{W,H},0)
+local Angle = P:Unknown("Angle",OPT_FLOAT,{W,H},1)
+local UrShape = 	P:Image("UrShape", OPT_FLOAT2,{W,H},2)		--urshape
+local Constraints = P:Image("Constraints", OPT_FLOAT2,{W,H},3)	--constraints
+local Mask = 		P:Image("Mask", OPT_FLOAT, {W,H} ,4)				--validity mask for constraints
 local w_fitSqrt = P:Param("w_fitSqrt", float, 5)
 local w_regSqrt = P:Param("w_regSqrt", float, 6)
 

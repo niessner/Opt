@@ -8,6 +8,7 @@ extern "C" {
 #include "CudaArray.h"
 #include <cuda_runtime.h>
 #include <cudaUtil.h>
+#include "Timer.h"
 
 
 class TerraSolver {
@@ -70,11 +71,19 @@ public:
 
 		std::vector<SolverIteration> result;
 
+        Timer t;
+        t.init();
 		Opt_ProblemInit(m_optimizerState, m_plan, problemParams, solverParams);
-        result.push_back(SolverIteration(Opt_ProblemCurrentCost(m_optimizerState, m_plan)));
+        cudaDeviceSynchronize();
+        double cost = Opt_ProblemCurrentCost(m_optimizerState, m_plan);
+        double timeInMs = t.tick();
+        result.push_back(SolverIteration(cost, timeInMs));
 
         while (Opt_ProblemStep(m_optimizerState, m_plan, problemParams, solverParams)) {
-            result.push_back(SolverIteration(Opt_ProblemCurrentCost(m_optimizerState, m_plan)));
+            cudaDeviceSynchronize();
+            cost = Opt_ProblemCurrentCost(m_optimizerState, m_plan);
+            timeInMs = t.tick();
+            result.push_back(SolverIteration(cost, timeInMs));
         }
 
 		return result;

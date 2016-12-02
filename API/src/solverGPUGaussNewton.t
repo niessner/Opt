@@ -15,7 +15,7 @@ local guardedInvertType = GuardedInvertType.CERES
 
 -- CERES default, ONCE_PER_SOLVE
 local JacobiScalingType = { NONE = {}, ONCE_PER_SOLVE = {}, EVERY_ITERATION = {}}
-local JacobiScaling = JacobiScalingType.EVERY_ITERATION
+local JacobiScaling = JacobiScalingType.ONCE_PER_SOLVE
 
 local multistep_alphaDenominator_compute = false
 
@@ -795,6 +795,7 @@ return function(problemSpec)
 
         terra initLambda(pd : &PlanData)
             pd.parameters.trust_region_radius = 1e4
+            --pd.parameters.trust_region_radius = 1e5
             --pd.parameters.trust_region_radius = 1e6
             --pd.parameters.trust_region_radius = 
             --pd.parameters.trust_region_radius = 0.005
@@ -1017,7 +1018,7 @@ return function(problemSpec)
 				gpu.PCGInit1_Graph(pd)	
 				gpu.PCGInit1_Finish(pd)	
 			end
-
+--[[
             var pre : double[UNK_SZ]
             var s : double[UNK_SZ]
             var sSq : double[UNK_SZ]
@@ -1030,7 +1031,7 @@ return function(problemSpec)
             logDoubles(s, "S")
             logDoubles(sSq, "S^2")
             var v : double[UNK_SZ]
-
+--]]
 
             escape 
                 if problemSpec:UsesLambda() then
@@ -1048,7 +1049,8 @@ return function(problemSpec)
                         gpu.copyResidualsToB(pd)
                         --gpu.recomputeResiduals(pd)
                         Q0 = computeQ(pd)
-                        logSolver("\nQ0=%.18g\n", Q0)
+                        --logSolver("\nQ0=%.18g\n", Q0)
+--[[
                 var v : double[UNK_SZ]
                 var pre : double[UNK_SZ]
 
@@ -1095,7 +1097,7 @@ return function(problemSpec)
                 C.cudaMemcpy(&v, pd.p.funcParams.data, sizeof(double)*UNK_SZ, C.cudaMemcpyDeviceToHost)
                 logDoubles(v, "p")
                 logDoubles(div(v,s), "CERES p")
-
+--]]
                     end
                 end
             end
@@ -1129,18 +1131,19 @@ return function(problemSpec)
                 else
                     gpu.PCGStep2(pd)
                 end
+                --[[
                 var alphaNum : double
                 var alphaDenom : double
                 var betaNum : double
                 C.cudaMemcpy(&alphaNum, pd.scanAlphaNumerator, sizeof(double), C.cudaMemcpyDeviceToHost)
                 C.cudaMemcpy(&alphaDenom, pd.scanAlphaDenominator, sizeof(double), C.cudaMemcpyDeviceToHost)
                 logSolver("alpha = %.18g/%.18g = %.18g\n", alphaNum, alphaDenom, alphaNum/alphaDenom)
-
+--]]
                 gpu.PCGStep3(pd)
-
+--[[
                 C.cudaMemcpy(&betaNum, pd.scanBetaNumerator, sizeof(double), C.cudaMemcpyDeviceToHost)
                 logSolver("beta = %.18g/%.18g = %.18g\n", betaNum, alphaNum, betaNum/alphaNum)
-
+--]]
 				-- save new rDotz for next iteration
 				C.cudaMemcpy(pd.scanAlphaNumerator, pd.scanBetaNumerator, sizeof(opt_float), C.cudaMemcpyDeviceToDevice)	
 				
@@ -1148,7 +1151,7 @@ return function(problemSpec)
 	                Q1 = computeQ(pd)
 	                var zeta = [opt_float](lIter+1)*(Q1 - Q0) / Q1 
 
-
+--[[
                                var v : double[UNK_SZ]
                 var pre : double[UNK_SZ]
 
@@ -1167,8 +1170,6 @@ return function(problemSpec)
                 var rad = pd.parameters.trust_region_radius
                 C.cudaMemcpy(&v, pd.CtC.funcParams.data, sizeof(double)*UNK_SZ, C.cudaMemcpyDeviceToHost)
                 logDoubles(v, "CtC")
-
-
 
                 var diagJtJ : double[UNK_SZ]
                 var diagA : double[UNK_SZ]
@@ -1201,10 +1202,11 @@ return function(problemSpec)
                 C.cudaMemcpy(&v, pd.p.funcParams.data, sizeof(double)*UNK_SZ, C.cudaMemcpyDeviceToHost)
                 logDoubles(v, "p")
                 logDoubles(div(v,s), "CERES p")
-
-                    logSolver("Q1=%.18g\n", Q1 )
-                    logSolver("zeta=%.18g\n", zeta)
+--]]
+                   -- logSolver("Q1=%.18g\n", Q1 )
+                    --logSolver("zeta=%.18g\n", zeta)
 	                if zeta < q_tolerance then
+                        --logSolver("zeta=%.18g, breaking at iteration: %d\n", zeta, (lIter+1))
 	                    break
 	                end
 	                Q0 = Q1
@@ -1226,10 +1228,10 @@ return function(problemSpec)
 			gpu.precompute(pd)
 			var newCost = computeCost(pd)
 			
-			logSolver("\t%d: prev=%f new=%f ", pd.nIter, pd.prevCost,newCost)
+			--logSolver("\t%d: prev=%f new=%f ", pd.nIter, pd.prevCost,newCost)
 			
-            C.cudaMemcpy(&v, pd.prevX.funcParams.data, sizeof(double)*3, C.cudaMemcpyDeviceToHost)
-            logDoubles(v, "X")
+            --C.cudaMemcpy(&v, pd.prevX.funcParams.data, sizeof(double)*3, C.cudaMemcpyDeviceToHost)
+            --logDoubles(v, "X")
 
             --[[ TODO: Remove
             if newCost > 1000000 then
@@ -1282,7 +1284,7 @@ return function(problemSpec)
 			escape 
                 if problemSpec:UsesLambda() then
                     emit quote
-                        logSolver(" trust_region_radius=%f ",pd.parameters.trust_region_radius)
+                        --logSolver(" trust_region_radius=%f ",pd.parameters.trust_region_radius)
 
                         var cost_change = pd.prevCost - newCost
                         
@@ -1290,9 +1292,9 @@ return function(problemSpec)
                         -- See TrustRegionStepEvaluator::StepAccepted() for a more complicated version of this
                         var relative_decrease = cost_change / model_cost_change
 
-                        logSolver(" cost_change=%f ", cost_change)
-                        logSolver(" model_cost_change=%f ", model_cost_change)
-                        logSolver(" relative_decrease=%f ", relative_decrease)
+                        --logSolver(" cost_change=%f ", cost_change)
+                        --logSolver(" model_cost_change=%f ", model_cost_change)
+                        --logSolver(" relative_decrease=%f ", relative_decrease)
 
                         if cost_change >= 0 and relative_decrease > min_relative_decrease then	--in this case we revert
                             --[[
@@ -1316,8 +1318,8 @@ return function(problemSpec)
                             pd.parameters.trust_region_radius = pd.parameters.trust_region_radius / pd.parameters.radius_decrease_factor
                             pd.parameters.radius_decrease_factor = 2.0 * pd.parameters.radius_decrease_factor
                             if pd.parameters.trust_region_radius <= min_trust_region_radius then
-                                logSolver("\nTrust_region_radius is less than the min, exiting\n")
-                                logSolver("final cost=%f\n", pd.prevCost)
+                                --logSolver("\nTrust_region_radius is less than the min, exiting\n")
+                                --logSolver("final cost=%f\n", pd.prevCost)
                                 pd.timer:endEvent(nil,pd.endSolver)
                                 pd.timer:evaluate()
                                 pd.timer:cleanup()
@@ -1329,7 +1331,7 @@ return function(problemSpec)
                     end
                 else
                     emit quote
-                        logSolver("\n")
+                        --logSolver("\n")
                         pd.prevCost = newCost 
                     end
                 end 
