@@ -1964,12 +1964,6 @@ local function createjtjcentered(PS,ES)
                     local condition2, drdx_u = ad.splitcondition(rexp:d(uv))
                     local exp = drdx00*drdx_u
 
-                    if uv == x and PS:UsesLambda() then -- on the diagonal
-                        -- LM
-                        local diagVal = CtC[u.image.name](u.index,u.channel)
-                        exp = exp + diagVal
-                    end
-
                     lprintf(2,"term:\ndr%d_%s/dx%s[%d] = %s",rn,tostring(r),tostring(u.index),u.chan,tostring(drdx_u))
                     local conditionmerged = condition*condition2
                     if not P_hat_c[conditionmerged] then
@@ -1989,6 +1983,13 @@ local function createjtjcentered(PS,ES)
     end
     for i,p in ipairs(P_hat) do
         P_hat[i] = 1.0 * p
+    end
+    if PS:UsesLambda() then
+        for idx,unknownname,chan in UnknownType:UnknownIteratorForIndexSpace(ispace) do
+            local unknown = PS:ImageWithName(unknownname) 
+            local u = unknown(ispace:ZeroOffset(),chan)
+            P_hat[idx+1] = P_hat[idx+1] + CtC[unknownname](ispace:ZeroOffset(),chan)*P[unknownname](ispace:ZeroOffset(),chan)
+        end
     end
     dprint("JTJ[nopoly] = ", ad.tostrings(P_hat))
     P_hat = ad.polysimplify(P_hat)
