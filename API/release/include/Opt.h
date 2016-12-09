@@ -1,3 +1,5 @@
+#pragma once
+
 typedef struct Opt_State 	Opt_State;
 typedef struct Opt_Plan 	Opt_Plan;
 typedef struct Opt_Problem 	Opt_Problem;
