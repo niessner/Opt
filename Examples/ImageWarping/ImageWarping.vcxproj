@@ -64,7 +64,7 @@
       <ExceptionHandling>Sync</ExceptionHandling>
       <PreprocessorDefinitions>NOMINMAX;WIN32;_DEBUG;DEBUG;PROFILE;_CONSOLE;D3DXFX_LARGEADDRESS_HANDLE;_CRT_SECURE_NO_WARNINGS;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <BasicRuntimeChecks>EnableFastChecks</BasicRuntimeChecks>
-      <AdditionalIncludeDirectories>$(SolutionDir)\src\cutil\inc;$(SolutionDir)\;$(SolutionDir)\src\;$(ProjectDir)\..\..\..\..\ceres\glog\src\windows;$(ProjectDir)\..\..\..\..\ceres\ceres-solver\include;$(ProjectDir)\..\..\..\..\ceres\ceres-solver\config;$(ProjectDir)\..\..\..\..\mLibExternal/include/;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>$(SolutionDir)\src\cutil\inc;$(SolutionDir)\;$(SolutionDir)\src\;$(ProjectDir)\..\..\..\..\ceres\glog\src\windows;$(ProjectDir)\..\..\..\..\ceres\ceres-solver\include;$(ProjectDir)\..\..\..\..\ceres\ceres-solver\config;$(ProjectDir)\..\..\..\..\mLibExternal/include/;$(ProjectDir)\..\..\..\..\mLib\include\;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
     </ClCompile>
     <Link>
       <AdditionalDependencies>Opt.lib;winmm.lib;comctl32.lib;Shlwapi.lib;cudart.lib;cublas.lib;ceres-debug.lib;glog.lib;gflags_static.lib;%(AdditionalDependencies)</AdditionalDependencies>
@@ -155,6 +155,11 @@ xcopy /Y /D "..\..\API\release\include\*.h" "."</Command>
     <ClCompile Include="src\mLibSource.cpp" />
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="..\shared\CudaArray.h" />
+    <ClInclude Include="..\shared\cudaUtil.h" />
+    <ClInclude Include="..\shared\OptUtils.h" />
+    <ClInclude Include="..\shared\Precision.h" />
+    <ClInclude Include="..\shared\SolverIteration.h" />
     <ClInclude Include="src\CeresSolverImageWarping.h" />
     <ClInclude Include="src\CUDAPatchSolverWarping.h" />
     <ClInclude Include="src\CUDATimer.h" />
@@ -164,8 +169,6 @@ xcopy /Y /D "..\..\API\release\include\*.h" "."</Command>
     <ClInclude Include="src\PatchSolverWarpingEquations.h" />
     <ClInclude Include="src\PatchSolverWarpingState.h" />
     <ClInclude Include="src\PatchSolverWarpingUtil.h" />
-    <ClInclude Include="src\Precision.h" />
-    <ClInclude Include="src\SolverIteration.h" />
     <ClInclude Include="src\TerraSolverWarping.h" />
     <ClInclude Include="src\WarpingSolverEquations.h" />
     <ClInclude Include="src\WarpingSolverParameters.h" />
@@ -184,7 +187,6 @@ xcopy /Y /D "..\..\API\release\include\*.h" "."</Command>
   </ItemGroup>
   <ItemGroup>
     <CudaCompile Include="src\PatchSolverWarping.cu" />
-    <CudaCompile Include="src\TerraSolverWarping.cu" />
     <CudaCompile Include="src\WarpingSolver.cu" />
   </ItemGroup>
   <ItemGroup>

@@ -2,7 +2,7 @@
 
 #include <cuda_runtime.h>
 
-#include "cudaUtil.h"
+#include "../../shared/cudaUtil.h"
 #include "SFSSolverParameters.h"
 #include "SFSSolverState.h"
 

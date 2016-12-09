@@ -52,10 +52,10 @@ local nPatchIterations 		= P:Param("nPatchIterations",uint,offset+3) -- Steps on
 
 
 offset = offset + 4
-local D 	= P:Unknown("X",float, {W,H},offset+0) -- Refined Depth
-local D_i 	= P:Image("D_i",float, {W,H},offset+1) -- Depth input
-local I 	= P:Image("I",float, {W,H},offset+2) -- Target Intensity
-local D_p 	= P:Image("D_p",float, {W,H},offset+3) -- Previous Depth
+local D 	= P:Unknown("X",opt_float, {W,H},offset+0) -- Refined Depth
+local D_i 	= P:Image("D_i",opt_float, {W,H},offset+1) -- Depth input
+local I 	= P:Image("I",opt_float, {W,H},offset+2) -- Target Intensity
+local D_p 	= P:Image("D_p",opt_float, {W,H},offset+3) -- Previous Depth
 local edgeMaskR 	= P:Image("edgeMaskR",uint8, {W,H},offset+4) -- Edge mask. 
 local edgeMaskC 	= P:Image("edgeMaskC",uint8, {W,H},offset+5) -- Edge mask. 
 
@@ -64,11 +64,11 @@ local B_I_dx0
 local B_I_dx1
 local B_I_dx2
 if USE_PRECOMPUTE then
-	B_I = P:Image("B_I", float, {W,H}, "alloc")
-	B_I_dx0 = P:Image("B_I_dx0", float, {W,H}, "alloc")
-	B_I_dx1 = P:Image("B_I_dx1", float, {W,H}, "alloc")
-	B_I_dx2 = P:Image("B_I_dx2", float, {W,H}, "alloc")
-	pguard = P:Image("pguard", float, {W,H}, "alloc")
+	B_I = P:Image("B_I", opt_float, {W,H}, "alloc")
+	B_I_dx0 = P:Image("B_I_dx0", opt_float, {W,H}, "alloc")
+	B_I_dx1 = P:Image("B_I_dx1", opt_float, {W,H}, "alloc")
+	B_I_dx2 = P:Image("B_I_dx2", opt_float, {W,H}, "alloc")
+	pguard = P:Image("pguard", opt_float, {W,H}, "alloc")
 end	
 
 P:Stencil(2)
@@ -78,21 +78,21 @@ local WH = opt.toispace {W,H}
 local TUnknownType = P:UnknownType():terratype()
 local Index = WH:indextype()
 
-local ScalarImageType = P:ImageType(float, WH):terratype()
+local ScalarImageType = P:ImageType(opt_float, WH):terratype()
 
-local float3 = vector(float, 3)
-local float4 = vector(float, 4)
-local mat4   = vector(float, 16)
+local float3 = vector(opt_float, 3)
+local float4 = vector(opt_float, 4)
+local mat4   = vector(opt_float, 16)
 
-local terra make_float2(x : float, y : float)
+local terra make_float2(x : opt_float, y : opt_float)
 	return vector(x,y)
 end
 
-local terra make_float3(x : float, y : float, z : float)
+local terra make_float3(x : opt_float, y : opt_float, z : opt_float)
 	return vector(x, y, z)
 end
 
-local terra make_float4(x : float, y : float, z : float, w : float)
+local terra make_float4(x : opt_float, y : opt_float, z : opt_float, w : opt_float)
 	return vector(x, y, z, w)
 end
 
@@ -104,7 +104,7 @@ local terra sqMagnitude(v : float3)
 	return dot(v, v)
 end
 
-local terra IsValidPoint(d : float)
+local terra IsValidPoint(d : opt_float)
 	return d > 0
 end
 
@@ -115,7 +115,7 @@ end
 
 -- equation 8
 local terra p(idx : Index, gi : int32, gj : int32, self : P:ParameterType()) 
-    var d : float= self.X(idx)(0)
+    var d : opt_float= self.X(idx)(0)
     return make_float3((([float](gi)-self.u_x)/self.f_x)*d, (([float](gj)-self.u_y)/self.f_y)*d, d)
 end
 
@@ -141,9 +141,9 @@ end
 
 local terra B(idx : Index, gi : int32, gj : int32, self : P:ParameterType())
 	var normal = n(idx, gi, gj, self)
-	var n_x : float = normal[0]
-	var n_y : float = normal[1]
-	var n_z : float = normal[2]
+	var n_x : opt_float = normal[0]
+	var n_y : opt_float = normal[1]
+	var n_z : opt_float = normal[2]
 
 	var lighting = self.L_0 +
 					 self.L_1*n_y + self.L_2*n_z + self.L_3*n_x  +
@@ -153,7 +153,7 @@ local terra B(idx : Index, gi : int32, gj : int32, self : P:ParameterType())
 end
 
 local terra mat4_times_float4(M : mat4, v : float4)
-	var result : float[4]
+	var result : opt_float[4]
 	escape
 		for i=0,3 do
 			emit quote 
@@ -164,20 +164,20 @@ local terra mat4_times_float4(M : mat4, v : float4)
 	return make_float4(result[0], result[1], result[2], result[3])
 end
 
-local terra estimate_normal_from_depth2(inPriorDepth : ScalarImageType, gidx : int, gidy : int, W : int, H : int, ax : float, ay : float, f_x : float, f_y : float)
-	var x : float = 0.0f
-	var y : float = 0.0f
-	var z : float = 0.0f
+local terra estimate_normal_from_depth2(inPriorDepth : ScalarImageType, gidx : int, gidy : int, W : int, H : int, ax : opt_float, ay : opt_float, f_x : opt_float, f_y : opt_float)
+	var x : opt_float = 0.0f
+	var y : opt_float = 0.0f
+	var z : opt_float = 0.0f
 
-	var d0 : float = inPriorDepth.data[gidy*W+gidx-1](0);
-	var d1 : float = inPriorDepth.data[gidy*W+gidx](0);
-	var d2 : float = inPriorDepth.data[(gidy-1)*W+gidx](0);
+	var d0 : opt_float = inPriorDepth.data[gidy*W+gidx-1](0);
+	var d1 : opt_float = inPriorDepth.data[gidy*W+gidx](0);
+	var d2 : opt_float = inPriorDepth.data[(gidy-1)*W+gidx](0);
 
 	if IsValidPoint(d0) and IsValidPoint(d1) and IsValidPoint(d2) then
 		x = - d2*(d0-d1)/f_y;
 		y = - d0*(d2-d1)/f_x;
 		z = -ay*y - ax*x - d2*d0/f_x/f_y;			
-		var an : float = opt.math.sqrt( x * x + y * y + z * z )
+		var an : opt_float = opt.math.sqrt( x * x + y * y + z * z )
 		if(an ~= 0.0f) then
 			x = x / an; 
 			y = y / an; 
@@ -196,14 +196,14 @@ local function create_vector(self,name, count)
 	return `vector(names)
 end
 
-local terra prior_normal_from_previous_depth(d : float, gidx : int32, gidy : int32, self : P:ParameterType(), normal0 : &float3, normal1 : &float3, normal2 : &float3)
+local terra prior_normal_from_previous_depth(d : opt_float, gidx : int32, gidy : int32, self : P:ParameterType(), normal0 : &float3, normal1 : &float3, normal2 : &float3)
 
-	var f_x : float = self.f_x
-	var f_y : float = self.f_y
-	var u_x : float = self.u_x
-	var u_y : float = self.u_y
-	var uf_x : float = 1.0f / f_x
-	var uf_y : float = 1.0f / f_y
+	var f_x : opt_float = self.f_x
+	var f_y : opt_float = self.f_y
+	var u_x : opt_float = self.u_x
+	var u_y : opt_float = self.u_y
+	var uf_x : opt_float = 1.0f / f_x
+	var uf_y : opt_float = 1.0f / f_y
 	var W = [W.size]
 	var H = [H.size]
 	
@@ -230,8 +230,8 @@ local terra prior_normal_from_previous_depth(d : float, gidx : int32, gidy : int
 		return 	
 	end
 
-	var ax : float = (posx-u_x)/f_x;
-	var ay : float = (posy-u_y)/f_y;
+	var ax : opt_float = (posx-u_x)/f_x;
+	var ay : opt_float = (posy-u_y)/f_y;
 
 	@normal0 = estimate_normal_from_depth2(self.D_p, posx, posy, W,H, ax, ay, f_x, f_y);
 	@normal1 = estimate_normal_from_depth2(self.D_p, posx+1, posy, W, H, ax+uf_x, ay, f_x, f_y);
@@ -241,25 +241,25 @@ local terra prior_normal_from_previous_depth(d : float, gidx : int32, gidy : int
 end
 
 local terra calShading2depthGradHelper(idx : Index, posx : int, posy: int, self : P:ParameterType()) : float4
-	var f_x : float = self.f_x
-	var f_y : float = self.f_y
-	var u_x : float = self.u_x
-	var u_y : float = self.u_y
+	var f_x : opt_float = self.f_x
+	var f_y : opt_float = self.f_y
+	var u_x : opt_float = self.u_x
+	var u_y : opt_float = self.u_y
 
 	var mid,left,up =idx,idx(-1,0),idx(0,-1)
 
-	var d0 : float = self.X(left)(0);
-	var d1 : float = self.X(mid)(0);
-	var d2 : float = self.X(up)(0);
+	var d0 : opt_float = self.X(left)(0);
+	var d1 : opt_float = self.X(mid)(0);
+	var d2 : opt_float = self.X(up)(0);
 	
 	if (IsValidPoint(d0)) and (IsValidPoint(d1)) and (IsValidPoint(d2)) then
-		var greyval : float = (self.I(mid)(0)*0.5f + self.I(left)(0)*0.25f + self.I(up)(0)*0.25f)
+		var greyval : opt_float = (self.I(mid)(0)*0.5f + self.I(left)(0)*0.25f + self.I(up)(0)*0.25f)
 
-		var ax : float = (posx-u_x)/f_x
-		var ay : float = (posy-u_y)/f_y
-		var an  : float,an2  : float
+		var ax : opt_float = (posx-u_x)/f_x
+		var ay : opt_float = (posy-u_y)/f_y
+		var an  : opt_float,an2  : opt_float
 
-		var px  : float, py  : float, pz  : float
+		var px  : opt_float, py  : opt_float, pz  : opt_float
 		px = d2*(d1-d0)/f_y;
 		py = d0*(d1-d2)/f_x;
 		pz =  - ax*px -ay*py - d2*d0/(f_x*f_y);			
@@ -274,15 +274,15 @@ local terra calShading2depthGradHelper(idx : Index, posx : int, posy: int, self 
 		pz = pz / an;
 
 
-		var sh_callist0 : float = self.L_0;
-		var sh_callist1 : float = py*self.L_1;
-		var sh_callist2 : float = pz*self.L_2;
-		var sh_callist3 : float = px*self.L_3;				
-		var sh_callist4 : float = px * py * self.L_4;
-		var sh_callist5 : float = py * pz * self.L_5;
-		var sh_callist6 : float = ((-px*px-py*py+2*pz*pz))*self.L_6;
-		var sh_callist7 : float = pz * px * self.L_7;
-		var sh_callist8 : float = ( px * px - py * py )*self.L_8;
+		var sh_callist0 : opt_float = self.L_0;
+		var sh_callist1 : opt_float = py*self.L_1;
+		var sh_callist2 : opt_float = pz*self.L_2;
+		var sh_callist3 : opt_float = px*self.L_3;				
+		var sh_callist4 : opt_float = px * py * self.L_4;
+		var sh_callist5 : opt_float = py * pz * self.L_5;
+		var sh_callist6 : opt_float = ((-px*px-py*py+2*pz*pz))*self.L_6;
+		var sh_callist7 : opt_float = pz * px * self.L_7;
+		var sh_callist8 : opt_float = ( px * px - py * py )*self.L_8;
 
 
 		-- normal changes wrt depth
@@ -344,7 +344,7 @@ local terra calShading2depthGradHelper(idx : Index, posx : int, posy: int, self 
 		---- 
 		---- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- /
 
-		var grnds_0 : float, grnds_1 : float, grnds_2 : float
+		var grnds_0 : opt_float, grnds_1 : opt_float, grnds_2 : opt_float
 
 		grnds_0 = -d2/f_y;
 		grnds_1 = (d1-d2)/f_x;
@@ -386,16 +386,16 @@ local terra calShading2depthGrad(idx : Index, posx : int, posy: int, self : P:Pa
 end
 
 
-local terra est_lap_init_3d_imp(idx : Index, self : P:ParameterType(), w0 : float, w1 : float, uf_x : float, uf_y : float, b_valid : &bool) : float3
+local terra est_lap_init_3d_imp(idx : Index, self : P:ParameterType(), w0 : opt_float, w1 : opt_float, uf_x : opt_float, uf_y : opt_float, b_valid : &bool) : float3
 
 	var retval_0 = 0.0f
 	var retval_1 = 0.0f
 	var retval_2 = 0.0f	
-	var d  : float = self.X(idx)(0)
-	var d0 : float = self.X(idx(-1,0))(0)
-	var d1 : float = self.X(idx(1,0))(0)
-	var d2 : float = self.X(idx(0,-1))(0)
-	var d3 : float = self.X(idx(0,1))(0)
+	var d  : opt_float = self.X(idx)(0)
+	var d0 : opt_float = self.X(idx(-1,0))(0)
+	var d1 : opt_float = self.X(idx(1,0))(0)
+	var d2 : opt_float = self.X(idx(0,-1))(0)
+	var d3 : opt_float = self.X(idx(0,1))(0)
 
 	if IsValidPoint(d) and IsValidPoint(d0) and IsValidPoint(d1) and IsValidPoint(d2) and IsValidPoint(d3)
 		and opt.math.abs(d-d0) < [float](DEPTH_DISCONTINUITY_THRE) 
@@ -435,17 +435,17 @@ terra F.cost(idx : Index, self : P:ParameterType())
 	var H = [H.size]
 	var gi,gj = idx.d0,idx.d1
 
-	var E_s_x : float = 0.0f
-	var E_s_y : float = 0.0f
-	var E_s_z : float = 0.0f
+	var E_s_x : opt_float = 0.0f
+	var E_s_y : opt_float = 0.0f
+	var E_s_z : opt_float = 0.0f
 
 
-	var E_p : float = 0.0f
-	var E_r_h : float = 0.0f 
-	var E_r_v : float = 0.0f 
-	var E_r_d : float = 0.0f 
-	var E_g_v : float = 0.0f
-	var E_g_h : float = 0.0f
+	var E_p : opt_float = 0.0f
+	var E_r_h : opt_float = 0.0f 
+	var E_r_v : opt_float = 0.0f 
+	var E_r_d : opt_float = 0.0f 
+	var E_g_v : opt_float = 0.0f
+	var E_g_h : opt_float = 0.0f
 
 	var mid,left,up,right,down  = idx(0,0), idx(-1,0), idx(0,-1), idx(1,0), idx(0,1)
 	var leftUp,rightUp,leftDown = idx(-1,-1), idx(1,-1), idx(-1,1)
@@ -543,7 +543,7 @@ terra F.cost(idx : Index, self : P:ParameterType())
 		E_r_d = dot(n_p, p(idx,gi,gj,self) - p(leftUp,gi-1,gj-1,self))
 	end
 
-	var cost : float = self.w_s*E_s_x*E_s_x + self.w_s*E_s_y*E_s_y + self.w_s*E_s_z*E_s_z + self.w_p*E_p*E_p + self.w_g*E_g_h*E_g_h + self.w_g*E_g_v*E_g_v + self.w_r*E_r_h*E_r_h + self.w_r*E_r_v*E_r_v + self.w_r*E_r_d*E_r_d 
+	var cost : opt_float = self.w_s*E_s_x*E_s_x + self.w_s*E_s_y*E_s_y + self.w_s*E_s_z*E_s_z + self.w_p*E_p*E_p + self.w_g*E_g_h*E_g_h + self.w_g*E_g_v*E_g_v + self.w_r*E_r_h*E_r_h + self.w_r*E_r_v*E_r_v + self.w_r*E_r_d*E_r_d 
 
     
     return cost
@@ -555,13 +555,13 @@ end
 ---- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- 
 
 local terra evalMinusJTFDeviceLS_SFS_Shared_Mask_Prior(idx : Index, posx : int, posy : int, W : uint, H : int, self : P:ParameterType(),
-														normal0 : float3, normal1 : float3, normal2 : float3, outPre : &float)
-	var f_x : float = self.f_x
-	var f_y : float = self.f_y
-	var u_x : float = self.u_x
-	var u_y : float = self.u_y
-	var uf_x : float = 1.0f / f_x
-	var uf_y : float = 1.0f / f_y
+														normal0 : float3, normal1 : float3, normal2 : float3, outPre : &opt_float)
+	var f_x : opt_float = self.f_x
+	var f_y : opt_float = self.f_y
+	var u_x : opt_float = self.u_x
+	var u_y : opt_float = self.u_y
+	var uf_x : opt_float = 1.0f / f_x
+	var uf_y : opt_float = 1.0f / f_y
 
 
 	var b = 0.0f 
@@ -569,17 +569,17 @@ local terra evalMinusJTFDeviceLS_SFS_Shared_Mask_Prior(idx : Index, posx : int, 
 
 	-- Common stuff
 
-	var targetDepth : float = self.D_i(idx)(0); 
+	var targetDepth : opt_float = self.D_i(idx)(0); 
 	var validTarget : bool  = IsValidPoint(targetDepth);
-	var XC : float 			= self.X(idx)(0);
+	var XC : opt_float 			= self.X(idx)(0);
 
 
 		
 	if validTarget then
 		if posx>1 and posx<(W-5) and posy>1 and posy<(H-5) then
 			
-			var sum : float, tmpval : float
-			var val0 : float, val1 : float, val2 : float
+			var sum : opt_float, tmpval : opt_float
+			var val0 : opt_float, val1 : opt_float, val2 : opt_float
 			var maskval : uint8 = 1			
 			if [USE_SHADING_CONSTRAINT] then
 				-- TODO: How do we break this out to amortize for AD
@@ -697,7 +697,7 @@ local terra evalMinusJTFDeviceLS_SFS_Shared_Mask_Prior(idx : Index, posx : int, 
 			---- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- 
 			----                    smoothness term
 			---- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- /
-			var d : float
+			var d : opt_float
 			var b_valid = true
 			if [USE_REGULARIZATION] then
 				val0 = (posx - u_x)/f_x	
@@ -802,7 +802,7 @@ end
 
 terra F.evalJTF(idx : Index, self : P:ParameterType())
 		
-	var Pre     : float
+	var Pre     : opt_float
 	var normal0 : float3
 	var normal1 : float3
 	var normal2 : float3
@@ -816,7 +816,7 @@ terra F.evalJTF(idx : Index, self : P:ParameterType())
 	---- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- 
 
 	-- Negative gradient
-	var negGradient : float = evalMinusJTFDeviceLS_SFS_Shared_Mask_Prior(idx, idx.d0, idx.d1, [W.size], [H.size], self, normal0,normal1,normal2, &Pre); 
+	var negGradient : opt_float = evalMinusJTFDeviceLS_SFS_Shared_Mask_Prior(idx, idx.d0, idx.d1, [W.size], [H.size], self, normal0,normal1,normal2, &Pre); 
 	if not [USE_PRECONDITIONER] then
 		Pre = 1.0f
 	end
@@ -831,33 +831,33 @@ local terra add_mul_inp_grad_ls_bsp(self : P:ParameterType(), pImage : TUnknownT
 	   	  + pImage(idx(0,-1))(0)	* gradient[2]
 end
 
-local terra est_lap_3d_bsp_imp(pImage : TUnknownType, idx : Index, w0 : float, w1 : float, uf_x : float, uf_y : float)
+local terra est_lap_3d_bsp_imp(pImage : TUnknownType, idx : Index, w0 : opt_float, w1 : opt_float, uf_x : opt_float, uf_y : opt_float)
 	
 	
-	var d  : float = pImage(idx)(0)
-	var d0 : float = pImage(idx(-1,0))(0)
-	var d1 : float = pImage(idx(1,0))(0)
-	var d2 : float = pImage(idx(0,-1))(0)
-	var d3 : float = pImage(idx(0,1))(0)
+	var d  : opt_float = pImage(idx)(0)
+	var d0 : opt_float = pImage(idx(-1,0))(0)
+	var d1 : opt_float = pImage(idx(1,0))(0)
+	var d2 : opt_float = pImage(idx(0,-1))(0)
+	var d3 : opt_float = pImage(idx(0,1))(0)
 	
-	var x : float = ( d * 4 * w0 - d0 * (w0 - uf_x) - d1 * (w0 + uf_x)	- d2 * w0 - d3 * w0);
-	var y : float = ( d * 4 * w1 - d0 * w1 - d1 * w1 - d2 * (w1 - uf_y) - d3 * (w1 + uf_y));
-	var z : float = ( d * 4 - d0 - d1 - d2 - d3);
+	var x : opt_float = ( d * 4 * w0 - d0 * (w0 - uf_x) - d1 * (w0 + uf_x)	- d2 * w0 - d3 * w0);
+	var y : opt_float = ( d * 4 * w1 - d0 * w1 - d1 * w1 - d2 * (w1 - uf_y) - d3 * (w1 + uf_y));
+	var z : opt_float = ( d * 4 - d0 - d1 - d2 - d3);
 	return vector(x,y,z);
 end
 
-local terra est_lap_3d_bsp_imp_with_guard(self : P:ParameterType(), pImage : TUnknownType, idx : Index, w0 : float, w1 : float, uf_x : float, uf_y : float, b_valid : &bool)
+local terra est_lap_3d_bsp_imp_with_guard(self : P:ParameterType(), pImage : TUnknownType, idx : Index, w0 : opt_float, w1 : opt_float, uf_x : opt_float, uf_y : opt_float, b_valid : &bool)
 	
 	var retval_0 = 0.0f
 	var retval_1 = 0.0f
 	var retval_2 = 0.0f	
 	
 	if self.pguard:get(idx)(0) == 1.f then	
-		var p  : float = pImage(idx)(0)
-		var p0 : float = pImage(idx(-1,0))(0)
-		var p1 : float = pImage(idx(1,0))(0)
-		var p2 : float = pImage(idx(0,-1))(0)
-		var p3 : float = pImage(idx(0,1))(0)
+		var p  : opt_float = pImage(idx)(0)
+		var p0 : opt_float = pImage(idx(-1,0))(0)
+		var p1 : opt_float = pImage(idx(1,0))(0)
+		var p2 : opt_float = pImage(idx(0,-1))(0)
+		var p3 : opt_float = pImage(idx(0,1))(0)
 		
 		retval_0 = ( p * 4 * w0 - p0 * (w0 - uf_x) - p1 * (w0 + uf_x)	- p2 * w0 - p3 * w0);
 		retval_1 = ( p * 4 * w1 - p0 * w1 - p1 * w1 - p2 * (w1 - uf_y) - p3 * (w1 + uf_y));
@@ -871,25 +871,25 @@ end
 local terra applyJTJDeviceLS_SFS_Shared_BSP_Mask_Prior(idx : Index, posx : int, posy : int, W : uint, H : int, self : P:ParameterType(), pImage : TUnknownType,
 														normal0 : float3, normal1 : float3, normal2 : float3)
 
-	var f_x : float = self.f_x
-	var f_y : float = self.f_y
-	var u_x : float = self.u_x
-	var u_y : float = self.u_y
-	var uf_x : float = 1.0f / f_x
-	var uf_y : float = 1.0f / f_y
+	var f_x : opt_float = self.f_x
+	var f_y : opt_float = self.f_y
+	var u_x : opt_float = self.u_x
+	var u_y : opt_float = self.u_y
+	var uf_x : opt_float = 1.0f / f_x
+	var uf_y : opt_float = 1.0f / f_y
 
 	var b = 0.0f
 
-	var targetDepth : float = self.D_i(idx)(0) 
+	var targetDepth : opt_float = self.D_i(idx)(0) 
 	var validTarget : bool 	= IsValidPoint(targetDepth);
-	var PC : float  		= pImage(idx)(0)
+	var PC : opt_float  		= pImage(idx)(0)
 		
 	if validTarget then
 		if (posx>1) and (posx<(W-5)) and (posy>1) and (posy<(H-5)) then
-			var sum : float = 0.0f;
-			var tmpval : float = 0.0f;			
+			var sum : opt_float = 0.0f;
+			var tmpval : opt_float = 0.0f;			
 
-			var val0 : float, val1 : float, val2 : float
+			var val0 : opt_float, val1 : opt_float, val2 : opt_float
 
 			if [USE_SHADING_CONSTRAINT] then
 				-- TODO: How do we break this out to amortize for AD
@@ -1104,8 +1104,8 @@ local terra applyJTJDeviceLS_SFS_Shared_BSP_Mask_Prior(idx : Index, posx : int, 
 
 			if [USE_TEMPORAL_CONSTRAINT] then
 				sum = 0.0f
-				var ax : float = (posx-u_x)/f_x
-				var ay : float = (posy-u_y)/f_y;		
+				var ax : opt_float = (posx-u_x)/f_x
+				var ay : opt_float = (posy-u_y)/f_y;		
 				tmpval = normal0[0] * ax + normal0[1] * ay + normal0[2] --  derative of prior energy wrt depth			
 				sum = sum + tmpval * ( tmpval * pImage(idx)(0) + ( -tmpval + normal0[0]/f_x) * pImage(idx(-1,0))(0) )
 				sum = sum + tmpval * ( tmpval * pImage(idx)(0) + ( -tmpval + normal0[1]/f_y) * pImage(idx(0,-1))(0) )
@@ -1128,7 +1128,7 @@ end
 
 
 -- eval 2*JtJ (note that we keep the '2' to make it consistent with the gradient
-terra F.applyJTJ(idx : Index, self : P:ParameterType(), pImage : TUnknownType)
+terra F.applyJTJ(idx : Index, self : P:ParameterType(), pImage : TUnknownType, ctc : TUnknownType)
 	var W : int = [W.size]
 	var H : int = [H.size]
 
@@ -1140,7 +1140,7 @@ terra F.applyJTJ(idx : Index, self : P:ParameterType(), pImage : TUnknownType)
 	
 	--__syncthreads()
 
- 	var JTJ: float = applyJTJDeviceLS_SFS_Shared_BSP_Mask_Prior(idx, idx.d0, idx.d1, W, H, self, pImage, normal0, normal1, normal2)
+ 	var JTJ: opt_float = applyJTJDeviceLS_SFS_Shared_BSP_Mask_Prior(idx, idx.d0, idx.d1, W, H, self, pImage, normal0, normal1, normal2)
 	return 2.0*JTJ
 end
 
@@ -1152,11 +1152,11 @@ terra F.precompute(idx : Index, self : P:ParameterType())
 	self.B_I_dx1(idx) 	= temp[1]
 	self.B_I_dx2(idx) 	= temp[2]
 	self.B_I(idx) 		= temp[3]
-	var d  : float = self.X(idx)(0)
-	var d0 : float = self.X(idx(-1,0))(0)
-	var d1 : float = self.X(idx(1,0))(0)
-	var d2 : float = self.X(idx(0,-1))(0)
-	var d3 : float = self.X(idx(0,1))(0)
+	var d  : opt_float = self.X(idx)(0)
+	var d0 : opt_float = self.X(idx(-1,0))(0)
+	var d1 : opt_float = self.X(idx(1,0))(0)
+	var d2 : opt_float = self.X(idx(0,-1))(0)
+	var d3 : opt_float = self.X(idx(0,1))(0)
 	var guard = terralib.select(IsValidPoint(d) and IsValidPoint(d0) and IsValidPoint(d1) and IsValidPoint(d2) and IsValidPoint(d3)
 		and opt.math.abs(d-d0) < [float](DEPTH_DISCONTINUITY_THRE) 
 		and opt.math.abs(d-d1) < [float](DEPTH_DISCONTINUITY_THRE) 

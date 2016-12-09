@@ -4,7 +4,7 @@
 #define _CUDA_SIMPLE_MATRIX_UTIL_
 
 #include <iostream>
-#include "cudaUtil.h"
+#include "../../shared/cudaUtil.h"
 
 //////////////////////////////
 // float2x2

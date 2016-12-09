@@ -3,12 +3,6 @@
 
 #ifdef USE_CERES
 
-#include <cuda_runtime.h>
-#include <cudaUtil.h>
-
-#include "CUDAImageSolver.h"
-
-#include "OptImageSolver.h"
 #include "CeresImageSolver.h"
 #include "SFSSolverInput.h"
 
@@ -316,7 +310,7 @@ P:Exclude(ad.not_(ad.greater(D_i(0,0),0)))
 
 return P:Cost(cost)
 */
-void CeresImageSolver::solve(std::shared_ptr<SimpleBuffer> result, const SFSSolverInput& rawSolverInput)
+void CeresImageSolver::solve(std::shared_ptr<SimpleBuffer> result, const SFSSolverInput& rawSolverInput, std::vector<SolverIteration>& solverIterations)
 {
     const int pixelCount = width * height;
     Xfloat = (float *)result->data();
@@ -498,6 +492,10 @@ void CeresImageSolver::solve(std::shared_ptr<SimpleBuffer> result, const SFSSolv
         ml::Timer timer;
         Solve(options, &problem, &summary);
         elapsedTime = timer.getElapsedTimeMS();
+    }
+
+    for (auto &i : summary.iterations) {
+        solverIterations.push_back(SolverIteration(i.cost, i.iteration_time_in_seconds * 1000.0));
     }
 
     cout << "Solver used: " << summary.linear_solver_type_used << endl;

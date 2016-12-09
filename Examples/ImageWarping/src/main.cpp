@@ -50,49 +50,66 @@ int main(int argc, const char * argv[]) {
 	*/
 
 
-	// CAT
+	// CAT 
+    /*
 	const std::string inputImage = "cartooncat.png";
 	const std::string inputImageMask = "catmask.png";
 	std::vector<std::vector<int>> constraints;
 	loadConstraints(constraints, "cat.constraints");
-    
+    */
+
+    // CAT 512
+    const std::string inputImage = "cartooncat512.png";
+    const std::string inputImageMask = "catmask512.png";
+    std::vector<std::vector<int>> constraints;
+    loadConstraints(constraints, "cat512.constraints");
+    int downsampleFactor = 1;
 
 	ColorImageR8G8B8A8 image = LodePNG::load(inputImage);
+    const ColorImageR8G8B8A8 imageMask = LodePNG::load(inputImageMask);
+
+
     
-    ColorImageR32G32B32 imageColor(image.getWidth(), image.getHeight());
-    for (const auto &p : imageColor)
-    {
-        auto val = image(p.x, p.y);
-        
-        p.value = vec3f(val.x, val.y, val.z);
+    ColorImageR32G32B32 imageColor(image.getWidth() / downsampleFactor, image.getHeight() / downsampleFactor);
+    for (unsigned int y = 0; y < image.getHeight() / downsampleFactor; y++) {
+        for (unsigned int x = 0; x < image.getWidth() / downsampleFactor; x++) {
+            auto val = image(x*downsampleFactor, y*downsampleFactor);
+
+            imageColor(x,y) = vec3f(val.x, val.y, val.z);
+        }
     }
 
-	ColorImageR32 imageR32(image.getWidth(), image.getHeight());
-	printf("width %d, height %d\n", image.getWidth(), image.getHeight());
-	for (unsigned int y = 0; y < image.getHeight(); y++) {
-		for (unsigned int x = 0; x < image.getWidth(); x++) {
-			imageR32(x,y) = image(x,y).x;
+    ColorImageR32 imageR32(imageColor.getWidth(), imageColor.getHeight());
+    printf("width %d, height %d\n", imageColor.getWidth(), imageColor.getHeight());
+    for (unsigned int y = 0; y < imageColor.getHeight(); y++) {
+        for (unsigned int x = 0; x < imageColor.getWidth(); x++) {
+            imageR32(x, y) = imageColor(x, y).x;
 		}
 	}
     int activePixels = 0;
-	const ColorImageR8G8B8A8 imageMask = LodePNG::load(inputImageMask);
-	ColorImageR32 imageR32Mask(imageMask.getWidth(), imageMask.getHeight());
-	for (unsigned int y = 0; y < imageMask.getHeight(); y++) {
-		for (unsigned int x = 0; x < imageMask.getWidth(); x++) {
-			imageR32Mask(x, y) = imageMask(x, y).x;
-            if (imageMask(x, y).x == 0.0f) {
+
+    ColorImageR32 imageR32Mask(imageMask.getWidth() / downsampleFactor, imageMask.getHeight() / downsampleFactor);
+    for (unsigned int y = 0; y < imageMask.getHeight() / downsampleFactor; y++) {
+        for (unsigned int x = 0; x < imageMask.getWidth() / downsampleFactor; x++) {
+            imageR32Mask(x, y) = imageMask(x*downsampleFactor, y*downsampleFactor).x;
+            if (imageMask(x*downsampleFactor, y*downsampleFactor).x == 0.0f) {
                 ++activePixels;
             }
 		}
 	}
     printf("numActivePixels: %d\n", activePixels);
 	
-	
-	for (unsigned int y = 0; y < image.getHeight(); y++)
+    for (auto& constraint : constraints) {
+        for (auto& c : constraint) {
+            c /= downsampleFactor;
+        }
+    }
+
+    for (unsigned int y = 0; y < imageColor.getHeight(); y++)
 	{
-		for (unsigned int x = 0; x < image.getWidth(); x++)
+        for (unsigned int x = 0; x < imageColor.getWidth(); x++)
 		{
-			if (y == 0 || x == 0 || y == (image.getHeight() - 1) || x == (image.getWidth() - 1))
+            if (y == 0 || x == 0 || y == (imageColor.getHeight() - 1) || x == (imageColor.getWidth() - 1))
 			{
 				std::vector<int> v; v.push_back(x); v.push_back(y); v.push_back(x); v.push_back(y);
 				constraints.push_back(v);
@@ -125,7 +142,7 @@ int main(int argc, const char * argv[]) {
 				{
 					if (imageR32Mask(x, y) == 0)
 					{
-						image(x, y) = vec4uc(255, 0, 0, 255);
+                        image(x*downsampleFactor, y*downsampleFactor) = vec4uc(255, 0, 0, 255);
 					}
 				}
 			}

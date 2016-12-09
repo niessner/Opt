@@ -1,4 +1,7 @@
 
+require("opt_precision")
+
+
 local USE_DEPTH_CONSTRAINT 		= true
 local USE_REGULARIZATION 		= true
 local USE_SHADING_CONSTRAINT 	= true
@@ -50,11 +53,11 @@ local nNonLinearIterations 	= P:Param("nNonLinearIterations",uint,offset+1) -- S
 local nLinIterations 		= P:Param("nLinIterations",uint,offset+2) -- Steps of the linear solver
 local nPatchIterations 		= P:Param("nPatchIterations",uint,offset+3) -- Steps on linear step on block level
 offset = offset + 4
-local X     = P:Unknown("X",float, {W,H},offset+0) -- Refined Depth
-local D_i   = P:Image("D_i",float, {W,H},offset+1) -- Depth input
+local X     = P:Unknown("X",opt_float, {W,H},offset+0) -- Refined Depth
+local D_i   = P:Image("D_i",opt_float, {W,H},offset+1) -- Depth input
 
-local Im    = P:Image("Im",float, {W,H},offset+2) -- Target Intensity
-local D_p   = P:Image("D_p",float, {W,H},offset+3) -- Previous Depth
+local Im    = P:Image("Im",opt_float, {W,H},offset+2) -- Target Intensity
+local D_p   = P:Image("D_p",opt_float, {W,H},offset+3) -- Previous Depth
 local edgeMaskR = P:Image("edgeMaskR",uint8, {W,H},offset+4) -- Edge mask. 
 local edgeMaskC = P:Image("edgeMaskC",uint8, {W,H},offset+5) -- Edge mask. 
 

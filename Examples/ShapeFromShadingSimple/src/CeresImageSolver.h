@@ -3,6 +3,9 @@
 #include <cassert>
 
 #include "cutil.h"
+#include <SimpleBuffer.h>
+#include <SFSSolverInput.h>
+#include "../../shared/SolverIteration.h"
 
 class CeresImageSolver {
 
@@ -20,7 +23,7 @@ public:
         IterStruct(unsigned int* n, unsigned int* l, unsigned int* p) : nIter(n), lIter(l), pIter(p) {}
     };
 
-    void solve(std::shared_ptr<SimpleBuffer> result, const SFSSolverInput& rawSolverInput);
+    void solve(std::shared_ptr<SimpleBuffer> result, const SFSSolverInput& rawSolverInput, std::vector<SolverIteration>& solverIterations);
 
     int getPixel(int x, int y) const
     {
@@ -60,7 +63,7 @@ public:
 
 #ifndef USE_CERES
 
-inline void CeresImageSolver::solve(std::shared_ptr<SimpleBuffer> result, const SFSSolverInput& rawSolverInput)
+inline void CeresImageSolver::solve(std::shared_ptr<SimpleBuffer> result, const SFSSolverInput& rawSolverInput, std::vector<SolverIteration>& solverIterations)
 {
 
 }

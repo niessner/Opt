@@ -7,8 +7,8 @@ const bool performanceTest = true;
 //const int linearIterationMin = 100;
 
 #include <cuda_runtime.h>
-
-#include "SolverIteration.h"
+#include "../../shared/Precision.h"
+#include "../../shared/SolverIteration.h"
 #include "CeresSolverImageWarping.h"
 
 #include "ceres/ceres.h"
@@ -169,7 +169,7 @@ float CeresSolverWarping::solve(OPT_FLOAT2* h_x_float, OPT_FLOAT* h_a_float, OPT
     {
         for (int x = 0; x < m_width; x++)
         {
-            const float mask = h_mask[getPixel(x, y)];
+            float mask = h_mask[getPixel(x, y)];
             const vec2f constraint = toVec(h_constraints[getPixel(x, y)]);
             if (mask == 0.0f && constraint.x >= 0.0f && constraint.y >= 0.0f)
             {
@@ -190,7 +190,7 @@ float CeresSolverWarping::solve(OPT_FLOAT2* h_x_float, OPT_FLOAT* h_a_float, OPT
             const vec2i offsets[] = { vec2i(0, 1), vec2i(1, 0), vec2i(0, -1), vec2i(-1, 0) };
             for (vec2i offset : offsets)
             {
-                const float mask = h_mask[getPixel(x, y)];
+                float mask = h_mask[getPixel(x, y)];
                 const vec2i oPos = offset + vec2i(x, y);
                 if (mask == 0.0f && oPos.x >= 0 && oPos.x < m_width && oPos.y >= 0 && oPos.y < m_height)
                 {
@@ -215,6 +215,9 @@ float CeresSolverWarping::solve(OPT_FLOAT2* h_x_float, OPT_FLOAT* h_a_float, OPT
     options.num_threads = 8;
     options.num_linear_solver_threads = 8;
     options.linear_solver_type = ceres::LinearSolverType::SPARSE_NORMAL_CHOLESKY; //7.2s
+
+
+    options.max_num_iterations = 1000;
     //options.linear_solver_type = ceres::LinearSolverType::SPARSE_SCHUR; //10.0s
     
     //slower methods
@@ -224,7 +227,7 @@ float CeresSolverWarping::solve(OPT_FLOAT2* h_x_float, OPT_FLOAT* h_a_float, OPT
     //options.minimizer_type = ceres::LINE_SEARCH;
 
     //options.min_linear_solver_iterations = linearIterationMin;
-    options.max_num_iterations = 100;
+    
     //options.function_tolerance = 0.01;
     //options.gradient_tolerance = 1e-4 * options.function_tolerance;
 
@@ -234,6 +237,38 @@ float CeresSolverWarping::solve(OPT_FLOAT2* h_x_float, OPT_FLOAT* h_a_float, OPT
 
     //problem.Evaluate(Problem::EvaluateOptions(), &cost, nullptr, nullptr, nullptr);
     //cout << "Cost*2 start: " << cost << endl;
+
+    // TODO: remove
+    options.linear_solver_type = ceres::LinearSolverType::CGNR; 
+
+
+    options.function_tolerance = 1e-20;
+    options.gradient_tolerance = 1e-10 * options.function_tolerance;
+
+    // Default values, reproduced here for clarity
+    //options.trust_region_strategy_type = ceres::TrustRegionStrategyType::LEVENBERG_MARQUARDT;
+    options.initial_trust_region_radius = 1e4;
+    options.max_trust_region_radius = 1e16;
+    options.min_trust_region_radius = 1e-32;
+    options.min_relative_decrease = 1e-3;
+    // Disable to match Opt
+    //options.min_lm_diagonal = 1e-32;
+    //options.max_lm_diagonal = std::numeric_limits<double>::infinity();
+    //options.min_trust_region_radius = 1e-256;
+
+    //options.initial_trust_region_radius = 0.005;
+
+    options.initial_trust_region_radius = 1e4;
+    //options.initial_trust_region_radius = 1e7;
+    //options.max_linear_solver_iterations = 20;
+    
+    options.eta = 1e-4;
+
+    options.jacobi_scaling = true;
+    //options.preconditioner_type = ceres::PreconditionerType::IDENTITY;
+
+
+    options.max_num_iterations = 3;
 
     double elapsedTime;
     {
@@ -255,12 +290,8 @@ float CeresSolverWarping::solve(OPT_FLOAT2* h_x_float, OPT_FLOAT* h_a_float, OPT
         cout << "Iteration: " << i.linear_solver_iterations << " " << i.iteration_time_in_seconds * 1000.0 << "ms" << endl;
     }
 
-    for (auto &i : summary.iterations)
-    {
-        SolverIteration iter;
-        iter.cost = i.cost;
-        iter.timeInMS = i.iteration_time_in_seconds * 1000.0;
-        result.push_back(iter);
+    for (auto &i : summary.iterations) {
+        result.push_back(SolverIteration(i.cost, i.iteration_time_in_seconds * 1000.0));
     }
 
     cout << "Total iteration time: " << iterationTotalTime << endl;

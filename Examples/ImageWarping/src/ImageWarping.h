@@ -1,5 +1,5 @@
 #pragma once
-#include "SolverIteration.h"
+#include "../../shared/SolverIteration.h"
 #include "mLibInclude.h"
 //#include "/Users/zdevito/vdb/vdb.h"
 
@@ -11,7 +11,7 @@
 #include "TerraSolverWarping.h"
 #include "CeresSolverImageWarping.h"
 
-#include "Precision.h"
+#include "../../shared/Precision.h"
 #include <fstream>
 
 
@@ -19,7 +19,7 @@
 #if PERFORMANCE_RUN
 static bool useCUDA = false;
 static bool useTerra = false;
-static bool useAD = true;
+static bool useAD = false;
 static bool useLMAD = true;
 static bool useCeres = true;
 static bool earlyOut = true;
@@ -32,13 +32,7 @@ static bool useCeres = false;
 static bool earlyOut = false;
 #endif
 
-template<class T>
-const T& clampedRead(const std::vector<T> &v, int index)
-{
-    if (index < 0) return v[0];
-    if (index >= v.size()) return v[v.size() - 1];
-    return v[index];
-}
+
 
 static bool
 PointInTriangleBarycentric(float x0, float y0, float w0,
@@ -243,8 +237,8 @@ public:
 
 #if PERFORMANCE_RUN
 		unsigned int numIter = 20;
-		unsigned int nonLinearIter = 100;
-		unsigned int linearIter = 400;
+		unsigned int nonLinearIter = 8;
+        unsigned int linearIter = 1000;
 		unsigned int patchIter = 32;
 #else
         unsigned int numIter = 20;
@@ -376,29 +370,8 @@ public:
 #   else
         std::string resultSuffix = "_float";
 #   endif
-
-        std::ofstream resultFile(resultDirectory + "results" + resultSuffix + ".csv");
-        //std::cout << "Final Result: " << finalResult.x << ", " << finalResult.y << std::endl;
-        resultFile << std::scientific;
-        resultFile << std::setprecision(20);
-
-        resultFile << "Iter, Ceres Error, Opt (GN) Error,  Opt (LM) Error, Ceres Iter Time (ms), Opt (GN) Iter Time (ms), Opt (LM) Iter Time (ms), Total Ceres Time (ms), Total Opt (GN) Time (ms), Total Opt (LM) Time (ms)" << std::endl;
-        double sumOptGNTime = 0.0;
-        double sumOptLMTime = 0.0;
-        double sumCeresTime = 0.0;
-        if (!useCeres) {
-            m_ceresIters.push_back(SolverIteration(0, 0));
-        }
-        for (int i = 0; i < (int)max(m_ceresIters.size(), max(m_optLMIters.size(), m_optGNIters.size())); i++)
-        {
-            double ceresTime = ((m_ceresIters.size() > i) ? m_ceresIters[i].timeInMS : 0.0);
-            double optGNTime = ((m_optGNIters.size() > i) ? m_optGNIters[i].timeInMS : 0.0);
-            double optLMTime = ((m_optLMIters.size() > i) ? m_optLMIters[i].timeInMS : 0.0);
-            sumCeresTime += ceresTime;
-            sumOptGNTime += optGNTime;
-            sumOptLMTime += optLMTime;
-            resultFile << i << ", " << clampedRead(m_ceresIters, i).cost << ", " << clampedRead(m_optGNIters, i).cost << ", " << clampedRead(m_optLMIters, i).cost << ", " << ceresTime << ", " << optGNTime << ", " << optLMTime << ", " << sumCeresTime << ", " << sumOptGNTime << ", " << sumOptLMTime << std::endl;
-        }
+        resultSuffix += std::to_string(m_image.getWidth());
+        saveSolverResults(resultDirectory, resultSuffix, m_ceresIters, m_optGNIters, m_optLMIters);
 
 		return &m_resultColor;
 	}

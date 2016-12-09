@@ -1,5 +1,5 @@
 #pragma once
-#include "Precision.h"
+#include "../../shared/Precision.h"
 class CeresSolverWarping {
 
 public:

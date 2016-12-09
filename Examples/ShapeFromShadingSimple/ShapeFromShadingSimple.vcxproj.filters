@@ -93,6 +93,22 @@
       <Filter>Util</Filter>
     </ClInclude>
     <ClInclude Include="src\CeresImageSolver.h" />
+    <ClInclude Include="src\SolverIteration.h" />
+    <ClInclude Include="..\shared\CudaArray.h">
+      <Filter>shared</Filter>
+    </ClInclude>
+    <ClInclude Include="..\shared\cudaUtil.h">
+      <Filter>shared</Filter>
+    </ClInclude>
+    <ClInclude Include="..\shared\OptUtils.h">
+      <Filter>shared</Filter>
+    </ClInclude>
+    <ClInclude Include="..\shared\Precision.h">
+      <Filter>shared</Filter>
+    </ClInclude>
+    <ClInclude Include="..\shared\SolverIteration.h">
+      <Filter>shared</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <Filter Include="CUDAPatchSolver">
@@ -113,6 +129,9 @@
     <Filter Include="Opt">
       <UniqueIdentifier>{64b2cd64-34cf-40f6-a5b6-aacba7241a37}</UniqueIdentifier>
     </Filter>
+    <Filter Include="shared">
+      <UniqueIdentifier>{f519daf8-80dd-4a8c-a618-13407e632a79}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
   <ItemGroup>
     <None Include="shapeFromShadingAD.t">
@@ -122,5 +141,11 @@
       <Filter>Terra</Filter>
     </None>
     <None Include="default.SFSSolverParameters" />
+    <None Include="opt_precision.t">
+      <Filter>Terra</Filter>
+    </None>
+    <None Include="..\..\API\src\precision.t">
+      <Filter>Terra</Filter>
+    </None>
   </ItemGroup>
 </Project>

@@ -25,6 +25,8 @@ local Mask = 		S:Image("Mask", opt_float, {W,H},4)				--validity mask for constr
 local w_fitSqrt = S:Param("w_fitSqrt", float, 5)
 local w_regSqrt = S:Param("w_regSqrt", float, 6)
 
+--S:Exclude(ad.not_(ad.eq(Mask(0,0),0)))
+
 function evalRot(CosAlpha, SinAlpha)
 	return ad.Vector(CosAlpha, -SinAlpha, SinAlpha, CosAlpha)
 end
@@ -67,13 +69,14 @@ for ii ,o in ipairs(offsets) do
     local n = Offset(i,j)
     local ARAPCost = (x - n)	-	mul(R, (xHat - UrShape( i,j)))
     local ARAPCostF = ad.select(opt.InBounds(0,0),	ad.select(opt.InBounds( i,j), ARAPCost, ad.Vector(0.0, 0.0)), ad.Vector(0.0, 0.0))
-    local m = Mask(i,j)
+    --local m = Mask(i,j)
     ARAPCostF = w_regSqrt*ad.select(ad.eq(m, 0.0), ARAPCostF, ad.Vector(0.0, 0.0))
     if USE_J then
         ARAPCostF = S:ComputedImage("J_reg_"..tostring(i).."_"..tostring(j),{W,H},ARAPCostF)(0,0)
     end
     terms:insert(ARAPCostF)
 end
+
 
 return S:Cost(unpack(terms))
 

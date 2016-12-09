@@ -3,7 +3,7 @@
 #include <cuda_runtime.h>
 //#include <cuda_d3d11_interop.h>
 
-#include "../../cudaUtil.h"
+#include "../../shared/cudaUtil.h"
 #include "PatchSolverWarpingState.h"
 
 class CUDAPatchSolverWarping
