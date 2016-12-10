@@ -1,3 +1,12 @@
+
+require("opt_precision")
+
+if OPT_DOUBLE_PRECISION then
+    OPT_FLOAT3 = double3
+else
+    OPT_FLOAT3 = float3
+end
+
 local IO = terralib.includec("stdio.h")
 local adP = ad.ProblemSpec()
 local P = adP.P
@@ -5,10 +14,12 @@ local N = opt.Dim("N",0)
 
 local w_fitSqrt = adP:Param("w_fitSqrt", float, 0)
 local w_regSqrt = adP:Param("w_regSqrt", float, 1)
-local Offset = 			adP:Unknown("Offset", opt.float3,{N},2)			--vertex.xyz, rotation.xyz <- unknown
-local Angle = 			adP:Unknown("Angle", opt.float3,{N},3)			--vertex.xyz, rotation.xyz <- unknown
-local UrShape = 	adP:Image("UrShape", opt.float3, {N},4)		--urshape: vertex.xyz
-local Constraints = adP:Image("Constraints", opt.float3,{N},5)	--constraints
+
+
+local Offset = 			adP:Unknown("Offset", OPT_FLOAT3,{N},2)			--vertex.xyz, rotation.xyz <- unknown
+local Angle = 			adP:Unknown("Angle",OPT_FLOAT3,{N},3)			--vertex.xyz, rotation.xyz <- unknown
+local UrShape = 	adP:Image("UrShape", OPT_FLOAT3, {N},4)		--urshape: vertex.xyz
+local Constraints = adP:Image("Constraints", OPT_FLOAT3,{N},5)	--constraints
 local G = adP:Graph("G", 6, "v0", {N}, 7, "v1", {N}, 9)
 P:UsePreconditioner(true)
 
