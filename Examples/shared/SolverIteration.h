@@ -38,7 +38,7 @@ static void saveSolverResults(std::string directory, std::string suffix,
     if (optGNIters.size() == 0) {
         optGNIters.push_back(SolverIteration(0, 0));
     }
-    for (int i = 0; i < (int)max((int)ceresIters.size(), max((int)optLMIters.size(), (int)optGNIters.size())); i++)
+    for (int i = 0; i < (int)std::max((int)ceresIters.size(), std::max((int)optLMIters.size(), (int)optGNIters.size())); i++)
     {
         double ceresTime = ((ceresIters.size() > i) ? ceresIters[i].timeInMS : 0.0);
         double optGNTime = ((optGNIters.size() > i) ? optGNIters[i].timeInMS : 0.0);

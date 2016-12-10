@@ -181,7 +181,8 @@ float CeresWarpingSolver::solveGN(
     float3* vertexPosFloat3Urshape,
     float3* vertexPosTargetFloat3,
     float weightFit,
-    float weightReg)
+    float weightReg,
+    std::vector<SolverIteration>& iters)
 {
     float weightFitSqrt = sqrt(weightFit);
     float weightRegSqrt = sqrt(weightReg);
@@ -242,8 +243,8 @@ float CeresWarpingSolver::solveGN(
     options.minimizer_progress_to_stdout = !performanceTest;
 
     //faster methods
-    options.num_threads = 7;
-    options.num_linear_solver_threads = 7;
+    options.num_threads = 8;
+    options.num_linear_solver_threads = 8;
     options.linear_solver_type = ceres::LinearSolverType::SPARSE_NORMAL_CHOLESKY; //7.2s
 	options.trust_region_strategy_type = ceres::TrustRegionStrategyType::DOGLEG;
     //options.linear_solver_type = ceres::LinearSolverType::SPARSE_SCHUR; //10.0s
@@ -283,6 +284,11 @@ float CeresWarpingSolver::solveGN(
         totalLinearItereations += i.linear_solver_iterations;
         cout << "Iteration: " << i.linear_solver_iterations << " " << i.iteration_time_in_seconds * 1000.0 << "ms" << endl;
     }
+
+    for (auto &i : summary.iterations) {
+        iters.push_back(SolverIteration(i.cost, i.iteration_time_in_seconds * 1000.0));
+    }
+
 
     cout << "Total iteration time: " << iterationTotalTime << endl;
     cout << "Cost per linear solver iteration: " << iterationTotalTime * 1000.0 / totalLinearItereations << "ms" << endl;

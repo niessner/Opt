@@ -3,6 +3,7 @@
 #include <cassert>
 
 #include "cutil.h"
+#include "../../shared/OptUtils.h"
 
 extern "C" {
 #include "Opt.h"
@@ -112,7 +113,8 @@ public:
 		unsigned int nNonLinearIterations,
 		unsigned int nLinearIterations,
 		float weightFit,
-		float weightReg)
+		float weightReg,
+        std::vector<SolverIteration>& iters)
 	{
 		unsigned int nBlockIterations = 1;	//invalid just as a dummy;
 
@@ -124,7 +126,8 @@ public:
 		int * d_zeros = d_headY;		
 		void* problemParams[] = { &weightFitSqrt, &weightRegSqrt, d_vertexPosFloat3, d_anglesFloat3, d_vertexPosFloat3Urshape, d_vertexPosTargetFloat3, &edgeCount,  d_headX, d_headY, d_tailX, d_tailY };
 
-		Opt_ProblemSolve(m_optimizerState, m_plan, problemParams, solverParams);
+        launchProfiledSolve(m_optimizerState, m_plan, problemParams, solverParams, iters);
+
 	}
 
 private:

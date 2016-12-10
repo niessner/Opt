@@ -3,7 +3,8 @@ extern "C" {
 #include <Opt.h>
 }
 #include "SolverIteration.h"
-
+#include <vector>
+#include "cudaUtil.h"
 
 #ifdef _WIN32
 #include <Windows.h>

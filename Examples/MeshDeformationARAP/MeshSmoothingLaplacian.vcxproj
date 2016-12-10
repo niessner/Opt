@@ -135,6 +135,11 @@ xcopy /Y /D "..\..\API\release\include\*.h" "."</Command>
     <ClCompile Include="src\mLibSource.cpp" />
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="..\shared\CudaArray.h" />
+    <ClInclude Include="..\shared\cudaUtil.h" />
+    <ClInclude Include="..\shared\OptUtils.h" />
+    <ClInclude Include="..\shared\Precision.h" />
+    <ClInclude Include="..\shared\SolverIteration.h" />
     <ClInclude Include="src\CeresWarpingSolver.h" />
     <ClInclude Include="src\CUDATimer.h" />
     <ClInclude Include="src\CUDAWarpingSolver.h" />
@@ -162,6 +167,7 @@ xcopy /Y /D "..\..\API\release\include\*.h" "."</Command>
     <CudaCompile Include="src\WarpingSolver.cu" />
   </ItemGroup>
   <ItemGroup>
+    <None Include="..\..\API\src\precision.t" />
     <None Include="MeshDeformationAD.t" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />

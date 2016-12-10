@@ -3,9 +3,10 @@
 #define RUN_CUDA 0
 #define RUN_TERRA 0
 #define RUN_OPT 1
-#define RUN_CERES 0
+#define RUN_OPT_LM 1
+#define RUN_CERES 1
 
-#define EARLY_OUT 0
+#define EARLY_OUT 1
 
 
 #include "mLibInclude.h"
@@ -17,6 +18,8 @@
 #include "CUDAWarpingSolver.h"
 #include "OpenMesh.h"
 #include "CeresWarpingSolver.h"
+#include "../../shared/SolverIteration.h"
+#include "../../shared/Precision.h"
 
 class ImageWarping
 {
@@ -41,9 +44,10 @@ class ImageWarping
 			resetGPUMemory();
 
 			m_warpingSolver	= new CUDAWarpingSolver(N);
-			//m_terraWarpingSolver = new TerraWarpingSolver(N, 2 * E, d_neighbourIdx, d_neighbourOffset, "MeshDeformation.t", "gaussNewtonGPU");				
-                 	m_optWarpingSolver = new TerraWarpingSolver(N, 2 * E, d_neighbourIdx, d_neighbourOffset, "MeshDeformationAD.t", "gaussNewtonGPU");
-                        m_ceresWarpingSolver = new CeresWarpingSolver(m_initial);
+			//m_terraWarpingSolver = std::make_unique<TerraWarpingSolver>(N, 2 * E, d_neighbourIdx, d_neighbourOffset, "MeshDeformation.t", "gaussNewtonGPU");				
+            m_optWarpingSolver = std::make_unique<TerraWarpingSolver>(N, 2 * E, d_neighbourIdx, d_neighbourOffset, "MeshDeformationAD.t", "gaussNewtonGPU");
+            m_optLMWarpingSolver = std::make_unique<TerraWarpingSolver>(N, 2 * E, d_neighbourIdx, d_neighbourOffset, "MeshDeformationAD.t", "LMGPU");
+            m_ceresWarpingSolver = new CeresWarpingSolver(m_initial);
 		} 
 
 		void setConstraints(float alpha)
@@ -142,8 +146,6 @@ class ImageWarping
 			cutilSafeCall(cudaFree(d_neighbourOffset));
 
 			SAFE_DELETE(m_warpingSolver);
-			SAFE_DELETE(m_terraWarpingSolver);
-			SAFE_DELETE(m_optWarpingSolver);
 		}
 
 		SimpleMesh* solve()
@@ -161,56 +163,34 @@ class ImageWarping
 			unsigned int numIter = 32;
 			unsigned int nonLinearIter = 2;
             unsigned int linearIter = 4000;			
-#			if RUN_CUDA
-			m_result = m_initial;
-			resetGPUMemory();
-			for (unsigned int i = 1; i < numIter; i++)
-			{
-				std::cout << "//////////// ITERATION" << i << "  (CUDA) ///////////////" << std::endl;
-				setConstraints((float)i/(float)(numIter-1));
-			
-				m_warpingSolver->solveGN(d_vertexPosFloat3, d_anglesFloat3, d_vertexPosFloat3Urshape, d_numNeighbours, d_neighbourIdx, d_neighbourOffset, d_vertexPosTargetFloat3, nonLinearIter, linearIter, weightFit, weightReg);
-                                #if EARLY_OUT
-				break;
-				#endif
-			}
-			copyResultToCPUFromFloat3();
-#			endif
 
+            auto gpuSolve = [&](std::string name, bool condition, std::function<void(void)> solveFunc) {
+                if (condition) {
+                    m_result = m_initial;
+                    resetGPUMemory();
+                    for (unsigned int i = 1; i < numIter; i++)
+                    {
+                        std::cout << "//////////// ITERATION" << i << "  (" << name << ") ///////////////" << std::endl;
+                        setConstraints((float)i/(float)(numIter-1));
 
-#			if RUN_TERRA
-			m_result = m_initial;
-			resetGPUMemory();
-			for (unsigned int i = 1; i < numIter; i++)
-			{
-				std::cout << "//////////// ITERATION" << i << "  (TERRA) ///////////////" << std::endl;
-				setConstraints((float)i / (float)(numIter - 1));
+                        solveFunc();
+#if EARLY_OUT
+                        break;
+#endif
+                    }
+                    copyResultToCPUFromFloat3();
+                }
+            };
 
-				m_terraWarpingSolver->solveGN(d_vertexPosFloat3, d_anglesFloat3, d_vertexPosFloat3Urshape, d_vertexPosTargetFloat3, nonLinearIter, linearIter, weightFit, weightReg);
-                                #if EARLY_OUT
-				break;
-				#endif
+            auto cudaSolve = [=](){m_warpingSolver->solveGN(d_vertexPosFloat3, d_anglesFloat3, d_vertexPosFloat3Urshape, d_numNeighbours, d_neighbourIdx, d_neighbourOffset, d_vertexPosTargetFloat3, nonLinearIter, linearIter, weightFit, weightReg); };
+            gpuSolve("CUDA", RUN_CUDA != 0, cudaSolve);
 
-			}
-			copyResultToCPUFromFloat3();
-#			endif
+            auto genericOptSolve = [=](std::unique_ptr<TerraWarpingSolver>& solver, std::vector<SolverIteration>& iters) { solver->solveGN(d_vertexPosFloat3, d_anglesFloat3, d_vertexPosFloat3Urshape, d_vertexPosTargetFloat3, nonLinearIter, linearIter, weightFit, weightReg, iters); };
 
-#			if RUN_OPT
-			m_result = m_initial;
-			resetGPUMemory();
-			for (unsigned int i = 1; i < numIter; i++)
-			{
-				std::cout << "//////////// ITERATION" << i << "  (OPT) ///////////////" << std::endl;
-				setConstraints((float)i / (float)(numIter - 1));
+            gpuSolve("TERRA",   RUN_TERRA != 0,     [=](){ genericOptSolve(m_terraWarpingSolver, m_terraIters); });
+            gpuSolve("OPT",     RUN_OPT != 0,       [=](){ genericOptSolve(m_optWarpingSolver, m_optIters); });
+            gpuSolve("OPT_LM",  RUN_OPT_LM != 0,    [=](){ genericOptSolve(m_optLMWarpingSolver, m_optLMIters); });
 
-				m_optWarpingSolver->solveGN(d_vertexPosFloat3, d_anglesFloat3, d_vertexPosFloat3Urshape, d_vertexPosTargetFloat3, nonLinearIter, linearIter, weightFit, weightReg);
-                                #if EARLY_OUT
-				break;
-				#endif
-
-			}
-			copyResultToCPUFromFloat3();
-#			endif
 
 #			if RUN_CERES
             m_result = m_initial;
@@ -241,7 +221,7 @@ class ImageWarping
                 setConstraints((float)i / (float)(numIter - 1));
                 cutilSafeCall(cudaMemcpy(h_vertexPosTargetFloat3, d_vertexPosTargetFloat3, sizeof(float3)*N, cudaMemcpyDeviceToHost));
 
-                finalIterTime = m_ceresWarpingSolver->solveGN(h_vertexPosFloat3, h_anglesFloat3, h_vertexPosFloat3Urshape, h_vertexPosTargetFloat3, weightFit, weightReg);
+                finalIterTime = m_ceresWarpingSolver->solveGN(h_vertexPosFloat3, h_anglesFloat3, h_vertexPosFloat3Urshape, h_vertexPosTargetFloat3, weightFit, weightReg, m_ceresIters);
                 #if EARLY_OUT
 		break;
                 #endif
@@ -252,6 +232,14 @@ class ImageWarping
             cutilSafeCall(cudaMemcpy(d_vertexPosFloat3, h_vertexPosFloat3, sizeof(float3)*N, cudaMemcpyHostToDevice));
             copyResultToCPUFromFloat3();
 #			endif
+
+            std::string resultDirectory = "results/";
+#   if OPT_DOUBLE_PRECISION
+            std::string resultSuffix = "_double";
+#   else
+            std::string resultSuffix = "_float";
+#   endif
+            saveSolverResults(resultDirectory, resultSuffix, m_ceresIters, m_optIters, m_optLMIters);
 						
 			return &m_result;
 		}
@@ -283,8 +271,14 @@ class ImageWarping
 		int*	d_neighbourIdx;
 		int* 	d_neighbourOffset;
 
-		TerraWarpingSolver* m_optWarpingSolver;
-		TerraWarpingSolver* m_terraWarpingSolver;
+        std::vector<SolverIteration> m_optIters;
+        std::vector<SolverIteration> m_optLMIters;
+        std::vector<SolverIteration> m_terraIters;
+        std::vector<SolverIteration> m_ceresIters;
+
+		std::unique_ptr<TerraWarpingSolver> m_optWarpingSolver;
+        std::unique_ptr<TerraWarpingSolver> m_optLMWarpingSolver;
+		std::unique_ptr<TerraWarpingSolver> m_terraWarpingSolver;
         CeresWarpingSolver* m_ceresWarpingSolver;
 		CUDAWarpingSolver*	m_warpingSolver;
 

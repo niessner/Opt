@@ -1,5 +1,8 @@
 #pragma once
 
+#include <vector>
+#include "../../shared/SolverIteration.h"
+
 class CeresWarpingSolver {
 public:
 	CeresWarpingSolver(SimpleMesh &_mesh)
@@ -18,7 +21,8 @@ public:
         float3* vertexPosFloat3Urshape,
         float3* vertexPosTargetFloat3,
         float weightFit,
-        float weightReg);
+        float weightReg,
+        std::vector<SolverIteration>& iters);
 
 private:
     int vertexCount, edgeCount;
