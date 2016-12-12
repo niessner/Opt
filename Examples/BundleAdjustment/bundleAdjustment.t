@@ -3,7 +3,7 @@ local cameraCount = Dim("cameraCount", 0)
 local correspondenceCount = Dim("correspondenceCount", 1)
 
 local unknownType = double6
-local weightType = double
+local weightType = float
 
 local cameras =         Unknown("cameras", unknownType, {cameraCount}, 0) -- translation.xyz, rotation.xyz
 local correspondences =	Image("correspondences", unknownType, {correspondenceCount}, 1) -- ptA.xyz, ptB.xyz

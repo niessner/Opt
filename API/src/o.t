@@ -9,13 +9,14 @@ local A = ad.classes
 
 local C = util.C
 
-local use_bindless_texture = true
+
 local use_pitched_memory = true
 local use_split_sums = true
 local use_condition_scheduling = true
 local use_register_minimization = true
 local use_conditionalization = true
 local use_contiguous_allocation = true
+local use_bindless_texture = true and (not use_contiguous_allocation)
 local use_cost_speculate = false -- takes a lot of time and doesn't do much
 
 if false then
@@ -594,8 +595,8 @@ function ImageType:terratype()
     end
 	terra Image:initGPU()
         var data : &uint8
-        C.cudaMalloc([&&opaque](&data), self:totalbytes())
-        C.cudaMemset([&opaque](data), 0, self:totalbytes())
+        cd(C.cudaMalloc([&&opaque](&data), self:totalbytes()))
+        cd(C.cudaMemset([&opaque](data), 0, self:totalbytes()))
         self:initFromGPUptr(data)
     end
     return Image
@@ -669,9 +670,9 @@ function UnknownType:terratype()
                 end
             end
             var data : &uint8
-            C.cudaMalloc([&&opaque](&data), size)
+            cd(C.cudaMalloc([&&opaque](&data), size))
             self._contiguousallocation = data
-            C.cudaMemset([&opaque](data), 0, size)
+            cd(C.cudaMemset([&opaque](data), 0, size))
             size = 0
             escape
                 for i,ip in ipairs(images) do
@@ -819,6 +820,7 @@ local function problemPlan(id, dimensions, pplan)
 		print("compile time: ",e - b)
 		allPlans:insert(result)
 		pplan[0] = result()
+        print("problem plan complete")
     end,function(err) errorPrint(debug.traceback(err,2)) end)
 end
 problemPlan = terralib.cast({int,&uint32,&&opt.Plan} -> {}, problemPlan)

@@ -163,7 +163,6 @@ xcopy /Y /D "..\..\API\release\include\*.h" "."</Command>
     <Reference Include="System.Xml" />
   </ItemGroup>
   <ItemGroup>
-    <CudaCompile Include="src\TerraWarpingSolver.cu" />
     <CudaCompile Include="src\WarpingSolver.cu" />
   </ItemGroup>
   <ItemGroup>

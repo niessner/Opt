@@ -112,7 +112,7 @@ void ImagePairCorrespondences::visualize(const string &dir) const
 
     TriMeshf unifiedMesh = Shapesf::unifyMeshes(meshes);
 
-    MeshIOf::saveToPLY(dir + "mesh.ply", unifiedMesh.getMeshData());
+    MeshIOf::saveToPLY(dir + "mesh.ply", unifiedMesh.makeMeshData());
 }
 
 void ImagePairCorrespondences::estimateTransform()

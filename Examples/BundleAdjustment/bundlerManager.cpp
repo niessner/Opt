@@ -306,9 +306,9 @@ void BundlerManager::solveOpt(int linearIterations, int nonLinearIterations)
     }
     ml::vec3<OPT_FLOAT> *d_correspondences = createDeviceBuffer(correspondences, "correspondences");
 
-    vector<OPT_FLOAT> anchorWeights(cameraCount, (OPT_FLOAT)0.0f);
-    anchorWeights[0] = (OPT_FLOAT)100.0f;
-    OPT_FLOAT *d_anchorWeights = createDeviceBuffer(anchorWeights, "anchorWeights");
+    vector<float> anchorWeights(cameraCount, 0.0f);
+    anchorWeights[0] = 100.0f;
+    float *d_anchorWeights = createDeviceBuffer(anchorWeights, "anchorWeights");
     int *d_cameraAIndices = createDeviceBuffer(cameraAIndices, "cameraAIndices");
     int *d_cameraBIndices = createDeviceBuffer(cameraBIndices, "cameraBIndices");
     int *d_correspondenceIndices = createDeviceBuffer(correspondenceIndices, "correspondenceIndices");
@@ -466,5 +466,5 @@ void BundlerManager::visualizeCameras(const string &filename) const
 
     TriMeshf unifiedMesh = Shapesf::unifyMeshes(meshes);
 
-    MeshIOf::saveToPLY(filename, unifiedMesh.getMeshData());
+    MeshIOf::saveToPLY(filename, unifiedMesh.makeMeshData());
 }

@@ -8,13 +8,6 @@ extern "C" {
 #include "Opt.h"
 }
 
-struct float6 {
-	float array[6];
-};
-
-extern "C" void convertToFloat6(const float3* src0, const float3* src1, float6* target, unsigned int numVars);
-extern "C" void convertFromFloat6(const float6* source, float3* tar0, float3* tar1, unsigned int numVars);
-
 
 template <class type> type* createDeviceBuffer(const std::vector<type>& v) {
 	type* d_ptr;

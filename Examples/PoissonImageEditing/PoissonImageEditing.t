@@ -97,7 +97,7 @@ terra C.evalJTF(idx : Index, self : P:ParameterType())
 end
 	
 -- eval 2*JtJ (note that we keep the '2' to make it consistent with the gradient
-terra C.applyJTJ(idx : Index, self : P:ParameterType(), pImage : TUnknownType) : unknownElement
+terra C.applyJTJ(idx : Index, self : P:ParameterType(), pImage : TUnknownType, ctcImage : TUnknownType) : unknownElement
 	
 	var m = self.M(idx)(0)
 	var p = pImage(idx)

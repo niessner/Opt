@@ -31,7 +31,7 @@ public:
 	{
 		edgeCount = (int)E;
 		m_optimizerState = Opt_NewState();
-		m_problem = Opt_ProblemDefine(m_optimizerState, terraFile.c_str(), optName.c_str(), NULL);
+		m_problem = Opt_ProblemDefine(m_optimizerState, terraFile.c_str(), optName.c_str());
 
 		std::vector<int> yCoords;
 
@@ -62,14 +62,9 @@ public:
 		d_headX = createDeviceBuffer(h_headX);
 		d_tailX = createDeviceBuffer(h_tailX);
 
-		
-		
-		uint32_t stride = vertexCount * sizeof(float3);
-		uint32_t strides[] = { stride, stride };
-		uint32_t elemsizes[] = { sizeof(float3), sizeof(float3) };
 		uint32_t dims[] = { vertexCount, 1 };
 
-		m_plan = Opt_ProblemPlan(m_optimizerState, m_problem, dims, elemsizes, strides);
+		m_plan = Opt_ProblemPlan(m_optimizerState, m_problem, dims);
 
 		assert(m_optimizerState);
 		assert(m_problem);
@@ -95,23 +90,17 @@ public:
 
 	void solve(float3* d_unknown, float3* d_target, unsigned int nNonLinearIterations, unsigned int nLinearIterations, unsigned int nBlockIterations, float weightFit, float weightReg)
 	{
-
-		void* data[] = {d_unknown, d_target};
 		void* solverParams[] = { &nNonLinearIterations, &nLinearIterations, &nBlockIterations };
 
 		float weightFitSqrt = sqrt(weightFit);
 		float weightRegSqrt = sqrt(weightReg);
-		void* problemParams[] = { &weightFitSqrt, &weightRegSqrt };
+        void* problemParams[] = { &weightFitSqrt, &weightRegSqrt, d_unknown, d_target, &edgeCount, d_headX, d_headY, d_tailX, d_tailY };
 
-		int32_t* xCoords[] = { d_headX, d_tailX };
-		int32_t* yCoords[] = { d_headY, d_tailY };
-		int32_t edgeCounts[] = { edgeCount };
-		Opt_ProblemSolve(m_optimizerState, m_plan, data, edgeCounts, NULL, xCoords, yCoords, problemParams, solverParams);
-
+		Opt_ProblemSolve(m_optimizerState, m_plan, problemParams, solverParams);
 	}
 
 private:
-	OptState*	m_optimizerState;
-	Problem*	m_problem;
-	Plan*		m_plan;
+	Opt_State*	m_optimizerState;
+    Opt_Problem*	m_problem;
+    Opt_Plan*		m_plan;
 };

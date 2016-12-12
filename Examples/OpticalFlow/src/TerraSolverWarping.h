@@ -70,9 +70,9 @@ public:
 private:
 
 
-	OptState*	m_optimizerState;
-	Problem*	m_problem;
-	Plan*		m_plan;
+	Opt_State*	    m_optimizerState;
+    Opt_Problem*	m_problem;
+    Opt_Plan*		m_plan;
 
 	unsigned int m_width, m_height;
 };

@@ -44,13 +44,13 @@
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
     <LinkIncremental>true</LinkIncremental>
     <ExecutablePath>$(DXSDK_DIR)Utilities\bin\x64;$(DXSDK_DIR)Utilities\bin\x86;$(ExecutablePath)</ExecutablePath>
-    <IncludePath>C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA\v7.0\include;$(IncludePath);$(DXSDK_DIR)Include;$(KINECTSDK10_DIR)\inc;$(CUDA_INC_PATH);..\..\mLib\include;..\..\..\..\mLib\include;..\..\cusp-v0.5.1\cusp</IncludePath>
+    <IncludePath>C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA\v7.0\include;$(IncludePath);$(DXSDK_DIR)Include;$(KINECTSDK10_DIR)\inc;$(CUDA_INC_PATH);..\..\mLib\include;..\..\..\..\mLib\include;./;..\..\cusp-v0.5.1\cusp;</IncludePath>
     <LibraryPath>C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA\v7.0\lib\x64;$(LibraryPath);$(DXSDK_DIR)Lib\x64;$(KINECTSDK10_DIR)\lib\amd64;</LibraryPath>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
     <LinkIncremental>false</LinkIncremental>
     <ExecutablePath>$(DXSDK_DIR)Utilities\bin\x64;$(DXSDK_DIR)Utilities\bin\x86;$(ExecutablePath)</ExecutablePath>
-    <IncludePath>C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA\v7.0\include;$(IncludePath);$(DXSDK_DIR)Include;$(KINECTSDK10_DIR)\inc;$(CUDA_INC_PATH);..\..\mLib\include;..\..\..\..\mLib\include;..\..\cusp-v0.5.1\cusp;../../../../mLibExternal/libsWindows/ceres-windows\ceres-solver\include\;../../../../mLibExternal/libsWindows/ceres-windows\glog\src\windows;../../../../mLibExternal/libsWindows/ceres-windows\win\include</IncludePath>
+    <IncludePath>C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA\v7.0\include;$(IncludePath);$(DXSDK_DIR)Include;$(KINECTSDK10_DIR)\inc;$(CUDA_INC_PATH);..\..\mLib\include;..\..\..\..\mLib\include;./;..\..\cusp-v0.5.1\cusp;../../../../mLibExternal/libsWindows/ceres-windows\ceres-solver\include\;../../../../mLibExternal/libsWindows/ceres-windows\glog\src\windows;../../../../mLibExternal/libsWindows/ceres-windows\win\include</IncludePath>
     <LibraryPath>C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA\v7.0\lib\x64;$(LibraryPath);$(DXSDK_DIR)Lib\x64;$(KINECTSDK10_DIR)\lib\amd64;$(CUDA_LIB_PATH);..\..\..\..\mLibExternal\libsWindows\lib64\</LibraryPath>
   </PropertyGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
@@ -82,7 +82,10 @@
       <PtxAsOptionV>false</PtxAsOptionV>
     </CudaCompile>
     <PreBuildEvent>
-      <Command>call "../../API/common/optMake.bat" "$(ProjectDir)/../../../terra" "$(ProjectDir)/../../API/build" "$(ProjectDir)"</Command>
+      <Command>call "..\..\API\common\optMake.bat" "$(ProjectDir)\..\..\..\terra" "..\..\API" "false"
+xcopy /Y /D "..\..\API\release\bin\*.dll" "."
+xcopy /Y /D "..\..\API\release\lib\*.lib" "."
+xcopy /Y /D "..\..\API\release\include\*.h" "."</Command>
     </PreBuildEvent>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
@@ -117,7 +120,10 @@
       <Optimization>O3</Optimization>
     </CudaCompile>
     <PreBuildEvent>
-      <Command>call "../../API/common/optMake.bat" "$(ProjectDir)/../../../terra" "$(ProjectDir)/../../API/build" "$(ProjectDir)"</Command>
+      <Command>call "..\..\API\common\optMake.bat" "$(ProjectDir)\..\..\..\terra" "..\..\API" "false"
+xcopy /Y /D "..\..\API\release\bin\*.dll" "."
+xcopy /Y /D "..\..\API\release\lib\*.lib" "."
+xcopy /Y /D "..\..\API\release\include\*.h" "."</Command>
     </PreBuildEvent>
   </ItemDefinitionGroup>
   <ItemGroup>
