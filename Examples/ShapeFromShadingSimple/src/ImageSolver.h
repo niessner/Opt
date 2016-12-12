@@ -12,6 +12,12 @@
 #include "SFSSolverInput.h"
 #include "../../shared/SolverIteration.h"
 
+// From the future (C++14)
+template<typename T, typename... Args>
+std::unique_ptr<T> make_unique(Args&&... args) {
+    return std::unique_ptr<T>(new T(std::forward<Args>(args)...));
+}
+
 class ImageSolver {
 private:
 
@@ -36,12 +42,12 @@ public:
 
 		resetGPUMemory();
 
-        m_cudaSolver = std::make_unique<CUDAImageSolver>(m_result->width(), m_result->height());
-        m_terraSolver = std::make_unique<OptImageSolver>(m_result->width(), m_result->height(), "shapeFromShading.t", "gaussNewtonGPU");
-        m_optSolver = std::make_unique<OptImageSolver>(m_result->width(), m_result->height(), "shapeFromShadingAD.t", "gaussNewtonGPU");
-        m_optLMSolver = std::make_unique<OptImageSolver>(m_result->width(), m_result->height(), "shapeFromShadingAD.t", "LMGPU");
+        m_cudaSolver = make_unique<CUDAImageSolver>(m_result->width(), m_result->height());
+        m_terraSolver = make_unique<OptImageSolver>(m_result->width(), m_result->height(), "shapeFromShading.t", "gaussNewtonGPU");
+        m_optSolver = make_unique<OptImageSolver>(m_result->width(), m_result->height(), "shapeFromShadingAD.t", "gaussNewtonGPU");
+        m_optLMSolver = make_unique<OptImageSolver>(m_result->width(), m_result->height(), "shapeFromShadingAD.t", "LMGPU");
         //m_optSolver = new OptImageSolver(m_result->width(), m_result->height(), "shapeFromShadingADHacked.t", "gaussNewtonGPU");
-        m_ceresSolver = std::make_unique<CeresImageSolver>(m_result->width(), m_result->height());
+        m_ceresSolver = make_unique<CeresImageSolver>(m_result->width(), m_result->height());
 	}
 
 	void resetGPUMemory()

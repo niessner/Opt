@@ -10,6 +10,8 @@
 #define SAFE_DELETE_ARRAY(p) { if (p) { delete[] (p);   (p)=NULL; } }
 #endif
 
-#define USE_CERES
+#ifdef _WIN32
+#	define USE_CERES
+#endif
 
 #define PERFORMANCE_RUN 1

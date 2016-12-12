@@ -5,6 +5,7 @@ extern "C" {
 #include "SolverIteration.h"
 #include <vector>
 #include "cudaUtil.h"
+#include <cmath>
 
 #ifdef _WIN32
 #include <Windows.h>
@@ -36,7 +37,7 @@ class SimpleTimer {
 public:
     void init() {}
     // Time since last tick in ms
-    double tick() { return fnan();}
+    double tick() { return nanf("");}
 };
 #endif
 

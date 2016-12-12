@@ -2,12 +2,12 @@
 
 #include <cassert>
 
-#include "SolverIteration.h"
+#include "../../shared/SolverIteration.h"
 extern "C" {
 #include "Opt.h"
 }
 
-#include "Precision.h"
+#include "../../shared/Precision.h"
 
 #include <cuda_runtime.h>
 #include <cudaUtil.h>
