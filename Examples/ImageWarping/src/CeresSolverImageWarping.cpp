@@ -11,6 +11,7 @@ const bool performanceTest = true;
 #include "../../shared/SolverIteration.h"
 #include "CeresSolverImageWarping.h"
 
+#define GLOG_NO_ABBREVIATED_SEVERITIES
 #include "ceres/ceres.h"
 #include "glog/logging.h"
 

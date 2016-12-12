@@ -122,7 +122,6 @@ public:
 
 		convertToFloat12(d_vertexPosFloat3, d_rotsFloat9, d_unknowns, m_numUnknown);
 
-		void* data[] = { };
 		void* solverParams[] = { &nNonLinearIterations, &nLinearIterations, &nBlockIterations };
 
 		float weightFitSqrt = sqrt(weightFit);
@@ -135,9 +134,9 @@ public:
 	}
 
 private:
-	OptState*	m_optimizerState;
-	Problem*	m_problem;
-	Plan*		m_plan;
+	Opt_State*	m_optimizerState;
+    Opt_Problem*	m_problem;
+    Opt_Plan*		m_plan;
 
 	unsigned int m_numUnknown;
 	float12*		d_unknowns;	//float3 (vertices) + float3 (angles)

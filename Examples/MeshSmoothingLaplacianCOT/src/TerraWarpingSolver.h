@@ -105,7 +105,6 @@ public:
 	void solve(float3* d_unknown, float3* d_target, unsigned int nNonLinearIterations, unsigned int nLinearIterations, unsigned int nBlockIterations, float weightFit, float weightReg)
 	{
 
-		void* data[] = { };
 		void* solverParams[] = {  &nNonLinearIterations, &nLinearIterations, &nBlockIterations };
 
 		float weightFitSqrt = sqrt(weightFit);
@@ -116,7 +115,7 @@ public:
 	}
 
 private:
-	OptState*	m_optimizerState;
-	Problem*	m_problem;
-	Plan*		m_plan;
+    Opt_State*	    m_optimizerState;
+	Opt_Problem*    m_problem;
+    Opt_Plan*		m_plan;
 };

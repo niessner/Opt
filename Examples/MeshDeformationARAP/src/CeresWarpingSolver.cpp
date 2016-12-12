@@ -9,7 +9,7 @@ const bool performanceTest = false;
 //const int linearIterationMin = 100;
 
 #include <cuda_runtime.h>
-
+#define GLOG_NO_ABBREVIATED_SEVERITIES
 #include "OpenMesh.h"
 #include "CeresWarpingSolver.h"
 

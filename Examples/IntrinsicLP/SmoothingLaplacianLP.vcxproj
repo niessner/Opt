@@ -145,6 +145,7 @@ xcopy /Y /D "..\..\API\release\include\*.h" "."</Command>
     <Reference Include="System.Xml" />
   </ItemGroup>
   <ItemGroup>
+    <None Include="..\..\API\src\precision.t" />
     <None Include="SmoothingLaplacianFloat3AD.t" />
     <None Include="SmoothingLaplacianFloat3AD_full.t" />
   </ItemGroup>

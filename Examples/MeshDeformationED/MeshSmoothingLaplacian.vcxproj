@@ -83,7 +83,10 @@
       <PtxAsOptionV>false</PtxAsOptionV>
     </CudaCompile>
     <PreBuildEvent>
-      <Command>call "../../API/common/optMake.bat" "$(ProjectDir)/../../../terra" "$(ProjectDir)/../../API/build" "$(ProjectDir)"</Command>
+      <Command>call "..\..\API\common\optMake.bat" "$(ProjectDir)\..\..\..\terra" "..\..\API" "false"
+xcopy /Y /D "..\..\API\release\bin\*.dll" "."
+xcopy /Y /D "..\..\API\release\lib\*.lib" "."
+xcopy /Y /D "..\..\API\release\include\*.h" "."</Command>
     </PreBuildEvent>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
@@ -119,7 +122,10 @@
       <Optimization>O3</Optimization>
     </CudaCompile>
     <PreBuildEvent>
-      <Command>call "../../API/common/optMake.bat" "$(ProjectDir)/../../../terra" "$(ProjectDir)/../../API/build" "$(ProjectDir)"</Command>
+      <Command>call "..\..\API\common\optMake.bat" "$(ProjectDir)\..\..\..\terra" "..\..\API" "false"
+xcopy /Y /D "..\..\API\release\bin\*.dll" "."
+xcopy /Y /D "..\..\API\release\lib\*.lib" "."
+xcopy /Y /D "..\..\API\release\include\*.h" "."</Command>
     </PreBuildEvent>
   </ItemDefinitionGroup>
   <ItemGroup>
@@ -142,6 +148,9 @@
   </ItemGroup>
   <ItemGroup>
     <CudaCompile Include="src\TerraSolver.cu" />
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="..\..\API\src\precision.t" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

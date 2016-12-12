@@ -8,7 +8,3 @@
 #ifndef SAFE_DELETE_ARRAY
 #define SAFE_DELETE_ARRAY(p) { if (p) { delete[] (p);   (p)=NULL; } }
 #endif
-
-#ifdef _WIN32
-	#define USE_CERES
-#endif
