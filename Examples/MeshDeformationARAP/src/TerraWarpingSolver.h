@@ -96,75 +96,76 @@ public:
 	}
 
 	//void solve(float3* d_unknown, float3* d_target, unsigned int nNonLinearIterations, unsigned int nLinearIterations, unsigned int nBlockIterations, float weightFit, float weightReg)
-	void solveGN(
-		float3* d_vertexPosFloat3,
-		float3* d_anglesFloat3,
-		float3* d_vertexPosFloat3Urshape,
-		//int* d_numNeighbours,
-		//int* d_neighbourIdx,
-		//int* d_neighbourOffset,
-		float3* d_vertexPosTargetFloat3,
-		unsigned int nNonLinearIterations,
-		unsigned int nLinearIterations,
-		float weightFit,
-		float weightReg,
+    void solveGN(
+        float3* d_vertexPosFloat3,
+        float3* d_anglesFloat3,
+        float3* d_vertexPosFloat3Urshape,
+        //int* d_numNeighbours,
+        //int* d_neighbourIdx,
+        //int* d_neighbourOffset,
+        float3* d_vertexPosTargetFloat3,
+        unsigned int nNonLinearIterations,
+        unsigned int nLinearIterations,
+        float weightFit,
+        float weightReg,
         std::vector<SolverIteration>& iters)
-	{
-		unsigned int nBlockIterations = 1;	//invalid just as a dummy;
+    {
+        unsigned int nBlockIterations = 1;	//invalid just as a dummy;
 
-		void* solverParams[] = { &nNonLinearIterations, &nLinearIterations, &nBlockIterations };
+        void* solverParams[] = { &nNonLinearIterations, &nLinearIterations, &nBlockIterations };
 
-		float weightFitSqrt = sqrt(weightFit);
-		float weightRegSqrt = sqrt(weightReg);
-		
-		int * d_zeros = d_headY;		
-		
-#if OPT_DOUBLE_PRECISION
-        auto getDoubleArrayFromFloatDevicePointer = [](CudaArray<double>& doubleArray, float* d_ptr, int size) {
+        float weightFitSqrt = sqrt(weightFit);
+        float weightRegSqrt = sqrt(weightReg);
+
+        int * d_zeros = d_headY;
+        std::vector<void*> problemParams;
+        CudaArray<double> d_vertexPosDouble3, d_anglesDouble3, d_vertexPosDouble3Urshape, d_vertexPosTargetDouble3;
+        if (OPT_DOUBLE_PRECISION) {
+            auto getDoubleArrayFromFloatDevicePointer = [](CudaArray<double>& doubleArray, float* d_ptr, int size) {
+                std::vector<float> v;
+                v.resize(size);
+                cutilSafeCall(cudaMemcpy(v.data(), d_ptr, size*sizeof(float), cudaMemcpyDeviceToHost));
+                std::vector<double> vDouble;
+                vDouble.resize(size);
+                for (int i = 0; i < size; ++i) {
+                    vDouble[i] = (double)v[i];
+                }
+                doubleArray.update(vDouble);
+            };
+
+
+            getDoubleArrayFromFloatDevicePointer(d_vertexPosDouble3, (float*)d_vertexPosFloat3, m_numUnknown * 3);
+            getDoubleArrayFromFloatDevicePointer(d_anglesDouble3, (float*)d_anglesFloat3, m_numUnknown * 3);
+            getDoubleArrayFromFloatDevicePointer(d_vertexPosDouble3Urshape, (float*)d_vertexPosFloat3Urshape, m_numUnknown * 3);
+            getDoubleArrayFromFloatDevicePointer(d_vertexPosTargetDouble3, (float*)d_vertexPosTargetFloat3, m_numUnknown * 3);
+
+
+            problemParams = { &weightFitSqrt, &weightRegSqrt, d_vertexPosDouble3.data(), d_anglesDouble3.data(), d_vertexPosDouble3Urshape.data(), d_vertexPosTargetDouble3.data(), &edgeCount, d_headX, d_headY, d_tailX, d_tailY };
+        } else {
+            problemParams = { &weightFitSqrt, &weightRegSqrt, d_vertexPosFloat3, d_anglesFloat3, d_vertexPosFloat3Urshape, d_vertexPosTargetFloat3, &edgeCount, d_headX, d_headY, d_tailX, d_tailY };
+        }
+        launchProfiledSolve(m_optimizerState, m_plan, problemParams.data(), solverParams, iters);
+
+
+        if (OPT_DOUBLE_PRECISION) {
+            std::vector<double> vDouble;
+            size_t size = m_numUnknown * 3;
+            vDouble.resize(size);
             std::vector<float> v;
             v.resize(size);
-            cutilSafeCall(cudaMemcpy(v.data(), d_ptr, size*sizeof(float), cudaMemcpyDeviceToHost));
-            std::vector<double> vDouble;
-            vDouble.resize(size);
+
+            cutilSafeCall(cudaMemcpy(vDouble.data(), d_vertexPosDouble3.data(), size*sizeof(double), cudaMemcpyDeviceToHost));
             for (int i = 0; i < size; ++i) {
-                vDouble[i] = (double)v[i];
+                v[i] = (float)vDouble[i];
             }
-            doubleArray.update(vDouble);
-        };
+            cutilSafeCall(cudaMemcpy(d_vertexPosFloat3, v.data(), size*sizeof(float), cudaMemcpyHostToDevice));
 
-        CudaArray<double> d_vertexPosDouble3, d_anglesDouble3, d_vertexPosDouble3Urshape, d_vertexPosTargetDouble3;
-        getDoubleArrayFromFloatDevicePointer(d_vertexPosDouble3, (float*)d_vertexPosFloat3, m_numUnknown*3);
-        getDoubleArrayFromFloatDevicePointer(d_anglesDouble3, (float*)d_anglesFloat3, m_numUnknown * 3);
-        getDoubleArrayFromFloatDevicePointer(d_vertexPosDouble3Urshape, (float*)d_vertexPosFloat3Urshape, m_numUnknown * 3);
-        getDoubleArrayFromFloatDevicePointer(d_vertexPosTargetDouble3, (float*)d_vertexPosTargetFloat3, m_numUnknown * 3);
-
-        
-        void* problemParams[] = { &weightFitSqrt, &weightRegSqrt, d_vertexPosDouble3.data(), d_anglesDouble3.data(), d_vertexPosDouble3Urshape.data(), d_vertexPosTargetDouble3.data(), &edgeCount, d_headX, d_headY, d_tailX, d_tailY };
-#else
-        void* problemParams[] = { &weightFitSqrt, &weightRegSqrt, d_vertexPosFloat3, d_anglesFloat3, d_vertexPosFloat3Urshape, d_vertexPosTargetFloat3, &edgeCount, d_headX, d_headY, d_tailX, d_tailY };
-#endif
-        launchProfiledSolve(m_optimizerState, m_plan, problemParams, solverParams, iters);
-
-
-#if OPT_DOUBLE_PRECISION
-        std::vector<double> vDouble;
-        size_t size = m_numUnknown * 3;
-        vDouble.resize(size);
-        std::vector<float> v;
-        v.resize(size);
-
-        cutilSafeCall(cudaMemcpy(vDouble.data(), d_vertexPosDouble3.data(), size*sizeof(double), cudaMemcpyDeviceToHost));
-        for (int i = 0; i < size; ++i) {
-            v[i] = (float)vDouble[i];
+            cutilSafeCall(cudaMemcpy(vDouble.data(), d_anglesDouble3.data(), size*sizeof(double), cudaMemcpyDeviceToHost));
+            for (int i = 0; i < size; ++i) {
+                v[i] = (float)vDouble[i];
+            }
+            cutilSafeCall(cudaMemcpy(d_anglesFloat3, v.data(), size*sizeof(float), cudaMemcpyHostToDevice));
         }
-        cutilSafeCall(cudaMemcpy(d_vertexPosFloat3, v.data(), size*sizeof(float), cudaMemcpyHostToDevice));
-
-        cutilSafeCall(cudaMemcpy(vDouble.data(), d_anglesDouble3.data(), size*sizeof(double), cudaMemcpyDeviceToHost));
-        for (int i = 0; i < size; ++i) {
-            v[i] = (float)vDouble[i];
-        }
-        cutilSafeCall(cudaMemcpy(d_anglesFloat3, v.data(), size*sizeof(float), cudaMemcpyHostToDevice));
-#endif
 
 	}
 

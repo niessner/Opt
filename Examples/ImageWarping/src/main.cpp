@@ -51,19 +51,37 @@ int main(int argc, const char * argv[]) {
 
 
 	// CAT 
-    /*
-	const std::string inputImage = "cartooncat.png";
-	const std::string inputImageMask = "catmask.png";
+
+	std::string inputImage = "cartooncat.png";
+	std::string inputImageMask = "catmask.png";
 	std::vector<std::vector<int>> constraints;
 	loadConstraints(constraints, "cat.constraints");
-    */
-
-    // CAT 512
-    const std::string inputImage = "cartooncat512.png";
-    const std::string inputImageMask = "catmask512.png";
-    std::vector<std::vector<int>> constraints;
-    loadConstraints(constraints, "cat512.constraints");
     int downsampleFactor = 1;
+
+
+    if (argc > 1) {
+        downsampleFactor = atoi(argv[1]);
+        if (downsampleFactor > 0) {
+            inputImage = "cartooncat512.png";
+            inputImageMask = "catmask512.png";
+            constraints.clear();
+            loadConstraints(constraints, "cat512.constraints");
+        } else {
+            downsampleFactor = 1;
+        }
+        
+    }
+    bool performanceRun = false;
+    if (argc > 2) {
+        if (std::string(argv[2]) == "perf") {
+            performanceRun = true;
+        } else {
+            printf("Invalid second parameter: %s\n", argv[2]);
+        }
+    }
+
+    
+
 
 	ColorImageR8G8B8A8 image = LodePNG::load(inputImage);
     const ColorImageR8G8B8A8 imageMask = LodePNG::load(inputImageMask);
@@ -117,7 +135,7 @@ int main(int argc, const char * argv[]) {
 		}
 	}
 
-    ImageWarping warping(imageR32, imageColor, imageR32Mask, constraints);
+    ImageWarping warping(imageR32, imageColor, imageR32Mask, constraints, performanceRun);
 
 	ColorImageR32G32B32* res = warping.solve();
 	ColorImageR8G8B8A8 out(res->getWidth(), res->getHeight());
@@ -151,11 +169,13 @@ int main(int argc, const char * argv[]) {
 	LodePNG::save(out, "output.png");
 	LodePNG::save(image, "inputMark.png");
     printf("Saved\n");
-    #ifdef _WIN32
- 	    getchar();
-    #else
+    if (!performanceRun) {
+#ifdef _WIN32
+        getchar();
+#else
         exit(0);
-    #endif
+#endif
+    }
 
 	return 0;
 }

@@ -9,9 +9,19 @@ int main(int argc, const char * argv[])
     const char* markerFilename = "armadillo.mrk";
     //std::string filename = "raptor_clean.stl";
     //const char* markerFilename = "raptor.mrk";
+
 	if (argc >= 2) {
 		filename = argv[1];
 	}
+    bool performanceRun = false;
+    if (argc >= 3) {
+        if (std::string(argv[2]) == "perf") {
+            performanceRun = true;
+        }
+        else {
+            printf("Invalid second parameter: %s\n", argv[2]);
+        }
+    }
 
 	// Load Constraints
 	LandMarkSet markersMesh;
@@ -36,7 +46,7 @@ int main(int argc, const char * argv[])
 	}
     printf("Faces: %d\nVertices: %d\n", mesh->n_faces(), mesh->n_vertices());
 
-	ImageWarping warping(mesh, constraintsIdx, constraintsTarget);
+	ImageWarping warping(mesh, constraintsIdx, constraintsTarget, performanceRun);
     SimpleMesh* res = warping.solve();
 
 	if (!OpenMesh::IO::write_mesh(*res, "out.ply"))
@@ -45,8 +55,10 @@ int main(int argc, const char * argv[])
 		std::cout << "out.off" << std::endl;
 		exit(1);
 	}
+    if (!performanceRun) {
 #ifdef _WIN32
-	getchar();
+        getchar();
 #endif
+    }
 	return 0;
 }

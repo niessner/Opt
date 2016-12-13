@@ -188,20 +188,23 @@ float CeresSolverWarping::solve(OPT_FLOAT2* h_x_float, OPT_FLOAT* h_a_float, OPT
     {
         for (int x = 0; x < m_width; x++)
         {
-            const vec2i offsets[] = { vec2i(0, 1), vec2i(1, 0), vec2i(0, -1), vec2i(-1, 0) };
-            for (vec2i offset : offsets)
-            {
-                float mask = h_mask[getPixel(x, y)];
-                const vec2i oPos = offset + vec2i(x, y);
-                if (mask == 0.0f && oPos.x >= 0 && oPos.x < m_width && oPos.y >= 0 && oPos.y < m_height)
+            float mask = h_mask[getPixel(x, y)];
+            if (mask == 0.0f) {
+                const vec2i offsets[] = { vec2i(0, 1), vec2i(1, 0), vec2i(0, -1), vec2i(-1, 0) };
+                for (vec2i offset : offsets)
                 {
-                    vec2f deltaUr = toVec(h_urshape[getPixel(x, y)]) - toVec(h_urshape[getPixel(oPos.x, oPos.y)]);
-                    ceres::CostFunction* costFunction = RegTerm::Create(deltaUr, weightRegSqrt);
-                    double2 *varStartA = h_x_double + getPixel(x, y);
-                    double2 *varStartB = h_x_double + getPixel(oPos.x, oPos.y);
-                    problem.AddResidualBlock(costFunction, NULL, (double*)varStartA, (double*)varStartB, h_a_double + getPixel(x, y));
+                    const vec2i oPos = offset + vec2i(x, y);
+                    float innerMask = h_mask[getPixel(oPos.x, oPos.y)];
+                    if (innerMask == 0.0f && oPos.x >= 0 && oPos.x < m_width && oPos.y >= 0 && oPos.y < m_height)
+                    {
+                        vec2f deltaUr = toVec(h_urshape[getPixel(x, y)]) - toVec(h_urshape[getPixel(oPos.x, oPos.y)]);
+                        ceres::CostFunction* costFunction = RegTerm::Create(deltaUr, weightRegSqrt);
+                        double2 *varStartA = h_x_double + getPixel(x, y);
+                        double2 *varStartB = h_x_double + getPixel(oPos.x, oPos.y);
+                        problem.AddResidualBlock(costFunction, NULL, (double*)varStartA, (double*)varStartB, h_a_double + getPixel(x, y));
+                    }
                 }
-            }
+            } 
         }
     }
     
@@ -212,9 +215,11 @@ float CeresSolverWarping::solve(OPT_FLOAT2* h_x_float, OPT_FLOAT* h_a_float, OPT
 
    // options.minimizer_progress_to_stdout = true;// !performanceTest;
 
+    options.minimizer_progress_to_stdout = true;
+
     //faster methods
-    options.num_threads = 8;
-    options.num_linear_solver_threads = 8;
+    options.num_threads = 12;
+    options.num_linear_solver_threads = 12;
     options.linear_solver_type = ceres::LinearSolverType::SPARSE_NORMAL_CHOLESKY; //7.2s
 
 
@@ -240,7 +245,7 @@ float CeresSolverWarping::solve(OPT_FLOAT2* h_x_float, OPT_FLOAT* h_a_float, OPT
     //cout << "Cost*2 start: " << cost << endl;
 
     // TODO: remove
-    options.linear_solver_type = ceres::LinearSolverType::CGNR; 
+    //options.linear_solver_type = ceres::LinearSolverType::CGNR; 
 
 
     options.function_tolerance = 1e-20;
@@ -269,7 +274,7 @@ float CeresSolverWarping::solve(OPT_FLOAT2* h_x_float, OPT_FLOAT* h_a_float, OPT
     //options.preconditioner_type = ceres::PreconditionerType::IDENTITY;
 
 
-    options.max_num_iterations = 3;
+    options.max_num_iterations = 100;
 
     double elapsedTime;
     {

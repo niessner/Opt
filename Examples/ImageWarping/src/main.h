@@ -13,5 +13,3 @@
 #ifdef _WIN32
 #	define USE_CERES
 #endif
-
-#define PERFORMANCE_RUN 1

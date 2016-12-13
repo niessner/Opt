@@ -15,22 +15,18 @@
 #include <fstream>
 
 
-
-#if PERFORMANCE_RUN
-static bool useCUDA = false;
-static bool useTerra = false;
-static bool useAD = false;
-static bool useLMAD = true;
-static bool useCeres = true;
-static bool earlyOut = true;
-#else
-static bool useCUDA = false;
-static bool useTerra = false;
-static bool useAD = true;
-static bool useLMAD = false;
-static bool useCeres = false;
-static bool earlyOut = false;
-#endif
+struct CombinedSolverParameters {
+    bool useCUDA = false;
+    bool useTerra = false;
+    bool useAD = true;
+    bool useLMAD = false;
+    bool useCeres = false;
+    bool earlyOut = false;
+    unsigned int numIter = 20;
+    unsigned int nonLinearIter = 3;
+    unsigned int linearIter = 200;
+    unsigned int patchIter = 32;
+};
 
 
 
@@ -121,7 +117,7 @@ float *wt0, float *wt1, float *wt2) {
 
 class ImageWarping {
 public:
-	ImageWarping(const ColorImageR32& image, const ColorImageR32G32B32& imageColor, const ColorImageR32& imageMask, std::vector<std::vector<int>>& constraints) : m_constraints(constraints){
+    ImageWarping(const ColorImageR32& image, const ColorImageR32G32B32& imageColor, const ColorImageR32& imageMask, std::vector<std::vector<int>>& constraints, bool performanceRun) : m_constraints(constraints){
 		m_image = image;
 		m_imageColor = imageColor;
 		m_imageMask = imageMask;
@@ -134,22 +130,32 @@ public:
 
 		resetGPU();
 
-		if (useCUDA)
-			m_warpingSolver = new CUDAWarpingSolver(m_image.getWidth(), m_image.getHeight());
 
-		if (useTerra)
-			m_warpingSolverTerra = new TerraSolverWarping(m_image.getWidth(), m_image.getHeight(), "ImageWarping.t", "gaussNewtonGPU");
+        m_params.useCUDA = false;
+        m_params.useTerra = false;
+        m_params.useAD = true;
+        m_params.useLMAD = true;
+        m_params.useCeres = true;
+        m_params.earlyOut = true;
+        m_params.nonLinearIter = 25;
 
-		if (useAD) {
-            m_warpingSolverTerraAD = new TerraSolverWarping(m_image.getWidth(), m_image.getHeight(), "ImageWarpingAD.t", "gaussNewtonGPU");
+
+        if (m_params.useCUDA)
+            m_warpingSolver = std::unique_ptr<CUDAWarpingSolver>(new CUDAWarpingSolver(m_image.getWidth(), m_image.getHeight()));
+
+        if (m_params.useTerra)
+            m_warpingSolverTerra = std::unique_ptr<TerraSolverWarping>(new TerraSolverWarping(m_image.getWidth(), m_image.getHeight(), "ImageWarping.t", "gaussNewtonGPU"));
+
+        if (m_params.useAD) {
+            m_warpingSolverTerraAD = std::unique_ptr<TerraSolverWarping>(new TerraSolverWarping(m_image.getWidth(), m_image.getHeight(), "ImageWarpingAD.t", "gaussNewtonGPU"));
 		}
 
-        if (useLMAD) {
-            m_warpingSolverTerraLMAD = new TerraSolverWarping(m_image.getWidth(), m_image.getHeight(), "ImageWarpingAD.t", "LMGPU");
+        if (m_params.useLMAD) {
+            m_warpingSolverTerraLMAD = std::unique_ptr<TerraSolverWarping>(new TerraSolverWarping(m_image.getWidth(), m_image.getHeight(), "ImageWarpingAD.t", "LMGPU"));
         }
 
-		if (useCeres)
-			m_warpingSolverCeres = new CeresSolverWarping(m_image.getWidth(), m_image.getHeight());
+        if (m_params.useCeres)
+            m_warpingSolverCeres = std::unique_ptr<CeresSolverWarping>(new CeresSolverWarping(m_image.getWidth(), m_image.getHeight()));
 
 	}
 
@@ -215,19 +221,6 @@ public:
 		cutilSafeCall(cudaFree(d_warpField));
 		cutilSafeCall(cudaFree(d_constraints));
 		cutilSafeCall(cudaFree(d_warpAngles));
-
-
-		if (useCUDA)
-			SAFE_DELETE(m_warpingSolver);
-
-		if (useTerra)
-			SAFE_DELETE(m_warpingSolverTerra);
-
-		if (useAD)
-			SAFE_DELETE(m_warpingSolverTerraAD);
-        if (useLMAD)
-            SAFE_DELETE(m_warpingSolverTerraLMAD);
-
 	}
 
 	ColorImageR32G32B32* solve() {
@@ -235,90 +228,76 @@ public:
 		float weightReg = 0.01f;
 
 
-#if PERFORMANCE_RUN
-		unsigned int numIter = 20;
-		unsigned int nonLinearIter = 8;
-        unsigned int linearIter = 1000;
-		unsigned int patchIter = 32;
-#else
-        unsigned int numIter = 20;
-        unsigned int nonLinearIter = 3;
-        unsigned int linearIter = 200;
-        unsigned int patchIter = 32;
-#endif
 
-		//unsigned int numIter = 20;
-		//unsigned int nonLinearIter = 32;
-		//unsigned int linearIter = 50;
-		//unsigned int patchIter = 32;
-
-		if (useCUDA) {
+		if (m_params.useCUDA) {
 			resetGPU();
-			for (unsigned int i = 1; i < numIter; i++)	{
+
+            std::cout << std::endl << std::endl;
+            for (unsigned int i = 1; i < m_params.numIter; i++)	{
 				std::cout << "//////////// ITERATION" << i << "  (CUDA) ///////////////" << std::endl;
-				setConstraintImage((float)i / (float)numIter);
+                setConstraintImage((float)i / (float)m_params.numIter);
                 assert(!OPT_DOUBLE_PRECISION);
-                m_warpingSolver->solveGN((float2*)d_urshape, (float2*)d_warpField, (float*)d_warpAngles, (float2*)d_constraints, (float*)d_mask, nonLinearIter, linearIter, weightFit, weightReg);
-				if (i == 1 && earlyOut) break;
+                m_warpingSolver->solveGN((float2*)d_urshape, (float2*)d_warpField, (float*)d_warpAngles, (float2*)d_constraints, (float*)d_mask, m_params.nonLinearIter, m_params.linearIter, weightFit, weightReg);
+                if (i == 1 && m_params.earlyOut) break;
 				//	std::cout << std::endl;
 			}
 			copyResultToCPU();
 		}
 
-		if (useTerra) {
+        if (m_params.useTerra) {
 			resetGPU();
 
 			std::cout << std::endl << std::endl;
 
-			for (unsigned int i = 1; i < numIter; i++)	{
+            for (unsigned int i = 1; i < m_params.numIter; i++)	{
 				std::cout << "//////////// ITERATION" << i << "  (TERRA) ///////////////" << std::endl;
-				setConstraintImage((float)i / (float)numIter);
+                setConstraintImage((float)i / (float)m_params.numIter);
 
-				m_warpingSolverTerra->solve(d_warpField, d_warpAngles, d_urshape, d_constraints, d_mask, nonLinearIter, linearIter, patchIter, weightFit, weightReg, m_optGNIters);
-				if (i == 1 && earlyOut) break;
+                m_warpingSolverTerra->solve(d_warpField, d_warpAngles, d_urshape, d_constraints, d_mask, m_params.nonLinearIter, m_params.linearIter, m_params.patchIter, weightFit, weightReg, m_optGNIters);
+                if (i == 1 && m_params.earlyOut) break;
 				//	std::cout << std::endl;
 			}
 			copyResultToCPU();
 		}
 
 
-		if (useAD) {
+        if (m_params.useAD) {
 			resetGPU();
 
 			std::cout << std::endl << std::endl;
 
-			for (unsigned int i = 1; i < numIter; i++)	{
+            for (unsigned int i = 1; i < m_params.numIter; i++)	{
 
 				std::cout << "//////////// ITERATION" << i << "  (DSL AD) ///////////////" << std::endl;
-				setConstraintImage((float)i / (float)numIter);
+                setConstraintImage((float)i / (float)m_params.numIter);
 
-				m_warpingSolverTerraAD->solve(d_warpField, d_warpAngles, d_urshape, d_constraints, d_mask, nonLinearIter, linearIter, patchIter, weightFit, weightReg, m_optGNIters);
+                m_warpingSolverTerraAD->solve(d_warpField, d_warpAngles, d_urshape, d_constraints, d_mask, m_params.nonLinearIter, m_params.linearIter, m_params.patchIter, weightFit, weightReg, m_optGNIters);
 				std::cout << std::endl;
-				if (i == 1 && earlyOut) break;
+                if (i == 1 && m_params.earlyOut) break;
 			}
 
 			copyResultToCPU();
 		}
 
-        if (useLMAD) {
+        if (m_params.useLMAD) {
             resetGPU();
 
             std::cout << std::endl << std::endl;
 
-            for (unsigned int i = 1; i < numIter; i++)	{
+            for (unsigned int i = 1; i < m_params.numIter; i++)	{
 
                 std::cout << "//////////// ITERATION" << i << "  (DSL LM AD) ///////////////" << std::endl;
-                setConstraintImage((float)i / (float)numIter);
+                setConstraintImage((float)i / (float)m_params.numIter);
 
-                m_warpingSolverTerraLMAD->solve(d_warpField, d_warpAngles, d_urshape, d_constraints, d_mask, nonLinearIter, linearIter, patchIter, weightFit, weightReg, m_optLMIters);
+                m_warpingSolverTerraLMAD->solve(d_warpField, d_warpAngles, d_urshape, d_constraints, d_mask, m_params.nonLinearIter, m_params.linearIter, m_params.patchIter, weightFit, weightReg, m_optLMIters);
                 std::cout << std::endl;
-                if (i == 1 && earlyOut) break;
+                if (i == 1 && m_params.earlyOut) break;
             }
 
             copyResultToCPU();
         }
 
-		if (useCeres) {
+        if (m_params.useCeres) {
 			resetGPU();
 
 			const int pixelCount = m_image.getWidth()*m_image.getHeight();
@@ -340,14 +319,14 @@ public:
 
 			std::cout << std::endl << std::endl;
 
-			for (unsigned int i = 1; i < numIter; i++)	{
+            for (unsigned int i = 1; i < m_params.numIter; i++)	{
 				std::cout << "//////////// ITERATION" << i << "  (CERES) ///////////////" << std::endl;
-				setConstraintImage((float)i / (float)numIter);
+                setConstraintImage((float)i / (float)m_params.numIter);
                 cutilSafeCall(cudaMemcpy(h_constraints, d_constraints, sizeof(OPT_FLOAT2) * pixelCount, cudaMemcpyDeviceToHost));
 
                 totalCeresTimeMS = m_warpingSolverCeres->solve(h_warpField, h_warpAngles, h_urshape, h_constraints, h_mask, weightFit, weightReg, m_ceresIters);
                 std::cout << std::endl;
-                if (i == 1 && earlyOut) break;
+                if (i == 1 && m_params.earlyOut) break;
 			}
 
             cutilSafeCall(cudaMemcpy(d_warpField, h_warpField, sizeof(OPT_FLOAT2) * pixelCount, cudaMemcpyHostToDevice));
@@ -502,6 +481,7 @@ private:
 
 	float m_scale;
 
+
 	OPT_FLOAT2*	d_urshape;
     OPT_FLOAT2* d_warpField;
     OPT_FLOAT2* d_constraints;
@@ -513,14 +493,15 @@ private:
     std::vector<SolverIteration> m_optLMIters;
 
 	std::vector<std::vector<int>>& m_constraints;
+    CombinedSolverParameters m_params;
 
-	CUDAWarpingSolver*	    m_warpingSolver;
+	std::unique_ptr<CUDAWarpingSolver>	    m_warpingSolver;
 
-	TerraSolverWarping*		m_warpingSolverTerraAD;
+    std::unique_ptr<TerraSolverWarping>		m_warpingSolverTerraAD;
 
-    TerraSolverWarping*		m_warpingSolverTerraLMAD;
+    std::unique_ptr<TerraSolverWarping>		m_warpingSolverTerraLMAD;
 
-	TerraSolverWarping*		m_warpingSolverTerra;
+    std::unique_ptr<TerraSolverWarping>		m_warpingSolverTerra;
 
-	CeresSolverWarping*		m_warpingSolverCeres;
+    std::unique_ptr<CeresSolverWarping>		m_warpingSolverCeres;
 };
