@@ -137,7 +137,7 @@ public:
         m_params.useLMAD = true;
         m_params.useCeres = true;
         m_params.earlyOut = true;
-        m_params.nonLinearIter = 25;
+        m_params.nonLinearIter = 50;
 
 
         if (m_params.useCUDA)
