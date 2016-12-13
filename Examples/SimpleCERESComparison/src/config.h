@@ -27,10 +27,11 @@ struct SolverIteration
 
 const bool useProblemDefault = false; //2 unknowns -- Michael's original curveFitting.t code
 
-const int maxUnknownCount = 4;
+// Corresponds to the ENSO problem
+const int maxUnknownCount = 9;
 
 //#define OPT_UNKNOWNS OPT_FLOAT2
-#define OPT_UNKNOWNS OPT_FLOAT4
+#define OPT_UNKNOWNS OPT_FLOAT9
 
 //#define UNKNOWNS double2
-#define UNKNOWNS double4
+#define UNKNOWNS double9

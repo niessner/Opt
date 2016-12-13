@@ -328,7 +328,7 @@ return function(problemSpec)
                     end
                 end        
             
-                if not isGraph then		
+                if (not fmap.exclude(idx,pd.parameters)) and (not isGraph) then		
                     pre = guardedInvert(pre)
                     var p = pre*residuum	-- apply pre-conditioner M^-1			   
                     pd.p(idx) = p
@@ -337,7 +337,6 @@ return function(problemSpec)
                 end
             
                 pd.preconditioner(idx) = pre
-            
             end 
             if not isGraph then
                 unknownWideReduction(idx,d,pd.scanAlphaNumerator)
@@ -417,7 +416,11 @@ return function(problemSpec)
                 pd.z(idx) = z;										-- save for next kernel call
 
                 b = z:dot(r)									-- compute x-th term of the numerator of beta
+                --if (b - 0.000998503 < 0.0000001f and b - 0.000998503 > -0.0000001f) then 
+                   -- printf("%dx%d b: %g, mask: %f, constraints %f,%f\n", idx.d0, idx.d1, b, pd.parameters.Mask(idx), pd.parameters.Constraints(idx)(0), pd.parameters.Constraints(idx)(1))
+                --end
             end
+
             unknownWideReduction(idx,b,pd.scanBetaNumerator)
         end
 
@@ -551,49 +554,42 @@ return function(problemSpec)
         if problemSpec:UsesLambda() then
             terra kernels.PCGComputeCtC(pd : PlanData)
                 var idx : Index
-                if idx:initFromCUDAParams() then                         
-                    if not fmap.exclude(idx,pd.parameters) then 
-                        var CtC = fmap.computeCtC(idx, pd.parameters)
-                        pd.CtC(idx) = CtC
-                    end        
+                if idx:initFromCUDAParams() and not fmap.exclude(idx,pd.parameters) then 
+                    var CtC = fmap.computeCtC(idx, pd.parameters)
+                    pd.CtC(idx) = CtC    
                 end 
             end
 
             terra kernels.PCGSaveSSq(pd : PlanData)
                 var idx : Index
-                if idx:initFromCUDAParams() then                         
-                    if not fmap.exclude(idx,pd.parameters) then 
-                        pd.SSq(idx) = pd.preconditioner(idx)
-                    end        
+                if idx:initFromCUDAParams() and not fmap.exclude(idx,pd.parameters) then 
+                    pd.SSq(idx) = pd.preconditioner(idx)       
                 end 
             end
 
             terra kernels.PCGFinalizeDiagonal(pd : PlanData)
                 var idx : Index
                 var d = [opt_float](0.0f)
-                if idx:initFromCUDAParams() then
-                    if not fmap.exclude(idx,pd.parameters) then 
-                        var unclampedCtC = pd.CtC(idx)
-                        var invS_iiSq : unknownElement = opt_float(1.0f)
-                        if [JacobiScaling == JacobiScalingType.ONCE_PER_SOLVE] then
-                            invS_iiSq = opt_float(1.0f) / pd.SSq(idx)
-                        elseif [JacobiScaling == JacobiScalingType.EVERY_ITERATION] then 
-                            invS_iiSq = opt_float(1.0f) / pd.preconditioner(idx)
-                        end -- else if  [JacobiScaling == JacobiScalingType.NONE] then invS_iiSq == 1
-                        var minVal = square(pd.parameters.min_lm_diagonal) * invS_iiSq
-                        var maxVal = square(pd.parameters.max_lm_diagonal) * invS_iiSq
-                        var CtC = clamp(unclampedCtC, minVal, maxVal)
-                        pd.CtC(idx) = CtC
-                        
-                        -- Calculate true preconditioner, taking into account the diagonal
-                        var pre = opt_float(1.0f) / (CtC+pd.parameters.trust_region_radius*unclampedCtC) 
-                        pd.preconditioner(idx) = pre
-                        var residuum = pd.r(idx)
-                        var p = pre*residuum    -- apply pre-conditioner M^-1
-                        pd.p(idx) = p
-                        d = residuum:dot(p)
-                        
-                    end        
+                if idx:initFromCUDAParams() and not fmap.exclude(idx,pd.parameters) then 
+                    var unclampedCtC = pd.CtC(idx)
+                    var invS_iiSq : unknownElement = opt_float(1.0f)
+                    if [JacobiScaling == JacobiScalingType.ONCE_PER_SOLVE] then
+                        invS_iiSq = opt_float(1.0f) / pd.SSq(idx)
+                    elseif [JacobiScaling == JacobiScalingType.EVERY_ITERATION] then 
+                        invS_iiSq = opt_float(1.0f) / pd.preconditioner(idx)
+                    end -- else if  [JacobiScaling == JacobiScalingType.NONE] then invS_iiSq == 1
+                    var minVal = square(pd.parameters.min_lm_diagonal) * invS_iiSq
+                    var maxVal = square(pd.parameters.max_lm_diagonal) * invS_iiSq
+                    var CtC = clamp(unclampedCtC, minVal, maxVal)
+                    pd.CtC(idx) = CtC
+                    
+                    -- Calculate true preconditioner, taking into account the diagonal
+                    var pre = opt_float(1.0f) / (CtC+pd.parameters.trust_region_radius*unclampedCtC) 
+                    pd.preconditioner(idx) = pre
+                    var residuum = pd.r(idx)
+                    var p = pre*residuum    -- apply pre-conditioner M^-1
+                    pd.p(idx) = p
+                    d = residuum:dot(p)     
                 end    
                 unknownWideReduction(idx,d,pd.scanAlphaNumerator)
             end
@@ -1363,7 +1359,6 @@ return function(problemSpec)
 		var pd = PlanData.alloc()
 		pd.plan.data = pd
 		pd.plan.init,pd.plan.step,pd.plan.cost = init,step,cost
-
 		pd.delta:initGPU()
 		pd.r:initGPU()
         pd.b:initGPU()

@@ -31,8 +31,3 @@ local d = abcd(3)
 
 
 Energy(y_i - a * ( x_i * x_i + x_i * b) / (x_i * x_i + x_i * c + d) )
-
--- Hack to get example to work with no image domain energy
-local zero = 0.0
-local zeroIm = ComputedImage("zero",{U},zero)
-Energy(zeroIm(0)*(funcParams(0)(0) + funcParams(0)(1) + funcParams(0)(2) + funcParams(0)(3)))

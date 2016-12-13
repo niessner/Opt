@@ -27,10 +27,4 @@ local b = abc(1)
 local c = abc(2)
 --local d = abc(3)
 
---Energy(y_i - ad.pow(2.7182818284590452353603, -a * x_i) / (b + c * x_i))
 Energy(y_i - a / (1.0 + ad.exp(b - c * x_i)))
-
--- Hack to get example to work with no image domain energy
-local zero = 0.0
-local zeroIm = ComputedImage("zero",{U},zero)
-Energy(zeroIm(0)*(funcParams(0)(0) + funcParams(0)(1) + funcParams(0)(2)))
