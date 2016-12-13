@@ -141,9 +141,6 @@
       <Filter>Terra</Filter>
     </None>
     <None Include="default.SFSSolverParameters" />
-    <None Include="opt_precision.t">
-      <Filter>Terra</Filter>
-    </None>
     <None Include="..\..\API\src\precision.t">
       <Filter>Terra</Filter>
     </None>

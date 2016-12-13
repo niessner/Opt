@@ -1,11 +1,20 @@
+package.path = package.path .. ';../shared/?.t;'
+require("opt_precision")
+
+if OPT_DOUBLE_PRECISION then
+    OPT_FLOAT3 = double3
+else
+    OPT_FLOAT3 = float3
+end
+
 local adP = ad.ProblemSpec()
 local P = adP.P
 local N = opt.Dim("N",0)
 
 local w_fitSqrt = adP:Param("w_fit", float, 0)
 local w_regSqrt = adP:Param("w_reg", float, 1)
-local X = adP:Unknown("X", opt.float3,{N},2)
-local A = adP:Image("A", opt.float3,{N},3)
+local X = adP:Unknown("X", OPT_FLOAT3,{N},2)
+local A = adP:Image("A", OPT_FLOAT3,{N},3)
 local G = adP:Graph("G", 4, "v0", {N}, 5, --current vertex
                             "v1", {N}, 7, --neighboring vertex
                             "v2", {N}, 9, --prev neighboring vertex

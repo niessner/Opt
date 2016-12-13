@@ -18,9 +18,18 @@ std::unique_ptr<T> make_unique(Args&&... args) {
     return std::unique_ptr<T>(new T(std::forward<Args>(args)...));
 }
 
+
+struct CombinedSolverParameters {
+    bool useCUDA = false;
+    bool useTerra = false;
+    bool useOpt = true;
+    bool useOptLM = false;
+    bool useCeres = false;
+};
+
 class ImageSolver {
 private:
-
+    CombinedSolverParameters m_params;
     std::shared_ptr<SimpleBuffer>   m_result;
     SFSSolverInput                  m_solverInputGPU;
     SFSSolverInput                  m_solverInputCPU;
@@ -33,10 +42,19 @@ private:
     std::vector<SolverIteration> m_ceresIters;
     std::vector<SolverIteration> m_optGNIters;
     std::vector<SolverIteration> m_optLMIters;
+    std::vector<SolverIteration> m_optTerraIters;
 
 public:
-    ImageSolver(const SFSSolverInput& inputGPU, const SFSSolverInput& inputCPU)
+    ImageSolver(const SFSSolverInput& inputGPU, const SFSSolverInput& inputCPU, bool performanceRun)
 	{
+        if (performanceRun) {
+            m_params.useCUDA = false;
+            m_params.useTerra = false;
+            m_params.useOpt = true;
+            m_params.useOptLM = true;
+            m_params.useCeres = true;
+        }
+
         m_solverInputGPU = inputGPU;
         m_solverInputCPU = inputCPU;
 
@@ -59,34 +77,30 @@ public:
 
     std::shared_ptr<SimpleBuffer> solve()
     {
-        const bool useCUDA = false;
-        const bool useTerra = false;
-        const bool useOpt = true;
-        const bool useOptLM = true;
-        const bool useCeres = true ;
 
-        if (useCUDA)
+
+        if (m_params.useCUDA)
         {
             std::cout << "CUDA" << std::endl;
             resetGPUMemory();
             m_cudaSolver->solve(m_result, m_solverInputGPU);
         }
 
-        if (useTerra)
+        if (m_params.useTerra)
         {
             std::cout << "\n\nTERRA" << std::endl;
             resetGPUMemory();
-            m_terraSolver->solve(m_result, m_solverInputGPU, m_optGNIters);
+            m_terraSolver->solve(m_result, m_solverInputGPU, m_optTerraIters);
         }
 
-        if (useOpt)
+        if (m_params.useOpt)
         {
             std::cout << "\n\nOPT" << std::endl;
             resetGPUMemory();
             m_optSolver->solve(m_result, m_solverInputGPU, m_optGNIters);
         }
 
-        if (useOptLM)
+        if (m_params.useOptLM)
         {
             std::cout << "\n\nOPT LM" << std::endl;
             resetGPUMemory();
@@ -94,7 +108,7 @@ public:
         }
 
 #ifdef USE_CERES
-        if (useCeres)
+        if (m_params.useCeres)
         {
             std::cout << "\n\nCERES" << std::endl;
             m_result = std::shared_ptr<SimpleBuffer>(new SimpleBuffer(*m_solverInputCPU.initialUnknown.get(), false));

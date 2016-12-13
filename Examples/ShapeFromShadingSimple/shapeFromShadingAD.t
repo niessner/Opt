@@ -1,4 +1,4 @@
-
+package.path = package.path .. ';../shared/?.t;'
 require("opt_precision")
 
 

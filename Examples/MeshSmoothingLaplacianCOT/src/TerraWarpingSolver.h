@@ -3,7 +3,8 @@
 #include <cassert>
 
 #include "cutil.h"
-
+#include "../../shared/CudaArray.h"
+#include "../../shared/Precision.h"
 extern "C" {
 #include "Opt.h"
 }
@@ -51,6 +52,8 @@ public:
 		int* h_xCoords = (int*)malloc(sizeof(int)*(edgeCount * 3));
 		cutilSafeCall(cudaMemcpy(h_xCoords, d_xCoords, sizeof(int)*(edgeCount * 3), cudaMemcpyDeviceToHost));
 		h_xCoords[edgeCount] = vertexCount;
+
+        m_unknownCount = vertexCount;
 
 		// Convert to our edge format
 		std::vector<int> h_headX;
@@ -102,7 +105,7 @@ public:
 
 	}
 
-	void solve(float3* d_unknown, float3* d_target, unsigned int nNonLinearIterations, unsigned int nLinearIterations, unsigned int nBlockIterations, float weightFit, float weightReg)
+	void solve(float3* d_unknown, float3* d_target, unsigned int nNonLinearIterations, unsigned int nLinearIterations, unsigned int nBlockIterations, float weightFit, float weightReg, std::vector<SolverIteration>& iters)
 	{
 
 		void* solverParams[] = {  &nNonLinearIterations, &nLinearIterations, &nBlockIterations };
@@ -110,11 +113,52 @@ public:
 		float weightFitSqrt = sqrt(weightFit);
 		float weightRegSqrt = sqrt(weightReg);
 		int * d_zero = d_headY;
-		void* problemParams[] = { &weightFitSqrt, &weightRegSqrt, d_unknown, d_target , &edgeCount, d_headX, d_zero, d_tailX, d_zero, d_prevX, d_zero, d_nextX, d_zero};
-		Opt_ProblemSolve(m_optimizerState, m_plan, problemParams, solverParams);
+
+
+        std::vector<void*> problemParams;
+        CudaArray<double> d_unknownDouble, d_targetDouble;
+        if (OPT_DOUBLE_PRECISION) {
+            auto getDoubleArrayFromFloatDevicePointer = [](CudaArray<double>& doubleArray, float* d_ptr, int size) {
+                std::vector<float> v;
+                v.resize(size);
+                cutilSafeCall(cudaMemcpy(v.data(), d_ptr, size*sizeof(float), cudaMemcpyDeviceToHost));
+                std::vector<double> vDouble;
+                vDouble.resize(size);
+                for (int i = 0; i < size; ++i) {
+                    vDouble[i] = (double)v[i];
+                }
+                doubleArray.update(vDouble);
+            };
+
+
+            getDoubleArrayFromFloatDevicePointer(d_unknownDouble, (float*)d_unknown, m_unknownCount * 3);
+            getDoubleArrayFromFloatDevicePointer(d_targetDouble, (float*)d_target, m_unknownCount * 3);
+
+
+            problemParams = { &weightFitSqrt, &weightRegSqrt, d_unknownDouble.data(), d_targetDouble.data(), &edgeCount, d_headX, d_zero, d_tailX, d_zero, d_prevX, d_zero, d_nextX, d_zero };
+        }
+        else {
+            problemParams = { &weightFitSqrt, &weightRegSqrt, d_unknown, d_target, &edgeCount, d_headX, d_zero, d_tailX, d_zero, d_prevX, d_zero, d_nextX, d_zero };
+        }
+
+		launchProfiledSolve(m_optimizerState, m_plan, problemParams.data(), solverParams, iters);
+
+
+        if (OPT_DOUBLE_PRECISION) {
+            size_t size = m_unknownCount * 3;
+            std::vector<double> vDouble(size);
+            std::vector<float> v(size);
+
+            cutilSafeCall(cudaMemcpy(vDouble.data(), d_unknownDouble.data(), size*sizeof(double), cudaMemcpyDeviceToHost));
+            for (int i = 0; i < size; ++i) {
+                v[i] = (float)vDouble[i];
+            }
+            cutilSafeCall(cudaMemcpy(d_unknown, v.data(), size*sizeof(float), cudaMemcpyHostToDevice));
+        }
 	}
 
 private:
+    int m_unknownCount;
     Opt_State*	    m_optimizerState;
 	Opt_Problem*    m_problem;
     Opt_Plan*		m_plan;

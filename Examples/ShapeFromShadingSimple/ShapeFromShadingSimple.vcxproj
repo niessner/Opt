@@ -182,7 +182,6 @@ xcopy /Y /D "..\..\API\release\include\*.h" "."</Command>
   <ItemGroup>
     <None Include="..\..\API\src\precision.t" />
     <None Include="default.SFSSolverParameters" />
-    <None Include="opt_precision.t" />
     <None Include="shapeFromShading.t" />
     <None Include="shapeFromShadingAD.t" />
   </ItemGroup>

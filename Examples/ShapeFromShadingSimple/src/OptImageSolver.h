@@ -18,8 +18,6 @@ public:
 		m_optimizerState = Opt_NewState();
 		m_problem = Opt_ProblemDefine(m_optimizerState, terraFile.c_str(), optName.c_str());
 
-        
-
 		uint32_t dims[] = { width, height };
 
         m_plan = Opt_ProblemPlan(m_optimizerState, m_problem, dims);

@@ -1,7 +1,7 @@
 #pragma once
 
-#define RUN_OPT 1
-
+#include "../../shared/Precision.h"
+#include "../../shared/OptUtils.h"
 #include "mLibInclude.h"
 
 #include <cuda_runtime.h>
@@ -17,10 +17,17 @@ struct EdgeCOT {
 	unsigned int v3;	//next neigh
 };
 
+struct CombinedSolverParameters {
+    unsigned int nonLinearIter = 2;
+    unsigned int linearIter = 25;
+    bool useOptGN = true;
+    bool useOptLM = false;
+};
+
 class ImageWarping
 {
 public:
-	ImageWarping(const SimpleMesh* mesh)
+	ImageWarping(const SimpleMesh* mesh, bool performanceRun)
 	{
 		m_result = *mesh;
 		m_initial = m_result;
@@ -35,9 +42,13 @@ public:
 		cutilSafeCall(cudaMalloc(&d_neighbourIdx, sizeof(int) * 2 * E * 3));
 		cutilSafeCall(cudaMalloc(&d_neighbourOffset, sizeof(int)*(N + 1)));
 
+        m_params.useOptLM = performanceRun;
+
+
 		resetGPUMemory();
 		std::cout << "compiling... ";
-		m_optWarpingSolver = new TerraWarpingSolver(N, 2 * E, d_neighbourIdx, d_neighbourOffset, "MeshSmoothingLaplacianAD.t", "gaussNewtonGPU");
+		m_optWarpingSolver = std::unique_ptr<TerraWarpingSolver>(new TerraWarpingSolver(N, 2 * E, d_neighbourIdx, d_neighbourOffset, "MeshSmoothingLaplacianAD.t", "gaussNewtonGPU"));
+        m_optLMWarpingSolver = std::unique_ptr<TerraWarpingSolver>(new TerraWarpingSolver(N, 2 * E, d_neighbourIdx, d_neighbourOffset, "MeshSmoothingLaplacianAD.t", "LMGPU"));
 		std::cout << " done!" << std::endl;
 	}
 
@@ -122,8 +133,6 @@ public:
 		cutilSafeCall(cudaFree(d_numNeighbours));
 		cutilSafeCall(cudaFree(d_neighbourIdx));
 		cutilSafeCall(cudaFree(d_neighbourOffset));
-
-		SAFE_DELETE(m_optWarpingSolver);
 	}
 
 	SimpleMesh* solve()
@@ -131,20 +140,37 @@ public:
 		float weightFit = 1.0f;
 		float weightReg = 4.5f;
 
-		unsigned int nonLinearIter = 2;
-		unsigned int linearIter = 25;
 
+        std::vector<SolverIteration> ceresIters, optIters, optLMIters;
 
-#		if RUN_OPT
-		std::cout << "=========OPT=========" << std::endl;
-		resetGPUMemory();
-		unsigned int numIter = 1;
-		for (unsigned int i = 0; i < numIter; i++) {
-			m_optWarpingSolver->solve(d_vertexPosFloat3, d_vertexPosTargetFloat3, nonLinearIter, linearIter, 1, weightFit, weightReg);
-		}
-		copyResultToCPUFromFloat3();
-#		endif
+        if (m_params.useOptGN) {
+            std::cout << "=========OPT=========" << std::endl;
+            resetGPUMemory();
+            unsigned int numIter = 1;
+            for (unsigned int i = 0; i < numIter; i++) {
+                m_optWarpingSolver->solve(d_vertexPosFloat3, d_vertexPosTargetFloat3, m_params.nonLinearIter, m_params.linearIter, 1, weightFit, weightReg, optIters);
+            }
+            copyResultToCPUFromFloat3();
+        }
 
+        if (m_params.useOptLM) {
+            std::cout << "=========OPT LM=========" << std::endl;
+            resetGPUMemory();
+            unsigned int numIter = 1;
+            for (unsigned int i = 0; i < numIter; i++) {
+                m_optLMWarpingSolver->solve(d_vertexPosFloat3, d_vertexPosTargetFloat3, m_params.nonLinearIter, m_params.linearIter, 1, weightFit, weightReg, optLMIters);
+            }
+            copyResultToCPUFromFloat3();
+        }
+
+        
+        std::string resultDirectory = "results/";
+#   if OPT_DOUBLE_PRECISION
+        std::string resultSuffix = "_double";
+#   else
+        std::string resultSuffix = "_float";
+#   endif
+        saveSolverResults(resultDirectory, resultSuffix, ceresIters, optIters, optLMIters);
 
 		return &m_result;
 	}
@@ -174,5 +200,8 @@ private:
 	int*	d_neighbourIdx;
 	int* 	d_neighbourOffset;
 
-	TerraWarpingSolver* m_optWarpingSolver;
+    CombinedSolverParameters m_params;
+
+	std::unique_ptr<TerraWarpingSolver> m_optWarpingSolver;
+    std::unique_ptr<TerraWarpingSolver> m_optLMWarpingSolver;
 };
