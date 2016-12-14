@@ -218,8 +218,8 @@ float CeresSolverWarping::solve(OPT_FLOAT2* h_x_float, OPT_FLOAT* h_a_float, OPT
     options.minimizer_progress_to_stdout = true;
 
     //faster methods
-    options.num_threads = 12;
-    options.num_linear_solver_threads = 12;
+    options.num_threads = 8;
+    options.num_linear_solver_threads = 8;
     options.linear_solver_type = ceres::LinearSolverType::SPARSE_NORMAL_CHOLESKY; //7.2s
 
 
