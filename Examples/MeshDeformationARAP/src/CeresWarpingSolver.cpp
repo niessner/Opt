@@ -243,8 +243,8 @@ float CeresWarpingSolver::solveGN(
     options.minimizer_progress_to_stdout = !performanceTest;
 
     //faster methods
-    options.num_threads = 12;
-    options.num_linear_solver_threads = 12;
+    options.num_threads = 8;
+    options.num_linear_solver_threads = 8;
     options.linear_solver_type = ceres::LinearSolverType::SPARSE_NORMAL_CHOLESKY; //7.2s
 	//options.trust_region_strategy_type = ceres::TrustRegionStrategyType::DOGLEG;
     //options.linear_solver_type = ceres::LinearSolverType::SPARSE_SCHUR; //10.0s

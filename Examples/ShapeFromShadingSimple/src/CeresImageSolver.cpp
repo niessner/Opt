@@ -474,8 +474,8 @@ void CeresImageSolver::solve(std::shared_ptr<SimpleBuffer> result, const SFSSolv
     //options.linear_solver_type = ceres::LinearSolverType::CGNR;
     //options.min_linear_solver_iterations = linearIterationMin;
 
-    options.num_threads = 12;
-    options.num_linear_solver_threads = 12;
+    options.num_threads = 8;
+    options.num_linear_solver_threads = 8;
 
     options.max_num_iterations = 10000;
     //options.linear_solver_type = ceres::LinearSolverType::SPARSE_SCHUR;
