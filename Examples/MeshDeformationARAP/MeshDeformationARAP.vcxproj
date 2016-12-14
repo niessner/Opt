@@ -14,7 +14,7 @@
     <ProjectGuid>{CA9DD020-FC04-44B1-8741-AFC2A99756D1}</ProjectGuid>
     <Keyword>Win32Proj</Keyword>
     <RootNamespace>DepthWithColor.D3D</RootNamespace>
-    <ProjectName>MeshDeformation</ProjectName>
+    <ProjectName>MeshDeformationARAP</ProjectName>
   </PropertyGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'" Label="Configuration">

@@ -79,8 +79,8 @@ testTable["ImageWarping"] = ("ImageWarping", "ImageWarping", "0", "perf", "")
 testTable["MeshDeformationARAP"] = ("MeshDeformationARAP", "MeshDeformation", "Armadillo20k.ply", "perf", "")
 testTable["ShapeFromShading"] = ("ShapeFromShadingSimple", "ShapeFromShadingSimple", "default", "perf", "")
 testTable["CotangentLaplacian"] = ("MeshSmoothingLaplacianCOT", "MeshSmoothingLaplacianCOT", "serapis.stl", "perf", "")
-
-performanceTests = [testTable["ShapeFromShading"], testTable["CotangentLaplacian"], testTable["ImageWarping"], testTable["MeshDeformationARAP"]]
+#  testTable["CotangentLaplacian"], 
+performanceTests = [testTable["MeshDeformationARAP"], testTable["ImageWarping"], testTable["ShapeFromShading"]]
 
 
 

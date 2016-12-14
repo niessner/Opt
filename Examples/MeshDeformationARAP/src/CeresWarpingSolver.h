@@ -40,7 +40,8 @@ inline float CeresWarpingSolver::solveGN(
     float3* vertexPosFloat3Urshape,
     float3* vertexPosTargetFloat3,
     float weightFit,
-    float weightReg)
+    float weightReg,
+	std::vector<SolverIteration>& iters)
 {
     return 0.0f;
 }
