@@ -1,12 +1,12 @@
 #!/bin/bash
 
 # Author: Michael Mara (mmara@cs.stanford.edu)
-# Created 11-20-2015
-# Last Edited 02-04-2016
+# Created 2015-11-20
+# Last Edited 2016-12-11
 
 
-foldernames=(SmoothingLaplacianFloat4Graph ImageWarping ShapeFromShadingSimple MeshDeformationARAP MeshDeformationED OpticalFlow PoissonImageEditing MeshSmoothingLaplacianCOT)
-programnames=(meshsmoothing imagewarping shapefromshading meshdeformation meshdeformation opticalflow imageediting meshsmoothing)
+foldernames=(ImageWarping IntrinsicLP MeshDeformationARAP MeshDeformationED MeshDeformationLARAP MeshSmoothingLaplacian MeshSmoothingLaplacianCOT OpticalFlow PoissonImageEdition RobustMeshDeformationARAP ShapeFromShadingSimple SmoothingLaplacianFloat4Graph SmoothingLP)
+programnames=(imagewarping imagewarping meshdeformation meshdeformation meshsmoothing meshsmoothing opticalflow imageediting meshdeformation shapefromshading imagewarping imagewarping)
 
 #foldernames=(MeshDeformationED)
 #programnames=(meshdeformation)
