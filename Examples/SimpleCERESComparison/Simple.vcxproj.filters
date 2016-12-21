@@ -51,6 +51,9 @@
     <None Include="lanczos2.t">
       <Filter>TODOs</Filter>
     </None>
+    <None Include="problem_setup.t">
+      <Filter>opt</Filter>
+    </None>
   </ItemGroup>
   <ItemGroup>
     <Filter Include="opt">

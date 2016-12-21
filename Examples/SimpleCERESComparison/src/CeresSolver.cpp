@@ -40,46 +40,23 @@ struct TermDefault
     double y;
 };
 
-struct HackRegularizerTerm
+struct TermMirsa1a
 {
-    HackRegularizerTerm(double weight) : m_weight(weight) {}
-
-    template <typename T>
-    bool operator()(const T* const funcParams, T* residuals) const
-    {
-
-        residuals[0] = (funcParams[0]*funcParams[2] - funcParams[1]) * m_weight;
-        return true;
-    }
-
-    static ceres::CostFunction* Create(double weight)
-    {
-        return (new ceres::AutoDiffCostFunction<HackRegularizerTerm, 1, 3>(
-            new HackRegularizerTerm(weight)));
-    }
-    double m_weight;
-};
-
-struct TermMirsa
-{
-	TermMirsa(double x, double y)
-		: x(x), y(y) {}
+    TermMirsa1a(double x, double y) : x(x), y(y) {}
 
 	template <typename T>
-	bool operator()(const T* const funcParams, T* residuals) const
-	{
-		residuals[0] = y - funcParams[0] * ((T)1.0 - exp(-funcParams[1] * x));
+	bool operator()(const T* const b, T* residuals) const {
+        residuals[0] = y - b[0] * ((T)1.0 - exp(-b[1] * x));
 		return true;
 	}
 
 	static ceres::CostFunction* Create(double x, double y)
 	{
-		return (new ceres::AutoDiffCostFunction<TermMirsa, 1, 2>(
-			new TermMirsa(x, y)));
+        return (new ceres::AutoDiffCostFunction<TermMirsa1a, 1, 2>(
+            new TermMirsa1a(x, y)));
 	}
 
-	double x;
-	double y;
+	double x; double y;
 };
 
 struct TermBennet5

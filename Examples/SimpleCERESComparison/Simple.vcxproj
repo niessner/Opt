@@ -180,6 +180,7 @@ xcopy /Y /D "..\..\API\release\include\*.h" "."</Command>
     <None Include="mgh09.t" />
     <None Include="misra.t" />
     <None Include="opt_precision.t" />
+    <None Include="problem_setup.t" />
     <None Include="rat42.t" />
     <None Include="roszman1.t" />
   </ItemGroup>
