@@ -9,6 +9,13 @@
 #include "OpenMesh.h"
 #include "CudaArray.h"
 
+// From the future (C++14)
+template<typename T, typename... Args>
+std::unique_ptr<T> make_unique(Args&&... args) {
+    return std::unique_ptr<T>(new T(std::forward<Args>(args)...));
+}
+
+
 static bool operator==(const float3& v0, const float3& v1) {
     return (v0.x == v1.x) && (v0.y == v1.y) && (v0.z == v1.z);
 }
@@ -396,7 +403,7 @@ class ImageWarping
 	private:
 
         std::unique_ptr<ml::NearestNeighborSearchFLANN<float>> generateAccelerationStructure(const SimpleMesh& mesh) {
-            auto nnData = std::make_unique<ml::NearestNeighborSearchFLANN<float>>(max(50, 4 * MAX_K), 1);
+            auto nnData = make_unique<ml::NearestNeighborSearchFLANN<float>>(max(50, 4 * MAX_K), 1);
             unsigned int N = (unsigned int)mesh.n_vertices();
 
             assert(m_spuriousIndices.size() == m_noisyOffsets.size());

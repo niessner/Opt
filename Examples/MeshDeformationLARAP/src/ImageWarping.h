@@ -97,7 +97,7 @@ class ImageWarping
 				std::vector<VertexHandle> vhs;
 				for (SimpleMesh::FaceVertexIter v_it = meshSphere.fv_begin(FaceHandle(k)); v_it != meshSphere.fv_end(FaceHandle(k)); ++v_it)
 				{
-					vhs.push_back(VertexHandle(VertexHandle(v_it).idx() + currentN));
+					vhs.push_back(VertexHandle(v_it->idx() + currentN));
 				}
 				out.add_face(vhs);
 			}
@@ -133,7 +133,7 @@ class ImageWarping
 				std::vector<VertexHandle> vhs;
 				for (SimpleMesh::FaceVertexIter v_it = meshCone.fv_begin(FaceHandle(k)); v_it != meshCone.fv_end(FaceHandle(k)); ++v_it)
 				{
-					vhs.push_back(VertexHandle(VertexHandle(v_it).idx() + currentN));
+					vhs.push_back(VertexHandle(v_it->idx() + currentN));
 				}
 				out.add_face(vhs);
 			}

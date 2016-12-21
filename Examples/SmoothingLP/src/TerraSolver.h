@@ -1,12 +1,12 @@
 #pragma once
 
-#include "PrecisionUtil.h"
+#include "../../shared/Precision.h"
 #include <cassert>
 
 #include "cutil.h"
 
 extern "C" {
-#include "../Opt.h"
+#include "Opt.h"
 }
 
 class TerraSolver {

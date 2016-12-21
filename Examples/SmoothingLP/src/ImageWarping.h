@@ -4,7 +4,7 @@
 
 #include <cuda_runtime.h>
 #include <cudaUtil.h>
-#include "PrecisionUtil.h"
+#include "../../shared/Precision.h"
 #include "CUDAWarpingSolver.h"
 #include "TerraSolver.h"
 
