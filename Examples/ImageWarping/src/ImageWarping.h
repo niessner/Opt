@@ -130,14 +130,16 @@ public:
 
 		resetGPU();
 
-
-        m_params.useCUDA = false;
-        m_params.useTerra = false;
-        m_params.useAD = true;
-        m_params.useLMAD = true;
-        m_params.useCeres = true;
-        m_params.earlyOut = true;
-        m_params.nonLinearIter = 50;
+		if (performanceRun) {
+			m_params.useCUDA = false;
+			m_params.useTerra = false;
+			m_params.useAD = true;
+			m_params.useLMAD = true;
+			m_params.useCeres = true;
+			m_params.earlyOut = true;
+			m_params.nonLinearIter = 50;
+			m_params.linearIter = 500;
+		}
 
 
         if (m_params.useCUDA)
