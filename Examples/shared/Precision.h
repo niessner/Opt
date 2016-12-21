@@ -5,7 +5,7 @@
 // opt_precision.t true/false
 // precision.t double/float
 
-#define OPT_DOUBLE_PRECISION 1
+#define OPT_DOUBLE_PRECISION 0
 
 #if OPT_DOUBLE_PRECISION
 #   define OPT_FLOAT double

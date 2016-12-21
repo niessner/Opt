@@ -14,6 +14,12 @@
 #include "../../shared/SolverIteration.h"
 #include "../../shared/Precision.h"
 
+// From the future (C++14)
+template<typename T, typename... Args>
+std::unique_ptr<T> make_unique(Args&&... args) {
+    return std::unique_ptr<T>(new T(std::forward<Args>(args)...));
+}
+
 
 struct CombinedSolverParameters {
     bool useCUDA = false;
@@ -67,9 +73,9 @@ class ImageWarping
             }
 
 			m_warpingSolver	= new CUDAWarpingSolver(N);
-			//m_terraWarpingSolver = std::make_unique<TerraWarpingSolver>(N, 2 * E, d_neighbourIdx, d_neighbourOffset, "MeshDeformation.t", "gaussNewtonGPU");				
-            m_optWarpingSolver = std::make_unique<TerraWarpingSolver>(N, 2 * E, d_neighbourIdx, d_neighbourOffset, "MeshDeformationAD.t", "gaussNewtonGPU");
-            m_optLMWarpingSolver = std::make_unique<TerraWarpingSolver>(N, 2 * E, d_neighbourIdx, d_neighbourOffset, "MeshDeformationAD.t", "LMGPU");
+			//m_terraWarpingSolver = make_unique<TerraWarpingSolver>(N, 2 * E, d_neighbourIdx, d_neighbourOffset, "MeshDeformation.t", "gaussNewtonGPU");				
+            m_optWarpingSolver = make_unique<TerraWarpingSolver>(N, 2 * E, d_neighbourIdx, d_neighbourOffset, "MeshDeformationAD.t", "gaussNewtonGPU");
+            m_optLMWarpingSolver = make_unique<TerraWarpingSolver>(N, 2 * E, d_neighbourIdx, d_neighbourOffset, "MeshDeformationAD.t", "LMGPU");
             m_ceresWarpingSolver = new CeresWarpingSolver(m_initial);
 		} 
 

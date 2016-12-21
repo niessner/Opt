@@ -3,7 +3,7 @@ OBJS = build/LandMark.o build/LandMarkSet.o build/TerraSolver.o build/mLibSource
 
 UNAME := $(shell uname)
 ifeq ($(UNAME), Darwin)
-  LFLAGS += -L$(MLIB_EXTERNAL)/libsOSX  -Wl,-rpath,$(MLIB_EXTERNAL)/libsOSX
+  LFLAGS += -L$(MLIB_EXTERNAL)/libsOSX -Wl,-rpath,$(MLIB_EXTERNAL)/libsOSX
 endif
 
 LFLAGS += -lOpenMeshCore -lOpenMeshTools
