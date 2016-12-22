@@ -6,20 +6,21 @@ dataPath = "data/"
 dataSheets = [f for f in listdir(originalPath) if isfile(join(originalPath, f)) and ".dat" in f]
 
 ceresStructStubs = []
+ceresSelectorStubs = []
 
 def makeCeresStruct(name, codeSnippet, paramCount):
-	ceresCode = "struct Term" + name + "\n{\nTerm" + name
+	ceresCode = "struct Term" + name + "\n{\n\t\tTerm" + name
 	ceresCode += """(double x, double y) : x(x), y(y) {}
 	template <typename T>
 	bool operator()(const T* const funcParams, T* residuals) const
 	{
-		/*\n"""
+		/* """
 	ceresCode += codeSnippet
-	ceresCode += "\t\t*/\n"
+	ceresCode += " */\n"
 	for i in range(0,paramCount):
 		ceresCode += "\t\tT b" + str(i+1) + " = funcParams[" + str(i) +"];\n"
-	ceresCode += "residuals[0] = " + codeSnippet
-	ceresCode += """\t\treturn true;
+	ceresCode += "\t\tresiduals[0] = " + codeSnippet.replace("=", "-")[:-6]
+	ceresCode += """;\n\t\treturn true;
 	}
 	static ceres::CostFunction* Create(double x, double y)
 	{
@@ -27,8 +28,11 @@ def makeCeresStruct(name, codeSnippet, paramCount):
 			new Term""" + name + """(x, y)));
 	}
 	double x, y;
-};"""
+};\n\n"""
 	return ceresCode
+
+def makeCeresSelector(name):
+	return 'if (problemInfo.baseName == "' + name.lower() + '") costFunction = Term' + name + "::Create(functionData[i].x, functionData[i].y);"
 
 for fname in dataSheets:
 	with open(join(originalPath, fname)) as f:
@@ -57,6 +61,7 @@ for fname in dataSheets:
 			start1.append(float(tokens[2]))
 			start2.append(float(tokens[3]))
 			solution.append(float(tokens[4]))
+
 		paramCount = len(start1)
 		cppCode = '\tproblems.push_back(NLLSProblem("' + name.lower()
 		cppCode += '", ' + str(paramCount) + ", { "
@@ -65,9 +70,19 @@ for fname in dataSheets:
 		cppCode += ", ".join([str(x) for x in solution])
 		cppCode += "}));"
 
-		ceresStructStubs.append(makeCeresStruct(name, paramCount, codeSnippet))
+		codeStart = [i for i,line in enumerate(sheet) if "Model:" in line][0] + 3
+		codeSnippet = sheet[codeStart].lstrip()
+		for line in sheet[codeStart+1:]:
+			if "b" not in line:
+				break
+			codeSnippet += line
+		codeSnippet = codeSnippet.rstrip()
+		ceresStructStubs.append(makeCeresStruct(name, codeSnippet, paramCount))
+		ceresSelectorStubs.append(makeCeresSelector(name))
 
 		print(cppCode)
 		#print(outputfname)
 		with open(join(dataPath, outputfname), "w") as outputFile:
 			outputFile.write(resultContents)
+print("".join(ceresStructStubs))
+print("\n".join(ceresSelectorStubs))
