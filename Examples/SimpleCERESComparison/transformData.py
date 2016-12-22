@@ -18,7 +18,28 @@ for fname in dataSheets:
 					break
 		cleanData = [" ".join([str(float(x)) for x in line.split()]) for line in sheet[dataStartLine:]]
 		resultContents = "\n".join(cleanData)
-		outputfname = fname[:-4].lower() + ".txt"
+		name = fname[:-4].lower()
+		outputfname = name + ".txt"
+
+		valuestart = [i for i,line in enumerate(sheet) if "Start 1" in line][0] + 1
+		start1 = []
+		start2 = []
+		solution = []
+		for line in sheet[valuestart:]:
+			tokens = line.split()
+			if len(tokens) == 0 or not tokens[0].startswith("b"):
+				break
+			start1.append(float(tokens[2]))
+			start2.append(float(tokens[3]))
+			solution.append(float(tokens[4]))
+
+		cppCode = '\tproblems.push_back(NLLSProblem("' + name
+		cppCode += '", ' + str(len(start1)) + ", { "
+		cppCode += ", ".join([str(x) for x in start1])
+		cppCode += " }, { "
+		cppCode += ", ".join([str(x) for x in solution])
+		cppCode += "}));"
+		print(cppCode)
 		#print(outputfname)
 		with open(join(dataPath, outputfname), "w") as outputFile:
 			outputFile.write(resultContents)
