@@ -28,8 +28,8 @@ int main(int argc, const char * argv[])
     solverInputGPU.parameters.nLinIterations = 10;
 
 	if (performanceRun) {
-		solverInputGPU.parameters.nNonLinearIterations = 60;
-		solverInputGPU.parameters.nLinIterations = 100;
+		solverInputGPU.parameters.nNonLinearIterations = 200;
+		solverInputGPU.parameters.nLinIterations = 10;
 	}
 
     solverInputGPU.targetDepth->savePLYMesh("sfsInitDepth.ply");

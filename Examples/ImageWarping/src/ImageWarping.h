@@ -117,7 +117,7 @@ float *wt0, float *wt1, float *wt2) {
 
 class ImageWarping {
 public:
-    ImageWarping(const ColorImageR32& image, const ColorImageR32G32B32& imageColor, const ColorImageR32& imageMask, std::vector<std::vector<int>>& constraints, bool performanceRun) : m_constraints(constraints){
+	ImageWarping(const ColorImageR32& image, const ColorImageR32G32B32& imageColor, const ColorImageR32& imageMask, std::vector<std::vector<int>>& constraints, bool performanceRun, bool lmOnlyFullSolve) : m_constraints(constraints){
 		m_image = image;
 		m_imageColor = imageColor;
 		m_imageMask = imageMask;
@@ -139,6 +139,12 @@ public:
 			m_params.earlyOut = true;
 			m_params.nonLinearIter = 50;
 			m_params.linearIter = 500;
+
+		}
+		if (lmOnlyFullSolve) {
+			m_params.useAD = false;
+			m_params.useLMAD = true;
+			m_params.linearIter = 1000000000;
 		}
 
 
