@@ -1,5 +1,5 @@
-UNKNOWN_COUNT = 4
 require("problem_setup")
-
+problemsetup(4,2)
 -- y = (b1/b2) * exp[-0.5*((x-b3)/b2)**2]  +  e
-Energy(y - ((b1/b2) * ad.exp(-0.5*((x-b3)/b2)**2))
+terms:insert(y - ((b1/b2) * ad.exp(-0.5*((x-b3)/b2)**2))
+return S:Cost(unpack(terms))
