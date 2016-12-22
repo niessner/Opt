@@ -99,6 +99,8 @@
     <None Include="terra\thurber.t">
       <Filter>opt</Filter>
     </None>
+    <None Include="..\..\API\src\precision.t" />
+    <None Include="opt_precision.t" />
   </ItemGroup>
   <ItemGroup>
     <Filter Include="opt">

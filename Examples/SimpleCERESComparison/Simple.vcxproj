@@ -171,6 +171,8 @@ xcopy /Y /D "..\..\API\release\include\*.h" "."</Command>
     <Reference Include="System.Xml" />
   </ItemGroup>
   <ItemGroup>
+    <None Include="..\..\API\src\precision.t" />
+    <None Include="opt_precision.t" />
     <None Include="terra\bennet5.t" />
     <None Include="terra\boxbod.t" />
     <None Include="terra\chwirut1.t" />

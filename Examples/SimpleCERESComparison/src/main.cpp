@@ -11,7 +11,7 @@
 #include <direct.h>
 #endif
 
-//http://www.itl.nist.gov/div898/strd/nls/nls_main.shtml
+// http://www.itl.nist.gov/div898/strd/nls/nls_main.shtml
 
 using namespace std;
 
