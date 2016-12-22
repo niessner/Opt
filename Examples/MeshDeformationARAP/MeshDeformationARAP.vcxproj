@@ -167,6 +167,7 @@ xcopy /Y /D "..\..\API\release\include\*.h" "."</Command>
   </ItemGroup>
   <ItemGroup>
     <None Include="..\..\API\src\precision.t" />
+    <None Include="..\shared\opt_precision.t" />
     <None Include="MeshDeformationAD.t" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />

@@ -28,3 +28,8 @@ local c = abc(2)
 
 
 Energy(y_i - a * ad.pow(b + x_i, -1.0 / c))
+
+-- Hack to get example to work with no image domain energy
+local zero = 0.0
+local zeroIm = ComputedImage("zero",{U},zero)
+Energy(zeroIm(0)*(funcParams(0)(0) + funcParams(0)(1) + funcParams(0)(2)))

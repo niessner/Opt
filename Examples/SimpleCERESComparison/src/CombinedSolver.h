@@ -18,7 +18,7 @@ class CombinedSolver {
 public:
 	CombinedSolver(const NLLSProblem &problem, std::vector<double2> dataPoints) {
 
-		std::string optProblemFilename = problem.baseName + ".t";
+		std::string optProblemFilename = "terra/" + problem.baseName + ".t";
 		if (useProblemDefault) optProblemFilename = "curveFitting.t";
 		
         m_ceresDataPoints = dataPoints;
@@ -47,8 +47,6 @@ public:
 		{
 			*((OPT_FLOAT*)&unknowns[0] + i) = (OPT_FLOAT)((double*)&m_functionParametersGuess + i)[0];
 		}
-        //unknowns[0].x = (OPT_FLOAT)m_functionParametersGuess.x;
-        //unknowns[0].y = (OPT_FLOAT)m_functionParametersGuess.y;
         d_functionParameters.update(unknowns);
 	}
 

@@ -171,17 +171,33 @@ xcopy /Y /D "..\..\API\release\include\*.h" "."</Command>
     <Reference Include="System.Xml" />
   </ItemGroup>
   <ItemGroup>
-    <None Include="..\..\API\src\precision.t" />
-    <None Include="bennet5.t" />
-    <None Include="chwirut1.t" />
-    <None Include="curveFitting.t" />
-    <None Include="eckerle4.t" />
-    <None Include="lanczos2.t" />
-    <None Include="mgh09.t" />
-    <None Include="misra.t" />
-    <None Include="opt_precision.t" />
-    <None Include="rat42.t" />
-    <None Include="roszman1.t" />
+    <None Include="terra\bennet5.t" />
+    <None Include="terra\boxbod.t" />
+    <None Include="terra\chwirut1.t" />
+    <None Include="terra\chwirut2.t" />
+    <None Include="terra\danwood.t" />
+    <None Include="terra\eckerle4.t" />
+    <None Include="terra\enso.t" />
+    <None Include="terra\gauss1.t" />
+    <None Include="terra\gauss2.t" />
+    <None Include="terra\gauss3.t" />
+    <None Include="terra\hahn1.t" />
+    <None Include="terra\kirby2.t" />
+    <None Include="terra\lanczos1.t" />
+    <None Include="terra\lanczos2.t" />
+    <None Include="terra\lanczos3.t" />
+    <None Include="terra\mgh09.t" />
+    <None Include="terra\mgh10.t" />
+    <None Include="terra\mgh17.t" />
+    <None Include="terra\misra1a.t" />
+    <None Include="terra\misra1b.t" />
+    <None Include="terra\misra1c.t" />
+    <None Include="terra\misra1d.t" />
+    <None Include="terra\nelson.t" />
+    <None Include="terra\rat42.t" />
+    <None Include="terra\rat43.t" />
+    <None Include="terra\roszman1.t" />
+    <None Include="terra\thurber.t" />
   </ItemGroup>
   <ItemGroup>
     <Text Include="data\bennet5.txt" />
@@ -189,7 +205,7 @@ xcopy /Y /D "..\..\API\release\include\*.h" "."</Command>
     <Text Include="data\eckerle4.txt" />
     <Text Include="data\lanczos2.txt" />
     <Text Include="data\mgh09.txt" />
-    <Text Include="data\misra.txt" />
+    <Text Include="data\misra1a.txt" />
     <Text Include="data\rat42.txt" />
     <Text Include="data\roszman1.txt" />
     <Text Include="results.txt" />

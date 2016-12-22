@@ -40,46 +40,23 @@ struct TermDefault
     double y;
 };
 
-struct HackRegularizerTerm
+struct TermMirsa1a
 {
-    HackRegularizerTerm(double weight) : m_weight(weight) {}
-
-    template <typename T>
-    bool operator()(const T* const funcParams, T* residuals) const
-    {
-
-        residuals[0] = (funcParams[0]*funcParams[2] - funcParams[1]) * m_weight;
-        return true;
-    }
-
-    static ceres::CostFunction* Create(double weight)
-    {
-        return (new ceres::AutoDiffCostFunction<HackRegularizerTerm, 1, 3>(
-            new HackRegularizerTerm(weight)));
-    }
-    double m_weight;
-};
-
-struct TermMirsa
-{
-	TermMirsa(double x, double y)
-		: x(x), y(y) {}
+    TermMirsa1a(double x, double y) : x(x), y(y) {}
 
 	template <typename T>
-	bool operator()(const T* const funcParams, T* residuals) const
-	{
-		residuals[0] = y - funcParams[0] * ((T)1.0 - exp(-funcParams[1] * x));
+	bool operator()(const T* const b, T* residuals) const {
+        residuals[0] = y - b[0] * ((T)1.0 - exp(-b[1] * x));
 		return true;
 	}
 
 	static ceres::CostFunction* Create(double x, double y)
 	{
-		return (new ceres::AutoDiffCostFunction<TermMirsa, 1, 2>(
-			new TermMirsa(x, y)));
+        return (new ceres::AutoDiffCostFunction<TermMirsa1a, 1, 2>(
+            new TermMirsa1a(x, y)));
 	}
 
-	double x;
-	double y;
+	double x; double y;
 };
 
 struct TermBennet5
@@ -196,6 +173,8 @@ std::vector<SolverIteration> CeresSolver::solve(
     UNKNOWNS* funcParameters,
     double2* funcData)
 {
+
+    std::vector<SolverIteration> result;
     for (int i = 0; i < functionData.size(); i++)
     {
         functionData[i].x = funcData[i].x;
@@ -209,8 +188,8 @@ std::vector<SolverIteration> CeresSolver::solve(
 		ceres::CostFunction* costFunction = nullptr;
 
 		if (useProblemDefault) costFunction = TermDefault::Create(functionData[i].x, functionData[i].y);
-		if (problemInfo.baseName == "misra") costFunction = TermMirsa::Create(functionData[i].x, functionData[i].y);
-		if (problemInfo.baseName == "bennet5") costFunction = TermBennet5::Create(functionData[i].x, functionData[i].y);
+		if (problemInfo.baseName == "misra1a") costFunction = TermMirsa1a::Create(functionData[i].x, functionData[i].y);
+		if (problemInfo.baseName == "bennett5") costFunction = TermBennet5::Create(functionData[i].x, functionData[i].y);
 		if (problemInfo.baseName == "chwirut1") costFunction = TermChwirut1::Create(functionData[i].x, functionData[i].y);
 		if (problemInfo.baseName == "eckerle4") costFunction = TermEckerle4::Create(functionData[i].x, functionData[i].y);
 		if (problemInfo.baseName == "mgh09") costFunction = TermMGH09::Create(functionData[i].x, functionData[i].y);
@@ -219,7 +198,7 @@ std::vector<SolverIteration> CeresSolver::solve(
 		if (costFunction == nullptr)
 		{
 			cout << "No problem specified!" << endl;
-			cin.get();
+            return result;
 		}
 		problem.AddResidualBlock(costFunction, NULL, (double*)funcParameters);
     }
@@ -273,7 +252,6 @@ std::vector<SolverIteration> CeresSolver::solve(
 
     Solve(options, &problem, &summary);
 
-	std::vector<SolverIteration> result; 
 	for (auto &i : summary.iterations)
 	{
 		SolverIteration iter;

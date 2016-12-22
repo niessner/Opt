@@ -41,7 +41,7 @@ vector<NLLSProblem> makeProblems()
 	problems.push_back(NLLSProblem("misra1b", 2, { 500.0, 0.0001 }, { 337.99746163, 0.00039039091287}));
 	problems.push_back(NLLSProblem("misra1c", 2, { 500.0, 0.0001 }, { 636.42725809, 0.00020813627256}));
 	problems.push_back(NLLSProblem("misra1d", 2, { 500.0, 0.0001 }, { 437.36970754, 0.00030227324449}));
-	problems.push_back(NLLSProblem("nelson", 3, { 2.0, 0.0001, -0.01 }, { 2.5906836021, 5.6177717026e-09, -0.057701013174}));
+	//problems.push_back(NLLSProblem("nelson", 3, { 2.0, 0.0001, -0.01 }, { 2.5906836021, 5.6177717026e-09, -0.057701013174}));
 	problems.push_back(NLLSProblem("rat42", 3, { 100.0, 1.0, 0.1 }, { 72.462237576, 2.6180768402, 0.067359200066}));
 	problems.push_back(NLLSProblem("rat43", 4, { 100.0, 10.0, 1.0, 1.0 }, { 699.6415127, 5.2771253025, 0.75962938329, 1.2792483859}));
 	problems.push_back(NLLSProblem("roszman1", 4, { 0.1, -1e-05, 1000.0, -100.0 }, { 0.20196866396, -6.1953516256e-06, 1204.4556708, -181.34269537}));
@@ -91,7 +91,7 @@ void runTestA()
 	
 	CombinedSolver solver(problem, dataPoints);
 	UNKNOWNS finalResult = solver.solve(problem);
-	std::cout << "Final Result: " << finalResult.x << ", " << finalResult.y << std::endl;
+    std::cout << "Final Result: " << finalResult.vals[0] << ", " << finalResult.vals[1] << std::endl;
 }
 
 template<class T>
@@ -122,13 +122,25 @@ void runProblem(const NLLSProblem &problem)
     resultFile << std::scientific;
     resultFile << std::setprecision(20);
 	resultFile << "Problem, " << problem.baseName << endl;
-	resultFile << "True solution, " << problem.trueSolution.x << ", " << problem.trueSolution.y << ", " << problem.trueSolution.z << ", " << problem.trueSolution.w << endl;
-	resultFile << "Ceres solution, " << solver.m_ceresResult.x << ", " << solver.m_ceresResult.y << ", " << solver.m_ceresResult.z << ", " << solver.m_ceresResult.w << endl;
-	resultFile << "Opt solution, " << solver.m_optResult.x << ", " << solver.m_optResult.y << ", " << solver.m_optResult.z << ", " << solver.m_optResult.w << endl;
 
-	resultFile << "Iter, Ceres Error, Opt Error, Ceres Iter Time (ms), Opt Iter Time (ms), Total Ceres Time (ms), Total Opt Time (ms)" << endl;
+    auto printSolution = [](ofstream& file, std::string name, unsigned unknownCount, double9 solution){
+        file << name << " solution, ";
+        for (int i = 0; i < unknownCount; ++i) {
+            file << ", " << solution.vals[i];
+        }
+        file << endl;
+    };
+
+    printSolution(resultFile, "True", problem.unknownCount, problem.trueSolution);
+    printSolution(resultFile, "Ceres", problem.unknownCount, solver.m_ceresResult);
+    printSolution(resultFile, "Opt", problem.unknownCount, solver.m_optResult);
+
+    resultFile << "Iter, Ceres Error, Opt Error, Ceres Iter Time (ms), Opt Iter Time (ms), Total Ceres Time (ms), Total Opt Time (ms)" << endl;
     double sumOptTime = 0.0;
     double sumCeresTime = 0.0;
+    if (solver.m_ceresIters.size() == 0) {
+        solver.m_ceresIters.push_back({ 0.0, 0.0 });
+    }
 	for (int i = 0; i < (int)max(solver.m_ceresIters.size(), solver.m_optIters.size()); i++)
 	{
         double ceresTime    = ((solver.m_ceresIters.size() > i) ? solver.m_ceresIters[i].timeInMS : 0.0);
