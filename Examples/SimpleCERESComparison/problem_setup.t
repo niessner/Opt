@@ -5,6 +5,8 @@ function sqr(x)
     return x*x
 end
 
+pi = 3.14159265358979323846264338327950288
+
 x = 0
 y = 0
 b1 = 0

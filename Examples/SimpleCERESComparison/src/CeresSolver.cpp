@@ -189,7 +189,7 @@ std::vector<SolverIteration> CeresSolver::solve(
 
 		if (useProblemDefault) costFunction = TermDefault::Create(functionData[i].x, functionData[i].y);
 		if (problemInfo.baseName == "misra1a") costFunction = TermMirsa1a::Create(functionData[i].x, functionData[i].y);
-		if (problemInfo.baseName == "bennet5") costFunction = TermBennet5::Create(functionData[i].x, functionData[i].y);
+		if (problemInfo.baseName == "bennett5") costFunction = TermBennet5::Create(functionData[i].x, functionData[i].y);
 		if (problemInfo.baseName == "chwirut1") costFunction = TermChwirut1::Create(functionData[i].x, functionData[i].y);
 		if (problemInfo.baseName == "eckerle4") costFunction = TermEckerle4::Create(functionData[i].x, functionData[i].y);
 		if (problemInfo.baseName == "mgh09") costFunction = TermMGH09::Create(functionData[i].x, functionData[i].y);

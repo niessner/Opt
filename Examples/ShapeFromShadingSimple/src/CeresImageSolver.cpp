@@ -471,7 +471,7 @@ void CeresImageSolver::solve(std::shared_ptr<SimpleBuffer> result, const SFSSolv
 
     options.minimizer_progress_to_stdout = !performanceTest;
     options.linear_solver_type = ceres::LinearSolverType::SPARSE_NORMAL_CHOLESKY;
-    //options.linear_solver_type = ceres::LinearSolverType::CGNR;
+
     //options.min_linear_solver_iterations = linearIterationMin;
 
     options.num_threads = 8;
@@ -481,12 +481,12 @@ void CeresImageSolver::solve(std::shared_ptr<SimpleBuffer> result, const SFSSolv
     //options.linear_solver_type = ceres::LinearSolverType::SPARSE_SCHUR;
     //options.linear_solver_type = ceres::LinearSolverType::ITERATIVE_SCHUR;
 
-    options.function_tolerance = 0.001;
+    options.function_tolerance = 0.00001;
     options.gradient_tolerance = 1e-4 * options.function_tolerance;
 
-    //options.min_lm_diagonal = 1.0f;
-    //options.min_lm_diagonal = options.max_lm_diagonal;
-    //options.max_lm_diagonal = 10000000.0;
+	// The linear approximation is bad for SFS, so solving exactly actually *hurts* convergence.
+	options.linear_solver_type = ceres::LinearSolverType::CGNR;
+	options.max_linear_solver_iterations = 10;
 
     //problem.Evaluate(Problem::EvaluateOptions(), &cost, nullptr, nullptr, nullptr);
     //cout << "Cost*2 start: " << cost << endl;

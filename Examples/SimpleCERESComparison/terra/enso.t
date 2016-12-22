@@ -1,6 +1,5 @@
 require("problem_setup")
 problemsetup(9,2)
-
 --y = b1 + b2*cos( 2*pi*x/12 ) + b3*sin( 2*pi*x/12 ) 
 --                      + b5*cos( 2*pi*x/b4 ) + b6*sin( 2*pi*x/b4 )
 --                      + b8*cos( 2*pi*x/b7 ) + b9*sin( 2*pi*x/b7 )  + e

@@ -58,7 +58,7 @@ int main(int argc, const char * argv[]) {
 	loadConstraints(constraints, "cat.constraints");
     int downsampleFactor = 1;
 
-
+	bool lmOnlyFullSolve = false;
     if (argc > 1) {
         downsampleFactor = atoi(argv[1]);
         if (downsampleFactor > 0) {
@@ -66,6 +66,7 @@ int main(int argc, const char * argv[]) {
             inputImageMask = "catmask512.png";
             constraints.clear();
             loadConstraints(constraints, "cat512.constraints");
+			lmOnlyFullSolve = true;
         } else {
             downsampleFactor = 1;
         }
@@ -135,7 +136,7 @@ int main(int argc, const char * argv[]) {
 		}
 	}
 
-    ImageWarping warping(imageR32, imageColor, imageR32Mask, constraints, performanceRun);
+	ImageWarping warping(imageR32, imageColor, imageR32Mask, constraints, performanceRun, lmOnlyFullSolve);
 
 	ColorImageR32G32B32* res = warping.solve();
 	ColorImageR8G8B8A8 out(res->getWidth(), res->getHeight());
