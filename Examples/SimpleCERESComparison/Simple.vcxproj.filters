@@ -18,40 +18,85 @@
     <ClInclude Include="src\Timer.h" />
   </ItemGroup>
   <ItemGroup>
-    <None Include="bennet5.t">
+    <None Include="terra\bennet5.t">
       <Filter>opt</Filter>
     </None>
-    <None Include="chwirut1.t">
+    <None Include="terra\boxbod.t">
       <Filter>opt</Filter>
     </None>
-    <None Include="curveFitting.t">
+    <None Include="terra\chwirut1.t">
       <Filter>opt</Filter>
     </None>
-    <None Include="misra.t">
+    <None Include="terra\chwirut2.t">
       <Filter>opt</Filter>
     </None>
-    <None Include="opt_precision.t">
+    <None Include="terra\danwood.t">
       <Filter>opt</Filter>
     </None>
-    <None Include="..\..\API\src\precision.t">
+    <None Include="terra\eckerle4.t">
       <Filter>opt</Filter>
     </None>
-    <None Include="eckerle4.t">
+    <None Include="terra\enso.t">
       <Filter>opt</Filter>
     </None>
-    <None Include="rat42.t">
+    <None Include="terra\gauss1.t">
       <Filter>opt</Filter>
     </None>
-    <None Include="mgh09.t">
+    <None Include="terra\gauss2.t">
       <Filter>opt</Filter>
     </None>
-    <None Include="roszman1.t">
-      <Filter>TODOs</Filter>
+    <None Include="terra\gauss3.t">
+      <Filter>opt</Filter>
     </None>
-    <None Include="lanczos2.t">
-      <Filter>TODOs</Filter>
+    <None Include="terra\hahn1.t">
+      <Filter>opt</Filter>
     </None>
-    <None Include="problem_setup.t">
+    <None Include="terra\kirby2.t">
+      <Filter>opt</Filter>
+    </None>
+    <None Include="terra\lanczos1.t">
+      <Filter>opt</Filter>
+    </None>
+    <None Include="terra\lanczos2.t">
+      <Filter>opt</Filter>
+    </None>
+    <None Include="terra\lanczos3.t">
+      <Filter>opt</Filter>
+    </None>
+    <None Include="terra\mgh09.t">
+      <Filter>opt</Filter>
+    </None>
+    <None Include="terra\mgh10.t">
+      <Filter>opt</Filter>
+    </None>
+    <None Include="terra\mgh17.t">
+      <Filter>opt</Filter>
+    </None>
+    <None Include="terra\misra1a.t">
+      <Filter>opt</Filter>
+    </None>
+    <None Include="terra\misra1b.t">
+      <Filter>opt</Filter>
+    </None>
+    <None Include="terra\misra1c.t">
+      <Filter>opt</Filter>
+    </None>
+    <None Include="terra\misra1d.t">
+      <Filter>opt</Filter>
+    </None>
+    <None Include="terra\nelson.t">
+      <Filter>opt</Filter>
+    </None>
+    <None Include="terra\rat42.t">
+      <Filter>opt</Filter>
+    </None>
+    <None Include="terra\rat43.t">
+      <Filter>opt</Filter>
+    </None>
+    <None Include="terra\roszman1.t">
+      <Filter>opt</Filter>
+    </None>
+    <None Include="terra\thurber.t">
       <Filter>opt</Filter>
     </None>
   </ItemGroup>
@@ -62,15 +107,9 @@
     <Filter Include="data">
       <UniqueIdentifier>{78d1700e-d69c-4097-9175-eed776f1dfb7}</UniqueIdentifier>
     </Filter>
-    <Filter Include="TODOs">
-      <UniqueIdentifier>{ced860df-ef70-4295-99ad-681fcd1d3023}</UniqueIdentifier>
-    </Filter>
   </ItemGroup>
   <ItemGroup>
     <Text Include="data\chwirut1.txt">
-      <Filter>data</Filter>
-    </Text>
-    <Text Include="data\misra.txt">
       <Filter>data</Filter>
     </Text>
     <Text Include="data\bennet5.txt">
@@ -85,13 +124,16 @@
     <Text Include="data\rat42.txt">
       <Filter>data</Filter>
     </Text>
-    <Text Include="data\roszman1.txt">
-      <Filter>TODOs</Filter>
+    <Text Include="data\mgh09.txt">
+      <Filter>data</Filter>
+    </Text>
+    <Text Include="data\misra1a.txt">
+      <Filter>data</Filter>
     </Text>
     <Text Include="data\lanczos2.txt">
-      <Filter>TODOs</Filter>
+      <Filter>data</Filter>
     </Text>
-    <Text Include="data\mgh09.txt">
+    <Text Include="data\roszman1.txt">
       <Filter>data</Filter>
     </Text>
   </ItemGroup>

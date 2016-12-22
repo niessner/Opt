@@ -1,7 +1,7 @@
 #pragma once
 #include <limits>
 #include <algorithm>
-
+#include "Precision.h"
 
 struct SolverIteration
 {
@@ -24,8 +24,15 @@ static void saveSolverResults(std::string directory, std::string suffix,
     std::ofstream resultFile(directory + "results" + suffix + ".csv");
     resultFile << std::scientific;
     resultFile << std::setprecision(20);
-
-    resultFile << "Iter, Ceres Error, Opt (GN) Error,  Opt (LM) Error, Ceres Iter Time (ms), Opt (GN) Iter Time (ms), Opt (LM) Iter Time (ms), Total Ceres Time (ms), Total Opt (GN) Time (ms), Total Opt (LM) Time (ms)" << std::endl;
+#if OPT_DOUBLE_PRECISION
+	std::string colSuffix = " (double)";
+#else
+	std::string colSuffix = " (float)";
+#endif
+	resultFile << "Iter, Ceres Error, ";
+	resultFile << "Opt(GN) Error" << colSuffix << ",  Opt(LM) Error" << colSuffix << ", Ceres Iter Time(ms), ";
+	resultFile << "Opt(GN) Iter Time(ms)" << colSuffix << ", Opt(LM) Iter Time(ms)" << colSuffix << ", Total Ceres Time(ms), ";
+	resultFile << "Total Opt(GN) Time(ms)" << colSuffix << ", Total Opt(LM) Time(ms)" << colSuffix << std::endl;
     double sumOptGNTime = 0.0;
     double sumOptLMTime = 0.0;
     double sumCeresTime = 0.0;

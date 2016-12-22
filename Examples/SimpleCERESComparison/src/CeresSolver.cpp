@@ -173,6 +173,8 @@ std::vector<SolverIteration> CeresSolver::solve(
     UNKNOWNS* funcParameters,
     double2* funcData)
 {
+
+    std::vector<SolverIteration> result;
     for (int i = 0; i < functionData.size(); i++)
     {
         functionData[i].x = funcData[i].x;
@@ -186,7 +188,7 @@ std::vector<SolverIteration> CeresSolver::solve(
 		ceres::CostFunction* costFunction = nullptr;
 
 		if (useProblemDefault) costFunction = TermDefault::Create(functionData[i].x, functionData[i].y);
-		if (problemInfo.baseName == "misra") costFunction = TermMirsa::Create(functionData[i].x, functionData[i].y);
+		if (problemInfo.baseName == "misra1a") costFunction = TermMirsa1a::Create(functionData[i].x, functionData[i].y);
 		if (problemInfo.baseName == "bennet5") costFunction = TermBennet5::Create(functionData[i].x, functionData[i].y);
 		if (problemInfo.baseName == "chwirut1") costFunction = TermChwirut1::Create(functionData[i].x, functionData[i].y);
 		if (problemInfo.baseName == "eckerle4") costFunction = TermEckerle4::Create(functionData[i].x, functionData[i].y);
@@ -196,7 +198,7 @@ std::vector<SolverIteration> CeresSolver::solve(
 		if (costFunction == nullptr)
 		{
 			cout << "No problem specified!" << endl;
-			cin.get();
+            return result;
 		}
 		problem.AddResidualBlock(costFunction, NULL, (double*)funcParameters);
     }
@@ -250,7 +252,6 @@ std::vector<SolverIteration> CeresSolver::solve(
 
     Solve(options, &problem, &summary);
 
-	std::vector<SolverIteration> result; 
 	for (auto &i : summary.iterations)
 	{
 		SolverIteration iter;

@@ -19,12 +19,12 @@ vector<NLLSProblem> makeProblems()
 {
 	vector<NLLSProblem> problems;
 
-	//problems.push_back(NLLSProblem("mgh09", 4, { 25.0, 39.0, 41.5, 39.0 }, { 1.9280693458E-01, 1.9128232873E-01, 1.2305650693E-01, 1.3606233068E-01 }));
-    //problems.push_back(NLLSProblem("eckerle4", 3, { 1.0, 10.0, 500.0, 0.0 }, { 1.5543827178E+00, 4.0888321754E+00, 4.5154121844E+02, 0.0 }));
-	//problems.push_back(NLLSProblem("rat42", 3, { 100.0, 1.0, 0.1, 0.0 }, { 0.0, 0.0, 0.0, 0.0 }));
+	problems.push_back(NLLSProblem("mgh09", 4, { 25.0, 39.0, 41.5, 39.0 }, { 1.9280693458E-01, 1.9128232873E-01, 1.2305650693E-01, 1.3606233068E-01 }));
+    problems.push_back(NLLSProblem("eckerle4", 3, { 1.0, 10.0, 500.0, 0.0 }, { 1.5543827178E+00, 4.0888321754E+00, 4.5154121844E+02, 0.0 }));
+	problems.push_back(NLLSProblem("rat42", 3, { 100.0, 1.0, 0.1, 0.0 }, { 0.0, 0.0, 0.0, 0.0 }));
 
-	//problems.push_back(NLLSProblem("misra", 2, { 5e2, 1e-4, 0.0, 0.0 }, { 2.3894212918E+02, 5.5015643181E-04, 0.0, 0.0 }));
-	//problems.push_back(NLLSProblem("bennet5", 2, { -200, 50.0, 0.8, 0.0 }, { -2.5235e3, 4.6736e1, 9.32184e-1, 0.0 }));
+	problems.push_back(NLLSProblem("misra1a", 2, { 5e2, 1e-4, 0.0, 0.0 }, { 2.3894212918E+02, 5.5015643181E-04, 0.0, 0.0 }));
+	problems.push_back(NLLSProblem("bennet5", 2, { -200, 50.0, 0.8, 0.0 }, { -2.5235e3, 4.6736e1, 9.32184e-1, 0.0 }));
 	problems.push_back(NLLSProblem("chwirut1", 2, { 1e-1, 1e-2, 2e-2, 0.0 }, { 1.9027818370E-01, 6.1314004477E-03, 1.0530908399E-02, 0.0 }));
 	
 	return problems;
@@ -117,6 +117,9 @@ void runProblem(const NLLSProblem &problem)
 	resultFile << "Iter, Ceres Error, Opt Error, Ceres Iter Time (ms), Opt Iter Time (ms), Total Ceres Time (ms), Total Opt Time (ms)" << endl;
     double sumOptTime = 0.0;
     double sumCeresTime = 0.0;
+    if (solver.m_ceresIters.size() == 0) {
+        solver.m_ceresIters.push_back({ 0.0, 0.0 });
+    }
 	for (int i = 0; i < (int)max(solver.m_ceresIters.size(), solver.m_optIters.size()); i++)
 	{
         double ceresTime    = ((solver.m_ceresIters.size() > i) ? solver.m_ceresIters[i].timeInMS : 0.0);

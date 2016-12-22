@@ -63,7 +63,9 @@ class ImageWarping
                 m_params.useLMAD = true;
                 m_params.useCeres = true;
                 m_params.earlyOut = true;
-                //m_params.numIter = 32;
+				m_params.nonLinearIter = 20;
+				m_params.linearIter = 500;
+				//m_params.numIter = 32;
                 //m_params.nonLinearIter = 2;
                 //m_params.linearIter = 4000;
 

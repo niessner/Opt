@@ -1,11 +1,16 @@
 require("opt_precision")
 S = ad.ProblemSpec()
 
+function sqr(x)
+    return x*x
+end
+
 x = 0
 y = 0
 b1 = 0
 b2 = 0
 b3 = 0
+b4 = 0
 b5 = 0
 b6 = 0
 b7 = 0
