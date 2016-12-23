@@ -145,13 +145,20 @@ void runProblem(const NLLSProblem &problem)
     if (solver.m_ceresIters.size() == 0) {
         solver.m_ceresIters.push_back({ 0.0, 0.0 });
     }
+    double prevCeresCost = std::numeric_limits<double>::infinity();
 	for (int i = 0; i < (int)max(solver.m_ceresIters.size(), solver.m_optIters.size()); i++)
 	{
         double ceresTime    = ((solver.m_ceresIters.size() > i) ? solver.m_ceresIters[i].timeInMS : 0.0);
         double optTime = ((solver.m_optIters.size() > i) ? solver.m_optIters[i].timeInMS : 0.0);
         sumCeresTime    += ceresTime;
         sumOptTime      += optTime;
-        resultFile << i << ", " << clampedRead(solver.m_ceresIters, i).cost << ", " << clampedRead(solver.m_optIters, i).cost << ", " << ceresTime << ", " << optTime << ", " << sumCeresTime << ", " << sumOptTime << endl;
+
+        // When hooked up to certain debug builds of CERES, the "potential" cost is reported instead of the real one. This corrects for that.
+        double ceresCost = clampedRead(solver.m_ceresIters, i).cost;
+        ceresCost = fmin(ceresCost, prevCeresCost);
+        prevCeresCost = ceresCost;
+
+        resultFile << i << ", " << ceresCost << ", " << clampedRead(solver.m_optIters, i).cost << ", " << ceresTime << ", " << optTime << ", " << sumCeresTime << ", " << sumOptTime << endl;
 	}
 }
 
