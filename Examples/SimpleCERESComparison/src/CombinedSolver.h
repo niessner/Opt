@@ -63,7 +63,7 @@ public:
 
 	UNKNOWNS solve(const NLLSProblem &problem) {
 		std::cout << "*** Solving " << problem.baseName << std::endl;
-        uint nonLinearIter = 1000;
+        uint nonLinearIter = 100000;
         uint linearIter = 100;
 		if (useOpt) {
 			resetGPU();

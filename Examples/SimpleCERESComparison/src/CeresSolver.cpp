@@ -131,7 +131,7 @@ struct TermDanWood
         /* y  = b1*x**b2  +  e */
         T b1 = funcParams[0];
         T b2 = funcParams[1];
-        residuals[0] = y - pow(b1*x, b2);
+        residuals[0] = y - b1*pow(x, b2);
         return true;
     }
     static ceres::CostFunction* Create(double x, double y)
@@ -152,7 +152,7 @@ struct TermEckerle4
         T b1 = funcParams[0];
         T b2 = funcParams[1];
         T b3 = funcParams[2];
-        residuals[0] = y - (b1 / b2) * exp(pow(-(T)0.5*((x - b3) / b2), 2));
+        residuals[0] = y - (b1 / b2) * exp(-(T)0.5*pow(((x - b3) / b2), 2));
         return true;
     }
     static ceres::CostFunction* Create(double x, double y)
@@ -182,9 +182,9 @@ struct TermENSO
         T b8 = funcParams[7];
         T b9 = funcParams[8];
         const double pi = 3.141592653589793238462643383279;
-        residuals[0] = y - b1 + b2*cos((T)2 * pi*x / (T)12) + b3*sin((T)2 * pi*x / (T)12)
+        residuals[0] = y - (b1 + b2*cos((T)2 * pi*x / (T)12) + b3*sin((T)2 * pi*x / (T)12)
             + b5*cos((T)2 * pi*x / b4) + b6*sin((T)2 * pi*x / b4)
-            + b8*cos((T)2 * pi*x / b7) + b9*sin((T)2 * pi*x / b7);
+            + b8*cos((T)2 * pi*x / b7) + b9*sin((T)2 * pi*x / b7));
         return true;
     }
     static ceres::CostFunction* Create(double x, double y)
@@ -211,8 +211,8 @@ struct TermGauss1
         T b6 = funcParams[5];
         T b7 = funcParams[6];
         T b8 = funcParams[7];
-        residuals[0] = y - b1*exp(-b2*x) + b3*exp(-((x - b4)*(x - b4)) / (b5*b5))
-            + b6*exp(-((x - b7)*(x - b7)) / (b8*b8));
+        residuals[0] = y - (b1*exp(-b2*x) + b3*exp(-((x - b4)*(x - b4)) / (b5*b5))
+            + b6*exp(-((x - b7)*(x - b7)) / (b8*b8)));
         return true;
     }
     static ceres::CostFunction* Create(double x, double y)
@@ -239,8 +239,8 @@ struct TermGauss2
         T b6 = funcParams[5];
         T b7 = funcParams[6];
         T b8 = funcParams[7];
-        residuals[0] = y - b1*exp(-b2*x) + b3*exp(-((x - b4)*(x - b4)) / (b5*b5))
-            + b6*exp(-((x - b7)*(x - b7)) / (b8*b8));
+        residuals[0] = y - (b1*exp(-b2*x) + b3*exp(-((x - b4)*(x - b4)) / (b5*b5))
+            + b6*exp(-((x - b7)*(x - b7)) / (b8*b8)));
         return true;
     }
     static ceres::CostFunction* Create(double x, double y)
@@ -267,8 +267,8 @@ struct TermGauss3
         T b6 = funcParams[5];
         T b7 = funcParams[6];
         T b8 = funcParams[7];
-        residuals[0] = y - b1*exp(-b2*x) + b3*exp(-((x - b4)*(x - b4)) / (b5*b5))
-            + b6*exp(-((x - b7)*(x - b7)) / (b8*b8));
+        residuals[0] = y - (b1*exp(-b2*x) + b3*exp(-((x - b4)*(x - b4)) / (b5*b5))
+            + b6*exp(-((x - b7)*(x - b7)) / (b8*b8)));
         return true;
     }
     static ceres::CostFunction* Create(double x, double y)
@@ -344,7 +344,7 @@ struct TermLanczos1
         T b4 = funcParams[3];
         T b5 = funcParams[4];
         T b6 = funcParams[5];
-        residuals[0] = y - b1*exp(-b2*x) + b3*exp(-b4*x) + b5*exp(-b6*x);
+        residuals[0] = y - (b1*exp(-b2*x) + b3*exp(-b4*x) + b5*exp(-b6*x));
         return true;
     }
     static ceres::CostFunction* Create(double x, double y)
@@ -368,7 +368,7 @@ struct TermLanczos2
         T b4 = funcParams[3];
         T b5 = funcParams[4];
         T b6 = funcParams[5];
-        residuals[0] = y - b1*exp(-b2*x) + b3*exp(-b4*x) + b5*exp(-b6*x);
+        residuals[0] = y - (b1*exp(-b2*x) + b3*exp(-b4*x) + b5*exp(-b6*x));
         return true;
     }
     static ceres::CostFunction* Create(double x, double y)
@@ -392,7 +392,7 @@ struct TermLanczos3
         T b4 = funcParams[3];
         T b5 = funcParams[4];
         T b6 = funcParams[5];
-        residuals[0] = y - b1*exp(-b2*x) + b3*exp(-b4*x) + b5*exp(-b6*x);
+        residuals[0] = y - (b1*exp(-b2*x) + b3*exp(-b4*x) + b5*exp(-b6*x));
         return true;
     }
     static ceres::CostFunction* Create(double x, double y)
@@ -431,11 +431,11 @@ struct TermMGH10
     template <typename T>
     bool operator()(const T* const funcParams, T* residuals) const
     {
-        /* y = b1 / (1+exp[b2-b3*x])  +  e */
+        /* y = b1 * exp[b2/(x+b3)]  +  e */
         T b1 = funcParams[0];
         T b2 = funcParams[1];
         T b3 = funcParams[2];
-        residuals[0] = y - b1 / ((T)1 + exp(b2 - b3*x));
+        residuals[0] = y - (b1 * exp(b2 / (x + b3)));
         return true;
     }
     static ceres::CostFunction* Create(double x, double y)
@@ -445,7 +445,6 @@ struct TermMGH10
     }
     double x, y;
 };
-
 struct TermMGH17
 {
     TermMGH17(double x, double y) : x(x), y(y) {}
@@ -458,7 +457,7 @@ struct TermMGH17
         T b3 = funcParams[2];
         T b4 = funcParams[3];
         T b5 = funcParams[4];
-        residuals[0] = y - b1 + b2*exp(-x*b4) + b3*exp(-x*b5);
+        residuals[0] = y - (b1 + b2*exp(-x*b4) + b3*exp(-x*b5));
         return true;
     }
     static ceres::CostFunction* Create(double x, double y)
@@ -626,8 +625,7 @@ struct TermRoszman1
         T b3 = funcParams[2];
         T b4 = funcParams[3];
         const double pi = 3.141592653589793238462643383279;
-        residuals[0] = 
-            y - b1 - b2*x - atan(b3 / (x - b4)) / pi;
+        residuals[0] = y - (b1 - b2*x - atan(b3 / (x - b4)) / pi);
         return true;
     }
     static ceres::CostFunction* Create(double x, double y)
