@@ -130,11 +130,13 @@ xcopy /Y /D "..\..\API\release\include\*.h" "."</Command>
     </PreBuildEvent>
   </ItemDefinitionGroup>
   <ItemGroup>
+    <ClCompile Include="src\CERESWarpingSolver.cpp" />
     <ClCompile Include="src\CUDAWarpingSolver.cpp" />
     <ClCompile Include="src\main.cpp" />
     <ClCompile Include="src\mLibSource.cpp" />
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="src\CERESWarpingSolver.h" />
     <ClInclude Include="src\CUDATimer.h" />
     <ClInclude Include="src\CUDAWarpingSolver.h" />
     <ClInclude Include="src\ImageWarping.h" />

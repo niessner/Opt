@@ -424,3 +424,15 @@ Examples/ShapeFromShadingSimple/shapefromshading
 /Examples/SimpleCERESComparison/Simple.sdf
 /Examples/SimpleCERESComparison/Simple.v12.suo
 /Examples/SimpleCERESComparison/results.txt
+/Examples/MeshDeformationLARAP/MeshDeformationLARAP.opensdf
+/Examples/MeshDeformationLARAP/MeshDeformationLARAP.sdf
+/Examples/MeshDeformationLARAP/MeshDeformationLARAP.v12.suo
+/Examples/MeshDeformationLARAP/Opt.dll
+/Examples/MeshDeformationLARAP/Opt.exp
+/Examples/MeshDeformationLARAP/Opt.h
+/Examples/MeshDeformationLARAP/Opt.lib
+/Examples/MeshDeformationLARAP/grid.ply
+/Examples/MeshDeformationLARAP/gridOut.ply
+/Examples/MeshDeformationLARAP/out.ply
+/Examples/MeshDeformationLARAP/x64/Debug
+/Examples/MeshDeformationLARAP/vc120.pdb
