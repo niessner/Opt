@@ -14,10 +14,22 @@ class CERESWarpingSolver
 		CERESWarpingSolver(unsigned int width, unsigned int height, unsigned int depth);
 		~CERESWarpingSolver();
 
-		void solve(float3* d_x, float3* d_a, float3* d_urshape, float3* d_constraints, unsigned int nNonLinearIterations, unsigned int nLinearIterations, unsigned int nBlockIterations, float weightFit, float weightReg);
-		
-	private:
+		void solve(float3* d_vertexPosFloat3,
+				   float3* d_anglesFloat3,
+				   float3* d_vertexPosFloat3Urshape,
+				   float3* d_vertexPosTargetFloat3,
+				   float weightFit,
+				   float weightReg);
 
-		vec3d*	d_unknown;
+	private:
+		vec3d* vertexPosDouble3;
+		vec3d* anglesDouble3;
+
+		float3* h_vertexPosFloat3;
+		float3* h_anglesFloat3;
+		float3* h_vertexPosFloat3Urshape;
+		float3* h_vertexPosTargetFloat3;
+
 		unsigned int m_width, m_height, m_depth;
+		unsigned int voxelCount;
 };

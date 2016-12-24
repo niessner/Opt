@@ -10,7 +10,7 @@
 #include "TerraSolverWarping.h"
 #include "OpenMesh.h"
 
-static bool useCERES = false;
+static bool useCERES = true;
 static bool useCUDA = false;
 static bool useTerra = true;
 
@@ -278,7 +278,7 @@ class ImageWarping
 				m_result = m_initial;
 				resetGPUMemory();
 				std::cout << "//////////// (CERES) ///////////////" << std::endl;
-				m_warpingSolverCeres->solve(d_gridPosFloat3, d_gridAnglesFloat3, d_gridPosFloat3Urshape, d_gridPosTargetFloat3, nonLinearIter, linearIter, 1, weightFit, weightReg);
+				m_warpingSolverCeres->solve(d_gridPosFloat3, d_gridAnglesFloat3, d_gridPosFloat3Urshape, d_gridPosTargetFloat3, weightFit, weightReg);
 
 				copyResultToCPUFromFloat3();
 			}
