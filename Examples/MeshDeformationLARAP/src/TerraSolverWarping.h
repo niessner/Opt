@@ -59,6 +59,9 @@ public:
 		
 		void* problemParams[] = { d_x, d_a, d_urshape, d_constraints, &weightFitSqrt, &weightRegSqrt };
 		
+		Opt_ProblemInit(m_optimizerState, m_plan, problemParams, solverParams);
+		std::cout << "Opt starting cost: " << Opt_ProblemCurrentCost(m_optimizerState, m_plan) << std::endl;
+
 		Opt_ProblemSolve(m_optimizerState, m_plan, problemParams, solverParams);
 	}
 

@@ -437,3 +437,4 @@ Examples/ShapeFromShadingSimple/shapefromshading
 /Examples/MeshDeformationLARAP/x64/Debug
 /Examples/MeshDeformationLARAP/vc120.pdb
 /Examples/MeshDeformationLARAP/x64/Release
+/Examples/MeshDeformationLARAP/x64/ReleaseNoOptimization
