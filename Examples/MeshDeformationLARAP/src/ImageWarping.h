@@ -10,9 +10,9 @@
 #include "TerraSolverWarping.h"
 #include "OpenMesh.h"
 
-static bool useCERES = true;
+static bool useCERES = false;
 static bool useCUDA = false;
-static bool useTerra = false;
+static bool useTerra = true;
 
 class ImageWarping
 {
@@ -38,7 +38,7 @@ class ImageWarping
 			resetGPUMemory();
 			
 			if (useCUDA)  m_warpingSolver = new CUDAWarpingSolver(m_nNodes);
-			if (useCERES) m_warpingSolverCeres = new CERESWarpingSolver(m_nNodes);
+			if (useCERES) m_warpingSolverCeres = new CERESWarpingSolver(m_dims.x + 1, m_dims.y + 1, m_dims.z + 1);
 			if (useTerra) m_warpingSolverTerra = new TerraSolverWarping(m_dims.x+1, m_dims.y+1, m_dims.z+1, "ImageWarpingAD.t", "gaussNewtonGPU");
 		}
 
@@ -278,7 +278,7 @@ class ImageWarping
 				m_result = m_initial;
 				resetGPUMemory();
 				std::cout << "//////////// (CERES) ///////////////" << std::endl;
-				m_warpingSolverCeres->solve(m_dims, d_gridPosFloat3, d_gridAnglesFloat3, d_gridPosFloat3Urshape, d_gridPosTargetFloat3, nonLinearIter, linearIter, weightFit, weightReg);
+				m_warpingSolverCeres->solve(d_gridPosFloat3, d_gridAnglesFloat3, d_gridPosFloat3Urshape, d_gridPosTargetFloat3, nonLinearIter, linearIter, 1, weightFit, weightReg);
 
 				copyResultToCPUFromFloat3();
 			}

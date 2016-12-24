@@ -11,14 +11,13 @@
 class CERESWarpingSolver
 {
 	public:
-		CERESWarpingSolver(unsigned int N);
+		CERESWarpingSolver(unsigned int width, unsigned int height, unsigned int depth);
 		~CERESWarpingSolver();
 
-		void solve(int3 dims, float3* d_vertexPosFloat3, float3* d_anglesFloat3, float3* d_vertexPosFloat3Urshape, float3* d_vertexPosTargetFloat3, int nonLinearIter, int linearIter, float weightFit, float weightReg);
+		void solve(float3* d_x, float3* d_a, float3* d_urshape, float3* d_constraints, unsigned int nNonLinearIterations, unsigned int nLinearIterations, unsigned int nBlockIterations, float weightFit, float weightReg);
 		
 	private:
 
-		SolverState	m_solverState;
-
-		unsigned int m_N;
+		vec3d*	d_unknown;
+		unsigned int m_width, m_height, m_depth;
 };
