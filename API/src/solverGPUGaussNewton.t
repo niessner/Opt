@@ -2,6 +2,9 @@ local S = require("std")
 local util = require("util")
 local dbg = require("dbg")
 require("precision")
+
+local ffi = require("ffi")
+
 local C = util.C
 local Timer = util.Timer
 
@@ -19,11 +22,16 @@ local JacobiScaling = JacobiScalingType.ONCE_PER_SOLVE
 
 local multistep_alphaDenominator_compute = false
 
-
-local cd = macro(function(apicall) return quote
+local cd = macro(function(apicall) 
+    local apicallstr = tostring(apicall)
+    local filename = debug.getinfo(1,'S').source
+    return quote
+        var str = [apicallstr]
         var r = apicall
         if r ~= 0 then  
             C.printf("Cuda reported error %d: %s\n",r, C.cudaGetErrorString(r))
+            C.printf("In call: %s", str)
+            C.printf("In file: %s\n", filename)
             C.exit(r)
         end
     in
@@ -31,7 +39,13 @@ local cd = macro(function(apicall) return quote
     end end)
 if use_dump_j then
     local cusparsepath = "/usr/local/cuda"
-    terralib.linklibrary(cusparsepath.."/lib64/libcusparse.so")
+    local cusparselibpath = "/lib64/libcusparse.so"
+    if ffi.os == "Windows" then
+        cusparsepath = "C:\\Program Files\\NVIDIA GPU Computing Toolkit\\CUDA\\v7.5"
+        cusparselibpath = "\\bin\\cusparse64_75.dll"
+        --cusparselibpath = "\\lib\\x64\\cusparse.lib"
+    end
+    terralib.linklibrary(cusparsepath..cusparselibpath)
     terralib.includepath = terralib.includepath..";"..
                            cusparsepath.."/include/"
     CUsp = terralib.includecstring [[
@@ -970,7 +984,7 @@ return function(problemSpec)
                 -- write J_csrRowPtrA end
                 var nnz = nnzExp
                 C.printf("setting rowptr[%d] = %d\n",nResidualsExp,nnz)
-                C.cudaMemcpy(&pd.J_csrRowPtrA[nResidualsExp],&nnz,sizeof(int),C.cudaMemcpyHostToDevice)
+                cd(C.cudaMemcpy(&pd.J_csrRowPtrA[nResidualsExp],&nnz,sizeof(int),C.cudaMemcpyHostToDevice))
             end
         end end end
 	   pd.nIter = 0

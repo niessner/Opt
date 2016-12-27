@@ -650,16 +650,36 @@ end)
 
 local positionForValidLane = util.positionForValidLane
 
-local cd = macro(function(cufunc)
+local cd = macro(function(apicall) 
+    local apicallstr = tostring(apicall)
+    local filename = debug.getinfo(1,'S').source
     return quote
-        var r = cufunc
+        var str = [apicallstr]
+        var r = apicall
         if r ~= 0 then  
             C.printf("Cuda reported error %d: %s\n",r, C.cudaGetErrorString(r))
-            return r
+            C.printf("In call: %s", str)
+            C.printf("In file: %s\n", filename)
+            C.exit(r)
         end
-    end
-end)
+    in
+        r
+    end end)
 
+
+local checkedLaunch = macro(function(kernelName, apicall)
+    local apicallstr = tostring(apicall)
+    local filename = debug.getinfo(1,'S').source
+    return quote
+        var name = [kernelName]
+        var r = apicall
+        if r ~= 0 then  
+            C.printf("Kernel %s, Cuda reported error %d: %s\n", name, r, C.cudaGetErrorString(r))
+            C.exit(r)
+        end
+    in
+        r
+    end end)
 
 local GRID_SIZES = { {256,1,1}, {16,16,1}, {8,8,4} }
 
@@ -698,7 +718,7 @@ local function makeGPULauncher(PlanData,kernelName,ft,compiledKernel)
             pd.timer:startEvent(kernelName,nil,&endEvent)
         end
 
-        cd(compiledKernel(&launch, @pd, params))
+        checkedLaunch(kernelName, compiledKernel(&launch, @pd, params))
         
         if ([timeIndividualKernels]) then
             pd.timer:endEvent(nil,endEvent)
