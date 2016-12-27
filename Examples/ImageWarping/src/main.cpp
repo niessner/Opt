@@ -66,7 +66,7 @@ int main(int argc, const char * argv[]) {
             inputImageMask = "catmask512.png";
             constraints.clear();
             loadConstraints(constraints, "cat512.constraints");
-			lmOnlyFullSolve = true;
+			//lmOnlyFullSolve = true;
         } else {
             downsampleFactor = 1;
         }
@@ -76,6 +76,9 @@ int main(int argc, const char * argv[]) {
     if (argc > 2) {
         if (std::string(argv[2]) == "perf") {
             performanceRun = true;
+            if (atoi(argv[1]) > 0) {
+                lmOnlyFullSolve = true;
+            }
         } else {
             printf("Invalid second parameter: %s\n", argv[2]);
         }
