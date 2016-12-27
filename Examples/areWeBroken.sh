@@ -6,7 +6,7 @@
 
 #TODO: Add smoothinglp
 foldernames=(ImageWarping IntrinsicLP MeshDeformationARAP MeshDeformationED MeshDeformationLARAP MeshSmoothingLaplacian MeshSmoothingLaplacianCOT OpticalFlow PoissonImageEditing RobustMeshDeformationARAP ShapeFromShadingSimple SmoothingLaplacianFloat4Graph)
-programnames=(imagewarping intrinsiclp meshdeformation meshdeformation meshsmoothing meshsmoothing opticalflow imageediting meshdeformation shapefromshading imagewarping)
+programnames=(imagewarping intrinsiclp meshdeformation meshdeformation meshdeformation meshsmoothing opticalflow imageediting meshdeformation shapefromshading imagewarping)
 
 #foldernames=(MeshDeformationED)
 #programnames=(meshdeformation)
