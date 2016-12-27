@@ -437,12 +437,21 @@ function ImageType:usestexture() -- texture, 2D texture
     return false, false 
 end
 
-local cd = macro(function(apicall) return quote
-    var r = apicall
-    if r ~= 0 then  
-        C.printf("CUDA reported error %d: %s\n",r, C.cudaGetErrorString(r))
-    end
-end end)
+local cd = macro(function(apicall) 
+    local apicallstr = tostring(apicall)
+    local filename = debug.getinfo(1,'S').source
+    return quote
+        var str = [apicallstr]
+        var r = apicall
+        if r ~= 0 then  
+            C.printf("Cuda reported error %d: %s\n",r, C.cudaGetErrorString(r))
+            C.printf("In call: %s", str)
+            C.printf("In file: %s\n", filename)
+            C.exit(r)
+        end
+    in
+        r
+    end end)
 
 local terra wrapBindlessTexture(data : &uint8, channelcount : int, width : int, height : int) : C.cudaTextureObject_t
     var res_desc : C.cudaResourceDesc
