@@ -39,11 +39,13 @@ local cd = macro(function(apicall)
     end end)
 if use_dump_j then
     local cusparsepath = "/usr/local/cuda"
-    local cusparselibpath = "/lib64/libcusparse.so"
+    local cusparselibpath = "/lib64/libcusparse.dylib"
     if ffi.os == "Windows" then
         cusparsepath = "C:\\Program Files\\NVIDIA GPU Computing Toolkit\\CUDA\\v7.5"
         cusparselibpath = "\\bin\\cusparse64_75.dll"
-        --cusparselibpath = "\\lib\\x64\\cusparse.lib"
+    end
+    if ffi.os == "Linux" then
+        local cusparselibpath = "/lib/libcusparse.so"
     end
     terralib.linklibrary(cusparsepath..cusparselibpath)
     terralib.includepath = terralib.includepath..";"..
