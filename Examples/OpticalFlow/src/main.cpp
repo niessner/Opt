@@ -62,13 +62,6 @@ int main(int argc, const char * argv[]) {
 	//ImageHelper::drawLine(imageSrcGray, vec2ui(50, 50), vec2ui(100, 75), 1.0f);
 	//LodePNG::save(ImageHelper::convertGrayToColor(imageSrcGray), outFile);
 
-	
-    #ifdef _WIN32
-	std::cout << "<press key to continue>" << std::endl;
- 	    getchar();
-    #else
-        exit(0);
-    #endif
 
 	return 0;
 }

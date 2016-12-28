@@ -20,5 +20,6 @@
   <ItemGroup>
     <None Include="bundleAdjustment.t" />
     <None Include="bundleAdjustmentBroken.t" />
+    <None Include="..\PoissonImageEditing\PoissonImageEditing.sln" />
   </ItemGroup>
 </Project>

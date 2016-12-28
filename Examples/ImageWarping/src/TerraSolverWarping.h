@@ -8,6 +8,7 @@ extern "C" {
 }
 
 #include "../../shared/Precision.h"
+#include "../../shared/OptUtils.h"
 
 #include <cuda_runtime.h>
 #include <cudaUtil.h>
@@ -54,26 +55,16 @@ public:
 		
 		void* problemParams[] = { d_x, d_a, d_urshape, d_constraints, d_mask, &weightFitSqrt, &weightRegSqrt };
 		
-        Timer t;
-        t.start();
-        Opt_ProblemInit(m_optimizerState, m_plan, problemParams, solverParams);
-        cudaDeviceSynchronize();
-        t.stop();
-        double cost = Opt_ProblemCurrentCost(m_optimizerState, m_plan);
-        iterationSummary.push_back(SolverIteration(cost, t.getElapsedTimeMS()));
-        
-        
-        t.start();
-        while (Opt_ProblemStep(m_optimizerState, m_plan, problemParams, solverParams)) {
-            cudaDeviceSynchronize();
-            t.stop();
-            cost = Opt_ProblemCurrentCost(m_optimizerState, m_plan);
-            iterationSummary.push_back(SolverIteration(cost, t.getElapsedTimeMS()));
-            t.start();
-        }
-        t.stop();
+        launchProfiledSolve(m_optimizerState, m_plan, (void**)&problemParams, (void**)&solverParams, iterationSummary);
+
+        m_finalCost = Opt_ProblemCurrentCost(m_optimizerState, m_plan);
 	}
 
+    double finalCost() const {
+        return m_finalCost;
+    }
+
+    double m_finalCost = nan("");
 
 	Opt_State*		m_optimizerState;
 	Opt_Problem*	m_problem;

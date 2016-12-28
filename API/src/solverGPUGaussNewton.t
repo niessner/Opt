@@ -20,7 +20,7 @@ local guardedInvertType = GuardedInvertType.CERES
 local JacobiScalingType = { NONE = {}, ONCE_PER_SOLVE = {}, EVERY_ITERATION = {}}
 local JacobiScaling = JacobiScalingType.ONCE_PER_SOLVE
 
-local multistep_alphaDenominator_compute = false
+local multistep_alphaDenominator_compute = use_dump_j
 
 local cd = macro(function(apicall) 
     local apicallstr = tostring(apicall)
@@ -911,7 +911,7 @@ return function(problemSpec)
                 cd(CUsp.cusparseScsrmv(
                             pd.handle, CUsp.CUSPARSE_OPERATION_NON_TRANSPOSE,
                             nUnknowns, nUnknowns,pd.JTJ_nnz,
-                            &consts[2], pd.desc,
+                            &consts[1], pd.desc,
                             pd.JTJ_csrValA, 
                             pd.JTJ_csrRowPtrA, pd.JTJ_csrColIndA,
                             [&float](pd.p._contiguousallocation),
@@ -936,7 +936,7 @@ return function(problemSpec)
                 cd(CUsp.cusparseScsrmv(
                             pd.handle, CUsp.CUSPARSE_OPERATION_NON_TRANSPOSE,
                             nUnknowns, nResidualsExp, nnzExp,
-                            &consts[2], pd.desc,
+                            &consts[1], pd.desc,
                             pd.JT_csrValA, 
                             pd.JT_csrRowPtrA, pd.JT_csrColIndA,
                             pd.Jp,
@@ -1120,14 +1120,14 @@ return function(problemSpec)
 
 				if isGraph then
 					gpu.PCGStep1_Graph(pd)
-				end
-                if multistep_alphaDenominator_compute then
-                    gpu.PCGStep1_Finish(pd)
-                end
-				
+				end				
 
 				-- only does anything if use_dump_j is true
 				cusparseInner(pd)
+
+                if multistep_alphaDenominator_compute then
+                    gpu.PCGStep1_Finish(pd)
+                end
 				
 				C.cudaMemset(pd.scanBetaNumerator, 0, sizeof(opt_float))
 				
@@ -1142,11 +1142,11 @@ return function(problemSpec)
                     gpu.PCGStep2(pd)
                 end
                 --[[
-                var alphaNum : double
-                var alphaDenom : double
-                var betaNum : double
-                C.cudaMemcpy(&alphaNum, pd.scanAlphaNumerator, sizeof(double), C.cudaMemcpyDeviceToHost)
-                C.cudaMemcpy(&alphaDenom, pd.scanAlphaDenominator, sizeof(double), C.cudaMemcpyDeviceToHost)
+                var alphaNum : opt_float
+                var alphaDenom : opt_float
+                var betaNum : opt_float
+                C.cudaMemcpy(&alphaNum, pd.scanAlphaNumerator, sizeof(opt_float), C.cudaMemcpyDeviceToHost)
+                C.cudaMemcpy(&alphaDenom, pd.scanAlphaDenominator, sizeof(opt_float), C.cudaMemcpyDeviceToHost)
                 logSolver("alpha = %.18g/%.18g = %.18g\n", alphaNum, alphaDenom, alphaNum/alphaDenom)
 --]]
                 gpu.PCGStep3(pd)

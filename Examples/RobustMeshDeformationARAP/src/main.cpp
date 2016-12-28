@@ -61,8 +61,5 @@ int main(int argc, const char * argv[])
     }
     delete sourceMesh;
 
-#ifdef _WIN32
-	getchar();
-#endif
 	return 0;
 }

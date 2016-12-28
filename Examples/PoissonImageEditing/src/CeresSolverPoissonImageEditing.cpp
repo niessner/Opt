@@ -7,8 +7,9 @@
 #include <cuda_runtime.h>
 
 #include "CeresSolverPoissonImageEditing.h"
-
+#define GLOG_NO_ABBREVIATED_SEVERITIES
 #include "ceres/ceres.h"
+
 #include "glog/logging.h"
 
 using ceres::DynamicAutoDiffCostFunction;

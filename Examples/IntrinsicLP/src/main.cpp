@@ -39,8 +39,5 @@ int main(int argc, const char * argv[])
 		}
 	}
 	LodePNG::save(out2, "outputShading.png");
-#ifdef _WIN32
-	getchar();
-#endif
 	return 0;
 }

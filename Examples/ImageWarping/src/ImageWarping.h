@@ -10,23 +10,10 @@
 #include "CUDAPatchSolverWarping.h"
 #include "TerraSolverWarping.h"
 #include "CeresSolverImageWarping.h"
+#include "../../shared/CombinedSolverParameters.h"
 
 #include "../../shared/Precision.h"
 #include <fstream>
-
-
-struct CombinedSolverParameters {
-    bool useCUDA = false;
-    bool useTerra = false;
-    bool useAD = true;
-    bool useLMAD = false;
-    bool useCeres = false;
-    bool earlyOut = false;
-    unsigned int numIter = 20;
-    unsigned int nonLinearIter = 3;
-    unsigned int linearIter = 200;
-    unsigned int patchIter = 32;
-};
 
 
 
@@ -133,8 +120,8 @@ public:
 		if (performanceRun) {
 			m_params.useCUDA = false;
 			m_params.useTerra = false;
-			m_params.useAD = true;
-			m_params.useLMAD = true;
+			m_params.useOpt = true;
+            m_params.useOptLM = true;
 			m_params.useCeres = true;
 			m_params.earlyOut = true;
 			m_params.nonLinearIter = 50;
@@ -142,8 +129,8 @@ public:
 
 		}
 		if (lmOnlyFullSolve) {
-			m_params.useAD = false;
-			m_params.useLMAD = true;
+            m_params.useOpt = false;
+            m_params.useOptLM = true;
 			m_params.linearIter = 1000000000;
 		}
 
@@ -154,11 +141,11 @@ public:
         if (m_params.useTerra)
             m_warpingSolverTerra = std::unique_ptr<TerraSolverWarping>(new TerraSolverWarping(m_image.getWidth(), m_image.getHeight(), "ImageWarping.t", "gaussNewtonGPU"));
 
-        if (m_params.useAD) {
+        if (m_params.useOpt) {
             m_warpingSolverTerraAD = std::unique_ptr<TerraSolverWarping>(new TerraSolverWarping(m_image.getWidth(), m_image.getHeight(), "ImageWarpingAD.t", "gaussNewtonGPU"));
 		}
 
-        if (m_params.useLMAD) {
+        if (m_params.useOptLM) {
             m_warpingSolverTerraLMAD = std::unique_ptr<TerraSolverWarping>(new TerraSolverWarping(m_image.getWidth(), m_image.getHeight(), "ImageWarpingAD.t", "LMGPU"));
         }
 
@@ -269,7 +256,7 @@ public:
 		}
 
 
-        if (m_params.useAD) {
+        if (m_params.useOpt) {
 			resetGPU();
 
 			std::cout << std::endl << std::endl;
@@ -287,7 +274,7 @@ public:
 			copyResultToCPU();
 		}
 
-        if (m_params.useLMAD) {
+        if (m_params.useOptLM) {
             resetGPU();
 
             std::cout << std::endl << std::endl;
@@ -351,14 +338,16 @@ public:
 		}
 
 
-        std::string resultDirectory = "results/";
-#   if OPT_DOUBLE_PRECISION
-        std::string resultSuffix = "_double";
-#   else
-        std::string resultSuffix = "_float";
-#   endif
+   
+        std::string resultSuffix = OPT_DOUBLE_PRECISION ? "_double" : "_float";
+
         resultSuffix += std::to_string(m_image.getWidth());
-        saveSolverResults(resultDirectory, resultSuffix, m_ceresIters, m_optGNIters, m_optLMIters);
+        saveSolverResults("results/", resultSuffix, m_ceresIters, m_optGNIters, m_optLMIters);
+        
+        double optCost = m_params.useOpt ? m_warpingSolverTerraAD->finalCost()  : nan(nullptr);
+        double optLMCost = m_params.useOptLM ? m_warpingSolverTerraLMAD->finalCost() : nan(nullptr);
+        double ceresCost = m_params.useCeres ? m_warpingSolverCeres->finalCost() : nan(nullptr);
+        reportFinalCosts("Image Warping", m_params, optCost, optLMCost, ceresCost);
 
 		return &m_resultColor;
 	}

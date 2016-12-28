@@ -521,6 +521,7 @@ void CeresImageSolver::solve(std::shared_ptr<SimpleBuffer> result, const SFSSolv
     cost = -1.0;
     problem.Evaluate(ceres::Problem::EvaluateOptions(), &cost, nullptr, nullptr, nullptr);
     cout << "Cost*2 end: " << cost * 2 << endl;
+    m_finalCost = cost;
 
     cout << summary.FullReport() << endl;
 

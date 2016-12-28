@@ -130,14 +130,21 @@ public:
 		void* problemParams[] = { &weightFitSqrt, &weightRegSqrt, &weightRotSqrt, d_unknowns, d_vertexPosFloat3Urshape, d_vertexPosTargetFloat3, &edgeCount, d_headX, d_headY, d_tailX, d_tailY };
 		Opt_ProblemSolve(m_optimizerState, m_plan, problemParams, solverParams);
 
+        m_finalCost = Opt_ProblemCurrentCost(m_optimizerState, m_plan);
+
 		convertFromFloat12(d_unknowns, d_vertexPosFloat3, d_rotsFloat9, m_numUnknown);
 	}
+
+    double finalCost() const {
+        return m_finalCost;
+    }
 
 private:
 	Opt_State*	m_optimizerState;
     Opt_Problem*	m_problem;
     Opt_Plan*		m_plan;
 
+    double m_finalCost = nan(nullptr);
 	unsigned int m_numUnknown;
 	float12*		d_unknowns;	//float3 (vertices) + float3 (angles)
 };

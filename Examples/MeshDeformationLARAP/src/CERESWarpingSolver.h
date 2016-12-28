@@ -7,6 +7,7 @@
 #include "WarpingSolverState.h"
 
 #include "../../shared/Precision.h"
+#include "../../shared/SolverIteration.h"
 
 class CERESWarpingSolver
 {
@@ -19,7 +20,13 @@ class CERESWarpingSolver
 				   float3* d_vertexPosFloat3Urshape,
 				   float3* d_vertexPosTargetFloat3,
 				   float weightFit,
-				   float weightReg);
+                   float weightReg,
+                   std::vector<SolverIteration>& iter);
+
+        double finalCost() const {
+            return m_finalCost;
+        }
+
 
 	private:
 		vec3d* vertexPosDouble3;
@@ -32,4 +39,5 @@ class CERESWarpingSolver
 
 		unsigned int m_width, m_height, m_depth;
 		unsigned int voxelCount;
+        double m_finalCost = nan(nullptr);
 };

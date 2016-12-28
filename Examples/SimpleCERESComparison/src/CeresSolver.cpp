@@ -733,14 +733,14 @@ std::vector<SolverIteration> CeresSolver::solve(
     options.logging_type = ceres::SILENT;
 
     //faster methods
-    options.num_threads = 8;
-    options.num_linear_solver_threads = 8;
+    options.num_threads = 1;
+    options.num_linear_solver_threads = 1;
     options.linear_solver_type = ceres::LinearSolverType::SPARSE_NORMAL_CHOLESKY; //7.2s
     //options.linear_solver_type = ceres::LinearSolverType::SPARSE_SCHUR; //10.0s
 
     //slower methods
     //options.linear_solver_type = ceres::LinearSolverType::ITERATIVE_SCHUR; //40.6s
-   // options.linear_solver_type = ceres::LinearSolverType::CGNR; //46.9s
+    options.linear_solver_type = ceres::LinearSolverType::CGNR; //46.9s
 	//options.linear_solver_type = ceres::LinearSolverType::DENSE_NORMAL_CHOLESKY;
 
     //options.min_linear_solver_iterations = linearIterationMin;

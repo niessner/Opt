@@ -16,6 +16,9 @@
 #include <cuda_runtime.h>
 #include <cudaUtil.h>
 
+#include "../../shared/CombinedSolverParameters.h"
+#include "../../shared/SolverIteration.h"
+
 #include "CUDAWarpingSolver.h"
 #include "CUDAPatchSolverWarping.h"
 #include "TerraSolverPoissonImageEditing.h"
@@ -43,6 +46,11 @@ public:
 		m_warpingSolverPatch = NULL;
 		m_terraBlockSolver = NULL;
 		m_optBlockSolver = NULL;
+
+        m_params.useCUDA    = (bool)RUN_CUDA;
+        m_params.useTerra   = (bool)RUN_TERRA;
+        m_params.useOpt     = (bool)RUN_OPT;
+        m_params.useCeres   = (bool)RUN_CERES;
 
 		//non-blocked solvers
 #if RUN_CUDA
@@ -200,7 +208,7 @@ public:
 #if RUN_TERRA_BLOCK
 		std::cout << "\n\n======TERRA_BLOCK=========" << std::endl;
 		resetGPUMemory();
-		m_terraBlockSolver->solve(d_image, d_target, d_mask, nonLinearIter, linearIter,  patchIter, weightFit, weightReg );
+		m_terraBlockSolver->solve(d_image, d_target, d_mask, nonLinearIter, linearIter, patchIter, weightFit, weightReg );
 		copyResultToCPU();
 #endif
 #if RUN_TERRA_BLOCK
@@ -209,8 +217,11 @@ public:
 		m_optBlockSolver->solve(d_image, d_target, d_mask, nonLinearIter, linearIter, patchIter, weightFit, weightReg);
 		copyResultToCPU();
 #endif
-
-
+        double optGNCost = m_params.useOpt ? m_optSolver->finalCost() : nan(nullptr);
+        double optLMCost = nan(nullptr);
+        double ceresCost = nan(nullptr);
+        m_params.useCeres = false; // TODO: thread this through properly
+        reportFinalCosts("Poisson Image Editing", m_params, optGNCost, optLMCost, ceresCost);
 		return &m_result;
 	}
 
@@ -231,6 +242,8 @@ private:
 	float4* d_target;
 	float*  d_mask;
 	
+
+    CombinedSolverParameters m_params;
 
 	CUDAWarpingSolver*	    m_warpingSolver;
 	TerraSolverPoissonImageEditing* m_terraSolver;

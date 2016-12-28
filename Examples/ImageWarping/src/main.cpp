@@ -63,7 +63,7 @@ int main(int argc, const char * argv[]) {
         downsampleFactor = atoi(argv[1]);
         if (downsampleFactor > 0) {
             inputImage = "cartooncat512.png";
-            inputImageMask = "catmask512.png";
+            inputImageMask = "catmask512_black.png";
             constraints.clear();
             loadConstraints(constraints, "cat512.constraints");
 			//lmOnlyFullSolve = true;
@@ -173,13 +173,6 @@ int main(int argc, const char * argv[]) {
 	LodePNG::save(out, "output.png");
 	LodePNG::save(image, "inputMark.png");
     printf("Saved\n");
-    if (!performanceRun) {
-#ifdef _WIN32
-        getchar();
-#else
-        exit(0);
-#endif
-    }
 
 	return 0;
 }

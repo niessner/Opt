@@ -87,6 +87,5 @@ int main(int argc, char** argv)
 
     App app;
     app.go();
-    getchar();
     return 0;
 }

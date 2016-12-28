@@ -13,6 +13,7 @@
 #include "CeresWarpingSolver.h"
 #include "../../shared/SolverIteration.h"
 #include "../../shared/Precision.h"
+#include "../../shared/CombinedSolverParameters.h"
 
 // From the future (C++14)
 template<typename T, typename... Args>
@@ -21,18 +22,6 @@ std::unique_ptr<T> make_unique(Args&&... args) {
 }
 
 
-struct CombinedSolverParameters {
-    bool useCUDA = false;
-    bool useTerra = false;
-    bool useAD = true;
-    bool useLMAD = false;
-    bool useCeres = false;
-    bool earlyOut = false;
-    unsigned int numIter = 32;
-    unsigned int nonLinearIter = 2;
-    unsigned int linearIter = 4000;
-};
-
 class ImageWarping
 {
 	public:
@@ -40,6 +29,10 @@ class ImageWarping
 		{
 			m_result = *mesh;
 			m_initial = m_result;
+
+            m_params.numIter = 32;
+            m_params.nonLinearIter = 2;
+            m_params.linearIter = 4000;
 
 			unsigned int N = (unsigned int)mesh->n_vertices();
 			unsigned int E = (unsigned int)mesh->n_edges();
@@ -59,8 +52,8 @@ class ImageWarping
             if (performanceRun) {
                 m_params.useCUDA = false;
                 m_params.useTerra = false;
-                m_params.useAD = true;
-                m_params.useLMAD = true;
+                m_params.useOpt = true;
+                m_params.useOptLM = true;
                 m_params.useCeres = true;
                 m_params.earlyOut = true;
 				m_params.nonLinearIter = 20;
@@ -211,8 +204,8 @@ class ImageWarping
             auto genericOptSolve = [=](std::unique_ptr<TerraWarpingSolver>& solver, std::vector<SolverIteration>& iters) { solver->solveGN(d_vertexPosFloat3, d_anglesFloat3, d_vertexPosFloat3Urshape, d_vertexPosTargetFloat3, m_params.nonLinearIter, m_params.linearIter, weightFit, weightReg, iters); };
 
             gpuSolve("TERRA", m_params.useTerra != 0, [=](){ genericOptSolve(m_terraWarpingSolver, m_terraIters); });
-            gpuSolve("OPT", m_params.useAD != 0, [=](){ genericOptSolve(m_optWarpingSolver, m_optIters); });
-            gpuSolve("OPT_LM", m_params.useLMAD != 0, [=](){ genericOptSolve(m_optLMWarpingSolver, m_optLMIters); });
+            gpuSolve("OPT", m_params.useOpt != 0, [=](){ genericOptSolve(m_optWarpingSolver, m_optIters); });
+            gpuSolve("OPT_LM", m_params.useOptLM != 0, [=](){ genericOptSolve(m_optLMWarpingSolver, m_optLMIters); });
 
 
     
@@ -255,14 +248,10 @@ class ImageWarping
             cutilSafeCall(cudaMemcpy(d_vertexPosFloat3, h_vertexPosFloat3, sizeof(float3)*N, cudaMemcpyHostToDevice));
             copyResultToCPUFromFloat3();
 
-            std::string resultDirectory = "results/";
-#   if OPT_DOUBLE_PRECISION
-            std::string resultSuffix = "_double";
-#   else
-            std::string resultSuffix = "_float";
-#   endif
-            saveSolverResults(resultDirectory, resultSuffix, m_ceresIters, m_optIters, m_optLMIters);
-						
+            saveSolverResults("results/", OPT_DOUBLE_PRECISION ? "_double" : "_float", m_ceresIters, m_optIters, m_optLMIters);
+			
+            reportFinalCosts("Mesh Deformation ARAP", m_params, m_optWarpingSolver->finalCost(), m_optLMWarpingSolver->finalCost(), m_ceresWarpingSolver->finalCost());
+
 			return &m_result;
 		}
 

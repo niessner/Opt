@@ -145,7 +145,7 @@ public:
             problemParams = { &weightFitSqrt, &weightRegSqrt, d_vertexPosFloat3, d_anglesFloat3, d_vertexPosFloat3Urshape, d_vertexPosTargetFloat3, &edgeCount, d_headX, d_headY, d_tailX, d_tailY };
         }
         launchProfiledSolve(m_optimizerState, m_plan, problemParams.data(), solverParams, iters);
-
+        m_finalCost = Opt_ProblemCurrentCost(m_optimizerState, m_plan);
 
         if (OPT_DOUBLE_PRECISION) {
             std::vector<double> vDouble;
@@ -169,10 +169,15 @@ public:
 
 	}
 
+    double finalCost() const {
+        return m_finalCost;
+    }
+
 private:
 	Opt_State*	m_optimizerState;
     Opt_Problem*	m_problem;
     Opt_Plan*		m_plan;
 
+    double m_finalCost = nan(nullptr);
 	unsigned int m_numUnknown;
 };

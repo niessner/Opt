@@ -29,6 +29,5 @@ int main(int argc, const char * argv[])
 	}
 	LodePNG::save(out, "output.png");
 
-	getchar();
 	return 0;
 }

@@ -7,6 +7,8 @@
 
 #include "TerraSolver.h"
 #include "CUDATimer.h"
+#include "../../shared/CombinedSolverParameters.h"
+#include "../../shared/SolverIteration.h"
 
 class ImageWarping
 {
@@ -23,7 +25,8 @@ class ImageWarping
 						
 			resetGPUMemory();
 
-			m_terraSolver = new TerraSolver(m_image.getWidth(), m_image.getHeight(), "SmoothingLaplacianFloat3AD.t", "gaussNewtonGPU");
+            m_gnSolver = new TerraSolver(m_image.getWidth(), m_image.getHeight(), "SmoothingLaplacianFloat3AD.t", "gaussNewtonGPU");
+            m_lmSolver = new TerraSolver(m_image.getWidth(), m_image.getHeight(), "SmoothingLaplacianFloat3AD.t", "LMGPU");
 		}
 
 		void resetGPUMemory()
@@ -84,7 +87,8 @@ class ImageWarping
 			cutilSafeCall(cudaFree(d_imageFloat3Albedo));
 			cutilSafeCall(cudaFree(d_imageFloatIllumination));
 
-			SAFE_DELETE(m_terraSolver);
+			SAFE_DELETE(m_gnSolver);
+            SAFE_DELETE(m_lmSolver);
 		}
 
 		ColorImageR32G32B32A32* solve()
@@ -95,20 +99,22 @@ class ImageWarping
 			float weightRegChroma  = 100.0f;
 			float pNorm = 0.8;
 
-			unsigned int nonLinearIter = 7;
-			unsigned int linearIter = 10;
-	            
-            std::cout << "\n\nOPT" << std::endl;
-            resetGPUMemory();
+            m_params.nonLinearIter = 7;
+            m_params.linearIter = 10;
+	         
+            if (m_params.useOpt) {
+                std::cout << "\n\nOPT GN" << std::endl;
+                resetGPUMemory();
+                m_gnSolver->solve(d_imageFloat3Albedo, d_imageFloatIllumination, d_targetFloat3, d_input, m_params.nonLinearIter, m_params.linearIter, 0, weightFit, weightRegAlbedo, weightRegShading, weightRegChroma, pNorm);
+            }
+            if (m_params.useOptLM) {
+                std::cout << "\n\nOPT LM" << std::endl;
+                resetGPUMemory();
+                m_lmSolver->solve(d_imageFloat3Albedo, d_imageFloatIllumination, d_targetFloat3, d_input, m_params.nonLinearIter, m_params.linearIter, 0, weightFit, weightRegAlbedo, weightRegShading, weightRegChroma, pNorm);
+            }
 
-			CUDATimer timer;
-			timer.startEvent("opt");
-			m_terraSolver->solve(d_imageFloat3Albedo, d_imageFloatIllumination, d_targetFloat3, d_input, nonLinearIter, linearIter, 0, weightFit, weightRegAlbedo, weightRegShading, weightRegChroma, pNorm);
-			timer.endEvent();
-			timer.evaluate();
-
-			copyResultToCPUFromFloat3();
-			
+            reportFinalCosts("Intrinsic Images", m_params, m_gnSolver->finalCost(), m_lmSolver->finalCost(), nan(nullptr));
+			copyResultToCPUFromFloat3();			
 			return &m_result;
 		}
 
@@ -172,5 +178,9 @@ class ImageWarping
 		float3* d_targetFloat3;
 		float3* d_input;
 	
-        TerraSolver* m_terraSolver;
+
+        CombinedSolverParameters m_params;
+        TerraSolver* m_gnSolver;
+        TerraSolver* m_lmSolver;
+
 };
