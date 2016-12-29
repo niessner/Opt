@@ -9,6 +9,11 @@
 #include "../../shared/Precision.h"
 #include "../../shared/SolverIteration.h"
 
+#ifdef _WIN32
+#define USE_CERES
+#endif
+
+
 class CERESWarpingSolver
 {
 	public:
@@ -41,3 +46,8 @@ class CERESWarpingSolver
 		unsigned int voxelCount;
         double m_finalCost = nan(nullptr);
 };
+#ifndef USE_CERES
+CERESWarpingSolver::CERESWarpingSolver(unsigned int, unsigned int, unsigned int) {}
+CERESWarpingSolver::~CERESWarpingSolver() {}
+void CERESWarpingSolver::solve(float3*, float3*, float3*, float3*, float, float, std::vector<SolverIteration>&) {}
+#endif

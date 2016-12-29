@@ -1,5 +1,5 @@
 EXECUTABLE = meshdeformation
-OBJS = build/CUDAWarpingSolver.o build/WarpingSolver.o build/TerraSolverWarping.o build/mLibSource.o build/main.o
+OBJS = build/CUDAWarpingSolver.o build/WarpingSolver.o build/TerraSolverWarping.o build/mLibSource.o build/main.o 
 
 UNAME := $(shell uname)
 ifeq ($(UNAME), Darwin)

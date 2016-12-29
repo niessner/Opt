@@ -2,7 +2,7 @@
 
 # Author: Michael Mara (mmara@cs.stanford.edu)
 # Created 2015-11-20
-# Last Edited 2016-12-18
+# Last Edited 2016-12-29
 
 #TODO: Add smoothinglp
 foldernames=(ImageWarping IntrinsicLP MeshDeformationARAP MeshDeformationED MeshDeformationLARAP MeshSmoothingLaplacian MeshSmoothingLaplacianCOT OpticalFlow PoissonImageEditing RobustMeshDeformationARAP ShapeFromShadingSimple SmoothingLaplacianFloat4Graph)

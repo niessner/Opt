@@ -235,7 +235,7 @@ void SimpleBuffer::savePLYMesh(std::string filename) const {
         }
     }
     TriMeshf mesh(vertices, indices);
-	MeshIOf::saveToPLY(filename, mesh.makeMeshData());
+	MeshIOf::saveToPLY(filename, mesh.computeMeshData());
 
     if (m_onGPU) {
         free(ptr);
