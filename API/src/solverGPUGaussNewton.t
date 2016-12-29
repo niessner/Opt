@@ -239,8 +239,8 @@ return function(problemSpec)
                         local uidx = GetOffset(idx,u.index)
                         local unknown_index = `image_offset + nchannels*uidx + u.channel
                         emit quote
-                            pd.J_csrValA[local_rowidx + nnz] = rhs.["_"..tostring(nnz)]
-                            pd.J_csrColIndA[local_rowidx + nnz] = wrap(unknown_index,rhs.["_"..tostring(nnz)])
+                            pd.J_csrValA[local_rowidx + nnz] = opt_float(rhs.["_"..tostring(nnz)])
+                            pd.J_csrColIndA[local_rowidx + nnz] = wrap(unknown_index,opt_float(rhs.["_"..tostring(nnz)]))
                         end
                         nnz = nnz + 1
                     end

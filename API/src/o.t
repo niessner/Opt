@@ -564,7 +564,7 @@ function ImageType:terratype()
     -- lerps for 2D images only
     if 2 == #self.ispace.dims then
         local terra lerp(v0 : vectortype, v1 : vectortype, t : opt_float)
-            return ([opt_float](1.) - t)*v0 + t*v1
+            return (opt_float(1.) - t)*v0 + t*v1
         end
         terra Image:sample(x : opt_float, y : opt_float)
             var x0 : int, x1 : int = opt.math.floor(x),opt.math.ceil(x)
