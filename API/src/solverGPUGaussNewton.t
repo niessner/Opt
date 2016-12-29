@@ -9,8 +9,8 @@ local C = util.C
 local Timer = util.Timer
 
 local getValidUnknown = util.getValidUnknown
-local use_dump_j = true
-local use_fused_jtj = true
+local use_dump_j    = false
+local use_fused_jtj = false
 
 
 local GuardedInvertType = { CERES = {}, MODIFIED_CERES = {}, EPSILON_ADD = {} }

@@ -49,5 +49,5 @@ class CERESWarpingSolver
 #ifndef USE_CERES
 CERESWarpingSolver::CERESWarpingSolver(unsigned int, unsigned int, unsigned int) {}
 CERESWarpingSolver::~CERESWarpingSolver() {}
-void CERESWarpingSolver::solve(float3*, float3*, float3*, float3*, float, float) {}
+void CERESWarpingSolver::solve(float3*, float3*, float3*, float3*, float, float, std::vector<SolverIteration>&) {}
 #endif
