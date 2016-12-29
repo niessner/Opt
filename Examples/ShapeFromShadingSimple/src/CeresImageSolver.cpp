@@ -481,7 +481,7 @@ void CeresImageSolver::solve(std::shared_ptr<SimpleBuffer> result, const SFSSolv
     //options.linear_solver_type = ceres::LinearSolverType::SPARSE_SCHUR;
     //options.linear_solver_type = ceres::LinearSolverType::ITERATIVE_SCHUR;
 
-    options.function_tolerance = 0.00001;
+    options.function_tolerance = 0.00000001;
     options.gradient_tolerance = 1e-4 * options.function_tolerance;
 
 	// The linear approximation is bad for SFS, so solving exactly actually *hurts* convergence.
