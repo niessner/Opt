@@ -9,7 +9,7 @@ local C = util.C
 local Timer = util.Timer
 
 local getValidUnknown = util.getValidUnknown
-local use_dump_j    = false
+local use_cusparse    = false
 local use_fused_jtj = false
 
 
@@ -20,7 +20,7 @@ local guardedInvertType = GuardedInvertType.CERES
 local JacobiScalingType = { NONE = {}, ONCE_PER_SOLVE = {}, EVERY_ITERATION = {}}
 local JacobiScaling = JacobiScalingType.ONCE_PER_SOLVE
 
-local multistep_alphaDenominator_compute = use_dump_j
+local multistep_alphaDenominator_compute = use_cusparse
 
 local cd = macro(function(apicall) 
     local apicallstr = tostring(apicall)
@@ -37,7 +37,7 @@ local cd = macro(function(apicall)
     in
         r
     end end)
-if use_dump_j then
+if use_cusparse then
     local cusparsepath = "/usr/local/cuda"
     local cusparselibpath = "/lib64/libcusparse.dylib"
     if ffi.os == "Windows" then
@@ -164,7 +164,7 @@ return function(problemSpec)
 	    
 	    Jp : &float
 	}
-	if use_dump_j then
+	if use_cusparse then
 	    PlanData.entries:insert {"handle", CUsp.cusparseHandle_t }
 	    PlanData.entries:insert {"desc", CUsp.cusparseMatDescr_t }
 	end
@@ -310,17 +310,6 @@ return function(problemSpec)
             return result
         end
 
-        terra kernels.computeQ(pd : PlanData)
-            var q : opt_float = opt_float(0.0f)
-            var idx : Index
-            if idx:initFromCUDAParams() and not fmap.exclude(idx,pd.parameters) then 
-                -- Right side is -2 of CERES versions, left is just negative version, 
-                --  so after the dot product, just need to multiply by 2 to recover value identical to CERES  
-                q = 0.5*(pd.delta(idx):dot(pd.r(idx) + pd.b(idx))) 
-            end
-            unknownWideReduction(idx,q,pd.scratch)
-        end
-	
         terra kernels.PCGInit1(pd : PlanData)
             var d : opt_float = opt_float(0.0f) -- init for out of bounds lanes
         
@@ -408,6 +397,7 @@ return function(problemSpec)
 
         terra kernels.PCGStep2(pd : PlanData)
             var b = opt_float(0.0f) 
+            var q = opt_float(0.0f) -- Only used if LM
             var idx : Index
             if idx:initFromCUDAParams() and not fmap.exclude(idx,pd.parameters) then
                 -- sum over block results to compute denominator of alpha
@@ -418,7 +408,8 @@ return function(problemSpec)
                 var alpha = opt_float(0.0f)
                 alpha = alphaNumerator/alphaDenominator 
     
-                pd.delta(idx) = pd.delta(idx)+alpha*pd.p(idx)		-- do a descent step
+                var delta = pd.delta(idx)+alpha*pd.p(idx)       -- do a descent step
+                pd.delta(idx) = delta
 
                 var r = pd.r(idx)-alpha*pd.Ap_X(idx)				-- update residuum
                 pd.r(idx) = r										-- store for next kernel call
@@ -432,11 +423,19 @@ return function(problemSpec)
                 pd.z(idx) = z;										-- save for next kernel call
 
                 b = z:dot(r)									-- compute x-th term of the numerator of beta
-                --if (b - 0.000998503 < 0.0000001f and b - 0.000998503 > -0.0000001f) then 
-                   -- printf("%dx%d b: %g, mask: %f, constraints %f,%f\n", idx.d0, idx.d1, b, pd.parameters.Mask(idx), pd.parameters.Constraints(idx)(0), pd.parameters.Constraints(idx)(1))
-                --end
+
+                if [problemSpec:UsesLambda()] then
+                    -- computeQ    
+                    -- Right side is -2 of CERES versions, left is just negative version, 
+                    --  so after the dot product, just need to multiply by 2 to recover value identical to CERES  
+                    q = 0.5*(delta:dot(r + pd.b(idx))) 
+                end
             end
+            
             unknownWideReduction(idx,b,pd.scanBetaNumerator)
+            if [problemSpec:UsesLambda()] then
+                unknownWideReduction(idx,q,pd.scratch)
+            end
         end
 
         terra kernels.PCGStep2_1stHalf(pd : PlanData)
@@ -452,6 +451,7 @@ return function(problemSpec)
 
         terra kernels.PCGStep2_2ndHalf(pd : PlanData)
             var b = opt_float(0.0f) 
+            var q = opt_float(0.0f) 
             var idx : Index
             if idx:initFromCUDAParams() and not fmap.exclude(idx,pd.parameters) then
                 -- Recompute residual
@@ -467,8 +467,17 @@ return function(problemSpec)
                 var z = pre*r       -- apply pre-conditioner M^-1
                 pd.z(idx) = z;      -- save for next kernel call
                 b = z:dot(r)        -- compute x-th term of the numerator of beta
+                if [problemSpec:UsesLambda()] then
+                    -- computeQ    
+                    -- Right side is -2 of CERES versions, left is just negative version, 
+                    --  so after the dot product, just need to multiply by 2 to recover value identical to CERES  
+                    q = 0.5*(pd.delta(idx):dot(r + pd.b(idx))) 
+                end
             end
             unknownWideReduction(idx,b,pd.scanBetaNumerator) 
+            if [problemSpec:UsesLambda()] then
+                unknownWideReduction(idx,q,pd.scratch)
+            end
         end
 
 
@@ -566,7 +575,8 @@ return function(problemSpec)
 
             terra kernels.PCGFinalizeDiagonal(pd : PlanData)
                 var idx : Index
-                var d = [opt_float](0.0f)
+                var d = opt_float(0.0f)
+                var q = opt_float(0.0f)
                 if idx:initFromCUDAParams() and not fmap.exclude(idx,pd.parameters) then 
                     var unclampedCtC = pd.CtC(idx)
                     var invS_iiSq : unknownElement = opt_float(1.0f)
@@ -584,11 +594,16 @@ return function(problemSpec)
                     var pre = opt_float(1.0f) / (CtC+pd.parameters.trust_region_radius*unclampedCtC) 
                     pd.preconditioner(idx) = pre
                     var residuum = pd.r(idx)
-                    pd.b(idx) = residuum
+                    pd.b(idx) = residuum -- copy over to b
                     var p = pre*residuum    -- apply pre-conditioner M^-1
                     pd.p(idx) = p
-                    d = residuum:dot(p)     
+                    d = residuum:dot(p)
+                    -- computeQ    
+                    -- Right side is -2 of CERES versions, left is just negative version, 
+                    --  so after the dot product, just need to multiply by 2 to recover value identical to CERES  
+                    q = 0.5*(pd.delta(idx):dot(residuum + residuum)) 
                 end    
+                unknownWideReduction(idx,q,pd.scratch)
                 unknownWideReduction(idx,d,pd.scanAlphaNumerator)
             end
 
@@ -703,7 +718,6 @@ return function(problemSpec)
                                                                         "savePreviousUnknowns",
                                                                         "computeCost",
                                                                         "PCGSaveSSq",
-                                                                        "computeQ",
                                                                         "precompute",
                                                                         "computeAdelta",
                                                                         "computeAdelta_Graph",
@@ -737,15 +751,12 @@ return function(problemSpec)
 
     local sqrtf = util.cpuMath.sqrt
 
-    local terra computeQ(pd : &PlanData) : opt_float
-        C.cudaMemset(pd.scratch, 0, sizeof(opt_float))
-        gpu.computeQ(pd)
-
+    local terra fetchQ(pd : &PlanData) : opt_float
         var f : opt_float
         C.cudaMemcpy(&f, pd.scratch, sizeof(opt_float), C.cudaMemcpyDeviceToHost)
-
         return f
     end
+
 
     local terra logDoubles(vec : double[UNK_SZ], label : rawstring)
         logSolver("\t %s", label)
@@ -812,7 +823,7 @@ return function(problemSpec)
         return r
     end
     local cusparseInner,cusparseOuter
-    if use_dump_j then
+    if use_cusparse then
         terra cusparseOuter(pd : &PlanData)
             var [parametersSym] = &pd.parameters
             --logSolver("saving J...\n")
@@ -938,7 +949,7 @@ return function(problemSpec)
 	   pd.timer:startEvent("overall",nil,&pd.endSolver)
        [util.initParameters(`pd.parameters,problemSpec,params_,true)]
        var [parametersSym] = &pd.parameters
-        escape if use_dump_j then emit quote
+        escape if use_cusparse then emit quote
             if pd.J_csrValA == nil then
                 cd(CUsp.cusparseCreateMatDescr( &pd.desc ))
                 cd(CUsp.cusparseSetMatType( pd.desc,CUsp.CUSPARSE_MATRIX_TYPE_GENERAL ))
@@ -1029,16 +1040,16 @@ return function(problemSpec)
                 if problemSpec:UsesLambda() then
                     emit quote
                         C.cudaMemset(pd.scanAlphaNumerator, 0, sizeof(opt_float))
-
+                        C.cudaMemset(pd.scratch, 0, sizeof(opt_float))
                         if [JacobiScaling == JacobiScalingType.ONCE_PER_SOLVE] and pd.nIter == 0 then
                             gpu.PCGSaveSSq(pd)
                         end
                         --logSolver(" trust_region_radius=%f ",pd.parameters.trust_region_radius)
                         gpu.PCGComputeCtC(pd)
                         gpu.PCGComputeCtC_Graph(pd)
-
+                        -- This also computes Q
                         gpu.PCGFinalizeDiagonal(pd)
-                        Q0 = computeQ(pd)
+                        Q0 = fetchQ(pd)
                         --logSolver("\nQ0=%.18g\n", Q0)
 --[[
                 var v : double[UNK_SZ]
@@ -1095,15 +1106,17 @@ return function(problemSpec)
             for lIter = 0, pd.lIterations do				
 
                 C.cudaMemset(pd.scanAlphaDenominator, 0, sizeof(opt_float))
+                C.cudaMemset(pd.scratch, 0, sizeof(opt_float))
 
-				gpu.PCGStep1(pd)
+                if not use_cusparse then
+    				gpu.PCGStep1(pd)
+    				if isGraph then
+    					gpu.PCGStep1_Graph(pd)
+    				end		
+                end		
 
-				if isGraph then
-					gpu.PCGStep1_Graph(pd)
-				end				
-
-				-- only does anything if use_dump_j is true
-				cusparseInner(pd)
+				-- only does anything if use_cusparse is true
+                cusparseInner(pd)
 
                 if multistep_alphaDenominator_compute then
                     gpu.PCGStep1_Finish(pd)
@@ -1138,7 +1151,7 @@ return function(problemSpec)
 				C.cudaMemcpy(pd.scanAlphaNumerator, pd.scanBetaNumerator, sizeof(opt_float), C.cudaMemcpyDeviceToDevice)	
 				
 				if [problemSpec:UsesLambda()] then
-	                Q1 = computeQ(pd)
+	                Q1 = fetchQ(pd)
 	                var zeta = [opt_float](lIter+1)*(Q1 - Q0) / Q1 
 
 --[[
@@ -1205,13 +1218,10 @@ return function(problemSpec)
 			
 
             var model_cost_change : opt_float
-            escape 
-                if problemSpec:UsesLambda() then
-                    emit quote
-                        model_cost_change = computeModelCostChange(pd)
-                        gpu.savePreviousUnknowns(pd)
-                    end
-                end
+
+            if problemSpec:UsesLambda() then
+                model_cost_change = computeModelCostChange(pd)
+                gpu.savePreviousUnknowns(pd)
             end
 
 			gpu.PCGLinearUpdate(pd)    
