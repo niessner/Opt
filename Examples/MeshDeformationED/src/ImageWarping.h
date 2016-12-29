@@ -21,6 +21,21 @@ class ImageWarping
 			m_result = *mesh;
 			m_initial = m_result;
 
+            m_params.useOpt = true;
+            m_params.useOptLM = false;
+            m_params.numIter = 32;
+            m_params.nonLinearIter = 1;
+            m_params.linearIter = 4000;
+            m_params.earlyOut = true;
+
+            /* LM is good here 
+            m_params.useOpt = false;
+            m_params.useOptLM = true;
+            m_params.numIter = 32;
+            m_params.nonLinearIter = 20;
+            */
+            m_params.linearIter = 200;
+
 			unsigned int N = (unsigned int)mesh->n_vertices();
 			unsigned int E = (unsigned int)mesh->n_edges();
 
@@ -143,12 +158,10 @@ class ImageWarping
 			
 			//float weightFit = 5.0f;
 			float weightFit = 3.0f;
-			float weightReg = 4.0f;
+			float weightReg = 12.0f;
 			float weightRot = 5.0f;
 		
-            m_params.numIter = 32;
-            m_params.nonLinearIter = 1;
-            m_params.linearIter = 4000;
+
 
 			//unsigned int numIter = 2;
 			//unsigned int nonLinearIter = 3;
