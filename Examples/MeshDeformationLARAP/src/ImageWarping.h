@@ -300,7 +300,7 @@ class ImageWarping
 
             saveSolverResults("results/", OPT_DOUBLE_PRECISION ? "_double" : "_float", m_ceresIters, m_optIters, m_optLMIters);
 
-            reportFinalCosts("Mesh Deformation ARAP", m_params, m_warpingSolverOpt->finalCost(), m_warpingSolverOptLM->finalCost(), m_warpingSolverCeres->finalCost());
+            reportFinalCosts("Mesh Deformation LARAP", m_params, m_warpingSolverOpt->finalCost(), m_warpingSolverOptLM->finalCost(), m_warpingSolverCeres->finalCost());
 
 						
 			return &m_result;

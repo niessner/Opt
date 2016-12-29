@@ -11,7 +11,7 @@ P:Stencil(2)
 P:UsePreconditioner(true)
 
 local terms = terralib.newlist()
-terms:insert(w_fitSqrt*(X(0,0) - A(0,0)))
+terms:insert(w_fitSqrt*(X(0) - A(0)))
 terms:insert(w_regSqrt*(X(G.v1) - X(G.v0)))
 
 return adP:Cost(unpack(terms))

@@ -41,7 +41,6 @@ def buildAndRunPerformanceTests(pTests):
 	for pTest in pTests:
 		compileProject(pTest[0], pTest[0])
 		perfTest(*pTest)
-	scalingPerfTest()
 
 def setDoublePrecision(isDouble):
 	boolExpr = "false"
@@ -71,9 +70,9 @@ opt_float = """
 
 testTable = {}
 
-   
+   #TODO: Add in Poisson Image Editing
 projectList = ["ImageWarping", "IntrinsicLP", "MeshDeformationARAP", "MeshDeformationED", "MeshDeformationLARAP", 
-    "MeshSmoothingLaplacian", "MeshSmoothingLaplacianCOT", "OpticalFlow", "PoissonImageEditing", "RobustMeshDeformationARAP"
+    "MeshSmoothingLaplacian", "MeshSmoothingLaplacianCOT", "OpticalFlow", "RobustMeshDeformationARAP",
     "ShapeFromShadingSimple", "SmoothingLaplacianLP"]
 
 

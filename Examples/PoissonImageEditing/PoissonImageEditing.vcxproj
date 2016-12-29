@@ -11,7 +11,7 @@
     </ProjectConfiguration>
   </ItemGroup>
   <PropertyGroup Label="Globals">
-    <ProjectGuid>{CA9DD020-FC04-44B1-8741-AFC2A99756D1}</ProjectGuid>
+    <ProjectGuid>{4F087199-0BCB-4A85-B442-0472A166A1C5}</ProjectGuid>
     <Keyword>Win32Proj</Keyword>
     <RootNamespace>DepthWithColor.D3D</RootNamespace>
     <ProjectName>PoissonImageEditing</ProjectName>
