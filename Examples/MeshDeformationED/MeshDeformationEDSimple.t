@@ -16,13 +16,13 @@ local w_rotSqrt = Param("w_rotSqrt", float, 2)
 local Offset = Slice(X,0,3)
 
 --fitting
-local e_fit = Offset(0,0) - Constraints(0,0)
-local valid = greatereq(Constraints(0,0,0), -999999.9)
+local e_fit = Offset(0) - Constraints(0)
+local valid = greatereq(Constraints(0)(0), -999999.9)
 Energy(Select(valid, w_fitSqrt*e_fit, 0))
 
 --rot
 local RotMatrix = Slice(X,3,12)
-local R = RotMatrix(0,0)
+local R = RotMatrix(0)
 local c0 = ad.Vector(R(0), R(3), R(6))
 local c1 = ad.Vector(R(1), R(4), R(7))
 local c2 = ad.Vector(R(2), R(5), R(8))

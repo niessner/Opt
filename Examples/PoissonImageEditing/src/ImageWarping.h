@@ -1,6 +1,6 @@
 #pragma once
 
-#define RUN_CUDA 1
+#define RUN_CUDA 0
 #define RUN_TERRA 0
 #define RUN_OPT 1
 #define RUN_CERES 0
@@ -59,14 +59,14 @@ public:
 #if RUN_TERRA
 		m_terraSolver = new TerraSolverPoissonImageEditing(m_image.getWidth(), m_image.getHeight(), "PoissonImageEditing.t", "gaussNewtonGPU");
 #endif
-#ifdef RUN_OPT
+#if RUN_OPT
 		m_optSolver = new TerraSolverPoissonImageEditing(m_image.getWidth(), m_image.getHeight(), "PoissonImageEditingAD.t", "gaussNewtonGPU");
 #endif
-#ifdef RUN_CERES
+#if RUN_CERES
         m_ceresSolver = new CeresSolverPoissonImageEditing(m_image.getWidth(), m_image.getHeight());
 #endif
 
-#ifdef RUN_EIGEN
+#if RUN_EIGEN
         m_eigenSolver = new EigenSolverPoissonImageEditing(m_image.getWidth(), m_image.getHeight());
 #endif
 

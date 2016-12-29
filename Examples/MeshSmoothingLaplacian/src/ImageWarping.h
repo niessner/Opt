@@ -137,7 +137,7 @@ public:
             copyResultToCPUFromFloat3();
         }
 
-        reportFinalCosts("Mesh Deformation ARAP", m_params, m_optWarpingSolver->finalCost(), m_optLMWarpingSolver->finalCost(), nan(nullptr));
+        reportFinalCosts("Mesh Smoothing Laplacian", m_params, m_optWarpingSolver->finalCost(), m_optLMWarpingSolver->finalCost(), nan(nullptr));
 
 
 		return &m_result;
