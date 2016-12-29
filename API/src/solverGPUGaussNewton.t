@@ -436,21 +436,16 @@ return function(problemSpec)
                    -- printf("%dx%d b: %g, mask: %f, constraints %f,%f\n", idx.d0, idx.d1, b, pd.parameters.Mask(idx), pd.parameters.Constraints(idx)(0), pd.parameters.Constraints(idx)(1))
                 --end
             end
-
             unknownWideReduction(idx,b,pd.scanBetaNumerator)
         end
 
         terra kernels.PCGStep2_1stHalf(pd : PlanData)
             var idx : Index
             if idx:initFromCUDAParams() and not fmap.exclude(idx,pd.parameters) then
-                -- sum over block results to compute denominator of alpha
                 var alphaDenominator : opt_float = pd.scanAlphaDenominator[0]
                 var alphaNumerator : opt_float = pd.scanAlphaNumerator[0]
-
                 -- update step size alpha
-                var alpha = opt_float(0.0f)
-                alpha = alphaNumerator/alphaDenominator 
-    
+                var alpha = alphaNumerator/alphaDenominator 
                 pd.delta(idx) = pd.delta(idx)+alpha*pd.p(idx)       -- do a descent step
             end
         end
@@ -459,14 +454,19 @@ return function(problemSpec)
             var b = opt_float(0.0f) 
             var idx : Index
             if idx:initFromCUDAParams() and not fmap.exclude(idx,pd.parameters) then
-                var r = pd.r(idx)
+                -- Recompute residual
+                var Ax = pd.Adelta(idx)
+                var b = pd.b(idx)
+                var r = b - Ax
+                pd.r(idx) = r
+
                 var pre = pd.preconditioner(idx)
                 if not problemSpec.usepreconditioner then
                     pre = opt_float(1.0f)
                 end
-                var z = pre*r                                       -- apply pre-conditioner M^-1
-                pd.z(idx) = z;                                      -- save for next kernel call
-                b = z:dot(r)                                    -- compute x-th term of the numerator of beta
+                var z = pre*r       -- apply pre-conditioner M^-1
+                pd.z(idx) = z;      -- save for next kernel call
+                b = z:dot(r)        -- compute x-th term of the numerator of beta
             end
             unknownWideReduction(idx,b,pd.scanBetaNumerator) 
         end
@@ -476,13 +476,12 @@ return function(problemSpec)
             var idx : Index
             if idx:initFromCUDAParams() and not fmap.exclude(idx,pd.parameters) then
             
-                var rDotzNew : opt_float = pd.scanBetaNumerator[0]				-- get new numerator
-                var rDotzOld : opt_float = pd.scanAlphaNumerator[0]				-- get old denominator
+                var rDotzNew : opt_float = pd.scanBetaNumerator[0]	-- get new numerator
+                var rDotzOld : opt_float = pd.scanAlphaNumerator[0]	-- get old denominator
 
                 var beta : opt_float = opt_float(0.0f)
                 beta = rDotzNew/rDotzOld
-                pd.p(idx) = pd.z(idx)+beta*pd.p(idx)							-- update decent direction
-
+                pd.p(idx) = pd.z(idx)+beta*pd.p(idx)			    -- update decent direction
             end
         end
     
@@ -500,28 +499,10 @@ return function(problemSpec)
             end
         end	
 
-        terra kernels.copyResidualsToB(pd : PlanData)
-            var idx : Index
-            if idx:initFromCUDAParams() and not fmap.exclude(idx,pd.parameters) then
-                pd.b(idx) = pd.r(idx)
-            end
-        end
-
         terra kernels.computeAdelta(pd : PlanData)
             var idx : Index
             if idx:initFromCUDAParams() and not fmap.exclude(idx,pd.parameters) then
                 pd.Adelta(idx) = fmap.applyJTJ(idx, pd.parameters, pd.delta, pd.CtC)
-            end
-        end
-
-        terra kernels.recomputeResiduals(pd : PlanData)
-            var d : opt_float = opt_float(0.0f)
-            var idx : Index
-            if idx:initFromCUDAParams() and not fmap.exclude(idx,pd.parameters) then
-                var Ax = pd.Adelta(idx)
-                var b = pd.b(idx)
-                var newR = b - Ax
-                pd.r(idx) = newR
             end
         end
 
@@ -603,6 +584,7 @@ return function(problemSpec)
                     var pre = opt_float(1.0f) / (CtC+pd.parameters.trust_region_radius*unclampedCtC) 
                     pd.preconditioner(idx) = pre
                     var residuum = pd.r(idx)
+                    pd.b(idx) = residuum
                     var p = pre*residuum    -- apply pre-conditioner M^-1
                     pd.p(idx) = p
                     d = residuum:dot(p)     
@@ -723,10 +705,8 @@ return function(problemSpec)
                                                                         "PCGSaveSSq",
                                                                         "computeQ",
                                                                         "precompute",
-                                                                        "copyResidualsToB",
                                                                         "computeAdelta",
                                                                         "computeAdelta_Graph",
-                                                                        "recomputeResiduals",
                                                                         "PCGInit1_Graph",
                                                                         "PCGComputeCtC_Graph",
                                                                         "PCGStep1_Graph",
@@ -1058,8 +1038,6 @@ return function(problemSpec)
                         gpu.PCGComputeCtC_Graph(pd)
 
                         gpu.PCGFinalizeDiagonal(pd)
-                        gpu.copyResidualsToB(pd)
-                        --gpu.recomputeResiduals(pd)
                         Q0 = computeQ(pd)
                         --logSolver("\nQ0=%.18g\n", Q0)
 --[[
@@ -1136,9 +1114,9 @@ return function(problemSpec)
 				if [problemSpec:UsesLambda()] and ((lIter + 1) % residual_reset_period) == 0 then
                     gpu.PCGStep2_1stHalf(pd)
                     gpu.computeAdelta(pd)
-                    -- TODO: merge these?
-                    gpu.computeAdelta_Graph(pd)
-                    gpu.recomputeResiduals(pd)
+                    if isGraph then
+                        gpu.computeAdelta_Graph(pd)
+                    end
                     gpu.PCGStep2_2ndHalf(pd)
                 else
                     gpu.PCGStep2(pd)
