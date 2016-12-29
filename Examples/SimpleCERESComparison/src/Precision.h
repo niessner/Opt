@@ -5,7 +5,7 @@
 // opt_precision.t true/false
 // precision.t double/float
 
-#define OPT_DOUBLE_PRECISION 0
+#define OPT_DOUBLE_PRECISION 1
 
 
 struct double9 {

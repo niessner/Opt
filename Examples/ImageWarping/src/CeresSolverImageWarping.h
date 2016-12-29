@@ -27,8 +27,12 @@ public:
     // !returns total time taken for solve, in milliseconds
     float solve(OPT_FLOAT2* h_x_float, OPT_FLOAT* h_a_float, OPT_FLOAT2* h_urshape, OPT_FLOAT2* h_constraints, OPT_FLOAT* h_mask, float weightFit, float weightReg, std::vector<SolverIteration>& results);
 
-private:
+    double finalCost() const {
+        return m_finalCost;
+    }
 
+private:
+    double m_finalCost = nan("");
 	double2* h_x_double;
     double* h_a_double;
 	int m_width, m_height;

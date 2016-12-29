@@ -1,0 +1,106 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio 2013
+VisualStudioVersion = 12.0.31101.0
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "BundleAdjustment", "BundleAdjustment\bundleAdjustment.vcxproj", "{F25CC672-B37B-4B36-8130-84A78E86890A}"
+EndProject
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "ImageWarping", "ImageWarping\ImageWarping.vcxproj", "{CA9DD020-FC04-44B1-8741-AFC2A99756D1}"
+EndProject
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "IntrinsicLP", "IntrinsicLP\IntrinsicLP.vcxproj", "{A1ABFE1F-43DA-483B-9B5E-7A67814C642F}"
+EndProject
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "MeshDeformationARAP", "MeshDeformationARAP\MeshDeformationARAP.vcxproj", "{79CF5D69-490A-4A57-A917-D7520F652637}"
+EndProject
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "MeshDeformationED", "MeshDeformationED\MeshDeformationED.vcxproj", "{2F60F3FF-47AB-4ACB-AD79-2AF4617863FB}"
+EndProject
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "MeshDeformationLARAP", "MeshDeformationLARAP\MeshDeformationLARAP.vcxproj", "{F8951AF1-ABE8-4918-9C9E-42C0E492BBF6}"
+EndProject
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "MeshSmoothingLaplacian", "MeshSmoothingLaplacian\MeshSmoothingLaplacian.vcxproj", "{C09CC99E-2075-422C-AF64-C112916A812E}"
+EndProject
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "MeshSmoothingLaplacianCOT", "MeshSmoothingLaplacianCOT\MeshSmoothingLaplacianCOT.vcxproj", "{A8ED6F22-C092-4B11-9F3A-A034C2094C48}"
+EndProject
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "OpticalFlow", "OpticalFlow\OpticalFlow.vcxproj", "{D07572C4-C93C-4625-9127-6DC29456C74D}"
+EndProject
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "PoissonImageEditing", "PoissonImageEditing\PoissonImageEditing.vcxproj", "{4F087199-0BCB-4A85-B442-0472A166A1C5}"
+EndProject
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "RobustMeshDeformationARAP", "RobustMeshDeformationARAP\RobustMeshDeformationARAP.vcxproj", "{340488D1-1212-4A87-AF4D-1FEA6CACDD77}"
+EndProject
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "ShapeFromShadingSimple", "ShapeFromShadingSimple\ShapeFromShadingSimple.vcxproj", "{A8BACB4C-0A77-422E-9FCC-170BACB6EE6A}"
+EndProject
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "Simple", "SimpleCERESComparison\Simple.vcxproj", "{BCE28248-392E-48F1-BA1F-030C326BEC2C}"
+EndProject
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "SmoothingLaplacian", "SmoothingLaplacianFloat4Graph\SmoothingLaplacianFloat4.vcxproj", "{2A12D4BA-DB49-4C80-9A48-43817626635C}"
+EndProject
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "SmoothingLaplacianLP", "SmoothingLP\SmoothingLaplacianLP.vcxproj", "{4E547FAA-5441-4043-87D9-BC71C206DE1E}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|x64 = Debug|x64
+		Release|x64 = Release|x64
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{F25CC672-B37B-4B36-8130-84A78E86890A}.Debug|x64.ActiveCfg = Release NoOpt|x64
+		{F25CC672-B37B-4B36-8130-84A78E86890A}.Debug|x64.Build.0 = Release NoOpt|x64
+		{F25CC672-B37B-4B36-8130-84A78E86890A}.Release|x64.ActiveCfg = Release|x64
+		{F25CC672-B37B-4B36-8130-84A78E86890A}.Release|x64.Build.0 = Release|x64
+		{CA9DD020-FC04-44B1-8741-AFC2A99756D1}.Debug|x64.ActiveCfg = Debug|x64
+		{CA9DD020-FC04-44B1-8741-AFC2A99756D1}.Debug|x64.Build.0 = Debug|x64
+		{CA9DD020-FC04-44B1-8741-AFC2A99756D1}.Release|x64.ActiveCfg = Release|x64
+		{CA9DD020-FC04-44B1-8741-AFC2A99756D1}.Release|x64.Build.0 = Release|x64
+		{A1ABFE1F-43DA-483B-9B5E-7A67814C642F}.Debug|x64.ActiveCfg = Debug|x64
+		{A1ABFE1F-43DA-483B-9B5E-7A67814C642F}.Debug|x64.Build.0 = Debug|x64
+		{A1ABFE1F-43DA-483B-9B5E-7A67814C642F}.Release|x64.ActiveCfg = Release|x64
+		{A1ABFE1F-43DA-483B-9B5E-7A67814C642F}.Release|x64.Build.0 = Release|x64
+		{79CF5D69-490A-4A57-A917-D7520F652637}.Debug|x64.ActiveCfg = Debug|x64
+		{79CF5D69-490A-4A57-A917-D7520F652637}.Debug|x64.Build.0 = Debug|x64
+		{79CF5D69-490A-4A57-A917-D7520F652637}.Release|x64.ActiveCfg = Release|x64
+		{79CF5D69-490A-4A57-A917-D7520F652637}.Release|x64.Build.0 = Release|x64
+		{2F60F3FF-47AB-4ACB-AD79-2AF4617863FB}.Debug|x64.ActiveCfg = Debug|x64
+		{2F60F3FF-47AB-4ACB-AD79-2AF4617863FB}.Debug|x64.Build.0 = Debug|x64
+		{2F60F3FF-47AB-4ACB-AD79-2AF4617863FB}.Release|x64.ActiveCfg = Release|x64
+		{2F60F3FF-47AB-4ACB-AD79-2AF4617863FB}.Release|x64.Build.0 = Release|x64
+		{F8951AF1-ABE8-4918-9C9E-42C0E492BBF6}.Debug|x64.ActiveCfg = Debug|x64
+		{F8951AF1-ABE8-4918-9C9E-42C0E492BBF6}.Debug|x64.Build.0 = Debug|x64
+		{F8951AF1-ABE8-4918-9C9E-42C0E492BBF6}.Release|x64.ActiveCfg = Release|x64
+		{F8951AF1-ABE8-4918-9C9E-42C0E492BBF6}.Release|x64.Build.0 = Release|x64
+		{C09CC99E-2075-422C-AF64-C112916A812E}.Debug|x64.ActiveCfg = Debug|x64
+		{C09CC99E-2075-422C-AF64-C112916A812E}.Debug|x64.Build.0 = Debug|x64
+		{C09CC99E-2075-422C-AF64-C112916A812E}.Release|x64.ActiveCfg = Release|x64
+		{C09CC99E-2075-422C-AF64-C112916A812E}.Release|x64.Build.0 = Release|x64
+		{A8ED6F22-C092-4B11-9F3A-A034C2094C48}.Debug|x64.ActiveCfg = Debug|x64
+		{A8ED6F22-C092-4B11-9F3A-A034C2094C48}.Debug|x64.Build.0 = Debug|x64
+		{A8ED6F22-C092-4B11-9F3A-A034C2094C48}.Release|x64.ActiveCfg = Release|x64
+		{A8ED6F22-C092-4B11-9F3A-A034C2094C48}.Release|x64.Build.0 = Release|x64
+		{D07572C4-C93C-4625-9127-6DC29456C74D}.Debug|x64.ActiveCfg = Debug|x64
+		{D07572C4-C93C-4625-9127-6DC29456C74D}.Debug|x64.Build.0 = Debug|x64
+		{D07572C4-C93C-4625-9127-6DC29456C74D}.Release|x64.ActiveCfg = Release|x64
+		{D07572C4-C93C-4625-9127-6DC29456C74D}.Release|x64.Build.0 = Release|x64
+		{4F087199-0BCB-4A85-B442-0472A166A1C5}.Debug|x64.ActiveCfg = Debug|x64
+		{4F087199-0BCB-4A85-B442-0472A166A1C5}.Debug|x64.Build.0 = Debug|x64
+		{4F087199-0BCB-4A85-B442-0472A166A1C5}.Release|x64.ActiveCfg = Release|x64
+		{4F087199-0BCB-4A85-B442-0472A166A1C5}.Release|x64.Build.0 = Release|x64
+		{340488D1-1212-4A87-AF4D-1FEA6CACDD77}.Debug|x64.ActiveCfg = Debug|x64
+		{340488D1-1212-4A87-AF4D-1FEA6CACDD77}.Debug|x64.Build.0 = Debug|x64
+		{340488D1-1212-4A87-AF4D-1FEA6CACDD77}.Release|x64.ActiveCfg = Release|x64
+		{340488D1-1212-4A87-AF4D-1FEA6CACDD77}.Release|x64.Build.0 = Release|x64
+		{A8BACB4C-0A77-422E-9FCC-170BACB6EE6A}.Debug|x64.ActiveCfg = Debug|x64
+		{A8BACB4C-0A77-422E-9FCC-170BACB6EE6A}.Debug|x64.Build.0 = Debug|x64
+		{A8BACB4C-0A77-422E-9FCC-170BACB6EE6A}.Release|x64.ActiveCfg = Release|x64
+		{A8BACB4C-0A77-422E-9FCC-170BACB6EE6A}.Release|x64.Build.0 = Release|x64
+		{BCE28248-392E-48F1-BA1F-030C326BEC2C}.Debug|x64.ActiveCfg = Debug|x64
+		{BCE28248-392E-48F1-BA1F-030C326BEC2C}.Debug|x64.Build.0 = Debug|x64
+		{BCE28248-392E-48F1-BA1F-030C326BEC2C}.Release|x64.ActiveCfg = Release|x64
+		{BCE28248-392E-48F1-BA1F-030C326BEC2C}.Release|x64.Build.0 = Release|x64
+		{2A12D4BA-DB49-4C80-9A48-43817626635C}.Debug|x64.ActiveCfg = Debug|x64
+		{2A12D4BA-DB49-4C80-9A48-43817626635C}.Debug|x64.Build.0 = Debug|x64
+		{2A12D4BA-DB49-4C80-9A48-43817626635C}.Release|x64.ActiveCfg = Release|x64
+		{2A12D4BA-DB49-4C80-9A48-43817626635C}.Release|x64.Build.0 = Release|x64
+		{4E547FAA-5441-4043-87D9-BC71C206DE1E}.Debug|x64.ActiveCfg = Debug|x64
+		{4E547FAA-5441-4043-87D9-BC71C206DE1E}.Debug|x64.Build.0 = Debug|x64
+		{4E547FAA-5441-4043-87D9-BC71C206DE1E}.Release|x64.ActiveCfg = Release|x64
+		{4E547FAA-5441-4043-87D9-BC71C206DE1E}.Release|x64.Build.0 = Release|x64
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+EndGlobal

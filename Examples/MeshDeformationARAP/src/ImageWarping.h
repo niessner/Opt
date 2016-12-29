@@ -13,6 +13,7 @@
 #include "CeresWarpingSolver.h"
 #include "../../shared/SolverIteration.h"
 #include "../../shared/Precision.h"
+#include "../../shared/CombinedSolverParameters.h"
 
 // From the future (C++14)
 template<typename T, typename... Args>
@@ -21,18 +22,6 @@ std::unique_ptr<T> make_unique(Args&&... args) {
 }
 
 
-struct CombinedSolverParameters {
-    bool useCUDA = false;
-    bool useTerra = false;
-    bool useAD = true;
-    bool useLMAD = false;
-    bool useCeres = false;
-    bool earlyOut = false;
-    unsigned int numIter = 32;
-    unsigned int nonLinearIter = 2;
-    unsigned int linearIter = 4000;
-};
-
 class ImageWarping
 {
 	public:
@@ -40,6 +29,10 @@ class ImageWarping
 		{
 			m_result = *mesh;
 			m_initial = m_result;
+
+            m_params.numIter = 32;
+            m_params.nonLinearIter = 2;
+            m_params.linearIter = 4000;
 
 			unsigned int N = (unsigned int)mesh->n_vertices();
 			unsigned int E = (unsigned int)mesh->n_edges();
@@ -59,8 +52,8 @@ class ImageWarping
             if (performanceRun) {
                 m_params.useCUDA = false;
                 m_params.useTerra = false;
-                m_params.useAD = true;
-                m_params.useLMAD = true;
+                m_params.useOpt = true;
+                m_params.useOptLM = true;
                 m_params.useCeres = true;
                 m_params.earlyOut = true;
 				m_params.nonLinearIter = 20;
@@ -211,58 +204,55 @@ class ImageWarping
             auto genericOptSolve = [=](std::unique_ptr<TerraWarpingSolver>& solver, std::vector<SolverIteration>& iters) { solver->solveGN(d_vertexPosFloat3, d_anglesFloat3, d_vertexPosFloat3Urshape, d_vertexPosTargetFloat3, m_params.nonLinearIter, m_params.linearIter, weightFit, weightReg, iters); };
 
             gpuSolve("TERRA", m_params.useTerra != 0, [=](){ genericOptSolve(m_terraWarpingSolver, m_terraIters); });
-            gpuSolve("OPT", m_params.useAD != 0, [=](){ genericOptSolve(m_optWarpingSolver, m_optIters); });
-            gpuSolve("OPT_LM", m_params.useLMAD != 0, [=](){ genericOptSolve(m_optLMWarpingSolver, m_optLMIters); });
+            gpuSolve("OPT", m_params.useOpt != 0, [=](){ genericOptSolve(m_optWarpingSolver, m_optIters); });
+            gpuSolve("OPT_LM", m_params.useOptLM != 0, [=](){ genericOptSolve(m_optLMWarpingSolver, m_optLMIters); });
 
 
-    
-            m_result = m_initial;
-            resetGPUMemory();
+            if (m_params.useCeres) {
+                m_result = m_initial;
+                resetGPUMemory();
 
-            unsigned int N = (unsigned int)m_initial.n_vertices();
-            unsigned int E = (unsigned int)m_initial.n_edges();
+                unsigned int N = (unsigned int)m_initial.n_vertices();
+                unsigned int E = (unsigned int)m_initial.n_edges();
 
-            float3* h_vertexPosFloat3 = new float3[N];
-            float3* h_vertexPosFloat3Urshape = new float3[N];
-            int*	h_numNeighbours = new int[N];
-            int*	h_neighbourIdx = new int[2 * E];
-            int*	h_neighbourOffset = new int[N + 1];
-            float3* h_anglesFloat3 = new float3[N];
-            float3* h_vertexPosTargetFloat3 = new float3[N];
-            
-            cutilSafeCall(cudaMemcpy(h_anglesFloat3, d_anglesFloat3, sizeof(float3)*N, cudaMemcpyDeviceToHost));
-            cutilSafeCall(cudaMemcpy(h_vertexPosFloat3, d_vertexPosFloat3, sizeof(float3)*N, cudaMemcpyDeviceToHost));
-            cutilSafeCall(cudaMemcpy(h_vertexPosFloat3Urshape, d_vertexPosFloat3Urshape, sizeof(float3)*N, cudaMemcpyDeviceToHost));
-            cutilSafeCall(cudaMemcpy(h_numNeighbours, d_numNeighbours, sizeof(int)*N, cudaMemcpyDeviceToHost));
-            cutilSafeCall(cudaMemcpy(h_neighbourIdx, d_neighbourIdx, sizeof(int) * 2 * E, cudaMemcpyDeviceToHost));
-            cutilSafeCall(cudaMemcpy(h_neighbourOffset, d_neighbourOffset, sizeof(int)*(N + 1), cudaMemcpyDeviceToHost));
+                float3* h_vertexPosFloat3 = new float3[N];
+                float3* h_vertexPosFloat3Urshape = new float3[N];
+                int*	h_numNeighbours = new int[N];
+                int*	h_neighbourIdx = new int[2 * E];
+                int*	h_neighbourOffset = new int[N + 1];
+                float3* h_anglesFloat3 = new float3[N];
+                float3* h_vertexPosTargetFloat3 = new float3[N];
 
-            float finalIterTime;
-            for (unsigned int i = 1; i < m_params.numIter; i++)
-            {
-                std::cout << "//////////// ITERATION" << i << "  (CERES) ///////////////" << std::endl;
-                setConstraints((float)i / (float)(m_params.numIter - 1));
-                cutilSafeCall(cudaMemcpy(h_vertexPosTargetFloat3, d_vertexPosTargetFloat3, sizeof(float3)*N, cudaMemcpyDeviceToHost));
+                cutilSafeCall(cudaMemcpy(h_anglesFloat3, d_anglesFloat3, sizeof(float3)*N, cudaMemcpyDeviceToHost));
+                cutilSafeCall(cudaMemcpy(h_vertexPosFloat3, d_vertexPosFloat3, sizeof(float3)*N, cudaMemcpyDeviceToHost));
+                cutilSafeCall(cudaMemcpy(h_vertexPosFloat3Urshape, d_vertexPosFloat3Urshape, sizeof(float3)*N, cudaMemcpyDeviceToHost));
+                cutilSafeCall(cudaMemcpy(h_numNeighbours, d_numNeighbours, sizeof(int)*N, cudaMemcpyDeviceToHost));
+                cutilSafeCall(cudaMemcpy(h_neighbourIdx, d_neighbourIdx, sizeof(int) * 2 * E, cudaMemcpyDeviceToHost));
+                cutilSafeCall(cudaMemcpy(h_neighbourOffset, d_neighbourOffset, sizeof(int)*(N + 1), cudaMemcpyDeviceToHost));
 
-                finalIterTime = m_ceresWarpingSolver->solveGN(h_vertexPosFloat3, h_anglesFloat3, h_vertexPosFloat3Urshape, h_vertexPosTargetFloat3, weightFit, weightReg, m_ceresIters);
-                if (m_params.earlyOut) {
-                    break;
+                float finalIterTime;
+                for (unsigned int i = 1; i < m_params.numIter; i++)
+                {
+                    std::cout << "//////////// ITERATION" << i << "  (CERES) ///////////////" << std::endl;
+                    setConstraints((float)i / (float)(m_params.numIter - 1));
+                    cutilSafeCall(cudaMemcpy(h_vertexPosTargetFloat3, d_vertexPosTargetFloat3, sizeof(float3)*N, cudaMemcpyDeviceToHost));
+
+                    finalIterTime = m_ceresWarpingSolver->solveGN(h_vertexPosFloat3, h_anglesFloat3, h_vertexPosFloat3Urshape, h_vertexPosTargetFloat3, weightFit, weightReg, m_ceresIters);
+                    if (m_params.earlyOut) {
+                        break;
+                    }
+
                 }
+                std::cout << "CERES final iter time: " << finalIterTime << "ms" << std::endl;
 
+                cutilSafeCall(cudaMemcpy(d_vertexPosFloat3, h_vertexPosFloat3, sizeof(float3)*N, cudaMemcpyHostToDevice));
+                copyResultToCPUFromFloat3();
             }
-            std::cout << "CERES final iter time: " << finalIterTime << "ms" << std::endl;
 
-            cutilSafeCall(cudaMemcpy(d_vertexPosFloat3, h_vertexPosFloat3, sizeof(float3)*N, cudaMemcpyHostToDevice));
-            copyResultToCPUFromFloat3();
+            saveSolverResults("results/", OPT_DOUBLE_PRECISION ? "_double" : "_float", m_ceresIters, m_optIters, m_optLMIters);
+			
+            reportFinalCosts("Mesh Deformation ARAP", m_params, m_optWarpingSolver->finalCost(), m_optLMWarpingSolver->finalCost(), m_ceresWarpingSolver->finalCost());
 
-            std::string resultDirectory = "results/";
-#   if OPT_DOUBLE_PRECISION
-            std::string resultSuffix = "_double";
-#   else
-            std::string resultSuffix = "_float";
-#   endif
-            saveSolverResults(resultDirectory, resultSuffix, m_ceresIters, m_optIters, m_optLMIters);
-						
 			return &m_result;
 		}
 

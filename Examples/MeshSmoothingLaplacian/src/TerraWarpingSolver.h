@@ -97,10 +97,14 @@ public:
         void* problemParams[] = { &weightFitSqrt, &weightRegSqrt, d_unknown, d_target, &edgeCount, d_headX, d_headY, d_tailX, d_tailY };
 
 		Opt_ProblemSolve(m_optimizerState, m_plan, problemParams, solverParams);
+        m_finalCost = Opt_ProblemCurrentCost(m_optimizerState, m_plan);
 	}
-
+    double finalCost() const {
+        return m_finalCost;
+    }
 private:
-	Opt_State*	m_optimizerState;
+    double m_finalCost = nan(nullptr);
+    Opt_State*	m_optimizerState;
     Opt_Problem*	m_problem;
     Opt_Plan*		m_plan;
 };

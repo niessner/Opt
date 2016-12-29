@@ -5,6 +5,9 @@
 #include <cuda_runtime.h>
 #include <cudaUtil.h>
 
+#include "../../shared/CombinedSolverParameters.h"
+#include "../../shared/SolverIteration.h"
+
 #include "TerraWarpingSolver.h"
 #include "OpenMesh.h"
 #include "CudaArray.h"
@@ -307,9 +310,9 @@ class ImageWarping
 			//unsigned int nonLinearIter = 20;
 			//unsigned int linearIter = 50;
 
-			uint numIter = 15;
-			uint nonLinearIter = 8;
-            uint linearIter = 250;			
+			m_params.numIter = 15;
+			m_params.nonLinearIter = 8;
+            m_params.linearIter = 250;			
             unsigned int N = (unsigned int)m_initial.n_vertices();
 
 			m_result = m_initial;
@@ -324,7 +327,7 @@ class ImageWarping
                 }
                 std::cout << "---- Acceleration Structure Build: " << m_timer.getElapsedTime() << "s" << std::endl;
                 float weightReg = weightRegMax;
-                for (uint i = 0; i < numIter; i++)
+                for (uint i = 0; i < m_params.numIter; i++)
                 {
                     std::cout << "//////////// ITERATION" << i << "  (OPT) ///////////////" << std::endl;
                     
@@ -341,10 +344,10 @@ class ImageWarping
                         if (weightReg != weightRegMin) {
                             std::cout << " -------- Skipping to min reg weight" << std::endl;
                             weightReg = weightRegMin;
-                            m_optWarpingSolver->initGN(d_vertexPosFloat3.data(), d_anglesFloat3.data(), d_robustWeights.data(), d_vertexPosFloat3Urshape.data(), d_vertexPosTargetFloat3.data(), d_vertexNormalTargetFloat3.data(), nonLinearIter, linearIter, weightFit, weightReg);
+                            m_optWarpingSolver->initGN(d_vertexPosFloat3.data(), d_anglesFloat3.data(), d_robustWeights.data(), d_vertexPosFloat3Urshape.data(), d_vertexPosTargetFloat3.data(), d_vertexNormalTargetFloat3.data(), m_params.nonLinearIter, m_params.linearIter, weightFit, weightReg);
                             float currentCost = m_optWarpingSolver->currentCost();
-                            for (int nlIter = 0; nlIter < nonLinearIter; ++nlIter) {
-                                m_optWarpingSolver->stepGN(d_vertexPosFloat3.data(), d_anglesFloat3.data(), d_robustWeights.data(), d_vertexPosFloat3Urshape.data(), d_vertexPosTargetFloat3.data(), d_vertexNormalTargetFloat3.data(), nonLinearIter, linearIter, weightFit, weightReg);
+                            for (int nlIter = 0; nlIter < m_params.nonLinearIter; ++nlIter) {
+                                m_optWarpingSolver->stepGN(d_vertexPosFloat3.data(), d_anglesFloat3.data(), d_robustWeights.data(), d_vertexPosFloat3Urshape.data(), d_vertexPosTargetFloat3.data(), d_vertexNormalTargetFloat3.data(), m_params.nonLinearIter, m_params.linearIter, weightFit, weightReg);
                                 float newCost = m_optWarpingSolver->currentCost();
                                 if ((currentCost - newCost) < costEqualityEpsilon) {
                                     std::cout << " -------- NO SIGNIFICANT COST CHANGE, FINISHING OUTER-ITER EARLY" << std::endl;
@@ -357,10 +360,10 @@ class ImageWarping
                         }
                         break;
                     }
-                    m_optWarpingSolver->initGN(d_vertexPosFloat3.data(), d_anglesFloat3.data(), d_robustWeights.data(), d_vertexPosFloat3Urshape.data(), d_vertexPosTargetFloat3.data(), d_vertexNormalTargetFloat3.data(), nonLinearIter, linearIter, weightFit, weightReg);
+                    m_optWarpingSolver->initGN(d_vertexPosFloat3.data(), d_anglesFloat3.data(), d_robustWeights.data(), d_vertexPosFloat3Urshape.data(), d_vertexPosTargetFloat3.data(), d_vertexNormalTargetFloat3.data(), m_params.nonLinearIter, m_params.linearIter, weightFit, weightReg);
                     float currentCost = m_optWarpingSolver->currentCost();
-                    for (int nlIter = 0; nlIter < nonLinearIter; ++nlIter) {
-                        m_optWarpingSolver->stepGN(d_vertexPosFloat3.data(), d_anglesFloat3.data(), d_robustWeights.data(), d_vertexPosFloat3Urshape.data(), d_vertexPosTargetFloat3.data(), d_vertexNormalTargetFloat3.data(), nonLinearIter, linearIter, weightFit, weightReg);
+                    for (int nlIter = 0; nlIter < m_params.nonLinearIter; ++nlIter) {
+                        m_optWarpingSolver->stepGN(d_vertexPosFloat3.data(), d_anglesFloat3.data(), d_robustWeights.data(), d_vertexPosFloat3Urshape.data(), d_vertexPosTargetFloat3.data(), d_vertexNormalTargetFloat3.data(), m_params.nonLinearIter, m_params.linearIter, weightFit, weightReg);
                         float newCost = m_optWarpingSolver->currentCost();
                         if ((currentCost - newCost) < costEqualityEpsilon) {
                             std::cout << " -------- NO SIGNIFICANT COST CHANGE, FINISHING OUTER-ITER EARLY" << std::endl;
@@ -385,6 +388,8 @@ class ImageWarping
                 sprintf(buff, "out_%04d.ply", targetIndex + m_startIndex + 1);
                 saveCurrentMesh(buff);
             }
+            reportFinalCosts("Robust Mesh Deformation", m_params, m_optWarpingSolver->currentCost(), nan(nullptr), nan(nullptr));
+
 			return &m_result;
 		}
 
@@ -449,6 +454,8 @@ class ImageWarping
 		CudaArray<int>	d_numNeighbours;
 		CudaArray<int>	d_neighbourIdx;
 		CudaArray<int> 	d_neighbourOffset;
+
+        CombinedSolverParameters m_params;
 
 		TerraWarpingSolver* m_optWarpingSolver;
 };

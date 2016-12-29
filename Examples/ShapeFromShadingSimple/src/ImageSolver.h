@@ -11,6 +11,7 @@
 #include "CeresImageSolver.h"
 #include "SFSSolverInput.h"
 #include "../../shared/SolverIteration.h"
+#include "../../shared/CombinedSolverParameters.h"
 
 // From the future (C++14)
 template<typename T, typename... Args>
@@ -19,13 +20,6 @@ std::unique_ptr<T> make_unique(Args&&... args) {
 }
 
 
-struct CombinedSolverParameters {
-    bool useCUDA = false;
-    bool useTerra = false;
-    bool useOpt = true;
-    bool useOptLM = false;
-    bool useCeres = false;
-};
 
 class ImageSolver {
 private:
@@ -116,15 +110,10 @@ public:
         }
 #endif
 
+        saveSolverResults("results/", OPT_DOUBLE_PRECISION ? "_double" : "_float", m_ceresIters, m_optGNIters, m_optLMIters);
 
-        std::string resultDirectory = "results/";
-#   if OPT_DOUBLE_PRECISION
-        std::string resultSuffix = "_double";
-#   else
-        std::string resultSuffix = "_float";
-#   endif
-        saveSolverResults(resultDirectory, resultSuffix, m_ceresIters, m_optGNIters, m_optLMIters);
-
+        reportFinalCosts("Shape From Shading", m_params, m_optSolver->finalCost(), m_optLMSolver->finalCost(), m_ceresSolver->finalCost());
+        
         return m_result;
     }
 

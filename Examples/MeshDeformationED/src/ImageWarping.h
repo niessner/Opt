@@ -2,7 +2,6 @@
 
 #define RUN_OPT 1
 
-#define EARLY_OUT 1
 
 #include "mLibInclude.h"
 
@@ -11,6 +10,8 @@
 
 #include "TerraSolver.h"
 #include "OpenMesh.h"
+#include "../../shared/SolverIteration.h"
+#include "../../shared/CombinedSolverParameters.h"
 
 class ImageWarping
 {
@@ -19,6 +20,21 @@ class ImageWarping
 		{
 			m_result = *mesh;
 			m_initial = m_result;
+
+            m_params.useOpt = true;
+            m_params.useOptLM = false;
+            m_params.numIter = 32;
+            m_params.nonLinearIter = 1;
+            m_params.linearIter = 4000;
+            m_params.earlyOut = true;
+
+            /* LM is good here 
+            m_params.useOpt = false;
+            m_params.useOptLM = true;
+            m_params.numIter = 32;
+            m_params.nonLinearIter = 20;
+            */
+            m_params.linearIter = 200;
 
 			unsigned int N = (unsigned int)mesh->n_vertices();
 			unsigned int E = (unsigned int)mesh->n_edges();
@@ -34,6 +50,8 @@ class ImageWarping
 		
 			resetGPUMemory();	
 			m_optSolver = new TerraSolver(N, 2 * E, d_neighbourIdx, d_neighbourOffset, "MeshDeformationAD.t", "gaussNewtonGPU");
+            m_optLMSolver = new TerraSolver(N, 2 * E, d_neighbourIdx, d_neighbourOffset, "MeshDeformationAD.t", "LMGPU");
+
 		} 
 
 		void setConstraints(float alpha)
@@ -132,6 +150,7 @@ class ImageWarping
 			cutilSafeCall(cudaFree(d_neighbourOffset));
 
 			SAFE_DELETE(m_optSolver);
+            SAFE_DELETE(m_optLMSolver);
 		}
 
 		SimpleMesh* solve()
@@ -139,33 +158,51 @@ class ImageWarping
 			
 			//float weightFit = 5.0f;
 			float weightFit = 3.0f;
-			float weightReg = 4.0f;
+			float weightReg = 12.0f;
 			float weightRot = 5.0f;
 		
-            unsigned int numIter = 32;
-            unsigned int nonLinearIter = 1;
-            unsigned int linearIter = 4000;
+
 
 			//unsigned int numIter = 2;
 			//unsigned int nonLinearIter = 3;
 			//unsigned int linearIter = 3;
 
-#			if RUN_OPT
-			m_result = m_initial;
-			resetGPUMemory();
-			for (unsigned int i = 1; i < numIter; i++)
-			{
-				std::cout << "//////////// ITERATION" << i << "  (OPT) ///////////////" << std::endl;
-				setConstraints((float)i / (float)(numIter - 1));
+            if (m_params.useOpt) {
+                m_result = m_initial;
+                resetGPUMemory();
+                for (unsigned int i = 1; i < m_params.numIter; i++)
+                {
+                    std::cout << "//////////// ITERATION" << i << "  (OPT GN) ///////////////" << std::endl;
+                    setConstraints((float)i / (float)(m_params.numIter - 1));
 
-				m_optSolver->solveGN(d_vertexPosFloat3, d_rotsFloat9, d_vertexPosFloat3Urshape, d_vertexPosTargetFloat3, nonLinearIter, linearIter, weightFit, weightReg, weightRot);
-				#if EARLY_OUT
-				break;
-				#endif
+                    m_optSolver->solveGN(d_vertexPosFloat3, d_rotsFloat9, d_vertexPosFloat3Urshape, d_vertexPosTargetFloat3, m_params.nonLinearIter, m_params.linearIter, weightFit, weightReg, weightRot);
+                    if (m_params.earlyOut) {
+                        break;
+                    }
 
-			}
-			copyResultToCPUFromFloat3();
-#			endif
+                }
+                copyResultToCPUFromFloat3();
+            }
+
+            if (m_params.useOptLM) {
+                m_result = m_initial;
+                resetGPUMemory();
+                for (unsigned int i = 1; i < m_params.numIter; i++)
+                {
+                    std::cout << "//////////// ITERATION" << i << "  (OPT LM) ///////////////" << std::endl;
+                    setConstraints((float)i / (float)(m_params.numIter - 1));
+
+                    m_optLMSolver->solveGN(d_vertexPosFloat3, d_rotsFloat9, d_vertexPosFloat3Urshape, d_vertexPosTargetFloat3, m_params.nonLinearIter, m_params.linearIter, weightFit, weightReg, weightRot);
+                    if (m_params.earlyOut) {
+                        break;
+                    }
+
+                }
+                copyResultToCPUFromFloat3();
+            }
+
+            reportFinalCosts("Mesh Deformation ED", m_params, m_optSolver->finalCost(), m_optLMSolver->finalCost(), nan(nullptr));
+
 						
 			return &m_result;
 		}
@@ -198,6 +235,9 @@ class ImageWarping
 		int* 	d_neighbourOffset;
 
 		TerraSolver* m_optSolver;
+        TerraSolver* m_optLMSolver;
+
+        CombinedSolverParameters m_params;
 
 		std::vector<int>				m_constraintsIdx;
 		std::vector<std::vector<float>>	m_constraintsTarget;

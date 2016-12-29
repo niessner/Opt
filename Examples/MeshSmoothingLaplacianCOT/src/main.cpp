@@ -39,9 +39,6 @@ int main(int argc, const char * argv[])
         std::cout << "out.off" << std::endl;
         exit(1);
     }
-    if (!performanceRun) {
-        getchar();
-    }
 
 	return 0;
 }

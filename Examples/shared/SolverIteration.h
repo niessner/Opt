@@ -2,6 +2,7 @@
 #include <limits>
 #include <algorithm>
 #include "Precision.h"
+#include "CombinedSolverParameters.h"
 
 struct SolverIteration
 {
@@ -55,4 +56,25 @@ static void saveSolverResults(std::string directory, std::string suffix,
         sumOptLMTime += optLMTime;
         resultFile << i << ", " << clampedRead(ceresIters, i).cost << ", " << clampedRead(optGNIters, i).cost << ", " << clampedRead(optLMIters, i).cost << ", " << ceresTime << ", " << optGNTime << ", " << optLMTime << ", " << sumCeresTime << ", " << sumOptGNTime << ", " << sumOptLMTime << std::endl;
     }
+}
+
+
+static void reportFinalCosts(std::string name, const CombinedSolverParameters& params, double gnCost, double lmCost, double ceresCost) {
+    std::cout << "===" << name << "===" << std::endl;
+    std::cout << "**Final Costs**" << std::endl;
+    std::cout << "Opt GN,Opt LM,CERES" << std::endl;
+    std::cout << std::scientific;
+    std::cout << std::setprecision(20);
+    if (params.useOpt) {
+        std::cout << gnCost;
+    }
+    std::cout << ",";
+    if (params.useOptLM) {
+        std::cout << lmCost;
+    }
+    std::cout << ",";
+    if (params.useCeres) {
+        std::cout << ceresCost;
+    }
+    std::cout << std::endl;
 }

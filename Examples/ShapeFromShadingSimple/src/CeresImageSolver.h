@@ -25,6 +25,10 @@ public:
 
     void solve(std::shared_ptr<SimpleBuffer> result, const SFSSolverInput& rawSolverInput, std::vector<SolverIteration>& solverIterations);
 
+    double finalCost() const {
+        return m_finalCost;
+    }
+
     int getPixel(int x, int y) const
     {
         if (x < 0 || x >= width || y < 0 || y >= height)
@@ -55,6 +59,8 @@ public:
     float f_y;
     float u_x;
     float u_y;
+
+    double m_finalCost = nan(nullptr);
 
     //float4x4 deltaTransform;
 

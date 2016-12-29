@@ -437,12 +437,21 @@ function ImageType:usestexture() -- texture, 2D texture
     return false, false 
 end
 
-local cd = macro(function(apicall) return quote
-    var r = apicall
-    if r ~= 0 then  
-        C.printf("CUDA reported error %d: %s\n",r, C.cudaGetErrorString(r))
-    end
-end end)
+local cd = macro(function(apicall) 
+    local apicallstr = tostring(apicall)
+    local filename = debug.getinfo(1,'S').source
+    return quote
+        var str = [apicallstr]
+        var r = apicall
+        if r ~= 0 then  
+            C.printf("Cuda reported error %d: %s\n",r, C.cudaGetErrorString(r))
+            C.printf("In call: %s", str)
+            C.printf("In file: %s\n", filename)
+            C.exit(r)
+        end
+    in
+        r
+    end end)
 
 local terra wrapBindlessTexture(data : &uint8, channelcount : int, width : int, height : int) : C.cudaTextureObject_t
     var res_desc : C.cudaResourceDesc
@@ -555,7 +564,7 @@ function ImageType:terratype()
     -- lerps for 2D images only
     if 2 == #self.ispace.dims then
         local terra lerp(v0 : vectortype, v1 : vectortype, t : opt_float)
-            return ([opt_float](1.) - t)*v0 + t*v1
+            return (opt_float(1.) - t)*v0 + t*v1
         end
         terra Image:sample(x : opt_float, y : opt_float)
             var x0 : int, x1 : int = opt.math.floor(x),opt.math.ceil(x)
@@ -2345,7 +2354,7 @@ function ProblemSpecAD:Cost(...)
         if energyspec.kind.kind == "CenteredFunction" then
             functionspecs:insert(createjtjcentered(self,energyspec))
             functionspecs:insert(createjtfcentered(self,energyspec))
-            --functionspecs:insert(createdumpjcentered(self,energyspec))
+            functionspecs:insert(createdumpjcentered(self,energyspec))
             
             if self.P:UsesLambda() then
                 functionspecs:insert(computeCtCcentered(self,energyspec))
@@ -2354,7 +2363,7 @@ function ProblemSpecAD:Cost(...)
         else
             functionspecs:insert(createjtjgraph(self,energyspec))
             functionspecs:insert(createjtfgraph(self,energyspec))
-            --functionspecs:insert(createdumpjgraph(self,energyspec))
+            functionspecs:insert(createdumpjgraph(self,energyspec))
             
             if self.P:UsesLambda() then
                 functionspecs:insert(computeCtCgraph(self,energyspec))

@@ -27,8 +27,8 @@ end
 local terms = terralib.newlist()
 	
 --fitting
-local x_fit = ad.Vector(X(0,0), X(0,1), X(0,2))	--vertex-unknown : float3
 local x = X(0)
+local x_fit = ad.Vector(x(0), x(1), x(2))	--vertex-unknown : float3
 local constraint = Constraints(0)						--target : float3
 local e_fit = x_fit - constraint
 e_fit = ad.select(ad.greatereq(constraint(0), -999999.9), e_fit, ad.Vector(0.0, 0.0, 0.0))

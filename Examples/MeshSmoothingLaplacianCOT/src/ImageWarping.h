@@ -2,6 +2,7 @@
 
 #include "../../shared/Precision.h"
 #include "../../shared/OptUtils.h"
+#include "../../shared/CombinedSolverParameters.h"
 #include "mLibInclude.h"
 
 #include <cuda_runtime.h>
@@ -17,12 +18,6 @@ struct EdgeCOT {
 	unsigned int v3;	//next neigh
 };
 
-struct CombinedSolverParameters {
-    unsigned int nonLinearIter = 2;
-    unsigned int linearIter = 25;
-    bool useOptGN = true;
-    bool useOptLM = false;
-};
 
 class ImageWarping
 {
@@ -43,6 +38,8 @@ public:
 		cutilSafeCall(cudaMalloc(&d_neighbourOffset, sizeof(int)*(N + 1)));
 
         m_params.useOptLM = performanceRun;
+        m_params.nonLinearIter = 2;
+        m_params.linearIter = 25;
 
 
 		resetGPUMemory();
@@ -143,7 +140,7 @@ public:
 
         std::vector<SolverIteration> ceresIters, optIters, optLMIters;
 
-        if (m_params.useOptGN) {
+        if (m_params.useOpt) {
             std::cout << "=========OPT=========" << std::endl;
             resetGPUMemory();
             unsigned int numIter = 1;
@@ -172,6 +169,8 @@ public:
 #   endif
         saveSolverResults(resultDirectory, resultSuffix, ceresIters, optIters, optLMIters);
 
+        reportFinalCosts("Cotangent Mesh Laplacian", m_params, m_optWarpingSolver->finalCost(), m_optLMWarpingSolver->finalCost(), nan(nullptr));
+
 		return &m_result;
 	}
 
@@ -190,7 +189,7 @@ public:
 	}
 
 private:
-
+    
 	SimpleMesh m_result;
 	SimpleMesh m_initial;
 

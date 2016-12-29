@@ -19,7 +19,7 @@ local G = Graph("G", 2,
 				"ab", {U}, 5)
 
 UsePreconditioner(true)
-
+print("This one\n\n")
 local d = data(G.d)
 local ab = funcParams(G.ab)
 local x_i = d(0)
@@ -28,3 +28,9 @@ local a = ab(0)
 local b = ab(1)
 
 Energy(y_i - a*(1.0 - ad.exp(-b*x_i)))
+
+
+-- Hack to get example to work with no image domain energy
+local zero = 0.0
+local zeroIm = ComputedImage("zero",{U},zero)
+Energy(zeroIm(0)*(funcParams(0)(0) + funcParams(0)(1)))

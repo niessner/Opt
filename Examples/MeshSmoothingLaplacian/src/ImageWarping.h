@@ -1,9 +1,7 @@
 #pragma once
 
-#define RUN_CUDA 0
-#define RUN_TERRA 0
-#define RUN_OPT 1
-
+#include "../../shared/CombinedSolverParameters.h"
+#include "../../shared/SolverIteration.h"
 #include "mLibInclude.h"
 
 #include <cuda_runtime.h>
@@ -33,11 +31,12 @@ public:
 
 		resetGPUMemory();
 		m_warpingSolver = new CUDAWarpingSolver(N);
-#if RUN_TERRA
-		m_terraWarpingSolver = new TerraWarpingSolver(N, 2 * E, d_neighbourIdx, d_neighbourOffset, "MeshSmoothingLaplacian.t", "gaussNewtonGPU");
-#endif
+        if (m_params.useTerra) {
+            m_terraWarpingSolver = new TerraWarpingSolver(N, 2 * E, d_neighbourIdx, d_neighbourOffset, "MeshSmoothingLaplacian.t", "gaussNewtonGPU");
+        }
 		m_optWarpingSolver = new TerraWarpingSolver(N, 2 * E, d_neighbourIdx, d_neighbourOffset, "MeshSmoothingLaplacianAD.t", "gaussNewtonGPU");
-	}
+        m_optLMWarpingSolver = new TerraWarpingSolver(N, 2 * E, d_neighbourIdx, d_neighbourOffset, "MeshSmoothingLaplacianAD.t", "LMGPU");
+    }
 
 	void resetGPUMemory()
 	{
@@ -102,34 +101,43 @@ public:
 		SAFE_DELETE(m_optWarpingSolver);
 	}
 
-	SimpleMesh* solve()
-	{
-		float weightFit = 50.0f;
-		float weightReg = 100.0f;
+    SimpleMesh* solve()
+    {
+        float weightFit = 50.0f;
+        float weightReg = 100.0f;
 
-		unsigned int nonLinearIter = 10;
-		unsigned int linearIter = 10;
+        m_params.nonLinearIter = 10;
+        m_params.linearIter = 10;
 
-#		if RUN_CUDA
-		std::cout << "=========CUDA========" << std::endl;
-		resetGPUMemory();
-		m_warpingSolver->solveGN(d_vertexPosFloat3, d_numNeighbours, d_neighbourIdx, d_neighbourOffset, d_vertexPosTargetFloat3, nonLinearIter, linearIter, weightFit, weightReg);
-		copyResultToCPUFromFloat3();
-#			endif
+        if (m_params.useCUDA) {
+            std::cout << "=========CUDA========" << std::endl;
+            resetGPUMemory();
+            m_warpingSolver->solveGN(d_vertexPosFloat3, d_numNeighbours, d_neighbourIdx, d_neighbourOffset, d_vertexPosTargetFloat3, m_params.nonLinearIter, m_params.linearIter, weightFit, weightReg);
+            copyResultToCPUFromFloat3();
+        }
 
-#		if RUN_TERRA
-		std::cout << "=========TERRA=======" << std::endl;
-		resetGPUMemory();
-		m_terraWarpingSolver->solve(d_vertexPosFloat3, d_vertexPosTargetFloat3, nonLinearIter, linearIter, 1, weightFit, weightReg);
-		copyResultToCPUFromFloat3();
-#		endif
+        if (m_params.useTerra) {
+            std::cout << "=========TERRA=======" << std::endl;
+            resetGPUMemory();
+            m_terraWarpingSolver->solve(d_vertexPosFloat3, d_vertexPosTargetFloat3, m_params.nonLinearIter, m_params.linearIter, 1, weightFit, weightReg);
+            copyResultToCPUFromFloat3();
+        }
 
-#		if RUN_OPT
-		std::cout << "=========OPT=========" << std::endl;
-		resetGPUMemory();
-		m_optWarpingSolver->solve(d_vertexPosFloat3, d_vertexPosTargetFloat3, nonLinearIter, linearIter, 1, weightFit, weightReg);
-		copyResultToCPUFromFloat3();
-#		endif
+        if (m_params.useOpt) {
+            std::cout << "=========OPT=========" << std::endl;
+            resetGPUMemory();
+            m_optWarpingSolver->solve(d_vertexPosFloat3, d_vertexPosTargetFloat3, m_params.nonLinearIter, m_params.linearIter, 1, weightFit, weightReg);
+            copyResultToCPUFromFloat3();
+        }
+
+        if (m_params.useOptLM) {
+            std::cout << "=========OPT LM=========" << std::endl;
+            resetGPUMemory();
+            m_optLMWarpingSolver->solve(d_vertexPosFloat3, d_vertexPosTargetFloat3, m_params.nonLinearIter, m_params.linearIter, 1, weightFit, weightReg);
+            copyResultToCPUFromFloat3();
+        }
+
+        reportFinalCosts("Mesh Smoothing Laplacian", m_params, m_optWarpingSolver->finalCost(), m_optLMWarpingSolver->finalCost(), nan(nullptr));
 
 
 		return &m_result;
@@ -160,6 +168,9 @@ private:
 	int*	d_neighbourIdx;
 	int* 	d_neighbourOffset;
 
+    CombinedSolverParameters m_params;
+
+    TerraWarpingSolver* m_optLMWarpingSolver;
 	TerraWarpingSolver* m_optWarpingSolver;
 	TerraWarpingSolver* m_terraWarpingSolver;
 	CUDAWarpingSolver* m_warpingSolver;
