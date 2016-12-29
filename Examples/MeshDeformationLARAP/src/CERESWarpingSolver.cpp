@@ -1,3 +1,6 @@
+#include "CERESWarpingSolver.h"
+
+#ifdef USE_CERES
 
 #include "mLibInclude.h"
 
@@ -7,7 +10,7 @@ const bool performanceTest = false;
 #include <cuda_runtime.h>
 #include "../../shared/Precision.h"
 #include "../../shared/SolverIteration.h"
-#include "CERESWarpingSolver.h"
+
 
 #define GLOG_NO_ABBREVIATED_SEVERITIES
 #include "ceres/ceres.h"
@@ -611,3 +614,4 @@ float CeresSolverWarping::solve(OPT_FLOAT2* h_x_float, OPT_FLOAT* h_a_float, OPT
 
 
 */
+#endif // USE_CERES

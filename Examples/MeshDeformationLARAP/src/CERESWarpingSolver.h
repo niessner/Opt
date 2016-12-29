@@ -8,6 +8,11 @@
 
 #include "../../shared/Precision.h"
 
+#ifdef _WIN32
+#define USE_CERES
+#endif
+
+
 class CERESWarpingSolver
 {
 	public:
@@ -33,3 +38,8 @@ class CERESWarpingSolver
 		unsigned int m_width, m_height, m_depth;
 		unsigned int voxelCount;
 };
+#ifndef USE_CERES
+CERESWarpingSolver::CERESWarpingSolver(unsigned int, unsigned int, unsigned int) {}
+CERESWarpingSolver::~CERESWarpingSolver() {}
+void CERESWarpingSolver::solve(float3*, float3*, float3*, float3*, float, float) {}
+#endif
