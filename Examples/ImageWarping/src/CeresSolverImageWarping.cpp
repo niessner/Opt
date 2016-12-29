@@ -306,6 +306,7 @@ float CeresSolverWarping::solve(OPT_FLOAT2* h_x_float, OPT_FLOAT* h_a_float, OPT
     double cost = -1.0;
     problem.Evaluate(Problem::EvaluateOptions(), &cost, nullptr, nullptr, nullptr);
     cout << "Cost*2 end: " << cost * 2 << endl;
+    m_finalCost = cost;
 
     cout << summary.FullReport() << endl;
 

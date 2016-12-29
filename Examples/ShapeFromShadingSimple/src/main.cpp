@@ -44,8 +44,6 @@ int main(int argc, const char * argv[])
     result->savePNG("sfsOutput", 150.0f);
     result->savePLYMesh("sfsOutput.ply");
     printf("Save\n");
-    if (!performanceRun) {
-        getchar();
-    }
+
 	return 0;
 }

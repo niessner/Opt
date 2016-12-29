@@ -101,6 +101,7 @@
     </None>
     <None Include="..\..\API\src\precision.t" />
     <None Include="opt_precision.t" />
+    <None Include="problem_setup.t" />
   </ItemGroup>
   <ItemGroup>
     <Filter Include="opt">

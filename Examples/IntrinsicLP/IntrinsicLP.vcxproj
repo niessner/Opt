@@ -11,10 +11,10 @@
     </ProjectConfiguration>
   </ItemGroup>
   <PropertyGroup Label="Globals">
-    <ProjectGuid>{A8BACB4C-0A77-422E-9FCC-170BACB6EE6A}</ProjectGuid>
+    <ProjectGuid>{A1ABFE1F-43DA-483B-9B5E-7A67814C642F}</ProjectGuid>
     <Keyword>Win32Proj</Keyword>
     <RootNamespace>DepthWithColor.D3D</RootNamespace>
-    <ProjectName>ShapeFromShadingSimple</ProjectName>
+    <ProjectName>IntrinsicLP</ProjectName>
   </PropertyGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'" Label="Configuration">
@@ -32,7 +32,7 @@
   </PropertyGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.props" />
   <ImportGroup Label="ExtensionSettings">
-    <Import Project="$(VCTargetsPath)\BuildCustomizations\CUDA 7.5.props" />
+    <Import Project="$(VCTargetsPath)\BuildCustomizations\CUDA 7.0.props" />
   </ImportGroup>
   <ImportGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'" Label="PropertySheets">
     <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
@@ -44,14 +44,14 @@
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
     <LinkIncremental>true</LinkIncremental>
     <ExecutablePath>$(DXSDK_DIR)Utilities\bin\x64;$(DXSDK_DIR)Utilities\bin\x86;$(ExecutablePath)</ExecutablePath>
-    <IncludePath>C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA\v7.5\include;$(IncludePath);$(DXSDK_DIR)Include;$(KINECTSDK10_DIR)\inc;$(ProjectDir);$(ProjectDir)../../../ceres-windows\ceres-solver\include\;$(ProjectDir)../..\..\ceres-windows\glog\src\windows;$(ProjectDir)..\..\..\ceres-windows\win\include;$(CUDA_INC_PATH);..\..\..\..\mLib\include;../../ceres-windows\ceres-solver\include\</IncludePath>
-    <LibraryPath>C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA\v7.5\lib\x64;$(LibraryPath);$(DXSDK_DIR)Lib\x64;$(KINECTSDK10_DIR)\lib\amd64;</LibraryPath>
+    <IncludePath>$(ProjectDir);C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA\v7.0\include;$(IncludePath);$(DXSDK_DIR)Include;$(KINECTSDK10_DIR)\inc;$(CUDA_INC_PATH);$(ProjectDir)..\..\..\..\mLib\include</IncludePath>
+    <LibraryPath>C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA\v7.0\lib\x64;$(LibraryPath);$(DXSDK_DIR)Lib\x64;$(KINECTSDK10_DIR)\lib\amd64;</LibraryPath>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
     <LinkIncremental>false</LinkIncremental>
     <ExecutablePath>$(DXSDK_DIR)Utilities\bin\x64;$(DXSDK_DIR)Utilities\bin\x86;$(ExecutablePath)</ExecutablePath>
-    <IncludePath>C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA\v7.5\include;$(IncludePath);$(DXSDK_DIR)Include;$(KINECTSDK10_DIR)\inc;$(ProjectDir);$(ProjectDir)../../../ceres-windows\ceres-solver\include\;$(ProjectDir)../..\..\ceres-windows\glog\src\windows;$(ProjectDir)..\..\..\ceres-windows\win\include;$(CUDA_INC_PATH);..\..\mLib\include;..\..\..\..\mLib\include;..\cusp-v0.5.1\cusp;../../ceres-windows\ceres-solver\include\;../../../../mLibExternal/libsWindows/ceres-windows\ceres-solver\include\;../../../../mLibExternal/libsWindows/ceres-windows\glog\src\windows;../../../../mLibExternal/libsWindows/ceres-windows\win\include</IncludePath>
-    <LibraryPath>C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA\v7.5\lib\x64;$(LibraryPath);$(DXSDK_DIR)Lib\x64;$(KINECTSDK10_DIR)\lib\amd64;$(CUDA_LIB_PATH);..\..\..\..\mLibExternal\libsWindows\lib64\</LibraryPath>
+    <IncludePath>$(ProjectDir);C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA\v7.0\include;$(IncludePath);$(DXSDK_DIR)Include;$(KINECTSDK10_DIR)\inc;$(CUDA_INC_PATH);$(ProjectDir)..\..\mLib\include;$(ProjectDir)..\..\..\..\mLib\include;$(ProjectDir)..\cusp-v0.5.1\cusp</IncludePath>
+    <LibraryPath>C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA\v7.0\lib\x64;$(LibraryPath);$(DXSDK_DIR)Lib\x64;$(KINECTSDK10_DIR)\lib\amd64;$(CUDA_LIB_PATH)</LibraryPath>
   </PropertyGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
     <ClCompile>
@@ -82,10 +82,10 @@
       <PtxAsOptionV>false</PtxAsOptionV>
     </CudaCompile>
     <PreBuildEvent>
-      <Command>call "..\..\API\common\optMake.bat" "$(ProjectDir)\..\..\..\terra" "..\..\API" "false"
-xcopy /Y /D "..\..\API\release\bin\*.dll" "."
-xcopy /Y /D "..\..\API\release\lib\*.lib" "."
-xcopy /Y /D "..\..\API\release\include\*.h" "."</Command>
+      <Command>call "$(ProjectDir)..\..\API\common\optMake.bat" "$(ProjectDir)\..\..\..\terra" "$(ProjectDir)..\..\API" "false"
+xcopy /Y /D "$(ProjectDir)..\..\API\release\bin\*.dll" "."
+xcopy /Y /D "$(ProjectDir)..\..\API\release\lib\*.lib" "."
+xcopy /Y /D "$(ProjectDir)..\..\API\release\include\*.h" "."</Command>
     </PreBuildEvent>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
@@ -98,11 +98,11 @@ xcopy /Y /D "..\..\API\release\include\*.h" "."</Command>
       <IntrinsicFunctions>true</IntrinsicFunctions>
       <FloatingPointModel>Fast</FloatingPointModel>
       <ExceptionHandling>Sync</ExceptionHandling>
-      <PreprocessorDefinitions>GLOG_NO_ABBREVIATED_SEVERITIES;USE_CERES;NOMINMAX;WIN32;NDEBUG;_WINDOWS;D3DXFX_LARGEADDRESS_HANDLE;_CRT_SECURE_NO_WARNINGS;GOOGLE_GLOG_DLL_DECL=;_MBCS;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <PreprocessorDefinitions>NOMINMAX;WIN32;NDEBUG;_WINDOWS;D3DXFX_LARGEADDRESS_HANDLE;_CRT_SECURE_NO_WARNINGS;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <AdditionalIncludeDirectories>$(ProjectDir)\src\cutil\inc;$(ProjectDir)\src\;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
     </ClCompile>
     <Link>
-      <AdditionalDependencies>libglog_static.lib;ceres.lib;Opt.lib;cublas.lib;cusparse.lib;winmm.lib;comctl32.lib;Shlwapi.lib;cudart.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalDependencies>Opt.lib;cublas.lib;cusparse.lib;winmm.lib;comctl32.lib;Shlwapi.lib;cudart.lib;%(AdditionalDependencies)</AdditionalDependencies>
       <GenerateDebugInformation>true</GenerateDebugInformation>
       <EnableCOMDATFolding>true</EnableCOMDATFolding>
       <SubSystem>Console</SubSystem>
@@ -120,53 +120,22 @@ xcopy /Y /D "..\..\API\release\include\*.h" "."</Command>
       <Optimization>O3</Optimization>
     </CudaCompile>
     <PreBuildEvent>
-      <Command>call "..\..\API\common\optMake.bat" "$(ProjectDir)\..\..\..\terra" "..\..\API" "false"
-xcopy /Y /D "..\..\API\release\bin\*.dll" "."
-xcopy /Y /D "..\..\API\release\lib\*.lib" "."
-xcopy /Y /D "..\..\API\release\include\*.h" "."</Command>
+      <Command>call "$(ProjectDir)..\..\API\common\optMake.bat" "$(ProjectDir)\..\..\..\terra" "$(ProjectDir)..\..\API" "false"
+xcopy /Y /D "$(ProjectDir)..\..\API\release\bin\*.dll" "."
+xcopy /Y /D "$(ProjectDir)..\..\API\release\lib\*.lib" "."
+xcopy /Y /D "$(ProjectDir)..\..\API\release\include\*.h" "."</Command>
     </PreBuildEvent>
   </ItemDefinitionGroup>
   <ItemGroup>
-    <ClCompile Include="src\CeresImageSolver.cpp" />
-    <ClCompile Include="src\CUDAPatchSolverWarping.cpp" />
-    <ClCompile Include="src\CUDAImageSolver.cpp" />
     <ClCompile Include="src\main.cpp" />
     <ClCompile Include="src\mLibSource.cpp" />
-    <ClCompile Include="src\SimpleBuffer.cpp" />
   </ItemGroup>
   <ItemGroup>
-    <ClInclude Include="..\shared\CudaArray.h" />
-    <ClInclude Include="..\shared\cudaUtil.h" />
-    <ClInclude Include="..\shared\OptUtils.h" />
-    <ClInclude Include="..\shared\Precision.h" />
-    <ClInclude Include="..\shared\SolverIteration.h" />
-    <ClInclude Include="Opt.h" />
-    <ClInclude Include="src\CameraParams.h" />
-    <ClInclude Include="src\CeresImageSolver.h" />
-    <ClInclude Include="src\ConvergenceAnalysis.h" />
-    <ClInclude Include="src\CUDAPatchSolverWarping.h" />
     <ClInclude Include="src\CUDATimer.h" />
-    <ClInclude Include="src\cudaUtil.h" />
-    <ClInclude Include="src\CUDAImageSolver.h" />
-    <ClInclude Include="src\cuda_SimpleMatrixUtil.h" />
-    <ClInclude Include="src\ImageSolver.h" />
-    <ClInclude Include="src\PatchSolverWarpingParameters.h" />
-    <ClInclude Include="src\PatchSolverWarpingEquations.h" />
-    <ClInclude Include="src\PatchSolverWarpingState.h" />
-    <ClInclude Include="src\PatchSolverWarpingUtil.h" />
-    <ClInclude Include="src\OptImageSolver.h" />
-    <ClInclude Include="src\SFSSolverParameters.h" />
-    <ClInclude Include="src\SimpleBuffer.h" />
-    <ClInclude Include="src\SFSSolverInput.h" />
-    <ClInclude Include="src\SFSSolverEquations.h" />
-    <ClInclude Include="src\SFSSolverUtil.h" />
-    <ClInclude Include="src\SFSSolverTerms.h" />
-    <ClInclude Include="src\SolverIteration.h" />
-    <ClInclude Include="src\TerraSolverParameters.h" />
-    <ClInclude Include="src\SFSSolverState.h" />
+    <ClInclude Include="src\ImageWarping.h" />
     <ClInclude Include="src\main.h" />
     <ClInclude Include="src\mLibInclude.h" />
-    <ClInclude Include="src\SolverUtil.h" />
+    <ClInclude Include="src\TerraSolver.h" />
   </ItemGroup>
   <ItemGroup>
     <Reference Include="System" />
@@ -176,17 +145,12 @@ xcopy /Y /D "..\..\API\release\include\*.h" "."</Command>
     <Reference Include="System.Xml" />
   </ItemGroup>
   <ItemGroup>
-    <CudaCompile Include="src\PatchSolverWarping.cu" />
-    <CudaCompile Include="src\SFSSolver.cu" />
-  </ItemGroup>
-  <ItemGroup>
     <None Include="..\..\API\src\precision.t" />
-    <None Include="default.SFSSolverParameters" />
-    <None Include="shapeFromShading.t" />
-    <None Include="shapeFromShadingAD.t" />
+    <None Include="SmoothingLaplacianFloat3AD.t" />
+    <None Include="SmoothingLaplacianFloat3AD_full.t" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">
-    <Import Project="$(VCTargetsPath)\BuildCustomizations\CUDA 7.5.targets" />
+    <Import Project="$(VCTargetsPath)\BuildCustomizations\CUDA 7.0.targets" />
   </ImportGroup>
 </Project>

@@ -1,13 +1,20 @@
 require("helper")
 
-local unknownType = opt.double3
+package.path = package.path .. ';../shared/?.t;'
+require("opt_precision")
+
+if OPT_DOUBLE_PRECISION then
+    OPT_FLOAT3 = double3
+else
+    OPT_FLOAT3 = float3
+end
 
 local w_fitSqrt = S:Param("w_fitSqrt", float, 0)
 local w_regSqrt = S:Param("w_regSqrt", float, 1)
 local pNorm = S:Param("pNorm", float, 2)
-local X = S:Unknown("X", unknownType,{W,H},3)
-local X_const = S:Image("X_const", unknownType,{W,H},3)
-local A = S:Image("A", unknownType,{W,H},4)
+local X = S:Unknown("X", OPT_FLOAT3,{W,H},3)
+local X_const = S:Image("X_const", OPT_FLOAT3,{W,H},3)
+local A = S:Image("A", OPT_FLOAT3,{W,H},4)
 
 local terms = terralib.newlist()
 

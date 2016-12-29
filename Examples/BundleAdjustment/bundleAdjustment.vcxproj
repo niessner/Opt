@@ -28,13 +28,14 @@
     <ClInclude Include="mLibInclude.h" />
   </ItemGroup>
   <ItemGroup>
+    <None Include="..\PoissonImageEditing\PoissonImageEditing.sln" />
     <None Include="bundleAdjustment.t" />
     <None Include="bundleAdjustmentBroken.t" />
   </ItemGroup>
   <PropertyGroup Label="Globals">
     <ProjectGuid>{F25CC672-B37B-4B36-8130-84A78E86890A}</ProjectGuid>
     <RootNamespace>curve_fitting</RootNamespace>
-    <ProjectName>bundleAdjustment</ProjectName>
+    <ProjectName>BundleAdjustment</ProjectName>
   </PropertyGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'" Label="Configuration">
@@ -64,12 +65,12 @@
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
     <IntDir>$(Platform)\$(Configuration)\$(ProjectName)\</IntDir>
     <LibraryPath>$(ProjectDir)\..\..\..\..\mLibExternal\libsWindows\lib64;$(ProjectDir)\..\..\API\build\;$(CUDA_PATH)/lib/x64/;.\;C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA\v7.0\lib\x64;$(LibraryPath)</LibraryPath>
-    <IncludePath>$(ProjectDir);..\..\API\release\include;$(CUDA_PATH)/include;$(IncludePath)</IncludePath>
+    <IncludePath>$(ProjectDir);$(ProjectDir)..\..\API\release\include;$(CUDA_PATH)/include;$(IncludePath)</IncludePath>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release NoOpt|x64'">
     <IntDir>$(Platform)\$(Configuration)\$(ProjectName)\</IntDir>
     <LibraryPath>$(ProjectDir)\..\..\..\..\mLibExternal\libsWindows\lib64;$(ProjectDir)\..\..\API\build\;$(CUDA_PATH)/lib/x64/;.\;C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA\v7.0\lib\x64;$(LibraryPath)</LibraryPath>
-    <IncludePath>$(ProjectDir);..\..\API\release\include;$(CUDA_PATH)/include;$(IncludePath)</IncludePath>
+    <IncludePath>$(ProjectDir);$(ProjectDir)..\..\API\release\include;$(CUDA_PATH)/include;$(IncludePath)</IncludePath>
   </PropertyGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
     <ClCompile>
@@ -94,10 +95,10 @@
       <AdditionalDependencies>opt.lib;cudart.lib;cublas.lib;zlib64.lib;opencv_world310.lib;opencv_xfeatures2d310.lib;libglog_static.lib;ceres.lib;kernel32.lib;user32.lib;gdi32.lib;winspool.lib;comdlg32.lib;advapi32.lib;shell32.lib;ole32.lib;oleaut32.lib;uuid.lib;odbc32.lib;odbccp32.lib;%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
     <PreBuildEvent>
-      <Command>call "..\..\API\common\optMake.bat" "$(ProjectDir)\..\..\..\terra\" "..\..\API" "false"
-xcopy /Y /D "..\..\API\release\bin\*.dll" "."
-xcopy /Y /D "..\..\API\release\lib\*.lib" "."
-xcopy /Y /D "..\..\API\release\include\*.h" "."</Command>
+      <Command>call "$(ProjectDir)..\..\API\common\optMake.bat" "$(ProjectDir)\..\..\..\terra\" "..\..\API" "false"
+xcopy /Y /D "$(ProjectDir)..\..\API\release\bin\*.dll" "."
+xcopy /Y /D "$(ProjectDir)..\..\API\release\lib\*.lib" "."
+xcopy /Y /D "$(ProjectDir)..\..\API\release\include\*.h" "."</Command>
     </PreBuildEvent>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release NoOpt|x64'">
@@ -121,10 +122,10 @@ xcopy /Y /D "..\..\API\release\include\*.h" "."</Command>
       <AdditionalDependencies>opt.lib;zlib64.lib;cudart.lib;cublas.lib;opencv_world310.lib;opencv_xfeatures2d310.lib;libglog_static.lib;ceres.lib;kernel32.lib;user32.lib;gdi32.lib;winspool.lib;comdlg32.lib;advapi32.lib;shell32.lib;ole32.lib;oleaut32.lib;uuid.lib;odbc32.lib;odbccp32.lib;%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
     <PreBuildEvent>
-      <Command>call "..\..\API\common\optMake.bat" "$(ProjectDir)\..\..\..\terra\" "..\..\API" "false"
-xcopy /Y /D "..\..\API\release\bin\*.dll" "."
-xcopy /Y /D "..\..\API\release\lib\*.lib" "."
-xcopy /Y /D "..\..\API\release\include\*.h" "."</Command>
+      <Command>call "$(ProjectDir)..\..\API\common\optMake.bat" "$(ProjectDir)\..\..\..\terra\" "$(ProjectDir)..\..\API" "false"
+xcopy /Y /D "$(ProjectDir)..\..\API\release\bin\*.dll" "."
+xcopy /Y /D "$(ProjectDir)..\..\API\release\lib\*.lib" "."
+xcopy /Y /D "$(ProjectDir)..\..\API\release\include\*.h" "."</Command>
     </PreBuildEvent>
   </ItemDefinitionGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />

@@ -8,6 +8,10 @@
 #include "CUDAWarpingSolver.h"
 #include "TerraSolver.h"
 
+#include "../../shared/SolverIteration.h"
+#include "../../shared/CombinedSolverParameters.h"
+
+
 class ImageWarping
 {
 	public:
@@ -16,8 +20,8 @@ class ImageWarping
 		{
 			m_image = image;
 
-            cutilSafeCall(cudaMalloc(&d_imageFloat3, sizeof(UNKNOWN_TYPE)*m_image.getWidth()*m_image.getHeight()));
-            cutilSafeCall(cudaMalloc(&d_targetFloat3, sizeof(UNKNOWN_TYPE)*m_image.getWidth()*m_image.getHeight()));
+            cutilSafeCall(cudaMalloc(&d_imageFloat3, sizeof(OPT_FLOAT3)*m_image.getWidth()*m_image.getHeight()));
+            cutilSafeCall(cudaMalloc(&d_targetFloat3, sizeof(OPT_FLOAT3)*m_image.getWidth()*m_image.getHeight()));
 
 			resetGPUMemory();
 
@@ -27,7 +31,7 @@ class ImageWarping
 
 		void resetGPUMemory()
 		{
-            UNKNOWN_TYPE* h_imageFloat3 = new UNKNOWN_TYPE[m_image.getWidth()*m_image.getHeight()];
+            OPT_FLOAT3* h_imageFloat3 = new OPT_FLOAT3[m_image.getWidth()*m_image.getHeight()];
 
 			for (unsigned int i = 0; i < m_image.getHeight(); i++)
 			{
@@ -42,8 +46,8 @@ class ImageWarping
 				}
 			}
 
-            cutilSafeCall(cudaMemcpy(d_imageFloat3, h_imageFloat3, sizeof(UNKNOWN_TYPE)*m_image.getWidth()*m_image.getHeight(), cudaMemcpyHostToDevice));
-            cutilSafeCall(cudaMemcpy(d_targetFloat3, h_imageFloat3, sizeof(UNKNOWN_TYPE)*m_image.getWidth()*m_image.getHeight(), cudaMemcpyHostToDevice));
+            cutilSafeCall(cudaMemcpy(d_imageFloat3, h_imageFloat3, sizeof(OPT_FLOAT3)*m_image.getWidth()*m_image.getHeight(), cudaMemcpyHostToDevice));
+            cutilSafeCall(cudaMemcpy(d_targetFloat3, h_imageFloat3, sizeof(OPT_FLOAT3)*m_image.getWidth()*m_image.getHeight(), cudaMemcpyHostToDevice));
 
 			delete h_imageFloat3;
 		}
@@ -62,21 +66,24 @@ class ImageWarping
 			float weightReg  = 800.0f;
 			float pNorm = 1.0f;
 
-			unsigned int nonLinearIter = 50;
-			unsigned int linearIter = 40;
-		
-#if !DOUBLE_PRECISION_OPT
+			m_params.nonLinearIter = 50;
+			m_params.linearIter = 40;
+            m_params.useCUDA = !OPT_DOUBLE_PRECISION;
+
+#if !OPT_DOUBLE_PRECISION
 			std::cout << "\n\nCUDA" << std::endl;
 			resetGPUMemory();
-			m_warpingSolver->solveGN(d_imageFloat3, d_targetFloat3, nonLinearIter, linearIter, weightFit, weightReg, pNorm);
+			m_warpingSolver->solveGN(d_imageFloat3, d_targetFloat3, m_params.nonLinearIter, m_params.linearIter, weightFit, weightReg, pNorm);
 			copyResultToCPUFromFloat3();
 #endif
             
             std::cout << "\n\nOPT" << std::endl;
             resetGPUMemory();
-            m_terraSolver->solve(d_imageFloat3, d_targetFloat3, nonLinearIter, linearIter, 0, weightFit, weightReg, pNorm);
+            m_terraSolver->solve(d_imageFloat3, d_targetFloat3, m_params.nonLinearIter, m_params.linearIter, 0, weightFit, weightReg, pNorm);
             copyResultToCPUFromFloat3();
 			
+            reportFinalCosts("Smoothing Laplacian Lp", m_params, m_terraSolver->finalCost(), nan(nullptr), nan(nullptr));
+
 			return &m_result;
 		}
 
@@ -84,14 +91,14 @@ class ImageWarping
 		{
 			m_result = ColorImageR32G32B32A32(m_image.getWidth(), m_image.getHeight());
 
-			UNKNOWN_TYPE* h_imageFloat3 = new UNKNOWN_TYPE[m_image.getWidth()*m_image.getHeight()];
-			cutilSafeCall(cudaMemcpy(h_imageFloat3, d_imageFloat3, sizeof(UNKNOWN_TYPE)*m_image.getWidth()*m_image.getHeight(), cudaMemcpyDeviceToHost));
+            OPT_FLOAT3* h_imageFloat3 = new OPT_FLOAT3[m_image.getWidth()*m_image.getHeight()];
+            cutilSafeCall(cudaMemcpy(h_imageFloat3, d_imageFloat3, sizeof(OPT_FLOAT3)*m_image.getWidth()*m_image.getHeight(), cudaMemcpyDeviceToHost));
 
 			for (unsigned int i = 0; i < m_image.getHeight(); i++)
 			{
 				for (unsigned int j = 0; j < m_image.getWidth(); j++)
 				{
-					UNKNOWN_TYPE v = h_imageFloat3[i*m_image.getWidth() + j];
+                    OPT_FLOAT3 v = h_imageFloat3[i*m_image.getWidth() + j];
 					m_result(j, i) = vec4f(v.x, v.y, v.z, 1.0f);
 				}
 			}
@@ -104,9 +111,10 @@ class ImageWarping
 		ColorImageR32G32B32A32 m_result;
 		ColorImageR32G32B32A32 m_image;
 	
-		UNKNOWN_TYPE*	d_imageFloat3;
-        UNKNOWN_TYPE* d_targetFloat3;
-	
+		OPT_FLOAT3*	d_imageFloat3;
+        OPT_FLOAT3* d_targetFloat3;
+
+        CombinedSolverParameters m_params;
 		CUDAWarpingSolver*		m_warpingSolver;
         TerraSolver* m_terraSolver;
         

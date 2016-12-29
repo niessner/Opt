@@ -55,7 +55,7 @@
       <ExceptionHandling>Sync</ExceptionHandling>
       <PreprocessorDefinitions>NOMINMAX;WIN32;_DEBUG;DEBUG;PROFILE;_CONSOLE;D3DXFX_LARGEADDRESS_HANDLE;_CRT_SECURE_NO_WARNINGS;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <BasicRuntimeChecks>EnableFastChecks</BasicRuntimeChecks>
-      <AdditionalIncludeDirectories>$(SolutionDir)\src\cutil\inc;$(ProjectDir)\..\..\..\..\mLibExternal/libsWindows/ceres-windows\ceres-solver\include\;$(ProjectDir)\..\..\..\..\mLibExternal/libsWindows/ceres-windows\glog\src\windows;$(ProjectDir)\..\..\..\..\mLibExternal/libsWindows/ceres-windows\win\include;$(SolutionDir)\;$(SolutionDir)\src\;$(ProjectDir)\..\..\..\..\mLibExternal/include/;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>$(ProjectDir)src\cutil\inc;$(ProjectDir)\..\..\..\..\mLibExternal/libsWindows/ceres-windows\ceres-solver\include\;$(ProjectDir)\..\..\..\..\mLibExternal/libsWindows/ceres-windows\glog\src\windows;$(ProjectDir)\..\..\..\..\mLibExternal/libsWindows/ceres-windows\win\include;$(ProjectDir)\;$(ProjectDir)\src\;$(ProjectDir)\..\..\..\..\mLibExternal/include/;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
     </ClCompile>
     <Link>
       <AdditionalDependencies>Opt.lib;cublas.lib;cusparse.lib;winmm.lib;comctl32.lib;Shlwapi.lib;cudart.lib;%(AdditionalDependencies)</AdditionalDependencies>
@@ -66,7 +66,7 @@
       <EnableDPIAwareness>true</EnableDPIAwareness>
     </Manifest>
     <CudaCompile>
-      <Include>$(SolutionDir)\src\cutil\inc;$(SolutionDir)\</Include>
+      <Include>$(ProjectDir)\src\cutil\inc;$(ProjectDir)\</Include>
       <TargetMachinePlatform>64</TargetMachinePlatform>
       <CodeGeneration>compute_30,sm_30;compute_35,sm_35</CodeGeneration>
       <MaxRegCount>62</MaxRegCount>
@@ -98,7 +98,7 @@ xcopy /Y /D "..\..\API\release\include\*.h" "."</Command>
       <FloatingPointModel>Fast</FloatingPointModel>
       <ExceptionHandling>Sync</ExceptionHandling>
       <PreprocessorDefinitions>NOMINMAX;WIN32;NDEBUG;_WINDOWS;D3DXFX_LARGEADDRESS_HANDLE;_CRT_SECURE_NO_WARNINGS;GOOGLE_GLOG_DLL_DECL=;USE_CERES;%(PreprocessorDefinitions)</PreprocessorDefinitions>
-      <AdditionalIncludeDirectories>$(SolutionDir)\src\cutil\inc;$(ProjectDir)\..\..\..\..\mLibExternal/libsWindows/ceres-windows\ceres-solver\include\;$(ProjectDir)\..\..\..\..\mLibExternal/libsWindows/ceres-windows\glog\src\windows;$(ProjectDir)\..\..\..\..\mLibExternal/libsWindows/ceres-windows\win\include;$(SolutionDir)\;$(SolutionDir)\src\;$(ProjectDir)\..\..\..\..\mLibExternal/include/;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>$(ProjectDir)src\cutil\inc;$(ProjectDir)\..\..\..\..\mLibExternal/libsWindows/ceres-windows\ceres-solver\include\;$(ProjectDir)\..\..\..\..\mLibExternal/libsWindows/ceres-windows\glog\src\windows;$(ProjectDir)\..\..\..\..\mLibExternal/libsWindows/ceres-windows\win\include;$(ProjectDir)\;$(ProjectDir)\src\;$(ProjectDir)\..\..\..\..\mLibExternal/include/;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <SDLCheck>false</SDLCheck>
       <InlineFunctionExpansion>AnySuitable</InlineFunctionExpansion>
       <FavorSizeOrSpeed>Speed</FavorSizeOrSpeed>
@@ -116,7 +116,7 @@ xcopy /Y /D "..\..\API\release\include\*.h" "."</Command>
     </Manifest>
     <CudaCompile>
       <TargetMachinePlatform>64</TargetMachinePlatform>
-      <Include>$(SolutionDir)\src\cutil\inc;$(SolutionDir)\</Include>
+      <Include>$(ProjectDir)\src\cutil\inc;$(ProjectDir)\</Include>
       <CodeGeneration>compute_35,sm_35</CodeGeneration>
       <MaxRegCount>62</MaxRegCount>
       <FastMath>true</FastMath>
@@ -184,7 +184,6 @@ xcopy /Y /D "..\..\API\release\include\*.h" "."</Command>
     <None Include="ImageWarping.t" />
     <None Include="ImageWarpingAD.t" />
     <None Include="ImageWarpingCombined.t" />
-    <None Include="opt_precision.t" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

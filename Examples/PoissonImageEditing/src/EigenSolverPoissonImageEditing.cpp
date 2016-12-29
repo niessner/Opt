@@ -1,6 +1,8 @@
 #pragma once
 
 #include "main.h"
+
+#define GLOG_NO_ABBREVIATED_SEVERITIES
 #include <Eigen33b1/Eigen>
 #include <Eigen33b1/IterativeLinearSolvers>
 #include <cuda_runtime.h>

@@ -10,9 +10,14 @@
 #include "TerraSolverWarping.h"
 #include "OpenMesh.h"
 
-static bool useCERES = true;
-static bool useCUDA = false;
-static bool useTerra = true;
+#include "../../shared/CombinedSolverParameters.h"
+#include "../../shared/SolverIteration.h"
+
+// From the future (C++14)
+template<typename T, typename... Args>
+std::unique_ptr<T> make_unique(Args&&... args) {
+    return std::unique_ptr<T>(new T(std::forward<Args>(args)...));
+}
 
 class ImageWarping
 {
@@ -37,9 +42,10 @@ class ImageWarping
 
 			resetGPUMemory();
 			
-			if (useCUDA)  m_warpingSolver = new CUDAWarpingSolver(m_nNodes);
-			if (useCERES) m_warpingSolverCeres = new CERESWarpingSolver(m_dims.x + 1, m_dims.y + 1, m_dims.z + 1);
-			if (useTerra) m_warpingSolverTerra = new TerraSolverWarping(m_dims.x+1, m_dims.y+1, m_dims.z+1, "ImageWarpingAD.t", "gaussNewtonGPU");
+			m_warpingSolver         = make_unique<CUDAWarpingSolver>(m_nNodes);
+			m_warpingSolverCeres    = make_unique<CERESWarpingSolver>(m_dims.x + 1, m_dims.y + 1, m_dims.z + 1);
+			m_warpingSolverOpt      = make_unique<TerraSolverWarping>(m_dims.x+1, m_dims.y+1, m_dims.z+1, "ImageWarpingAD.t", "gaussNewtonGPU");
+            m_warpingSolverOptLM    = make_unique<TerraSolverWarping>(m_dims.x + 1, m_dims.y + 1, m_dims.z + 1, "ImageWarpingAD.t", "LMGPU");
 		}
 
 		void setConstraints(float alpha)
@@ -231,9 +237,6 @@ class ImageWarping
 
 		~ImageWarping()
 		{
-			if (useCUDA)  SAFE_DELETE(m_warpingSolver);
-			if (useCERES) SAFE_DELETE(m_warpingSolverCeres);
-			if (useTerra) SAFE_DELETE(m_warpingSolverTerra);
 
 			cutilSafeCall(cudaFree(d_gridPosTargetFloat3));
 			cutilSafeCall(cudaFree(d_gridPosFloat3));
@@ -250,38 +253,55 @@ class ImageWarping
 			float weightFit = 1.0f;
 			float weightReg = 0.05f;
 
-			unsigned int nonLinearIter = 100;
-            unsigned int linearIter = 20;
+            m_params.useCeres = true;
 
-			if (useCUDA)
+			m_params.nonLinearIter = 100;
+            m_params.linearIter = 20;
+
+			if (m_params.useCUDA)
 			{
 				m_result = m_initial;
 				resetGPUMemory();
 				std::cout << "//////////// (CUDA) ///////////////" << std::endl;
-				m_warpingSolver->solveGN(m_dims, d_gridPosFloat3, d_gridAnglesFloat3, d_gridPosFloat3Urshape, d_gridPosTargetFloat3, nonLinearIter, linearIter, weightFit, weightReg);
+				m_warpingSolver->solveGN(m_dims, d_gridPosFloat3, d_gridAnglesFloat3, d_gridPosFloat3Urshape, d_gridPosTargetFloat3, m_params.nonLinearIter, m_params.linearIter, weightFit, weightReg);
 
 				copyResultToCPUFromFloat3();
 			}
 
-			if (useTerra)
+			if (m_params.useOpt)
 			{
 				m_result = m_initial;
 				resetGPUMemory();
-				std::cout << "//////////// (TERRA) ///////////////" << std::endl;
-				m_warpingSolverTerra->solve(d_gridPosFloat3, d_gridAnglesFloat3, d_gridPosFloat3Urshape, d_gridPosTargetFloat3, nonLinearIter, linearIter, 1, weightFit, weightReg);
+				std::cout << "//////////// (OPT GN) ///////////////" << std::endl;
+                m_warpingSolverOpt->solve(d_gridPosFloat3, d_gridAnglesFloat3, d_gridPosFloat3Urshape, d_gridPosTargetFloat3, m_params.nonLinearIter, m_params.linearIter, 1, weightFit, weightReg, m_optIters);
 
 				copyResultToCPUFromFloat3();
 			}
 
-			if (useCERES)
+            if (m_params.useOptLM)
+            {
+                m_result = m_initial;
+                resetGPUMemory();
+                std::cout << "//////////// (OPT LM) ///////////////" << std::endl;
+                m_warpingSolverOptLM->solve(d_gridPosFloat3, d_gridAnglesFloat3, d_gridPosFloat3Urshape, d_gridPosTargetFloat3, m_params.nonLinearIter, m_params.linearIter, 1, weightFit, weightReg, m_optLMIters);
+
+                copyResultToCPUFromFloat3();
+            }
+
+			if (m_params.useCeres)
 			{
 				m_result = m_initial;
 				resetGPUMemory();
 				std::cout << "//////////// (CERES) ///////////////" << std::endl;
-				m_warpingSolverCeres->solve(d_gridPosFloat3, d_gridAnglesFloat3, d_gridPosFloat3Urshape, d_gridPosTargetFloat3, weightFit, weightReg);
+                m_warpingSolverCeres->solve(d_gridPosFloat3, d_gridAnglesFloat3, d_gridPosFloat3Urshape, d_gridPosTargetFloat3, weightFit, weightReg, m_ceresIters);
 
 				copyResultToCPUFromFloat3();
 			}
+
+            saveSolverResults("results/", OPT_DOUBLE_PRECISION ? "_double" : "_float", m_ceresIters, m_optIters, m_optLMIters);
+
+            reportFinalCosts("Mesh Deformation LARAP", m_params, m_warpingSolverOpt->finalCost(), m_warpingSolverOptLM->finalCost(), m_warpingSolverCeres->finalCost());
+
 						
 			return &m_result;
 		}
@@ -376,7 +396,14 @@ class ImageWarping
 		float3* d_gridPosFloat3Urshape;
 		float3* d_gridAnglesFloat3;
 
-		CUDAWarpingSolver*	m_warpingSolver;
-		CERESWarpingSolver*	m_warpingSolverCeres;
-		TerraSolverWarping*	m_warpingSolverTerra;
+        CombinedSolverParameters m_params;
+
+        std::unique_ptr<CUDAWarpingSolver>	m_warpingSolver;
+        std::unique_ptr<CERESWarpingSolver>	m_warpingSolverCeres;
+		std::unique_ptr<TerraSolverWarping>	m_warpingSolverOpt;
+        std::unique_ptr<TerraSolverWarping>	m_warpingSolverOptLM;
+
+        std::vector<SolverIteration> m_ceresIters;
+        std::vector<SolverIteration> m_optIters;
+        std::vector<SolverIteration> m_optLMIters;
 };

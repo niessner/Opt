@@ -5,7 +5,7 @@
 extern "C" {
 #include "Opt.h"
 }
-
+#include "../../shared/OptUtils.h"
 #include <cuda_runtime.h>
 #include <cudaUtil.h>
 
@@ -51,7 +51,7 @@ public:
 	}
 
 
-	void solve(float3* d_x, float3* d_a, float3* d_urshape, float3* d_constraints, unsigned int nNonLinearIterations, unsigned int nLinearIterations, unsigned int nBlockIterations, float weightFit, float weightReg)
+	void solve(float3* d_x, float3* d_a, float3* d_urshape, float3* d_constraints, unsigned int nNonLinearIterations, unsigned int nLinearIterations, unsigned int nBlockIterations, float weightFit, float weightReg, std::vector<SolverIteration>& iters)
 	{
 		void* solverParams[] = { &nNonLinearIterations, &nLinearIterations, &nBlockIterations };
 		float weightFitSqrt = sqrt(weightFit);
@@ -59,13 +59,17 @@ public:
 		
 		void* problemParams[] = { d_x, d_a, d_urshape, d_constraints, &weightFitSqrt, &weightRegSqrt };
 		
-		Opt_ProblemInit(m_optimizerState, m_plan, problemParams, solverParams);
-		std::cout << "Opt starting cost: " << Opt_ProblemCurrentCost(m_optimizerState, m_plan) << std::endl;
 
-		Opt_ProblemSolve(m_optimizerState, m_plan, problemParams, solverParams);
+        launchProfiledSolve(m_optimizerState, m_plan, problemParams, solverParams, iters);
+        m_finalCost = Opt_ProblemCurrentCost(m_optimizerState, m_plan);
 	}
 
+    double finalCost() const {
+        return m_finalCost;
+    }
 
+
+    double m_finalCost = nan(nullptr);
 	Opt_State*		m_optimizerState;
 	Opt_Problem*	m_problem;
 	Opt_Plan*		m_plan;

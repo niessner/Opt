@@ -11,10 +11,10 @@
     </ProjectConfiguration>
   </ItemGroup>
   <PropertyGroup Label="Globals">
-    <ProjectGuid>{CA9DD020-FC04-44B1-8741-AFC2A99756D1}</ProjectGuid>
+    <ProjectGuid>{4E547FAA-5441-4043-87D9-BC71C206DE1E}</ProjectGuid>
     <Keyword>Win32Proj</Keyword>
     <RootNamespace>DepthWithColor.D3D</RootNamespace>
-    <ProjectName>MeshDeformation</ProjectName>
+    <ProjectName>SmoothingLaplacianLP</ProjectName>
   </PropertyGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'" Label="Configuration">
@@ -44,13 +44,13 @@
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
     <LinkIncremental>true</LinkIncremental>
     <ExecutablePath>$(DXSDK_DIR)Utilities\bin\x64;$(DXSDK_DIR)Utilities\bin\x86;$(ExecutablePath)</ExecutablePath>
-    <IncludePath>C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA\v7.0\include;$(IncludePath);$(DXSDK_DIR)Include;$(KINECTSDK10_DIR)\inc;$(CUDA_INC_PATH);..\..\..\..\mLib\include;..\..\cusp-v0.5.1\cusp;./</IncludePath>
-    <LibraryPath>C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA\v6.0\lib\x64;$(LibraryPath);$(DXSDK_DIR)Lib\x64;$(KINECTSDK10_DIR)\lib\amd64;</LibraryPath>
+    <IncludePath>$(ProjectDir);C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA\v7.0\include;$(IncludePath);$(DXSDK_DIR)Include;$(KINECTSDK10_DIR)\inc;$(CUDA_INC_PATH);..\..\..\..\mLib\include</IncludePath>
+    <LibraryPath>C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA\v7.0\lib\x64;$(LibraryPath);$(DXSDK_DIR)Lib\x64;$(KINECTSDK10_DIR)\lib\amd64;</LibraryPath>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
     <LinkIncremental>false</LinkIncremental>
     <ExecutablePath>$(DXSDK_DIR)Utilities\bin\x64;$(DXSDK_DIR)Utilities\bin\x86;$(ExecutablePath)</ExecutablePath>
-    <IncludePath>C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA\v7.0\include;$(IncludePath);$(DXSDK_DIR)Include;$(KINECTSDK10_DIR)\inc;$(CUDA_INC_PATH);..\..\mLib\include;..\..\..\..\mLib\include;..\..\cusp-v0.5.1\cusp;./</IncludePath>
+    <IncludePath>$(ProjectDir);C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA\v7.0\include;$(IncludePath);$(DXSDK_DIR)Include;$(KINECTSDK10_DIR)\inc;$(CUDA_INC_PATH);..\..\mLib\include;..\..\..\..\mLib\include;..\cusp-v0.5.1\cusp</IncludePath>
     <LibraryPath>C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA\v7.0\lib\x64;$(LibraryPath);$(DXSDK_DIR)Lib\x64;$(KINECTSDK10_DIR)\lib\amd64;$(CUDA_LIB_PATH)</LibraryPath>
   </PropertyGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
@@ -64,19 +64,18 @@
       <ExceptionHandling>Sync</ExceptionHandling>
       <PreprocessorDefinitions>NOMINMAX;WIN32;_DEBUG;DEBUG;PROFILE;_CONSOLE;D3DXFX_LARGEADDRESS_HANDLE;_CRT_SECURE_NO_WARNINGS;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <BasicRuntimeChecks>EnableFastChecks</BasicRuntimeChecks>
-      <AdditionalIncludeDirectories>$(SolutionDir)\src\cutil\inc;$(SolutionDir)\src\;..\..\..\..\mLibExternal\\include\;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>$(ProjectDir)\src\cutil\inc;$(ProjectDir)\src\;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
     </ClCompile>
     <Link>
-      <AdditionalDependencies>Opt.lib;cublas.lib;cusparse.lib;winmm.lib;comctl32.lib;Shlwapi.lib;cudart.lib;OpenMeshCored.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalDependencies>Opt.lib;winmm.lib;comctl32.lib;Shlwapi.lib;cudart.lib;cublas.lib;%(AdditionalDependencies)</AdditionalDependencies>
       <SubSystem>Console</SubSystem>
       <GenerateDebugInformation>true</GenerateDebugInformation>
-      <AdditionalLibraryDirectories>..\..\..\..\mLibExternal\libsWindows\lib64;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
     </Link>
     <Manifest>
       <EnableDPIAwareness>true</EnableDPIAwareness>
     </Manifest>
     <CudaCompile>
-      <Include>$(SolutionDir)\src\cutil\inc;$(SolutionDir)</Include>
+      <Include>$(ProjectDir)\src\cutil\inc;$(ProjectDir)</Include>
       <TargetMachinePlatform>64</TargetMachinePlatform>
       <CodeGeneration>compute_30,sm_30;compute_35,sm_35</CodeGeneration>
       <MaxRegCount>62</MaxRegCount>
@@ -100,22 +99,21 @@ xcopy /Y /D "..\..\API\release\include\*.h" "."</Command>
       <FloatingPointModel>Fast</FloatingPointModel>
       <ExceptionHandling>Sync</ExceptionHandling>
       <PreprocessorDefinitions>NOMINMAX;WIN32;NDEBUG;_WINDOWS;D3DXFX_LARGEADDRESS_HANDLE;_CRT_SECURE_NO_WARNINGS;%(PreprocessorDefinitions)</PreprocessorDefinitions>
-      <AdditionalIncludeDirectories>$(SolutionDir)\src\cutil\inc;$(SolutionDir)\src\;..\..\..\..\mLibExternal\\include\;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>$(ProjectDir)\src\cutil\inc;$(ProjectDir)\src\;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
     </ClCompile>
     <Link>
-      <AdditionalDependencies>Opt.lib;cublas.lib;cusparse.lib;winmm.lib;comctl32.lib;Shlwapi.lib;cudart.lib;OpenMeshCore.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalDependencies>Opt.lib;cublas.lib;cusparse.lib;winmm.lib;comctl32.lib;Shlwapi.lib;cudart.lib;%(AdditionalDependencies)</AdditionalDependencies>
       <GenerateDebugInformation>true</GenerateDebugInformation>
       <EnableCOMDATFolding>true</EnableCOMDATFolding>
       <SubSystem>Console</SubSystem>
       <OptimizeReferences>true</OptimizeReferences>
-      <AdditionalLibraryDirectories>..\..\..\..\mLibExternal\libsWindows\lib64;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
     </Link>
     <Manifest>
       <EnableDPIAwareness>true</EnableDPIAwareness>
     </Manifest>
     <CudaCompile>
       <TargetMachinePlatform>64</TargetMachinePlatform>
-      <Include>$(SolutionDir)\src\cutil\inc;$(SolutionDir)</Include>
+      <Include>$(ProjectDir)\src\cutil\inc;$(ProjectDir)</Include>
       <CodeGeneration>compute_35,sm_35</CodeGeneration>
       <MaxRegCount>62</MaxRegCount>
       <FastMath>true</FastMath>
@@ -129,15 +127,22 @@ xcopy /Y /D "..\..\API\release\include\*.h" "."</Command>
     </PreBuildEvent>
   </ItemDefinitionGroup>
   <ItemGroup>
+    <ClCompile Include="src\CUDAWarpingSolver.cpp" />
     <ClCompile Include="src\main.cpp" />
     <ClCompile Include="src\mLibSource.cpp" />
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="src\CUDATimer.h" />
+    <ClInclude Include="src\CUDAWarpingSolver.h" />
     <ClInclude Include="src\ImageWarping.h" />
-    <ClInclude Include="src\OpenMesh.h" />
     <ClInclude Include="src\main.h" />
     <ClInclude Include="src\mLibInclude.h" />
+    <ClInclude Include="src\SolverUtil.h" />
     <ClInclude Include="src\TerraSolver.h" />
+    <ClInclude Include="src\WarpingSolverEquations.h" />
+    <ClInclude Include="src\WarpingSolverParameters.h" />
+    <ClInclude Include="src\WarpingSolverState.h" />
+    <ClInclude Include="src\WarpingSolverUtil.h" />
   </ItemGroup>
   <ItemGroup>
     <Reference Include="System" />
@@ -147,10 +152,10 @@ xcopy /Y /D "..\..\API\release\include\*.h" "."</Command>
     <Reference Include="System.Xml" />
   </ItemGroup>
   <ItemGroup>
-    <CudaCompile Include="src\TerraSolver.cu" />
+    <CudaCompile Include="src\WarpingSolver.cu" />
   </ItemGroup>
   <ItemGroup>
-    <None Include="..\..\API\src\precision.t" />
+    <None Include="SmoothingLaplacianFloat3AD.t" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

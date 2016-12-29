@@ -205,7 +205,8 @@ void CERESWarpingSolver::solve(
 	float3* d_vertexPosFloat3Urshape,
 	float3* d_vertexPosTargetFloat3,
 	float weightFit,
-	float weightReg)
+	float weightReg,
+    std::vector<SolverIteration>& iters)
 {
 	float weightFitSqrt = sqrt(weightFit);
 	float weightRegSqrt = sqrt(weightReg);
@@ -333,9 +334,9 @@ void CERESWarpingSolver::solve(
 		cout << "Iteration: " << i.linear_solver_iterations << " " << i.iteration_time_in_seconds * 1000.0 << "ms," << " cost: " << i.cost << endl;
 	}
 
-	for (auto &i : summary.iterations) {
-		//iters.push_back(SolverIteration(i.cost, i.iteration_time_in_seconds * 1000.0));
-	}
+    for (auto &i : summary.iterations) {
+        iters.push_back(SolverIteration(i.cost, i.iteration_time_in_seconds * 1000.0));
+    }
 
 
 	cout << "Total iteration time: " << iterationTotalTime << endl;
@@ -344,6 +345,8 @@ void CERESWarpingSolver::solve(
 	double cost = -1.0;
 	problem.Evaluate(Problem::EvaluateOptions(), &cost, nullptr, nullptr, nullptr);
 	cout << "Cost*2 end: " << cost * 2 << endl;
+
+    m_finalCost = cost;
 
 	cout << summary.FullReport() << endl;
 

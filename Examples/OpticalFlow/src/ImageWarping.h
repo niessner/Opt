@@ -7,6 +7,8 @@
 
 #include "TerraSolverWarping.h"
 #include "ImageHelper.h"
+#include "../../shared/CombinedSolverParameters.h"
+#include "../../shared/SolverIteration.h"
 
 class ImageWarping {
 public:
@@ -63,12 +65,12 @@ public:
 
         float fitTarget = 50.0f;
 
-		unsigned int numRelaxIter = 3;
-		unsigned int nonLinearIter = 1;
-		unsigned int linearIter = 50;
+		m_params.numIter = 3;
+		m_params.nonLinearIter = 1;
+		m_params.linearIter = 50;
 
 
-        float fitStepSize = (fitTarget - weightFit) / (numRelaxIter);
+        float fitStepSize = (fitTarget - weightFit) / (m_params.numIter);
 
 		//unsigned int numIter = 20;
 		//unsigned int nonLinearIter = 32;
@@ -85,16 +87,18 @@ public:
 			}
 			
 			HierarchyLevel& level = m_levels[i];
-			for (unsigned int k = 0; k < numRelaxIter; k++)  {
+            for (unsigned int k = 0; k < m_params.numIter; k++)  {
                 weightFit += fitStepSize;
 				std::cout << "//////////// ITERATION " << k << " (on hierarchy level " << i << " )  (DSL AD) ///////////////" << std::endl;
-				m_solverOpt->solve(level.d_flowVectors, level.d_source, level.d_target, level.d_targetDU, level.d_targetDV, nonLinearIter, linearIter, 1, weightFit, weightReg);
+				m_solverOpt->solve(level.d_flowVectors, level.d_source, level.d_target, level.d_targetDU, level.d_targetDV, m_params.nonLinearIter, m_params.linearIter, 1, weightFit, weightReg);
 				std::cout << std::endl;
 			}
 
 			
 		}
 		//copyResultToCPU();
+
+        reportFinalCosts("Optical Flow", m_params, m_solverOpt->finalCost(), nan(nullptr), nan(nullptr));
 		
 		return m_levels[0].getFlowVectors();
 	}
@@ -207,7 +211,7 @@ private:
 	
 	std::vector<HierarchyLevel> m_levels;
 
-
+    CombinedSolverParameters m_params;
 	TerraSolverWarping*		m_solverOpt;
 
 };

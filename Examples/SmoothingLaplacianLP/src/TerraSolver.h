@@ -38,7 +38,7 @@ public:
 
 	}
 
-    void solve(UNKNOWN_TYPE* d_unknown, UNKNOWN_TYPE* d_target, unsigned int nNonLinearIterations, unsigned int nLinearIterations, unsigned int nBlockIterations, float weightFit, float weightReg, float pNorm)
+    void solve(OPT_FLOAT3* d_unknown, OPT_FLOAT3* d_target, unsigned int nNonLinearIterations, unsigned int nLinearIterations, unsigned int nBlockIterations, float weightFit, float weightReg, float pNorm)
 	{
 
 		void* solverParams[] = { &nNonLinearIterations, &nLinearIterations, &nBlockIterations };
@@ -48,9 +48,15 @@ public:
         void* problemParams[] = { &weightFitSqrt, &weightRegSqrt, &pNorm, d_unknown, d_target };
 
 		Opt_ProblemSolve(m_optimizerState, m_plan, problemParams, solverParams);
+        m_finalCost = Opt_ProblemCurrentCost(m_optimizerState, m_plan);
 	}
 
+    double finalCost() const {
+        return m_finalCost;
+    }
+
 private:
+    double m_finalCost = nan(nullptr);
 	Opt_State*	m_optimizerState;
     Opt_Problem*	m_problem;
     Opt_Plan*		m_plan;

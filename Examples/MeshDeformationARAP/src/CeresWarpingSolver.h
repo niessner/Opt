@@ -24,7 +24,12 @@ public:
         float weightReg,
         std::vector<SolverIteration>& iters);
 
+    double finalCost() const {
+        return m_finalCost;
+    }
+
 private:
+    double m_finalCost = nan(nullptr);
     int vertexCount, edgeCount;
 
     double3* vertexPosDouble3;

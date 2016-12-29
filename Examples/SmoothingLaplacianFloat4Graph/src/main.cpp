@@ -33,8 +33,6 @@ int main(int argc, const char * argv[])
 	printf("About to save\n");
 	LodePNG::save(out, "output.png");
 	printf("Save\n");
-	#ifdef _WIN32
-	getchar();
-	#endif
+
 	return 0;
 }

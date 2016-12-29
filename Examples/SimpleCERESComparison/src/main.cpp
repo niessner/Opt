@@ -188,11 +188,6 @@ int main(int argc, const char * argv[]) {
 	}
 
 	cout << "See results/*.csv" << endl;
-    #ifdef _WIN32
- 	    getchar();
-    #else
-        exit(0);
-    #endif
 
 	return 0;
 }

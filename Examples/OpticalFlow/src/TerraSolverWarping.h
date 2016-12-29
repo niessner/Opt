@@ -65,10 +65,15 @@ public:
 		void* problemParams[] = { &weightFitSqrt, &weightRegSqrt, d_unknown, d_source, d_target, d_targetDU, d_targetDV };
 		void* solverParams[] = { &nNonLinearIterations, &nLinearIterations, &nBlockIterations };
  		Opt_ProblemSolve(m_optimizerState, m_plan, problemParams, solverParams);
+        m_finalCost = Opt_ProblemCurrentCost(m_optimizerState, m_plan);
 	}
 
-private:
+    double finalCost() const {
+        return m_finalCost;
+    }
 
+private:
+    double m_finalCost = nan(nullptr);
 
 	Opt_State*	    m_optimizerState;
     Opt_Problem*	m_problem;
