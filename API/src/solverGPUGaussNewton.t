@@ -1219,7 +1219,7 @@ return function(problemSpec)
 
             var model_cost_change : opt_float
 
-            if problemSpec:UsesLambda() then
+            if [problemSpec:UsesLambda()] then
                 model_cost_change = computeModelCostChange(pd)
                 gpu.savePreviousUnknowns(pd)
             end
