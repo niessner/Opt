@@ -2,6 +2,7 @@
 
 #include <cuda_runtime.h>
 
+#include "mLibInclude.h"
 #include "cudaUtil.h"
 #include "WarpingSolverParameters.h"
 #include "WarpingSolverState.h"
@@ -10,7 +11,9 @@
 #include "../../shared/SolverIteration.h"
 
 #ifdef _WIN32
+#ifndef USE_CERES
 #define USE_CERES
+#endif
 #endif
 
 

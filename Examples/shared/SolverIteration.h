@@ -1,5 +1,9 @@
 #pragma once
 #include <limits>
+#include <vector>
+#include <iostream>
+#include <iomanip>
+#include <cmath>
 #include <algorithm>
 #include "Precision.h"
 #include "CombinedSolverParameters.h"

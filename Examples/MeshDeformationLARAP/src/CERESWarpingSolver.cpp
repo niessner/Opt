@@ -243,7 +243,7 @@ void CERESWarpingSolver::solve(
 	for (int i = 0; i < (int)voxelCount; i++)
 	{
 		const vec3f constraint = toVec(h_vertexPosTargetFloat3[i]);
-		if (constraint.x > -999999.0f)
+		if (constraint.x > -999999.9f)
 		{
 			ceres::CostFunction* costFunction = FitTerm::Create(constraint, weightFitSqrt);
 			vec3d *varStart = vertexPosDouble3 + i;
@@ -270,9 +270,9 @@ void CERESWarpingSolver::solve(
 					const int neighborIndex = getVoxel(x + o.x, y + o.y, z + o.z);
 					if (!voxelValid(x + o.x, y + o.y, z + o.z)) continue;
 
-					const vec3f constraintA = toVec(h_vertexPosTargetFloat3[myIndex]);
-					const vec3f constraintB = toVec(h_vertexPosTargetFloat3[neighborIndex]);
-					if (constraintA.x > -999999.0f && constraintB.x > -999999.0f)
+					//const vec3f constraintA = toVec(h_vertexPosTargetFloat3[myIndex]);
+					//const vec3f constraintB = toVec(h_vertexPosTargetFloat3[neighborIndex]);
+					//if (constraintA.x > -999999.0f && constraintB.x > -999999.0f)
 					{
 						const vec3f deltaUr = toVec(h_vertexPosFloat3Urshape[myIndex]) - toVec(h_vertexPosFloat3Urshape[neighborIndex]);
 						ceres::CostFunction* costFunction = RegTerm::Create(deltaUr, weightRegSqrt);
@@ -304,7 +304,7 @@ void CERESWarpingSolver::solve(
 
 	//options.min_linear_solver_iterations = linearIterationMin;
 	options.max_num_iterations = 10000;
-	options.function_tolerance = 0.1;
+	options.function_tolerance = 1e-10;
 	options.gradient_tolerance = 1e-4 * options.function_tolerance;
 
 	//options.min_lm_diagonal = 1.0f;
