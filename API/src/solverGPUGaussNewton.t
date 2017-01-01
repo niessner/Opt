@@ -1219,10 +1219,12 @@ return function(problemSpec)
 
             var model_cost_change : opt_float
 
-            if [problemSpec:UsesLambda()] then
-                model_cost_change = computeModelCostChange(pd)
-                gpu.savePreviousUnknowns(pd)
-            end
+            escape if problemSpec:UsesLambda() then
+                emit quote 
+                    model_cost_change = computeModelCostChange(pd)
+                    gpu.savePreviousUnknowns(pd)
+                end
+            end end
 
 			gpu.PCGLinearUpdate(pd)    
 			gpu.precompute(pd)
