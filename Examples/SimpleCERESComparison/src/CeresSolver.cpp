@@ -142,6 +142,9 @@ struct TermDanWood
     double x, y;
 };
 
+template <typename T>
+static T sqr(T x) { return x*x; }
+
 struct TermEckerle4
 {
     TermEckerle4(double x, double y) : x(x), y(y) {}
@@ -152,7 +155,7 @@ struct TermEckerle4
         T b1 = funcParams[0];
         T b2 = funcParams[1];
         T b3 = funcParams[2];
-        residuals[0] = y - (b1 / b2) * exp(-(T)0.5*pow(((x - b3) / b2), 2));
+        residuals[0] = y - (b1 / b2) * exp((T(-0.5))*sqr(((x - b3) / b2)));
         return true;
     }
     static ceres::CostFunction* Create(double x, double y)
@@ -749,11 +752,15 @@ std::vector<SolverIteration> CeresSolver::solve(
     options.gradient_tolerance = 1e-10 * options.function_tolerance;
 
     // Default values, reproduced here for clarity
-    //options.trust_region_strategy_type = ceres::TrustRegionStrategyType::LEVENBERG_MARQUARDT;
+    options.trust_region_strategy_type = ceres::TrustRegionStrategyType::LEVENBERG_MARQUARDT;
     options.initial_trust_region_radius = 1e4;
     options.max_trust_region_radius = 1e16;
     options.min_trust_region_radius = 1e-32;
     options.min_relative_decrease = 1e-3;
+
+    options.min_lm_diagonal = 1e-6;
+    options.max_lm_diagonal = 1e32;
+
     // Disable to match Opt
     //options.min_lm_diagonal = 1e-32;
     //options.max_lm_diagonal = std::numeric_limits<double>::infinity();

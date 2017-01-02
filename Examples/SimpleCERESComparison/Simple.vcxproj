@@ -11,7 +11,7 @@
     </ProjectConfiguration>
   </ItemGroup>
   <PropertyGroup Label="Globals">
-    <ProjectGuid>{BCE28248-392E-48F1-BA1F-030C326BEC2C}</ProjectGuid>
+    <ProjectGuid>{CA9DD020-FC04-44B1-8741-AFC2A99756D1}</ProjectGuid>
     <Keyword>Win32Proj</Keyword>
     <RootNamespace>DepthWithColor.D3D</RootNamespace>
     <ProjectName>Simple</ProjectName>

@@ -64,7 +64,7 @@ public:
 	UNKNOWNS solve(const NLLSProblem &problem) {
 		std::cout << "*** Solving " << problem.baseName << std::endl;
         uint nonLinearIter = 100000;
-        uint linearIter = 100;
+        uint linearIter = problem.unknownCount+2;
 		if (useOpt) {
 			resetGPU();
 			m_optIters = m_solverOpt->solve(d_functionParameters.data(), d_dataPoints.data(), nonLinearIter, linearIter);

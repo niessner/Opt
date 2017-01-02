@@ -47,11 +47,11 @@ vector<NLLSProblem> makeProblems()
 	problems.push_back(NLLSProblem("roszman1", 4, { 0.1, -1e-05, 1000.0, -100.0 }, { 0.20196866396, -6.1953516256e-06, 1204.4556708, -181.34269537}));
 	problems.push_back(NLLSProblem("thurber", 7, { 1000.0, 1000.0, 400.0, 40.0, 0.7, 0.3, 0.03 }, { 1288.13968, 1491.0792535, 583.23836877, 75.416644291, 0.96629502864, 0.39797285797, 0.049727297349}));
 
-    /* The problematic ones 
+    /*The problematic ones 
     problems.push_back(NLLSProblem("mgh10", 3, { 2.0, 400000.0, 25000.0 }, { 0.005609636471, 6181.3463463, 345.22363462 }));
     problems.push_back(NLLSProblem("mgh17", 5, { 50.0, 150.0, -100.0, 1.0, 2.0 }, { 0.37541005211, 1.9358469127, -1.4646871366, 0.01286753464, 0.022122699662 }));
     */
-
+    //problems.push_back(NLLSProblem("eckerle4", 3, { 1.0, 10.0, 500.0 }, { 1.5543827178, 4.0888321754, 451.54121844 }));
 	return problems;
 }
 
