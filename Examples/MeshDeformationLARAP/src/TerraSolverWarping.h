@@ -6,6 +6,8 @@ extern "C" {
 #include "Opt.h"
 }
 #include "../../shared/OptUtils.h"
+#include "../../shared/CudaArray.h"
+#include "../../shared/Precision.h"
 #include <cuda_runtime.h>
 #include <cudaUtil.h>
 
@@ -57,11 +59,59 @@ public:
 		float weightFitSqrt = sqrt(weightFit);
 		float weightRegSqrt = sqrt(weightReg);
 		
-		void* problemParams[] = { d_x, d_a, d_urshape, d_constraints, &weightFitSqrt, &weightRegSqrt };
+
+        std::vector<void*> problemParams;
+        int scalarCount = m_height*m_width*m_depth * 3;
+        CudaArray<double> d_xDouble3, d_aDouble3, d_urshapeDouble3, d_constraintsDouble3;
+        if (OPT_DOUBLE_PRECISION) {
+            auto getDoubleArrayFromFloatDevicePointer = [](CudaArray<double>& doubleArray, float* d_ptr, int size) {
+                std::vector<float> v;
+                v.resize(size);
+                cutilSafeCall(cudaMemcpy(v.data(), d_ptr, size*sizeof(float), cudaMemcpyDeviceToHost));
+                std::vector<double> vDouble;
+                vDouble.resize(size);
+                for (int i = 0; i < size; ++i) {
+                    vDouble[i] = (double)v[i];
+                }
+                doubleArray.update(vDouble);
+            };
+
+            
+            getDoubleArrayFromFloatDevicePointer(d_xDouble3, (float*)d_x, scalarCount);
+            getDoubleArrayFromFloatDevicePointer(d_aDouble3, (float*)d_a, scalarCount);
+            getDoubleArrayFromFloatDevicePointer(d_urshapeDouble3, (float*)d_urshape, scalarCount);
+            getDoubleArrayFromFloatDevicePointer(d_constraintsDouble3, (float*)d_constraints, scalarCount);
+
+
+            problemParams = { d_xDouble3.data(), d_aDouble3.data(), d_urshapeDouble3.data(), d_constraintsDouble3.data(), &weightFitSqrt, &weightRegSqrt };
+        }
+        else {
+            problemParams = { d_x, d_a, d_urshape, d_constraints, &weightFitSqrt, &weightRegSqrt };
+        }
+
 		
 
-        launchProfiledSolve(m_optimizerState, m_plan, problemParams, solverParams, iters);
+        launchProfiledSolve(m_optimizerState, m_plan, problemParams.data(), solverParams, iters);
         m_finalCost = Opt_ProblemCurrentCost(m_optimizerState, m_plan);
+
+        if (OPT_DOUBLE_PRECISION) {
+            std::vector<double> vDouble;
+            vDouble.resize(scalarCount);
+            std::vector<float> v;
+            v.resize(scalarCount);
+
+            cutilSafeCall(cudaMemcpy(vDouble.data(), d_xDouble3.data(), scalarCount*sizeof(double), cudaMemcpyDeviceToHost));
+            for (int i = 0; i < scalarCount; ++i) {
+                v[i] = (float)vDouble[i];
+            }
+            cutilSafeCall(cudaMemcpy(d_x, v.data(), scalarCount*sizeof(float), cudaMemcpyHostToDevice));
+
+            cutilSafeCall(cudaMemcpy(vDouble.data(), d_aDouble3.data(), scalarCount*sizeof(double), cudaMemcpyDeviceToHost));
+            for (int i = 0; i < scalarCount; ++i) {
+                v[i] = (float)vDouble[i];
+            }
+            cutilSafeCall(cudaMemcpy(d_a, v.data(), scalarCount*sizeof(float), cudaMemcpyHostToDevice));
+        }
 	}
 
     double finalCost() const {

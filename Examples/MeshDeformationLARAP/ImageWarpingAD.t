@@ -1,12 +1,20 @@
+package.path = package.path .. ';../shared/?.t;'
+require("opt_precision")
+
+if OPT_DOUBLE_PRECISION then
+    OPT_FLOAT3 = double3
+else
+    OPT_FLOAT3 = float3
+end
 
 local W,H,D = opt.Dim("W",0), opt.Dim("H",1), opt.Dim("D",2)
 local S = ad.ProblemSpec()
 S:UsePreconditioner(true)
 
-local Offset = S:Unknown("Offset",opt.float3,{W,H,D},0)
-local Angle = S:Unknown("Angle",opt.float3,{W,H,D},1)
-local UrShape = 	S:Image("UrShape", opt.float3,{W,H,D},2)		--urshape
-local Constraints = S:Image("Constraints", opt.float3,{W,H,D},3)	--constraints
+local Offset = S:Unknown("Offset",OPT_FLOAT3,{W,H,D},0)
+local Angle = S:Unknown("Angle",OPT_FLOAT3,{W,H,D},1)
+local UrShape = 	S:Image("UrShape", OPT_FLOAT3,{W,H,D},2)		--urshape
+local Constraints = S:Image("Constraints", OPT_FLOAT3,{W,H,D},3)	--constraints
 
 local w_fitSqrt = S:Param("w_fitSqrt", float, 4)
 local w_regSqrt = S:Param("w_regSqrt", float, 5)

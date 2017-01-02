@@ -253,10 +253,12 @@ class ImageWarping
 			float weightFit = 1.0f;
 			float weightReg = 0.05f;
 
+
+            m_params.useOptLM = true;
             m_params.useCeres = true;
 
 			m_params.nonLinearIter = 100;
-            m_params.linearIter = 20;
+            m_params.linearIter = 500;
 
 			if (m_params.useCUDA)
 			{

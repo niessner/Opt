@@ -77,10 +77,11 @@ opt_float = """
 testTable = {}
 testTable["ImageWarping"] = ("ImageWarping", "ImageWarping", "0", "perf", "")
 testTable["MeshDeformationARAP"] = ("MeshDeformationARAP", "MeshDeformationARAP", "Armadillo20k.ply", "perf", "")
+testTable["MeshDeformationLARAP"] = ("MeshDeformationLARAP", "MeshDeformationLARAP", "meshes/neptune.ply", "", "")
 testTable["ShapeFromShading"] = ("ShapeFromShadingSimple", "ShapeFromShadingSimple", "default", "perf", "")
 testTable["CotangentLaplacian"] = ("MeshSmoothingLaplacianCOT", "MeshSmoothingLaplacianCOT", "serapis.stl", "perf", "")
 #  testTable["CotangentLaplacian"], 
-performanceTests = [testTable["MeshDeformationARAP"], testTable["ImageWarping"], testTable["ShapeFromShading"]]
+performanceTests = [testTable["MeshDeformationLARAP"], testTable["MeshDeformationARAP"], testTable["ImageWarping"], testTable["ShapeFromShading"]]
 
 
 
