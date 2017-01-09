@@ -4,7 +4,8 @@ from utils import *
 
 
 def runPaperExamples(outputFile):
-	call(["python", "./runPaperExamples.py", ">", outputFile])
+	with open(outputFile, "w") as outfile:
+		subprocess.call(["python", "./runPaperExamples.py"], stdout=outfile)
 
 def setCusparseParams(usingCusparse, fusedJtJ):
 	cusparseString = "local use_cusparse  = "
@@ -33,13 +34,14 @@ def setCusparseParams(usingCusparse, fusedJtJ):
 
 
 def runCusparsePaperExamples(name, usingCusparse, fusedJtJ):
+	print("Generating "+name+" results")
 	setCusparseParams(usingCusparse, fusedJtJ)
 	runPaperExamples("cusparseTiming_" + name + ".txt")
 
 runCusparsePaperExamples("noCusparse", False, False)
 runCusparsePaperExamples("cusparseSeparateJTJ", True, False)
 runCusparsePaperExamples("cusparseCombinedJTJ", True, True)
-
+print("Finished")
 
 
 
