@@ -34,13 +34,14 @@ def setCusparseParams(usingCusparse, fusedJtJ):
 
 
 def runCusparsePaperExamples(name, usingCusparse, fusedJtJ):
+	print("Generating "+name+" results")
 	setCusparseParams(usingCusparse, fusedJtJ)
 	runPaperExamples("cusparseTiming_" + name + ".txt")
 
 runCusparsePaperExamples("noCusparse", False, False)
 runCusparsePaperExamples("cusparseSeparateJTJ", True, False)
 runCusparsePaperExamples("cusparseCombinedJTJ", True, True)
-
+print("Finished")
 
 
 
