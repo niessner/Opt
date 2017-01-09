@@ -9,7 +9,7 @@ local C = util.C
 local Timer = util.Timer
 
 local getValidUnknown = util.getValidUnknown
-local use_cusparse    = false
+local use_cusparse  = false
 local use_fused_jtj = false
 
 

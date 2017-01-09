@@ -1,5 +1,5 @@
 
-local timeIndividualKernels = false
+local timeIndividualKernels = true
 
 
 local S = require("std")
@@ -370,6 +370,30 @@ terra Timer:evaluate()
             end
         end
         C.printf("\n")
+        -- TODO: Refactor timing code
+        var linIters = 0
+        var nonLinIters = 0
+        for i = 0, aggregateTimingNames:size() do
+            var n = aggregateTimingNames(i)
+            if isprefix("PCGInit1",n) then
+                linIters = aggregateTimingInfo(i)._1
+            end
+            if isprefix("PCGStep1",n) then
+                nonLinIters = aggregateTimingInfo(i)._1
+            end
+        end
+        var linAggregate : float = 0.0f
+        var nonLinAggregate : float = 0.0f
+        for i = 0, aggregateTimingNames:size() do
+            var n = aggregateTimingInfo(i)._1
+            if n == linIters then
+                linAggregate = linAggregate + aggregateTimingInfo(i)._0
+            end
+            if n == nonLinIters then
+                nonLinAggregate = nonLinAggregate + aggregateTimingInfo(i)._0
+            end
+        end
+        C.printf("Per-iter times ms (nonlinear,linear): %7.4f\t%7.4f\n", linAggregate, nonLinAggregate)
 	end
     
 end
