@@ -26,7 +26,7 @@ local Mask = 		S:Image("Mask", opt_float, {W,H},4)				--validity mask for constr
 local w_fitSqrt = S:Param("w_fitSqrt", float, 5)
 local w_regSqrt = S:Param("w_regSqrt", float, 6)
 
-S:Exclude(ad.not_(ad.eq(Mask(0,0),0)))
+--S:Exclude(ad.not_(ad.eq(Mask(0,0),0)))
 
 function evalRot(CosAlpha, SinAlpha)
 	return ad.Vector(CosAlpha, -SinAlpha, SinAlpha, CosAlpha)

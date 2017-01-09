@@ -10,7 +10,7 @@ local USE_J = false
 local USE_PRECOMPUTE = true and not USE_J
 
 local DEPTH_DISCONTINUITY_THRE = 0.01
-
+--P:Exclude(ad.not_(ad.greater(D_i(0,0),0)))
 
 local W,H 	= opt.Dim("W",0), opt.Dim("H",1)
 local P 	= ad.ProblemSpec()
@@ -185,7 +185,6 @@ if USE_J then
 end
 
 local cost = {w_g*E_g_h, w_g*E_g_v, w_s*E_s, w_p*E_p}
-P:Exclude(ad.not_(ad.greater(D_i(0,0),0)))
 
 return P:Cost(unpack(cost))
 

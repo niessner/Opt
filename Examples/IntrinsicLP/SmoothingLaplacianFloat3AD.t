@@ -1,3 +1,4 @@
+package.path = package.path .. ';?.t;'
 require("helper")
 
 local w_fitSqrt = S:Param("w_fitSqrt", float, 0)
