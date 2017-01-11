@@ -585,8 +585,9 @@ return function(problemSpec)
                     elseif [JacobiScaling == JacobiScalingType.EVERY_ITERATION] then 
                         invS_iiSq = opt_float(1.0f) / pd.preconditioner(idx)
                     end -- else if  [JacobiScaling == JacobiScalingType.NONE] then invS_iiSq == 1
-                    var minVal = square(pd.parameters.min_lm_diagonal) * invS_iiSq
-                    var maxVal = square(pd.parameters.max_lm_diagonal) * invS_iiSq
+                    var clampMultiplier = invS_iiSq / pd.parameters.trust_region_radius
+                    var minVal = pd.parameters.min_lm_diagonal * clampMultiplier
+                    var maxVal = pd.parameters.max_lm_diagonal * clampMultiplier
                     var CtC = clamp(unclampedCtC, minVal, maxVal)
                     pd.CtC(idx) = CtC
                     
@@ -999,14 +1000,12 @@ return function(problemSpec)
 
 	
 	local terra step(data_ : &opaque, params_ : &&opaque, solverparams : &&opaque)
-
-
         --TODO: make parameters
         var residual_reset_period = 10
         var min_relative_decrease = 1e-3f
         var min_trust_region_radius = 1e-32;
         var max_trust_region_radius = 1e16;
-        var q_tolerance = 1e-4
+        var q_tolerance = 2.2251e-308--1e-4
         var Q0 : opt_float
         var Q1 : opt_float
 		var pd = [&PlanData](data_)
@@ -1318,6 +1317,7 @@ return function(problemSpec)
                             gpu.revertUpdate(pd)
 
                             pd.parameters.trust_region_radius = pd.parameters.trust_region_radius / pd.parameters.radius_decrease_factor
+                            logSolver(" trust_region_radius=%f \n", pd.parameters.trust_region_radius)
                             pd.parameters.radius_decrease_factor = 2.0 * pd.parameters.radius_decrease_factor
                             if pd.parameters.trust_region_radius <= min_trust_region_radius then
                                 --logSolver("\nTrust_region_radius is less than the min, exiting\n")

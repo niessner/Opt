@@ -53,11 +53,32 @@ for p in problems:
 	plt.legend(handles=[ceres_line, optLM_d_line, optGN_d_line, optLM_f_line, optGN_f_line])
 	plt.ylabel('Cost')
 	plt.xlabel('Iterations')
-	plt.title(p)
+	SIZE = 12
+	MEDIUM_SIZE = 16
+	BIGGER_SIZE = 20
+	plt.title(p, fontsize=BIGGER_SIZE)
 	#plt.plot(iters, optGN_f, 'g')
 	plt.yscale('log')
+
+
+	plt.rc('font', size=SIZE)                # controls default text sizes
+	plt.rc('axes', titlesize=SIZE)           # fontsize of the axes title
+	plt.rc('axes', labelsize=MEDIUM_SIZE)    # fontsize of the x and y labels
+	plt.rc('xtick', labelsize=SIZE)          # fontsize of the tick labels
+	plt.rc('ytick', labelsize=SIZE)          # fontsize of the tick labels
+	plt.rc('legend', fontsize=SIZE)          # legend fontsize
+	#plt.rc('figure', titlesize=BIGGER_SIZE)  # fontsize of the figure title
 	#plt.show()
 	plt.savefig(plotpath+p+".pdf", dpi=300, facecolor='w', edgecolor='w',
         orientation='portrait', papertype=None, format=None,
         transparent=False, bbox_inches=None, pad_inches=0.1,
         frameon=None)
+
+i = 0
+figureString=""
+for p in problems:
+	figureString += "\\includegraphics[width=0.333\\textwidth]{benchmark/" + p + ".pdf}"
+	i += 1
+	if i%3 == 0:
+		figureString += "\\\\\n"
+print(figureString)
