@@ -18,7 +18,7 @@ using namespace std;
 vector<NLLSProblem> makeProblems()
 {
 	vector<NLLSProblem> problems;
-
+   
 	problems.push_back(NLLSProblem("bennett5", 3, { -2000.0, 50.0, 0.8 }, { -2523.5058043, 46.736564644, 0.93218483193}));
 	problems.push_back(NLLSProblem("boxbod", 2, { 1.0, 1.0 }, { 213.80940889, 0.54723748542}));
 	problems.push_back(NLLSProblem("chwirut1", 3, { 0.1, 0.01, 0.02 }, { 0.1902781837, 0.0061314004477, 0.010530908399}));
@@ -46,12 +46,11 @@ vector<NLLSProblem> makeProblems()
 	problems.push_back(NLLSProblem("rat43", 4, { 100.0, 10.0, 1.0, 1.0 }, { 699.6415127, 5.2771253025, 0.75962938329, 1.2792483859}));
 	problems.push_back(NLLSProblem("roszman1", 4, { 0.1, -1e-05, 1000.0, -100.0 }, { 0.20196866396, -6.1953516256e-06, 1204.4556708, -181.34269537}));
 	problems.push_back(NLLSProblem("thurber", 7, { 1000.0, 1000.0, 400.0, 40.0, 0.7, 0.3, 0.03 }, { 1288.13968, 1491.0792535, 583.23836877, 75.416644291, 0.96629502864, 0.39797285797, 0.049727297349}));
+    
 
-    /*The problematic ones 
-    problems.push_back(NLLSProblem("mgh10", 3, { 2.0, 400000.0, 25000.0 }, { 0.005609636471, 6181.3463463, 345.22363462 }));
-    problems.push_back(NLLSProblem("mgh17", 5, { 50.0, 150.0, -100.0, 1.0, 2.0 }, { 0.37541005211, 1.9358469127, -1.4646871366, 0.01286753464, 0.022122699662 }));
-    */
-    //problems.push_back(NLLSProblem("eckerle4", 3, { 1.0, 10.0, 500.0 }, { 1.5543827178, 4.0888321754, 451.54121844 }));
+    //The problematic ones 
+    //problems.push_back(NLLSProblem("boxbod", 2, { 1.0, 1.0 }, { 213.80940889, 0.54723748542 }));
+    
 	return problems;
 }
 
@@ -137,28 +136,22 @@ void runProblem(const NLLSProblem &problem)
 
     printSolution(resultFile, "True", problem.unknownCount, problem.trueSolution);
     printSolution(resultFile, "Ceres", problem.unknownCount, solver.m_ceresResult);
-    printSolution(resultFile, "Opt", problem.unknownCount, solver.m_optResult);
+    printSolution(resultFile, "OptLM", problem.unknownCount, solver.m_optLMResult);
+    printSolution(resultFile, "OptGN", problem.unknownCount, solver.m_optGNResult);
 
-    resultFile << "Iter, Ceres Error, Opt Error, Ceres Iter Time (ms), Opt Iter Time (ms), Total Ceres Time (ms), Total Opt Time (ms)" << endl;
-    double sumOptTime = 0.0;
-    double sumCeresTime = 0.0;
+    resultFile << "Iter, Ceres Error, Opt LM Error, Opt GN Error" << endl;
     if (solver.m_ceresIters.size() == 0) {
         solver.m_ceresIters.push_back({ 0.0, 0.0 });
     }
     double prevCeresCost = std::numeric_limits<double>::infinity();
-	for (int i = 0; i < (int)max(solver.m_ceresIters.size(), solver.m_optIters.size()); i++)
+    for (int i = 0; i < (int)max(solver.m_ceresIters.size(), max(solver.m_optGNIters.size(), solver.m_optLMIters.size())); i++)
 	{
-        double ceresTime    = ((solver.m_ceresIters.size() > i) ? solver.m_ceresIters[i].timeInMS : 0.0);
-        double optTime = ((solver.m_optIters.size() > i) ? solver.m_optIters[i].timeInMS : 0.0);
-        sumCeresTime    += ceresTime;
-        sumOptTime      += optTime;
-
         // When hooked up to certain debug builds of CERES, the "potential" cost is reported instead of the real one. This corrects for that.
         double ceresCost = clampedRead(solver.m_ceresIters, i).cost;
         ceresCost = fmin(ceresCost, prevCeresCost);
         prevCeresCost = ceresCost;
 
-        resultFile << i << ", " << ceresCost << ", " << clampedRead(solver.m_optIters, i).cost << ", " << ceresTime << ", " << optTime << ", " << sumCeresTime << ", " << sumOptTime << endl;
+        resultFile << i << ", " << ceresCost << ", " << clampedRead(solver.m_optLMIters, i).cost << ", " << clampedRead(solver.m_optGNIters, i).cost << endl;
 	}
 }
 

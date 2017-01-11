@@ -768,8 +768,9 @@ std::vector<SolverIteration> CeresSolver::solve(
 
     //options.initial_trust_region_radius = 0.005;
 
-    options.initial_trust_region_radius = 1e4;
-    options.eta = 1e-4;
+    options.initial_trust_region_radius = 1e4;//2e5;
+    options.eta = 2.2251e-308;// 1e-4;
+
 
     options.jacobi_scaling = true;
     //options.preconditioner_type = ceres::PreconditionerType::IDENTITY;

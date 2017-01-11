@@ -10,7 +10,7 @@
 #include "TerraSolver.h"
 #include "CeresSolver.h"
 #include <vector>
-static bool useOpt = true;
+static bool useOptGN = true;
 static bool useCeres = true;
 static bool useOptLM = true;
 
@@ -30,10 +30,13 @@ public:
         }
         d_dataPoints.update(dataPointsFloat);
 		resetGPU();
+        if (useOptLM) {
+            m_solverOptLM = new TerraSolver((uint32_t)dataPoints.size(), optProblemFilename, "LMGPU");
+        }
 
-        if (useOpt) {
-			m_solverOpt = new TerraSolver((uint32_t)dataPoints.size(), optProblemFilename, useOptLM ? "LMGPU" : "gaussNewtonGPU");
-		}
+        if (useOptGN) {
+            m_solverOptGN = new TerraSolver((uint32_t)dataPoints.size(), optProblemFilename, "gaussNewtonGPU");
+        }
 
         if (useCeres) {
             m_solverCeres = new CeresSolver(dataPoints.size());
@@ -63,29 +66,52 @@ public:
 
 	UNKNOWNS solve(const NLLSProblem &problem) {
 		std::cout << "*** Solving " << problem.baseName << std::endl;
-        uint nonLinearIter = 100000;
-        uint linearIter = problem.unknownCount+2;
-		if (useOpt) {
+        uint nonLinearIter = 10000;
+        uint linearIter = problem.unknownCount + 3;
+        if (useOptLM) {
 			resetGPU();
-			m_optIters = m_solverOpt->solve(d_functionParameters.data(), d_dataPoints.data(), nonLinearIter, linearIter);
+            m_optLMIters = m_solverOptLM->solve(d_functionParameters.data(), d_dataPoints.data(), nonLinearIter, linearIter);
 			copyResultToCPU();
-			m_optResult = m_functionParameters;
+            m_optLMResult = m_functionParameters;
 		}
-
 		if (useCeres) {
             m_functionParameters = m_functionParametersGuess;
 			m_ceresIters = m_solverCeres->solve(problem, &m_functionParameters, m_ceresDataPoints.data());
 			m_ceresResult = m_functionParameters;
 		}
 
+        nonLinearIter = (uint)min(m_ceresIters.size(), m_optLMIters.size());
+
+        if (useOptGN) {
+            resetGPU();
+            m_optGNIters = m_solverOptGN->solve(d_functionParameters.data(), d_dataPoints.data(), nonLinearIter, linearIter);
+            copyResultToCPU();
+            m_optGNResult = m_functionParameters;
+        }
+
         return m_functionParameters;
 	}
 
-	UNKNOWNS m_optResult;
+    ~CombinedSolver() {
+        if (useOptLM) {
+            delete m_solverOptLM;
+        }
+        if (useOptGN) {
+            delete m_solverOptGN;
+        }
+
+        if (useCeres) {
+            delete m_solverCeres;
+        }
+    }
+
+	UNKNOWNS m_optLMResult;
+    UNKNOWNS m_optGNResult;
 	UNKNOWNS m_ceresResult;
 
 	std::vector<SolverIteration> m_ceresIters;
-	std::vector<SolverIteration> m_optIters; // no good idea how to get at these yet
+	std::vector<SolverIteration> m_optLMIters;
+    std::vector<SolverIteration> m_optGNIters;
 
 private:
     std::vector<double2> m_ceresDataPoints;
@@ -96,6 +122,7 @@ private:
 	CudaArray<OPT_UNKNOWNS> d_functionParameters;
 	
 
-	TerraSolver*		m_solverOpt;
+	TerraSolver*		m_solverOptLM;
+    TerraSolver*		m_solverOptGN;
 	CeresSolver*		m_solverCeres;
 };
