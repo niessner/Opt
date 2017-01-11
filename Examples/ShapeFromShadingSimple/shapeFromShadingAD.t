@@ -12,6 +12,9 @@ local USE_PRECOMPUTE = true and not USE_J
 local DEPTH_DISCONTINUITY_THRE = 0.01
 --P:Exclude(ad.not_(ad.greater(D_i(0,0),0)))
 
+--P:Exclude(ad.not_(ad.greater(D_i(0,0),0)))
+
+
 local W,H 	= opt.Dim("W",0), opt.Dim("H",1)
 local P 	= ad.ProblemSpec()
 

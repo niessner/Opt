@@ -346,7 +346,7 @@ class ImageWarping
                             weightReg = weightRegMin;
                             m_optWarpingSolver->initGN(d_vertexPosFloat3.data(), d_anglesFloat3.data(), d_robustWeights.data(), d_vertexPosFloat3Urshape.data(), d_vertexPosTargetFloat3.data(), d_vertexNormalTargetFloat3.data(), m_params.nonLinearIter, m_params.linearIter, weightFit, weightReg);
                             float currentCost = m_optWarpingSolver->currentCost();
-                            for (int nlIter = 0; nlIter < m_params.nonLinearIter; ++nlIter) {
+                            for (int nlIter = 0; nlIter <= m_params.nonLinearIter; ++nlIter) {
                                 m_optWarpingSolver->stepGN(d_vertexPosFloat3.data(), d_anglesFloat3.data(), d_robustWeights.data(), d_vertexPosFloat3Urshape.data(), d_vertexPosTargetFloat3.data(), d_vertexNormalTargetFloat3.data(), m_params.nonLinearIter, m_params.linearIter, weightFit, weightReg);
                                 float newCost = m_optWarpingSolver->currentCost();
                                 if ((currentCost - newCost) < costEqualityEpsilon) {
@@ -362,7 +362,7 @@ class ImageWarping
                     }
                     m_optWarpingSolver->initGN(d_vertexPosFloat3.data(), d_anglesFloat3.data(), d_robustWeights.data(), d_vertexPosFloat3Urshape.data(), d_vertexPosTargetFloat3.data(), d_vertexNormalTargetFloat3.data(), m_params.nonLinearIter, m_params.linearIter, weightFit, weightReg);
                     float currentCost = m_optWarpingSolver->currentCost();
-                    for (int nlIter = 0; nlIter < m_params.nonLinearIter; ++nlIter) {
+                    for (int nlIter = 0; nlIter <= m_params.nonLinearIter; ++nlIter) {
                         m_optWarpingSolver->stepGN(d_vertexPosFloat3.data(), d_anglesFloat3.data(), d_robustWeights.data(), d_vertexPosFloat3Urshape.data(), d_vertexPosTargetFloat3.data(), d_vertexNormalTargetFloat3.data(), m_params.nonLinearIter, m_params.linearIter, weightFit, weightReg);
                         float newCost = m_optWarpingSolver->currentCost();
                         if ((currentCost - newCost) < costEqualityEpsilon) {
