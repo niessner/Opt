@@ -1,6 +1,8 @@
 from subprocess import call
 
 from utils import *
+from opt_utils import *
+import sys
 
 import os
 import platform
@@ -48,13 +50,21 @@ projectList = ["ImageWarping", "IntrinsicLP", "MeshDeformationARAP", "MeshDeform
     "MeshSmoothingLaplacianCOT", "OpticalFlow", "RobustMeshDeformationARAP",
     "ShapeFromShadingSimple"]
 
+cusparseMode = len(sys.argv > 1) and ("false" in sys.argv[1])
+
+if not cusparseMode:
+    projectList.append("PoissonImageEditing")
+    setCusparseParams(False, False)
 
 for name in projectList:
     testTable[name] = (name, name)
 
 costTests = [testTable[name] for name in projectList]
 
-#setDoublePrecision(True)
+setExcludeEnabled(not cusparseMode)
+setContiguousAllocation(cusparseMode)
+setDoublePrecision(False)
+setUtilParams(True, False)
 buildAndRunPerformanceTests(costTests)
 
 

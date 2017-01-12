@@ -1,0 +1,32 @@
+1. NLLS Benchmark 
+	Change directory to Examples/SimpleCERESComparison.
+	If data needs to be recreated:
+		Ensure that initial trust region radius is set to 1e4 for both CERES and Opt
+		Ensure "API/src/solverGPUGaussNewton.t" has "use_cusparse" and "use_fused_jtj" set to false
+		Ensure that all problems are set to run in main.cpp
+		Compile and Run the release version of the Simple program
+		Change the problems set to run in main.cpp to just boxbod
+		Ensure that initial trust region radius is set to 2e5 for both CERES and Opt
+		Compile and Run the release version of the Simple program
+	Run "python generateResultSummary.py; python generateIterationGraphSources.py; python generatePlots.py"
+	The plots will be in the "plots/" subdirectory; copy them over to your paper directory and use them (latex code for putting the graphs in the paper will be made by hand)
+
+2. Timing for all problems (float OptGN)
+	Change directory to "Examples/"
+	Run "python runPaperExamples.py > allResults.txt"
+	Extract timing by inspection from allResults.txt 
+	Put timing info into paper
+
+3. CERES Iteration/Time comparison for 4 problems (float/double OptGN/OptLM) and scaling
+	Change directory to "Examples/"
+	Run "python generateAllPerformanceResults.py [pascalOrBetterGPU]" with the argument set to true if on a pascal or better gpu
+	All results will be in Examples/[Example Name]/results/results_[suffix].csv
+	Make all the graphs by painstakingly generating them in your favorite table editing environment
+	Copy them to your paper directory
+	Insert them all manually
+
+4. Cusparse Comparison
+	Change directory to "Examples/"
+	Run "python cusparseComparison.py"
+	extract timing by inspection from "cusparseTiming_*.txt"
+	Put timing info into paper
