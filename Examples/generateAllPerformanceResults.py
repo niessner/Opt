@@ -5,6 +5,13 @@ from utils import *
 import os
 import platform
 
+def make_sure_path_exists(path):
+    try:
+        os.makedirs(path)
+    except OSError as exception:
+        if exception.errno != errno.EEXIST:
+            raise
+
 s = platform.system()
 windows = (s == 'Windows') or (s == 'Microsoft')
 freebsd = (s == 'FreeBSD')
@@ -29,6 +36,7 @@ def compileProject(exampleName, exampleProjectName):
 
 def perfTest(exampleName, exeName, arg0, arg1, arg2):
 	os.chdir("./" + exampleName)
+	make_sure_path_exists("results/")
 	print("PerfTest " + exampleName)
 	call(["x64/Release/" + exeName + ".exe", arg0, arg1, arg2])
 	print("Done with " + exampleName)
@@ -82,8 +90,6 @@ testTable["ShapeFromShading"] = ("ShapeFromShadingSimple", "ShapeFromShadingSimp
 testTable["CotangentLaplacian"] = ("MeshSmoothingLaplacianCOT", "MeshSmoothingLaplacianCOT", "serapis.stl", "perf", "")
 #  testTable["CotangentLaplacian"], 
 performanceTests = [testTable["MeshDeformationLARAP"], testTable["MeshDeformationARAP"], testTable["ImageWarping"], testTable["ShapeFromShading"]]
-
-
 
 setDoublePrecision(True)
 buildAndRunPerformanceTests(performanceTests)

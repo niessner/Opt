@@ -1,6 +1,7 @@
 from subprocess import call
 
 from utils import *
+import sys
 
 import os
 import platform
@@ -48,6 +49,8 @@ projectList = ["ImageWarping", "IntrinsicLP", "MeshDeformationARAP", "MeshDeform
     "MeshSmoothingLaplacianCOT", "OpticalFlow", "RobustMeshDeformationARAP",
     "ShapeFromShadingSimple"]
 
+if not (len(sys.argv > 1) and ("false" in sys.argv[1])):
+    projectList.append("PoissonImageEditing")
 
 for name in projectList:
     testTable[name] = (name, name)
