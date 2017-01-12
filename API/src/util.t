@@ -1,4 +1,3 @@
-
 local timeIndividualKernels = true
 local pascalOrBetterGPU = false
 

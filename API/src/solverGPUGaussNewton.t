@@ -787,7 +787,7 @@ return function(problemSpec)
     
     if problemSpec:UsesLambda() then
         terra computeModelCostChange(pd : &PlanData) : opt_float
-            var cost = computeCost(pd)
+            var cost = pd.prevCost
             var model_cost = computeModelCost(pd)
             logSolver(" cost=%f \n",cost)
             logSolver(" model_cost=%f \n",model_cost)
