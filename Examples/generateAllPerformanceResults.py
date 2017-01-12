@@ -69,7 +69,7 @@ if len(sys.argv) > 1 and "true" in sys.argv[1]:
 
 setExcludeEnabled(True)
 setContiguousAllocation(False)
-setUtilParams(True, pascalOrBetterGPU)
+setUtilParams(False, pascalOrBetterGPU)
 setCusparseParams(False, False)
 
 
