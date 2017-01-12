@@ -6,13 +6,14 @@ from opt_utils import *
 
 def runPaperExamples(outputFile):
 	with open(outputFile, "w") as outfile:
-		subprocess.call(["python", "./runPaperExamples.py", "false"], stdout=outfile)
+		subprocess.call(["python", script_dir + "runPaperExamples.py", "false"], stdout=outfile)
 
 def runCusparsePaperExamples(name, usingCusparse, fusedJtJ):
 	print("Generating "+name+" results")
 	setCusparseParams(usingCusparse, fusedJtJ)
-	runPaperExamples("cusparseTiming_" + name + ".txt")
+	runPaperExamples(results_dir + "cusparseTiming_" + name + ".txt")
 
+ensure_result_dirs()
 runCusparsePaperExamples("noCusparse", False, False)
 runCusparsePaperExamples("cusparseSeparateJTJ", True, False)
 runCusparsePaperExamples("cusparseCombinedJTJ", True, True)

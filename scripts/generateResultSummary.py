@@ -1,7 +1,9 @@
 from os import listdir
 from os.path import isfile, join
+from opt_utils import *
 
-originalPath = "originalDataSheets/"
+ensure_result_dirs()
+originalPath = simple_dir + "originalDataSheets/"
 dataSheets = [f for f in listdir(originalPath) if isfile(join(originalPath, f)) and ".dat" in f]
 
 problemNames = [filename[:-4] for filename in dataSheets]
@@ -34,9 +36,9 @@ for name in problemNames:
 	doubleRows = []
 	floatRows = []
 
-	with open(join("results/", name.lower() + "_double.csv")) as f:
+	with open(join(simple_results_dir, name.lower() + "_double.csv")) as f:
 		doubleRows = f.readlines()
-	with open(join("results/", name.lower() + "_float.csv")) as f:
+	with open(join(simple_results_dir, name.lower() + "_float.csv")) as f:
 		floatRows = f.readlines()
 
 	trueSolRow = doubleRows[1].split(",")
@@ -74,5 +76,5 @@ output += "CERES," + ",".join([toStatus(s) for s in ceresStatus]) + "\n"
 output += "OptLM (double)," + ",".join([toStatus(s) for s in doubleLMStatus]) + "\n"
 output += "OptLM (float)," + ",".join([toStatus(s) for s in floatLMStatus]) + "\n"
 
-with open(join("results/", "summary.csv"), "w") as f:
+with open(join(simple_results_dir, "summary.csv"), "w") as f:
 	f.write(output)

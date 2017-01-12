@@ -1,8 +1,9 @@
 from os import listdir
 from os.path import isfile, join
+from opt_utils import *
 
-originalPath = "originalDataSheets/"
-dataPath = "data/"
+originalPath = simple_dir + "originalDataSheets/"
+dataPath = simple_dir + "data/"
 dataSheets = [f for f in listdir(originalPath) if isfile(join(originalPath, f)) and ".dat" in f]
 
 ceresStructStubs = []
