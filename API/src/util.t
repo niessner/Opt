@@ -1,6 +1,6 @@
 
 local timeIndividualKernels = true
-
+local pascalOrBetterGPU = false
 
 local S = require("std")
 require("precision")
@@ -418,43 +418,6 @@ if opt_float == float then
     end
     util.atomicAdd = atomicAdd
 
-    struct IntFloat {
-        union {
-            a : int;
-            b : float;
-        }
-    }
-
-    local terra __float_as_int(v : float)
-        var u : IntFloat
-        u.b = v;
-
-        return u.a;
-    end
-
-    local terra __int_as_float(v : int)
-        var u : IntFloat
-        u.a = v;
-
-        return u.b;
-    end
-
-    local terra atomicMax(max_value : &float, value : float)
-        var address_as_i : &int = [&int] (max_value);
-        var old : int = address_as_i[0];
-        var assumed : int;
-        repeat
-            assumed = old;
-            old = terralib.asm(int,"atom.global.cas.b32 $0,[$1],$2,$3;", 
-                "=r,l,r,r", true, address_as_i, assumed, 
-                __float_as_int( util.gpuMath.fmax(value, __int_as_float(assumed)) )
-                );
-        until assumed == old;
-
-        return __int_as_float(old);
-    end
-    util.atomicMax = atomicMax
-
     terra __shfl_down(v : float, delta : uint, width : int)
     	var ret : float;
         var c : int;
@@ -496,39 +459,29 @@ else
         return u.b;
     end
 
-    local terra atomicAdd(sum : &double, value : double)
-        var address_as_i : &uint64 = [&uint64] (sum);
-        var old : uint64 = address_as_i[0];
-        var assumed : uint64;
+    if pascalOrBetterGPU then
+        local terra atomicAdd(sum : &double, value : double)
+            var address_as_i : &uint64 = [&uint64] (sum);
+            var old : uint64 = address_as_i[0];
+            var assumed : uint64;
 
-        repeat
-            assumed = old;
-            old = terralib.asm(uint64,"atom.global.cas.b64 $0,[$1],$2,$3;", 
-                "=l,l,l,l", true, address_as_i, assumed, 
-                __double_as_ull( value + __ull_as_double(assumed) )
-                );
-        until assumed == old;
+            repeat
+                assumed = old;
+                old = terralib.asm(uint64,"atom.global.cas.b64 $0,[$1],$2,$3;", 
+                    "=l,l,l,l", true, address_as_i, assumed, 
+                    __double_as_ull( value + __ull_as_double(assumed) )
+                    );
+            until assumed == old;
 
-        return __ull_as_double(old);
+            return __ull_as_double(old);
+        end
+    else
+        local terra atomicAdd(sum : &double, value : double)
+            var address_as_i : uint64 = [uint64] (sum);
+            terralib.asm(terralib.types.unit,"red.global.add.f64 [$0],$1;","l,d", true, address_as_i, value)
+        end
+        util.atomicAdd = atomicAdd
     end
-    util.atomicAdd = atomicAdd
-
-    local terra atomicMax(max_value : &double, value : double)
-        var address_as_i : &uint64 = [&uint64] (max_value);
-        var old : uint64 = address_as_i[0];
-        var assumed : uint64;
-
-        repeat
-            assumed = old;
-            old = terralib.asm(uint64,"atom.global.cas.b64 $0,[$1],$2,$3;", 
-                "=l,l,l,l", true, address_as_i, assumed, 
-                __double_as_ull( util.gpuMath.fmax(value, __ull_as_double(assumed)) )
-                );
-        until assumed == old;
-
-        return __ull_as_double(old);
-    end
-    util.atomicMax = atomicMax
 
     terra __shfl_down(v : double, delta : uint, width : int)
         var ret : uint2Double;
@@ -555,22 +508,6 @@ local terra warpReduce(val : opt_float)
 
 end
 util.warpReduce = warpReduce
-
-local terra warpMaxReduce(val : opt_float) 
-
-  var offset = warpSize >> 1
-  while offset > 0 do 
-    var temp = __shfl_down(val, offset, warpSize);
-    if temp > val then
-        val = temp
-    end
-    offset =  offset >> 1
-  end
--- Is unrolling worth it?
-  return val;
-
-end
-util.warpMaxReduce = warpMaxReduce
 
 -- Straightforward implementation of: http://devblogs.nvidia.com/parallelforall/faster-parallel-reductions-kepler/
 -- sdata must be a block of 128 bytes of shared memory we are free to trash
