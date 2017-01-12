@@ -10,11 +10,11 @@ local USE_J = false
 local USE_PRECOMPUTE = true and not USE_J
 
 local DEPTH_DISCONTINUITY_THRE = 0.01
-P:Exclude(ad.not_(ad.greater(D_i(0,0),0)))
 
 
 local W,H 	= opt.Dim("W",0), opt.Dim("H",1)
 local P 	= ad.ProblemSpec()
+P:Exclude(ad.not_(ad.greater(D_i(0,0),0)))
 
 -- See TerraSolverParameters
 local w_p						= P:Param("w_p",float,0)-- Is initialized by the solver!
