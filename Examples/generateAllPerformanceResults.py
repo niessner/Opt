@@ -7,13 +7,6 @@ import os
 import platform
 import sys
 
-def make_sure_path_exists(path):
-    try:
-        os.makedirs(path)
-    except OSError as exception:
-        if exception.errno != errno.EEXIST:
-            raise
-
 s = platform.system()
 windows = (s == 'Windows') or (s == 'Microsoft')
 freebsd = (s == 'FreeBSD')
@@ -72,15 +65,18 @@ performanceTests = [testTable["MeshDeformationLARAP"], testTable["MeshDeformatio
 pascalOrBetterGPU = False
 if len(sys.argv) > 1 and "true" in sys.argv[1]:
 	pascalOrBetterGPU = True
+	print("Enabling fast double precision atomic add")
 
 setExcludeEnabled(True)
 setContiguousAllocation(False)
 setUtilParams(True, pascalOrBetterGPU)
 setCusparseParams(False, False)
-setDoublePrecision(True)
-buildAndRunPerformanceTests(performanceTests)
+
 
 setDoublePrecision(False)
+buildAndRunPerformanceTests(performanceTests)
+
+setDoublePrecision(True)
 buildAndRunPerformanceTests(performanceTests)
 
 
