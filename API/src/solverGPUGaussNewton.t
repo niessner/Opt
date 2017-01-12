@@ -9,7 +9,7 @@ local C = util.C
 local Timer = util.Timer
 
 local getValidUnknown = util.getValidUnknown
-local use_cusparse  = false
+local use_cusparse = false
 local use_fused_jtj = false
 
 
@@ -982,9 +982,9 @@ return function(problemSpec)
         --TODO: make parameters
         var residual_reset_period = 10
         var min_relative_decrease = 1e-3f
-        var min_trust_region_radius = 1e-32;
-        var max_trust_region_radius = 1e16;
-        var q_tolerance = 1e-4
+        var min_trust_region_radius = 1e-32
+        var max_trust_region_radius = 1e16
+        var q_tolerance = 0.0001
         var Q0 : opt_float
         var Q1 : opt_float
 		var pd = [&PlanData](data_)

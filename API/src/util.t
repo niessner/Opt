@@ -1,6 +1,5 @@
 local timeIndividualKernels  = false
 local pascalOrBetterGPU = true
-
 local S = require("std")
 require("precision")
 local util = {}

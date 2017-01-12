@@ -2,6 +2,7 @@ from subprocess import call
 
 from utils import *
 from opt_utils import *
+import shutil
 
 import os
 import platform
@@ -31,7 +32,7 @@ def compileProject(exampleName, exampleProjectName):
 
 def perfTest(exampleName, exeName, arg0, arg1, arg2):
 	os.chdir(examples_dir + exampleName)
-	make_sure_path_exists("results/")
+	make_sure_path_exists(examples_dir + exampleName + "/results/")
 	print("PerfTest " + exampleName)
 	call(["x64/Release/" + exeName + ".exe", arg0, arg1, arg2])
 	print("Done with " + exampleName)
@@ -46,10 +47,15 @@ def scalingPerfTest():
 
 
 def buildAndRunPerformanceTests(pTests):
-	for pTest in performanceTests:
+	for pTest in pTests:
 		compileProject(pTest[0], pTest[0])
 		perfTest(*pTest)
 	scalingPerfTest()
+
+def copyResultsToResultDirectory(pTests):
+	make_sure_path_exists(results_dir)
+	for p in pTests:
+		copytree(examples_dir + p[0], results_dir + p[0])
 
 
 
@@ -67,7 +73,7 @@ if len(sys.argv) > 1 and "true" in sys.argv[1]:
 	pascalOrBetterGPU = True
 	print("Enabling fast double precision atomic add")
 
-os.chdir(example_dir)
+setQTolerance(1e-4)
 setExcludeEnabled(True)
 setContiguousAllocation(False)
 setUtilParams(False, pascalOrBetterGPU)
@@ -79,6 +85,8 @@ buildAndRunPerformanceTests(performanceTests)
 
 setDoublePrecision(True)
 buildAndRunPerformanceTests(performanceTests)
+
+copyResultsToResultDirectory(performanceTests)
 
 
 
