@@ -1,9 +1,11 @@
 from subprocess import call
 
 from utils import *
+from opt_utils import *
 
 import os
 import platform
+import sys
 
 def make_sure_path_exists(path):
     try:
@@ -56,31 +58,7 @@ def buildAndRunPerformanceTests(pTests):
 		perfTest(*pTest)
 	scalingPerfTest()
 
-def setDoublePrecision(isDouble):
-	boolExpr = "false"
-	intExpr = "0"
-	typeString = "float"
 
-	if isDouble:
-		boolExpr = "true"
-		intExpr = "1"
-		typeString = "double"
-	with open("shared/opt_precision.t", "w") as text_file:
-		text_file.write("OPT_DOUBLE_PRECISION =  %s" % boolExpr)
-
-	with open('shared/Precision.h.templ', 'r') as text_file:
-		headerString = text_file.read()
-	headerString = headerString.replace("$0", intExpr)
-
-	with open("shared/Precision.h", "w") as text_file:
-		text_file.write(headerString)
-
-	optAPIprecisionString = """-- Switch to double to check for precision issues in the solver
--- currently using doubles is extremely slow
-opt_float = """
-
-	with open("../API/src/precision.t", "w") as text_file:
-		text_file.write("%s %s" % (optAPIprecisionString, typeString))
 
 testTable = {}
 testTable["ImageWarping"] = ("ImageWarping", "ImageWarping", "0", "perf", "")
@@ -91,6 +69,14 @@ testTable["CotangentLaplacian"] = ("MeshSmoothingLaplacianCOT", "MeshSmoothingLa
 #  testTable["CotangentLaplacian"], 
 performanceTests = [testTable["MeshDeformationLARAP"], testTable["MeshDeformationARAP"], testTable["ImageWarping"], testTable["ShapeFromShading"]]
 
+pascalOrBetterGPU = False
+if len(sys.argv) > 1 and "true" in sys.argv[1]:
+	pascalOrBetterGPU = True
+
+setExcludeEnabled(True)
+setContiguousAllocation(False)
+setUtilParams(True, pascalOrBetterGPU)
+setCusparseParams(False, False)
 setDoublePrecision(True)
 buildAndRunPerformanceTests(performanceTests)
 

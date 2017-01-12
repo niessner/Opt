@@ -15,7 +15,7 @@ local use_split_sums = true
 local use_condition_scheduling = true
 local use_register_minimization = true
 local use_conditionalization = true
-local use_contiguous_allocation = true
+local use_contiguous_allocation = false
 local use_bindless_texture = true and (not use_contiguous_allocation)
 local use_cost_speculate = false -- takes a lot of time and doesn't do much
 
