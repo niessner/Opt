@@ -984,7 +984,7 @@ return function(problemSpec)
         var min_relative_decrease = 1e-3f
         var min_trust_region_radius = 1e-32;
         var max_trust_region_radius = 1e16;
-        var q_tolerance = 2.2251e-308--1e-4
+        var q_tolerance = 1e-4
         var Q0 : opt_float
         var Q1 : opt_float
 		var pd = [&PlanData](data_)

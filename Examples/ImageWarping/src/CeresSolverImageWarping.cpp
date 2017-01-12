@@ -194,8 +194,7 @@ float CeresSolverWarping::solve(OPT_FLOAT2* h_x_float, OPT_FLOAT* h_a_float, OPT
                 for (vec2i offset : offsets)
                 {
                     const vec2i oPos = offset + vec2i(x, y);
-                    float innerMask = h_mask[getPixel(oPos.x, oPos.y)];
-                    if (innerMask == 0.0f && oPos.x >= 0 && oPos.x < m_width && oPos.y >= 0 && oPos.y < m_height)
+                    if (oPos.x >= 0 && oPos.x < m_width && oPos.y >= 0 && oPos.y < m_height && h_mask[getPixel(oPos.x, oPos.y)] == 0.0f)
                     {
                         vec2f deltaUr = toVec(h_urshape[getPixel(x, y)]) - toVec(h_urshape[getPixel(oPos.x, oPos.y)]);
                         ceres::CostFunction* costFunction = RegTerm::Create(deltaUr, weightRegSqrt);

@@ -131,7 +131,7 @@ public:
 		if (lmOnlyFullSolve) {
             m_params.useOpt = false;
             m_params.useOptLM = true;
-			m_params.linearIter = 1000000000;
+			m_params.linearIter = m_image.getWidth()*m_image.getHeight();
 		}
 
 
@@ -149,8 +149,9 @@ public:
             m_warpingSolverTerraLMAD = std::unique_ptr<TerraSolverWarping>(new TerraSolverWarping(m_image.getWidth(), m_image.getHeight(), "ImageWarpingAD.t", "LMGPU"));
         }
 
-        if (m_params.useCeres)
-            m_warpingSolverCeres = std::unique_ptr<CeresSolverWarping>(new CeresSolverWarping(m_image.getWidth(), m_image.getHeight()));
+		if (m_params.useCeres) {
+			m_warpingSolverCeres = std::unique_ptr<CeresSolverWarping>(new CeresSolverWarping(m_image.getWidth(), m_image.getHeight()));
+		}
 
 	}
 
