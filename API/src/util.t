@@ -1,5 +1,5 @@
-local timeIndividualKernels  = true
-local pascalOrBetterGPU = false
+local timeIndividualKernels  = false
+local pascalOrBetterGPU = true
 
 local S = require("std")
 require("precision")
@@ -474,6 +474,7 @@ else
 
             return __ull_as_double(old);
         end
+        util.atomicAdd = atomicAdd
     else
         local terra atomicAdd(sum : &double, value : double)
             var address_as_i : uint64 = [uint64] (sum);
