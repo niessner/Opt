@@ -14,7 +14,6 @@ local DEPTH_DISCONTINUITY_THRE = 0.01
 
 local W,H 	= opt.Dim("W",0), opt.Dim("H",1)
 local P 	= ad.ProblemSpec()
-P:Exclude(ad.not_(ad.greater(D_i(0,0),0)))
 
 -- See TerraSolverParameters
 local w_p						= P:Param("w_p",float,0)-- Is initialized by the solver!
@@ -62,6 +61,7 @@ local D_p   = P:Image("D_p",opt_float, {W,H},offset+3) -- Previous Depth
 local edgeMaskR = P:Image("edgeMaskR",uint8, {W,H},offset+4) -- Edge mask. 
 local edgeMaskC = P:Image("edgeMaskC",uint8, {W,H},offset+5) -- Edge mask. 
 
+P:Exclude(ad.not_(ad.greater(D_i(0,0),0)))
 
 local util = require("util")
 
