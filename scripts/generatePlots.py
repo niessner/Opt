@@ -2,19 +2,16 @@ import numpy as np
 import matplotlib.pyplot as plt
 import os
 import errno
-plt.style.use('ggplot')
-def make_sure_path_exists(path):
-    try:
-        os.makedirs(path)
-    except OSError as exception:
-        if exception.errno != errno.EEXIST:
-            raise
+from opt_utils import *
 
-plotpath = "plots/"
+plt.style.use('ggplot')
+
+ensure_result_dirs()
+plotpath = simple_results_dir + "plots/"
 make_sure_path_exists(plotpath)
 
 summary = []
-with open("results/summary.csv", "r") as text_file:
+with open(simple_results_dir + "summary.csv", "r") as text_file:
 	summary = text_file.readlines()
 problems = [p.strip() for p in summary[0].split(",")][1:]
 
@@ -30,7 +27,7 @@ def processData(col):
 
 
 for p in problems:
-	filename = "iterations/"+p+".csv"
+	filename = simple_results_dir + "iterations/"+p+".csv"
 	lines = []
 	with open(filename, "r") as text_file:
 		lines = text_file.readlines()

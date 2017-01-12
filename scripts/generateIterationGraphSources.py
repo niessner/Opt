@@ -7,8 +7,10 @@ def make_sure_path_exists(path):
         if exception.errno != errno.EEXIST:
             raise
 
+ensure_result_dirs()
+
 summary = []
-with open("results/summary.csv", "r") as text_file:
+with open(simple_results_dir + "summary.csv", "r") as text_file:
 	summary = text_file.readlines()
 problems = summary[0].split(",")
 indicators = summary[3].split(",")
@@ -19,17 +21,17 @@ for i,v in enumerate(indicators):
 		badProblems.append(problems[i].strip())
 print(badProblems)
 
-outdirectory = "iterations/"
+outdirectory = simple_results_dir + "iterations/"
 make_sure_path_exists(outdirectory)
 
 for p in [p.strip() for p in problems[1:]]:
-	filename_d = "results/"+p+"_double.csv"
+	filename_d = simple_results_dir+p+"_double.csv"
 	lines_d = []
 	with open(filename_d, "r") as text_file:
 		lines_d = text_file.readlines()[6:]
 	splitlines_d = [line.strip().split(",") for line in lines_d]
 
-	filename_f = "results/"+p+"_float.csv"
+	filename_f = simple_results_dir+p+"_float.csv"
 	lines_f = []
 	with open(filename_f, "r") as text_file:
 		lines_f = text_file.readlines()[6:]
