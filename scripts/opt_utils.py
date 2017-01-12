@@ -1,12 +1,25 @@
 import errno
 import os
+import shutil
 
-script_dir = os.path.dirname(os.path.realpath(__file__))
-results_dir = script_dir + "../results"
+script_dir = os.path.dirname(os.path.realpath(__file__)) + "/"
+results_dir = script_dir + "../results/"
 opt_src_dir = script_dir + "../API/src/"
 examples_dir = script_dir + "../Examples/"
 simple_dir = examples_dir + "SimpleCERESComparison/"
 simple_results_dir = results_dir + "simple/"
+
+def copytree(src, dst):
+    if not os.path.exists(dst):
+        os.makedirs(dst)
+    for item in os.listdir(src):
+        s = os.path.join(src, item)
+        d = os.path.join(dst, item)
+        if os.path.isdir(s):
+            copytree(s, d)
+        else:
+            if not os.path.exists(d) or os.stat(s).st_mtime - os.stat(d).st_mtime > 1:
+                shutil.copy2(s, d)
 
 def make_sure_path_exists(path):
 	try:
@@ -19,23 +32,22 @@ def ensure_result_dirs():
 	make_sure_path_exists(results_dir)
 	make_sure_path_exists(simple_results_dir)
 
-
-def setLocalLuaBooleansInFile(filename, var_names, boolExprs):
+def setVariablesInFile(filename, decl_strings, assignment_strings):
 	lines = []
 	with open(filename, 'r') as text_file:
 		lines = text_file.readlines()
-	for v,b in zip(var_names, boolExprs):
-		baseExpr = "local " + v
-		boolString = "false\n"
-		if b:
-			boolString = "true\n"
+	for d,a in zip(decl_strings, assignment_strings):
 		for i in range(len(lines)):
-			if baseExpr in lines[i]:
-				lines[i] = baseExpr + boolString
+			if d in lines[i]:
+				lines[i] = d + " = " + a
 				break
 	with open(filename, 'w') as text_file:
 		text_file.write("".join(lines))
 
+def setLocalLuaBooleansInFile(filename, var_names, boolExprs):
+	decl_strings = ["local "+ v for v in var_names]
+	assignment_strings = ["true\n" if b else "false\n" for b in boolExprs]
+	setVariablesInFile(filename, decl_strings, assignment_strings)
 
 def setCusparseParams(usingCusparse, fusedJtJ):
 	filename = opt_src_dir + 'solverGPUGaussNewton.t'
@@ -52,6 +64,10 @@ def setUtilParams(timeIndividualKernels, pascalOrBetterGPU):
 def setContiguousAllocation(contiguousAllocation):
 	filename = opt_src_dir + 'o.t'
 	setLocalLuaBooleansInFile(filename, ["use_contiguous_allocation"], [contiguousAllocation])
+
+def setQTolerance(q_tolerance):
+	filename = opt_src_dir + 'solverGPUGaussNewton.t'
+	setVariablesInFile(filename, ["        var q_tolerance"], [str(q_tolerance)+"\n"])
 
 def setDoublePrecision(isDouble):
 	boolExpr = "false"

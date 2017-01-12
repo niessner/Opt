@@ -1,4 +1,4 @@
-local timeIndividualKernels  = true
+local timeIndividualKernels  = false
 local pascalOrBetterGPU = false
 
 local S = require("std")
