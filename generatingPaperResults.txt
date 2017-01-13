@@ -19,9 +19,9 @@
 	Extract timing by inspection from allResults.txt 
 	Put timing info into paper
 
-3. CERES Iteration/Time comparison for 4 problems (float/double OptGN/OptLM) and scaling
+3. CERES Iteration/Time comparison for 4 problems (float/double OptGN/OptLM)
 	Change directory to "scripts/"
-	Run "python generateAllPerformanceResults.py [pascalOrBetterGPU]" with the argument set to true if on a pascal or better gpu
+	Run "python generateInDepthPerformanceResults.py [pascalOrBetterGPU]" with the argument set to true if on a pascal or better gpu
 	All results will be in "results/"
 	Run "python generateIterationTimePlots.py"
 	The plots will be in the "scripts/plots/" subdirectory copy them over to your paper directory and use them
@@ -32,11 +32,17 @@
 	extract timing by inspection from "results/cusparseTiming_*.txt"
 	Put timing info into paper
 
-
-Alternatively, combined steps 2-4:
-2-4. Timing for all problems (float OptGN)
+5. Scaling
 	Change directory to "scripts/"
-	Run "python generateAllPerformanceResults.py [pascalOrBetterGPU];python runPaperExamples.py > ../results/allResults.txt;python generateIterationTimePlots.py;python cusparseComparison.py" with the argument set to true if on a pascal or better gpu
+	Run "python generateScalingPerformanceResults.py [pascalOrBetterGPU]" with the argument set to true if on a pascal or better gpu
+	All results will be in "results/"
+	Make graphs somehow
+	Put graphs in paper
+
+Alternatively, combined steps 2-5:
+2-5. Timing for all problems (float OptGN)
+	Change directory to "scripts/"
+	Run "python generateInDepthPerformanceResults.py [pascalOrBetterGPU];python runPaperExamples.py > ../results/allResults.txt;python generateIterationTimePlots.py;python cusparseComparison.py;python generateScalingPerformanceResults.py [pascalOrBetterGPU]" with the argument set to true if on a pascal or better gpu
 	Extract timing by inspection from results/allResults.txt and results/cusparseTiming_*.txt, 
 	Copy the plots from scripts/plots/ into the pap
 	Put timing info into paper
