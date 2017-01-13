@@ -257,7 +257,7 @@ class ImageWarping
             m_params.useOptLM = true;
             m_params.useCeres = true;
 
-			m_params.nonLinearIter = 100;
+			m_params.nonLinearIter = 20;
             m_params.linearIter = 500;
 
 			if (m_params.useCUDA)
