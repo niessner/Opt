@@ -50,7 +50,7 @@ projectList = ["ImageWarping", "IntrinsicLP", "MeshDeformationARAP", "MeshDeform
     "MeshSmoothingLaplacianCOT", "OpticalFlow", "RobustMeshDeformationARAP",
     "ShapeFromShadingSimple"]
 
-cusparseMode = len(sys.argv > 1) and ("false" in sys.argv[1])
+cusparseMode = len(sys.argv) > 1 and ("false" in sys.argv[1])
 
 if not cusparseMode:
     projectList.append("PoissonImageEditing")
