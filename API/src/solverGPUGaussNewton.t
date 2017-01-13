@@ -140,6 +140,7 @@ return function(problemSpec)
 		scanBetaNumerator : &opt_float
 
         modelCost : &opt_float    -- modelCost = L(delta) where L(h) = F' F + 2 h' J' F + h' J' J h
+        q : &opt_float -- Q value for zeta calculation (see CERES)
 		
 		timer : Timer
 		endSolver : util.TimerEvent
@@ -396,7 +397,7 @@ return function(problemSpec)
         end
 
         terra kernels.PCGStep2(pd : PlanData)
-            var b = opt_float(0.0f) 
+            var betaNum = opt_float(0.0f) 
             var q = opt_float(0.0f) -- Only used if LM
             var idx : Index
             if idx:initFromCUDAParams() and not fmap.exclude(idx,pd.parameters) then
@@ -422,7 +423,7 @@ return function(problemSpec)
                 var z = pre*r										-- apply pre-conditioner M^-1
                 pd.z(idx) = z;										-- save for next kernel call
 
-                b = z:dot(r)									-- compute x-th term of the numerator of beta
+                betaNum = z:dot(r)									-- compute x-th term of the numerator of beta
 
                 if [problemSpec:UsesLambda()] then
                     -- computeQ    
@@ -432,9 +433,9 @@ return function(problemSpec)
                 end
             end
             
-            unknownWideReduction(idx,b,pd.scanBetaNumerator)
+            unknownWideReduction(idx,betaNum,pd.scanBetaNumerator)
             if [problemSpec:UsesLambda()] then
-                unknownWideReduction(idx,q,pd.scratch)
+                unknownWideReduction(idx,q,pd.q)
             end
         end
 
@@ -450,7 +451,7 @@ return function(problemSpec)
         end
 
         terra kernels.PCGStep2_2ndHalf(pd : PlanData)
-            var b = opt_float(0.0f) 
+            var betaNum = opt_float(0.0f) 
             var q = opt_float(0.0f) 
             var idx : Index
             if idx:initFromCUDAParams() and not fmap.exclude(idx,pd.parameters) then
@@ -466,17 +467,17 @@ return function(problemSpec)
                 end
                 var z = pre*r       -- apply pre-conditioner M^-1
                 pd.z(idx) = z;      -- save for next kernel call
-                b = z:dot(r)        -- compute x-th term of the numerator of beta
+                betaNum = z:dot(r)        -- compute x-th term of the numerator of beta
                 if [problemSpec:UsesLambda()] then
                     -- computeQ    
                     -- Right side is -2 of CERES versions, left is just negative version, 
                     --  so after the dot product, just need to multiply by 2 to recover value identical to CERES  
-                    q = 0.5*(pd.delta(idx):dot(r + pd.b(idx))) 
+                    q = 0.5*(pd.delta(idx):dot(r + b)) 
                 end
             end
-            unknownWideReduction(idx,b,pd.scanBetaNumerator) 
+            unknownWideReduction(idx,betaNum,pd.scanBetaNumerator) 
             if [problemSpec:UsesLambda()] then
-                unknownWideReduction(idx,q,pd.scratch)
+                unknownWideReduction(idx,q,pd.q)
             end
         end
 
@@ -527,7 +528,7 @@ return function(problemSpec)
             var idx : Index
             if idx:initFromCUDAParams() and not fmap.exclude(idx,pd.parameters) then
                 var params = pd.parameters
-                cost = cost + [opt_float](fmap.cost(idx, params))
+                cost = fmap.cost(idx, params)
             end
 
             cost = util.warpReduce(cost)
@@ -604,7 +605,7 @@ return function(problemSpec)
                     --  so after the dot product, just need to multiply by 2 to recover value identical to CERES  
                     q = 0.5*(pd.delta(idx):dot(residuum + residuum)) 
                 end    
-                unknownWideReduction(idx,q,pd.scratch)
+                unknownWideReduction(idx,q,pd.q)
                 unknownWideReduction(idx,d,pd.scanAlphaNumerator)
             end
 
@@ -613,7 +614,7 @@ return function(problemSpec)
                 var idx : Index
                 if idx:initFromCUDAParams() and not fmap.exclude(idx,pd.parameters) then
                     var params = pd.parameters              
-                    cost = cost + [opt_float](fmap.modelcost(idx, params, pd.delta))
+                    cost = fmap.modelcost(idx, params, pd.delta)
                 end
 
                 cost = util.warpReduce(cost)
@@ -661,7 +662,7 @@ return function(problemSpec)
             var cost : opt_float = opt_float(0.0f)
             var tIdx = 0
             if util.getValidGraphElement(pd,[graphname],&tIdx) then
-                cost = cost + fmap.cost(tIdx, pd.parameters)
+                cost = fmap.cost(tIdx, pd.parameters)
             end 
             cost = util.warpReduce(cost)
             if (util.laneid() == 0) then
@@ -692,7 +693,7 @@ return function(problemSpec)
                 var cost : opt_float = opt_float(0.0f)
                 var tIdx = 0
                 if util.getValidGraphElement(pd,[graphname],&tIdx) then
-                    cost = cost + fmap.modelcost(tIdx, pd.parameters, pd.delta)
+                    cost = fmap.modelcost(tIdx, pd.parameters, pd.delta)
                 end 
                 cost = util.warpReduce(cost)
                 if (util.laneid() == 0) then
@@ -754,7 +755,7 @@ return function(problemSpec)
 
     local terra fetchQ(pd : &PlanData) : opt_float
         var f : opt_float
-        C.cudaMemcpy(&f, pd.scratch, sizeof(opt_float), C.cudaMemcpyDeviceToHost)
+        C.cudaMemcpy(&f, pd.q, sizeof(opt_float), C.cudaMemcpyDeviceToHost)
         return f
     end
 
@@ -981,10 +982,10 @@ return function(problemSpec)
 	local terra step(data_ : &opaque, params_ : &&opaque, solverparams : &&opaque)
         --TODO: make parameters
         var residual_reset_period = 10
-        var min_relative_decrease = 1e-3f
-        var min_trust_region_radius = 1e-32
-        var max_trust_region_radius = 1e16
-        var q_tolerance = 0.0001
+        var min_relative_decrease : opt_float = 1e-3f
+        var min_trust_region_radius : opt_float = 1e-32
+        var max_trust_region_radius : opt_float = 1e16
+        var q_tolerance = 0.1
         var Q0 : opt_float
         var Q1 : opt_float
 		var pd = [&PlanData](data_)
@@ -1004,7 +1005,7 @@ return function(problemSpec)
                 if problemSpec:UsesLambda() then
                     emit quote
                         C.cudaMemset(pd.scanAlphaNumerator, 0, sizeof(opt_float))
-                        C.cudaMemset(pd.scratch, 0, sizeof(opt_float))
+                        C.cudaMemset(pd.q, 0, sizeof(opt_float))
                         if [JacobiScaling == JacobiScalingType.ONCE_PER_SOLVE] and pd.nIter == 0 then
                             gpu.PCGSaveSSq(pd)
                         end
@@ -1020,7 +1021,7 @@ return function(problemSpec)
             for lIter = 0, pd.lIterations do				
 
                 C.cudaMemset(pd.scanAlphaDenominator, 0, sizeof(opt_float))
-                C.cudaMemset(pd.scratch, 0, sizeof(opt_float))
+                C.cudaMemset(pd.q, 0, sizeof(opt_float))
 
                 if not use_cusparse then
     				gpu.PCGStep1(pd)
@@ -1056,6 +1057,7 @@ return function(problemSpec)
 				if [problemSpec:UsesLambda()] then
 	                Q1 = fetchQ(pd)
 	                var zeta = [opt_float](lIter+1)*(Q1 - Q0) / Q1 
+                    --logSolver("%d: Q0(%g) Q1(%g), zeta(%g)\n", lIter, Q0, Q1, zeta)
 	                if zeta < q_tolerance then
                         logSolver("zeta=%.18g, breaking at iteration: %d\n", zeta, (lIter+1))
 	                    break
@@ -1166,6 +1168,7 @@ return function(problemSpec)
 		C.cudaMalloc([&&opaque](&(pd.modelCost)), sizeof(opt_float))
 		
 		C.cudaMalloc([&&opaque](&(pd.scratch)), sizeof(opt_float))
+        C.cudaMalloc([&&opaque](&(pd.q)), sizeof(opt_float))
 		pd.J_csrValA = nil
 		pd.JTJ_csrRowPtrA = nil
 		return &pd.plan

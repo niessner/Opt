@@ -65,24 +65,25 @@ testTable["MeshDeformationLARAP"] = ("MeshDeformationLARAP", "MeshDeformationLAR
 testTable["ShapeFromShading"] = ("ShapeFromShadingSimple", "ShapeFromShadingSimple", "default", "perf", "")
 testTable["CotangentLaplacian"] = ("MeshSmoothingLaplacianCOT", "MeshSmoothingLaplacianCOT", "serapis.stl", "perf", "")
 #  testTable["CotangentLaplacian"], 
-performanceTests = [testTable["MeshDeformationLARAP"], testTable["MeshDeformationARAP"], testTable["ImageWarping"], testTable["ShapeFromShading"]]
+performanceTests = [testTable["MeshDeformationARAP"], testTable["MeshDeformationLARAP"], testTable["ImageWarping"], testTable["ShapeFromShading"]]
 
 pascalOrBetterGPU = False
 if len(sys.argv) > 1 and "true" in sys.argv[1]:
 	pascalOrBetterGPU = True
 	print("Enabling fast double precision atomic add")
 
-setQTolerance(1e-20)
+setQTolerance(1e-1)
 setExcludeEnabled(True)
 setContiguousAllocation(False)
 setUtilParams(False, pascalOrBetterGPU)
 setCusparseParams(False, False)
 
 
-setDoublePrecision(False)
-buildAndRunPerformanceTests(performanceTests)
 
 setDoublePrecision(True)
+buildAndRunPerformanceTests(performanceTests)
+
+setDoublePrecision(False)
 buildAndRunPerformanceTests(performanceTests)
 
 copyResultsToResultDirectory(performanceTests)
