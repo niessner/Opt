@@ -248,7 +248,7 @@ float CeresSolverWarping::solve(OPT_FLOAT2* h_x_float, OPT_FLOAT* h_a_float, OPT
 
 
     options.function_tolerance = 1e-20;
-    options.gradient_tolerance = 1e-10 * options.function_tolerance;
+    options.gradient_tolerance = 1e-4 * options.function_tolerance;
 
     // Default values, reproduced here for clarity
     //options.trust_region_strategy_type = ceres::TrustRegionStrategyType::LEVENBERG_MARQUARDT;
