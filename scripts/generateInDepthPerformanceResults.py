@@ -50,7 +50,6 @@ def buildAndRunPerformanceTests(pTests):
 	for pTest in pTests:
 		compileProject(pTest[0], pTest[0])
 		perfTest(*pTest)
-	scalingPerfTest()
 
 def copyResultsToResultDirectory(pTests):
 	make_sure_path_exists(results_dir)
@@ -73,7 +72,7 @@ if len(sys.argv) > 1 and "true" in sys.argv[1]:
 	pascalOrBetterGPU = True
 	print("Enabling fast double precision atomic add")
 
-setQTolerance(1e-9)
+setQTolerance(1e-20)
 setExcludeEnabled(True)
 setContiguousAllocation(False)
 setUtilParams(False, pascalOrBetterGPU)
