@@ -131,7 +131,7 @@ public:
 		if (lmOnlyFullSolve) {
             m_params.useOpt = false;
             m_params.useOptLM = true;
-			m_params.linearIter = m_image.getWidth()*m_image.getHeight();
+			m_params.linearIter = 500;// m_image.getWidth()*m_image.getHeight();
 		}
 
 

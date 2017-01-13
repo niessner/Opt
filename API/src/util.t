@@ -1,5 +1,5 @@
 local timeIndividualKernels  = false
-local pascalOrBetterGPU = true
+local pascalOrBetterGPU = false
 local S = require("std")
 require("precision")
 local util = {}
@@ -459,6 +459,12 @@ else
 
     if pascalOrBetterGPU then
         local terra atomicAdd(sum : &double, value : double)
+            var address_as_i : uint64 = [uint64] (sum);
+            terralib.asm(terralib.types.unit,"red.global.add.f64 [$0],$1;","l,d", true, address_as_i, value)
+        end
+        util.atomicAdd = atomicAdd
+    else
+        local terra atomicAdd(sum : &double, value : double)
             var address_as_i : &uint64 = [&uint64] (sum);
             var old : uint64 = address_as_i[0];
             var assumed : uint64;
@@ -472,12 +478,6 @@ else
             until assumed == old;
 
             return __ull_as_double(old);
-        end
-        util.atomicAdd = atomicAdd
-    else
-        local terra atomicAdd(sum : &double, value : double)
-            var address_as_i : uint64 = [uint64] (sum);
-            terralib.asm(terralib.types.unit,"red.global.add.f64 [$0],$1;","l,d", true, address_as_i, value)
         end
         util.atomicAdd = atomicAdd
     end

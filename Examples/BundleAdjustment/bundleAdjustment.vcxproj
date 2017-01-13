@@ -64,12 +64,12 @@
   <PropertyGroup Label="UserMacros" />
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
     <IntDir>$(Platform)\$(Configuration)\$(ProjectName)\</IntDir>
-    <LibraryPath>$(ProjectDir)\..\..\..\..\mLibExternal\libsWindows\lib64;$(ProjectDir)\..\..\API\build\;$(CUDA_PATH)/lib/x64/;.\;C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA\v7.0\lib\x64;$(LibraryPath)</LibraryPath>
+    <LibraryPath>$(ProjectDir)\..\..\..\..\mLibExternal\libsWindows\lib64;$(ProjectDir)\..\..\API\build\;$(CUDA_PATH)/lib/x64/;.\;C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA\v7.5\lib\x64;$(LibraryPath)</LibraryPath>
     <IncludePath>$(ProjectDir);$(ProjectDir)..\..\API\release\include;$(CUDA_PATH)/include;$(IncludePath)</IncludePath>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release NoOpt|x64'">
     <IntDir>$(Platform)\$(Configuration)\$(ProjectName)\</IntDir>
-    <LibraryPath>$(ProjectDir)\..\..\..\..\mLibExternal\libsWindows\lib64;$(ProjectDir)\..\..\API\build\;$(CUDA_PATH)/lib/x64/;.\;C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA\v7.0\lib\x64;$(LibraryPath)</LibraryPath>
+    <LibraryPath>$(ProjectDir)\..\..\..\..\mLibExternal\libsWindows\lib64;$(ProjectDir)\..\..\API\build\;$(CUDA_PATH)/lib/x64/;.\;C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA\v7.5\lib\x64;$(LibraryPath)</LibraryPath>
     <IncludePath>$(ProjectDir);$(ProjectDir)..\..\API\release\include;$(CUDA_PATH)/include;$(IncludePath)</IncludePath>
   </PropertyGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
