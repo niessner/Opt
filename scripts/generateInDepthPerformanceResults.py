@@ -72,7 +72,7 @@ if len(sys.argv) > 1 and "true" in sys.argv[1]:
 	pascalOrBetterGPU = True
 	print("Enabling fast double precision atomic add")
 
-setQTolerance(1e-1)
+setQTolerance(1e-4)
 setExcludeEnabled(True)
 setContiguousAllocation(False)
 setUtilParams(False, pascalOrBetterGPU)

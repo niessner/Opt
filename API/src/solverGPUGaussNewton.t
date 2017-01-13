@@ -978,14 +978,21 @@ return function(problemSpec)
 	   pd.prevCost = computeCost(pd)
 	end
 
-	
+	local terra cleanup(pd : &PlanData)
+        logSolver("final cost=%f\n", pd.prevCost)
+        pd.timer:endEvent(nil,pd.endSolver)
+        pd.timer:evaluate()
+        pd.timer:cleanup()
+    end
+
 	local terra step(data_ : &opaque, params_ : &&opaque, solverparams : &&opaque)
         --TODO: make parameters
         var residual_reset_period = 10
         var min_relative_decrease : opt_float = 1e-3f
         var min_trust_region_radius : opt_float = 1e-32
         var max_trust_region_radius : opt_float = 1e16
-        var q_tolerance = 0.1
+        var q_tolerance = 0.0001
+        var function_tolerance = 0.000001
         var Q0 : opt_float
         var Q1 : opt_float
 		var pd = [&PlanData](data_)
@@ -1088,7 +1095,14 @@ return function(problemSpec)
                         
                         -- See CERES's TrustRegionStepEvaluator::StepAccepted() for a more complicated version of this
                         var relative_decrease = cost_change / model_cost_change
-                        if cost_change >= 0 and relative_decrease > min_relative_decrease then	--in this case we revert
+                        if cost_change >= 0 and relative_decrease > min_relative_decrease then
+                            var absolute_function_tolerance = pd.prevCost * function_tolerance
+                            if cost_change <= absolute_function_tolerance then
+                                logSolver("\nFunction tolerance reached, exiting\n")
+                                cleanup(pd)
+                                return 0
+                            end
+
                             var step_quality = relative_decrease
                             var min_factor = 1.0/3.0
                             var tmp_factor = 1.0 - util.cpuMath.pow(2.0 * step_quality - 1.0, 3.0)
@@ -1105,10 +1119,7 @@ return function(problemSpec)
                             pd.parameters.radius_decrease_factor = 2.0 * pd.parameters.radius_decrease_factor
                             if pd.parameters.trust_region_radius <= min_trust_region_radius then
                                 logSolver("\nTrust_region_radius is less than the min, exiting\n")
-                                logSolver("final cost=%f\n", pd.prevCost)
-                                pd.timer:endEvent(nil,pd.endSolver)
-                                pd.timer:evaluate()
-                                pd.timer:cleanup()
+                                cleanup(pd)
                                 return 0
                             end
                             logSolver("REVERT\n")
@@ -1125,16 +1136,12 @@ return function(problemSpec)
             --[[ 
             To match CERES we would check for termination:
             iteration_summary_.gradient_max_norm <= options_.gradient_tolerance
-            iteration_summary_.trust_region_radius <= options_.min_trust_region_radius
             ]]
 
 			pd.nIter = pd.nIter + 1
 			return 1
 		else
-			logSolver("final cost=%f\n", pd.prevCost)
-		    pd.timer:endEvent(nil,pd.endSolver)
-		    pd.timer:evaluate()
-		    pd.timer:cleanup()
+			cleanup(pd)
 		    return 0
 		end
 	end
