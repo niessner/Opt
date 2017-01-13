@@ -139,7 +139,7 @@ return function(problemSpec)
 		scanAlphaDenominator : &opt_float
 		scanBetaNumerator : &opt_float
 
-        modelCostChange : &opt_float    -- modelCostChange = L(0) - L(delta) where L(h) = F' F + 2 h' J' F + h' J' J h
+        modelCost : &opt_float    -- modelCost = L(delta) where L(h) = F' F + 2 h' J' F + h' J' J h
 		
 		timer : Timer
 		endSolver : util.TimerEvent
@@ -618,7 +618,7 @@ return function(problemSpec)
 
                 cost = util.warpReduce(cost)
                 if (util.laneid() == 0) then
-                    util.atomicAdd(pd.scratch, cost)
+                    util.atomicAdd(pd.modelCost, cost)
                 end
             end
 
@@ -696,7 +696,7 @@ return function(problemSpec)
                 end 
                 cost = util.warpReduce(cost)
                 if (util.laneid() == 0) then
-                    util.atomicAdd(pd.scratch, cost)
+                    util.atomicAdd(pd.modelCost, cost)
                 end
             end
         end
@@ -742,11 +742,11 @@ return function(problemSpec)
     end
 
     local terra computeModelCost(pd : &PlanData) : opt_float
-        C.cudaMemset(pd.scratch, 0, sizeof(opt_float))
+        C.cudaMemset(pd.modelCost, 0, sizeof(opt_float))
         gpu.computeModelCost(pd)
         gpu.computeModelCost_Graph(pd)
         var f : opt_float
-        C.cudaMemcpy(&f, pd.scratch, sizeof(opt_float), C.cudaMemcpyDeviceToHost)
+        C.cudaMemcpy(&f, pd.modelCost, sizeof(opt_float), C.cudaMemcpyDeviceToHost)
         return f
     end
 
@@ -1026,8 +1026,8 @@ return function(problemSpec)
     				gpu.PCGStep1(pd)
     				if isGraph then
     					gpu.PCGStep1_Graph(pd)
-    				end		
-                end		
+    				end
+                end
 
 				-- only does anything if use_cusparse is true
                 cusparseInner(pd)
@@ -1163,7 +1163,7 @@ return function(problemSpec)
 		C.cudaMalloc([&&opaque](&(pd.scanAlphaNumerator)), sizeof(opt_float))
 		C.cudaMalloc([&&opaque](&(pd.scanBetaNumerator)), sizeof(opt_float))
 		C.cudaMalloc([&&opaque](&(pd.scanAlphaDenominator)), sizeof(opt_float))
-		C.cudaMalloc([&&opaque](&(pd.modelCostChange)), sizeof(opt_float))
+		C.cudaMalloc([&&opaque](&(pd.modelCost)), sizeof(opt_float))
 		
 		C.cudaMalloc([&&opaque](&(pd.scratch)), sizeof(opt_float))
 		pd.J_csrValA = nil
