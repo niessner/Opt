@@ -44,6 +44,9 @@ int main(int argc, const char * argv[])
     std::vector<SimpleMesh*> targetMeshes;
     for (int i = startIndex + 1; i < allFiles.size(); i += 2) {
         targetMeshes.push_back(createMesh(sourceDirectory + "/" + allFiles[i]));
+		if (targetMeshes.size() > 4) {
+			break;
+		}
     }
     std::cout << "All meshes now in memory" << std::endl;
     ImageWarping warping(sourceMesh, targetMeshes, sourceTetIndices, startIndex);
