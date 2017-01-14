@@ -36,9 +36,9 @@ public:
 		cutilSafeCall(cudaMalloc(&d_numNeighbours, sizeof(int)*N));
 		cutilSafeCall(cudaMalloc(&d_neighbourIdx, sizeof(int) * 2 * E * 3));
 		cutilSafeCall(cudaMalloc(&d_neighbourOffset, sizeof(int)*(N + 1)));
-
-        m_params.useOptLM = performanceRun;
-        m_params.nonLinearIter = 2;
+		//m_params.useOpt = false;
+		//m_params.useOptLM = true;//performanceRun;
+        m_params.nonLinearIter = 8;
         m_params.linearIter = 25;
 
 

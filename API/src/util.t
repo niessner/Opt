@@ -1,5 +1,6 @@
-local timeIndividualKernels  = false
+local timeIndividualKernels  = true
 local pascalOrBetterGPU = false
+local printTimingInfo = true
 local S = require("std")
 require("precision")
 local util = {}
@@ -335,7 +336,7 @@ terra isprefix(pre : rawstring, str : rawstring) : bool
     return isprefix(pre+1,str+1)
 end
 terra Timer:evaluate()
-	if ([timeIndividualKernels]) then
+	if ([printTimingInfo]) then
 		var aggregateTimingInfo = [Array(tuple(float,int))].salloc():init()
 		var aggregateTimingNames = [Array(rawstring)].salloc():init()
 		for i = 0,self.timingInfo:size() do

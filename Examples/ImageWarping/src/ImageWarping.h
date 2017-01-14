@@ -117,6 +117,11 @@ public:
 
 		resetGPU();
 
+
+		m_params.numIter = 20;
+		m_params.useCUDA = true;
+		m_params.nonLinearIter = 8;
+		m_params.linearIter = 400;
 		if (performanceRun) {
 			m_params.useCUDA = false;
 			m_params.useTerra = false;
@@ -124,11 +129,9 @@ public:
             m_params.useOptLM = true;
 			m_params.useCeres = true;
 			m_params.earlyOut = true;
-			m_params.nonLinearIter = 50;
-			m_params.linearIter = 500;
-
 		}
 		if (lmOnlyFullSolve) {
+			m_params.useCUDA = false;
             m_params.useOpt = false;
             m_params.useOptLM = true;
 			m_params.linearIter = 500;// m_image.getWidth()*m_image.getHeight();

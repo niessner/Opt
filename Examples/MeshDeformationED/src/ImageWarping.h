@@ -26,15 +26,15 @@ class ImageWarping
             m_params.numIter = 32;
             m_params.nonLinearIter = 1;
             m_params.linearIter = 4000;
-            m_params.earlyOut = true;
+            m_params.earlyOut = false;
 
             /* LM is good here 
             m_params.useOpt = false;
             m_params.useOptLM = true;
             m_params.numIter = 32;
-            m_params.nonLinearIter = 20;
+            m_params.nonLinearIter = 5;
             */
-            m_params.linearIter = 200;
+            m_params.linearIter = 125;
 
 			unsigned int N = (unsigned int)mesh->n_vertices();
 			unsigned int E = (unsigned int)mesh->n_edges();
