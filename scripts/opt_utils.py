@@ -9,6 +9,17 @@ examples_dir = script_dir + "../Examples/"
 simple_dir = examples_dir + "SimpleCERESComparison/"
 simple_results_dir = results_dir + "simple/"
 
+
+
+# CERES, optLM_d, optGN_d, optLM_f, optGN_f
+graph_colors = ['#608ac3', '#2ca02c', '#d62728', '#9467bd', '#FD8B3A']
+
+#For graphs
+LEGEND_SIZE = 12
+SIZE = 18
+MEDIUM_SIZE = 22
+BIGGER_SIZE = 28
+
 def copytree(src, dst):
     if not os.path.exists(dst):
         os.makedirs(dst)
