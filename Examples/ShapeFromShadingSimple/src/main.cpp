@@ -24,7 +24,7 @@ int main(int argc, const char * argv[])
 
     solverInputGPU.load(inputFilenamePrefix, true);
 
-    solverInputGPU.parameters.nNonLinearIterations = 60;
+    solverInputGPU.parameters.nNonLinearIterations = 34;
     solverInputGPU.parameters.nLinIterations = 10;
 
 	if (performanceRun) {

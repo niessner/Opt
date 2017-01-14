@@ -31,8 +31,9 @@ class ImageWarping
 			m_initial = m_result;
 
             m_params.numIter = 32;
-            m_params.nonLinearIter = 2;
-            m_params.linearIter = 4000;
+			m_params.useCUDA = true;
+			m_params.nonLinearIter = 6;
+			m_params.linearIter = 750;
 
 			unsigned int N = (unsigned int)mesh->n_vertices();
 			unsigned int E = (unsigned int)mesh->n_edges();
@@ -57,7 +58,7 @@ class ImageWarping
                 m_params.useCeres = true;
                 m_params.earlyOut = true;
 				m_params.nonLinearIter = 20;
-				m_params.linearIter = 500;
+				m_params.linearIter = 750;
 				//m_params.numIter = 32;
                 //m_params.nonLinearIter = 2;
                 //m_params.linearIter = 4000;

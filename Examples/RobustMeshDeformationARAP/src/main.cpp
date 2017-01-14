@@ -31,7 +31,7 @@ static std::vector<int4> getSourceTetIndices(std::string filename) {
 
 int main(int argc, const char * argv[])
 {
-    int startIndex = 0;
+    int startIndex = 50;
     std::string sourceDirectory = "squat";
     std::vector<std::string> allFiles = ml::Directory::enumerateFiles(sourceDirectory);
     std::string source_filename = sourceDirectory + "/" + allFiles[startIndex];
@@ -42,7 +42,7 @@ int main(int argc, const char * argv[])
     SimpleMesh* sourceMesh = createMesh(source_filename);
 
     std::vector<SimpleMesh*> targetMeshes;
-    for (int i = startIndex + 1; i < 5/*allFiles.size()*/; i += 1) {
+    for (int i = startIndex + 1; i < allFiles.size(); i += 2) {
         targetMeshes.push_back(createMesh(sourceDirectory + "/" + allFiles[i]));
     }
     std::cout << "All meshes now in memory" << std::endl;

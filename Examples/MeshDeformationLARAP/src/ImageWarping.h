@@ -27,7 +27,7 @@ class ImageWarping
 			m_result = *mesh;
 			m_initial = m_result;
 
-			m_dims = make_int3(5, 20, 5);
+			m_dims = make_int3(10, 40, 10);
 			m_nNodes = (m_dims.x + 1)*(m_dims.y + 1)*(m_dims.z + 1);
 			
 			unsigned int N = (unsigned int)mesh->n_vertices();
@@ -258,7 +258,7 @@ class ImageWarping
             m_params.useCeres = true;
 
 			m_params.nonLinearIter = 20;
-            m_params.linearIter = 30;
+            m_params.linearIter = 60;
 
 			if (m_params.useCUDA)
 			{

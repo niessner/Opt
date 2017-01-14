@@ -247,7 +247,7 @@ float CeresSolverWarping::solve(OPT_FLOAT2* h_x_float, OPT_FLOAT* h_a_float, OPT
     //options.linear_solver_type = ceres::LinearSolverType::CGNR; 
 
 
-    options.function_tolerance = 1e-20;
+    options.function_tolerance = 1e-2;
     options.gradient_tolerance = 1e-4 * options.function_tolerance;
 
     // Default values, reproduced here for clarity
