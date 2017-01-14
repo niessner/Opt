@@ -1,16 +1,10 @@
 import os
 import errno
-def make_sure_path_exists(path):
-    try:
-        os.makedirs(path)
-    except OSError as exception:
-        if exception.errno != errno.EEXIST:
-            raise
+from opt_utils import *
 
-ensure_result_dirs()
 
 summary = []
-with open(simple_results_dir + "summary.csv", "r") as text_file:
+with open(simple_dir + "results/" + "summary.csv", "r") as text_file:
 	summary = text_file.readlines()
 problems = summary[0].split(",")
 indicators = summary[3].split(",")
@@ -25,13 +19,13 @@ outdirectory = simple_results_dir + "iterations/"
 make_sure_path_exists(outdirectory)
 
 for p in [p.strip() for p in problems[1:]]:
-	filename_d = simple_results_dir+p+"_double.csv"
+	filename_d = simple_dir + "results/"+p+"_double.csv"
 	lines_d = []
 	with open(filename_d, "r") as text_file:
 		lines_d = text_file.readlines()[6:]
 	splitlines_d = [line.strip().split(",") for line in lines_d]
 
-	filename_f = simple_results_dir+p+"_float.csv"
+	filename_f = simple_dir + "results/"+p+"_float.csv"
 	lines_f = []
 	with open(filename_f, "r") as text_file:
 		lines_f = text_file.readlines()[6:]

@@ -36,9 +36,9 @@ for name in problemNames:
 	doubleRows = []
 	floatRows = []
 
-	with open(join(simple_results_dir, name.lower() + "_double.csv")) as f:
+	with open(join(simple_dir + "results/", name.lower() + "_double.csv")) as f:
 		doubleRows = f.readlines()
-	with open(join(simple_results_dir, name.lower() + "_float.csv")) as f:
+	with open(join(simple_dir + "results/", name.lower() + "_float.csv")) as f:
 		floatRows = f.readlines()
 
 	trueSolRow = doubleRows[1].split(",")
