@@ -10,6 +10,8 @@ simple_dir = examples_dir + "SimpleCERESComparison/"
 simple_results_dir = results_dir + "simple/"
 
 
+def thousandAsKFormatter(x,p):
+	return str(int(x/1000)) + "k"
 
 # CERES, optLM_d, optGN_d, optLM_f, optGN_f
 graph_colors = ['#608ac3', '#2ca02c', '#d62728', '#9467bd', '#FD8B3A']

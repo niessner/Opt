@@ -63,6 +63,7 @@ for p in problems:
 	plt.rc('legend', fontsize=LEGEND_SIZE)          # legend fontsize
 	#plt.rc('figure', titlesize=BIGGER_SIZE)  # fontsize of the figure title
 	#plt.show()
+	plt.tight_layout()
 	plt.savefig(plotpath+p+".pdf", dpi=300, facecolor='w', edgecolor='w',
         orientation='portrait', papertype=None, format=None,
         transparent=False, bbox_inches=None, pad_inches=0.1,
