@@ -11,7 +11,7 @@
 #include "TerraSolverWarping.h"
 #include "CeresSolverImageWarping.h"
 #include "../../shared/CombinedSolverParameters.h"
-
+#include "Configure.h"
 #include "../../shared/Precision.h"
 #include <fstream>
 
@@ -136,7 +136,7 @@ public:
             m_params.useOptLM = true;
 			m_params.linearIter = 500;// m_image.getWidth()*m_image.getHeight();
 		}
-
+		m_lmOnlyFullSolve = lmOnlyFullSolve;
 
         if (m_params.useCUDA)
             m_warpingSolver = std::unique_ptr<CUDAWarpingSolver>(new CUDAWarpingSolver(m_image.getWidth(), m_image.getHeight()));
@@ -345,6 +345,14 @@ public:
    
         std::string resultSuffix = OPT_DOUBLE_PRECISION ? "_double" : "_float";
 
+		if (m_lmOnlyFullSolve) {
+#if USE_CERES_PCG
+			resultSuffix += "_PCG_";
+#else
+			resultSuffix += "_SNC_";
+#endif
+		}
+
         resultSuffix += std::to_string(m_image.getWidth());
         saveSolverResults("results/", resultSuffix, m_ceresIters, m_optGNIters, m_optLMIters);
         
@@ -481,7 +489,7 @@ private:
 	ColorImageR32G32B32 m_resultColor;
 
 	float m_scale;
-
+	bool m_lmOnlyFullSolve;
 
 	OPT_FLOAT2*	d_urshape;
     OPT_FLOAT2* d_warpField;

@@ -1,6 +1,7 @@
 #pragma once
 
 #include "main.h"
+#include "Configure.h"
 
 #ifdef USE_CERES
 const bool performanceTest = true;
@@ -219,15 +220,18 @@ float CeresSolverWarping::solve(OPT_FLOAT2* h_x_float, OPT_FLOAT* h_a_float, OPT
     //faster methods
     options.num_threads = 8;
     options.num_linear_solver_threads = 8;
-    options.linear_solver_type = ceres::LinearSolverType::SPARSE_NORMAL_CHOLESKY; //7.2s
-
+#if USE_CERES_PCG
+	options.linear_solver_type = ceres::LinearSolverType::CGNR; 
+#else
+	options.linear_solver_type = ceres::LinearSolverType::SPARSE_NORMAL_CHOLESKY; 
+#endif
 
     options.max_num_iterations = 1000;
-    //options.linear_solver_type = ceres::LinearSolverType::SPARSE_SCHUR; //10.0s
+    //options.linear_solver_type = ceres::LinearSolverType::SPARSE_SCHUR; 
     
     //slower methods
-    //options.linear_solver_type = ceres::LinearSolverType::ITERATIVE_SCHUR; //40.6s
-    //options.linear_solver_type = ceres::LinearSolverType::CGNR; //46.9s
+    //options.linear_solver_type = ceres::LinearSolverType::ITERATIVE_SCHUR; 
+    //options.linear_solver_type = ceres::LinearSolverType::CGNR;
     
     //options.minimizer_type = ceres::LINE_SEARCH;
 
