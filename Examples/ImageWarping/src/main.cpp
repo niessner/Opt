@@ -62,10 +62,10 @@ int main(int argc, const char * argv[]) {
     if (argc > 1) {
         downsampleFactor = atoi(argv[1]);
         if (downsampleFactor > 0) {
-            inputImage = "cartooncat512.png";
-            inputImageMask = "catmask512_black.png";
+            inputImage = "cartooncat4096.png";
+            inputImageMask = "catmask4096_black.png";
             constraints.clear();
-            loadConstraints(constraints, "cat512.constraints");
+            loadConstraints(constraints, "cat4096.constraints");
 			//lmOnlyFullSolve = true;
         } else {
             downsampleFactor = 1;

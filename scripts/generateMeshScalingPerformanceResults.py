@@ -30,11 +30,11 @@ def compileProject(exampleName, exampleProjectName):
 	os.chdir(script_dir)
 
 def scalingPerfTest():
-	compileProject("ImageWarping", "ImageWarping")
-	os.chdir(examples_dir + "ImageWarping")
+	compileProject("MeshDeformationARAP", "MeshDeformationARAP")
+	os.chdir(examples_dir + "MeshDeformationARAP")
 	print("*****************Scaling Tests.***********************")
-	for i in range(0,6)[::-1]:
-	    call(["x64/Release/ImageWarping.exe", str(2**i), "perf"])
+	for i in range(0,7):
+	    call(["x64/Release/MeshDeformationARAP.exe", "small_armadillo.ply", "perf", str(i)])
 	os.chdir(script_dir)
 
 
@@ -44,13 +44,13 @@ def copyResultsToResultDirectory(pTests):
 		copytree(examples_dir + p[0] + "/results/", results_dir + p[0])
 
 
-def setImageWarpingCeresPCG(usePCG):
+def setMeshDeformationARAPCeresPCG(usePCG):
 	contents = "#pragma once\n#define USE_CERES_PCG "
 	if usePCG:
 		contents += "1\n"
 	else:
 		contents += "0\n"
-	filename = examples_dir + "ImageWarping/src/Configure.h"
+	filename = examples_dir + "MeshDeformationARAP/src/Configure.h"
 	with open(filename, 'w') as text_file:
 		text_file.write(contents)
 
@@ -68,13 +68,13 @@ setCusparseParams(False, False)
 
 
 setDoublePrecision(False)
-setImageWarpingCeresPCG(False)
+setMeshDeformationARAPCeresPCG(False)
 scalingPerfTest()
 setDoublePrecision(True)
-setImageWarpingCeresPCG(True)
+setMeshDeformationARAPCeresPCG(True)
 scalingPerfTest()
 
-copyResultsToResultDirectory([["ImageWarping"]])
+copyResultsToResultDirectory([["MeshDeformationARAP"]])
 
 
 

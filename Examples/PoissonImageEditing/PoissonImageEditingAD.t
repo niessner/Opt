@@ -51,12 +51,4 @@ terms:insert(laplacianCost1)
 terms:insert(laplacianCost2)
 terms:insert(laplacianCost3)
 
---[[
--- Hack to get example to work with dumpJ
-    local zero = 0.0
-    local zeroIm = S:ComputedImage("zero",{W,H},zero)
-    local hack = zeroIm(0,0)*(p(0)+p(1)+p(2)+p(3))
-    terms:insert(hack)
-    --]]
-
 return S:Cost(unpack(terms))

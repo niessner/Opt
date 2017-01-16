@@ -135,6 +135,13 @@ public:
             m_params.useOpt = false;
             m_params.useOptLM = true;
 			m_params.linearIter = 500;// m_image.getWidth()*m_image.getHeight();
+			if (image.getWidth() > 1024) {
+				m_params.nonLinearIter = 100;
+			}
+// TODO: Remove for < 2048x2048
+#if !USE_CERES_PCG
+			//m_params.useCeres = false;
+#endif
 		}
 		m_lmOnlyFullSolve = lmOnlyFullSolve;
 
@@ -344,14 +351,6 @@ public:
 
    
         std::string resultSuffix = OPT_DOUBLE_PRECISION ? "_double" : "_float";
-
-		if (m_lmOnlyFullSolve) {
-#if USE_CERES_PCG
-			resultSuffix += "_PCG_";
-#else
-			resultSuffix += "_SNC_";
-#endif
-		}
 
         resultSuffix += std::to_string(m_image.getWidth());
         saveSolverResults("results/", resultSuffix, m_ceresIters, m_optGNIters, m_optLMIters);

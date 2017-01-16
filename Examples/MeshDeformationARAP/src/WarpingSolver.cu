@@ -110,7 +110,7 @@ __global__ void PCGInit_Kernel1(SolverInput input, SolverState state, SolverPara
         atomicAdd(state.d_scanAlpha, d);
     }
 }
-
+ 
 __global__ void PCGInit_Kernel2(unsigned int N, SolverState state)
 {
 	const unsigned int x = blockIdx.x * blockDim.x + threadIdx.x;
