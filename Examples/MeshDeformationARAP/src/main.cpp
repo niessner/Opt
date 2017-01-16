@@ -33,7 +33,7 @@ int main(int argc, const char * argv[])
 	bool lmOnlyFullSolve = false;
 	if (argc > 3) {
 		lmOnlyFullSolve = true;
-		subdivisionFactor = atoi(argv[1]);
+		subdivisionFactor = atoi(argv[3]);
 		markerFilename = "small_armadillo.mrk";
 	}
 
