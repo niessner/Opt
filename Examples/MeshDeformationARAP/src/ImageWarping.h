@@ -14,7 +14,7 @@
 #include "../../shared/SolverIteration.h"
 #include "../../shared/Precision.h"
 #include "../../shared/CombinedSolverParameters.h"
-include <cuda_profiler_api.h>
+#include <cuda_profiler_api.h>
 // From the future (C++14)
 template<typename T, typename... Args>
 std::unique_ptr<T> make_unique(Args&&... args) {
