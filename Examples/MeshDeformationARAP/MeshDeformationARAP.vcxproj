@@ -141,6 +141,7 @@ xcopy /Y /D "..\..\API\release\include\*.h" "."</Command>
     <ClInclude Include="..\shared\Precision.h" />
     <ClInclude Include="..\shared\SolverIteration.h" />
     <ClInclude Include="src\CeresWarpingSolver.h" />
+    <ClInclude Include="src\Configure.h" />
     <ClInclude Include="src\CUDATimer.h" />
     <ClInclude Include="src\CUDAWarpingSolver.h" />
     <ClInclude Include="src\ImageWarping.h" />

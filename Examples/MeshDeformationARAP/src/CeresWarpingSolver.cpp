@@ -5,6 +5,8 @@
 
 #ifdef USE_CERES
 
+
+#include "Configure.h"
 const bool performanceTest = true;
 //const int linearIterationMin = 100;
 
@@ -245,7 +247,12 @@ float CeresWarpingSolver::solveGN(
     //faster methods
     options.num_threads = 8;
     options.num_linear_solver_threads = 8;
-    options.linear_solver_type = ceres::LinearSolverType::SPARSE_NORMAL_CHOLESKY; //7.2s
+
+#if USE_CERES_PCG
+	options.linear_solver_type = ceres::LinearSolverType::CGNR;
+#else
+	options.linear_solver_type = ceres::LinearSolverType::SPARSE_NORMAL_CHOLESKY; 
+#endif
 	//options.trust_region_strategy_type = ceres::TrustRegionStrategyType::DOGLEG;
     //options.linear_solver_type = ceres::LinearSolverType::SPARSE_SCHUR; //10.0s
 
