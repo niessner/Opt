@@ -30,6 +30,8 @@ return function(P)
     L.And = L.Reduce(1,ad.and_)
     L.Or = L.Reduce(0,ad.or_)
     L.Not = ad.not_
+    
+    function L.UsePreconditioner(...) return P:UsePreconditioner(...) end
     -- alas for Image/Array
     function L.Array(...) return P:Image(...) end
     function L.ComputedArray(...) return P:ComputedImage(...) end
