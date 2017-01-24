@@ -57,8 +57,8 @@ def make_iteration_plot(name, iters_f, iters_d, ceres, optLM_d, optGN_d, optLM_f
 	for i in range(5):
 		plt.axvline(x=float(iters[i][len(errors[i])-1])+offsets[i], color=graph_colors[i], linestyle='--',    linewidth=sizes[i])
 
-	plt.legend(handles=[ceres_line, optGN_f_line, optLM_f_line, optGN_d_line, optLM_d_line])
-	plt.ylabel('Log Cost')
+
+	plt.ylabel('Cost (log scale)')
 	plt.xlabel('Iterations')
 	plt.title(name, fontsize=BIGGER_SIZE)
 	plt.yscale('log',basey=2)
@@ -69,6 +69,19 @@ def make_iteration_plot(name, iters_f, iters_d, ceres, optLM_d, optGN_d, optLM_f
 	plt.rc('xtick', labelsize=SIZE)          # fontsize of the tick labels
 	plt.rc('ytick', labelsize=SIZE)          # fontsize of the tick labels
 	plt.rc('legend', fontsize=LEGEND_SIZE)          # legend fontsize
+	plt.legend(handles=[ceres_line, optGN_f_line, optLM_f_line, optGN_d_line, optLM_d_line])
+	ax = plt.gca()
+	if name == "ARAP Mesh Deformation":
+		ax = plt.gca()
+		ax.set_xlim(xmax=12.05)
+	if name == "Image Warping":
+		ax = plt.gca()
+		ax.set_xlim(xmax=8.05)
+	
+	ax.set_axis_bgcolor('white')
+	ax.yaxis.grid(color='#DDDDDD')
+	ax.xaxis.grid(color='#DDDDDD')
+
 	#plt.rc('figure', titlesize=BIGGER_SIZE)  # fontsize of the figure title
 	#plt.show()
 	plt.tight_layout()
@@ -93,12 +106,16 @@ def make_time_plot(name, ceres, optLM_d, optGN_d, optLM_f, optGN_f):
 	plt.axvline(x=optGN_f[-1][0], color=graph_colors[4], linestyle='--',  linewidth=2)
 
 
-	plt.legend(handles=[ceres_line, optGN_f_line, optLM_f_line, optGN_d_line, optLM_d_line])
-	plt.ylabel('Log Cost')
-	plt.xlabel('Log Time (ms)')
+	
+	plt.ylabel('Cost (log scale)')
+	plt.xlabel('Time (ms, log scale)')
 	plt.title(name, fontsize=BIGGER_SIZE)
 	plt.xscale('log')
 	plt.yscale('log',basey=2)
+
+	if name == "Shape From Shading":
+		ax = plt.gca()
+		ax.set_ylim(ymin=55)
 
 	plt.rc('font', size=SIZE)                # controls default text sizes
 	plt.rc('axes', titlesize=SIZE)           # fontsize of the axes title
@@ -108,6 +125,11 @@ def make_time_plot(name, ceres, optLM_d, optGN_d, optLM_f, optGN_f):
 	plt.rc('legend', fontsize=LEGEND_SIZE)          # legend fontsize
 	#plt.rc('figure', titlesize=BIGGER_SIZE)  # fontsize of the figure title
 	#plt.show()
+	ax = plt.gca()
+	ax.set_axis_bgcolor('white')
+	ax.yaxis.grid(color='#DDDDDD')
+	ax.xaxis.grid(color='#DDDDDD')
+	plt.legend(handles=[ceres_line, optGN_f_line, optLM_f_line, optGN_d_line, optLM_d_line])
 	plt.tight_layout()
 	plt.savefig(plotpath+name+"_time.pdf", dpi=300, facecolor='w', edgecolor='w',
         orientation='portrait', papertype=None, format=None,
@@ -132,7 +154,9 @@ plotpath = results_dir + "plots/"
 make_sure_path_exists(plotpath)
 
 problems = ["MeshDeformationLARAP", "MeshDeformationARAP", "ImageWarping", "ShapeFromShadingSimple"]
-for problem in problems:
+better_names = ["Volumetric Mesh Deformation", "ARAP Mesh Deformation", "Image Warping", "Shape From Shading"]
+for i in range(len(problems)):
+	problem = problems[i]
 	suffix = "672.csv" if "ImageWarping" in problem else ".csv"
 	file_prefix = results_dir + problem + "/results_"
 	rows_f = []
@@ -149,7 +173,8 @@ for problem in problems:
 	errorOptLM_d = processData([r[3] for r in rows_d])
 	errorOptGN_f = processData([r[2] for r in rows_f])
 	errorOptLM_f = processData([r[3] for r in rows_f])
-
+	if "ImageWarping" in problem: # Hack because stoping parameter was wrong at data collection tim
+		errorCERES = errorCERES[:8]
 
 
 	minError = errorCERES[-1]
@@ -174,24 +199,24 @@ for problem in problems:
 
 
 
-
+	name = better_names[i]
 
 	timeCERES = processData([r[7] for r in rows_d])
 	timeOptGN_d = processData([r[8] for r in rows_d])
 	timeOptLM_d = processData([r[9] for r in rows_d])
 	timeOptGN_f = processData([r[8] for r in rows_f])
 	timeOptLM_f = processData([r[9] for r in rows_f])
-	make_iteration_plot(problem, iters_f, iters_d, errorCERES, errorOptLM_d, errorOptGN_d, errorOptLM_f, errorOptGN_f)
+	make_iteration_plot(name, iters_f, iters_d, errorCERES, errorOptLM_d, errorOptGN_d, errorOptLM_f, errorOptGN_f)
 	ceres = list(zip(timeCERES, errorCERES))
 	optLM_d = list(zip(timeOptLM_d, errorOptLM_d))
 	optGN_d = list(zip(timeOptGN_d, errorOptGN_d))
 	optLM_f = list(zip(timeOptLM_f, errorOptLM_f))
 	optGN_f = list(zip(timeOptGN_f, errorOptGN_f))
 
-	print(problem + ": Opt GN (float): %fms, %fx faster than CERES\n" % (timeOptGN_f[len(errorOptGN_f)-1], timeCERES[-1]/timeOptGN_f[len(errorOptGN_f)-1]))
-	print(problem + ": Opt GN (double): %fms, %fx faster than CERES\n" % (timeOptGN_d[len(errorOptGN_d)-1], timeCERES[-1]/timeOptGN_d[len(errorOptGN_d)-1]))
+	print(name + ": Opt GN (float): %fms, %fx faster than CERES\n" % (timeOptGN_f[len(errorOptGN_f)-1], timeCERES[-1]/timeOptGN_f[len(errorOptGN_f)-1]))
+	print(name + ": Opt GN (double): %fms, %fx faster than CERES\n" % (timeOptGN_d[len(errorOptGN_d)-1], timeCERES[-1]/timeOptGN_d[len(errorOptGN_d)-1]))
 
-	make_time_plot(problem, ceres, optLM_d, optGN_d, optLM_f, optGN_f)
+	make_time_plot(name, ceres, optLM_d, optGN_d, optLM_f, optGN_f)
 
 i = 0
 figureString=""

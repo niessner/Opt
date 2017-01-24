@@ -68,7 +68,7 @@ class ImageWarping
             float spuriousProbability = 0.05f;
 
             std::uniform_int_distribution<> targetDistribution(0, m_targets[0].n_vertices() - 1);
-            float noiseModifier = 10.0f;
+            float noiseModifier = 30.0f;
             std::normal_distribution<> normalDistribution(0.0f, m_averageEdgeLength * noiseModifier);
             int spuriousCount = int(N*spuriousProbability);
             for (int i = 0; i < spuriousCount; ++i) {
@@ -87,7 +87,7 @@ class ImageWarping
             }
             for (int index : m_spuriousIndices) {
                 uchar w = 0;
-                m_result.set_color(VertexHandle(index), Vec3uc(w, w, w));
+                //m_result.set_color(VertexHandle(index), Vec3uc(w, w, w));
             }
 
             OpenMesh::IO::Options options = OpenMesh::IO::Options::VertexColor;
@@ -99,6 +99,15 @@ class ImageWarping
             m_optWarpingSolver = new TerraWarpingSolver(N, d_neighbourIdx.size(), d_neighbourIdx.data(), d_neighbourOffset.data(), "MeshDeformationAD.t", "gaussNewtonGPU");
 		} 
 
+
+        inline vec3f convertDepthToRGB(float depth, float depthMin = 0.0f, float depthMax = 1.0f) {
+            float depthZeroOne = (depth - depthMin) / (depthMax - depthMin);
+            float x = 1.0f - depthZeroOne;
+            if (x < 0.0f) x = 0.0f;
+            if (x > 1.0f) x = 1.0f;
+            return BaseImageHelper::convertHSVtoRGB(vec3f(240.0f*x, 1.0f, 0.5f));
+        }
+
         void saveCurrentMesh(std::string filename) {
             { // Save intermediate mesh
                 unsigned int N = (unsigned int)m_result.n_vertices();
@@ -106,8 +115,10 @@ class ImageWarping
                 cutilSafeCall(cudaMemcpy(h_vertexWeightFloat.data(), d_robustWeights.data(), sizeof(float)*N, cudaMemcpyDeviceToHost));
                 for (unsigned int i = 0; i < N; i++)
                 {
-                    uchar w = (uchar)(255 * h_vertexWeightFloat[i]);
-                    m_result.set_color(VertexHandle(i), Vec3uc(w, w, w));
+                    vec3f color = convertDepthToRGB(1.0f-clamp(h_vertexWeightFloat[i], 0.0f, 1.0f));
+
+                    m_result.set_color(VertexHandle(i), Vec3uc(color.r * 255, color.g * 255, color.b * 255));
+
                     if (h_vertexWeightFloat[i] < 0.9f || h_vertexWeightFloat[i] > 1.0f) {
                         printf("Interesting robustWeight[%d]: %f\n", i, h_vertexWeightFloat[i]);
                     }
@@ -175,6 +186,13 @@ class ImageWarping
                 }
 			}
 
+            for (int i = 0; i < m_spuriousIndices.size(); ++i) {
+                h_vertexPosTargetFloat3[m_spuriousIndices[i]] += m_noisyOffsets[i];
+                /*float3 before = *((float3*)mesh.point(VertexHandle(i)).data());
+                *((float3*)mesh.point(VertexHandle(i)).data()) += m_noisyOffsets[i];
+                float3 after = *((float3*)mesh.point(VertexHandle(i)).data());*/
+            }
+
 
             d_vertexPosTargetFloat3.update(h_vertexPosTargetFloat3.data(), N);
             d_vertexNormalTargetFloat3.update(h_vertexNormalTargetFloat3.data(), N);
@@ -194,6 +212,7 @@ class ImageWarping
                         float dist = (target - currentPt).length();
                         float weight = (positionThreshold - dist) / positionThreshold;
                         h_robustWeights[i] = fmaxf(0.1f, weight*0.9f+0.05f);
+                        h_robustWeights[i] = 1.0f;
                     }
                 }
             }
@@ -412,11 +431,12 @@ class ImageWarping
             unsigned int N = (unsigned int)mesh.n_vertices();
 
             assert(m_spuriousIndices.size() == m_noisyOffsets.size());
+            /*
             for (int i = 0; i < m_spuriousIndices.size(); ++i) {
                 float3 before = *((float3*)mesh.point(VertexHandle(i)).data());
                 *((float3*)mesh.point(VertexHandle(i)).data()) += m_noisyOffsets[i];
                 float3 after = *((float3*)mesh.point(VertexHandle(i)).data());
-            }
+            }*/
 
             std::vector<const float*> flannPoints(N);
             for (unsigned int i = 0; i < N; i++)

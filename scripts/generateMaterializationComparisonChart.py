@@ -14,11 +14,12 @@ plotpath = results_dir + "plots/"
 make_sure_path_exists(plotpath)
 
 #reverse because matplotlib starts at the bottom
-labels = ['None', 'Lighting', 'J', 'JtJ'][::-1]
+labels = ['Full Matrix-Free', 'Lighting', 'Materialized J', 'Materialized JtJ'][::-1]
 y_pos = np.arange(len(labels))
 linearItersPerSecond = [825.414613,6120.854471,1554.432097,2870.256795][::-1]
 #linearItersPerSecond = [i*0.001 for i in linearItersPerSecond]
 plt.clf()
+
 
 TITLE_SIZE = 24
 
@@ -30,23 +31,28 @@ plt.rc('ytick', labelsize=SIZE)          # fontsize of the tick labels
 plt.rc('legend', fontsize=LEGEND_SIZE)          # legend fontsize
 
 font0 = FontProperties()
-font0.set_size(TITLE_SIZE)
-font0.set_weight('bold')
+font0.set_size(20)
+#font0.set_weight('bold')
 
-fig, ax = plt.subplots()
+ax = plt.gca()
 ax.xaxis.set_major_formatter(FuncFormatter(thousandAsKFormatter))
 
-plt.barh(y_pos, linearItersPerSecond, align='center', color=graph_colors[4])
+
+plt.barh(y_pos, linearItersPerSecond, height=0.8, align='center', color=graph_colors[4])
 plt.yticks(y_pos, labels)
 plt.xlabel('Linear Iterations Per Second')
 plt.title('Performance of Materialization Strategies', fontsize=TITLE_SIZE)
-plt.annotate("Fastest", (3000, y_pos[2]-0.02), va='center', fontproperties=font0, color="black")
+plt.annotate("Fastest", (3000, y_pos[2]-0.09), va='center', fontproperties=font0, color="#333333")
+ax = plt.gca()
+ax.set_axis_bgcolor('white')
+ax.yaxis.grid(color='#DDDDDD')
+ax.xaxis.grid(color='#DDDDDD')
 
 
 
 plt.tight_layout()
-#plt.show()
-plt.savefig(plotpath+"Materialization.pdf", dpi=300, facecolor='w', edgecolor='w',
-        orientation='portrait', papertype=None, format=None,
-        transparent=False, bbox_inches=None, pad_inches=0.0,
-        frameon=None)
+plt.show()
+#plt.savefig(plotpath+"Materialization.pdf", dpi=300, facecolor='w', edgecolor='w',
+#        orientation='portrait', papertype=None, format=None,
+#        transparent=False, bbox_inches=None, pad_inches=0.0,
+#        frameon=None)

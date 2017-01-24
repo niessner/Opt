@@ -36,7 +36,29 @@ def make_scaling_plot(name, scaling_sizes, ceres_pcg, ceres_cholesky, optLM_f, o
 	plt.title(name, fontsize=BIGGER_SIZE)
 	plt.yscale('log',basey=10)
 	plt.xscale('log',basex=10)
-	plt.legend(handles=[ceres_line, ceres_cholesky_line, optLM_f_line, optLM_d_line],loc="upper left")
+	legend = plt.legend(handles=[ceres_line, ceres_cholesky_line, optLM_f_line, optLM_d_line],loc="upper left")
+
+	ax = plt.gca()
+	ax.set_axis_bgcolor('white')
+	ax.yaxis.grid(color='#DDDDDD')
+	ax.xaxis.grid(color='#DDDDDD')
+
+	print(str(int(ceres_pcg[-1]/optLM_f[-1]))+"x")
+	"""
+	x = 0.97
+	y = 0.725
+	width = 0.05
+	widthB = 3.4
+	lengthB = 1.0
+
+	plt.annotate(str(int(ceres_pcg[-1]/optLM_f[-1]))+"x", xy=(x,y), xytext=(x+width,y), xycoords="axes fraction", 
+            fontsize=12, ha='center', va='center',
+            bbox=dict(boxstyle='square', fc='white'),
+            arrowprops=dict(arrowstyle='-[, widthB='+str(widthB)+', lengthB='+str(lengthB), lw=2.0,facecolor='black',edgecolor='black'))
+	"""
+	
+
+
 	#plt.rc('figure', titlesize=BIGGER_SIZE)  # fontsize of the figure title
 	#plt.show()
 	plt.tight_layout()
@@ -102,4 +124,4 @@ for image_size in image_sizes:
 	optLM_f.append(timeOptLM_f[len(errorOptLM_d)-1])
 	optLM_d.append(timeOptLM_d[len(errorOptLM_f)-1])
 	
-make_scaling_plot("Performance vs. Problem Size", scaling_sizes, ceres_pcg, ceres_cholesky, optLM_f, optLM_d)
+make_scaling_plot("Image Warping", scaling_sizes, ceres_pcg, ceres_cholesky, optLM_f, optLM_d)

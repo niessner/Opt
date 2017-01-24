@@ -2425,11 +2425,14 @@ end
 
 for i = 2,12 do
     opt["float"..tostring(i)] = util.Vector(float,i)
+    opt["double"..tostring(i)] = util.Vector(double,i)
+    if opt_float == float then
+        opt["opt_float"..tostring(i)] = opt["float"..tostring(i)]
+    else
+        opt["opt_float"..tostring(i)] = opt["double"..tostring(i)]
+    end
 end
 
-for i = 2,12 do
-    opt["double"..tostring(i)] = util.Vector(double,i)
-end
 
 opt.Dot = util.Dot
 opt.toispace = toispace

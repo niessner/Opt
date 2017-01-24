@@ -1,38 +1,32 @@
-package.path = package.path .. ';?.t;'
-require("helper")
-
-local w_fitSqrt = S:Param("w_fitSqrt", float, 0)
-local w_regSqrtAlbedo = S:Param("w_regSqrtAlbedo", float, 1)
-local w_regSqrtShading = S:Param("w_regSqrtShading", float, 2)
-local pNorm = S:Param("pNorm", float, 4)
-local r = S:Unknown("r", opt.float3,{W,H},5)
-local r_const = S:Image("r_const", opt.float3,{W,H},5)
-local i = S:Image("i", opt.float3,{W,H},6)
-local s = S:Unknown("s", float,{W,H},8)
-
-local terms = terralib.newlist()
-local offsets = { {1,0}, {-1,0}, {0,1}, {0,-1} }
+W,H = opt.Dim("W",0), opt.Dim("H",1)
+local w_fitSqrt         = Param("w_fitSqrt", float, 0)
+local w_regSqrtAlbedo   = Param("w_regSqrtAlbedo", float, 1)
+local w_regSqrtShading  = Param("w_regSqrtShading", float, 2)
+local pNorm             = Param("pNorm", float, 4)
+local r                 = Unknown("r", float3,{W,H},5)
+local r_const           = Array("r_const", float3,{W,H},5) -- A constant view of the unknown
+local i                 = Array("i", float3,{W,H},6)
+local s                 = Unknown("s", float,{W,H},8)
 
 -- reg Albedo
-for j,o in ipairs(offsets) do
-    local x,y = unpack(o)
+for x,y in Stencil { {1,0}, {-1,0}, {0,1}, {0,-1} } do
 	local diff = (r(0,0) - r(x,y))
 	local diff_const = (r_const(0,0) - r_const(x,y))
-    local laplacianCost = L_p(diff, diff_const, pNorm, S)
-    local laplacianCostF = ad.select(opt.InBounds(0,0),ad.select(opt.InBounds(x,y), laplacianCost,0),0)
-    terms:insert(w_regSqrtAlbedo*laplacianCostF)
+    -- The helper L_p function takes diff_const, raises it's length to the (p-2) power, 
+    -- and stores it in a computed array, so its value remains constant during the nonlinear iteration,
+    -- then multiplies it with diff and returns
+    local laplacianCost = L_p(diff, diff_const, pNorm, {W,H})
+    local laplacianCostF = Select(InBounds(0,0),Select(InBounds(x,y), laplacianCost,0),0)
+    Energy(w_regSqrtAlbedo*laplacianCostF)
 end
 
 -- reg Shading
-for j,o in ipairs(offsets) do
-    local x,y = unpack(o)
+for x,y in Stencil { {1,0}, {-1,0}, {0,1}, {0,-1} } do
     local diff = (s(0,0) - s(x,y))
-    local laplacianCostF = ad.select(opt.InBounds(0,0),ad.select(opt.InBounds(x,y), diff,0),0)
-    terms:insert(w_regSqrtShading*laplacianCostF)
+    local laplacianCostF = Select(InBounds(0,0),Select(InBounds(x,y), diff,0),0)
+    Energy(w_regSqrtShading*laplacianCostF)
 end
 
 -- fit
 local fittingCost = r(0,0)+s(0,0)-i(0,0)
-terms:insert(w_fitSqrt*fittingCost)
-
-return S:Cost(unpack(terms))
+Energy(w_fitSqrt*fittingCost)

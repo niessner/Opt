@@ -14,7 +14,7 @@
 #include "../../shared/SolverIteration.h"
 #include "../../shared/Precision.h"
 #include "../../shared/CombinedSolverParameters.h"
-#include <cuda_profiler_api.h>
+include <cuda_profiler_api.h>
 // From the future (C++14)
 template<typename T, typename... Args>
 std::unique_ptr<T> make_unique(Args&&... args) {
@@ -30,10 +30,13 @@ class ImageWarping
 			m_result = *mesh;
 			m_initial = m_result;
 
-            m_params.numIter = 96;
+			m_params.numIter = 96;
 			//m_params.useCUDA = true;
 			m_params.nonLinearIter = 20;
 			m_params.linearIter = 1000;
+
+            m_params.useOpt = true;
+            //m_params.earlyOut = true;
 
 			unsigned int N = (unsigned int)mesh->n_vertices();
 			unsigned int E = (unsigned int)mesh->n_edges();
@@ -273,8 +276,8 @@ class ImageWarping
 
 			saveSolverResults("results/", suffix, m_ceresIters, m_optIters, m_optLMIters);
 			
-            reportFinalCosts("Mesh Deformation ARAP", m_params, m_optWarpingSolver->finalCost(), m_optLMWarpingSolver->finalCost(), m_ceresWarpingSolver->finalCost());
-
+            //reportFinalCosts("Mesh Deformation ARAP", m_params, m_optWarpingSolver->finalCost(), m_optLMWarpingSolver->finalCost(), m_ceresWarpingSolver->finalCost());
+            cudaProfilerStop();
 			return &m_result;
 		}
 
