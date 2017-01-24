@@ -226,7 +226,7 @@ return function(problemSpec)
         end
         return quote
             var rhs = dumpJ(idx,pd.parameters)
-            escape                
+            --[[escape                
                 local nnz = 0
                 local residual = 0
                 for i,r in ipairs(ES.residuals) do
@@ -239,6 +239,7 @@ return function(problemSpec)
                         local nchannels = u.image.type.channelcount
                         local uidx = GetOffset(idx,u.index)
                         local unknown_index = `image_offset + nchannels*uidx + u.channel
+
                         emit quote
                             pd.J_csrValA[local_rowidx + nnz] = opt_float(rhs.["_"..tostring(nnz)])
                             pd.J_csrColIndA[local_rowidx + nnz] = wrap(unknown_index,opt_float(rhs.["_"..tostring(nnz)]))
@@ -251,7 +252,7 @@ return function(problemSpec)
                     end
                     residual = residual + 1
                 end
-            end
+            end--]]
         end
 	end
 	

@@ -29,9 +29,48 @@ return function(P)
     end
     L.And = L.Reduce(1,ad.and_)
     L.Or = L.Reduce(0,ad.or_)
+    L.Not = ad.not_
     -- alas for Image/Array
     function L.Array(...) return P:Image(...) end
     function L.ComputedArray(...) return P:ComputedImage(...) end
+
+    function L.Matrix3x3Mul(matrix,v)
+        return ad.Vector(
+            matrix(0)*v(0)+matrix(1)*v(1)+matrix(2)*v(2),
+            matrix(3)*v(0)+matrix(4)*v(1)+matrix(5)*v(2),
+            matrix(6)*v(0)+matrix(7)*v(1)+matrix(8)*v(2))
+    end
+
+    function L.Dot3(v0,v1)
+        return v0(0)*v1(0)+v0(1)*v1(1)+v0(2)*v1(2)
+    end
+
+    function L.Sqrt(v)
+        return ad.sqrt(v)
+    end
+
+    function L.normalize(v)
+        return v / ad.sqrt(L.Dot3(v, v))
+    end
+
+    function L.length(v0, v1) 
+        local diff = v0 - v1
+        return ad.sqrt(L.Dot3(diff, diff))
+    end
+
+    function L.Slice(im,s,e)
+        return setmetatable({},{
+            __call = function(self,ind)
+                if s + 1 == e then return im(ind)(s) end
+                local t = terralib.newlist()
+                for i = s,e - 1 do
+                    local val = im(ind)
+                    local chan = val(i)
+                    t:insert(chan)
+                end
+                return ad.Vector(unpack(t))
+            end })
+    end
 
     function L.Rotate3D(a,v)
         local alpha, beta, gamma = a(0), a(1), a(2)
@@ -46,17 +85,32 @@ return function(P)
             -SinBeta,
             CosBeta*SinAlpha,
             CosBeta*CosAlpha)
-        return  ad.Vector(
-                matrix(0)*v(0)+matrix(1)*v(1)+matrix(2)*v(2),
-                matrix(3)*v(0)+matrix(4)*v(1)+matrix(5)*v(2),
-                matrix(6)*v(0)+matrix(7)*v(1)+matrix(8)*v(2))
+        return L.Matrix3x3Mul(matrix,v)
+    end
+    function L.Rotate2D(angle, v)
+	    local CosAlpha, SinAlpha = ad.cos(angle), ad.sin(angle)
+        local matrix = ad.Vector(CosAlpha, -SinAlpha, SinAlpha, CosAlpha)
+	    return ad.Vector(matrix(0)*v(0)+matrix(1)*v(1), matrix(2)*v(0)+matrix(3)*v(1))
+    end
+    L.Index = ad.Index
+    L.SampledImage = ad.sampledimage
+
+--
+    function L.L_2_norm(v)
+        -- TODO: check if scalar and just return
+        return ad.sqrt(v:dot(v))
+    end
+    L.L_p_counter = 1
+    function L.L_p(val, val_const, p, dims)
+        local dist_const = L.L_2_norm(val_const)
+        local eps = 0.0000001
+        local C = ad.pow(dist_const+eps,(p-2))
+        local sqrtC = ad.sqrt(C)
+        local sqrtCImage = L.ComputedArray("L_p"..tostring(L.L_p_counter),dims,sqrtC)
+        L.L_p_counter = L.L_p_counter + 1
+        return sqrtCImage(0,0)*val
     end
 
-    function L.Rotate2D(angle, v)
-	    local CosAlpha, SinAlpha = cos(angle), sin(angle)
-        local matrix = Vector(CosAlpha, -SinAlpha, SinAlpha, CosAlpha)
-	    return Vector(matrix(0)*v(0)+matrix(1)*v(1), matrix(2)*v(0)+matrix(3)*v(1))
-    end
     L.Select = ad.select
     function L.Stencil (lst)
         local i = 0

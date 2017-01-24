@@ -119,7 +119,7 @@ public:
 
 
 		m_params.numIter = 20;
-		m_params.useCUDA = true;
+		m_params.useCUDA = false;
 		m_params.nonLinearIter = 8;
 		m_params.linearIter = 400;
 		if (performanceRun) {

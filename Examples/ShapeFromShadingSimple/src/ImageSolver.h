@@ -48,7 +48,7 @@ public:
             m_params.useOptLM = true;
             m_params.useCeres = true;
 		} else {
-			m_params.useCUDA = true;
+			//m_params.useCUDA = true;
 		}
 
         m_solverInputGPU = inputGPU;

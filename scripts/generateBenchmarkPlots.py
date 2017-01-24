@@ -42,18 +42,21 @@ for p in problems:
 
 #iters, optLM_f, 'p', iters, optGN_f, 'y'
 	plt.clf()
-	ceres_line, = plt.plot(iters, ceres, color=graph_colors[0], linewidth=2, marker=(4,0,45), markerfacecolor='none', markeredgecolor='g', label='CERES')
-	optLM_d_line, = plt.plot(iters, optLM_d, color=graph_colors[1], marker=(3,0,0), markerfacecolor='none', markeredgecolor='b', label='Opt LM (double)')
+	ceres_line, = plt.plot(iters, ceres, color=graph_colors[0], linewidth=2, marker=(4,0,45), markerfacecolor='none', markeredgecolor=graph_colors[0], label='CERES')
+	optLM_d_line, = plt.plot(iters, optLM_d, color=graph_colors[1], marker=(3,0,0), markerfacecolor='none', markeredgecolor=graph_colors[1], label='Opt LM (double)')
 	optGN_d_line, = plt.plot(iters, optGN_d, color=graph_colors[2], marker=(4,2,45), label='Opt GN (double)')
 	optLM_f_line, = plt.plot(iters, optLM_f, color=graph_colors[3], marker=(6,2,0), label='Opt LM (float)')
-	optGN_f_line, = plt.plot(iters, optGN_f, color=graph_colors[4], marker=(4,0,0), markerfacecolor='none', markeredgecolor='m', label='Opt GN (float)')
-	plt.legend(handles=[ceres_line, optLM_d_line, optGN_d_line, optLM_f_line, optGN_f_line])
+	optGN_f_line, = plt.plot(iters, optGN_f, color=graph_colors[4], marker=(4,0,0), markerfacecolor='none', markeredgecolor=graph_colors[4], label='Opt GN (float)')
+	
 	plt.ylabel('Cost')
 	plt.xlabel('Iterations')
 	plt.title(p, fontsize=BIGGER_SIZE)
 	#plt.plot(iters, optGN_f, 'g')
 	plt.yscale('log')
-
+	ax = plt.gca()
+	ax.set_axis_bgcolor('white')
+	ax.yaxis.grid(color='#DDDDDD')
+	ax.xaxis.grid(color='#DDDDDD')
 
 	plt.rc('font', size=SIZE)                # controls default text sizes
 	plt.rc('axes', titlesize=SIZE)           # fontsize of the axes title
@@ -63,6 +66,7 @@ for p in problems:
 	plt.rc('legend', fontsize=LEGEND_SIZE)          # legend fontsize
 	#plt.rc('figure', titlesize=BIGGER_SIZE)  # fontsize of the figure title
 	#plt.show()
+	plt.legend(handles=[ceres_line, optLM_d_line, optGN_d_line, optLM_f_line, optGN_f_line])
 	plt.tight_layout()
 	plt.savefig(plotpath+p+".pdf", dpi=300, facecolor='w', edgecolor='w',
         orientation='portrait', papertype=None, format=None,

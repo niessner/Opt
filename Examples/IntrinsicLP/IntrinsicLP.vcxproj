@@ -11,7 +11,7 @@
     </ProjectConfiguration>
   </ItemGroup>
   <PropertyGroup Label="Globals">
-    <ProjectGuid>{A1ABFE1F-43DA-483B-9B5E-7A67814C642F}</ProjectGuid>
+    <ProjectGuid>{CA9DD020-FC04-44B1-8741-AFC2A99756D1}</ProjectGuid>
     <Keyword>Win32Proj</Keyword>
     <RootNamespace>DepthWithColor.D3D</RootNamespace>
     <ProjectName>IntrinsicLP</ProjectName>
