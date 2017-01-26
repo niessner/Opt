@@ -1,6 +1,5 @@
 local S = require("std")
 local util = require("util")
-local dbg = require("dbg")
 require("precision")
 
 local ffi = require("ffi")
@@ -57,8 +56,6 @@ end
 
 
 local gpuMath = util.gpuMath
-
-local UNK_SZ = 4
 
 opt.BLOCK_SIZE = 16
 local BLOCK_SIZE =  opt.BLOCK_SIZE
@@ -758,31 +755,6 @@ return function(problemSpec)
         var f : opt_float
         C.cudaMemcpy(&f, pd.q, sizeof(opt_float), C.cudaMemcpyDeviceToHost)
         return f
-    end
-
-
-    local terra logDoubles(vec : double[UNK_SZ], label : rawstring)
-        logSolver("\t %s", label)
-        for i=0,UNK_SZ do
-            logSolver(" %.18g", vec[i])
-        end  
-        logSolver("\n")
-    end
-
-    local terra mul(v0 : double[UNK_SZ], v1 : double[UNK_SZ]): double[UNK_SZ]
-        var result : double[UNK_SZ]
-        for i=0,UNK_SZ do
-            result[i] = v0[i] * v1[i]
-        end  
-        return result
-    end
-
-    local terra div(v0 : double[UNK_SZ], v1 : double[UNK_SZ]): double[UNK_SZ]
-        var result : double[UNK_SZ]
-        for i=0,UNK_SZ do
-            result[i] = v0[i] / v1[i]
-        end  
-        return result
     end
 
     local computeModelCostChange
