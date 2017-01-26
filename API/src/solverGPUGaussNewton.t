@@ -8,18 +8,32 @@ local C = util.C
 local Timer = util.Timer
 
 local getValidUnknown = util.getValidUnknown
-local use_cusparse = false
-local use_fused_jtj = false
-
 
 local GuardedInvertType = { CERES = {}, MODIFIED_CERES = {}, EPSILON_ADD = {} }
-local guardedInvertType = GuardedInvertType.CERES
 
 -- CERES default, ONCE_PER_SOLVE
 local JacobiScalingType = { NONE = {}, ONCE_PER_SOLVE = {}, EVERY_ITERATION = {}}
-local JacobiScaling = JacobiScalingType.ONCE_PER_SOLVE
 
-local multistep_alphaDenominator_compute = use_cusparse
+
+local options = {
+    use_cusparse = false
+    use_fused_jtj = false
+    guardedInvertType = GuardedInvertType.CERES,
+    jacobiScaling = JacobiScalingType.ONCE_PER_SOLVE,
+    residual_reset_period = 10,
+    min_relative_decrease = 1e-3,
+    min_trust_region_radius = 1e-32,
+    max_trust_region_radius = 1e16,
+    q_tolerance = 0.0001,
+    function_tolerance = 0.000001,
+    trust_region_radius = 1e4,
+    radius_decrease_factor = 2.0,
+    min_lm_diagonal = 1e-6,
+    max_lm_diagonal = 1e32
+}
+
+
+local multistep_alphaDenominator_compute = options.use_cusparse
 
 local cd = macro(function(apicall) 
     local apicallstr = tostring(apicall)
@@ -36,7 +50,7 @@ local cd = macro(function(apicall)
     in
         r
     end end)
-if use_cusparse then
+if options.use_cusparse then
     local cusparsepath = "/usr/local/cuda"
     local cusparselibpath = "/lib64/libcusparse.dylib"
     if ffi.os == "Windows" then
@@ -162,7 +176,7 @@ return function(problemSpec)
 	    
 	    Jp : &float
 	}
-	if use_cusparse then
+	if options.use_cusparse then
 	    PlanData.entries:insert {"handle", CUsp.cusparseHandle_t }
 	    PlanData.entries:insert {"desc", CUsp.cusparseMatDescr_t }
 	end
@@ -273,7 +287,7 @@ return function(problemSpec)
 
         local terra guardedInvert(p : unknownElement)
             escape 
-                if guardedInvertType == GuardedInvertType.CERES then
+                if options.guardedInvertType == GuardedInvertType.CERES then
                     emit quote
                         var invp = p
                         for i = 0, invp:size() do
@@ -281,7 +295,7 @@ return function(problemSpec)
                         end
                         return invp
                     end
-                elseif guardedInvertType == GuardedInvertType.MODIFIED_CERES then
+                elseif options.guardedInvertType == GuardedInvertType.MODIFIED_CERES then
                     emit quote
                         var invp = p
                         for i = 0, invp:size() do
@@ -289,7 +303,7 @@ return function(problemSpec)
                         end
                         return invp
                     end
-                elseif guardedInvertType == GuardedInvertType.EPSILON_ADD then
+                elseif options.guardedInvertType == GuardedInvertType.EPSILON_ADD then
                     emit quote
                         var invp = p
                         for i = 0, invp:size() do
@@ -579,11 +593,11 @@ return function(problemSpec)
                 if idx:initFromCUDAParams() and not fmap.exclude(idx,pd.parameters) then 
                     var unclampedCtC = pd.CtC(idx)
                     var invS_iiSq : unknownElement = opt_float(1.0f)
-                    if [JacobiScaling == JacobiScalingType.ONCE_PER_SOLVE] then
+                    if [options.jacobiScaling == JacobiScalingType.ONCE_PER_SOLVE] then
                         invS_iiSq = opt_float(1.0f) / pd.SSq(idx)
-                    elseif [JacobiScaling == JacobiScalingType.EVERY_ITERATION] then 
+                    elseif [options.jacobiScaling == JacobiScalingType.EVERY_ITERATION] then 
                         invS_iiSq = opt_float(1.0f) / pd.preconditioner(idx)
-                    end -- else if  [JacobiScaling == JacobiScalingType.NONE] then invS_iiSq == 1
+                    end -- else if  [options.jacobiScaling == JacobiScalingType.NONE] then invS_iiSq == 1
                     var clampMultiplier = invS_iiSq / pd.parameters.trust_region_radius
                     var minVal = pd.parameters.min_lm_diagonal * clampMultiplier
                     var maxVal = pd.parameters.max_lm_diagonal * clampMultiplier
@@ -777,7 +791,7 @@ return function(problemSpec)
         return r
     end
     local cusparseInner,cusparseOuter
-    if use_cusparse then
+    if options.use_cusparse then
         terra cusparseOuter(pd : &PlanData)
             var [parametersSym] = &pd.parameters
             --logSolver("saving J...\n")
@@ -852,7 +866,7 @@ return function(problemSpec)
             var consts = array(0.f,1.f,2.f)
             cd(C.cudaMemset(pd.Ap_X._contiguousallocation, -1, sizeof(float)*nUnknowns))
             
-            if use_fused_jtj then
+            if options.use_fused_jtj then
                 var endJTJp : util.TimerEvent
                 pd.timer:startEvent("J^TJp",nil,&endJTJp)
                 cd(CUsp.cusparseScsrmv(
@@ -903,7 +917,7 @@ return function(problemSpec)
 	   pd.timer:startEvent("overall",nil,&pd.endSolver)
        [util.initParameters(`pd.parameters,problemSpec,params_,true)]
        var [parametersSym] = &pd.parameters
-        escape if use_cusparse then emit quote
+        escape if options.use_cusparse then emit quote
             if pd.J_csrValA == nil then
                 cd(CUsp.cusparseCreateMatDescr( &pd.desc ))
                 cd(CUsp.cusparseSetMatType( pd.desc,CUsp.CUSPARSE_MATRIX_TYPE_GENERAL ))
@@ -940,10 +954,10 @@ return function(problemSpec)
        escape 
             if problemSpec:UsesLambda() then
               emit quote 
-                pd.parameters.trust_region_radius = 1e4
-                pd.parameters.radius_decrease_factor = 2.0
-                pd.parameters.min_lm_diagonal = 1e-6;
-                pd.parameters.max_lm_diagonal = 1e32;
+                pd.parameters.trust_region_radius       = [options.trust_region_radius]
+                pd.parameters.radius_decrease_factor    = [options.radius_decrease_factor]
+                pd.parameters.min_lm_diagonal           = [options.min_lm_diagonal]
+                pd.parameters.max_lm_diagonal           = [options.max_lm_diagonal]
               end
 	        end 
        end
@@ -960,12 +974,12 @@ return function(problemSpec)
 
 	local terra step(data_ : &opaque, params_ : &&opaque, solverparams : &&opaque)
         --TODO: make parameters
-        var residual_reset_period = 10
-        var min_relative_decrease : opt_float = 1e-3f
-        var min_trust_region_radius : opt_float = 1e-32
-        var max_trust_region_radius : opt_float = 1e16
-        var q_tolerance = 0.0001
-        var function_tolerance = 0.000001
+        var residual_reset_period : int         = [options.residual_reset_period]
+        var min_relative_decrease : opt_float   = [options.min_relative_decrease]
+        var min_trust_region_radius : opt_float = [options.min_trust_region_radius]
+        var max_trust_region_radius : opt_float = [options.max_trust_region_radius]
+        var q_tolerance : opt_float             = [options.q_tolerance]
+        var function_tolerance : opt_float      = [options.function_tolerance]
         var Q0 : opt_float
         var Q1 : opt_float
 		var pd = [&PlanData](data_)
@@ -986,7 +1000,7 @@ return function(problemSpec)
                     emit quote
                         C.cudaMemset(pd.scanAlphaNumerator, 0, sizeof(opt_float))
                         C.cudaMemset(pd.q, 0, sizeof(opt_float))
-                        if [JacobiScaling == JacobiScalingType.ONCE_PER_SOLVE] and pd.nIter == 0 then
+                        if [options.jacobiScaling == JacobiScalingType.ONCE_PER_SOLVE] and pd.nIter == 0 then
                             gpu.PCGSaveSSq(pd)
                         end
                         gpu.PCGComputeCtC(pd)
@@ -1003,14 +1017,14 @@ return function(problemSpec)
                 C.cudaMemset(pd.scanAlphaDenominator, 0, sizeof(opt_float))
                 C.cudaMemset(pd.q, 0, sizeof(opt_float))
 
-                if not use_cusparse then
+                if not options.use_cusparse then
     				gpu.PCGStep1(pd)
     				if isGraph then
     					gpu.PCGStep1_Graph(pd)
     				end
                 end
 
-				-- only does anything if use_cusparse is true
+				-- only does anything if options.use_cusparse is true
                 cusparseInner(pd)
 
                 if multistep_alphaDenominator_compute then
