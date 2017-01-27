@@ -16,8 +16,8 @@ local JacobiScalingType = { NONE = {}, ONCE_PER_SOLVE = {}, EVERY_ITERATION = {}
 
 
 local options = {
-    use_cusparse = false
-    use_fused_jtj = false
+    use_cusparse = false,
+    use_fused_jtj = false,
     guardedInvertType = GuardedInvertType.CERES,
     jacobiScaling = JacobiScalingType.ONCE_PER_SOLVE,
     residual_reset_period = 10,
