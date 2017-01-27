@@ -1,1 +1,0 @@
-OPT_DOUBLE_PRECISION =  false
