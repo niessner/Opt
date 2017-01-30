@@ -44,8 +44,8 @@ public:
 
 		resetGPUMemory();
 		std::cout << "compiling... ";
-		m_optWarpingSolver = std::unique_ptr<TerraWarpingSolver>(new TerraWarpingSolver(N, 2 * E, d_neighbourIdx, d_neighbourOffset, "MeshSmoothingLaplacianAD.t", "gaussNewtonGPU"));
-        m_optLMWarpingSolver = std::unique_ptr<TerraWarpingSolver>(new TerraWarpingSolver(N, 2 * E, d_neighbourIdx, d_neighbourOffset, "MeshSmoothingLaplacianAD.t", "LMGPU"));
+		m_optWarpingSolver = std::unique_ptr<TerraWarpingSolver>(new TerraWarpingSolver(N, 2 * E, d_neighbourIdx, d_neighbourOffset, "cotangent_mesh_smoothing.t", "gaussNewtonGPU"));
+        m_optLMWarpingSolver = std::unique_ptr<TerraWarpingSolver>(new TerraWarpingSolver(N, 2 * E, d_neighbourIdx, d_neighbourOffset, "cotangent_mesh_smoothing.t", "LMGPU"));
 		std::cout << " done!" << std::endl;
 	}
 

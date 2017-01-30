@@ -44,8 +44,8 @@ class ImageWarping
 			
 			m_warpingSolver         = make_unique<CUDAWarpingSolver>(m_nNodes);
 			m_warpingSolverCeres    = make_unique<CERESWarpingSolver>(m_dims.x + 1, m_dims.y + 1, m_dims.z + 1);
-			m_warpingSolverOpt      = make_unique<TerraSolverWarping>(m_dims.x+1, m_dims.y+1, m_dims.z+1, "ImageWarpingAD.t", "gaussNewtonGPU");
-            m_warpingSolverOptLM    = make_unique<TerraSolverWarping>(m_dims.x + 1, m_dims.y + 1, m_dims.z + 1, "ImageWarpingAD.t", "LMGPU");
+			m_warpingSolverOpt      = make_unique<TerraSolverWarping>(m_dims.x+1, m_dims.y+1, m_dims.z+1, "volumetric_mesh_deformation.t", "gaussNewtonGPU");
+            m_warpingSolverOptLM    = make_unique<TerraSolverWarping>(m_dims.x + 1, m_dims.y + 1, m_dims.z + 1, "volumetric_mesh_deformation.t", "LMGPU");
 		}
 
 		void setConstraints(float alpha)

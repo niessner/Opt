@@ -134,17 +134,11 @@
     </Filter>
   </ItemGroup>
   <ItemGroup>
-    <None Include="shapeFromShadingAD.t">
-      <Filter>Terra</Filter>
-    </None>
-    <None Include="shapeFromShading.t">
+    <None Include="shape_from_shading.t">
       <Filter>Terra</Filter>
     </None>
     <None Include="default.SFSSolverParameters" />
     <None Include="..\..\API\src\precision.t">
-      <Filter>Terra</Filter>
-    </None>
-    <None Include="..\shared\opt_precision.t">
       <Filter>Terra</Filter>
     </None>
   </ItemGroup>

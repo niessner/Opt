@@ -1,15 +1,12 @@
 #pragma once
 
 #define RUN_CUDA 1
-#define RUN_TERRA 0
 #define RUN_OPT 1
 #define RUN_CERES 0
 
 #define RUN_EIGEN 1
 
 #define RUN_CUDA_BLOCK 0
-#define RUN_TERRA_BLOCK 0
-#define RUN_OPT_BLOCK 0
 
 #include "mLibInclude.h"
 
@@ -40,15 +37,12 @@ public:
 		resetGPUMemory();
 
 		m_warpingSolver = NULL;
-		m_terraSolver = NULL;
 		m_optSolver = NULL;
 
 		m_warpingSolverPatch = NULL;
-		m_terraBlockSolver = NULL;
-		m_optBlockSolver = NULL;
 
         m_params.useCUDA    = (bool)RUN_CUDA;
-        m_params.useTerra   = (bool)RUN_TERRA;
+        m_params.useTerra   = false;
         m_params.useOpt     = (bool)RUN_OPT;
         m_params.useCeres   = (bool)RUN_CERES;
 
@@ -56,11 +50,9 @@ public:
 #if RUN_CUDA
 		m_warpingSolver = new CUDAWarpingSolver(m_image.getWidth(), m_image.getHeight());	
 #endif
-#if RUN_TERRA
-		m_terraSolver = new TerraSolverPoissonImageEditing(m_image.getWidth(), m_image.getHeight(), "PoissonImageEditing.t", "gaussNewtonGPU");
-#endif
+
 #if RUN_OPT
-		m_optSolver = new TerraSolverPoissonImageEditing(m_image.getWidth(), m_image.getHeight(), "PoissonImageEditingAD.t", "gaussNewtonGPU");
+		m_optSolver = new TerraSolverPoissonImageEditing(m_image.getWidth(), m_image.getHeight(), "poisson_image_editing.t", "gaussNewtonGPU");
 #endif
 #if RUN_CERES
         m_ceresSolver = new CeresSolverPoissonImageEditing(m_image.getWidth(), m_image.getHeight());
@@ -74,12 +66,7 @@ public:
 #if RUN_CUDA_BLOCK
 		m_warpingSolverPatch = new CUDAPatchSolverWarping(m_image.getWidth(), m_image.getHeight());
 #endif
-#if RUN_TERRA_BLOCK
-		m_terraBlockSolver = new TerraSolverPoissonImageEditing(m_image.getWidth(), m_image.getHeight(), "PoissonImageEditing.t", "gaussNewtonBlockGPU");
-#endif
-#if RUN_OPT_BLOCK
-		m_optBlockSolver = new TerraSolverPoissonImageEditing(m_image.getWidth(), m_image.getHeight(), "PoissonImageEditingAD.t", "gaussNewtonBlockGPU");
-#endif
+
 		
 	}
 
@@ -119,12 +106,9 @@ public:
 		cutilSafeCall(cudaFree(d_mask));
 
 		SAFE_DELETE(m_warpingSolver);
-		SAFE_DELETE(m_terraSolver);
 		SAFE_DELETE(m_optSolver);
 
 		SAFE_DELETE(m_warpingSolverPatch);
-		SAFE_DELETE(m_terraBlockSolver);
-		SAFE_DELETE(m_optBlockSolver);
 	}
 
 	ColorImageR32G32B32A32* solve()
@@ -141,12 +125,6 @@ public:
 		std::cout << "=======CUDA=======" << std::endl;
 		resetGPUMemory();
 		m_warpingSolver->solveGN(d_image, d_target, d_mask, nonLinearIter, linearIter, weightFit, weightReg);		
-		copyResultToCPU();
-#endif
-#if RUN_TERRA
-		std::cout << "\n\n========TERRA========" << std::endl;
-		resetGPUMemory();
-		m_terraSolver->solve(d_image, d_target, d_mask, nonLinearIter, linearIter, patchIter, weightFit, weightReg);
 		copyResultToCPU();
 #endif
 #if RUN_OPT
@@ -209,18 +187,6 @@ public:
 		m_warpingSolverPatch->solveGN(d_image, d_target, d_mask, nonLinearIter, linearIter, patchIter, weightFit, weightReg);
 		copyResultToCPU();
 #endif
-#if RUN_TERRA_BLOCK
-		std::cout << "\n\n======TERRA_BLOCK=========" << std::endl;
-		resetGPUMemory();
-		m_terraBlockSolver->solve(d_image, d_target, d_mask, nonLinearIter, linearIter, patchIter, weightFit, weightReg );
-		copyResultToCPU();
-#endif
-#if RUN_TERRA_BLOCK
-		std::cout << "\n\n======OPT_BLOCK=========" << std::endl;
-		resetGPUMemory();
-		m_optBlockSolver->solve(d_image, d_target, d_mask, nonLinearIter, linearIter, patchIter, weightFit, weightReg);
-		copyResultToCPU();
-#endif
         double optGNCost = m_params.useOpt ? m_optSolver->finalCost() : nan(nullptr);
         double optLMCost = nan(nullptr);
         double ceresCost = nan(nullptr);
@@ -250,12 +216,9 @@ private:
     CombinedSolverParameters m_params;
 
 	CUDAWarpingSolver*	    m_warpingSolver;
-	TerraSolverPoissonImageEditing* m_terraSolver;
 	TerraSolverPoissonImageEditing* m_optSolver;
     CeresSolverPoissonImageEditing* m_ceresSolver;
     EigenSolverPoissonImageEditing* m_eigenSolver;
 
 	CUDAPatchSolverWarping* m_warpingSolverPatch;
-	TerraSolverPoissonImageEditing* m_terraBlockSolver;
-	TerraSolverPoissonImageEditing* m_optBlockSolver;
 };

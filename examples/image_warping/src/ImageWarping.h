@@ -148,15 +148,12 @@ public:
         if (m_params.useCUDA)
             m_warpingSolver = std::unique_ptr<CUDAWarpingSolver>(new CUDAWarpingSolver(m_image.getWidth(), m_image.getHeight()));
 
-        if (m_params.useTerra)
-            m_warpingSolverTerra = std::unique_ptr<TerraSolverWarping>(new TerraSolverWarping(m_image.getWidth(), m_image.getHeight(), "ImageWarping.t", "gaussNewtonGPU"));
-
         if (m_params.useOpt) {
-            m_warpingSolverTerraAD = std::unique_ptr<TerraSolverWarping>(new TerraSolverWarping(m_image.getWidth(), m_image.getHeight(), "ImageWarpingAD.t", "gaussNewtonGPU"));
+            m_warpingSolverTerraAD = std::unique_ptr<TerraSolverWarping>(new TerraSolverWarping(m_image.getWidth(), m_image.getHeight(), "image_warping.t", "gaussNewtonGPU"));
 		}
 
         if (m_params.useOptLM) {
-            m_warpingSolverTerraLMAD = std::unique_ptr<TerraSolverWarping>(new TerraSolverWarping(m_image.getWidth(), m_image.getHeight(), "ImageWarpingAD.t", "LMGPU"));
+            m_warpingSolverTerraLMAD = std::unique_ptr<TerraSolverWarping>(new TerraSolverWarping(m_image.getWidth(), m_image.getHeight(), "image_warping.t", "LMGPU"));
         }
 
 		if (m_params.useCeres) {

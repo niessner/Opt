@@ -14,7 +14,7 @@
     <ProjectGuid>{CA9DD020-FC04-44B1-8741-AFC2A99756D1}</ProjectGuid>
     <Keyword>Win32Proj</Keyword>
     <RootNamespace>DepthWithColor.D3D</RootNamespace>
-    <ProjectName>IntrinsicLP</ProjectName>
+    <ProjectName>intrinsic_image_decomposition</ProjectName>
   </PropertyGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'" Label="Configuration">
@@ -146,8 +146,7 @@ xcopy /Y /D "$(ProjectDir)..\..\API\release\include\*.h" "."</Command>
   </ItemGroup>
   <ItemGroup>
     <None Include="..\..\API\src\precision.t" />
-    <None Include="SmoothingLaplacianFloat3AD.t" />
-    <None Include="SmoothingLaplacianFloat3AD_full.t" />
+    <None Include="intrinsic_image_decomposition.t" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

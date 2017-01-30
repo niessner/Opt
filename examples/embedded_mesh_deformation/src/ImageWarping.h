@@ -21,19 +21,20 @@ class ImageWarping
 			m_result = *mesh;
 			m_initial = m_result;
 
-            m_params.useOpt = true;
+            /*m_params.useOpt = true;
             m_params.useOptLM = false;
             m_params.numIter = 32;
             m_params.nonLinearIter = 1;
             m_params.linearIter = 4000;
             m_params.earlyOut = false;
+            */
 
-            /* LM is good here 
+            /* LM is good here */
             m_params.useOpt = false;
             m_params.useOptLM = true;
             m_params.numIter = 32;
             m_params.nonLinearIter = 5;
-            */
+            
             m_params.linearIter = 125;
 
 			unsigned int N = (unsigned int)mesh->n_vertices();
@@ -49,8 +50,8 @@ class ImageWarping
 			cutilSafeCall(cudaMalloc(&d_neighbourOffset, sizeof(int)*(N+1)));
 		
 			resetGPUMemory();	
-			m_optSolver = new TerraSolver(N, 2 * E, d_neighbourIdx, d_neighbourOffset, "MeshDeformationAD.t", "gaussNewtonGPU");
-            m_optLMSolver = new TerraSolver(N, 2 * E, d_neighbourIdx, d_neighbourOffset, "MeshDeformationAD.t", "LMGPU");
+			m_optSolver = new TerraSolver(N, 2 * E, d_neighbourIdx, d_neighbourOffset, "embedded_mesh_deformation.t", "gaussNewtonGPU");
+            m_optLMSolver = new TerraSolver(N, 2 * E, d_neighbourIdx, d_neighbourOffset, "embedded_mesh_deformation.t", "LMGPU");
 
 		} 
 

@@ -29,7 +29,6 @@ private:
     SFSSolverInput                  m_solverInputCPU;
 
     std::unique_ptr<CUDAImageSolver>  m_cudaSolver;
-    std::unique_ptr<OptImageSolver>	  m_terraSolver;
     std::unique_ptr<OptImageSolver>	  m_optSolver;
     std::unique_ptr<OptImageSolver>	  m_optLMSolver;
     std::unique_ptr<CeresImageSolver> m_ceresSolver;
@@ -57,10 +56,8 @@ public:
 		resetGPUMemory();
 
         m_cudaSolver = make_unique<CUDAImageSolver>(m_result->width(), m_result->height());
-        m_terraSolver = make_unique<OptImageSolver>(m_result->width(), m_result->height(), "shapeFromShading.t", "gaussNewtonGPU");
-        m_optSolver = make_unique<OptImageSolver>(m_result->width(), m_result->height(), "shapeFromShadingAD.t", "gaussNewtonGPU");
-        m_optLMSolver = make_unique<OptImageSolver>(m_result->width(), m_result->height(), "shapeFromShadingAD.t", "LMGPU");
-        //m_optSolver = new OptImageSolver(m_result->width(), m_result->height(), "shapeFromShadingADHacked.t", "gaussNewtonGPU");
+        m_optSolver = make_unique<OptImageSolver>(m_result->width(), m_result->height(), "shape_from_shading.t", "gaussNewtonGPU");
+        m_optLMSolver = make_unique<OptImageSolver>(m_result->width(), m_result->height(), "shape_from_shading.t", "LMGPU");
         m_ceresSolver = make_unique<CeresImageSolver>(m_result->width(), m_result->height());
 	}
 
@@ -80,13 +77,6 @@ public:
             std::cout << "CUDA" << std::endl;
             resetGPUMemory();
             m_cudaSolver->solve(m_result, m_solverInputGPU);
-        }
-
-        if (m_params.useTerra)
-        {
-            std::cout << "\n\nTERRA" << std::endl;
-            resetGPUMemory();
-            m_terraSolver->solve(m_result, m_solverInputGPU, m_optTerraIters);
         }
 
         if (m_params.useOpt)

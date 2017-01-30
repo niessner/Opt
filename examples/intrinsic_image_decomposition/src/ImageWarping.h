@@ -25,8 +25,8 @@ class ImageWarping
 						
 			resetGPUMemory();
 
-            m_gnSolver = new TerraSolver(m_image.getWidth(), m_image.getHeight(), "SmoothingLaplacianFloat3AD.t", "gaussNewtonGPU");
-            m_lmSolver = new TerraSolver(m_image.getWidth(), m_image.getHeight(), "SmoothingLaplacianFloat3AD.t", "LMGPU");
+            m_gnSolver = new TerraSolver(m_image.getWidth(), m_image.getHeight(), "intrinsic_image_decomposition.t", "gaussNewtonGPU");
+            m_lmSolver = new TerraSolver(m_image.getWidth(), m_image.getHeight(), "intrinsic_image_decomposition.t", "LMGPU");
 		}
 
 		void resetGPUMemory()

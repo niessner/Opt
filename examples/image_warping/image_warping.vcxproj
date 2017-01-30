@@ -14,7 +14,7 @@
     <ProjectGuid>{CA9DD020-FC04-44B1-8741-AFC2A99756D1}</ProjectGuid>
     <Keyword>Win32Proj</Keyword>
     <RootNamespace>DepthWithColor.D3D</RootNamespace>
-    <ProjectName>PoissonImageEditing</ProjectName>
+    <ProjectName>image_warping</ProjectName>
   </PropertyGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'" Label="Configuration">
@@ -34,24 +34,15 @@
   <ImportGroup Label="ExtensionSettings">
     <Import Project="$(VCTargetsPath)\BuildCustomizations\CUDA 7.5.props" />
   </ImportGroup>
-  <ImportGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'" Label="PropertySheets">
-    <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
-  </ImportGroup>
-  <ImportGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'" Label="PropertySheets">
+  <ImportGroup Label="PropertySheets">
     <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
   </ImportGroup>
   <PropertyGroup Label="UserMacros" />
-  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
-    <LinkIncremental>true</LinkIncremental>
-    <ExecutablePath>$(DXSDK_DIR)Utilities\bin\x64;$(DXSDK_DIR)Utilities\bin\x86;$(ExecutablePath)</ExecutablePath>
-    <IncludePath>C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA\v7.5\include;$(IncludePath);$(DXSDK_DIR)Include;$(KINECTSDK10_DIR)\inc;$(CUDA_INC_PATH);$(ProjectDir)..\..\mLib\include;$(ProjectDir)..\..\..\..\mLibExternal\include;$(ProjectDir)..\..\..\..\mLib\include;$(ProjectDir)..\..\cusp-v0.5.1\cusp;$(ProjectDir);</IncludePath>
-    <LibraryPath>C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA\v7.5\lib\x64;$(LibraryPath);$(DXSDK_DIR)Lib\x64;$(KINECTSDK10_DIR)\lib\amd64;</LibraryPath>
-  </PropertyGroup>
-  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
+  <PropertyGroup>
     <LinkIncremental>false</LinkIncremental>
     <ExecutablePath>$(DXSDK_DIR)Utilities\bin\x64;$(DXSDK_DIR)Utilities\bin\x86;$(ExecutablePath)</ExecutablePath>
-    <IncludePath>C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA\v7.5\include;$(IncludePath);$(DXSDK_DIR)Include;$(KINECTSDK10_DIR)\inc;$(CUDA_INC_PATH);$(ProjectDir)..\..\mLib\include;$(ProjectDir)..\..\..\..\mLibExternal\include;$(ProjectDir)..\..\..\..\mLib\include;$(ProjectDir)..\..\cusp-v0.5.1\cusp;$(ProjectDir);../../../../mLibExternal/libsWindows/ceres-windows\ceres-solver\include\;../../../../mLibExternal/libsWindows/ceres-windows\glog\src\windows;../../../../mLibExternal/libsWindows/ceres-windows\win\include</IncludePath>
-    <LibraryPath>C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA\v7.5\lib\x64;$(LibraryPath);$(DXSDK_DIR)Lib\x64;$(KINECTSDK10_DIR)\lib\amd64;$(CUDA_LIB_PATH);..\..\..\..\mLibExternal\libsWindows\lib64\</LibraryPath>
+    <IncludePath>C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA\v7.5\include;$(IncludePath);$(DXSDK_DIR)Include;$(KINECTSDK10_DIR)\inc;..\..\mLib\include;..\..\..\..\mLib\include;..\..\cusp-v0.5.1\cusp;../../../../mLibExternal/libsWindows/ceres-windows\ceres-solver\include\;../../../../mLibExternal/libsWindows/ceres-windows\glog\src\windows;../../../../mLibExternal/libsWindows/ceres-windows\win\include</IncludePath>
+    <LibraryPath>C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA\v7.5\lib\x64;$(LibraryPath);$(DXSDK_DIR)Lib\x64;$(KINECTSDK10_DIR)\lib\amd64;..\..\..\..\mLibExternal\libsWindows\lib64\</LibraryPath>
   </PropertyGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
     <ClCompile>
@@ -64,7 +55,7 @@
       <ExceptionHandling>Sync</ExceptionHandling>
       <PreprocessorDefinitions>NOMINMAX;WIN32;_DEBUG;DEBUG;PROFILE;_CONSOLE;D3DXFX_LARGEADDRESS_HANDLE;_CRT_SECURE_NO_WARNINGS;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <BasicRuntimeChecks>EnableFastChecks</BasicRuntimeChecks>
-      <AdditionalIncludeDirectories>$(ProjectDir)\src\cutil\inc;$(ProjectDir)\src\;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>$(ProjectDir)src\cutil\inc;$(ProjectDir)\..\..\..\..\mLibExternal/libsWindows/ceres-windows\ceres-solver\include\;$(ProjectDir)\..\..\..\..\mLibExternal/libsWindows/ceres-windows\glog\src\windows;$(ProjectDir)\..\..\..\..\mLibExternal/libsWindows/ceres-windows\win\include;$(ProjectDir)\;$(ProjectDir)\src\;$(ProjectDir)\..\..\..\..\mLibExternal/include/;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
     </ClCompile>
     <Link>
       <AdditionalDependencies>Opt.lib;cublas.lib;cusparse.lib;winmm.lib;comctl32.lib;Shlwapi.lib;cudart.lib;%(AdditionalDependencies)</AdditionalDependencies>
@@ -75,7 +66,7 @@
       <EnableDPIAwareness>true</EnableDPIAwareness>
     </Manifest>
     <CudaCompile>
-      <Include>$(ProjectDir)\src\cutil\inc;$(ProjectDir)</Include>
+      <Include>$(ProjectDir)\src\cutil\inc;$(ProjectDir)\</Include>
       <TargetMachinePlatform>64</TargetMachinePlatform>
       <CodeGeneration>compute_30,sm_30;compute_35,sm_35</CodeGeneration>
       <MaxRegCount>62</MaxRegCount>
@@ -87,6 +78,14 @@ xcopy /Y /D "..\..\API\release\bin\*.dll" "."
 xcopy /Y /D "..\..\API\release\lib\*.lib" "."
 xcopy /Y /D "..\..\API\release\include\*.h" "."</Command>
     </PreBuildEvent>
+    <CustomBuildStep>
+      <Command>
+      </Command>
+    </CustomBuildStep>
+    <CustomBuildStep>
+      <Outputs>
+      </Outputs>
+    </CustomBuildStep>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
     <ClCompile>
@@ -99,10 +98,14 @@ xcopy /Y /D "..\..\API\release\include\*.h" "."</Command>
       <FloatingPointModel>Fast</FloatingPointModel>
       <ExceptionHandling>Sync</ExceptionHandling>
       <PreprocessorDefinitions>NOMINMAX;WIN32;NDEBUG;_WINDOWS;D3DXFX_LARGEADDRESS_HANDLE;_CRT_SECURE_NO_WARNINGS;GOOGLE_GLOG_DLL_DECL=;USE_CERES;%(PreprocessorDefinitions)</PreprocessorDefinitions>
-      <AdditionalIncludeDirectories>$(ProjectDir)\src\cutil\inc;$(ProjectDir)\src\;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>$(ProjectDir)src\cutil\inc;$(ProjectDir)\..\..\..\..\mLibExternal/libsWindows/ceres-windows\ceres-solver\include\;$(ProjectDir)\..\..\..\..\mLibExternal/libsWindows/ceres-windows\glog\src\windows;$(ProjectDir)\..\..\..\..\mLibExternal/libsWindows/ceres-windows\win\include;$(ProjectDir)\;$(ProjectDir)\src\;$(ProjectDir)\..\..\..\..\mLibExternal/include/;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <SDLCheck>false</SDLCheck>
+      <InlineFunctionExpansion>AnySuitable</InlineFunctionExpansion>
+      <FavorSizeOrSpeed>Speed</FavorSizeOrSpeed>
+      <BufferSecurityCheck>false</BufferSecurityCheck>
     </ClCompile>
     <Link>
-      <AdditionalDependencies>Opt.lib;libglog_static.lib;ceres.lib;cublas.lib;cusparse.lib;winmm.lib;comctl32.lib;Shlwapi.lib;cudart.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalDependencies>Opt.lib;ceres.lib;libglog_static.lib;cublas.lib;cusparse.lib;winmm.lib;comctl32.lib;Shlwapi.lib;cudart.lib;%(AdditionalDependencies)</AdditionalDependencies>
       <GenerateDebugInformation>true</GenerateDebugInformation>
       <EnableCOMDATFolding>true</EnableCOMDATFolding>
       <SubSystem>Console</SubSystem>
@@ -113,7 +116,7 @@ xcopy /Y /D "..\..\API\release\include\*.h" "."</Command>
     </Manifest>
     <CudaCompile>
       <TargetMachinePlatform>64</TargetMachinePlatform>
-      <Include>$(ProjectDir)\src\cutil\inc;$(ProjectDir)</Include>
+      <Include>$(ProjectDir)\src\cutil\inc;$(ProjectDir)\</Include>
       <CodeGeneration>compute_35,sm_35</CodeGeneration>
       <MaxRegCount>62</MaxRegCount>
       <FastMath>true</FastMath>
@@ -125,27 +128,39 @@ xcopy /Y /D "..\..\API\release\bin\*.dll" "."
 xcopy /Y /D "..\..\API\release\lib\*.lib" "."
 xcopy /Y /D "..\..\API\release\include\*.h" "."</Command>
     </PreBuildEvent>
+    <CustomBuildStep>
+      <Command>
+      </Command>
+    </CustomBuildStep>
+    <CustomBuildStep>
+      <Outputs>
+      </Outputs>
+    </CustomBuildStep>
   </ItemDefinitionGroup>
   <ItemGroup>
-    <ClCompile Include="src\CeresSolverPoissonImageEditing.cpp" />
+    <ClCompile Include="src\CeresSolverImageWarping.cpp" />
     <ClCompile Include="src\CUDAPatchSolverWarping.cpp" />
     <ClCompile Include="src\CUDAWarpingSolver.cpp" />
     <ClCompile Include="src\main.cpp" />
     <ClCompile Include="src\mLibSource.cpp" />
-    <ClCompile Include="src\EigenSolverPoissonImageEditing.cpp" />
   </ItemGroup>
   <ItemGroup>
-    <ClInclude Include="src\CeresSolverPoissonImageEditing.h" />
+    <ClInclude Include="..\shared\CudaArray.h" />
+    <ClInclude Include="..\shared\cudaUtil.h" />
+    <ClInclude Include="..\shared\OptUtils.h" />
+    <ClInclude Include="..\shared\Precision.h" />
+    <ClInclude Include="..\shared\SolverIteration.h" />
+    <ClInclude Include="src\CeresSolverImageWarping.h" />
+    <ClInclude Include="src\Configure.h" />
     <ClInclude Include="src\CUDAPatchSolverWarping.h" />
     <ClInclude Include="src\CUDATimer.h" />
     <ClInclude Include="src\CUDAWarpingSolver.h" />
-    <ClInclude Include="src\EigenSolverPoissonImageEditing.h" />
     <ClInclude Include="src\ImageWarping.h" />
     <ClInclude Include="src\PatchSolverWarpingParameters.h" />
     <ClInclude Include="src\PatchSolverWarpingEquations.h" />
     <ClInclude Include="src\PatchSolverWarpingState.h" />
     <ClInclude Include="src\PatchSolverWarpingUtil.h" />
-    <ClInclude Include="src\TerraSolverPoissonImageEditing.h" />
+    <ClInclude Include="src\TerraSolverWarping.h" />
     <ClInclude Include="src\WarpingSolverEquations.h" />
     <ClInclude Include="src\WarpingSolverParameters.h" />
     <ClInclude Include="src\WarpingSolverState.h" />
@@ -166,7 +181,9 @@ xcopy /Y /D "..\..\API\release\include\*.h" "."</Command>
     <CudaCompile Include="src\WarpingSolver.cu" />
   </ItemGroup>
   <ItemGroup>
-    <None Include="PoissonImageEditingAD.t" />
+    <None Include="..\..\API\src\precision.t" />
+    <None Include="..\shared\opt_precision.t" />
+    <None Include="image_warping.t" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

@@ -14,7 +14,7 @@
     <ProjectGuid>{2F60F3FF-47AB-4ACB-AD79-2AF4617863FB}</ProjectGuid>
     <Keyword>Win32Proj</Keyword>
     <RootNamespace>DepthWithColor.D3D</RootNamespace>
-    <ProjectName>MeshDeformationED</ProjectName>
+    <ProjectName>embedded_mesh_deformation</ProjectName>
   </PropertyGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'" Label="Configuration">
@@ -151,8 +151,7 @@ xcopy /Y /D "..\..\API\release\include\*.h" "."</Command>
   </ItemGroup>
   <ItemGroup>
     <None Include="..\..\API\src\precision.t" />
-    <None Include="MeshDeformationAD.t" />
-    <None Include="MeshDeformationEDSimple.t" />
+    <None Include="embedded_mesh_deformation.t" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

@@ -96,7 +96,7 @@ class ImageWarping
 
 
 
-            m_optWarpingSolver = new TerraWarpingSolver(N, d_neighbourIdx.size(), d_neighbourIdx.data(), d_neighbourOffset.data(), "MeshDeformationAD.t", "gaussNewtonGPU");
+            m_optWarpingSolver = new TerraWarpingSolver(N, d_neighbourIdx.size(), d_neighbourIdx.data(), d_neighbourOffset.data(), "robust_nonrigid_alignment.t", "gaussNewtonGPU");
 		} 
 
 

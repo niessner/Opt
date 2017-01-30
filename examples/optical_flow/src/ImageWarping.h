@@ -41,7 +41,7 @@ public:
 		resetGPU();
 
 
-		m_solverOpt = new TerraSolverWarping(sourceImage.getWidth(), sourceImage.getHeight(), "OpticalFlowAD.t", "gaussNewtonGPU");
+		m_solverOpt = new TerraSolverWarping(sourceImage.getWidth(), sourceImage.getHeight(), "optical_flow.t", "gaussNewtonGPU");
 
 	}
 
