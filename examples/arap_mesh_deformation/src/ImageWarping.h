@@ -85,9 +85,8 @@ class ImageWarping
 			}
 
 			m_warpingSolver	= new CUDAWarpingSolver(N);
-			//m_terraWarpingSolver = make_unique<TerraWarpingSolver>(N, 2 * E, d_neighbourIdx, d_neighbourOffset, "MeshDeformation.t", "gaussNewtonGPU");				
-            m_optWarpingSolver = make_unique<TerraWarpingSolver>(N, 2 * E, d_neighbourIdx, d_neighbourOffset, "MeshDeformationAD.t", "gaussNewtonGPU");
-            m_optLMWarpingSolver = make_unique<TerraWarpingSolver>(N, 2 * E, d_neighbourIdx, d_neighbourOffset, "MeshDeformationAD.t", "LMGPU");
+            m_optWarpingSolver = make_unique<TerraWarpingSolver>(N, 2 * E, d_neighbourIdx, d_neighbourOffset, "arap_mesh_deformation.t", "gaussNewtonGPU");
+            m_optLMWarpingSolver = make_unique<TerraWarpingSolver>(N, 2 * E, d_neighbourIdx, d_neighbourOffset, "arap_mesh_deformation.t", "LMGPU");
             m_ceresWarpingSolver = new CeresWarpingSolver(m_initial);
 		} 
 

@@ -15,9 +15,13 @@ public:
         update(newData.data(), newData.size());
     }
 
+    void readBack(T* cpuBuffer, size_t count) {
+        cutilSafeCall(cudaMemcpy(cpuBuffer, m_data, sizeof(T)*min(count,m_size), cudaMemcpyDeviceToHost));
+    }
+
     void readBack(std::vector<T>& cpuBuffer) {
         cpuBuffer.resize(m_size);
-        cutilSafeCall(cudaMemcpy(cpuBuffer.data(), m_data, sizeof(T)*m_size, cudaMemcpyDeviceToHost));
+        readBack(cpuBuffer.data(), m_size);
     }
 
     void destructiveResize(size_t count) {

@@ -9,7 +9,6 @@ local A = ad.classes
 
 local C = util.C
 
-
 local use_pitched_memory = true
 local use_split_sums = true
 local use_condition_scheduling = true
