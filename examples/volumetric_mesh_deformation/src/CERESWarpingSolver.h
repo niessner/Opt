@@ -10,47 +10,63 @@
 #include "../../shared/Precision.h"
 #include "../../shared/SolverIteration.h"
 
+#include "OptSolver.h"
+
+
+#define GLOG_NO_ABBREVIATED_SEVERITIES
+#include "ceres/ceres.h"
+#include "glog/logging.h"
+using ceres::DynamicAutoDiffCostFunction;
+using ceres::AutoDiffCostFunction;
+using ceres::CostFunction;
+using ceres::Problem;
+using ceres::Solver;
+
 #ifdef _WIN32
 #ifndef USE_CERES
 #define USE_CERES
 #endif
 #endif
 
+class SolverBase {
+public:
+    SolverBase(const std::vector<unsigned int>& dims) : m_dims(dims) {}
+    virtual double solve(const NamedParameters& solverParameters, const NamedParameters& problemParameters, bool profileSolve, std::vector<SolverIteration>& iter) {
+        fprintf(stderr, "No solve implemented\n");
+        return m_finalCost;
+    }
+    double finalCost() const {
+        return m_finalCost;
+    }
+protected:
+    double m_finalCost = nan(nullptr);
+    std::vector<unsigned int> m_dims;
+};
 
-class CERESWarpingSolver
+class CeresSolverBase : public SolverBase {
+public:
+    CeresSolverBase(const std::vector<unsigned int>& dims) : SolverBase(dims) {}
+
+    virtual double solve(const NamedParameters& solverParameters, const NamedParameters& problemParameters, bool profileSolve, std::vector<SolverIteration>& iter) override {
+        fprintf(stderr, "No Ceres solve implemented\n");
+        return m_finalCost;
+    }
+
+protected:
+    double launchProfiledSolveAndSummary(const std::unique_ptr<Solver::Options>& options, Problem* problem, bool profileSolve, std::vector<SolverIteration>& iter);
+    std::unique_ptr<Solver::Options> initializeOptions(const NamedParameters& solverParameters) const;
+};
+
+
+class CeresSolver : public CeresSolverBase
 {
 	public:
-		CERESWarpingSolver(unsigned int width, unsigned int height, unsigned int depth);
-		~CERESWarpingSolver();
+        CeresSolver(const std::vector<unsigned int>& dims) : CeresSolverBase(dims) {}
+        virtual double solve(const NamedParameters& solverParameters, const NamedParameters& problemParameters, bool profileSolve, std::vector<SolverIteration>& iter) override;
 
-		void solve(float3* d_vertexPosFloat3,
-				   float3* d_anglesFloat3,
-				   float3* d_vertexPosFloat3Urshape,
-				   float3* d_vertexPosTargetFloat3,
-				   float weightFit,
-                   float weightReg,
-                   std::vector<SolverIteration>& iter);
-
-        double finalCost() const {
-            return m_finalCost;
-        }
-
-
-	private:
-		vec3d* vertexPosDouble3;
-		vec3d* anglesDouble3;
-
-		float3* h_vertexPosFloat3;
-		float3* h_anglesFloat3;
-		float3* h_vertexPosFloat3Urshape;
-		float3* h_vertexPosTargetFloat3;
-
-		unsigned int m_width, m_height, m_depth;
-		unsigned int voxelCount;
-        double m_finalCost = nan(nullptr);
 };
 #ifndef USE_CERES
-CERESWarpingSolver::CERESWarpingSolver(unsigned int, unsigned int, unsigned int) {}
-CERESWarpingSolver::~CERESWarpingSolver() {}
-void CERESWarpingSolver::solve(float3*, float3*, float3*, float3*, float, float, std::vector<SolverIteration>&) {}
+CeresSolver::CeresSolver(unsigned int, unsigned int, unsigned int) {}
+CeresSolver::~CeresSolver() {}
+void CeresSolver::solve(float3*, float3*, float3*, float3*, float, float, std::vector<SolverIteration>&) {}
 #endif

@@ -10,17 +10,32 @@ extern "C" {
 #include "../../shared/Precision.h"
 #include <cuda_runtime.h>
 #include <cudaUtil.h>
-
-
-//std::vector<MultiDimensionalArray> images, 
+#include <algorithm>
 
 class OptSolver;
-
+/** 
+    Uses parallel vectors, fairly efficient for small # of parameters.
+    If parameter count could be large, consider better approaches 
+*/
 class NamedParameters {
     friend OptSolver;
+public:
     void** data() const {
         return (void**)m_data.data();
     }
+    void set(const std::string& name, void* data) {
+        auto location = std::find(m_names.begin(), m_names.end(), name);
+        if (location == m_names.end()) {
+            m_names.push_back(name);
+            m_data.push_back(data);
+        } else {
+            *location = name;
+        }
+    }
+    std::vector<std::string> names() const {
+        return m_names;
+    }
+
 protected:
     std::vector<void*> m_data;
     std::vector<std::string> m_names;
@@ -51,32 +66,19 @@ public:
 		}
 	}
 
-    void setProblemParam(std::string name, void* data) {
-        m_problemParameters.m_names.push_back(name);
-        m_problemParameters.m_data.push_back(data);
-    }
-
-    void setSolverParam(std::string name, void* data) {
-        m_solverParameters.m_names.push_back(name);
-        m_solverParameters.m_data.push_back(data);
-    }
-
-    void solve(std::vector<SolverIteration>& iters)
-	{
-		//void* solverParams[] = { &nNonLinearIterations, &nLinearIterations, &nBlockIterations };
-
-        //problemParams = { d_x, d_a, d_urshape, d_constraints, &weightFitSqrt, &weightRegSqrt };
-        
-        launchProfiledSolve(m_optimizerState, m_plan, m_problemParameters.data(), m_solverParameters.data(), iters);
+    double solve(const NamedParameters& solverParameters, const NamedParameters& problemParameters, bool profiledSolve, std::vector<SolverIteration>& iters) {
+        if (profiledSolve) {
+            launchProfiledSolve(m_optimizerState, m_plan, problemParameters.data(), solverParameters.data(), iters);
+        } else {
+            Opt_ProblemSolve(m_optimizerState, m_plan, problemParameters.data(), solverParameters.data());
+        }
         m_finalCost = Opt_ProblemCurrentCost(m_optimizerState, m_plan);
+        return m_finalCost;
 	}
 
     double finalCost() const {
         return m_finalCost;
     }
-
-    NamedParameters m_solverParameters;
-    NamedParameters m_problemParameters;
 
     double m_finalCost = nan(nullptr);
 	Opt_State*		m_optimizerState;
