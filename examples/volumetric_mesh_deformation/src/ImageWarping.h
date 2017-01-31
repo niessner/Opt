@@ -7,7 +7,7 @@
 
 #include "CUDAWarpingSolver.h"
 #include "CERESWarpingSolver.h"
-#include "TerraSolverWarping.h"
+#include "OptSolver.h"
 #include "OpenMesh.h"
 
 #include "../../shared/CombinedSolverParameters.h"
@@ -41,11 +41,11 @@ class ImageWarping
 			m_relativeCoords = new float3[N];
 
 			resetGPUMemory();
-			
+            std::vector<uint32_t> dims = { (uint)m_dims.x, (uint)m_dims.y, (uint)m_dims.z };
 			m_warpingSolver         = make_unique<CUDAWarpingSolver>(m_nNodes);
 			m_warpingSolverCeres    = make_unique<CERESWarpingSolver>(m_dims.x + 1, m_dims.y + 1, m_dims.z + 1);
-			m_warpingSolverOpt      = make_unique<TerraSolverWarping>(m_dims.x+1, m_dims.y+1, m_dims.z+1, "volumetric_mesh_deformation.t", "gaussNewtonGPU");
-            m_warpingSolverOptLM    = make_unique<TerraSolverWarping>(m_dims.x + 1, m_dims.y + 1, m_dims.z + 1, "volumetric_mesh_deformation.t", "LMGPU");
+            m_warpingSolverOpt = std::make_unique<OptSolver>(dims, "volumetric_mesh_deformation.t", "gaussNewtonGPU");
+            m_warpingSolverOptLM = std::make_unique<OptSolver>(dims, "volumetric_mesh_deformation.t", "LMGPU");
 		}
 
 		void setConstraints(float alpha)
@@ -270,12 +270,22 @@ class ImageWarping
 				copyResultToCPUFromFloat3();
 			}
 
+            float weightFitSqrt = sqrtf(weightFit);
+            float weightRegSqrt = sqrtf(weightReg);
 			if (m_params.useOpt)
 			{
 				m_result = m_initial;
 				resetGPUMemory();
 				std::cout << "//////////// (OPT GN) ///////////////" << std::endl;
-                m_warpingSolverOpt->solve(d_gridPosFloat3, d_gridAnglesFloat3, d_gridPosFloat3Urshape, d_gridPosTargetFloat3, m_params.nonLinearIter, m_params.linearIter, 1, weightFit, weightReg, m_optIters);
+                m_warpingSolverOpt->setProblemParam("Offset",       d_gridPosFloat3);
+                m_warpingSolverOpt->setProblemParam("Angle",        d_gridAnglesFloat3);
+                m_warpingSolverOpt->setProblemParam("UrShape",      d_gridPosFloat3Urshape);
+                m_warpingSolverOpt->setProblemParam("Constraints",  d_gridPosTargetFloat3);
+                m_warpingSolverOpt->setProblemParam("w_fitSqrt",    &weightFitSqrt);
+                m_warpingSolverOpt->setProblemParam("w_regSqrt",    &weightRegSqrt);
+                m_warpingSolverOpt->setSolverParam("nonLinearIterations", &m_params.nonLinearIter);
+                m_warpingSolverOpt->setSolverParam("linearIterations", &m_params.linearIter);
+                m_warpingSolverOpt->solve(m_optIters);
 
 				copyResultToCPUFromFloat3();
 			}
@@ -285,7 +295,15 @@ class ImageWarping
                 m_result = m_initial;
                 resetGPUMemory();
                 std::cout << "//////////// (OPT LM) ///////////////" << std::endl;
-                m_warpingSolverOptLM->solve(d_gridPosFloat3, d_gridAnglesFloat3, d_gridPosFloat3Urshape, d_gridPosTargetFloat3, m_params.nonLinearIter, m_params.linearIter, 1, weightFit, weightReg, m_optLMIters);
+                m_warpingSolverOptLM->setProblemParam("Offset", d_gridPosFloat3);
+                m_warpingSolverOptLM->setProblemParam("Angle", d_gridAnglesFloat3);
+                m_warpingSolverOptLM->setProblemParam("UrShape", d_gridPosFloat3Urshape);
+                m_warpingSolverOptLM->setProblemParam("Constraints", d_gridPosTargetFloat3);
+                m_warpingSolverOptLM->setProblemParam("w_fitSqrt", &weightFitSqrt);
+                m_warpingSolverOptLM->setProblemParam("w_regSqrt", &weightRegSqrt);
+                m_warpingSolverOptLM->setSolverParam("nonLinearIterations", &m_params.nonLinearIter);
+                m_warpingSolverOptLM->setSolverParam("linearIterations", &m_params.linearIter);
+                m_warpingSolverOptLM->solve(m_optLMIters);
 
                 copyResultToCPUFromFloat3();
             }
@@ -402,8 +420,8 @@ class ImageWarping
 
         std::unique_ptr<CUDAWarpingSolver>	m_warpingSolver;
         std::unique_ptr<CERESWarpingSolver>	m_warpingSolverCeres;
-		std::unique_ptr<TerraSolverWarping>	m_warpingSolverOpt;
-        std::unique_ptr<TerraSolverWarping>	m_warpingSolverOptLM;
+        std::unique_ptr<OptSolver>	m_warpingSolverOpt;
+        std::unique_ptr<OptSolver>	m_warpingSolverOptLM;
 
         std::vector<SolverIteration> m_ceresIters;
         std::vector<SolverIteration> m_optIters;

@@ -137,6 +137,7 @@ xcopy /Y /D "$(ProjectDir)..\..\API\release\include\*.h" "."</Command>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="src\CERESWarpingSolver.h" />
+    <ClInclude Include="src\CombinedSolver.h" />
     <ClInclude Include="src\CUDATimer.h" />
     <ClInclude Include="src\CUDAWarpingSolver.h" />
     <ClInclude Include="src\ImageWarping.h" />
@@ -159,7 +160,6 @@ xcopy /Y /D "$(ProjectDir)..\..\API\release\include\*.h" "."</Command>
     <Reference Include="System.Xml" />
   </ItemGroup>
   <ItemGroup>
-    <CudaCompile Include="src\TerraSolverWarping.cu" />
     <CudaCompile Include="src\WarpingSolver.cu" />
   </ItemGroup>
   <ItemGroup>
