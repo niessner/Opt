@@ -24,6 +24,7 @@ As an early release there are some things that are not complete that will be imp
 
 These issues will improve over time, but if you run into issues, just send us an email:
 
+* mmara at cs dot stanford dot edu
 * zdevito at cs dot stanford dot edu
 * niessner at cs dot stanford dot edu
 

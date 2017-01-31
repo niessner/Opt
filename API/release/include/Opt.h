@@ -3,6 +3,12 @@
 typedef struct Opt_State 	Opt_State;
 typedef struct Opt_Plan 	Opt_Plan;
 typedef struct Opt_Problem 	Opt_Problem;
+/*
+struct Opt_InitializationParameters {
+	bool doublePrecision;
+	bool printTimingInformation;
+	bool timeIndividualKernels;
+};*/
 
 //allocate a new independant context for Opt
 Opt_State* Opt_NewState();
