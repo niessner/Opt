@@ -28,24 +28,9 @@ using ceres::Solver;
 #endif
 #endif
 
-class SolverBase {
-public:
-    SolverBase(const std::vector<unsigned int>& dims) : m_dims(dims) {}
-    virtual double solve(const NamedParameters& solverParameters, const NamedParameters& problemParameters, bool profileSolve, std::vector<SolverIteration>& iter) {
-        fprintf(stderr, "No solve implemented\n");
-        return m_finalCost;
-    }
-    double finalCost() const {
-        return m_finalCost;
-    }
-protected:
-    double m_finalCost = nan(nullptr);
-    std::vector<unsigned int> m_dims;
-};
-
 class CeresSolverBase : public SolverBase {
 public:
-    CeresSolverBase(const std::vector<unsigned int>& dims) : SolverBase(dims) {}
+    CeresSolverBase(const std::vector<unsigned int>& dims) : m_dims(dims) {}
 
     virtual double solve(const NamedParameters& solverParameters, const NamedParameters& problemParameters, bool profileSolve, std::vector<SolverIteration>& iter) override {
         fprintf(stderr, "No Ceres solve implemented\n");
@@ -55,6 +40,7 @@ public:
 protected:
     double launchProfiledSolveAndSummary(const std::unique_ptr<Solver::Options>& options, Problem* problem, bool profileSolve, std::vector<SolverIteration>& iter);
     std::unique_ptr<Solver::Options> initializeOptions(const NamedParameters& solverParameters) const;
+    std::vector<unsigned int> m_dims;
 };
 
 

@@ -45,7 +45,7 @@ __inline__ __device__ float evalFDevice(unsigned int variableIdx, SolverInput& i
 	}
 
 	// E_reg
-	float3	 e_reg = make_float3(0.0f, 0.0f, 0.0F);
+	float3	 e_reg = make_float3(0.0f, 0.0f, 0.0f);
 	float3x3 R = evalR(state.d_a[variableIdx]);
 	float3   p = state.d_x[variableIdx];
 	float3   pHat = state.d_urshape[variableIdx];

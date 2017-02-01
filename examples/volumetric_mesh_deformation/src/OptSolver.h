@@ -8,17 +8,17 @@ extern "C" {
 #include "../../shared/OptUtils.h"
 #include "../../shared/CudaArray.h"
 #include "../../shared/Precision.h"
+#include "../../shared/SolverIteration.h"
 #include <cuda_runtime.h>
 #include <cudaUtil.h>
 #include <algorithm>
 
-class OptSolver;
-/** 
-    Uses parallel vectors, fairly efficient for small # of parameters.
-    If parameter count could be large, consider better approaches 
+
+/**
+    Uses SoA, fairly efficient for small # of parameters.
+    If parameter count could be large, consider better approaches
 */
 class NamedParameters {
-    friend OptSolver;
 public:
     void** data() const {
         return (void**)m_data.data();
@@ -28,7 +28,8 @@ public:
         if (location == m_names.end()) {
             m_names.push_back(name);
             m_data.push_back(data);
-        } else {
+        }
+        else {
             *location = name;
         }
     }
@@ -41,10 +42,24 @@ protected:
     std::vector<std::string> m_names;
 };
 
+class SolverBase {
+public:
+    SolverBase() {}
+    virtual double solve(const NamedParameters& solverParameters, const NamedParameters& problemParameters, bool profileSolve, std::vector<SolverIteration>& iter) {
+        fprintf(stderr, "No solve implemented\n");
+        return m_finalCost;
+    }
+    double finalCost() const {
+        return m_finalCost;
+    }
+protected:
+    double m_finalCost = nan(nullptr);
+};
+
 class OptSolver {
 
 public:
-    OptSolver(const std::vector<uint32_t>& dimensions, const std::string& terraFile, const std::string& optName) : m_optimizerState(nullptr), m_problem(nullptr), m_plan(nullptr)
+    OptSolver(const std::vector<unsigned int>& dimensions, const std::string& terraFile, const std::string& optName) : m_optimizerState(nullptr), m_problem(nullptr), m_plan(nullptr)
 	{
 		m_optimizerState = Opt_NewState();
 		m_problem = Opt_ProblemDefine(m_optimizerState, terraFile.c_str(), optName.c_str());
@@ -85,3 +100,33 @@ public:
 	Opt_Problem*	m_problem;
 	Opt_Plan*		m_plan;
 };
+
+
+template<class T> size_t index_of(T element, const std::vector<T>& v) {
+    auto location = std::find(v.begin(), v.end(), element);
+    if (location != v.end()) {
+        return std::distance(v.begin(), location);
+    }
+    else {
+        return -1;
+    }
+}
+
+template<class T> T* getTypedParameterImage(std::string name, const NamedParameters& solverParameters) {
+    auto i = index_of(name, solverParameters.names());
+    return (T*)(solverParameters.data()[i]);
+}
+
+// TODO: Error handling
+template<class T> void findAndCopyArrayToCPU(std::string name, std::vector<T>& cpuBuffer, const NamedParameters& solverParameters) {
+    auto i = index_of(name, solverParameters.names());
+    cutilSafeCall(cudaMemcpy(cpuBuffer.data(), solverParameters.data()[i], sizeof(T)*cpuBuffer.size(), cudaMemcpyDeviceToHost));
+}
+template<class T> void findAndCopyToArrayFromCPU(std::string name, std::vector<T>& cpuBuffer, const NamedParameters& solverParameters) {
+    auto i = index_of(name, solverParameters.names());
+    cutilSafeCall(cudaMemcpy(solverParameters.data()[i], cpuBuffer.data(), sizeof(T)*cpuBuffer.size(), cudaMemcpyHostToDevice));
+}
+template<class T> T getTypedParameter(std::string name, const NamedParameters& solverParameters) {
+    auto i = index_of(name, solverParameters.names());
+    return *(T*)solverParameters.data()[i];
+}

@@ -137,13 +137,12 @@ xcopy /Y /D "$(ProjectDir)..\..\API\release\include\*.h" "."</Command>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="src\CERESWarpingSolver.h" />
-    <ClInclude Include="src\CombinedSolver.h" />
     <ClInclude Include="src\CUDATimer.h" />
     <ClInclude Include="src\CUDAWarpingSolver.h" />
     <ClInclude Include="src\ImageWarping.h" />
     <ClInclude Include="src\OpenMesh.h" />
+    <ClInclude Include="src\OptSolver.h" />
     <ClInclude Include="src\RotationHelper.h" />
-    <ClInclude Include="src\TerraSolverWarping.h" />
     <ClInclude Include="src\WarpingSolverEquations.h" />
     <ClInclude Include="src\WarpingSolverParameters.h" />
     <ClInclude Include="src\WarpingSolverState.h" />

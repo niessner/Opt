@@ -42,7 +42,7 @@ class ImageWarping
 
 			resetGPUMemory();
             std::vector<unsigned int> dims = { (uint)m_dims.x + 1, (uint)m_dims.y + 1, (uint)m_dims.z + 1 };
-			m_warpingSolver         = make_unique<CUDAWarpingSolver>(m_nNodes);
+			m_warpingSolver         = std::make_unique<CUDAWarpingSolver>(dims);
             m_warpingSolverCeres    = std::make_unique<CeresSolver>(dims);
             m_warpingSolverOpt      = std::make_unique<OptSolver>(dims, "volumetric_mesh_deformation.t", "gaussNewtonGPU");
             m_warpingSolverOptLM    = std::make_unique<OptSolver>(dims, "volumetric_mesh_deformation.t", "LMGPU");
@@ -253,7 +253,7 @@ class ImageWarping
 			float weightFit = 1.0f;
 			float weightReg = 0.05f;
 
-
+            m_params.useCUDA = true;
             m_params.useOptLM = true;
             m_params.useCeres = true;
 
@@ -262,6 +262,7 @@ class ImageWarping
 
             float weightFitSqrt = sqrtf(weightFit);
             float weightRegSqrt = sqrtf(weightReg);
+
             NamedParameters probParams;
             probParams.set("Offset", d_gridPosFloat3);
             probParams.set("Angle", d_gridAnglesFloat3);
@@ -279,7 +280,7 @@ class ImageWarping
 				m_result = m_initial;
 				resetGPUMemory();
 				std::cout << "//////////// (CUDA) ///////////////" << std::endl;
-				m_warpingSolver->solveGN(m_dims, d_gridPosFloat3, d_gridAnglesFloat3, d_gridPosFloat3Urshape, d_gridPosTargetFloat3, m_params.nonLinearIter, m_params.linearIter, weightFit, weightReg);
+                m_warpingSolver->solve(solverParams, probParams, true, m_optIters);
 
 				copyResultToCPUFromFloat3();
 			}
