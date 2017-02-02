@@ -7,17 +7,14 @@
 
 #include "CUDAWarpingSolver.h"
 #include "CERESWarpingSolver.h"
-#include "OptSolver.h"
 #include "OpenMesh.h"
 
+#include "../../shared/OptSolver.h"
 #include "../../shared/CombinedSolverParameters.h"
 #include "../../shared/SolverIteration.h"
 
-// From the future (C++14)
-template<typename T, typename... Args>
-std::unique_ptr<T> make_unique(Args&&... args) {
-    return std::unique_ptr<T>(new T(std::forward<Args>(args)...));
-}
+
+
 
 class ImageWarping
 {

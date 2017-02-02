@@ -4,7 +4,9 @@
 #include <iostream>
 #include <iomanip>
 #include <cmath>
+#include <fstream>
 #include <algorithm>
+#include <string>
 #include "Precision.h"
 #include "CombinedSolverParameters.h"
 

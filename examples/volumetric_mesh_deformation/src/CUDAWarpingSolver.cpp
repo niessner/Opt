@@ -1,5 +1,6 @@
 #include "CUDAWarpingSolver.h"
-#include "OptSolver.h"
+#include "../../shared/OptUtils.h"
+#include "../../shared/OptSolver.h"
 
 extern "C" double ImageWarpingSolveGNStub(SolverInput& input, SolverState& state, SolverParameters& parameters);	// gauss newton
 

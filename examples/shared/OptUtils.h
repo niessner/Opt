@@ -3,6 +3,7 @@ extern "C" {
 #include <Opt.h>
 }
 #include "SolverIteration.h"
+#include "NamedParameters.h"
 #include <vector>
 #include "cudaUtil.h"
 #include <cmath>
@@ -61,4 +62,34 @@ static void launchProfiledSolve(Opt_State* state, Opt_Plan* plan, void** problem
         iterationSummary.push_back(SolverIteration(cost, timeMS));
         t.tick();
     }
+}
+
+
+template<class T> size_t index_of(T element, const std::vector<T>& v) {
+    auto location = std::find(v.begin(), v.end(), element);
+    if (location != v.end()) {
+        return std::distance(v.begin(), location);
+    }
+    else {
+        return -1;
+    }
+}
+
+template<class T> T* getTypedParameterImage(std::string name, const NamedParameters& solverParameters) {
+    auto i = index_of(name, solverParameters.names());
+    return (T*)(solverParameters.data()[i]);
+}
+
+// TODO: Error handling
+template<class T> void findAndCopyArrayToCPU(std::string name, std::vector<T>& cpuBuffer, const NamedParameters& solverParameters) {
+    auto i = index_of(name, solverParameters.names());
+    cutilSafeCall(cudaMemcpy(cpuBuffer.data(), solverParameters.data()[i], sizeof(T)*cpuBuffer.size(), cudaMemcpyDeviceToHost));
+}
+template<class T> void findAndCopyToArrayFromCPU(std::string name, std::vector<T>& cpuBuffer, const NamedParameters& solverParameters) {
+    auto i = index_of(name, solverParameters.names());
+    cutilSafeCall(cudaMemcpy(solverParameters.data()[i], cpuBuffer.data(), sizeof(T)*cpuBuffer.size(), cudaMemcpyHostToDevice));
+}
+template<class T> T getTypedParameter(std::string name, const NamedParameters& solverParameters) {
+    auto i = index_of(name, solverParameters.names());
+    return *(T*)solverParameters.data()[i];
 }

@@ -10,7 +10,7 @@
 #include "../../shared/Precision.h"
 #include "../../shared/SolverIteration.h"
 
-#include "OptSolver.h"
+#include "../../shared/CeresSolverBase.h"
 
 
 #define GLOG_NO_ABBREVIATED_SEVERITIES
@@ -27,21 +27,6 @@ using ceres::Solver;
 #define USE_CERES
 #endif
 #endif
-
-class CeresSolverBase : public SolverBase {
-public:
-    CeresSolverBase(const std::vector<unsigned int>& dims) : m_dims(dims) {}
-
-    virtual double solve(const NamedParameters& solverParameters, const NamedParameters& problemParameters, bool profileSolve, std::vector<SolverIteration>& iter) override {
-        fprintf(stderr, "No Ceres solve implemented\n");
-        return m_finalCost;
-    }
-
-protected:
-    double launchProfiledSolveAndSummary(const std::unique_ptr<Solver::Options>& options, Problem* problem, bool profileSolve, std::vector<SolverIteration>& iter);
-    std::unique_ptr<Solver::Options> initializeOptions(const NamedParameters& solverParameters) const;
-    std::vector<unsigned int> m_dims;
-};
 
 
 class CeresSolver : public CeresSolverBase

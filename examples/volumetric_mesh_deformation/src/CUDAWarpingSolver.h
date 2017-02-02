@@ -5,7 +5,7 @@
 #include "cudaUtil.h"
 #include "WarpingSolverParameters.h"
 #include "WarpingSolverState.h"
-#include "OptSolver.h"
+#include "../../shared/OptSolver.h"
 #include <vector>
 
 class CUDAWarpingSolver : public SolverBase

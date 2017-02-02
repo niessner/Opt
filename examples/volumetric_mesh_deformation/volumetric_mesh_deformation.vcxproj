@@ -130,18 +130,24 @@ xcopy /Y /D "$(ProjectDir)..\..\API\release\include\*.h" "."</Command>
     </PreBuildEvent>
   </ItemDefinitionGroup>
   <ItemGroup>
+    <ClCompile Include="..\shared\CeresSolverBase.cpp" />
     <ClCompile Include="src\CERESWarpingSolver.cpp" />
     <ClCompile Include="src\CUDAWarpingSolver.cpp" />
     <ClCompile Include="src\main.cpp" />
     <ClCompile Include="src\mLibSource.cpp" />
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="..\shared\CeresSolverBase.h" />
+    <ClInclude Include="..\shared\NamedParameters.h" />
+    <ClInclude Include="..\shared\OptSolver.h" />
+    <ClInclude Include="..\shared\OptUtils.h" />
+    <ClInclude Include="..\shared\Precision.h" />
+    <ClInclude Include="..\shared\SolverBase.h" />
     <ClInclude Include="src\CERESWarpingSolver.h" />
     <ClInclude Include="src\CUDATimer.h" />
     <ClInclude Include="src\CUDAWarpingSolver.h" />
     <ClInclude Include="src\ImageWarping.h" />
     <ClInclude Include="src\OpenMesh.h" />
-    <ClInclude Include="src\OptSolver.h" />
     <ClInclude Include="src\RotationHelper.h" />
     <ClInclude Include="src\WarpingSolverEquations.h" />
     <ClInclude Include="src\WarpingSolverParameters.h" />
