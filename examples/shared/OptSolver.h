@@ -14,7 +14,7 @@ extern "C" {
 #include "NamedParameters.h"
 #include "SolverBase.h"
 
-class OptSolver {
+class OptSolver : public SolverBase {
 
 public:
     OptSolver(const std::vector<unsigned int>& dimensions, const std::string& terraFile, const std::string& optName) : m_optimizerState(nullptr), m_problem(nullptr), m_plan(nullptr)
@@ -39,7 +39,7 @@ public:
 		}
 	}
 
-    double solve(const NamedParameters& solverParameters, const NamedParameters& problemParameters, bool profiledSolve, std::vector<SolverIteration>& iters) {
+    virtual double solve(const NamedParameters& solverParameters, const NamedParameters& problemParameters, bool profiledSolve, std::vector<SolverIteration>& iters) override {
         if (profiledSolve) {
             launchProfiledSolve(m_optimizerState, m_plan, problemParameters.data(), solverParameters.data(), iters);
         } else {

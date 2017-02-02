@@ -13,8 +13,14 @@
 #include "../../shared/CombinedSolverParameters.h"
 #include "../../shared/SolverIteration.h"
 
-
-
+/*
+class CombinedSolverBase {
+public:
+    virtual void preSolve
+protected:
+    NamedParameters m_solverParams;
+    NamedParameters m_problemParams;
+};*/
 
 class ImageWarping
 {
@@ -407,10 +413,10 @@ class ImageWarping
 
         CombinedSolverParameters m_params;
 
-        std::unique_ptr<CUDAWarpingSolver>	m_warpingSolver;
-        std::unique_ptr<CeresSolver> m_warpingSolverCeres;
-        std::unique_ptr<OptSolver>	m_warpingSolverOpt;
-        std::unique_ptr<OptSolver>	m_warpingSolverOptLM;
+        std::unique_ptr<SolverBase>	m_warpingSolver;
+        std::unique_ptr<SolverBase> m_warpingSolverCeres;
+        std::unique_ptr<SolverBase>	m_warpingSolverOpt;
+        std::unique_ptr<SolverBase>	m_warpingSolverOptLM;
 
         std::vector<SolverIteration> m_ceresIters;
         std::vector<SolverIteration> m_optIters;
