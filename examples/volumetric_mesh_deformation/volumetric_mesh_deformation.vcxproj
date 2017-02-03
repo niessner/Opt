@@ -138,6 +138,7 @@ xcopy /Y /D "$(ProjectDir)..\..\API\release\include\*.h" "."</Command>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="..\shared\CeresSolverBase.h" />
+    <ClInclude Include="..\shared\CombinedSolverBase.h" />
     <ClInclude Include="..\shared\NamedParameters.h" />
     <ClInclude Include="..\shared\OptSolver.h" />
     <ClInclude Include="..\shared\OptUtils.h" />
@@ -146,7 +147,6 @@ xcopy /Y /D "$(ProjectDir)..\..\API\release\include\*.h" "."</Command>
     <ClInclude Include="src\CERESWarpingSolver.h" />
     <ClInclude Include="src\CUDATimer.h" />
     <ClInclude Include="src\CUDAWarpingSolver.h" />
-    <ClInclude Include="src\ImageWarping.h" />
     <ClInclude Include="src\OpenMesh.h" />
     <ClInclude Include="src\RotationHelper.h" />
     <ClInclude Include="src\WarpingSolverEquations.h" />

@@ -1,5 +1,5 @@
 ﻿#include "main.h"
-#include "ImageWarping.h"
+#include "CombinedSolver.h"
 #include "OpenMesh.h"
 
 int main(int argc, const char * argv[])
@@ -20,10 +20,10 @@ int main(int argc, const char * argv[])
 	}
     printf("Faces: %d\nVertices: %d\n", mesh->n_faces(), mesh->n_vertices());
 
-	ImageWarping warping(mesh);
-    SimpleMesh* res = warping.solve();
-
-	warping.saveGraphResults();
+    CombinedSolver solver(mesh);
+    solver.solveAll();
+    SimpleMesh* res = solver.result();
+    solver.saveGraphResults();
 
 	if (!OpenMesh::IO::write_mesh(*res, "out.ply"))
 	{

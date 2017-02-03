@@ -9,24 +9,21 @@
 #include "CERESWarpingSolver.h"
 #include "OpenMesh.h"
 
-#include "../../shared/OptSolver.h"
-#include "../../shared/CombinedSolverParameters.h"
-#include "../../shared/SolverIteration.h"
+#include "../../shared/CombinedSolverBase.h"
 
-/*
-class CombinedSolverBase {
-public:
-    virtual void preSolve
-protected:
-    NamedParameters m_solverParams;
-    NamedParameters m_problemParams;
-};*/
-
-class ImageWarping
+class CombinedSolver : public CombinedSolverBase
 {
 	public:
-		ImageWarping(const SimpleMesh* mesh)
+        CombinedSolver(const SimpleMesh* mesh)
 		{
+
+            m_combinedSolverParameters.useCUDA = true;
+            m_combinedSolverParameters.useOptLM = true;
+            m_combinedSolverParameters.useCeres = true;
+
+            m_combinedSolverParameters.nonLinearIter = 20;
+            m_combinedSolverParameters.linearIter = 60;
+
 			m_result = *mesh;
 			m_initial = m_result;
 
@@ -45,11 +42,40 @@ class ImageWarping
 
 			resetGPUMemory();
             std::vector<unsigned int> dims = { (uint)m_dims.x + 1, (uint)m_dims.y + 1, (uint)m_dims.z + 1 };
-			m_warpingSolver         = std::make_unique<CUDAWarpingSolver>(dims);
-            m_warpingSolverCeres    = std::make_unique<CeresSolver>(dims);
-            m_warpingSolverOpt      = std::make_unique<OptSolver>(dims, "volumetric_mesh_deformation.t", "gaussNewtonGPU");
-            m_warpingSolverOptLM    = std::make_unique<OptSolver>(dims, "volumetric_mesh_deformation.t", "LMGPU");
+            addSolver(std::make_shared<CUDAWarpingSolver>(dims), "CUDA", m_combinedSolverParameters.useCUDA);
+            addSolver(std::make_shared<CeresSolver>(dims), "Ceres", m_combinedSolverParameters.useCeres);
+            addOptSolvers(dims, "volumetric_mesh_deformation.t");
 		}
+
+        virtual void combinedSolveInit() override {
+            float weightFit = 1.0f;
+            float weightReg = 0.05f;
+
+            m_weightFitSqrt = sqrtf(weightFit);
+            m_weightRegSqrt = sqrtf(weightReg);
+
+            m_problemParams.set("Offset", d_gridPosFloat3);
+            m_problemParams.set("Angle", d_gridAnglesFloat3);
+            m_problemParams.set("UrShape", d_gridPosFloat3Urshape);
+            m_problemParams.set("Constraints", d_gridPosTargetFloat3);
+            m_problemParams.set("w_fitSqrt", &m_weightFitSqrt);
+            m_problemParams.set("w_regSqrt", &m_weightRegSqrt);
+
+            m_solverParams.set("nonLinearIterations", &m_combinedSolverParameters.nonLinearIter);
+            m_solverParams.set("linearIterations", &m_combinedSolverParameters.linearIter);
+        }
+        virtual void preSingleSolve() override {
+            m_result = m_initial;
+            resetGPUMemory();
+        }
+        virtual void postSingleSolve() override {
+            copyResultToCPUFromFloat3();
+        }
+        virtual void combinedSolveFinalize() override {
+            if (m_combinedSolverParameters.profileSolve) {
+                ceresIterationComparison();
+            }
+        }
 
 		void setConstraints(float alpha)
 		{
@@ -238,7 +264,7 @@ class ImageWarping
 			setConstraints(1.0f);
 		}
 
-		~ImageWarping()
+        ~CombinedSolver()
 		{
 
 			cutilSafeCall(cudaFree(d_gridPosTargetFloat3));
@@ -251,77 +277,9 @@ class ImageWarping
 
 		}
 
-		SimpleMesh* solve()
-		{
-			float weightFit = 1.0f;
-			float weightReg = 0.05f;
-
-            m_params.useCUDA = true;
-            m_params.useOptLM = true;
-            m_params.useCeres = true;
-
-			m_params.nonLinearIter = 20;
-            m_params.linearIter = 60;
-
-            float weightFitSqrt = sqrtf(weightFit);
-            float weightRegSqrt = sqrtf(weightReg);
-
-            NamedParameters probParams;
-            probParams.set("Offset", d_gridPosFloat3);
-            probParams.set("Angle", d_gridAnglesFloat3);
-            probParams.set("UrShape", d_gridPosFloat3Urshape);
-            probParams.set("Constraints", d_gridPosTargetFloat3);
-            probParams.set("w_fitSqrt", &weightFitSqrt);
-            probParams.set("w_regSqrt", &weightRegSqrt);
-
-            NamedParameters solverParams;
-            solverParams.set("nonLinearIterations", &m_params.nonLinearIter);
-            solverParams.set("linearIterations", &m_params.linearIter);
-
-			if (m_params.useCUDA)
-			{
-				m_result = m_initial;
-				resetGPUMemory();
-				std::cout << "//////////// (CUDA) ///////////////" << std::endl;
-                m_warpingSolver->solve(solverParams, probParams, true, m_optIters);
-
-				copyResultToCPUFromFloat3();
-			}
-			if (m_params.useOpt)
-			{
-				m_result = m_initial;
-				resetGPUMemory();
-				std::cout << "//////////// (OPT GN) ///////////////" << std::endl;
-                m_warpingSolverOpt->solve(solverParams, probParams, true, m_optIters);
-				copyResultToCPUFromFloat3();
-			}
-
-            if (m_params.useOptLM)
-            {
-                m_result = m_initial;
-                resetGPUMemory();
-                std::cout << "//////////// (OPT LM) ///////////////" << std::endl;
-                m_warpingSolverOptLM->solve(solverParams, probParams, true, m_optLMIters);
-                copyResultToCPUFromFloat3();
-            }
-
-			if (m_params.useCeres)
-			{
-				m_result = m_initial;
-				resetGPUMemory();
-				std::cout << "//////////// (CERES) ///////////////" << std::endl;
-                m_warpingSolverCeres->solve(solverParams, probParams, true, m_ceresIters);
-
-				copyResultToCPUFromFloat3();
-			}
-
-            saveSolverResults("results/", OPT_DOUBLE_PRECISION ? "_double" : "_float", m_ceresIters, m_optIters, m_optLMIters);
-
-            reportFinalCosts("Mesh Deformation LARAP", m_params, m_warpingSolverOpt->finalCost(), m_warpingSolverOptLM->finalCost(), m_warpingSolverCeres->finalCost());
-
-						
-			return &m_result;
-		}
+        SimpleMesh* result() {
+            return &m_result;
+        }
 
 		int getIndex1D(int3 idx)
         {
@@ -410,15 +368,6 @@ class ImageWarping
 		float3* d_gridPosFloat3;
 		float3* d_gridPosFloat3Urshape;
 		float3* d_gridAnglesFloat3;
-
-        CombinedSolverParameters m_params;
-
-        std::unique_ptr<SolverBase>	m_warpingSolver;
-        std::unique_ptr<SolverBase> m_warpingSolverCeres;
-        std::unique_ptr<SolverBase>	m_warpingSolverOpt;
-        std::unique_ptr<SolverBase>	m_warpingSolverOptLM;
-
-        std::vector<SolverIteration> m_ceresIters;
-        std::vector<SolverIteration> m_optIters;
-        std::vector<SolverIteration> m_optLMIters;
+        float m_weightFitSqrt;
+        float m_weightRegSqrt;
 };
