@@ -14,15 +14,9 @@
 class CombinedSolver : public CombinedSolverBase
 {
 	public:
-        CombinedSolver(const SimpleMesh* mesh)
+        CombinedSolver(const SimpleMesh* mesh, CombinedSolverParameters params)
 		{
-
-            m_combinedSolverParameters.useCUDA = true;
-            m_combinedSolverParameters.useOptLM = true;
-            m_combinedSolverParameters.useCeres = true;
-
-            m_combinedSolverParameters.nonLinearIter = 20;
-            m_combinedSolverParameters.linearIter = 60;
+            m_combinedSolverParameters = params;
 
 			m_result = *mesh;
 			m_initial = m_result;
@@ -32,16 +26,17 @@ class CombinedSolver : public CombinedSolverBase
 			
 			unsigned int N = (unsigned int)mesh->n_vertices();
 		
-			cutilSafeCall(cudaMalloc(&d_gridPosTargetFloat3, sizeof(float3)*m_nNodes));
-			cutilSafeCall(cudaMalloc(&d_gridPosFloat3, sizeof(float3)*m_nNodes));
-			cutilSafeCall(cudaMalloc(&d_gridPosFloat3Urshape, sizeof(float3)*m_nNodes));
-			cutilSafeCall(cudaMalloc(&d_gridAnglesFloat3, sizeof(float3)*m_nNodes));
+            std::vector<unsigned int> dims = { (uint)m_dims.x + 1, (uint)m_dims.y + 1, (uint)m_dims.z + 1 };
+            m_gridPosFloat3 = createEmptyOptImage(dims, OptImage::Type::FLOAT, 3, OptImage::GPU, true);
+            m_gridAnglesFloat3 = createEmptyOptImage(dims, OptImage::Type::FLOAT, 3, OptImage::GPU, true);
+            m_gridPosFloat3Urshape = createEmptyOptImage(dims, OptImage::Type::FLOAT, 3, OptImage::GPU, true);
+            m_gridPosTargetFloat3 = createEmptyOptImage(dims, OptImage::Type::FLOAT, 3, OptImage::GPU, true);
 
-			m_vertexToVoxels = new int3[N];
-			m_relativeCoords = new float3[N];
+			m_vertexToVoxels.resize(N);
+            m_relativeCoords.resize(N);
 
 			resetGPUMemory();
-            std::vector<unsigned int> dims = { (uint)m_dims.x + 1, (uint)m_dims.y + 1, (uint)m_dims.z + 1 };
+            
             addSolver(std::make_shared<CUDAWarpingSolver>(dims), "CUDA", m_combinedSolverParameters.useCUDA);
             addSolver(std::make_shared<CeresSolver>(dims), "Ceres", m_combinedSolverParameters.useCeres);
             addOptSolvers(dims, "volumetric_mesh_deformation.t");
@@ -54,15 +49,17 @@ class CombinedSolver : public CombinedSolverBase
             m_weightFitSqrt = sqrtf(weightFit);
             m_weightRegSqrt = sqrtf(weightReg);
 
-            m_problemParams.set("Offset", d_gridPosFloat3);
-            m_problemParams.set("Angle", d_gridAnglesFloat3);
-            m_problemParams.set("UrShape", d_gridPosFloat3Urshape);
-            m_problemParams.set("Constraints", d_gridPosTargetFloat3);
+            m_problemParams.set("Offset", m_gridPosFloat3);
+            m_problemParams.set("Angle", m_gridAnglesFloat3);
+            m_problemParams.set("UrShape", m_gridPosFloat3Urshape);
+            m_problemParams.set("Constraints", m_gridPosTargetFloat3);
             m_problemParams.set("w_fitSqrt", &m_weightFitSqrt);
             m_problemParams.set("w_regSqrt", &m_weightRegSqrt);
 
+            
             m_solverParams.set("nonLinearIterations", &m_combinedSolverParameters.nonLinearIter);
             m_solverParams.set("linearIterations", &m_combinedSolverParameters.linearIter);
+            m_solverParams.set("double_precision", &m_combinedSolverParameters.optDoublePrecision);
         }
         virtual void preSingleSolve() override {
             m_result = m_initial;
@@ -79,7 +76,7 @@ class CombinedSolver : public CombinedSolverBase
 
 		void setConstraints(float alpha)
 		{
-			float3* h_gridPosTargetFloat3 = new float3[m_nNodes];
+			std::vector<float3> h_gridPosTargetFloat3(m_nNodes);
 			for (int i = 0; i <= m_dims.x; i++)
 			{
 				for (int j = 0; j <= m_dims.y; j++)
@@ -104,8 +101,7 @@ class CombinedSolver : public CombinedSolverBase
 				}
 			}
 
-			cutilSafeCall(cudaMemcpy(d_gridPosTargetFloat3, h_gridPosTargetFloat3, sizeof(float3)*m_nNodes, cudaMemcpyHostToDevice));
-			delete [] h_gridPosTargetFloat3;
+			cutilSafeCall(cudaMemcpy(m_gridPosTargetFloat3->data(), h_gridPosTargetFloat3.data(), sizeof(float3)*m_nNodes, cudaMemcpyHostToDevice));
 		}
 
 		void computeBoundingBox()
@@ -181,8 +177,8 @@ class CombinedSolver : public CombinedSolverBase
 		{
 			SimpleMesh out;
 
-			float3* h_gridPosTarget = new float3[m_nNodes];
-			cutilSafeCall(cudaMemcpy(h_gridPosTarget, d_gridPosTargetFloat3, sizeof(float3)*m_nNodes, cudaMemcpyDeviceToHost));
+			std::vector<float3> h_gridPosTarget(m_nNodes);
+            cutilSafeCall(cudaMemcpy(h_gridPosTarget.data(), m_gridPosTargetFloat3->data(), sizeof(float3)*m_nNodes, cudaMemcpyDeviceToHost));
 			for (unsigned int i = 0; i < N; i++)
 			{
 				if (h_gridPosTarget[i].x != -std::numeric_limits<float>::infinity())
@@ -190,7 +186,6 @@ class CombinedSolver : public CombinedSolverBase
 					GraphAddSphere(out, SimpleMesh::Point(data[i].x, data[i].y, data[i].z), scale, meshSphere, h_gridPosTarget[i].x != -std::numeric_limits<float>::infinity());
 				}
 			}
-			delete[] h_gridPosTarget;
 
 			for (int i = 0; i <= m_dims.x; i++)
 			{
@@ -212,7 +207,7 @@ class CombinedSolver : public CombinedSolverBase
 
 		void initializeWarpGrid()
 		{
-			float3* h_gridVertexPosFloat3 = new float3[m_nNodes];
+			std::vector<float3> h_gridVertexPosFloat3(m_nNodes);
 			for (int i = 0; i <= m_dims.x; i++)
 			{
 				for (int j = 0; j <= m_dims.y; j++)
@@ -226,11 +221,10 @@ class CombinedSolver : public CombinedSolverBase
 				}
 			}
 
-			cutilSafeCall(cudaMemcpy(d_gridPosFloat3,		 h_gridVertexPosFloat3, sizeof(float3)*m_nNodes, cudaMemcpyHostToDevice));
-			cutilSafeCall(cudaMemcpy(d_gridPosFloat3Urshape, h_gridVertexPosFloat3, sizeof(float3)*m_nNodes, cudaMemcpyHostToDevice));
-			cutilSafeCall(cudaMemset(d_gridAnglesFloat3,	 0, sizeof(float3)*m_nNodes));
+			cutilSafeCall(cudaMemcpy(m_gridPosFloat3->data(),		 h_gridVertexPosFloat3.data(), sizeof(float3)*m_nNodes, cudaMemcpyHostToDevice));
+            cutilSafeCall(cudaMemcpy(m_gridPosFloat3Urshape->data(), h_gridVertexPosFloat3.data(), sizeof(float3)*m_nNodes, cudaMemcpyHostToDevice));
+            cutilSafeCall(cudaMemset(m_gridAnglesFloat3->data(), 0, sizeof(float3)*m_nNodes));
 
-			delete [] h_gridVertexPosFloat3;
 		}
 
 		void resetGPUMemory()
@@ -264,18 +258,6 @@ class CombinedSolver : public CombinedSolverBase
 			setConstraints(1.0f);
 		}
 
-        ~CombinedSolver()
-		{
-
-			cutilSafeCall(cudaFree(d_gridPosTargetFloat3));
-			cutilSafeCall(cudaFree(d_gridPosFloat3));
-			cutilSafeCall(cudaFree(d_gridPosFloat3Urshape));
-			cutilSafeCall(cudaFree(d_gridAnglesFloat3));
-
-			delete [] m_vertexToVoxels;
-			delete [] m_relativeCoords;
-
-		}
 
         SimpleMesh* result() {
             return &m_result;
@@ -302,21 +284,19 @@ class CombinedSolver : public CombinedSolverBase
 				exit(1);
 			}
 
-			float3* h_gridPosUrshapeFloat3 = new float3[m_nNodes];
-			cutilSafeCall(cudaMemcpy(h_gridPosUrshapeFloat3, d_gridPosFloat3Urshape, sizeof(float3)*m_nNodes, cudaMemcpyDeviceToHost));
-			saveGraph("grid.ply", h_gridPosUrshapeFloat3, m_nNodes, 0.05f, meshSphere, meshCone);
-			delete[] h_gridPosUrshapeFloat3;
+			std::vector<float3> h_gridPosUrshapeFloat3(m_nNodes);
+			cutilSafeCall(cudaMemcpy(h_gridPosUrshapeFloat3.data(), m_gridPosFloat3Urshape->data(), sizeof(float3)*m_nNodes, cudaMemcpyDeviceToHost));
+            saveGraph("grid.ply", h_gridPosUrshapeFloat3.data(), m_nNodes, 0.05f, meshSphere, meshCone);
 
-			float3* h_gridPosFloat3 = new float3[m_nNodes];
-			cutilSafeCall(cudaMemcpy(h_gridPosFloat3, d_gridPosFloat3, sizeof(float3)*m_nNodes, cudaMemcpyDeviceToHost));
-			saveGraph("gridOut.ply", h_gridPosFloat3, m_nNodes, 0.05f, meshSphere, meshCone);
-			delete[] h_gridPosFloat3;
+            std::vector<float3> h_gridPosFloat3(m_nNodes);
+			cutilSafeCall(cudaMemcpy(h_gridPosFloat3.data(), m_gridPosFloat3->data(), sizeof(float3)*m_nNodes, cudaMemcpyDeviceToHost));
+            saveGraph("gridOut.ply", h_gridPosFloat3.data(), m_nNodes, 0.05f, meshSphere, meshCone);
 		}
 
 		void copyResultToCPUFromFloat3()
 		{
             std::vector<float3> h_gridPosFloat3(m_nNodes);
-			cutilSafeCall(cudaMemcpy(h_gridPosFloat3.data(), d_gridPosFloat3, sizeof(float3)*m_nNodes, cudaMemcpyDeviceToHost));
+            cutilSafeCall(cudaMemcpy(h_gridPosFloat3.data(), m_gridPosFloat3->data(), sizeof(float3)*m_nNodes, cudaMemcpyDeviceToHost));
 
 			for (SimpleMesh::VertexIter v_it = m_result.vertices_begin(); v_it != m_result.vertices_end(); ++v_it)
 			{
@@ -361,13 +341,13 @@ class CombinedSolver : public CombinedSolverBase
 		int3   m_dims;
 		float3 m_delta;
 
-		int3*   m_vertexToVoxels;
-		float3* m_relativeCoords;
+		std::vector<int3>   m_vertexToVoxels;
+        std::vector<float3> m_relativeCoords;
 
-		float3* d_gridPosTargetFloat3;
-		float3* d_gridPosFloat3;
-		float3* d_gridPosFloat3Urshape;
-		float3* d_gridAnglesFloat3;
+        std::shared_ptr<OptImage> m_gridPosTargetFloat3;
+        std::shared_ptr<OptImage> m_gridPosFloat3;
+        std::shared_ptr<OptImage> m_gridPosFloat3Urshape;
+        std::shared_ptr<OptImage> m_gridAnglesFloat3;
         float m_weightFitSqrt;
         float m_weightRegSqrt;
 };

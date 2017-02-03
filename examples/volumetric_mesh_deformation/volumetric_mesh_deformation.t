@@ -1,11 +1,11 @@
 local W,H,D = Dim("W",0), Dim("H",1), Dim("D",2)
 
-local Offset =      Unknown("Offset", opt_float3,{W,H,D},0)            --vertex.xyz, rotation.xyz <- unknown
-local Angle = 	    Unknown("Angle",opt_float3,{W,H,D},1)	
-local UrShape =     Array("UrShape",opt_float3,{W,H,D},2)        --original position: vertex.xyz
+local Offset =      Unknown("Offset",   opt_float3,{W,H,D},0)            --vertex.xyz, rotation.xyz <- unknown
+local Angle = 	    Unknown("Angle",    opt_float3,{W,H,D},1)	
+local UrShape =     Array("UrShape",    opt_float3,{W,H,D},2)        --original position: vertex.xyz
 local Constraints = Array("Constraints",opt_float3,{W,H,D},3)    --user constraints
-local w_fitSqrt =   Param("w_fitSqrt", float, 4)
-local w_regSqrt =   Param("w_regSqrt", float, 5)
+local w_fitSqrt =   Param("w_fitSqrt",  float, 4)
+local w_regSqrt =   Param("w_regSqrt",  float, 5)
 UsePreconditioner(true)
 
 --fitting

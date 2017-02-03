@@ -11,4 +11,6 @@ struct CombinedSolverParameters {
     unsigned int nonLinearIter = 3;
     unsigned int linearIter = 200;
     unsigned int patchIter = 32;
+    bool profileSolve = true;
+    bool optDoublePrecision = false;
 };

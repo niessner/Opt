@@ -71,7 +71,7 @@ template<class T> size_t index_of(T element, const std::vector<T>& v) {
         return std::distance(v.begin(), location);
     }
     else {
-        return -1;
+        return (size_t)-1;
     }
 }
 
@@ -89,7 +89,15 @@ template<class T> void findAndCopyToArrayFromCPU(std::string name, std::vector<T
     auto i = index_of(name, solverParameters.names());
     cutilSafeCall(cudaMemcpy(solverParameters.data()[i], cpuBuffer.data(), sizeof(T)*cpuBuffer.size(), cudaMemcpyHostToDevice));
 }
-template<class T> T getTypedParameter(std::string name, const NamedParameters& solverParameters) {
-    auto i = index_of(name, solverParameters.names());
-    return *(T*)solverParameters.data()[i];
+template<class T> T getTypedParameter(std::string name, const NamedParameters& params) {
+    auto i = index_of(name, params.names());
+    return *(T*)params.data()[i];
 }
+
+template<class T> void getTypedParameterIfPresent(std::string name, const NamedParameters& params, T& value) {
+    auto i = index_of(name, params.names());
+    if (i != (size_t)-1) {
+        value = *(T*)params.data()[i];
+    }
+}
+

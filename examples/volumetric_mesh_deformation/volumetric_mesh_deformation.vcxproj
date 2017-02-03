@@ -139,12 +139,14 @@ xcopy /Y /D "$(ProjectDir)..\..\API\release\include\*.h" "."</Command>
   <ItemGroup>
     <ClInclude Include="..\shared\CeresSolverBase.h" />
     <ClInclude Include="..\shared\CombinedSolverBase.h" />
+    <ClInclude Include="..\shared\OptImage.h" />
     <ClInclude Include="..\shared\NamedParameters.h" />
     <ClInclude Include="..\shared\OptSolver.h" />
     <ClInclude Include="..\shared\OptUtils.h" />
     <ClInclude Include="..\shared\Precision.h" />
     <ClInclude Include="..\shared\SolverBase.h" />
     <ClInclude Include="src\CERESWarpingSolver.h" />
+    <ClInclude Include="src\CombinedSolver.h" />
     <ClInclude Include="src\CUDATimer.h" />
     <ClInclude Include="src\CUDAWarpingSolver.h" />
     <ClInclude Include="src\OpenMesh.h" />

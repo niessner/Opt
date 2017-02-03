@@ -14,6 +14,29 @@ extern "C" {
 #include "NamedParameters.h"
 #include "SolverBase.h"
 
+static NamedParameters copyParametersAndConvertUnknownsToDouble(const NamedParameters& original) {
+    NamedParameters newParams(original);
+    std::vector<NamedParameters::Parameter> unknownParameters = original.unknownParameters();
+    for (auto p : unknownParameters) {
+        auto gpuDoubleImage = copyImageTo(getDoubleImageFromFloatImage(copyImageTo(p.im, OptImage::Location::CPU)), OptImage::Location::GPU);
+        newParams.set(p.name, gpuDoubleImage);
+    }
+    return newParams;
+}
+
+static void copyUnknownsFromDoubleToFloat(const NamedParameters& floatParams, const NamedParameters& doubleParams) {
+    std::vector<NamedParameters::Parameter> unknownParameters = doubleParams.unknownParameters();
+    for (auto p : unknownParameters) {
+        auto cpuDoubleImage = copyImageTo(p.im, OptImage::Location::CPU);
+        auto cpuFloatImage = getFloatImageFromDoubleImage(cpuDoubleImage);
+        NamedParameters::Parameter param;
+        floatParams.get(p.name, param);
+        copyImage(param.im, cpuFloatImage);
+    }
+}
+
+
+
 class OptSolver : public SolverBase {
 
 public:
@@ -39,21 +62,31 @@ public:
 		}
 	}
 
+
+
     virtual double solve(const NamedParameters& solverParameters, const NamedParameters& problemParameters, bool profiledSolve, std::vector<SolverIteration>& iters) override {
+
+        bool doublePrecision = false;
+        getTypedParameterIfPresent<bool>("double_precision", solverParameters, doublePrecision);
+        NamedParameters finalProblemParameters = problemParameters;
+        if (doublePrecision) {
+            finalProblemParameters = copyParametersAndConvertUnknownsToDouble(problemParameters);
+        }
+        
         if (profiledSolve) {
-            launchProfiledSolve(m_optimizerState, m_plan, problemParameters.data(), solverParameters.data(), iters);
+            launchProfiledSolve(m_optimizerState, m_plan, finalProblemParameters.data().data(), solverParameters.data().data(), iters);
         } else {
-            Opt_ProblemSolve(m_optimizerState, m_plan, problemParameters.data(), solverParameters.data());
+            Opt_ProblemSolve(m_optimizerState, m_plan, finalProblemParameters.data().data(), solverParameters.data().data());
         }
         m_finalCost = Opt_ProblemCurrentCost(m_optimizerState, m_plan);
+
+        if (doublePrecision) {
+            copyUnknownsFromDoubleToFloat(problemParameters, finalProblemParameters);
+        }
+
         return m_finalCost;
 	}
 
-    double finalCost() const {
-        return m_finalCost;
-    }
-
-    double m_finalCost = nan(nullptr);
 	Opt_State*		m_optimizerState;
 	Opt_Problem*	m_problem;
 	Opt_Plan*		m_plan;

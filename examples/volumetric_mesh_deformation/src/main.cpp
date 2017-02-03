@@ -20,7 +20,16 @@ int main(int argc, const char * argv[])
 	}
     printf("Faces: %d\nVertices: %d\n", mesh->n_faces(), mesh->n_vertices());
 
-    CombinedSolver solver(mesh);
+    CombinedSolverParameters params;
+    params.optDoublePrecision = true;
+    params.profileSolve = true;
+    params.useCUDA = true;
+    params.useOptLM = true;
+    params.useCeres = true;
+    params.nonLinearIter = 20;
+    params.linearIter = 60;
+
+    CombinedSolver solver(mesh, params);
     solver.solveAll();
     SimpleMesh* res = solver.result();
     solver.saveGraphResults();
