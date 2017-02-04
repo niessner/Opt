@@ -1,5 +1,5 @@
 ﻿#include "main.h"
-#include "ImageWarping.h"
+#include "CombinedSolver.h"
 #include "OpenMesh.h"
 #include "LandMarkSet.h"
 #include <OpenMesh/Tools/Subdivider/Uniform/SubdividerT.hh>
@@ -7,12 +7,8 @@
 #include <OpenMesh/Tools/Subdivider/Uniform/LoopT.hh>
 #include <OpenMesh/Tools/Subdivider/Uniform/CatmullClarkT.hh>
 #include <OpenMesh/Tools/Subdivider/Uniform/Sqrt3T.hh>
-int main(int argc, const char * argv[])
-{
-	//std::string filename = "Armadillo20k.ply";
-    //const char* markerFilename = "armadillo.mrk";
-    //std::string filename = "raptor_clean.stl";
-    //const char* markerFilename = "raptor.mrk";
+int main(int argc, const char * argv[]) {
+
 	std::string filename = "small_armadillo.ply";
 	const char* markerFilename = "small_armadillo.mrk";
 
@@ -76,14 +72,37 @@ int main(int argc, const char * argv[])
 		subdivider(1);
 		subdivider.detach();
 	}
-	
-	
-
     printf("Faces: %d\nVertices: %d\n", mesh->n_faces(), mesh->n_vertices());
 
-	ImageWarping warping(mesh, constraintsIdx, constraintsTarget, performanceRun, lmOnlyFullSolve);
-    SimpleMesh* res = warping.solve();
-
+    CombinedSolverParameters params;
+    params.numIter = 96;
+    //params.useCUDA = true;
+    params.nonLinearIter = 20;
+    params.linearIter = 1000;
+    params.useOpt = true;
+    params.earlyOut = true;
+    if (performanceRun) {
+        params.useCUDA = false;
+        params.useTerra = false;
+        params.useOpt = true;
+        params.useOptLM = true;
+        params.useCeres = true;
+        params.earlyOut = true;
+        params.nonLinearIter = 20;
+        params.linearIter = 1000;
+    }
+    if (lmOnlyFullSolve) {
+        params.useCUDA = false;
+        params.useOpt = false;
+        params.useOptLM = true;
+        params.linearIter = 1000;// m_image.getWidth()*m_image.getHeight();
+        if (mesh->n_vertices() > 100000) {
+            params.nonLinearIter = mesh->n_vertices() / 5000;
+        }
+    }
+    CombinedSolver solver(mesh, constraintsIdx, constraintsTarget, params);
+    solver.solveAll();
+    SimpleMesh* res = solver.result();
 	if (!OpenMesh::IO::write_mesh(*res, "out.ply"))
 	{
 	        std::cerr << "Error -> File: " << __FILE__ << " Line: " << __LINE__ << " Function: " << __FUNCTION__ << std::endl;

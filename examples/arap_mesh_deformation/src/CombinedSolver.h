@@ -1,7 +1,5 @@
 #pragma once
 
-
-
 #include "mLibInclude.h"
 
 #include <cuda_runtime.h>
@@ -14,6 +12,7 @@
 #include "../../shared/SolverIteration.h"
 #include "../../shared/Precision.h"
 #include "../../shared/CombinedSolverParameters.h"
+#include "../../shared/CombinedSolverBase.h"
 #include <cuda_profiler_api.h>
 // From the future (C++14)
 template<typename T, typename... Args>
@@ -22,21 +21,14 @@ std::unique_ptr<T> make_unique(Args&&... args) {
 }
 
 
-class ImageWarping
+class CombinedSolver : public CombinedSolverBase
 {
 	public:
-        ImageWarping(const SimpleMesh* mesh, std::vector<int> constraintsIdx, std::vector<std::vector<float>> constraintsTarget, bool performanceRun, bool lmOnlyFullSolve) : m_constraintsIdx(constraintsIdx), m_constraintsTarget(constraintsTarget)
+        CombinedSolver(const SimpleMesh* mesh, std::vector<int> constraintsIdx, std::vector<std::vector<float>> constraintsTarget, CombinedSolverParameters params) : m_constraintsIdx(constraintsIdx), m_constraintsTarget(constraintsTarget)
 		{
 			m_result = *mesh;
 			m_initial = m_result;
 
-			m_params.numIter = 96;
-			//m_params.useCUDA = true;
-			m_params.nonLinearIter = 20;
-			m_params.linearIter = 1000;
-
-            m_params.useOpt = true;
-            //m_params.earlyOut = true;
 
 			unsigned int N = (unsigned int)mesh->n_vertices();
 			unsigned int E = (unsigned int)mesh->n_edges();
@@ -51,44 +43,45 @@ class ImageWarping
 			cutilSafeCall(cudaMalloc(&d_neighbourOffset, sizeof(int)*(N+1)));
 		
 			resetGPUMemory();
-			m_params.earlyOut = true;
-            if (performanceRun) {
-                m_params.useCUDA = false;
-                m_params.useTerra = false;
-                m_params.useOpt = true;
-                m_params.useOptLM = true;
-                m_params.useCeres = true;
-                m_params.earlyOut = true;
-				m_params.nonLinearIter = 20;
-				m_params.linearIter = 1000;
-				//m_params.numIter = 32;
-                //m_params.nonLinearIter = 2;
-                //m_params.linearIter = 4000;
-
-                //unsigned int numIter = 10;
-                //unsigned int nonLinearIter = 20;
-                //unsigned int linearIter = 50;
-            }
-			m_lmOnlyFullSolve = lmOnlyFullSolve;
-
-			if (lmOnlyFullSolve) {
-				m_params.useCUDA = false;
-				m_params.useOpt = false;
-				m_params.useOptLM = true;
-				m_params.linearIter = 1000;// m_image.getWidth()*m_image.getHeight();
-				if (N > 100000) {
-					m_params.nonLinearIter = N / 5000;// nonLinearIter;
-				}
-#if !USE_CERES_PCG
-				//m_params.useCeres = false;
-#endif
-			}
+			
 
 			m_warpingSolver	= new CUDAWarpingSolver(N);
             m_optWarpingSolver = make_unique<TerraWarpingSolver>(N, 2 * E, d_neighbourIdx, d_neighbourOffset, "arap_mesh_deformation.t", "gaussNewtonGPU");
             m_optLMWarpingSolver = make_unique<TerraWarpingSolver>(N, 2 * E, d_neighbourIdx, d_neighbourOffset, "arap_mesh_deformation.t", "LMGPU");
             m_ceresWarpingSolver = new CeresWarpingSolver(m_initial);
 		} 
+
+        virtual void combinedSolveInit() override {
+            float weightFit = 1.0f;
+            float weightReg = 0.05f;
+
+            m_weightFitSqrt = sqrtf(weightFit);
+            m_weightRegSqrt = sqrtf(weightReg);
+
+            m_problemParams.set("Offset", m_gridPosFloat3);
+            m_problemParams.set("Angle", m_gridAnglesFloat3);
+            m_problemParams.set("UrShape", m_gridPosFloat3Urshape);
+            m_problemParams.set("Constraints", m_gridPosTargetFloat3);
+            m_problemParams.set("w_fitSqrt", &m_weightFitSqrt);
+            m_problemParams.set("w_regSqrt", &m_weightRegSqrt);
+
+
+            m_solverParams.set("nonLinearIterations", &m_combinedSolverParameters.nonLinearIter);
+            m_solverParams.set("linearIterations", &m_combinedSolverParameters.linearIter);
+            m_solverParams.set("double_precision", &m_combinedSolverParameters.optDoublePrecision);
+        }
+        virtual void preSingleSolve() override {
+            m_result = m_initial;
+            resetGPUMemory();
+        }
+        virtual void postSingleSolve() override {
+            copyResultToCPUFromFloat3();
+        }
+        virtual void combinedSolveFinalize() override {
+            if (m_combinedSolverParameters.profileSolve) {
+                ceresIterationComparison();
+            }
+        }
 
 		void setConstraints(float alpha)
 		{
@@ -174,7 +167,7 @@ class ImageWarping
 			delete [] h_neighbourOffset;
 		}
 
-		~ImageWarping()
+        ~CombinedSolver()
 		{
 			cutilSafeCall(cudaFree(d_anglesFloat3));
 
@@ -307,8 +300,6 @@ class ImageWarping
 		int*	d_neighbourIdx;
 		int* 	d_neighbourOffset;
 
-		bool m_lmOnlyFullSolve;
-
         std::vector<SolverIteration> m_optIters;
         std::vector<SolverIteration> m_optLMIters;
         std::vector<SolverIteration> m_terraIters;
@@ -319,8 +310,6 @@ class ImageWarping
 		std::unique_ptr<TerraWarpingSolver> m_terraWarpingSolver;
         CeresWarpingSolver* m_ceresWarpingSolver;
 		CUDAWarpingSolver*	m_warpingSolver;
-
-        CombinedSolverParameters m_params;
 
 		std::vector<int>				m_constraintsIdx;
 		std::vector<std::vector<float>>	m_constraintsTarget;
