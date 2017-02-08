@@ -2,6 +2,7 @@
 #include <vector>
 #include <algorithm>
 #include "OptImage.h"
+#include "OptGraph.h"
 
 
 /**

@@ -5,7 +5,7 @@ local Offset =      Unknown("Offset", opt_float3,{N},2)            --vertex.xyz,
 local Angle = 	    Unknown("Angle",opt_float3,{N},3)	
 local UrShape =     Array("UrShape",opt_float3,{N},4)        --original position: vertex.xyz
 local Constraints = Array("Constraints",opt_float3,{N},5)    --user constraints
-local G = Graph("G", 6, "v0", {N}, 7, "v1", {N}, 9)
+local G = Graph("G", 6, "v0", {N}, 7, "v1", {N}, 8)
 UsePreconditioner(true)
 
 --fitting

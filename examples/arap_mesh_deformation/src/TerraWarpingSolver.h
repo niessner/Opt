@@ -22,10 +22,8 @@ template <class type> type* createDeviceBuffer(const std::vector<type>& v) {
 class TerraWarpingSolver {
 
 	int* d_headX;
-	int* d_headY;
 
 	int* d_tailX;
-	int* d_tailY;
 
 	int edgeCount;
 
@@ -36,15 +34,6 @@ public:
 		edgeCount = (int)E;
 		m_optimizerState = Opt_NewState();
 		m_problem = Opt_ProblemDefine(m_optimizerState, terraFile.c_str(), optName.c_str());
-
-		std::vector<int> yCoords;
-
-		for (int y = 0; y < (int)edgeCount; ++y) {
-			yCoords.push_back(0);
-		}
-
-		d_headY = createDeviceBuffer(yCoords);
-		d_tailY = createDeviceBuffer(yCoords);
 
 		int* h_offsets = (int*)malloc(sizeof(int)*(vertexCount + 1));
 		cutilSafeCall(cudaMemcpy(h_offsets, d_offsets, sizeof(int)*(vertexCount + 1), cudaMemcpyDeviceToHost));
@@ -66,7 +55,7 @@ public:
 		d_headX = createDeviceBuffer(h_headX);
 		d_tailX = createDeviceBuffer(h_tailX);
 
-		uint32_t dims[] = { vertexCount, 1 };
+		uint32_t dims[] = { vertexCount };
 
 		m_plan = Opt_ProblemPlan(m_optimizerState, m_problem, dims);
 
@@ -81,9 +70,7 @@ public:
 	~TerraWarpingSolver()
 	{
 		cutilSafeCall(cudaFree(d_headX));
-		cutilSafeCall(cudaFree(d_headY));
 		cutilSafeCall(cudaFree(d_tailX));
-		cutilSafeCall(cudaFree(d_tailY));
 
 		if (m_plan) {
 			Opt_PlanFree(m_optimizerState, m_plan);
