@@ -1,59 +1,31 @@
 Opt
 ---
 
-Opt is a DSL for optimization problems in graphics.
+Opt is a DSL for large-scale nonlinear least squares optimization problems in graphics.
 
 ### Prerequisites ###
 
-Opt and all of its examples require a recent version of [Terra](https://github.com/zdevito/terra)/, and [CUDA 7.0](https://developer.nvidia.com/cuda-toolkit-70). On Windows we use Visual Studio 2013 for development, though other versions may also work. Many of the examples also depend on mLib and mLibExternal.
+Opt and all of its examples require a recent version of [Terra](https://github.com/zdevito/terra)/, and [CUDA 7.5](https://developer.nvidia.com/cuda-75-downloads-archive). On Windows we use Visual Studio 2013 for development/compilation, though other versions may also work. Many of the examples also depend on mLib and mLibExternal.
+
+Download and unzip the [terra binary release for windows, release-2016-03-25](https://github.com/zdevito/terra/releases)
 
 Our recommended directory structure for development is:
 
 /DSL/Opt (this repo)
-/DSL/terra
-/DSL/LLVM
-/DSL/LuaJIT-2.0.4
+/DSL/terra (renamed from the fully qualified directory name from the release download)
 
+If you change this repo structure, you must update Opt/API/buildOpt.bat's second argument on line 2 to point to the terra repo. If you compiled terra from scratch, its internal directory structure might also be different from the release, and you will need to update Opt/API/optMake.bat's line 3 to point to the terra binary.
 
-Examples/ShapeFromShading works only on Windows and requires the following:
-
-1. [DirectX SDK (June 2010)](https://www.microsoft.com/en-us/download/details.aspx?id=6812)
-2. [OpenNI 2 SDK](http://structure.io/openni)
-3. [Kinect SDK 1.8](https://www.microsoft.com/en-us/download/details.aspx?id=40278)
-4. [Kinect SDK 2.0](http://www.microsoft.com/en-us/download/details.aspx?id=44561)
-5. mLib
-6. mLibExternal
-
-Make sure mLibExternal/libsWindows/dll64 and OpenNI2\Redist are in your path.
-
-Examples/MeshSmoothingLaplacian works on all platforms, but requires the following:
-1. mLib
-2. mLibExternal
-
-
-### .imagedump file format ###
-
-In order to save out results and intermediate buffers within Opt, we needed a lossless floating-point image format, saver, loader, and visualizer. Ideally we would use an extant and widely supported format. For our use case, we needed something that was either trivial to write save/load code for, or had a well-documented and easily-imported-into-terra C library.
-
-File formats examined but ultimately discarded as impractical without significant engineering effort:
-
-* .exr : Couldn't find lightweight C library
-* .hdr : Not true floating-point (shared exponent)
-* .tiff : Is probably worth exploring further; but hadn't found lightweight C read/write library
-
-Ultimately decided to (for the moment) go the ad-hoc route, and created the .imagedump file format.
-
-Specification:
-
-width : int32
-height : int32
-channelCount : int32
-datatype : int32 (0 means 32-bit floating point, all other values are reserved in case we need to support other types)
-pixelData (row-major, no padding between rows, takes up width*height*channelCount*sizeof(type indicated by datatype)
-
-Implementation in native Terra is in API/src/im.t. CPP implementation is currently ad-hoc within programs and needs to be abstracted; though one can be found in Examples/ShapeFromShading/DumpOptImage.*
-
+The examples/ work on all platforms, but require the following (which will be simplified before release):
+1. mLib, in /DSL/../mLib
+2. mLibExternal, in /DSL/../mLibExternal
+3. Changing your path to include /DSL/../mLibExternal/libsWindows/dll64 (for OpenMesh and Ceres)
+4. Terra's binary path in your $PATH environment variable
 
 ### Troubleshooting ###
 
 If you get "cuInit: cuda reported error 100" when using this code on OS X, you might have gfxCardStatus installed and set with dynamic switching. Fix: switch to "Discrete Only" mode in gfxCardStatus
+
+"The program can't start because cudart64_75.dll is missing from your computer. Try reinstalling the program to fix this problem." Cuda 7.5 is not on your path. Perhaps you didn't install it, or haven't closed Visual Studio since installing it. If you have done both, you'll need to add it to your path environment variable. By default, the path will be "C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA\v7.5\bin"
+
+"The program can't start because terra.dll is missing from your computer. Try reinstalling the program to fix this problem." Terra is not on your path. Perhaps you didn't install it, or haven't closed Visual Studio since installing it.
