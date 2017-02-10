@@ -11,13 +11,6 @@ extern "C" {
 struct float9 {
 	float array[9];
 };
-struct float12 {
-	float array[12];
-};
-
-extern "C" void convertToFloat12(const float3* src0, const float9* src1, float12* target, unsigned int numVars);
-extern "C" void convertFromFloat12(const float12* source, float3* tar0, float9* tar1, unsigned int numVars);
-
 
 template <class type> type* createDeviceBuffer(const std::vector<type>& v) {
 	type* d_ptr;
@@ -85,7 +78,6 @@ public:
 
 
 		m_numUnknown = vertexCount;
-		cutilSafeCall(cudaMalloc(&d_unknowns, sizeof(float12)*vertexCount));
 	}
 
 	~TerraSolver()
@@ -103,7 +95,6 @@ public:
 			Opt_ProblemDelete(m_optimizerState, m_problem);
 		}
 
-		cutilSafeCall(cudaFree(d_unknowns));
 	}
 
 	//void solve(float3* d_unknown, float3* d_target, unsigned int nNonLinearIterations, unsigned int nLinearIterations, unsigned int nBlockIterations, float weightFit, float weightReg)
@@ -120,19 +111,17 @@ public:
 	{
 		unsigned int nBlockIterations = 1;	//invalid just as a dummy;
 
-		convertToFloat12(d_vertexPosFloat3, d_rotsFloat9, d_unknowns, m_numUnknown);
 
 		void* solverParams[] = { &nNonLinearIterations, &nLinearIterations, &nBlockIterations };
 
 		float weightFitSqrt = sqrt(weightFit);
 		float weightRegSqrt = sqrt(weightReg);
 		float weightRotSqrt = sqrt(weightRot);
-		void* problemParams[] = { &weightFitSqrt, &weightRegSqrt, &weightRotSqrt, d_unknowns, d_vertexPosFloat3Urshape, d_vertexPosTargetFloat3, &edgeCount, d_headX, d_headY, d_tailX, d_tailY };
+        void* problemParams[] = { &weightFitSqrt, &weightRegSqrt, &weightRotSqrt, d_vertexPosFloat3, d_rotsFloat9, d_vertexPosFloat3Urshape, d_vertexPosTargetFloat3, &edgeCount, d_headX, d_headY, d_tailX, d_tailY };
 		Opt_ProblemSolve(m_optimizerState, m_plan, problemParams, solverParams);
 
         m_finalCost = Opt_ProblemCurrentCost(m_optimizerState, m_plan);
 
-		convertFromFloat12(d_unknowns, d_vertexPosFloat3, d_rotsFloat9, m_numUnknown);
 	}
 
     double finalCost() const {
@@ -146,5 +135,4 @@ private:
 
     double m_finalCost = nan(nullptr);
 	unsigned int m_numUnknown;
-	float12*		d_unknowns;	//float3 (vertices) + float3 (angles)
 };
