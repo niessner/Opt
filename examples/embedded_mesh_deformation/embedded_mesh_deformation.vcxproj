@@ -133,7 +133,14 @@ xcopy /Y /D "..\..\API\release\include\*.h" "."</Command>
     <ClCompile Include="src\mLibSource.cpp" />
   </ItemGroup>
   <ItemGroup>
-    <ClInclude Include="src\ImageWarping.h" />
+    <ClInclude Include="..\shared\CombinedSolverParameters.h" />
+    <ClInclude Include="..\shared\NamedParameters.h" />
+    <ClInclude Include="..\shared\OptGraph.h" />
+    <ClInclude Include="..\shared\OptImage.h" />
+    <ClInclude Include="..\shared\OptSolver.h" />
+    <ClInclude Include="src\CombinedSolver.h" />
+    <ClInclude Include="src\LandMark.h" />
+    <ClInclude Include="src\LandMarkSet.h" />
     <ClInclude Include="src\OpenMesh.h" />
     <ClInclude Include="src\main.h" />
     <ClInclude Include="src\mLibInclude.h" />
@@ -145,9 +152,6 @@ xcopy /Y /D "..\..\API\release\include\*.h" "."</Command>
     <Reference Include="System.Drawing" />
     <Reference Include="System.Windows.Forms" />
     <Reference Include="System.Xml" />
-  </ItemGroup>
-  <ItemGroup>
-    <CudaCompile Include="src\TerraSolver.cu" />
   </ItemGroup>
   <ItemGroup>
     <None Include="..\..\API\src\precision.t" />

@@ -5,9 +5,9 @@ local w_regSqrt = Param("w_reg", float, 1)
 local X = Unknown("X", opt_float3,{N},2)
 local A = Array("A", opt_float3,{N},3)
 local G = Graph("G", 4, "v0", {N}, 5, --current vertex
-                            "v1", {N}, 7, --neighboring vertex
-                            "v2", {N}, 9, --prev neighboring vertex
-                            "v3", {N}, 11) --next neighboring vertex
+                            "v1", {N}, 6, --neighboring vertex
+                            "v2", {N}, 7, --prev neighboring vertex
+                            "v3", {N}, 8) --next neighboring vertex
 
 UsePreconditioner(true)
 

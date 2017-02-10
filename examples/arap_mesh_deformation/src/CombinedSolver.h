@@ -57,14 +57,6 @@ class CombinedSolver : public CombinedSolverBase
             m_problemParams.set("Constraints", m_vertexPosTargetFloat3);
             m_problemParams.set("G", m_graph);
 
-            size_t edgeCount = *m_graph->edgeCountPtr();
-            size_t size = (edgeCount)*sizeof(int);
-            std::vector<int> v0(edgeCount);
-            std::vector<int> v1(edgeCount);
-            
-            cutilSafeCall(cudaMemcpy(v0.data(), m_graph->gpuVertexPtr(0), size, cudaMemcpyDeviceToHost));
-            cutilSafeCall(cudaMemcpy(v1.data(), m_graph->gpuVertexPtr(1), size, cudaMemcpyDeviceToHost));
-
             m_solverParams.set("nonLinearIterations", &m_combinedSolverParameters.nonLinearIter);
             m_solverParams.set("linearIterations", &m_combinedSolverParameters.linearIter);
             m_solverParams.set("double_precision", &m_combinedSolverParameters.optDoublePrecision);
