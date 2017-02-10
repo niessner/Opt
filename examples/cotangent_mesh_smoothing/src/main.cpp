@@ -1,5 +1,5 @@
 ﻿#include "main.h"
-#include "ImageWarping.h"
+#include "CombinedSolver.h"
 #include "OpenMesh.h"
 
 int main(int argc, const char * argv[])
@@ -29,10 +29,14 @@ int main(int argc, const char * argv[])
         std::cout << filename << std::endl;
         exit(1);
     }
-
-    ImageWarping warping(mesh, performanceRun);
-    SimpleMesh* res = warping.solve();
-
+    CombinedSolverParameters params;
+    params.useOpt = true;
+    params.useOptLM = true;
+    params.nonLinearIter = 8;
+    params.linearIter = 25;
+    CombinedSolver solver(mesh, performanceRun, params);
+    solver.solveAll();
+    SimpleMesh* res = solver.result();
     if (!OpenMesh::IO::write_mesh(*res, "out.off"))
     {
         std::cerr << "Error -> File: " << __FILE__ << " Line: " << __LINE__ << " Function: " << __FUNCTION__ << std::endl;
