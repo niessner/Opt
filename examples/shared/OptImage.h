@@ -10,9 +10,10 @@ static unsigned int totalElementsFromDims(const std::vector<unsigned int>& dims)
     return std::accumulate(dims.begin(), dims.end(), 1, std::multiplies<unsigned int>());
 }
 
+
 class OptImage {
 public:
-    enum Type { FLOAT, DOUBLE, UCHAR };
+    enum Type { FLOAT, DOUBLE, UCHAR, INT };
     enum Location { CPU, GPU };
     OptImage(std::vector<unsigned int> dims, void* data, Type type, unsigned int channelCount, Location location, bool isUnknown = false, bool ownsData = false) :
         m_dims(dims), m_data(data), m_type(type), m_channelCount(channelCount), m_location(location), m_isUnknown(isUnknown), m_ownsData(ownsData) {
@@ -36,10 +37,41 @@ public:
 
     size_t dataSize() const { return totalElementsFromDims(m_dims) * OptImage::typeSize(m_type) * m_channelCount; }
 
+
+    static cudaMemcpyKind cudaMemcpyType(OptImage::Location dstLoc, OptImage::Location srcLoc) {
+        if (srcLoc == OptImage::Location::CPU) {
+            return (dstLoc == OptImage::Location::CPU) ? cudaMemcpyHostToHost : cudaMemcpyHostToDevice;
+        } else {
+            return (dstLoc == OptImage::Location::CPU) ? cudaMemcpyDeviceToHost : cudaMemcpyDeviceToDevice;
+        }
+    }
+
+    void update(void* newData, size_t byteCount, Location loc) {
+        cutilSafeCall(cudaMemcpy(data(), newData, byteCount, cudaMemcpyType(location(), loc)));
+    }
+
+    template<typename T>
+    void update(const std::vector<T>& data) {
+        size_t byteCount = MIN(data.size()*sizeof(T), dataSize());
+        update((void*)data.data(), byteCount, Location::CPU);
+    }
+
+    void copyTo(void* buffer, Location loc = Location::CPU, size_t maxBufferSize = std::numeric_limits<size_t>::max()) {
+        size_t byteCount = MIN(maxBufferSize, dataSize());
+        cutilSafeCall(cudaMemcpy(buffer, data(), byteCount, cudaMemcpyType(loc, location())));
+    }
+
+    template<typename T>
+    void copyTo(const std::vector<T>& data) {
+        copyTo((void*)data.data(), Location::CPU, data.size()*sizeof(T));
+    }
+
     unsigned int channelCount() const { return m_channelCount; }
 
     static size_t typeSize(Type t) {
         switch (t){
+        case Type::INT:
+            return 4;
         case Type::FLOAT:
             return 4;
         case Type::DOUBLE:
@@ -75,21 +107,7 @@ static void copyImage(const std::shared_ptr<OptImage>& dst, const std::shared_pt
     assert(src->type() == dst->type());
     // TODO dimension asserts
     size_t size = dst->dataSize();
-    if (src->location() == OptImage::Location::CPU) {
-        if (dst->location() == OptImage::Location::CPU) {
-            memcpy(dst->data(), src->data(), size);
-        }
-        else {
-            cutilSafeCall(cudaMemcpy(dst->data(), src->data(), size, cudaMemcpyHostToDevice));
-        }
-    } else {
-        if (dst->location() == OptImage::Location::CPU) {
-            cutilSafeCall(cudaMemcpy(dst->data(), src->data(), size, cudaMemcpyDeviceToHost));
-        }
-        else {
-            cutilSafeCall(cudaMemcpy(dst->data(), src->data(), size, cudaMemcpyDeviceToDevice));
-        }
-    }
+    dst->update(src->data(), size, src->location());
 }
 
 static std::shared_ptr<OptImage> copyImageTo(const std::shared_ptr<OptImage>& original, OptImage::Location location) {

@@ -139,6 +139,7 @@ xcopy /Y /D "$(ProjectDir)..\..\API\release\include\*.h" "."</Command>
   <ItemGroup>
     <ClInclude Include="..\shared\CeresSolverBase.h" />
     <ClInclude Include="..\shared\CombinedSolverBase.h" />
+    <ClInclude Include="..\shared\OptGraph.h" />
     <ClInclude Include="..\shared\OptImage.h" />
     <ClInclude Include="..\shared\NamedParameters.h" />
     <ClInclude Include="..\shared\OptSolver.h" />

@@ -6,7 +6,7 @@
 #include <cudaUtil.h>
 
 #include "CUDAWarpingSolver.h"
-#include "CERESWarpingSolver.h"
+#include "CeresSolver.h"
 #include "OpenMesh.h"
 
 #include "../../shared/CombinedSolverBase.h"
@@ -27,10 +27,10 @@ class CombinedSolver : public CombinedSolverBase
 			unsigned int N = (unsigned int)mesh->n_vertices();
 		
             std::vector<unsigned int> dims = { (uint)m_dims.x + 1, (uint)m_dims.y + 1, (uint)m_dims.z + 1 };
-            m_gridPosFloat3 = createEmptyOptImage(dims, OptImage::Type::FLOAT, 3, OptImage::GPU, true);
-            m_gridAnglesFloat3 = createEmptyOptImage(dims, OptImage::Type::FLOAT, 3, OptImage::GPU, true);
-            m_gridPosFloat3Urshape = createEmptyOptImage(dims, OptImage::Type::FLOAT, 3, OptImage::GPU, true);
-            m_gridPosTargetFloat3 = createEmptyOptImage(dims, OptImage::Type::FLOAT, 3, OptImage::GPU, true);
+            m_gridPosFloat3         = createEmptyOptImage(dims, OptImage::Type::FLOAT, 3, OptImage::GPU, true);
+            m_gridAnglesFloat3      = createEmptyOptImage(dims, OptImage::Type::FLOAT, 3, OptImage::GPU, true);
+            m_gridPosFloat3Urshape  = createEmptyOptImage(dims, OptImage::Type::FLOAT, 3, OptImage::GPU, true);
+            m_gridPosTargetFloat3   = createEmptyOptImage(dims, OptImage::Type::FLOAT, 3, OptImage::GPU, true);
 
 			m_vertexToVoxels.resize(N);
             m_relativeCoords.resize(N);
@@ -68,9 +68,13 @@ class CombinedSolver : public CombinedSolverBase
         virtual void postSingleSolve() override {
             copyResultToCPUFromFloat3();
         }
+
+        virtual void preNonlinearSolve(int) override {}
+        virtual void postNonlinearSolve(int) override{}
+
         virtual void combinedSolveFinalize() override {
             if (m_combinedSolverParameters.profileSolve) {
-                ceresIterationComparison();
+                ceresIterationComparison("Volumetric Mesh Deformation");
             }
         }
 
@@ -100,8 +104,7 @@ class CombinedSolver : public CombinedSolverBase
 					}
 				}
 			}
-
-			cutilSafeCall(cudaMemcpy(m_gridPosTargetFloat3->data(), h_gridPosTargetFloat3.data(), sizeof(float3)*m_nNodes, cudaMemcpyHostToDevice));
+            m_gridPosTargetFloat3->update(h_gridPosTargetFloat3);
 		}
 
 		void computeBoundingBox()
@@ -178,7 +181,7 @@ class CombinedSolver : public CombinedSolverBase
 			SimpleMesh out;
 
 			std::vector<float3> h_gridPosTarget(m_nNodes);
-            cutilSafeCall(cudaMemcpy(h_gridPosTarget.data(), m_gridPosTargetFloat3->data(), sizeof(float3)*m_nNodes, cudaMemcpyDeviceToHost));
+            m_gridPosTargetFloat3->copyTo(h_gridPosTarget);
 			for (unsigned int i = 0; i < N; i++)
 			{
 				if (h_gridPosTarget[i].x != -std::numeric_limits<float>::infinity())
@@ -221,10 +224,9 @@ class CombinedSolver : public CombinedSolverBase
 				}
 			}
 
-			cutilSafeCall(cudaMemcpy(m_gridPosFloat3->data(),		 h_gridVertexPosFloat3.data(), sizeof(float3)*m_nNodes, cudaMemcpyHostToDevice));
-            cutilSafeCall(cudaMemcpy(m_gridPosFloat3Urshape->data(), h_gridVertexPosFloat3.data(), sizeof(float3)*m_nNodes, cudaMemcpyHostToDevice));
-            cutilSafeCall(cudaMemset(m_gridAnglesFloat3->data(), 0, sizeof(float3)*m_nNodes));
-
+            m_gridPosFloat3->update(h_gridVertexPosFloat3);
+            m_gridPosFloat3Urshape->update(h_gridVertexPosFloat3);
+			cutilSafeCall(cudaMemset(m_gridAnglesFloat3->data(), 0, sizeof(float3)*m_nNodes));
 		}
 
 		void resetGPUMemory()
@@ -285,18 +287,17 @@ class CombinedSolver : public CombinedSolverBase
 			}
 
 			std::vector<float3> h_gridPosUrshapeFloat3(m_nNodes);
-			cutilSafeCall(cudaMemcpy(h_gridPosUrshapeFloat3.data(), m_gridPosFloat3Urshape->data(), sizeof(float3)*m_nNodes, cudaMemcpyDeviceToHost));
-            saveGraph("grid.ply", h_gridPosUrshapeFloat3.data(), m_nNodes, 0.05f, meshSphere, meshCone);
+            m_gridPosFloat3Urshape->copyTo(h_gridPosUrshapeFloat3);   saveGraph("grid.ply", h_gridPosUrshapeFloat3.data(), m_nNodes, 0.05f, meshSphere, meshCone);
 
             std::vector<float3> h_gridPosFloat3(m_nNodes);
-			cutilSafeCall(cudaMemcpy(h_gridPosFloat3.data(), m_gridPosFloat3->data(), sizeof(float3)*m_nNodes, cudaMemcpyDeviceToHost));
-            saveGraph("gridOut.ply", h_gridPosFloat3.data(), m_nNodes, 0.05f, meshSphere, meshCone);
+            m_gridPosFloat3->copyTo(h_gridPosFloat3);
+			saveGraph("gridOut.ply", h_gridPosFloat3.data(), m_nNodes, 0.05f, meshSphere, meshCone);
 		}
 
 		void copyResultToCPUFromFloat3()
 		{
             std::vector<float3> h_gridPosFloat3(m_nNodes);
-            cutilSafeCall(cudaMemcpy(h_gridPosFloat3.data(), m_gridPosFloat3->data(), sizeof(float3)*m_nNodes, cudaMemcpyDeviceToHost));
+            m_gridPosFloat3->copyTo(h_gridPosFloat3);
 
 			for (SimpleMesh::VertexIter v_it = m_result.vertices_begin(); v_it != m_result.vertices_end(); ++v_it)
 			{

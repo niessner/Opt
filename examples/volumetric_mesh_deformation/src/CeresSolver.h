@@ -34,10 +34,9 @@ class CeresSolver : public CeresSolverBase
 	public:
         CeresSolver(const std::vector<unsigned int>& dims) : CeresSolverBase(dims) {}
         virtual double solve(const NamedParameters& solverParameters, const NamedParameters& problemParameters, bool profileSolve, std::vector<SolverIteration>& iter) override;
-
 };
 #ifndef USE_CERES
-CeresSolver::CeresSolver(unsigned int, unsigned int, unsigned int) {}
+CeresSolver::CeresSolver(const std::vector<unsigned int>&) {}
 CeresSolver::~CeresSolver() {}
-void CeresSolver::solve(float3*, float3*, float3*, float3*, float, float, std::vector<SolverIteration>&) {}
+virtual double CeresSolver::solve(const NamedParameters& solverParameters, const NamedParameters& problemParameters, bool profileSolve, std::vector<SolverIteration>& iter) {}
 #endif

@@ -81,6 +81,9 @@ int main(int argc, const char * argv[]) {
     params.linearIter = 1000;
     params.useOpt = true;
     params.earlyOut = true;
+
+
+
     if (performanceRun) {
         params.useCUDA = false;
         params.useTerra = false;
@@ -100,6 +103,12 @@ int main(int argc, const char * argv[]) {
             params.nonLinearIter = mesh->n_vertices() / 5000;
         }
     }
+    params.useCUDA = true;
+    params.useOpt = true;
+    params.useOptLM = true;
+    params.useCeres = true;
+    params.earlyOut = true;
+    params.optDoublePrecision = false;
     CombinedSolver solver(mesh, constraintsIdx, constraintsTarget, params);
     solver.solveAll();
     SimpleMesh* res = solver.result();

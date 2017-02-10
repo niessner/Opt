@@ -16,13 +16,30 @@ public:
     virtual void combinedSolveFinalize() = 0;
     virtual void preSingleSolve() = 0;
     virtual void postSingleSolve() = 0;
+    virtual void preNonlinearSolve(int iteration) = 0;
+    virtual void postNonlinearSolve(int iteration) = 0;
+
     void solveAll() {
         combinedSolveInit();
         for (auto s : m_solverInfo) {
             if (s.enabled) {
                 preSingleSolve();
-                std::cout << "//////////// (" << s.name << ") ///////////////" << std::endl;
-                s.solver->solve(m_solverParams, m_problemParams, m_combinedSolverParameters.profileSolve, s.iterationInfo);
+                if (m_combinedSolverParameters.numIter == 1) {
+                    preNonlinearSolve(0);
+                    std::cout << "//////////// (" << s.name << ") ///////////////" << std::endl;
+                    s.solver->solve(m_solverParams, m_problemParams, m_combinedSolverParameters.profileSolve, s.iterationInfo);
+                    postNonlinearSolve(0);
+                } else {
+                    for (int i = 0; i < m_combinedSolverParameters.numIter; ++i) {
+                        std::cout << "//////////// ITERATION" << i << "  (" << s.name << ") ///////////////" << std::endl;
+                        preNonlinearSolve(i);
+                        s.solver->solve(m_solverParams, m_problemParams, m_combinedSolverParameters.profileSolve, s.iterationInfo);
+                        postNonlinearSolve(i);
+                        if (m_combinedSolverParameters.earlyOut) {
+                            break;
+                        }
+                    }
+                }
                 postSingleSolve();
             }
         }
@@ -51,9 +68,9 @@ public:
         return std::vector<SolverIteration>();
     }
 
-    void ceresIterationComparison() {
+    void ceresIterationComparison(std::string name) {
         saveSolverResults("results/", OPT_DOUBLE_PRECISION ? "_double" : "_float", getIterationInfo("Ceres"), getIterationInfo("Opt(GN)"), getIterationInfo("Opt(LM)"));
-        reportFinalCosts("Mesh Deformation LARAP", m_combinedSolverParameters, getCost("Opt(GN)"), getCost("Opt(LM)"), getCost("Ceres"));
+        reportFinalCosts(name, m_combinedSolverParameters, getCost("Opt(GN)"), getCost("Opt(LM)"), getCost("Ceres"));
     }
 
     void addSolver(std::shared_ptr<SolverBase> solver, std::string name, bool enabled = true) {

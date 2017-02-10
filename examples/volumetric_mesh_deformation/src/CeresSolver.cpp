@@ -1,4 +1,4 @@
-#include "CERESWarpingSolver.h"
+#include "CeresSolver.h"
 
 #ifdef USE_CERES
 

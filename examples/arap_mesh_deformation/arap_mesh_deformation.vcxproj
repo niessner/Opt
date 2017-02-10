@@ -129,7 +129,7 @@ xcopy /Y /D "..\..\API\release\include\*.h" "."</Command>
     </PreBuildEvent>
   </ItemDefinitionGroup>
   <ItemGroup>
-    <ClCompile Include="src\CeresWarpingSolver.cpp" />
+    <ClCompile Include="src\CeresSolver.cpp" />
     <ClCompile Include="src\CUDAWarpingSolver.cpp" />
     <ClCompile Include="src\main.cpp" />
     <ClCompile Include="src\mLibSource.cpp" />
@@ -140,14 +140,13 @@ xcopy /Y /D "..\..\API\release\include\*.h" "."</Command>
     <ClInclude Include="..\shared\OptUtils.h" />
     <ClInclude Include="..\shared\Precision.h" />
     <ClInclude Include="..\shared\SolverIteration.h" />
-    <ClInclude Include="src\CeresWarpingSolver.h" />
+    <ClInclude Include="src\CeresSolver.h" />
+    <ClInclude Include="src\CombinedSolver.h" />
     <ClInclude Include="src\Configure.h" />
     <ClInclude Include="src\CUDATimer.h" />
     <ClInclude Include="src\CUDAWarpingSolver.h" />
-    <ClInclude Include="src\ImageWarping.h" />
     <ClInclude Include="src\OpenMesh.h" />
     <ClInclude Include="src\RotationHelper.h" />
-    <ClInclude Include="src\TerraWarpingSolver.h" />
     <ClInclude Include="src\WarpingSolverEquations.h" />
     <ClInclude Include="src\WarpingSolverParameters.h" />
     <ClInclude Include="src\WarpingSolverState.h" />
@@ -168,7 +167,6 @@ xcopy /Y /D "..\..\API\release\include\*.h" "."</Command>
   </ItemGroup>
   <ItemGroup>
     <None Include="..\..\API\src\precision.t" />
-    <None Include="..\shared\opt_precision.t" />
     <None Include="arap_mesh_deformation.t" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />

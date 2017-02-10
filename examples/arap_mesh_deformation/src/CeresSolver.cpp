@@ -13,7 +13,8 @@ const bool performanceTest = true;
 #include <cuda_runtime.h>
 #define GLOG_NO_ABBREVIATED_SEVERITIES
 #include "OpenMesh.h"
-#include "CeresWarpingSolver.h"
+#include "CeresSolver.h"
+#include "../../shared/OptUtils.h"
 
 #include "ceres/ceres.h"
 #include "glog/logging.h"
@@ -177,26 +178,34 @@ vec3f toVec(const float3 &v)
     return vec3f(v.x, v.y, v.z);
 }
 
-float CeresWarpingSolver::solveGN(
-    float3* vertexPosFloat3,
-    float3* anglesFloat3,
-    float3* vertexPosFloat3Urshape,
-    float3* vertexPosTargetFloat3,
-    float weightFit,
-    float weightReg,
-    std::vector<SolverIteration>& iters)
+double CeresSolver::solve(const NamedParameters& solverParameters, const NamedParameters& problemParameters, bool profileSolve, std::vector<SolverIteration>& iters)
 {
-    float weightFitSqrt = sqrt(weightFit);
-    float weightRegSqrt = sqrt(weightReg);
+    float weightFitSqrt = getTypedParameter<float>("w_fitSqrt", problemParameters);
+    float weightRegSqrt = getTypedParameter<float>("w_regSqrt", problemParameters);
 
-    for (int i = 0; i < vertexCount; i++)
+    size_t N = m_dims[0];
+    std::vector<double3> vertexPosDouble3(N);
+    std::vector<double3> anglesDouble3(N);
+   
+
+    std::vector<float3> h_vertexPosFloat3(N);
+    std::vector<float3> h_vertexPosFloat3Urshape(N);
+    std::vector<float3> h_anglesFloat3(N);
+    std::vector<float3> h_vertexPosTargetFloat3(N);
+
+    findAndCopyArrayToCPU("Offset", h_vertexPosFloat3, problemParameters);
+    findAndCopyArrayToCPU("Angle", h_anglesFloat3, problemParameters);
+    findAndCopyArrayToCPU("UrShape", h_vertexPosFloat3Urshape, problemParameters);
+    findAndCopyArrayToCPU("Constraints", h_vertexPosTargetFloat3, problemParameters);
+
+    for (int i = 0; i < N; i++)
     {
-        vertexPosDouble3[i].x = vertexPosFloat3[i].x;
-        vertexPosDouble3[i].y = vertexPosFloat3[i].y;
-        vertexPosDouble3[i].z = vertexPosFloat3[i].z;
-        anglesDouble3[i].x = anglesFloat3[i].x;
-        anglesDouble3[i].y = anglesFloat3[i].y;
-        anglesDouble3[i].z = anglesFloat3[i].z;
+        vertexPosDouble3[i].x = h_vertexPosFloat3[i].x;
+        vertexPosDouble3[i].y = h_vertexPosFloat3[i].y;
+        vertexPosDouble3[i].z = h_vertexPosFloat3[i].z;
+        anglesDouble3[i].x = h_anglesFloat3[i].x;
+        anglesDouble3[i].y = h_anglesFloat3[i].y;
+        anglesDouble3[i].z = h_anglesFloat3[i].z;
     }
 
     Problem problem;
@@ -204,35 +213,35 @@ float CeresWarpingSolver::solveGN(
     // add all fit constraints
     //if (mask(i, j) == 0 && constaints(i, j).u >= 0 && constaints(i, j).v >= 0)
     //    fit = (x(i, j) - constraints(i, j)) * w_fitSqrt
-    for (auto v = mesh->vertices_begin(); v != mesh->vertices_end(); v++)
+    for (auto v = m_mesh->vertices_begin(); v != m_mesh->vertices_end(); v++)
     {
         int myIndex = v->idx();
         
 
-        const vec3f constraint = toVec(vertexPosTargetFloat3[myIndex]);
+        const vec3f constraint = toVec(h_vertexPosTargetFloat3[myIndex]);
         if (constraint.x > -999999.0f)
         {
             ceres::CostFunction* costFunction = FitTerm::Create(constraint, weightFitSqrt);
-            double3 *varStart = vertexPosDouble3 + myIndex;
+            double3 *varStart = vertexPosDouble3.data() + myIndex;
             problem.AddResidualBlock(costFunction, NULL, (double *)varStart);
         }
     }
 
-    for (auto v = mesh->vertices_begin(); v != mesh->vertices_end(); v++)
+    for (auto v = m_mesh->vertices_begin(); v != m_mesh->vertices_end(); v++)
     {
-        unsigned int valence = mesh->valence(*v);
-        for (auto vv = mesh->vv_iter(*v); vv.is_valid(); vv++)
+        unsigned int valence = m_mesh->valence(*v);
+        for (auto vv = m_mesh->vv_iter(*v); vv.is_valid(); vv++)
         {
             auto handleNeighbor(*vv);
 
             int myIndex = v->idx();
             int neighborIndex = handleNeighbor.idx();
 
-            vec3f deltaUr = toVec(vertexPosFloat3Urshape[myIndex]) - toVec(vertexPosFloat3Urshape[neighborIndex]);
+            vec3f deltaUr = toVec(h_vertexPosFloat3Urshape[myIndex]) - toVec(h_vertexPosFloat3Urshape[neighborIndex]);
             ceres::CostFunction* costFunction = RegTerm::Create(deltaUr, weightRegSqrt);
-            double3 *varStartA = vertexPosDouble3 + myIndex;
-            double3 *varStartB = vertexPosDouble3 + neighborIndex;
-            double3 *angleStartA = anglesDouble3 + myIndex;
+            double3 *varStartA = vertexPosDouble3.data() + myIndex;
+            double3 *varStartB = vertexPosDouble3.data() + neighborIndex;
+            double3 *angleStartA = anglesDouble3.data() + myIndex;
             problem.AddResidualBlock(costFunction, NULL, (double*)varStartA, (double*)varStartB, (double*)angleStartA);
         }
     }
@@ -307,16 +316,17 @@ float CeresWarpingSolver::solveGN(
 
     cout << summary.FullReport() << endl;
 
-    for (int i = 0; i < vertexCount; i++)
+    for (int i = 0; i < N; i++)
     {
-        vertexPosFloat3[i].x = (float)vertexPosDouble3[i].x;
-        vertexPosFloat3[i].y = (float)vertexPosDouble3[i].y;
-        vertexPosFloat3[i].z = (float)vertexPosDouble3[i].z;
-        anglesFloat3[i].x = (float)anglesDouble3[i].x;
-        anglesFloat3[i].y = (float)anglesDouble3[i].y;
-        anglesFloat3[i].z = (float)anglesDouble3[i].z;
+        h_vertexPosFloat3[i].x = (float)vertexPosDouble3[i].x;
+        h_vertexPosFloat3[i].y = (float)vertexPosDouble3[i].y;
+        h_vertexPosFloat3[i].z = (float)vertexPosDouble3[i].z;
+        h_anglesFloat3[i].x = (float)anglesDouble3[i].x;
+        h_anglesFloat3[i].y = (float)anglesDouble3[i].y;
+        h_anglesFloat3[i].z = (float)anglesDouble3[i].z;
     }
-
+    findAndCopyToArrayFromCPU("Offset", h_vertexPosFloat3, problemParameters);
+    findAndCopyToArrayFromCPU("Angle", h_anglesFloat3, problemParameters);
     return (float)(summary.total_time_in_seconds * 1000.0);
 }
 
