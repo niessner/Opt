@@ -22,8 +22,6 @@ public:
         m_initial = m_result;
 
         unsigned int N = (unsigned int)mesh->n_vertices();
-        unsigned int E = (unsigned int)mesh->n_edges();
-
         initializeConnectivity();
         std::vector<unsigned int> dims = { N };
         m_unknown = createEmptyOptImage(dims, OptImage::Type::FLOAT, 3, OptImage::GPU, true);
@@ -58,6 +56,7 @@ public:
     virtual void postNonlinearSolve(int) override{}
 
     virtual void preSingleSolve() override {
+        m_result = m_initial;
         resetGPUMemory();
     }
     virtual void postSingleSolve() override {

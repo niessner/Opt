@@ -30,7 +30,7 @@ public:
                     s.solver->solve(m_solverParams, m_problemParams, m_combinedSolverParameters.profileSolve, s.iterationInfo);
                     postNonlinearSolve(0);
                 } else {
-                    for (int i = 0; i < m_combinedSolverParameters.numIter; ++i) {
+                    for (int i = 0; i < (int)m_combinedSolverParameters.numIter; ++i) {
                         std::cout << "//////////// ITERATION" << i << "  (" << s.name << ") ///////////////" << std::endl;
                         preNonlinearSolve(i);
                         s.solver->solve(m_solverParams, m_problemParams, m_combinedSolverParameters.profileSolve, s.iterationInfo);

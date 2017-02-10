@@ -8,39 +8,74 @@
 #include "TerraSolver.h"
 #include "OpenMesh.h"
 #include "../../shared/SolverIteration.h"
+#include "../../shared/CombinedSolverBase.h"
 #include "../../shared/CombinedSolverParameters.h"
 
-class ImageWarping
+class CombinedSolver : public CombinedSolverBase
 {
 	public:
-		ImageWarping(const SimpleMesh* mesh, std::vector<int> constraintsIdx, std::vector<std::vector<float>> constraintsTarget, CombinedSolverParameters params) : m_constraintsIdx(constraintsIdx), m_constraintsTarget(constraintsTarget)
+        CombinedSolver(const SimpleMesh* mesh, std::vector<int> constraintsIdx, std::vector<std::vector<float>> constraintsTarget, CombinedSolverParameters params) : m_constraintsIdx(constraintsIdx), m_constraintsTarget(constraintsTarget)
 		{
-            m_params = params;
+            m_combinedSolverParameters = params;
 			m_result = *mesh;
 			m_initial = m_result;
 
-			unsigned int N = (unsigned int)mesh->n_vertices();
-			unsigned int E = (unsigned int)mesh->n_edges();
-
-			cutilSafeCall(cudaMalloc(&d_vertexPosTargetFloat3, sizeof(float3)*N));
-
-			cutilSafeCall(cudaMalloc(&d_vertexPosFloat3, sizeof(float3)*N));
-			cutilSafeCall(cudaMalloc(&d_vertexPosFloat3Urshape, sizeof(float3)*N));
-			cutilSafeCall(cudaMalloc(&d_rotsFloat9, sizeof(float9)*N));
-			cutilSafeCall(cudaMalloc(&d_numNeighbours, sizeof(int)*N));
-			cutilSafeCall(cudaMalloc(&d_neighbourIdx, sizeof(int)*2*E));
-			cutilSafeCall(cudaMalloc(&d_neighbourOffset, sizeof(int)*(N+1)));
-		
-			resetGPUMemory();	
-			m_optSolver = new TerraSolver(N, 2 * E, d_neighbourIdx, d_neighbourOffset, "embedded_mesh_deformation.t", "gaussNewtonGPU");
-            m_optLMSolver = new TerraSolver(N, 2 * E, d_neighbourIdx, d_neighbourOffset, "embedded_mesh_deformation.t", "LMGPU");
-
+            unsigned int N = (unsigned int)mesh->n_vertices();
+            initializeConnectivity();
+            std::vector<unsigned int> dims = { N };
+            m_rotationMatrices = createEmptyOptImage(dims, OptImage::Type::FLOAT, 9, OptImage::GPU, true);
+            m_vertexPositions = createEmptyOptImage(dims, OptImage::Type::FLOAT, 3, OptImage::GPU, true);
+            m_vertexTargets = createEmptyOptImage(dims, OptImage::Type::FLOAT, 3, OptImage::GPU, true);
+            m_urshape = createEmptyOptImage(dims, OptImage::Type::FLOAT, 3, OptImage::GPU, true);
+            addOptSolvers(dims, "embedded_mesh_deformation.t");
 		} 
+
+        virtual void combinedSolveInit() override {
+
+            float weightFit = 3.0f;
+            float weightReg = 12.0f;
+            float weightRot = 5.0f;
+            m_weightFitSqrt = sqrtf(weightFit);
+            m_weightRegSqrt = sqrtf(weightReg);
+            m_weightRotSqrt = sqrtf(weightRot);
+
+            m_problemParams.set("w_fitSqrt", &m_weightFitSqrt);
+            m_problemParams.set("w_regSqrt", &m_weightRegSqrt);
+            m_problemParams.set("w_rotSqrt", &m_weightRotSqrt);
+            m_problemParams.set("Offset", m_vertexPositions);
+            m_problemParams.set("RotMatrix", m_rotationMatrices);
+            m_problemParams.set("UrShape", m_urshape);
+            m_problemParams.set("Constraints", m_vertexTargets);
+            m_problemParams.set("G", m_graph);
+
+
+            m_solverParams.set("nonLinearIterations", &m_combinedSolverParameters.nonLinearIter);
+            m_solverParams.set("linearIterations", &m_combinedSolverParameters.linearIter);
+            m_solverParams.set("double_precision", &m_combinedSolverParameters.optDoublePrecision);
+        }
+
+        virtual void preNonlinearSolve(int i) override {
+            printf("preNonlinearSolve\n");
+            setConstraints((float)(i+1) / (float)(m_combinedSolverParameters.numIter));
+        }
+        virtual void postNonlinearSolve(int) override{}
+        
+        virtual void preSingleSolve() override {
+            printf("preSingleSolve\n");
+            m_result = m_initial;
+            resetGPUMemory();
+        }
+        virtual void postSingleSolve() override {
+            copyResultToCPUFromFloat3();
+        }
+        virtual void combinedSolveFinalize() override {
+            reportFinalCosts("Embedded Mesh Deformation", m_combinedSolverParameters, getCost("Opt(GN)"), getCost("Opt(LM)"), nan(nullptr));
+        }
 
 		void setConstraints(float alpha)
 		{
 			unsigned int N = (unsigned int)m_result.n_vertices();
-			float3* h_vertexPosTargetFloat3 = new float3[N];
+			std::vector<float3> h_vertexPosTargetFloat3(N);
 			for (unsigned int i = 0; i < N; i++)
 			{
 				h_vertexPosTargetFloat3[i] = make_float3(-std::numeric_limits<float>::infinity(), -std::numeric_limits<float>::infinity(), -std::numeric_limits<float>::infinity());
@@ -54,173 +89,92 @@ class ImageWarping
 				Vec3f z = (1 - alpha)*pt + alpha*target;
 				h_vertexPosTargetFloat3[m_constraintsIdx[i]] = make_float3(z[0], z[1], z[2]);
 			}
-			cutilSafeCall(cudaMemcpy(d_vertexPosTargetFloat3, h_vertexPosTargetFloat3, sizeof(float3)*N, cudaMemcpyHostToDevice));
-			delete [] h_vertexPosTargetFloat3;
+            m_vertexTargets->update(h_vertexPosTargetFloat3);
 		}
+
+        void initializeConnectivity() {
+            unsigned int N = (unsigned int)m_initial.n_vertices();
+            unsigned int E = (unsigned int)m_initial.n_edges();
+            std::vector<int>    h_numNeighbours(N);
+            std::vector<int>    h_neighbourIdx(2 * E);
+            std::vector<int>    h_neighbourOffset(N + 1);
+            unsigned int count = 0;
+            unsigned int offset = 0;
+            h_neighbourOffset[0] = 0;
+            for (SimpleMesh::VertexIter v_it = m_initial.vertices_begin(); v_it != m_initial.vertices_end(); ++v_it)
+            {
+                VertexHandle c_vh(v_it.handle());
+                unsigned int valance = m_initial.valence(c_vh);
+                h_numNeighbours[count] = valance;
+
+                for (SimpleMesh::VertexVertexIter vv_it = m_initial.vv_iter(c_vh); vv_it; vv_it++)
+                {
+                    VertexHandle v_vh(vv_it.handle());
+
+                    h_neighbourIdx[offset] = v_vh.idx();
+                    offset++;
+                }
+
+                h_neighbourOffset[count + 1] = offset;
+
+                count++;
+            }
+            m_graph = createGraphFromNeighborLists(h_neighbourIdx, h_neighbourOffset);
+        }
 
 		void resetGPUMemory()
 		{
 			unsigned int N = (unsigned int)m_initial.n_vertices();
-			unsigned int E = (unsigned int)m_initial.n_edges();
-
-			float3* h_vertexPosFloat3 = new float3[N];
-			int*	h_numNeighbours   = new int[N];
-			int*	h_neighbourIdx	  = new int[2*E];
-			int*	h_neighbourOffset = new int[N+1];
-
+			std::vector<float3> h_vertexPosFloat3(N);
 			for (unsigned int i = 0; i < N; i++)
 			{
 				const Vec3f& pt = m_initial.point(VertexHandle(i));
 				h_vertexPosFloat3[i] = make_float3(pt[0], pt[1], pt[2]);
 			}
-
-			unsigned int count = 0;
-			unsigned int offset = 0;
-			h_neighbourOffset[0] = 0;
-			for (SimpleMesh::VertexIter v_it = m_initial.vertices_begin(); v_it != m_initial.vertices_end(); ++v_it)
-			{
-			    VertexHandle c_vh(v_it.handle());
-				unsigned int valance = m_initial.valence(c_vh);
-				h_numNeighbours[count] = valance;
-
-				for (SimpleMesh::VertexVertexIter vv_it = m_initial.vv_iter(c_vh); vv_it; vv_it++)
-				{
-					VertexHandle v_vh(vv_it.handle());
-
-					h_neighbourIdx[offset] = v_vh.idx();
-					offset++;
-				}
-
-				h_neighbourOffset[count + 1] = offset;
-
-				count++;
-			}
-			
+            
 			// Constraints
 			setConstraints(1.0f);
 
-
 			// Angles
-			ml::mat3f* h_rots = new ml::mat3f[N];
+			std::vector<ml::mat3f> h_rots(N);
 			for (unsigned int i = 0; i < N; i++)
 			{
 				h_rots[i].setIdentity();
 			}
-			cutilSafeCall(cudaMemcpy(d_rotsFloat9, h_rots, sizeof(float3)*N, cudaMemcpyHostToDevice));
-			delete [] h_rots;
-			
-			cutilSafeCall(cudaMemcpy(d_vertexPosFloat3, h_vertexPosFloat3, sizeof(float3)*N, cudaMemcpyHostToDevice));
-			cutilSafeCall(cudaMemcpy(d_vertexPosFloat3Urshape, h_vertexPosFloat3, sizeof(float3)*N, cudaMemcpyHostToDevice));
-			cutilSafeCall(cudaMemcpy(d_numNeighbours, h_numNeighbours, sizeof(int)*N, cudaMemcpyHostToDevice));
-			cutilSafeCall(cudaMemcpy(d_neighbourIdx, h_neighbourIdx, sizeof(int)* 2 * E, cudaMemcpyHostToDevice));
-			cutilSafeCall(cudaMemcpy(d_neighbourOffset, h_neighbourOffset, sizeof(int)*(N + 1), cudaMemcpyHostToDevice));
-
-			delete [] h_vertexPosFloat3;
-			delete [] h_numNeighbours;
-			delete [] h_neighbourIdx;
-			delete [] h_neighbourOffset;
-		}
-
-		~ImageWarping()
-		{
-			cutilSafeCall(cudaFree(d_rotsFloat9));
-
-			cutilSafeCall(cudaFree(d_vertexPosTargetFloat3));
-			cutilSafeCall(cudaFree(d_vertexPosFloat3));
-			cutilSafeCall(cudaFree(d_vertexPosFloat3Urshape));
-			cutilSafeCall(cudaFree(d_numNeighbours));
-			cutilSafeCall(cudaFree(d_neighbourIdx));
-			cutilSafeCall(cudaFree(d_neighbourOffset));
-
-			SAFE_DELETE(m_optSolver);
-            SAFE_DELETE(m_optLMSolver);
-		}
-
-		SimpleMesh* solve()
-		{
-			
-			//float weightFit = 5.0f;
-			float weightFit = 3.0f;
-			float weightReg = 12.0f;
-			float weightRot = 5.0f;
-		
-
-
-			//unsigned int numIter = 2;
-			//unsigned int nonLinearIter = 3;
-			//unsigned int linearIter = 3;
-
-            if (m_params.useOpt) {
-                m_result = m_initial;
-                resetGPUMemory();
-                for (unsigned int i = 1; i < m_params.numIter; i++)
-                {
-                    std::cout << "//////////// ITERATION" << i << "  (OPT GN) ///////////////" << std::endl;
-                    setConstraints((float)i / (float)(m_params.numIter - 1));
-
-                    m_optSolver->solveGN(d_vertexPosFloat3, d_rotsFloat9, d_vertexPosFloat3Urshape, d_vertexPosTargetFloat3, m_params.nonLinearIter, m_params.linearIter, weightFit, weightReg, weightRot);
-                    if (m_params.earlyOut) {
-                        break;
-                    }
-
-                }
-                copyResultToCPUFromFloat3();
-            }
-
-            if (m_params.useOptLM) {
-                m_result = m_initial;
-                resetGPUMemory();
-                for (unsigned int i = 1; i < m_params.numIter; i++)
-                {
-                    std::cout << "//////////// ITERATION" << i << "  (OPT LM) ///////////////" << std::endl;
-                    setConstraints((float)i / (float)(m_params.numIter - 1));
-
-                    m_optLMSolver->solveGN(d_vertexPosFloat3, d_rotsFloat9, d_vertexPosFloat3Urshape, d_vertexPosTargetFloat3, m_params.nonLinearIter, m_params.linearIter, weightFit, weightReg, weightRot);
-                    if (m_params.earlyOut) {
-                        break;
-                    }
-
-                }
-                copyResultToCPUFromFloat3();
-            }
-
-            reportFinalCosts("Mesh Deformation ED", m_params, m_optSolver->finalCost(), m_optLMSolver->finalCost(), nan(nullptr));
-
-						
-			return &m_result;
+            m_rotationMatrices->update(h_rots);
+            m_vertexPositions->update(h_vertexPosFloat3);
+            m_urshape->update(h_vertexPosFloat3);
 		}
 
 		void copyResultToCPUFromFloat3()
 		{
 			unsigned int N = (unsigned int)m_result.n_vertices();
-			float3* h_vertexPosFloat3 = new float3[N];
-			cutilSafeCall(cudaMemcpy(h_vertexPosFloat3, d_vertexPosFloat3, sizeof(float3)*N, cudaMemcpyDeviceToHost));
+			std::vector<float3> h_vertexPosFloat3(N);
+            m_vertexPositions->copyTo(h_vertexPosFloat3);
 
 			for (unsigned int i = 0; i < N; i++)
 			{
 				m_result.set_point(VertexHandle(i), Vec3f(h_vertexPosFloat3[i].x, h_vertexPosFloat3[i].y, h_vertexPosFloat3[i].z));
 			}
-
-			delete [] h_vertexPosFloat3;
 		}
+
+        SimpleMesh* result() {
+            return &m_result;
+        }
 
 	private:
 
 		SimpleMesh m_result;
 		SimpleMesh m_initial;
+        float m_weightFitSqrt;
+        float m_weightRegSqrt;
+        float m_weightRotSqrt;
 	
-		float9* d_rotsFloat9;
-		float3*	d_vertexPosTargetFloat3;
-		float3*	d_vertexPosFloat3;
-		float3*	d_vertexPosFloat3Urshape;
-		int*	d_numNeighbours;
-		int*	d_neighbourIdx;
-		int* 	d_neighbourOffset;
-
-		TerraSolver* m_optSolver;
-        TerraSolver* m_optLMSolver;
-
-        CombinedSolverParameters m_params;
+		std::shared_ptr<OptImage>   m_rotationMatrices;
+        std::shared_ptr<OptImage>   m_vertexTargets;
+        std::shared_ptr<OptImage>   m_vertexPositions;
+        std::shared_ptr<OptImage>   m_urshape;
+        std::shared_ptr<OptGraph>   m_graph;
 
 		std::vector<int>				m_constraintsIdx;
 		std::vector<std::vector<float>>	m_constraintsTarget;

@@ -45,12 +45,13 @@ int main(int argc, const char * argv[])
     /* LM is good here */
     params.useOpt = false;
     params.useOptLM = true;
-    params.numIter = 32;
+    params.numIter = 31;
     params.nonLinearIter = 5;
     params.linearIter = 125;
 
-    ImageWarping warping(mesh, constraintsIdx, constraintsTarget, params);
-	SimpleMesh* res = warping.solve();
+    CombinedSolver solver(mesh, constraintsIdx, constraintsTarget, params);
+    solver.solveAll();
+    SimpleMesh* res = solver.result();
 
 	if (!OpenMesh::IO::write_mesh(*res, "out.off"))
 	{

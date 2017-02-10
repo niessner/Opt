@@ -44,7 +44,7 @@ class CombinedSolver : public CombinedSolverBase
         virtual void combinedSolveInit() override {
 
             float weightFit = 3.0f;
-            float weightReg = 4.0f; //0.000001f;
+            float weightReg = 4.0f;
 
             m_weightFitSqrt = sqrtf(weightFit);
             m_weightRegSqrt = sqrtf(weightReg);

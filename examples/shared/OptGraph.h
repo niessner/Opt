@@ -19,11 +19,11 @@
 class OptGraph {
 public:
 
-    OptGraph(std::vector<std::vector<int>> indices) : m_indices(indices), m_edgeCount(indices[0].size()){
+    OptGraph(std::vector<std::vector<int>> indices) : m_indices(indices), m_edgeCount((int)indices[0].size()){
         copyToGPU();
     }
 
-    OptGraph(size_t edgeCount, size_t edgeSize) : m_edgeCount(edgeCount) {
+    OptGraph(size_t edgeCount, size_t edgeSize) : m_edgeCount((int)edgeCount) {
         m_indices.resize(edgeSize);
         m_gpuIndices.resize(edgeSize);
         for (size_t i = 0; i < edgeSize; ++i) {
@@ -69,7 +69,6 @@ static std::shared_ptr<OptGraph> createGraphFromNeighborLists(const std::vector<
         for (int j = neighborOffset[head]; j < neighborOffset[head + 1]; ++j) {
             h_head.push_back(head);
             h_tail.push_back(neighborIdx[j]);
-            printf("%d,%d: headX,tailX\n", head, neighborIdx[j]);
         }
     }
     return std::make_shared<OptGraph>(std::vector<std::vector<int> >({ h_head, h_tail }));
