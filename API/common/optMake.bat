@@ -1,6 +1,6 @@
 echo Remaking Opt.dll
 set TERRAHOME=%1
-set TERRA=%TERRAHOME%\release\bin\terra
+set TERRA=%TERRAHOME%\bin\terra
 set OPT_DIR=%2
 set OPT_FULL_BUILD=%3
 
