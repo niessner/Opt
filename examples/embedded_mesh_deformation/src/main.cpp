@@ -32,7 +32,24 @@ int main(int argc, const char * argv[])
 		exit(1);
 	}
 	printf("Beginning MeshDeformationED Warp\n");
-	ImageWarping warping(mesh, constraintsIdx, constraintsTarget);
+
+    CombinedSolverParameters params;
+    /*params.useOpt = true;
+    params.useOptLM = false;
+    params.numIter = 32;
+    params.nonLinearIter = 1;
+    params.linearIter = 4000;
+    params.earlyOut = false;
+    */
+
+    /* LM is good here */
+    params.useOpt = false;
+    params.useOptLM = true;
+    params.numIter = 32;
+    params.nonLinearIter = 5;
+    params.linearIter = 125;
+
+    ImageWarping warping(mesh, constraintsIdx, constraintsTarget, params);
 	SimpleMesh* res = warping.solve();
 
 	if (!OpenMesh::IO::write_mesh(*res, "out.off"))

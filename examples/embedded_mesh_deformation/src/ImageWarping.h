@@ -1,8 +1,5 @@
 #pragma once
 
-#define RUN_OPT 1
-
-
 #include "mLibInclude.h"
 
 #include <cuda_runtime.h>
@@ -16,26 +13,11 @@
 class ImageWarping
 {
 	public:
-		ImageWarping(const SimpleMesh* mesh, std::vector<int> constraintsIdx, std::vector<std::vector<float>> constraintsTarget) : m_constraintsIdx(constraintsIdx), m_constraintsTarget(constraintsTarget)
+		ImageWarping(const SimpleMesh* mesh, std::vector<int> constraintsIdx, std::vector<std::vector<float>> constraintsTarget, CombinedSolverParameters params) : m_constraintsIdx(constraintsIdx), m_constraintsTarget(constraintsTarget)
 		{
+            m_params = params;
 			m_result = *mesh;
 			m_initial = m_result;
-
-            /*m_params.useOpt = true;
-            m_params.useOptLM = false;
-            m_params.numIter = 32;
-            m_params.nonLinearIter = 1;
-            m_params.linearIter = 4000;
-            m_params.earlyOut = false;
-            */
-
-            /* LM is good here */
-            m_params.useOpt = false;
-            m_params.useOptLM = true;
-            m_params.numIter = 32;
-            m_params.nonLinearIter = 5;
-            
-            m_params.linearIter = 125;
 
 			unsigned int N = (unsigned int)mesh->n_vertices();
 			unsigned int E = (unsigned int)mesh->n_edges();
