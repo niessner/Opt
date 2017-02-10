@@ -1,5 +1,5 @@
 ﻿#include "main.h"
-#include "ImageWarping.h"
+#include "CombinedSolver.h"
 #include "OpenMesh.h"
 #include "LandMarkSet.h"
 
