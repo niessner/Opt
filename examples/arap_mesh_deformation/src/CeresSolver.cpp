@@ -311,7 +311,7 @@ double CeresSolver::solve(const NamedParameters& solverParameters, const NamedPa
 
     double cost = -1.0;
     problem.Evaluate(Problem::EvaluateOptions(), &cost, nullptr, nullptr, nullptr);
-    cout << "Cost*2 end: " << cost * 2 << endl;
+    cout << "Cost end: " << cost << endl;
     m_finalCost = cost;
 
     cout << summary.FullReport() << endl;
@@ -327,7 +327,7 @@ double CeresSolver::solve(const NamedParameters& solverParameters, const NamedPa
     }
     findAndCopyToArrayFromCPU("Offset", h_vertexPosFloat3, problemParameters);
     findAndCopyToArrayFromCPU("Angle", h_anglesFloat3, problemParameters);
-    return (float)(summary.total_time_in_seconds * 1000.0);
+    return m_finalCost;
 }
 
 #endif

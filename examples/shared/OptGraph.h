@@ -23,7 +23,7 @@ public:
         copyToGPU();
     }
 
-    OptGraph(size_t edgeCount, size_t edgeSize) : m_edgeCount(edgeCount){
+    OptGraph(size_t edgeCount, size_t edgeSize) : m_edgeCount(edgeCount) {
         m_indices.resize(edgeSize);
         m_gpuIndices.resize(edgeSize);
         for (size_t i = 0; i < edgeSize; ++i) {

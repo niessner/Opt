@@ -75,7 +75,7 @@ int main(int argc, const char * argv[]) {
     printf("Faces: %d\nVertices: %d\n", mesh->n_faces(), mesh->n_vertices());
 
     CombinedSolverParameters params;
-    params.numIter = 96;
+    params.numIter = 95;
     //params.useCUDA = true;
     params.nonLinearIter = 20;
     params.linearIter = 1000;

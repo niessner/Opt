@@ -64,10 +64,6 @@ class CombinedSolver : public CombinedSolverBase
             
             cutilSafeCall(cudaMemcpy(v0.data(), m_graph->gpuVertexPtr(0), size, cudaMemcpyDeviceToHost));
             cutilSafeCall(cudaMemcpy(v1.data(), m_graph->gpuVertexPtr(1), size, cudaMemcpyDeviceToHost));
-            printf("Edge Count %d\n", (int)edgeCount);
-            for (int i = 0; i < edgeCount; ++i) {
-                printf("%d,%d: headX,tailX\n", v0[i], v1[i]);
-            }
 
             m_solverParams.set("nonLinearIterations", &m_combinedSolverParameters.nonLinearIter);
             m_solverParams.set("linearIterations", &m_combinedSolverParameters.linearIter);
@@ -75,7 +71,7 @@ class CombinedSolver : public CombinedSolverBase
         }
 
         virtual void preNonlinearSolve(int i) override {
-            setConstraints((float)i / (float)(m_combinedSolverParameters.numIter - 1));
+            setConstraints((float)(i+1) / (float)(m_combinedSolverParameters.numIter));
         }
         virtual void postNonlinearSolve(int) override{}
 

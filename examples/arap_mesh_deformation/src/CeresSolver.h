@@ -15,14 +15,7 @@ private:
 };
 
 #ifndef USE_CERES
-inline float CeresSolver::solveGN(
-    float3* vertexPosFloat3,
-    float3* anglesFloat3,
-    float3* vertexPosFloat3Urshape,
-    float3* vertexPosTargetFloat3,
-    float weightFit,
-    float weightReg,
-	std::vector<SolverIteration>& iters)
+inline double solve(const NamedParameters& solverParameters, const NamedParameters& problemParameters, bool profileSolve, std::vector<SolverIteration>& iter)
 {
     return 0.0f;
 }
