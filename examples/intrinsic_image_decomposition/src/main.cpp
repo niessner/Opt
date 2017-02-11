@@ -1,6 +1,6 @@
 ﻿#include "main.h"
-#include "ImageWarping.h"
-
+#include "CombinedSolver.h"
+#include "../../shared/CombinedSolverParameters.h"
 int main(int argc, const char * argv[])
 {
 	const std::string inputImage = "ye_high2.png";
@@ -13,10 +13,16 @@ int main(int argc, const char * argv[])
 		}
 	}
 	
-	ImageWarping warping(imageR32);
-	warping.solve();
 
-	ColorImageR32G32B32A32* res = warping.getAlbedo();
+    CombinedSolverParameters params;
+    params.nonLinearIter = 7;
+    params.linearIter = 10;
+
+    CombinedSolver solver(imageR32, params);
+
+	solver.solveAll();
+
+    ColorImageR32G32B32A32* res = solver.getAlbedo();
 	ColorImageR8G8B8A8 out(res->getWidth(), res->getHeight());
 	for (unsigned int y = 0; y < res->getHeight(); y++) {
 		for (unsigned int x = 0; x < res->getWidth(); x++) {
@@ -28,7 +34,7 @@ int main(int argc, const char * argv[])
 	}
 	LodePNG::save(out, "outputAlbedo.png");
 
-	res = warping.getShading();
+    res = solver.getShading();
 	ColorImageR8G8B8A8 out2(res->getWidth(), res->getHeight());
 	for (unsigned int y = 0; y < res->getHeight(); y++) {
 		for (unsigned int x = 0; x < res->getWidth(); x++) {

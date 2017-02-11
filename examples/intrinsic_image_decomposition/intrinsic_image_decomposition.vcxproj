@@ -131,11 +131,10 @@ xcopy /Y /D "$(ProjectDir)..\..\API\release\include\*.h" "."</Command>
     <ClCompile Include="src\mLibSource.cpp" />
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="src\CombinedSolver.h" />
     <ClInclude Include="src\CUDATimer.h" />
-    <ClInclude Include="src\ImageWarping.h" />
     <ClInclude Include="src\main.h" />
     <ClInclude Include="src\mLibInclude.h" />
-    <ClInclude Include="src\TerraSolver.h" />
   </ItemGroup>
   <ItemGroup>
     <Reference Include="System" />
@@ -145,7 +144,6 @@ xcopy /Y /D "$(ProjectDir)..\..\API\release\include\*.h" "."</Command>
     <Reference Include="System.Xml" />
   </ItemGroup>
   <ItemGroup>
-    <None Include="..\..\API\src\precision.t" />
     <None Include="intrinsic_image_decomposition.t" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />

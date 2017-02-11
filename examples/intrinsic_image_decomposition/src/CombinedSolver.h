@@ -5,36 +5,70 @@
 #include <cuda_runtime.h>
 #include <cudaUtil.h>
 
-#include "TerraSolver.h"
 #include "CUDATimer.h"
-#include "../../shared/CombinedSolverParameters.h"
+#include "../../shared/CombinedSolverBase.h"
 #include "../../shared/SolverIteration.h"
 
-class ImageWarping
+class CombinedSolver : public CombinedSolverBase
 {
 	public:
 	
-		ImageWarping(const ColorImageR32G32B32A32& image)
-		{
+        CombinedSolver(const ColorImageR32G32B32A32& image, const CombinedSolverParameters& params) {
 			m_image = image;
+            m_combinedSolverParameters = params;
 
-			cutilSafeCall(cudaMalloc(&d_input, sizeof(float3)*m_image.getWidth()*m_image.getHeight()));
-			cutilSafeCall(cudaMalloc(&d_targetFloat3, sizeof(float3)*m_image.getWidth()*m_image.getHeight()));
-			cutilSafeCall(cudaMalloc(&d_imageFloat3Albedo,  sizeof(float3)*m_image.getWidth()*m_image.getHeight()));
-			cutilSafeCall(cudaMalloc(&d_imageFloatIllumination, sizeof(float)*m_image.getWidth()*m_image.getHeight()));
-						
+            std::vector<unsigned int> dims = { m_image.getWidth(), m_image.getHeight() };
+            unsigned int N = dims[0] * dims[1];
+            m_targetFloat3 = createEmptyOptImage(dims, OptImage::Type::FLOAT, 3, OptImage::GPU, true);
+            m_imageFloat3Albedo = createEmptyOptImage(dims, OptImage::Type::FLOAT, 3, OptImage::GPU, true);
+            m_imageFloatIllumination = createEmptyOptImage(dims, OptImage::Type::FLOAT, 1, OptImage::GPU, true);
+		
 			resetGPUMemory();
-
-            m_gnSolver = new TerraSolver(m_image.getWidth(), m_image.getHeight(), "intrinsic_image_decomposition.t", "gaussNewtonGPU");
-            m_lmSolver = new TerraSolver(m_image.getWidth(), m_image.getHeight(), "intrinsic_image_decomposition.t", "LMGPU");
+            addOptSolvers(dims, "intrinsic_image_decomposition.t");
 		}
+
+        virtual void combinedSolveInit() override { 
+            float weightFit = 500.0f;
+            float weightRegAlbedo = 1000.0f;
+            float weightRegShading = 10000.0f;
+            float pNorm = 0.8;
+            
+            m_weightFitSqrt = sqrtf(weightFit);
+            m_weightRegAlbedoSqrt = sqrtf(weightRegAlbedo);
+            m_weightRegShadingSqrt = sqrtf(weightRegShading);
+            m_pnorm = pNorm;
+
+            m_problemParams.set("w_fitSqrt", &m_weightFitSqrt);
+            m_problemParams.set("w_regSqrtAlbedo", &m_weightRegAlbedoSqrt);
+            m_problemParams.set("w_regSqrtShading", &m_weightRegShadingSqrt);
+            m_problemParams.set("pNorm", &m_pnorm);
+            m_problemParams.set("r", m_imageFloat3Albedo);
+            m_problemParams.set("i", m_targetFloat3);
+            m_problemParams.set("s", m_imageFloatIllumination);
+
+            m_solverParams.set("nonLinearIterations", &m_combinedSolverParameters.nonLinearIter);
+            m_solverParams.set("linearIterations", &m_combinedSolverParameters.linearIter);
+            m_solverParams.set("double_precision", &m_combinedSolverParameters.optDoublePrecision);
+        }
+        virtual void preSingleSolve() override {
+            resetGPUMemory();
+        }
+        virtual void postSingleSolve() override {
+            copyResultToCPUFromFloat3();
+        }
+
+        virtual void preNonlinearSolve(int) override {}
+        virtual void postNonlinearSolve(int) override {}
+
+        virtual void combinedSolveFinalize() override {
+            reportFinalCosts("Intrinsic Image Decomposition", m_combinedSolverParameters, getCost("Opt(GN)"), getCost("Opt(LM)"), nan(nullptr));
+        }
 
 		void resetGPUMemory()
 		{
-			float3* h_input = new float3[m_image.getWidth()*m_image.getHeight()];
-			float3* h_imageFloat3 = new float3[m_image.getWidth()*m_image.getHeight()];
-			float3* h_imageFloat3Albedo = new float3[m_image.getWidth()*m_image.getHeight()];
-			float*  h_imageFloatIllumination = new float[m_image.getWidth()*m_image.getHeight()];
+			std::vector<float3> h_imageFloat3(m_image.getWidth()*m_image.getHeight());
+			std::vector<float3> h_imageFloat3Albedo(m_image.getWidth()*m_image.getHeight());
+			std::vector<float>  h_imageFloatIllumination(m_image.getWidth()*m_image.getHeight());
 			
 			for (unsigned int i = 0; i < m_image.getHeight(); i++)
 			{
@@ -62,60 +96,14 @@ class ImageWarping
 					chroma.y = log2(chroma.y + EPS);
 					chroma.z = log2(chroma.z + EPS);
 	
-					h_input[i*m_image.getWidth() + j] = make_float3(v.x, v.y, v.z);
 					h_imageFloat3[i*m_image.getWidth() + j] = make_float3(t.x, t.y, t.z);
 					h_imageFloat3Albedo[i*m_image.getWidth() + j] = make_float3(chroma.x, chroma.y, chroma.z);
 					h_imageFloatIllumination[i*m_image.getWidth() + j] = intensity;
 				}
 			}
-
-			cutilSafeCall(cudaMemcpy(d_input, h_input, sizeof(float3)*m_image.getWidth()*m_image.getHeight(), cudaMemcpyHostToDevice));
-			cutilSafeCall(cudaMemcpy(d_targetFloat3, h_imageFloat3, sizeof(float3)*m_image.getWidth()*m_image.getHeight(), cudaMemcpyHostToDevice));
-			cutilSafeCall(cudaMemcpy(d_imageFloat3Albedo, h_imageFloat3Albedo, sizeof(float3)*m_image.getWidth()*m_image.getHeight(), cudaMemcpyHostToDevice));
-			cutilSafeCall(cudaMemcpy(d_imageFloatIllumination, h_imageFloatIllumination, sizeof(float)*m_image.getWidth()*m_image.getHeight(), cudaMemcpyHostToDevice));
-
-			delete h_input;
-			delete h_imageFloat3;
-			delete h_imageFloat3Albedo;
-			delete h_imageFloatIllumination;
-		}
-
-		~ImageWarping()
-		{
-			cutilSafeCall(cudaFree(d_input));
-			cutilSafeCall(cudaFree(d_targetFloat3));
-			cutilSafeCall(cudaFree(d_imageFloat3Albedo));
-			cutilSafeCall(cudaFree(d_imageFloatIllumination));
-
-			SAFE_DELETE(m_gnSolver);
-            SAFE_DELETE(m_lmSolver);
-		}
-
-		ColorImageR32G32B32A32* solve()
-		{
-			float weightFit  = 500.0f;
-			float weightRegAlbedo  = 1000.0f;
-			float weightRegShading = 10000.0f;
-			float weightRegChroma  = 100.0f;
-			float pNorm = 0.8;
-
-            m_params.nonLinearIter = 7;
-            m_params.linearIter = 10;
-	         
-            if (m_params.useOpt) {
-                std::cout << "\n\nOPT GN" << std::endl;
-                resetGPUMemory();
-                m_gnSolver->solve(d_imageFloat3Albedo, d_imageFloatIllumination, d_targetFloat3, d_input, m_params.nonLinearIter, m_params.linearIter, 0, weightFit, weightRegAlbedo, weightRegShading, weightRegChroma, pNorm);
-            }
-            if (m_params.useOptLM) {
-                std::cout << "\n\nOPT LM" << std::endl;
-                resetGPUMemory();
-                m_lmSolver->solve(d_imageFloat3Albedo, d_imageFloatIllumination, d_targetFloat3, d_input, m_params.nonLinearIter, m_params.linearIter, 0, weightFit, weightRegAlbedo, weightRegShading, weightRegChroma, pNorm);
-            }
-
-            reportFinalCosts("Intrinsic Images", m_params, m_gnSolver->finalCost(), m_lmSolver->finalCost(), nan(nullptr));
-			copyResultToCPUFromFloat3();			
-			return &m_result;
+            m_targetFloat3->update(h_imageFloat3);
+            m_imageFloat3Albedo->update(h_imageFloat3Albedo);
+            m_imageFloatIllumination->update(h_imageFloatIllumination);
 		}
 
 		ColorImageR32G32B32A32* getAlbedo()
@@ -132,9 +120,8 @@ class ImageWarping
 		{
 			m_result = ColorImageR32G32B32A32(m_image.getWidth(), m_image.getHeight());
 
-			float3* h_imageFloat3 = new float3[m_image.getWidth()*m_image.getHeight()];
-			cutilSafeCall(cudaMemcpy(h_imageFloat3, d_imageFloat3Albedo, sizeof(float3)*m_image.getWidth()*m_image.getHeight(), cudaMemcpyDeviceToHost));
-
+			std::vector<float3> h_imageFloat3(m_image.getWidth()*m_image.getHeight());
+            m_imageFloat3Albedo->copyTo(h_imageFloat3);
 			for (unsigned int i = 0; i < m_image.getHeight(); i++)
 			{
 				for (unsigned int j = 0; j < m_image.getWidth(); j++)
@@ -147,13 +134,11 @@ class ImageWarping
 				}
 			}
 
-			delete h_imageFloat3;
-
 			m_resultShading = ColorImageR32G32B32A32(m_image.getWidth(), m_image.getHeight());
 			
-			float* h_imageFloatShading = new float[m_image.getWidth()*m_image.getHeight()];
-			cutilSafeCall(cudaMemcpy(h_imageFloatShading, d_imageFloatIllumination, sizeof(float)*m_image.getWidth()*m_image.getHeight(), cudaMemcpyDeviceToHost));
-			
+            std::vector<float> h_imageFloatShading(m_image.getWidth()*m_image.getHeight());
+            m_imageFloatIllumination->copyTo(h_imageFloatShading);
+
 			for (unsigned int i = 0; i < m_image.getHeight(); i++)
 			{
 				for (unsigned int j = 0; j < m_image.getWidth(); j++)
@@ -163,24 +148,19 @@ class ImageWarping
 					m_resultShading(j, i) = vec4f(v, v, v, 1.0f);
 				}
 			}
-			
-			delete h_imageFloatShading;
 		}
 
 	private:
+        float m_weightFitSqrt;
+        float m_weightRegAlbedoSqrt;
+        float m_weightRegShadingSqrt;
+        float m_pnorm;
 
 		ColorImageR32G32B32A32 m_result;
 		ColorImageR32G32B32A32 m_resultShading;
 		ColorImageR32G32B32A32 m_image;
 	
-		float3*	d_imageFloat3Albedo;
-		float*	d_imageFloatIllumination;
-		float3* d_targetFloat3;
-		float3* d_input;
-	
-
-        CombinedSolverParameters m_params;
-        TerraSolver* m_gnSolver;
-        TerraSolver* m_lmSolver;
-
+		std::shared_ptr<OptImage> m_imageFloat3Albedo;
+		std::shared_ptr<OptImage> m_imageFloatIllumination;
+		std::shared_ptr<OptImage> m_targetFloat3;
 };
