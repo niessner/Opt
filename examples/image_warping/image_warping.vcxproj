@@ -138,29 +138,31 @@ xcopy /Y /D "..\..\API\release\include\*.h" "."</Command>
     </CustomBuildStep>
   </ItemDefinitionGroup>
   <ItemGroup>
+    <ClCompile Include="..\shared\CeresSolverBase.cpp" />
     <ClCompile Include="src\CeresSolverImageWarping.cpp" />
-    <ClCompile Include="src\CUDAPatchSolverWarping.cpp" />
     <ClCompile Include="src\CUDAWarpingSolver.cpp" />
     <ClCompile Include="src\main.cpp" />
     <ClCompile Include="src\mLibSource.cpp" />
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="..\shared\CeresSolverBase.h" />
+    <ClInclude Include="..\shared\CombinedSolverBase.h" />
+    <ClInclude Include="..\shared\CombinedSolverParameters.h" />
     <ClInclude Include="..\shared\CudaArray.h" />
     <ClInclude Include="..\shared\cudaUtil.h" />
+    <ClInclude Include="..\shared\NamedParameters.h" />
+    <ClInclude Include="..\shared\OptGraph.h" />
+    <ClInclude Include="..\shared\OptImage.h" />
+    <ClInclude Include="..\shared\OptSolver.h" />
     <ClInclude Include="..\shared\OptUtils.h" />
-    <ClInclude Include="..\shared\Precision.h" />
+    <ClInclude Include="..\shared\SolverBase.h" />
     <ClInclude Include="..\shared\SolverIteration.h" />
     <ClInclude Include="src\CeresSolverImageWarping.h" />
+    <ClInclude Include="src\CombinedSolver.h" />
     <ClInclude Include="src\Configure.h" />
-    <ClInclude Include="src\CUDAPatchSolverWarping.h" />
     <ClInclude Include="src\CUDATimer.h" />
     <ClInclude Include="src\CUDAWarpingSolver.h" />
     <ClInclude Include="src\ImageWarping.h" />
-    <ClInclude Include="src\PatchSolverWarpingParameters.h" />
-    <ClInclude Include="src\PatchSolverWarpingEquations.h" />
-    <ClInclude Include="src\PatchSolverWarpingState.h" />
-    <ClInclude Include="src\PatchSolverWarpingUtil.h" />
-    <ClInclude Include="src\TerraSolverWarping.h" />
     <ClInclude Include="src\WarpingSolverEquations.h" />
     <ClInclude Include="src\WarpingSolverParameters.h" />
     <ClInclude Include="src\WarpingSolverState.h" />
@@ -177,7 +179,6 @@ xcopy /Y /D "..\..\API\release\include\*.h" "."</Command>
     <Reference Include="System.Xml" />
   </ItemGroup>
   <ItemGroup>
-    <CudaCompile Include="src\PatchSolverWarping.cu" />
     <CudaCompile Include="src\WarpingSolver.cu" />
   </ItemGroup>
   <ItemGroup>

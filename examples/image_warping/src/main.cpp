@@ -1,5 +1,5 @@
 ﻿#include "main.h"
-#include "ImageWarping.h"
+#include "CombinedSolver.h"
 
 static void loadConstraints(std::vector<std::vector<int> >& constraints, std::string filename) {
   std::ifstream in(filename, std::fstream::in);
@@ -139,9 +139,38 @@ int main(int argc, const char * argv[]) {
 		}
 	}
 
-	ImageWarping warping(imageR32, imageColor, imageR32Mask, constraints, performanceRun, lmOnlyFullSolve);
+    CombinedSolverParameters params;
+    params.numIter = 19;
+    params.useCUDA = false;
+    params.nonLinearIter = 8;
+    params.linearIter = 400;
+    if (performanceRun) {
+        params.useCUDA = false;
+        params.useTerra = false;
+        params.useOpt = true;
+        params.useOptLM = true;
+        params.useCeres = true;
+        params.earlyOut = true;
+    }
+    if (lmOnlyFullSolve) {
+        params.useCUDA = false;
+        params.useOpt = false;
+        params.useOptLM = true;
+        params.linearIter = 500;
+        if (image.getWidth() > 1024) {
+            params.nonLinearIter = 100;
+        }
+        // TODO: Remove for < 2048x2048
+#if !USE_CERES_PCG
+        //m_params.useCeres = false;
+#endif
+    }
+   
 
-	ColorImageR32G32B32* res = warping.solve();
+
+	CombinedSolver solver(imageR32, imageColor, imageR32Mask, constraints, params);
+    solver.solveAll();
+    ColorImageR32G32B32* res = solver.result();
 	ColorImageR8G8B8A8 out(res->getWidth(), res->getHeight());
 	for (unsigned int y = 0; y < res->getHeight(); y++) {
 		for (unsigned int x = 0; x < res->getWidth(); x++) {

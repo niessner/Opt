@@ -5,20 +5,18 @@
 #include "cudaUtil.h"
 #include "WarpingSolverParameters.h"
 #include "WarpingSolverState.h"
+#include "../../shared/SolverBase.h"
 
-
-class CUDAWarpingSolver
+class CUDAWarpingSolver : public SolverBase
 {
 	public:
-		CUDAWarpingSolver(unsigned int imageWidth, unsigned int imageHeight);
+        CUDAWarpingSolver(const std::vector<unsigned int>& dims);
 		~CUDAWarpingSolver();
 
-		void solveGN(float2* d_urshape, float2* d_warpField, float* d_warpAngles, float2* d_constraints, float* d_mask, unsigned int nNonLinearIterations, unsigned int nLinearIterations, float weightFitting, float weightRegularizer);
-		
+        virtual double solve(const NamedParameters& solverParameters, const NamedParameters& problemParameters, bool profileSolve, std::vector<SolverIteration>& iters) override;
+
 	private:
 
 		SolverState	m_solverState;
-
-		unsigned int m_imageWidth;
-		unsigned int m_imageHeight;
+        std::vector<unsigned int> m_dims;
 };

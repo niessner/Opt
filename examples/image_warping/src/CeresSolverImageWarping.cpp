@@ -2,10 +2,10 @@
 
 #include "main.h"
 #include "Configure.h"
+#include "../../shared/OptUtils.h"
 
 #ifdef USE_CERES
-const bool performanceTest = true;
-//const int linearIterationMin = 100;
+
 
 #include <cuda_runtime.h>
 #include "../../shared/Precision.h"
@@ -145,18 +145,70 @@ struct RegTerm
     float weight;
 };
 
-float CeresSolverWarping::solve(OPT_FLOAT2* h_x_float, OPT_FLOAT* h_a_float, OPT_FLOAT2* h_urshape, OPT_FLOAT2* h_constraints, OPT_FLOAT* h_mask, float weightFit, float weightReg, std::vector<SolverIteration>& result)
+double CeresSolverWarping::solve(const NamedParameters& solverParameters, const NamedParameters& problemParameters, bool profileSolve, std::vector<SolverIteration>& iters)
 {
-    float weightFitSqrt = sqrt(weightFit);
-    float weightRegSqrt = sqrt(weightReg);
+    /*
+    
+    const int pixelCount = m_image.getWidth()*m_image.getHeight();
 
+            OPT_FLOAT2* h_warpField = new OPT_FLOAT2[pixelCount];
+            OPT_FLOAT* h_warpAngles = new OPT_FLOAT[pixelCount];
+
+            OPT_FLOAT2* h_urshape = new OPT_FLOAT2[pixelCount];
+            OPT_FLOAT*  h_mask = new OPT_FLOAT[pixelCount];
+            OPT_FLOAT2* h_constraints = new OPT_FLOAT2[pixelCount];
+
+			float totalCeresTimeMS = 0.0f;
+
+            cutilSafeCall(cudaMemcpy(h_urshape, d_urshape, sizeof(OPT_FLOAT2) * pixelCount, cudaMemcpyDeviceToHost));
+            cutilSafeCall(cudaMemcpy(h_mask, d_mask, sizeof(OPT_FLOAT) * pixelCount, cudaMemcpyDeviceToHost));
+            cutilSafeCall(cudaMemcpy(h_constraints, d_constraints, sizeof(OPT_FLOAT2) * pixelCount, cudaMemcpyDeviceToHost));
+            cutilSafeCall(cudaMemcpy(h_warpField, d_warpField, sizeof(OPT_FLOAT2) * pixelCount, cudaMemcpyDeviceToHost));
+            cutilSafeCall(cudaMemcpy(h_warpAngles, d_warpAngles, sizeof(OPT_FLOAT) * pixelCount, cudaMemcpyDeviceToHost));
+
+			std::cout << std::endl << std::endl;
+
+            for (unsigned int i = 1; i < m_params.numIter; i++)	{
+				std::cout << "//////////// ITERATION" << i << "  (CERES) ///////////////" << std::endl;
+                setConstraintImage((float)i / (float)m_params.numIter);
+                cutilSafeCall(cudaMemcpy(h_constraints, d_constraints, sizeof(OPT_FLOAT2) * pixelCount, cudaMemcpyDeviceToHost));
+
+                totalCeresTimeMS = m_warpingSolverCeres->solve(h_warpField, h_warpAngles, h_urshape, h_constraints, h_mask, weightFit, weightReg, m_ceresIters);
+                std::cout << std::endl;
+                if (i == 1 && m_params.earlyOut) break;
+			}
+
+            cutilSafeCall(cudaMemcpy(d_warpField, h_warpField, sizeof(OPT_FLOAT2) * pixelCount, cudaMemcpyHostToDevice));
+            cutilSafeCall(cudaMemcpy(d_warpAngles, h_warpAngles, sizeof(OPT_FLOAT) * pixelCount, cudaMemcpyHostToDevice));
+			copyResultToCPU();
+    */
+
+
+    float weightFitSqrt = getTypedParameter<float>("w_fitSqrt", problemParameters);
+    float weightRegSqrt = getTypedParameter<float>("w_regSqrt", problemParameters);
+    size_t N = m_dims[0] * m_dims[1];
+
+    std::vector<double2> h_x_double;
+    std::vector<double> h_a_double;
+
+    std::vector<float2> h_x_float;
+    std::vector<float> h_a_float;
+    std::vector<float2> h_urshape;
+    std::vector<float2> h_constraints;
+    std::vector<float> h_mask;
+
+    findAndCopyArrayToCPU("Offset", h_x_float, problemParameters);
+    findAndCopyArrayToCPU("Angle", h_a_float, problemParameters);
+    findAndCopyArrayToCPU("UrShape", h_urshape, problemParameters);
+    findAndCopyArrayToCPU("Constraints", h_constraints, problemParameters);
+    findAndCopyArrayToCPU("Mask", h_mask, problemParameters);
     Problem problem;
 
     auto getPixel = [=](int x, int y) {
-        return y * m_width + x;
+        return y * m_dims[0] + x;
     };
 
-    const int pixelCount = m_width * m_height;
+    const int pixelCount = m_dims[0] * m_dims[1];
     for (int i = 0; i < pixelCount; i++)
     {
         h_x_double[i].x = h_x_float[i].x;
@@ -167,16 +219,16 @@ float CeresSolverWarping::solve(OPT_FLOAT2* h_x_float, OPT_FLOAT* h_a_float, OPT
     // add all fit constraints
     //if (mask(i, j) == 0 && constaints(i, j).u >= 0 && constaints(i, j).v >= 0)
     //    fit = (x(i, j) - constraints(i, j)) * w_fitSqrt
-    for (int y = 0; y < m_height; y++)
+    for (int y = 0; y < m_dims[1]; y++)
     {
-        for (int x = 0; x < m_width; x++)
+        for (int x = 0; x < m_dims[0]; x++)
         {
             float mask = h_mask[getPixel(x, y)];
             const vec2f constraint = toVec(h_constraints[getPixel(x, y)]);
             if (mask == 0.0f && constraint.x >= 0.0f && constraint.y >= 0.0f)
             {
                 ceres::CostFunction* costFunction = FitTerm::Create(constraint, weightFitSqrt);
-                double2 *varStart = h_x_double + getPixel(x, y);
+                double2 *varStart = h_x_double.data() + getPixel(x, y);
                 problem.AddResidualBlock(costFunction, NULL, (double*)varStart);
             }
         }
@@ -185,9 +237,9 @@ float CeresSolverWarping::solve(OPT_FLOAT2* h_x_float, OPT_FLOAT* h_a_float, OPT
     //add all reg constraints
     //if(mask(i, j) == 0 && offset-in-bounds)
     //  cost = (x(i, j) - x(i + ox, j + oy)) - mul(R, urshape(i, j) - urshape(i + ox, j + oy)) * w_regSqrt
-    for (int y = 0; y < m_height; y++)
+    for (int y = 0; y < m_dims[1]; y++)
     {
-        for (int x = 0; x < m_width; x++)
+        for (int x = 0; x < m_dims[0]; x++)
         {
             float mask = h_mask[getPixel(x, y)];
             if (mask == 0.0f) {
@@ -195,13 +247,13 @@ float CeresSolverWarping::solve(OPT_FLOAT2* h_x_float, OPT_FLOAT* h_a_float, OPT
                 for (vec2i offset : offsets)
                 {
                     const vec2i oPos = offset + vec2i(x, y);
-                    if (oPos.x >= 0 && oPos.x < m_width && oPos.y >= 0 && oPos.y < m_height && h_mask[getPixel(oPos.x, oPos.y)] == 0.0f)
+                    if (oPos.x >= 0 && oPos.x < m_dims[0] && oPos.y >= 0 && oPos.y < m_dims[1] && h_mask[getPixel(oPos.x, oPos.y)] == 0.0f)
                     {
                         vec2f deltaUr = toVec(h_urshape[getPixel(x, y)]) - toVec(h_urshape[getPixel(oPos.x, oPos.y)]);
                         ceres::CostFunction* costFunction = RegTerm::Create(deltaUr, weightRegSqrt);
-                        double2 *varStartA = h_x_double + getPixel(x, y);
-                        double2 *varStartB = h_x_double + getPixel(oPos.x, oPos.y);
-                        problem.AddResidualBlock(costFunction, NULL, (double*)varStartA, (double*)varStartB, h_a_double + getPixel(x, y));
+                        double2 *varStartA = h_x_double.data() + getPixel(x, y);
+                        double2 *varStartB = h_x_double.data() + getPixel(oPos.x, oPos.y);
+                        problem.AddResidualBlock(costFunction, NULL, (double*)varStartA, (double*)varStartB, h_a_double.data() + getPixel(x, y));
                     }
                 }
             } 
@@ -210,108 +262,21 @@ float CeresSolverWarping::solve(OPT_FLOAT2* h_x_float, OPT_FLOAT* h_a_float, OPT
     
     cout << "Solving..." << endl;
 
-    Solver::Options options;
     Solver::Summary summary;
+    unique_ptr<Solver::Options> options = initializeOptions(solverParameters);
 
-   // options.minimizer_progress_to_stdout = true;// !performanceTest;
-
-    options.minimizer_progress_to_stdout = true;
-
-    //faster methods
-    options.num_threads = 8;
-    options.num_linear_solver_threads = 8;
 #if USE_CERES_PCG
-	options.linear_solver_type = ceres::LinearSolverType::CGNR; 
+    options->linear_solver_type = ceres::LinearSolverType::CGNR;
 #else
-	options.linear_solver_type = ceres::LinearSolverType::SPARSE_NORMAL_CHOLESKY; 
+    options->linear_solver_type = ceres::LinearSolverType::SPARSE_NORMAL_CHOLESKY;
 #endif
+    options->function_tolerance = 1e-2;
+    options->gradient_tolerance = 1e-4 * options->function_tolerance;
 
-    options.max_num_iterations = 1000;
-    //options.linear_solver_type = ceres::LinearSolverType::SPARSE_SCHUR; 
-    
-    //slower methods
-    //options.linear_solver_type = ceres::LinearSolverType::ITERATIVE_SCHUR; 
-    //options.linear_solver_type = ceres::LinearSolverType::CGNR;
-    
-    //options.minimizer_type = ceres::LINE_SEARCH;
+    cout << "Solving..." << endl;
 
-    //options.min_linear_solver_iterations = linearIterationMin;
-    
-    //options.function_tolerance = 0.01;
-    //options.gradient_tolerance = 1e-4 * options.function_tolerance;
-
-    //options.min_lm_diagonal = 1.0f;
-    //options.min_lm_diagonal = options.max_lm_diagonal;
-    //options.max_lm_diagonal = 10000000.0;
-
-    //problem.Evaluate(Problem::EvaluateOptions(), &cost, nullptr, nullptr, nullptr);
-    //cout << "Cost*2 start: " << cost << endl;
-
-    // TODO: remove
-    //options.linear_solver_type = ceres::LinearSolverType::CGNR; 
-
-
-    options.function_tolerance = 1e-2;
-    options.gradient_tolerance = 1e-4 * options.function_tolerance;
-
-    // Default values, reproduced here for clarity
-    //options.trust_region_strategy_type = ceres::TrustRegionStrategyType::LEVENBERG_MARQUARDT;
-    options.initial_trust_region_radius = 1e4;
-    options.max_trust_region_radius = 1e16;
-    options.min_trust_region_radius = 1e-32;
-    options.min_relative_decrease = 1e-3;
-    // Disable to match Opt
-    //options.min_lm_diagonal = 1e-32;
-    //options.max_lm_diagonal = std::numeric_limits<double>::infinity();
-    //options.min_trust_region_radius = 1e-256;
-
-    //options.initial_trust_region_radius = 0.005;
-
-    options.initial_trust_region_radius = 1e4;
-    //options.initial_trust_region_radius = 1e7;
-    //options.max_linear_solver_iterations = 20;
-    
-    options.eta = 1e-4;
-
-    options.jacobi_scaling = true;
-    //options.preconditioner_type = ceres::PreconditionerType::IDENTITY;
-
-
-    options.max_num_iterations = 100;
-
-    double elapsedTime;
-    {
-        ml::Timer timer;
-        Solve(options, &problem, &summary);
-        elapsedTime = timer.getElapsedTimeMS();
-    }
-    
-    cout << "Solver used: " << summary.linear_solver_type_used << endl;
-    cout << "Minimizer iters: " << summary.iterations.size() << endl;
-    cout << "Total time: " << elapsedTime << "ms" << endl;
-
-    double iterationTotalTime = 0.0;
-    int totalLinearItereations = 0;
-    for (auto &i : summary.iterations)
-    {
-        iterationTotalTime += i.iteration_time_in_seconds;
-        totalLinearItereations += i.linear_solver_iterations;
-        cout << "Iteration: " << i.linear_solver_iterations << " " << i.iteration_time_in_seconds * 1000.0 << "ms" << endl;
-    }
-
-    for (auto &i : summary.iterations) {
-        result.push_back(SolverIteration(i.cost, i.iteration_time_in_seconds * 1000.0));
-    }
-
-    cout << "Total iteration time: " << iterationTotalTime << endl;
-    cout << "Cost per linear solver iteration: " << iterationTotalTime * 1000.0 / totalLinearItereations << "ms" << endl;
-
-    double cost = -1.0;
-    problem.Evaluate(Problem::EvaluateOptions(), &cost, nullptr, nullptr, nullptr);
-    cout << "Cost*2 end: " << cost * 2 << endl;
+    double cost = launchProfiledSolveAndSummary(options, &problem, profileSolve, iters);
     m_finalCost = cost;
-
-    cout << summary.FullReport() << endl;
 
     for (int i = 0; i < pixelCount; i++)
     {
@@ -319,8 +284,9 @@ float CeresSolverWarping::solve(OPT_FLOAT2* h_x_float, OPT_FLOAT* h_a_float, OPT
         h_x_float[i].y = (float)h_x_double[i].y;
         h_a_float[i] = (float)h_a_double[i];
     }
-
-    return (float)(summary.total_time_in_seconds * 1000.0);
+    findAndCopyToArrayFromCPU("Offset", h_x_float, problemParameters);
+    findAndCopyToArrayFromCPU("Angle", h_a_float, problemParameters);
+    return m_finalCost;
 }
 
 #endif

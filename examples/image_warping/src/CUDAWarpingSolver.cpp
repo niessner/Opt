@@ -1,13 +1,13 @@
 #include "CUDAWarpingSolver.h"
+#include "../../shared/OptUtils.h"
+extern "C" double ImageWarpingSolveGNStub(SolverInput& input, SolverState& state, SolverParameters& parameters);	// gauss newton
 
-extern "C" void ImageWarpiungSolveGNStub(SolverInput& input, SolverState& state, SolverParameters& parameters);	// gauss newton
-
-CUDAWarpingSolver::CUDAWarpingSolver(unsigned int imageWidth, unsigned int imageHeight) : m_imageWidth(imageWidth), m_imageHeight(imageHeight)
+CUDAWarpingSolver::CUDAWarpingSolver(const std::vector<unsigned int>& dims) : m_dims(dims)
 {
 	const unsigned int THREADS_PER_BLOCK = 1024; // keep consistent with the GPU
 	const unsigned int tmpBufferSize = THREADS_PER_BLOCK*THREADS_PER_BLOCK;
 
-	const unsigned int N = m_imageWidth*m_imageHeight;
+    const unsigned int N = m_dims[0] * m_dims[1];
 	const unsigned int numberOfVariables = N;
 
 	// State
@@ -50,24 +50,27 @@ CUDAWarpingSolver::~CUDAWarpingSolver()
 	cutilSafeCall(cudaFree(m_solverState.d_sumResidual));
 }
 
-void CUDAWarpingSolver::solveGN(float2* d_urshape, float2* d_warpField, float* d_warpAngles, float2* d_constraints, float* d_mask, unsigned int nNonLinearIterations, unsigned int nLinearIterations, float weightFitting, float weightRegularizer)
+float sq(float x) { return x*x; }
+
+double CUDAWarpingSolver::solve(const NamedParameters& solverParams, const NamedParameters& probParams, bool profileSolve, std::vector<SolverIteration>& iters)
 {
-	m_solverState.d_urshape = d_urshape;
-	m_solverState.d_mask = d_mask;
-	m_solverState.d_x = d_warpField;
-	m_solverState.d_A = d_warpAngles;
 
-	SolverParameters parameters;
-	parameters.weightFitting = weightFitting;
-	parameters.weightRegularizer = weightRegularizer;	
-	parameters.nNonLinearIterations = nNonLinearIterations;
-	parameters.nLinIterations = nLinearIterations;
+    SolverInput solverInput;
+    m_solverState.d_urshape = getTypedParameterImage<float2>("UrShape", probParams);
+    m_solverState.d_mask = getTypedParameterImage<float>("Mask", probParams);
+    solverInput.d_constraints = getTypedParameterImage<float2>("Constraints", probParams);
+    m_solverState.d_A = getTypedParameterImage<float>("Angle", probParams);
+    m_solverState.d_x = getTypedParameterImage<float2>("Offset", probParams);
+
+    SolverParameters parameters;
+    parameters.weightFitting = sq(getTypedParameter<float>("w_fitSqrt", probParams));
+    parameters.weightRegularizer = sq(getTypedParameter<float>("w_regSqrt", probParams));
+    parameters.nNonLinearIterations = getTypedParameter<unsigned int>("nonLinearIterations", solverParams);
+    parameters.nLinIterations = getTypedParameter<unsigned int>("linearIterations", solverParams);
 	
-	SolverInput solverInput;
-	solverInput.N = m_imageWidth*m_imageHeight;
-	solverInput.width = m_imageWidth;
-	solverInput.height = m_imageHeight;
-	solverInput.d_constraints = d_constraints;
 
-	ImageWarpiungSolveGNStub(solverInput, m_solverState, parameters);
+    solverInput.N = m_dims[0] * m_dims[1];
+    solverInput.width = m_dims[0];
+    solverInput.height = m_dims[1];
+	return ImageWarpingSolveGNStub(solverInput, m_solverState, parameters);
 }

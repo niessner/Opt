@@ -1,45 +1,15 @@
 #pragma once
 #include "../../shared/Precision.h"
-class CeresSolverWarping {
-
+#include "../../shared/CeresSolverBase.h"
+class CeresSolverWarping : public CeresSolverBase {
 public:
-    CeresSolverWarping(unsigned int width, unsigned int height)
-	{
-		m_width = width;
-		m_height = height;
-
-        h_x_double = new double2[width * height];
-        h_a_double = new double[width * height];
-
-        for (int i = 0; i < (int)width * (int)height; i++)
-        {
-            h_x_double[i].x = 0.0;
-            h_x_double[i].y = 0.0;
-            h_a_double[i] = 0.0;
-        }
-	}
-
-    ~CeresSolverWarping()
-	{
-		
-	}
-
-    // !returns total time taken for solve, in milliseconds
-    float solve(OPT_FLOAT2* h_x_float, OPT_FLOAT* h_a_float, OPT_FLOAT2* h_urshape, OPT_FLOAT2* h_constraints, OPT_FLOAT* h_mask, float weightFit, float weightReg, std::vector<SolverIteration>& results);
-
-    double finalCost() const {
-        return m_finalCost;
-    }
-
-private:
-    double m_finalCost = nan("");
-	double2* h_x_double;
-    double* h_a_double;
-	int m_width, m_height;
+    CeresSolverWarping(const std::vector<unsigned int>& dims) : CeresSolverBase(dims) {}
+    virtual double solve(const NamedParameters& solverParameters, const NamedParameters& problemParameters, bool profileSolve, std::vector<SolverIteration>& iter) override;
 };
 #ifndef USE_CERES
-inline float CeresSolverWarping::solve(OPT_FLOAT2* h_x_float, OPT_FLOAT* h_a_float, OPT_FLOAT2* h_urshape, OPT_FLOAT2* h_constraints, OPT_FLOAT* h_mask, float weightFit, float weightReg, std::vector<SolverIteration>& results)
+CeresSolverWarping::CeresSolverWarping(const std::vector<unsigned int>&) {}
+inline double CeresSolverWarping::solve(const NamedParameters& solverParameters, const NamedParameters& problemParameters, bool profileSolve, std::vector<SolverIteration>& iter)
 {
-    return 0.0f;
+    return nan(nullptr);
 }
 #endif
