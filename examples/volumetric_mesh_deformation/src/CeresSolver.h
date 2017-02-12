@@ -37,6 +37,5 @@ class CeresSolver : public CeresSolverBase
 };
 #ifndef USE_CERES
 CeresSolver::CeresSolver(const std::vector<unsigned int>&) {}
-CeresSolver::~CeresSolver() {}
 virtual double CeresSolver::solve(const NamedParameters& solverParameters, const NamedParameters& problemParameters, bool profileSolve, std::vector<SolverIteration>& iter) {}
 #endif
