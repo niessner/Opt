@@ -127,6 +127,7 @@ xcopy /Y /D "..\..\API\release\include\*.h" "."</Command>
     </PreBuildEvent>
   </ItemDefinitionGroup>
   <ItemGroup>
+    <ClCompile Include="..\shared\CeresSolverBase.cpp" />
     <ClCompile Include="src\CeresSolverPoissonImageEditing.cpp" />
     <ClCompile Include="src\CUDAPatchSolverWarping.cpp" />
     <ClCompile Include="src\CUDAWarpingSolver.cpp" />
@@ -135,12 +136,22 @@ xcopy /Y /D "..\..\API\release\include\*.h" "."</Command>
     <ClCompile Include="src\EigenSolverPoissonImageEditing.cpp" />
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="..\shared\CeresSolverBase.h" />
+    <ClInclude Include="..\shared\CombinedSolverBase.h" />
+    <ClInclude Include="..\shared\CombinedSolverParameters.h" />
+    <ClInclude Include="..\shared\NamedParameters.h" />
+    <ClInclude Include="..\shared\OptGraph.h" />
+    <ClInclude Include="..\shared\OptImage.h" />
+    <ClInclude Include="..\shared\OptSolver.h" />
+    <ClInclude Include="..\shared\OptUtils.h" />
+    <ClInclude Include="..\shared\SolverBase.h" />
+    <ClInclude Include="..\shared\SolverIteration.h" />
     <ClInclude Include="src\CeresSolverPoissonImageEditing.h" />
+    <ClInclude Include="src\CombinedSolver.h" />
     <ClInclude Include="src\CUDAPatchSolverWarping.h" />
     <ClInclude Include="src\CUDATimer.h" />
     <ClInclude Include="src\CUDAWarpingSolver.h" />
     <ClInclude Include="src\EigenSolverPoissonImageEditing.h" />
-    <ClInclude Include="src\ImageWarping.h" />
     <ClInclude Include="src\PatchSolverWarpingParameters.h" />
     <ClInclude Include="src\PatchSolverWarpingEquations.h" />
     <ClInclude Include="src\PatchSolverWarpingState.h" />

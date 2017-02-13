@@ -1,7 +1,7 @@
 #pragma once
 
 #include "main.h"
-
+#include "../../shared/OptUtils.h"
 #ifdef USE_CERES
 
 #include <cuda_runtime.h>
@@ -75,19 +75,26 @@ struct FitTerm
     float weight;
 };
 
-void CeresSolverPoissonImageEditing::solve(float4* h_unknownFloat , float4* h_target, float* h_mask, float weightFit, float weightReg)
+double CeresSolverPoissonImageEditing::solve(const NamedParameters& solverParameters, const NamedParameters& problemParameters, bool profileSolve, std::vector<SolverIteration>& iters)
 {
-    float weightFitSqrt = sqrt(weightFit);
-    float weightRegSqrt = sqrt(weightReg);
 
     Problem problem;
 
     auto getPixel = [=](int x, int y) {
-        return y * width + x;
+        return y * m_dims[0] + x;
     };
 
-    const int pixelCount = width * height;
-    double4 *h_unknownDouble = new double4[pixelCount];
+    const int pixelCount = m_dims[0] * m_dims[1];
+    std::vector<float4> h_unknownFloat(pixelCount);
+    std::vector<float4> h_target(pixelCount);
+    std::vector<float> h_mask(pixelCount);
+
+    findAndCopyArrayToCPU("X", h_unknownFloat, problemParameters);
+    findAndCopyArrayToCPU("T", h_target, problemParameters);
+    findAndCopyArrayToCPU("M", h_mask, problemParameters);
+
+    std::vector<double4> h_unknownDouble(pixelCount);
+
     for (int i = 0; i < pixelCount; i++)
     {
         h_unknownDouble[i].x = h_unknownFloat[i].x;
@@ -97,9 +104,9 @@ void CeresSolverPoissonImageEditing::solve(float4* h_unknownFloat , float4* h_ta
     }
 
     vector< pair<int, int> > edges;
-    for (int y = 0; y < height - 1; y++)
+    for (int y = 0; y < m_dims[1] - 1; y++)
     {
-        for (int x = 0; x < width - 1; x++)
+        for (int x = 0; x < m_dims[0] - 1; x++)
         {
             int pixel00 = getPixel(x + 0, y + 0);
             int pixel10 = getPixel(x + 1, y + 0);
@@ -127,8 +134,8 @@ void CeresSolverPoissonImageEditing::solve(float4* h_unknownFloat , float4* h_ta
 
             vec4f targetDelta = targetA - targetB;
             ceres::CostFunction* costFunction = EdgeTerm::Create(targetA - targetB, 1.0f);
-            double4 *varStartA = h_unknownDouble + e.first;
-            double4 *varStartB = h_unknownDouble + e.second;
+            double4 *varStartA = h_unknownDouble.data() + e.first;
+            double4 *varStartB = h_unknownDouble.data() + e.second;
 
             problem.AddResidualBlock(costFunction, NULL, (double*)varStartA, (double*)varStartB);
             edgesAdded++;
@@ -147,7 +154,7 @@ void CeresSolverPoissonImageEditing::solve(float4* h_unknownFloat , float4* h_ta
             const vec4f target = toVec(h_unknownFloat[e.first]);
 
             ceres::CostFunction* costFunction = FitTerm::Create(target, 1.0f);
-            double4 *varStart = h_unknownDouble + e.first;
+            double4 *varStart = h_unknownDouble.data() + e.first;
 
             problem.AddResidualBlock(costFunction, NULL, (double*)varStart);
             edgesAdded++;
@@ -156,69 +163,13 @@ void CeresSolverPoissonImageEditing::solve(float4* h_unknownFloat , float4* h_ta
 
     cout << "Solving..." << endl;
 
-    Solver::Options options;
     Solver::Summary summary;
+    unique_ptr<Solver::Options> options = initializeOptions(solverParameters);
+    options->function_tolerance = 0.01;
+    options->gradient_tolerance = 1e-4 * options->function_tolerance;
 
-    options.minimizer_progress_to_stdout = true;
-
-    //faster methods
-    options.num_threads = 8;
-    options.num_linear_solver_threads = 8;
-    options.linear_solver_type = ceres::LinearSolverType::SPARSE_NORMAL_CHOLESKY; //7.2s
-    //options.linear_solver_type = ceres::LinearSolverType::SPARSE_SCHUR; //10.0s
-
-    //slower methods
-    //options.linear_solver_type = ceres::LinearSolverType::ITERATIVE_SCHUR; //40.6s
-    //options.linear_solver_type = ceres::LinearSolverType::CGNR; //46.9s
-
-    //options.minimizer_type = ceres::LINE_SEARCH;
-
-    //options.min_linear_solver_iterations = linearIterationMin;
-    options.max_num_iterations = 100;
-    options.function_tolerance = 0.01;
-    options.gradient_tolerance = 1e-4 * options.function_tolerance;
-
-    //options.min_lm_diagonal = 1.0f;
-    //options.min_lm_diagonal = options.max_lm_diagonal;
-    //options.max_lm_diagonal = 10000000.0;
-
-    //problem.Evaluate(Problem::EvaluateOptions(), &cost, nullptr, nullptr, nullptr);
-    //cout << "Cost*2 start: " << cost << endl;
-
-    double elapsedTime;
-    {
-        ml::Timer timer;
-        try {
-            Solve(options, &problem, &summary);
-        }
-        catch (exception ex)
-        {
-            cout << "exception: " << ex.what() << endl;
-        }
-        elapsedTime = timer.getElapsedTimeMS();
-    }
-
-    cout << "Solver used: " << summary.linear_solver_type_used << endl;
-    cout << "Minimizer iters: " << summary.iterations.size() << endl;
-    cout << "Total time: " << elapsedTime << "ms" << endl;
-
-    double iterationTotalTime = 0.0;
-    int totalLinearItereations = 0;
-    for (auto &i : summary.iterations)
-    {
-        iterationTotalTime += i.iteration_time_in_seconds;
-        totalLinearItereations += i.linear_solver_iterations;
-        cout << "Iteration: " << i.linear_solver_iterations << " " << i.iteration_time_in_seconds * 1000.0 << "ms" << endl;
-    }
-
-    cout << "Total iteration time: " << iterationTotalTime << endl;
-    cout << "Cost per linear solver iteration: " << iterationTotalTime * 1000.0 / totalLinearItereations << "ms" << endl;
-
-    double cost = -1.0;
-    problem.Evaluate(Problem::EvaluateOptions(), &cost, nullptr, nullptr, nullptr);
-    cout << "Cost*2 end: " << cost * 2 << endl;
-
-    cout << summary.FullReport() << endl;
+    double cost = launchProfiledSolveAndSummary(options, &problem, profileSolve, iters);
+    m_finalCost = cost;
 
     for (int i = 0; i < pixelCount; i++)
     {
@@ -228,7 +179,8 @@ void CeresSolverPoissonImageEditing::solve(float4* h_unknownFloat , float4* h_ta
         h_unknownFloat[i].w = (float)h_unknownDouble[i].w;
     }
 
-    cout << "Final time: " << (float)(summary.total_time_in_seconds * 1000.0) << "ms" << endl;
+    findAndCopyToArrayFromCPU("X", h_unknownFloat, problemParameters);;
+    return m_finalCost;
 }
 
 #endif

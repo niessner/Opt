@@ -5,20 +5,18 @@
 
 #include "../../cudaUtil.h"
 #include "PatchSolverWarpingState.h"
+#include "../../shared/SolverBase.h"
 
-class CUDAPatchSolverWarping
+class CUDAPatchSolverWarping : public SolverBase
 {
 	public:
+        CUDAPatchSolverWarping(const std::vector<unsigned int>& dims);
+        ~CUDAPatchSolverWarping();
 
-		CUDAPatchSolverWarping(unsigned int imageWidth, unsigned int imageHeight);
-		~CUDAPatchSolverWarping();
+        virtual double solve(const NamedParameters& solverParameters, const NamedParameters& problemParameters, bool profileSolve, std::vector<SolverIteration>& iters) override;
 
-		void solveGN(float4* d_image, float4* d_target, float* d_mask, unsigned int nNonLinearIterations, unsigned int nLinearITerations, unsigned int nPatchIterations, float weightFitting, float weightRegularizer);
-			
 	private:
 
 		PatchSolverState m_solverState;
-
-		unsigned int m_imageWidth;
-		unsigned int m_imageHeight;
+        std::vector<unsigned int> m_dims;
 };

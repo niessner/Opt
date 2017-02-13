@@ -1,12 +1,12 @@
 #pragma once
-
-class EigenSolverPoissonImageEditing {
+#include "../../shared/CeresSolverBase.h"
+class EigenSolverPoissonImageEditing : public SolverBase {
 
 public:
-    EigenSolverPoissonImageEditing(unsigned int width, unsigned int height) : m_width(width), m_height(height) {}
+    EigenSolverPoissonImageEditing(const std::vector<unsigned int>& dims) : m_dims(dims) {}
 
-    void solve(float4* h_unknown, float4* h_target, float* h_mask, float weightFit, float weightReg);
+    virtual double solve(const NamedParameters& solverParameters, const NamedParameters& problemParameters, bool profileSolve, std::vector<SolverIteration>& iters) override;
 
 private:
-    int m_width, m_height;
+    std::vector<unsigned int> m_dims;
 };

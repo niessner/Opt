@@ -147,43 +147,6 @@ struct RegTerm
 
 double CeresSolverWarping::solve(const NamedParameters& solverParameters, const NamedParameters& problemParameters, bool profileSolve, std::vector<SolverIteration>& iters)
 {
-    /*
-    
-    const int pixelCount = m_image.getWidth()*m_image.getHeight();
-
-            OPT_FLOAT2* h_warpField = new OPT_FLOAT2[pixelCount];
-            OPT_FLOAT* h_warpAngles = new OPT_FLOAT[pixelCount];
-
-            OPT_FLOAT2* h_urshape = new OPT_FLOAT2[pixelCount];
-            OPT_FLOAT*  h_mask = new OPT_FLOAT[pixelCount];
-            OPT_FLOAT2* h_constraints = new OPT_FLOAT2[pixelCount];
-
-			float totalCeresTimeMS = 0.0f;
-
-            cutilSafeCall(cudaMemcpy(h_urshape, d_urshape, sizeof(OPT_FLOAT2) * pixelCount, cudaMemcpyDeviceToHost));
-            cutilSafeCall(cudaMemcpy(h_mask, d_mask, sizeof(OPT_FLOAT) * pixelCount, cudaMemcpyDeviceToHost));
-            cutilSafeCall(cudaMemcpy(h_constraints, d_constraints, sizeof(OPT_FLOAT2) * pixelCount, cudaMemcpyDeviceToHost));
-            cutilSafeCall(cudaMemcpy(h_warpField, d_warpField, sizeof(OPT_FLOAT2) * pixelCount, cudaMemcpyDeviceToHost));
-            cutilSafeCall(cudaMemcpy(h_warpAngles, d_warpAngles, sizeof(OPT_FLOAT) * pixelCount, cudaMemcpyDeviceToHost));
-
-			std::cout << std::endl << std::endl;
-
-            for (unsigned int i = 1; i < m_params.numIter; i++)	{
-				std::cout << "//////////// ITERATION" << i << "  (CERES) ///////////////" << std::endl;
-                setConstraintImage((float)i / (float)m_params.numIter);
-                cutilSafeCall(cudaMemcpy(h_constraints, d_constraints, sizeof(OPT_FLOAT2) * pixelCount, cudaMemcpyDeviceToHost));
-
-                totalCeresTimeMS = m_warpingSolverCeres->solve(h_warpField, h_warpAngles, h_urshape, h_constraints, h_mask, weightFit, weightReg, m_ceresIters);
-                std::cout << std::endl;
-                if (i == 1 && m_params.earlyOut) break;
-			}
-
-            cutilSafeCall(cudaMemcpy(d_warpField, h_warpField, sizeof(OPT_FLOAT2) * pixelCount, cudaMemcpyHostToDevice));
-            cutilSafeCall(cudaMemcpy(d_warpAngles, h_warpAngles, sizeof(OPT_FLOAT) * pixelCount, cudaMemcpyHostToDevice));
-			copyResultToCPU();
-    */
-
-
     float weightFitSqrt = getTypedParameter<float>("w_fitSqrt", problemParameters);
     float weightRegSqrt = getTypedParameter<float>("w_regSqrt", problemParameters);
     size_t N = m_dims[0] * m_dims[1];

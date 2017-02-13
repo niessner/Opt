@@ -1,19 +1,12 @@
 #pragma once
 
-#define RUN_CUDA 1
-#define RUN_OPT 1
-#define RUN_CERES 0
-
-#define RUN_EIGEN 1
-
-#define RUN_CUDA_BLOCK 0
-
 #include "mLibInclude.h"
 
 #include <cuda_runtime.h>
 #include <cudaUtil.h>
 
 #include "../../shared/CombinedSolverParameters.h"
+#include "../../shared/CombinedSolverBase.h"
 #include "../../shared/SolverIteration.h"
 
 #include "CUDAWarpingSolver.h"
@@ -22,59 +15,62 @@
 #include "CeresSolverPoissonImageEditing.h"
 #include "EigenSolverPoissonImageEditing.h"
 
-class ImageWarping {
+class CombinedSolver : public CombinedSolverBase {
 public:
-	ImageWarping(const ColorImageR32G32B32A32& image, const ColorImageR32G32B32A32& image1, const ColorImageR32& imageMask)
+    CombinedSolver(const ColorImageR32G32B32A32& image, const ColorImageR32G32B32A32& image1, const ColorImageR32& imageMask, CombinedSolverParameters params, bool useCUDAPatch, bool useEigen)
 	{
+        m_combinedSolverParameters = params;
+        m_useCUDAPatch = useCUDAPatch;
+        m_useEigen = useEigen;
 		m_image = image;
 		m_image1 = image1;
 		m_imageMask = imageMask;
+        m_dims = { m_image.getWidth(), m_image.getHeight() };
 
-		cutilSafeCall(cudaMalloc(&d_image,	sizeof(float4)*m_image.getWidth()*m_image.getHeight()));
-		cutilSafeCall(cudaMalloc(&d_target, sizeof(float4)*m_image.getWidth()*m_image.getHeight()));
-		cutilSafeCall(cudaMalloc(&d_mask,	sizeof(float) *m_image.getWidth()*m_image.getHeight()));
+        d_image     = createEmptyOptImage(m_dims, OptImage::Type::FLOAT, 4, OptImage::Location::GPU, true);
+        d_target    = createEmptyOptImage(m_dims, OptImage::Type::FLOAT, 4, OptImage::Location::GPU, true);
+        d_mask      = createEmptyOptImage(m_dims, OptImage::Type::FLOAT, 1, OptImage::Location::GPU, true);
 
 		resetGPUMemory();
 
-		m_warpingSolver = NULL;
-		m_optSolver = NULL;
 
-		m_warpingSolverPatch = NULL;
-
-        m_params.useCUDA    = (bool)RUN_CUDA;
-        m_params.useTerra   = false;
-        m_params.useOpt     = (bool)RUN_OPT;
-        m_params.useCeres   = (bool)RUN_CERES;
-
-		//non-blocked solvers
-#if RUN_CUDA
-		m_warpingSolver = new CUDAWarpingSolver(m_image.getWidth(), m_image.getHeight());	
-#endif
-
-#if RUN_OPT
-		m_optSolver = new TerraSolverPoissonImageEditing(m_image.getWidth(), m_image.getHeight(), "poisson_image_editing.t", "gaussNewtonGPU");
-#endif
-#if RUN_CERES
-        m_ceresSolver = new CeresSolverPoissonImageEditing(m_image.getWidth(), m_image.getHeight());
-#endif
-
-#if RUN_EIGEN
-        m_eigenSolver = new EigenSolverPoissonImageEditing(m_image.getWidth(), m_image.getHeight());
-#endif
-
-		//blocked solvers
-#if RUN_CUDA_BLOCK
-		m_warpingSolverPatch = new CUDAPatchSolverWarping(m_image.getWidth(), m_image.getHeight());
-#endif
-
+        addSolver(std::make_shared<CUDAWarpingSolver>(m_dims), "CUDA", m_combinedSolverParameters.useCUDA);
+        addSolver(std::make_shared<CeresSolverPoissonImageEditing>(m_dims), "Ceres", m_combinedSolverParameters.useCeres);
+        addSolver(std::make_shared<EigenSolverPoissonImageEditing>(m_dims), "Eigen", m_useEigen);
+        addSolver(std::make_shared<CUDAPatchSolverWarping>(m_dims), "CUDA Patch", m_useCUDAPatch);
+        addOptSolvers(m_dims, "poisson_image_editing.t");
 		
 	}
 
+    virtual void combinedSolveInit() override {
+        m_problemParams.set("X", d_image);
+        m_problemParams.set("T", d_target);
+        m_problemParams.set("M", d_mask);
+
+        m_solverParams.set("nonLinearIterations", &m_combinedSolverParameters.nonLinearIter);
+        m_solverParams.set("linearIterations", &m_combinedSolverParameters.linearIter);
+        m_solverParams.set("double_precision", &m_combinedSolverParameters.optDoublePrecision);
+    }
+    virtual void preSingleSolve() override {
+        resetGPUMemory();
+    }
+    virtual void postSingleSolve() override { 
+        copyResultToCPU();
+    }
+
+    virtual void preNonlinearSolve(int) override {}
+    virtual void postNonlinearSolve(int) override {}
+
+    virtual void combinedSolveFinalize() override {
+        reportFinalCosts("Poisson Image Editing", m_combinedSolverParameters, getCost("Opt(GN)"), getCost("Opt(LM)"), getCost("CUDA"));
+    }
+
 	void resetGPUMemory()
 	{
-		float4* h_image = new float4[m_image.getWidth()*m_image.getHeight()];
-		float4* h_target = new float4[m_image.getWidth()*m_image.getHeight()];
-		float*  h_mask = new float[m_image.getWidth()*m_image.getHeight()];
+        unsigned int N = m_image.getWidth()*m_image.getHeight();
+        std::vector<float4> h_image(N);
+        std::vector<float4> h_target(N);
+        std::vector<float>  h_mask(N);
 
 		for (unsigned int i = 0; i < m_image1.getHeight(); i++)
 		{
@@ -90,50 +86,29 @@ public:
 				else						  h_mask[i*m_image.getWidth() + j] = 255;
 			}
 		}
-
-		cutilSafeCall(cudaMemcpy(d_image, h_image, sizeof(float4)*m_image.getWidth()*m_image.getHeight(), cudaMemcpyHostToDevice));
-		cutilSafeCall(cudaMemcpy(d_target, h_target, sizeof(float4)*m_image.getWidth()*m_image.getHeight(), cudaMemcpyHostToDevice));
-		cutilSafeCall(cudaMemcpy(d_mask, h_mask, sizeof(float)*m_image.getWidth()*m_image.getHeight(), cudaMemcpyHostToDevice));
-		delete h_mask;
-		delete h_image;
-		delete h_target;
+        d_image->update(h_image);
+        d_target->update(h_target);
+        d_mask->update(h_mask);
 	}
+    ColorImageR32G32B32A32* result() {
+        return &m_result;
+    }
+	/*solve()
+	{	
 
-	~ImageWarping()
-	{
-		cutilSafeCall(cudaFree(d_image));
-		cutilSafeCall(cudaFree(d_target));
-		cutilSafeCall(cudaFree(d_mask));
-
-		SAFE_DELETE(m_warpingSolver);
-		SAFE_DELETE(m_optSolver);
-
-		SAFE_DELETE(m_warpingSolverPatch);
-	}
-
-	ColorImageR32G32B32A32* solve()
-	{
-		//TODO
-		float weightFit = 0.0f; // not used
-		float weightReg = 0.0f; // not used
 		
-		unsigned int nonLinearIter = 1;
-		unsigned int linearIter = 100;
-		unsigned int patchIter = 16;
-		
-#if RUN_CUDA
+
 		std::cout << "=======CUDA=======" << std::endl;
 		resetGPUMemory();
 		m_warpingSolver->solveGN(d_image, d_target, d_mask, nonLinearIter, linearIter, weightFit, weightReg);		
 		copyResultToCPU();
-#endif
-#if RUN_OPT
+
 		std::cout << "\n\n========OPT========" << std::endl;
 		resetGPUMemory();
 		m_optSolver->solve(d_image, d_target, d_mask, nonLinearIter, linearIter, patchIter, weightFit, weightReg);
 		copyResultToCPU();
-#endif
-#if RUN_CERES
+
+
 		{
 			std::cout << "\n\n========CERES========" << std::endl;
 			resetGPUMemory();
@@ -154,9 +129,8 @@ public:
 
 			copyResultToCPU();
 		}
-#endif
 
-#if RUN_EIGEN
+
 		{
 			std::cout << "\n\n========EIGEN========" << std::endl;
 			resetGPUMemory();
@@ -177,30 +151,30 @@ public:
 
 			copyResultToCPU();
 		}
-#endif
 
 
 
-#if RUN_CUDA_BLOCK
 		std::cout << "======CUDA_BLOCK====" << std::endl;
 		resetGPUMemory();
 		m_warpingSolverPatch->solveGN(d_image, d_target, d_mask, nonLinearIter, linearIter, patchIter, weightFit, weightReg);
 		copyResultToCPU();
-#endif
+
         double optGNCost = m_params.useOpt ? m_optSolver->finalCost() : nan(nullptr);
         double optLMCost = nan(nullptr);
         double ceresCost = nan(nullptr);
         m_params.useCeres = false; // TODO: thread this through properly
         reportFinalCosts("Poisson Image Editing", m_params, optGNCost, optLMCost, ceresCost);
 		return &m_result;
-	}
+	}*/
 
 	void copyResultToCPU() {
 		m_result = ColorImageR32G32B32A32(m_image.getWidth(), m_image.getHeight());
-		cutilSafeCall(cudaMemcpy(m_result.getData(), d_image, sizeof(float4)*m_image.getWidth()*m_image.getHeight(), cudaMemcpyDeviceToHost));
+        cutilSafeCall(cudaMemcpy(m_result.getData(), d_image->data(), sizeof(float4)*m_image.getWidth()*m_image.getHeight(), cudaMemcpyDeviceToHost));
 	}
 
 private:
+
+    std::vector<unsigned int> m_dims;
 
 	ColorImageR32G32B32A32 m_image;
 	ColorImageR32G32B32A32 m_image1;
@@ -208,17 +182,10 @@ private:
 
 	ColorImageR32G32B32A32 m_result;
 
-	float4*	d_image;
-	float4* d_target;
-	float*  d_mask;
+	std::shared_ptr<OptImage> d_image;
+    std::shared_ptr<OptImage> d_target;
+    std::shared_ptr<OptImage> d_mask;
 	
-
-    CombinedSolverParameters m_params;
-
-	CUDAWarpingSolver*	    m_warpingSolver;
-	TerraSolverPoissonImageEditing* m_optSolver;
-    CeresSolverPoissonImageEditing* m_ceresSolver;
-    EigenSolverPoissonImageEditing* m_eigenSolver;
-
-	CUDAPatchSolverWarping* m_warpingSolverPatch;
+    bool m_useCUDAPatch;
+    bool m_useEigen;
 };

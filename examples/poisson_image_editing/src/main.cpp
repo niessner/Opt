@@ -1,5 +1,5 @@
 ﻿#include "main.h"
-#include "ImageWarping.h"
+#include "CombinedSolver.h"
 
 int main(int argc, const char * argv[]) {
 	//// Women
@@ -9,40 +9,6 @@ int main(int argc, const char * argv[]) {
 	const unsigned int offsetX = 0;
 	const unsigned int offsetY = 0;
 	const bool invertMask = false;
-
-	// Boy
-	/*const std::string inputImage = "boymanSource2_2.png";
-	const std::string inputImage1 = "boymanSource1_2.png";
-	const std::string inputImageMask = "boymanMask_2.png";
-	const unsigned int offsetX = 0;
-	const unsigned int offsetY = 0;
-	const bool invertMask = false;*/
-
-
-	//// JRK
-	//const std::string inputImage	 = "jrkSource2.png";
-	//const std::string inputImage1	 = "jrkSource1.png";
-	//const std::string inputImageMask = "jrkMask.png";
-	//const unsigned int offsetX = 0;
-	//const unsigned int offsetY = 0;
-	//const bool invertMask = false;
-
-	//// MONA
-	//const std::string inputImage = "MonaSource1.png";
-	//const std::string inputImage1 = "MonaSource2.png";
-	//const std::string inputImageMask = "MonaMask.png";
-	//const unsigned int offsetX = 37;
-	//const unsigned int offsetY = 88;
- //   const bool invertMask = false;
-
-
-    //const std::string inputImage = "test_1.png";
-    //const std::string inputImage1 = "test_2.png";
-    //const std::string inputImageMask = "testMask.png";
-    //const unsigned int offsetX = 0;
-    //const unsigned int offsetY = 0;
-    //const bool invertMask = false;
-
 
 	ColorImageR8G8B8A8	   image = LodePNG::load(inputImage);
 	ColorImageR32G32B32A32 imageR32(image.getWidth(), image.getHeight());
@@ -92,9 +58,21 @@ int main(int argc, const char * argv[]) {
 		}
 	}
 	
-	ImageWarping warping(imageR32, image1Large, imageR32MaskLarge);
+    CombinedSolverParameters params;
 
-	ColorImageR32G32B32A32* res = warping.solve();
+    params.useCUDA = true;
+    params.useOpt = true;
+    params.useCeres = false;
+    params.nonLinearIter = 1;
+    params.linearIter = 100;
+
+    // This example has a couple solvers that don't fit into the CombinedSolverParameters mold.
+    bool useCUDAPatch = true;
+    bool useEigen = true;
+
+    CombinedSolver solver(imageR32, image1Large, imageR32MaskLarge, params, useCUDAPatch, useEigen);
+    solver.solveAll();
+    ColorImageR32G32B32A32* res = solver.result();
 	ColorImageR8G8B8A8 out(res->getWidth(), res->getHeight());
 	for (unsigned int y = 0; y < res->getHeight(); y++) {
 		for (unsigned int x = 0; x < res->getWidth(); x++) {

@@ -1,13 +1,13 @@
 #include "CUDAWarpingSolver.h"
+#include "../../shared/OptUtils.h"
+extern "C" double ImageWarpingSolveGNStub(SolverInput& input, SolverState& state, SolverParameters& parameters);	// gauss newton
 
-extern "C" void ImageWarpiungSolveGNStub(SolverInput& input, SolverState& state, SolverParameters& parameters);	// gauss newton
-
-CUDAWarpingSolver::CUDAWarpingSolver(unsigned int imageWidth, unsigned int imageHeight) : m_imageWidth(imageWidth), m_imageHeight(imageHeight)
+CUDAWarpingSolver::CUDAWarpingSolver(const std::vector<unsigned int>& dims) : m_dims(dims)
 {
 	const unsigned int THREADS_PER_BLOCK = 1024; // keep consistent with the GPU
 	const unsigned int tmpBufferSize = THREADS_PER_BLOCK*THREADS_PER_BLOCK;
 
-	const unsigned int N = m_imageWidth*m_imageHeight;
+    const unsigned int N = dims[0] * dims[1];
 	const unsigned int numberOfVariables = N;
 
 	// State
@@ -38,22 +38,20 @@ CUDAWarpingSolver::~CUDAWarpingSolver()
 	cutilSafeCall(cudaFree(m_solverState.d_sumResidual));
 }
 
-void CUDAWarpingSolver::solveGN(float4* d_image, float4* d_target, float* d_mask, unsigned int nNonLinearIterations, unsigned int nLinearIterations, float weightFitting, float weightRegularizer)
+double CUDAWarpingSolver::solve(const NamedParameters& solverParams, const NamedParameters& probParams, bool profileSolve, std::vector<SolverIteration>& iters)
 {
-	m_solverState.d_target = d_target;
-	m_solverState.d_mask = d_mask;
-	m_solverState.d_x = d_image;
+    m_solverState.d_target = getTypedParameterImage<float4>("T", probParams);
+    m_solverState.d_mask = getTypedParameterImage<float>("M", probParams);
+    m_solverState.d_x = getTypedParameterImage<float4>("X", probParams);
 
 	SolverParameters parameters;
-	parameters.weightFitting = weightFitting;
-	parameters.weightRegularizer = weightRegularizer;	
-	parameters.nNonLinearIterations = nNonLinearIterations;
-	parameters.nLinIterations = nLinearIterations;
+    parameters.nNonLinearIterations = getTypedParameter<unsigned int>("nonLinearIterations", solverParams);
+    parameters.nLinIterations = getTypedParameter<unsigned int>("linearIterations", solverParams);
 	
 	SolverInput solverInput;
-	solverInput.N = m_imageWidth*m_imageHeight;
-	solverInput.width = m_imageWidth;
-	solverInput.height = m_imageHeight;
+    solverInput.N = m_dims[0] * m_dims[1];
+    solverInput.width = m_dims[0];
+    solverInput.height = m_dims[1];
 
-	ImageWarpiungSolveGNStub(solverInput, m_solverState, parameters);
+	return ImageWarpingSolveGNStub(solverInput, m_solverState, parameters);
 }

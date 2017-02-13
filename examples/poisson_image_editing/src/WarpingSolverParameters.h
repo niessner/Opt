@@ -5,9 +5,6 @@
 
 struct SolverParameters
 {
-	float weightFitting;					// Fitting weights
-	float weightRegularizer;				// Regularization weight
-
 	unsigned int nNonLinearIterations;		// Steps of the non-linear solver	
 	unsigned int nLinIterations;			// Steps of the linear solver
 };

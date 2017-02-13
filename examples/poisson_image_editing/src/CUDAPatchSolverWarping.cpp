@@ -1,13 +1,10 @@
 #include "CUDAPatchSolverWarping.h"
 #include "PatchSolverWarpingParameters.h"
+#include "../../shared/OptUtils.h"
+extern "C" double patchSolveStereoStub(PatchSolverInput& input, PatchSolverState& state, PatchSolverParameters& parameters);
 
-extern "C" void patchSolveStereoStub(PatchSolverInput& input, PatchSolverState& state, PatchSolverParameters& parameters);
-
-CUDAPatchSolverWarping::CUDAPatchSolverWarping(unsigned int imageWidth, unsigned int imageHeight) : m_imageWidth(imageWidth), m_imageHeight(imageHeight)
+CUDAPatchSolverWarping::CUDAPatchSolverWarping(const std::vector<unsigned int>& dims) : m_dims(dims)
 {
-	const unsigned int N = m_imageWidth*m_imageHeight;
-	const unsigned int numberOfVariables = N;
-
 	cutilSafeCall(cudaMalloc(&m_solverState.d_sumResidual, sizeof(float)));
 }
 
@@ -16,23 +13,24 @@ CUDAPatchSolverWarping::~CUDAPatchSolverWarping()
 	cutilSafeCall(cudaFree(m_solverState.d_sumResidual));
 }
 
-void CUDAPatchSolverWarping::solveGN(float4* d_image, float4* d_target, float* d_mask, unsigned int nNonLinearIterations, unsigned int nLinearIterations, unsigned int nPatchIterations, float weightFitting, float weightRegularizer)
+double CUDAPatchSolverWarping::solve(const NamedParameters& solverParams, const NamedParameters& probParams, bool profileSolve, std::vector<SolverIteration>& iters)
 {
-	m_solverState.d_x = d_image;
-	m_solverState.d_mask = d_mask;
-	m_solverState.d_target = d_target;
+    // TOOD: move this to a more visible place
+    unsigned int patchIter = 16;
 
-	PatchSolverParameters parameters;
-	parameters.weightFitting = weightFitting;
-	parameters.weightRegularizer = weightRegularizer;
-	parameters.nNonLinearIterations = nNonLinearIterations;
-	parameters.nLinearIterations = nLinearIterations;
-	parameters.nPatchIterations = nPatchIterations;
+    m_solverState.d_target = getTypedParameterImage<float4>("T", probParams);
+    m_solverState.d_mask = getTypedParameterImage<float>("M", probParams);
+    m_solverState.d_x = getTypedParameterImage<float4>("X", probParams);
+
+    PatchSolverParameters parameters;
+    parameters.nNonLinearIterations = getTypedParameter<unsigned int>("nonLinearIterations", solverParams);
+    parameters.nLinearIterations    = getTypedParameter<unsigned int>("linearIterations", solverParams);
+    parameters.nPatchIterations     = patchIter;
 
 	PatchSolverInput solverInput;
-	solverInput.N = m_imageWidth*m_imageHeight;
-	solverInput.width = m_imageWidth;
-	solverInput.height = m_imageHeight;
+    solverInput.N = m_dims[0] * m_dims[1];
+    solverInput.width = m_dims[0];
+    solverInput.height = m_dims[1];
 	
-	patchSolveStereoStub(solverInput, m_solverState, parameters);
+	return patchSolveStereoStub(solverInput, m_solverState, parameters);
 }

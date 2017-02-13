@@ -2,7 +2,6 @@
 
 struct CombinedSolverParameters {
     bool useCUDA = false;
-    bool useTerra = false;
     bool useOpt = true;
     bool useOptLM = false;
     bool useCeres = false;

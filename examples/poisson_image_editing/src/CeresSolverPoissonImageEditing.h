@@ -1,23 +1,19 @@
 #pragma once
-
-class CeresSolverPoissonImageEditing {
+#include "../../shared/CeresSolverBase.h"
+class CeresSolverPoissonImageEditing : public CeresSolverBase {
 
 public:
-    CeresSolverPoissonImageEditing(unsigned int _width, unsigned int _height)
-	{
-        width = _width;
-        height = _height;
-	}
+    CeresSolverPoissonImageEditing(const std::vector<unsigned int>& dims) : CeresSolverBase(dims) {}
 
-    void solve(float4* h_unknown, float4* h_target, float* h_mask, float weightFit, float weightReg);
+    virtual double solve(const NamedParameters& solverParameters, const NamedParameters& problemParameters, bool profileSolve, std::vector<SolverIteration>& iters) override;
 
 private:
-    int width, height;
+    
 };
 
 #ifndef USE_CERES
 
-inline void CeresSolverPoissonImageEditing::solve(float4* h_unknown, float4* h_target, float* h_mask, float weightFit, float weightReg)
+double CeresSolverPoissonImageEditing::solve(const NamedParameters& solverParameters, const NamedParameters& problemParameters, bool profileSolve, std::vector<SolverIteration>& iters) 
 {
 
 }

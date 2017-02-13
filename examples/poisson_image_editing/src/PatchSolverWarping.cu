@@ -219,7 +219,7 @@ void PCGIterationPatch(PatchSolverInput& input, PatchSolverState& state, PatchSo
 int offsetX[8] = {(int)(0.0f*PATCH_SIZE), (int)((1.0f/2.0f)*PATCH_SIZE), (int)((1.0f/4.0f)*PATCH_SIZE), (int)((3.0f/4.0f)*PATCH_SIZE), (int)((1.0f/8.0f)*PATCH_SIZE), (int)((5.0f/8.0f)*PATCH_SIZE), (int)((3.0f/8.0f)*PATCH_SIZE), (int)((7.0f/8.0f)*PATCH_SIZE)}; // Halton sequence base 2
 int offsetY[8] = {(int)(0.0f*PATCH_SIZE), (int)((1.0f/3.0f)*PATCH_SIZE), (int)((2.0f/3.0f)*PATCH_SIZE), (int)((1.0f/9.0f)*PATCH_SIZE), (int)((4.0f/9.0f)*PATCH_SIZE), (int)((7.0f/9.0f)*PATCH_SIZE), (int)((2.0f/9.0f)*PATCH_SIZE), (int)((5.0f/9.0f)*PATCH_SIZE)}; // Halton sequence base 3
 
-extern "C" void patchSolveStereoStub(PatchSolverInput& input, PatchSolverState& state, PatchSolverParameters& parameters)
+extern "C" double patchSolveStereoStub(PatchSolverInput& input, PatchSolverState& state, PatchSolverParameters& parameters)
 {
 	CUDATimer timer;
 
@@ -239,4 +239,5 @@ extern "C" void patchSolveStereoStub(PatchSolverInput& input, PatchSolverState& 
 
 	float residual = EvalResidual(input, state, parameters, timer);
 	printf("final cost: %f\n", residual);
+    return (double)residual;
 }

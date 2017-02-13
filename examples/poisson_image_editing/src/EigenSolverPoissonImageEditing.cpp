@@ -1,7 +1,7 @@
 #pragma once
 
 #include "main.h"
-
+#include "../../shared/OptUtils.h"
 #define GLOG_NO_ABBREVIATED_SEVERITIES
 #include <Eigen33b1/Eigen>
 #include <Eigen33b1/IterativeLinearSolvers>
@@ -52,17 +52,23 @@ void solveAxEqb(AxEqBSolver& solver, const Eigen::VectorXf& b, Eigen::VectorXf& 
     x = solver.solve(b);
 #endif
 }
-
-void EigenSolverPoissonImageEditing::solve(float4* h_unknownFloat, float4* h_target, float* h_mask, float weightFit, float weightReg)
+double EigenSolverPoissonImageEditing::solve(const NamedParameters& solverParameters, const NamedParameters& problemParameters, bool profileSolve, std::vector<SolverIteration>& iters)
 {
-    float weightFitSqrt = sqrt(weightFit);
-    float weightRegSqrt = sqrt(weightReg);
     int numUnknowns = 0;
     std::unordered_map<vec2i, int, vec2iHash> pixelLocationsToIndex;
     std::vector<vec2i> pixelLocations;
-    for (int y = 0; y < m_height; ++y) {
-        for (int x = 0; x < m_width; ++x) {
-            if (h_mask[y*m_width + x] == 0.0f) {
+    size_t pixelCount = m_dims[0] * m_dims[1];
+    std::vector<float4> h_unknownFloat(pixelCount);
+    std::vector<float4> h_target(pixelCount);
+    std::vector<float>  h_mask(pixelCount);
+
+    findAndCopyArrayToCPU("X", h_unknownFloat, problemParameters);
+    findAndCopyArrayToCPU("T", h_target, problemParameters);
+    findAndCopyArrayToCPU("M", h_mask, problemParameters);
+
+    for (int y = 0; y < m_dims[1]; ++y) {
+        for (int x = 0; x < m_dims[0]; ++x) {
+            if (h_mask[y*m_dims[0] + x] == 0.0f) {
                 ++numUnknowns;
                 vec2i p(x, y);
                 pixelLocationsToIndex[p] =(int)pixelLocations.size();
@@ -85,7 +91,7 @@ void EigenSolverPoissonImageEditing::solve(float4* h_unknownFloat, float4* h_tar
 
     for (int i = 0; i < pixelLocations.size(); ++i) {
         vec2i p = pixelLocations[i];
-        float4 color = sampleImage(h_unknownFloat, p, m_width);
+        float4 color = sampleImage(h_unknownFloat.data(), p, m_dims[0]);
         x_r[i] = color.x;
         //printf("%f\n", color.x);
         x_g[i] = color.y;
@@ -106,29 +112,32 @@ void EigenSolverPoissonImageEditing::solve(float4* h_unknownFloat, float4* h_tar
     for (int i = 0; i < pixelLocations.size(); ++i) {
         vec2i p = pixelLocations[i];
         int numInternalNeighbors = 0;
-        float4 g_p = sampleImage(h_target, p, m_width);
+        float4 g_p = sampleImage(h_target.data(), p, m_dims[0]);
         int j = 0;
 
         for (vec2i off : offsets) {
             vec2i q = p + off;
-            auto it = pixelLocationsToIndex.find(q);
-            int row = 4*i + j;
-            if (it == pixelLocationsToIndex.end()) {
-                float4 f_q = sampleImage(h_unknownFloat, q, m_width);
-                b_r[row] += f_q.x;
-                b_g[row] += f_q.y;
-                b_b[row] += f_q.z;
-                b_a[row] += f_q.w;
-            } else {
-                entriesA.push_back(Tripf(row, it->second, -1.0f));
+            if (q.x >= 0 && q.y >= 0 && q.x < m_dims[0] && q.y < m_dims[1]) {
+                auto it = pixelLocationsToIndex.find(q);
+                int row = 4 * i + j;
+                if (it == pixelLocationsToIndex.end()) {
+                    float4 f_q = sampleImage(h_unknownFloat.data(), q, m_dims[0]);
+                    b_r[row] += f_q.x;
+                    b_g[row] += f_q.y;
+                    b_b[row] += f_q.z;
+                    b_a[row] += f_q.w;
+                }
+                else {
+                    entriesA.push_back(Tripf(row, it->second, -1.0f));
+                }
+                entriesA.push_back(Tripf(row, i, 1.0f));
+
+                float4 g_q = sampleImage(h_target.data(), q, m_dims[0]);
+                b_r[row] += (g_p.x - g_q.x);
+                b_g[row] += (g_p.y - g_q.y);
+                b_b[row] += (g_p.z - g_q.z);
+                b_a[row] += (g_p.w - g_q.w);
             }
-            entriesA.push_back(Tripf(row, i, 1.0f));
-                
-            float4 g_q = sampleImage(h_target, q, m_width);
-            b_r[row] += (g_p.x - g_q.x);
-            b_g[row] += (g_p.y - g_q.y);
-            b_b[row] += (g_p.z - g_q.z);
-            b_a[row] += (g_p.w - g_q.w);
             ++j;
             
         }
@@ -182,9 +191,10 @@ void EigenSolverPoissonImageEditing::solve(float4* h_unknownFloat, float4* h_tar
     printf("Final Cost: %f : (%f, %f, %f, %f)\n", totalCost, cost_r, cost_g, cost_b, cost_a);
 
     for (int i = 0; i < pixelLocations.size(); ++i) {
-        setPixel(h_unknownFloat, pixelLocations[i], m_width, x_r[i], x_g[i], x_b[i]);
+        setPixel(h_unknownFloat.data(), pixelLocations[i], m_dims[0], x_r[i], x_g[i], x_b[i]);
     }
-    
+    findAndCopyToArrayFromCPU("X", h_unknownFloat, problemParameters);;
+    return (double)totalCost;
 
 }
 

@@ -289,7 +289,7 @@ void ApplyLinearUpdate(SolverInput& input, SolverState& state, SolverParameters&
 // Main GN Solver Loop
 ////////////////////////////////////////////////////////////////////
 
-extern "C" void ImageWarpiungSolveGNStub(SolverInput& input, SolverState& state, SolverParameters& parameters)
+extern "C" double ImageWarpingSolveGNStub(SolverInput& input, SolverState& state, SolverParameters& parameters)
 {
     CUDATimer timer;
 
@@ -313,5 +313,6 @@ extern "C" void ImageWarpiungSolveGNStub(SolverInput& input, SolverState& state,
 	printf("final cost: %f\n", residual);
 
     timer.evaluate();
+    return (double)residual;
 
 }
