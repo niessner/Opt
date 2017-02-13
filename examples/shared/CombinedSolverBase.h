@@ -19,28 +19,11 @@ public:
     virtual void preNonlinearSolve(int iteration) = 0;
     virtual void postNonlinearSolve(int iteration) = 0;
 
-    void solveAll() {
+    virtual void solveAll() {
         combinedSolveInit();
         for (auto s : m_solverInfo) {
             if (s.enabled) {
-                preSingleSolve();
-                if (m_combinedSolverParameters.numIter == 1) {
-                    preNonlinearSolve(0);
-                    std::cout << "//////////// (" << s.name << ") ///////////////" << std::endl;
-                    s.solver->solve(m_solverParams, m_problemParams, m_combinedSolverParameters.profileSolve, s.iterationInfo);
-                    postNonlinearSolve(0);
-                } else {
-                    for (int i = 0; i < (int)m_combinedSolverParameters.numIter; ++i) {
-                        std::cout << "//////////// ITERATION" << i << "  (" << s.name << ") ///////////////" << std::endl;
-                        preNonlinearSolve(i);
-                        s.solver->solve(m_solverParams, m_problemParams, m_combinedSolverParameters.profileSolve, s.iterationInfo);
-                        postNonlinearSolve(i);
-                        if (m_combinedSolverParameters.earlyOut) {
-                            break;
-                        }
-                    }
-                }
-                postSingleSolve();
+                singleSolve(s);
             }
         }
         combinedSolveFinalize();
@@ -103,6 +86,28 @@ protected:
         }
     };
     std::vector<SolverInfo> m_solverInfo;
+
+    virtual void singleSolve(SolverInfo s) {
+        preSingleSolve();
+        if (m_combinedSolverParameters.numIter == 1) {
+            preNonlinearSolve(0);
+            std::cout << "//////////// (" << s.name << ") ///////////////" << std::endl;
+            s.solver->solve(m_solverParams, m_problemParams, m_combinedSolverParameters.profileSolve, s.iterationInfo);
+            postNonlinearSolve(0);
+        }
+        else {
+            for (int i = 0; i < (int)m_combinedSolverParameters.numIter; ++i) {
+                std::cout << "//////////// ITERATION" << i << "  (" << s.name << ") ///////////////" << std::endl;
+                preNonlinearSolve(i);
+                s.solver->solve(m_solverParams, m_problemParams, m_combinedSolverParameters.profileSolve, s.iterationInfo);
+                postNonlinearSolve(i);
+                if (m_combinedSolverParameters.earlyOut) {
+                    break;
+                }
+            }
+        }
+        postSingleSolve();
+    }
 
     NamedParameters m_solverParams;
     NamedParameters m_problemParams;

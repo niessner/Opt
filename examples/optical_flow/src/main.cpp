@@ -1,5 +1,5 @@
 ﻿#include "main.h"
-#include "ImageWarping.h"
+#include "CombinedSolver.h"
 #include "ImageHelper.h"
 
 
@@ -24,24 +24,9 @@ void renderFlowVecotors(ColorImageR8G8B8A8& image, const BaseImage<float2>& flow
 
 int main(int argc, const char * argv[]) {
 
-
-	//const std::string srcFile = "eval-data/Mequon/frame07.png";
-	//const std::string tarFile = "eval-data/Mequon/frame10.png";
-
-	//const std::string srcFile = "other-data/Beanbags/frame07.png";
-	//const std::string tarFile = "other-data/Beanbags/frame08.png";
-
-    //const std::string srcFile = "other-data/RubberWhale/frame10.png";
-    //const std::string tarFile = "other-data/RubberWhale/frame11.png";
-
     const std::string srcFile = "other-data/DogDance/frame10.png";
     const std::string tarFile = "other-data/DogDance/frame11.png";
 
-    //const std::string srcFile = "other-data/Walking/frame13.png";
-    //const std::string tarFile = "other-data/Walking/frame14.png";
-
-    //const std::string srcFile = "RubberWhale/frame10.png";
-    //const std::string tarFile = "RubberWhale/frame11.png";
 
 	ColorImageR8G8B8A8 imageSrc = LodePNG::load(srcFile);
 	ColorImageR8G8B8A8 imageTar = LodePNG::load(tarFile);
@@ -49,19 +34,19 @@ int main(int argc, const char * argv[]) {
 	ColorImageR32 imageSrcGray = imageSrc.convertToGrayscale();
 	ColorImageR32 imageTarGray = imageTar.convertToGrayscale();
 
-	ImageWarping warping(imageSrcGray, imageTarGray);
+    CombinedSolverParameters params;
+    params.numIter = 3;
+    params.nonLinearIter = 1;
+    params.linearIter = 50;
 
-	BaseImage<float2> flowVectors = warping.solve();
+    CombinedSolver solver(imageSrcGray, imageTarGray, params);
+    solver.solveAll();
+    BaseImage<float2> flowVectors = solver.result();
 
 	const std::string outFile = "out.png";
 	ColorImageR8G8B8A8 out = imageSrc;
 	renderFlowVecotors(out, flowVectors);
 	LodePNG::save(out, outFile);
-
-	//const std::string outFile = "out.png";
-	//ImageHelper::drawLine(imageSrcGray, vec2ui(50, 50), vec2ui(100, 75), 1.0f);
-	//LodePNG::save(ImageHelper::convertGrayToColor(imageSrcGray), outFile);
-
 
 	return 0;
 }

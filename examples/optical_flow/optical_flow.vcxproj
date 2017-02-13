@@ -131,8 +131,14 @@ xcopy /Y /D "..\..\API\release\include\*.h" "."</Command>
     <ClCompile Include="src\mLibSource.cpp" />
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="..\shared\CombinedSolverBase.h" />
+    <ClInclude Include="..\shared\CombinedSolverParameters.h" />
+    <ClInclude Include="..\shared\OptGraph.h" />
+    <ClInclude Include="..\shared\OptImage.h" />
+    <ClInclude Include="..\shared\OptSolver.h" />
+    <ClInclude Include="..\shared\OptUtils.h" />
+    <ClInclude Include="src\CombinedSolver.h" />
     <ClInclude Include="src\ImageHelper.h" />
-    <ClInclude Include="src\ImageWarping.h" />
     <ClInclude Include="src\TerraSolverWarping.h" />
     <ClInclude Include="src\main.h" />
     <ClInclude Include="src\mLibInclude.h" />
