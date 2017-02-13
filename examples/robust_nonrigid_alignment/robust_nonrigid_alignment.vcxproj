@@ -133,12 +133,10 @@ xcopy /Y /D "..\..\API\release\include\*.h" "."</Command>
     <ClCompile Include="src\mLibSource.cpp" />
   </ItemGroup>
   <ItemGroup>
-    <ClInclude Include="src\CudaArray.h" />
-    <ClInclude Include="src\ImageWarping.h" />
+    <ClInclude Include="src\CombinedSolver.h" />
     <ClInclude Include="src\OpenMesh.h" />
     <ClInclude Include="src\main.h" />
     <ClInclude Include="src\mLibInclude.h" />
-    <ClInclude Include="src\TerraWarpingSolver.h" />
   </ItemGroup>
   <ItemGroup>
     <Reference Include="System" />

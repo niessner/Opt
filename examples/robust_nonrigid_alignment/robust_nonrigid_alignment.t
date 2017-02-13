@@ -4,12 +4,12 @@ local w_fitSqrt         = Param("w_fitSqrt", float, 0)
 local w_regSqrt         = Param("w_regSqrt", float, 1)
 local w_confSqrt        = 0.1
 local Offset            = Unknown("Offset", opt_float3,{N},2)			--vertex.xyz, rotation.xyz <- unknown
-local Angle             = Unknown("Angle", opt_float3,{N},3)			--vertex.xyz, rotation.xyz <- unknown		
+local Angle             = Unknown("Angle", opt_float3,{N},3)		    --vertex.xyz, rotation.xyz <- unknown		
 local RobustWeights     = Unknown("RobustWeights", opt_float,{N},4)	
-local UrShape           = Array("UrShape", float3, {N},5)		--urshape: vertex.xyz
-local Constraints       = Array("Constraints", float3,{N},6)	--constraints
-local ConstraintNormals = Array("ConstraintNormals", float3,{N},7)
-local G                 = Graph("G", 8, "v0", {N}, 9, "v1", {N}, 11)
+local UrShape           = Array("UrShape", opt_float3, {N},5)		    --urshape: vertex.xyz
+local Constraints       = Array("Constraints", opt_float3,{N},6)	    --constraints
+local ConstraintNormals = Array("ConstraintNormals", opt_float3,{N},7)
+local G                 = Graph("G", 8, "v0", {N}, 9, "v1", {N}, 10)
 UsePreconditioner(true)
 
 local robustWeight = RobustWeights(0)

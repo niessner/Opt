@@ -1,5 +1,5 @@
 ﻿#include "main.h"
-#include "ImageWarping.h"
+#include "CombinedSolver.h"
 #include "OpenMesh.h"
 
 static SimpleMesh* createMesh(std::string filename) {
@@ -44,13 +44,22 @@ int main(int argc, const char * argv[])
     std::vector<SimpleMesh*> targetMeshes;
     for (int i = startIndex + 1; i < allFiles.size(); i += 1) {
         targetMeshes.push_back(createMesh(sourceDirectory + "/" + allFiles[i]));
-		if (targetMeshes.size() > 1) {
+		if (targetMeshes.size() > 4) {
 			break;
 		}
     }
     std::cout << "All meshes now in memory" << std::endl;
-    ImageWarping warping(sourceMesh, targetMeshes, sourceTetIndices, startIndex);
-    SimpleMesh* res = warping.solve();
+
+    CombinedSolverParameters params;
+    params.numIter = 15;
+    params.nonLinearIter = 8;
+    params.linearIter = 250;
+    params.useOpt = false;
+    params.useOptLM = true;
+
+    CombinedSolver solver(sourceMesh, targetMeshes, sourceTetIndices, startIndex, params);
+    solver.solveAll();
+    SimpleMesh* res = solver.result();
     
 	if (!OpenMesh::IO::write_mesh(*res, "out.ply"))
 	{
