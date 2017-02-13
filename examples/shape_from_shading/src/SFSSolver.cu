@@ -28,42 +28,6 @@
 
 #define DEBUG_PRINT_INFO 0
 
-/*
-static void checkForNan(std::string name, float* cudaPtr, int W, int H) {
-int numBytes = W*H*sizeof(float);
-float* ptr = (float*)malloc(numBytes);
-printf("%s:\n", name.c_str());
-cutilSafeCall(cudaMemcpy(ptr, cudaPtr, numBytes, cudaMemcpyDeviceToHost));
-
-for (int i = 0; i < W*H; ++i) {
-if (isnan(ptr[i])) {
-printf("Is nan at (%d, %d)\n", i % W, i / W);
-}
-}
-free(ptr);
-
-}
-*/
-
-static void checkEverythingForNan(SolverInput& input, SolverState& state) {
-    /*
-    checkForNan("d_x", state.d_x, input.width, input.height);
-    checkForNan("d_preconditioner", state.d_preconditioner, input.width, input.height);
-
-    checkForNan(state.d_delta,          input.width, input.height);
-    checkForNan(state.d_r,              input.width, input.height);
-    checkForNan(state.d_z,              input.width, input.height);
-    checkForNan(state.d_p,              input.width, input.height);
-    //checkForNan(state.d_Ap_X,           input.width, input.height);
-    //checkForNan(state.d_scanAlpha,      input.width, input.height);
-    //checkForNan(state.d_scanBeta,       input.width, input.height);
-    checkForNan(state.d_rDotzOld,       input.width, input.height);
-    checkForNan(state.d_preconditioner, input.width, input.height);
-    //m_solverState.d_sumResidual,    sizeof(float)));
-    */
-
-
-}
 
 /////////////////////////////////////////////////////////////////////////
 // Eval Residual
@@ -176,9 +140,6 @@ void Initialization(SolverInput& input, SolverState& state, SolverParameters& pa
 	#ifdef _DEBUG
 		cutilSafeCall(cudaDeviceSynchronize());
 		cutilCheckMsg(__FUNCTION__);
-
-        
-        checkEverythingForNan(input, state);
 	#endif
     #if DEBUG_PRINT_INFO
         float scanAlpha = 0.0f;
@@ -295,9 +256,6 @@ void PCGIteration(SolverInput& input, SolverState& state, SolverParameters& para
 	#ifdef _DEBUG
 		cutilSafeCall(cudaDeviceSynchronize());
 		cutilCheckMsg(__FUNCTION__);
-
-        
-        checkEverythingForNan(input, state);
 	#endif
     #if DEBUG_PRINT_INFO
         float scanAlpha = 0.0f;
@@ -312,9 +270,6 @@ void PCGIteration(SolverInput& input, SolverState& state, SolverParameters& para
 	#ifdef _DEBUG
 		cutilSafeCall(cudaDeviceSynchronize());
 		cutilCheckMsg(__FUNCTION__);
-
-        
-        checkEverythingForNan(input, state);
 	#endif
     #if DEBUG_PRINT_INFO
         float scanBeta = 0.0f;
@@ -329,7 +284,6 @@ void PCGIteration(SolverInput& input, SolverState& state, SolverParameters& para
 	#ifdef _DEBUG
 		cutilSafeCall(cudaDeviceSynchronize());
 		cutilCheckMsg(__FUNCTION__);
-        checkEverythingForNan(input, state);
 	#endif
 }
 
@@ -416,7 +370,7 @@ void Precompute(SolverInput& input, SolverState& state, SolverParameters& parame
 // Main GN Solver Loop
 ////////////////////////////////////////////////////////////////////
 
-extern "C" void solveSFSStub(SolverInput& input, SolverState& state, SolverParameters& parameters, ConvergenceAnalysis<float>* ca)
+extern "C" double solveSFSStub(SolverInput& input, SolverState& state, SolverParameters& parameters, ConvergenceAnalysis<float>* ca)
 {
     CUDATimer timer;
 
@@ -447,6 +401,7 @@ extern "C" void solveSFSStub(SolverInput& input, SolverState& state, SolverParam
 	float residual = EvalResidual(input, state, parameters, timer);
 	printf("final cost: %f\n", residual);
     timer.evaluate();
+    return (double)residual;
 }
 
 __global__ void PCGStep_Kernel_SaveInitialCostJTFAndPre(SolverInput input, SolverState state, SolverParameters parameters,

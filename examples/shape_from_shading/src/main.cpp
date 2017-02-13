@@ -1,5 +1,5 @@
 ﻿#include "main.h"
-#include "ImageSolver.h"
+#include "CombinedSolver.h"
 #include "SFSSolverInput.h"
 
 int main(int argc, const char * argv[])
@@ -35,9 +35,22 @@ int main(int argc, const char * argv[])
     solverInputGPU.targetDepth->savePLYMesh("sfsInitDepth.ply");
     solverInputCPU.load(inputFilenamePrefix, false);
 
-    ImageSolver solver(solverInputGPU, solverInputCPU, performanceRun);
+    CombinedSolverParameters params;
+    performanceRun = true;
+    if (performanceRun) {
+        params.useCUDA = true;
+        params.useOpt = false;
+        params.useOptLM = false;
+        params.useCeres = true;
+    }
+    else {
+        //m_params.useCUDA = true;
+    }
+
+    CombinedSolver solver(solverInputGPU, params);
     printf("Solving\n");
-    std::shared_ptr<SimpleBuffer> result = solver.solve();
+    solver.solveAll();
+    std::shared_ptr<SimpleBuffer> result = solver.result();
     printf("Solved\n");
     printf("About to save\n");
     result->save("sfsOutput.imagedump");

@@ -5,22 +5,21 @@
 #include "../../shared/cudaUtil.h"
 #include "SFSSolverParameters.h"
 #include "SFSSolverState.h"
+#include "../../shared/SolverBase.h"
 
 #include <memory>
 #include "SimpleBuffer.h"
 #include "SFSSolverInput.h"
-class CUDAImageSolver
+class CUDAImageSolver : public SolverBase
 {
 	public:
-		CUDAImageSolver(unsigned int imageWidth, unsigned int imageHeight);
+        CUDAImageSolver(const std::vector<unsigned int>& dims);
 		~CUDAImageSolver();
 
-        void solve(std::shared_ptr<SimpleBuffer>   result, const SFSSolverInput& rawSolverInput);
+        virtual double solve(const NamedParameters& solverParameters, const NamedParameters& problemParameters, bool profileSolve, std::vector<SolverIteration>& iters) override;
 		
 	private:
 
 		SolverState	m_solverState;
-
-		unsigned int m_imageWidth;
-		unsigned int m_imageHeight;
+        std::vector<unsigned int> m_dims;
 };

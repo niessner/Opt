@@ -40,9 +40,9 @@ CUDAWarpingSolver::~CUDAWarpingSolver()
 
 double CUDAWarpingSolver::solve(const NamedParameters& solverParams, const NamedParameters& probParams, bool profileSolve, std::vector<SolverIteration>& iters)
 {
-    m_solverState.d_target = getTypedParameterImage<float4>("T", probParams);
-    m_solverState.d_mask = getTypedParameterImage<float>("M", probParams);
-    m_solverState.d_x = getTypedParameterImage<float4>("X", probParams);
+    m_solverState.d_target  = getTypedParameterImage<float4>("T", probParams);
+    m_solverState.d_mask    = getTypedParameterImage<float>("M", probParams);
+    m_solverState.d_x       = getTypedParameterImage<float4>("X", probParams);
 
 	SolverParameters parameters;
     parameters.nNonLinearIterations = getTypedParameter<unsigned int>("nonLinearIterations", solverParams);

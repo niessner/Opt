@@ -30,6 +30,10 @@ public:
         return m_data;
     }
 
+    DataType type() const {
+        return m_dataType;
+    }
+
     void save(std::string filename) const;
     void savePNG(std::string filenameBase, float depthScale) const;
     void savePLYPoints(std::string filename) const;

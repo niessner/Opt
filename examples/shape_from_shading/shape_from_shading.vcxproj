@@ -127,33 +127,35 @@ xcopy /Y /D "..\..\API\release\include\*.h" "."</Command>
     </PreBuildEvent>
   </ItemDefinitionGroup>
   <ItemGroup>
+    <ClCompile Include="..\shared\CeresSolverBase.cpp" />
     <ClCompile Include="src\CeresImageSolver.cpp" />
-    <ClCompile Include="src\CUDAPatchSolverWarping.cpp" />
     <ClCompile Include="src\CUDAImageSolver.cpp" />
     <ClCompile Include="src\main.cpp" />
     <ClCompile Include="src\mLibSource.cpp" />
     <ClCompile Include="src\SimpleBuffer.cpp" />
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="..\shared\CeresSolverBase.h" />
+    <ClInclude Include="..\shared\CombinedSolverBase.h" />
+    <ClInclude Include="..\shared\CombinedSolverParameters.h" />
     <ClInclude Include="..\shared\CudaArray.h" />
     <ClInclude Include="..\shared\cudaUtil.h" />
+    <ClInclude Include="..\shared\NamedParameters.h" />
+    <ClInclude Include="..\shared\OptGraph.h" />
+    <ClInclude Include="..\shared\OptImage.h" />
+    <ClInclude Include="..\shared\OptSolver.h" />
     <ClInclude Include="..\shared\OptUtils.h" />
-    <ClInclude Include="..\shared\Precision.h" />
+    <ClInclude Include="..\shared\SolverBase.h" />
     <ClInclude Include="..\shared\SolverIteration.h" />
     <ClInclude Include="Opt.h" />
     <ClInclude Include="src\CameraParams.h" />
     <ClInclude Include="src\CeresImageSolver.h" />
+    <ClInclude Include="src\CombinedSolver.h" />
     <ClInclude Include="src\ConvergenceAnalysis.h" />
-    <ClInclude Include="src\CUDAPatchSolverWarping.h" />
     <ClInclude Include="src\CUDATimer.h" />
     <ClInclude Include="src\cudaUtil.h" />
     <ClInclude Include="src\CUDAImageSolver.h" />
     <ClInclude Include="src\cuda_SimpleMatrixUtil.h" />
-    <ClInclude Include="src\ImageSolver.h" />
-    <ClInclude Include="src\PatchSolverWarpingParameters.h" />
-    <ClInclude Include="src\PatchSolverWarpingEquations.h" />
-    <ClInclude Include="src\PatchSolverWarpingState.h" />
-    <ClInclude Include="src\PatchSolverWarpingUtil.h" />
     <ClInclude Include="src\OptImageSolver.h" />
     <ClInclude Include="src\SFSSolverParameters.h" />
     <ClInclude Include="src\SimpleBuffer.h" />
@@ -176,7 +178,6 @@ xcopy /Y /D "..\..\API\release\include\*.h" "."</Command>
     <Reference Include="System.Xml" />
   </ItemGroup>
   <ItemGroup>
-    <CudaCompile Include="src\PatchSolverWarping.cu" />
     <CudaCompile Include="src\SFSSolver.cu" />
   </ItemGroup>
   <ItemGroup>

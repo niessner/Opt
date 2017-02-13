@@ -1,21 +1,18 @@
 #include "CUDAImageSolver.h"
+#include "../../shared/OptUtils.h"
 #include "ConvergenceAnalysis.h"
 
-#define DEBUG_DUMP_INFO 0
-
-
-extern "C" void solveSFSStub(SolverInput& input, SolverState& state, SolverParameters& parameters, ConvergenceAnalysis<float>* ca);
+extern "C" double solveSFSStub(SolverInput& input, SolverState& state, SolverParameters& parameters, ConvergenceAnalysis<float>* ca);
 extern "C" void solveSFSEvalCurrentCostJTFPreAndJTJStub(SolverInput& input, SolverState& state, SolverParameters& parameters, float* costResult, float* jtfResult, float* preResult, float* jtjResult);
 
 
-CUDAImageSolver::CUDAImageSolver(unsigned int imageWidth, unsigned int imageHeight) : m_imageWidth(imageWidth), m_imageHeight(imageHeight)
+CUDAImageSolver::CUDAImageSolver(const std::vector<unsigned int>& dims) : m_dims(dims)
 {
 	const unsigned int THREADS_PER_BLOCK = 1024; // keep consistent with the GPU
 	const unsigned int tmpBufferSize = THREADS_PER_BLOCK*THREADS_PER_BLOCK;
 
-	const unsigned int N = m_imageWidth*m_imageHeight;
+    const unsigned int N = dims[0] * dims[1];
     const size_t unknownStorageSize = sizeof(float)*N;
-
 
 	// State
 	cutilSafeCall(cudaMalloc(&m_solverState.d_delta,		unknownStorageSize));
@@ -58,53 +55,45 @@ CUDAImageSolver::~CUDAImageSolver()
     cutilSafeCall(cudaFree(m_solverState.B_I_dx2));
 }
 
-void CUDAImageSolver::solve(std::shared_ptr<SimpleBuffer>   result, const SFSSolverInput& rawSolverInput)
+double CUDAImageSolver::solve(const NamedParameters& solverParams, const NamedParameters& probParams, bool profileSolve, std::vector<SolverIteration>& iters)
 {
-    m_solverState.d_x = (float*)result->data();
+
+    m_solverState.d_x = getTypedParameterImage<float>("X", probParams);
 
     SolverInput solverInput;
-    solverInput.N = m_imageWidth*m_imageHeight;
-    solverInput.width = m_imageWidth;
-    solverInput.height = m_imageHeight;
+    solverInput.N = m_dims[0] * m_dims[1];
+    solverInput.width = m_dims[0];
+    solverInput.height = m_dims[0];
 
-    solverInput.d_targetIntensity   = (float*)rawSolverInput.targetIntensity->data();
-    solverInput.d_targetDepth = (float*)rawSolverInput.targetDepth->data();
-    solverInput.d_depthMapRefinedLastFrameFloat = (float*)rawSolverInput.previousDepth->data();
-    solverInput.d_maskEdgeMap = (unsigned char*)rawSolverInput.maskEdgeMap->data();
+    solverInput.d_targetIntensity = getTypedParameterImage<float>("Im", probParams);
+    solverInput.d_targetDepth = getTypedParameterImage<float>("D_i", probParams);
+    solverInput.d_depthMapRefinedLastFrameFloat = nullptr;
+    solverInput.d_maskEdgeMapR = getTypedParameterImage<unsigned char>("edgeMaskR", probParams);
+    solverInput.d_maskEdgeMapC = getTypedParameterImage<unsigned char>("edgeMaskC", probParams);
     
+    NamedParameters::Parameter lightCoeff;
+    probParams.get("L", lightCoeff);
     cudaMalloc(&solverInput.d_litcoeff, sizeof(float)*9);
-    cudaMemcpy(solverInput.d_litcoeff, rawSolverInput.parameters.lightingCoefficients, sizeof(float) * 9, cudaMemcpyHostToDevice);
+    cudaMemcpy(solverInput.d_litcoeff, lightCoeff.ptr, sizeof(float) * 9, cudaMemcpyHostToDevice);
     
-    solverInput.deltaTransform = rawSolverInput.parameters.deltaTransform; // transformation to last frame
-    solverInput.calibparams.ux = rawSolverInput.parameters.ux;
-    solverInput.calibparams.uy = rawSolverInput.parameters.uy;
-    solverInput.calibparams.fx = rawSolverInput.parameters.fx;
-    solverInput.calibparams.fy = rawSolverInput.parameters.fy;
+    //solverInput.deltaTransform = rawSolverInput.parameters.deltaTransform; // transformation to last frame, unused
+    solverInput.calibparams.ux = getTypedParameter<float>("u_x", probParams);
+    solverInput.calibparams.uy = getTypedParameter<float>("u_y", probParams);
+    solverInput.calibparams.fx = getTypedParameter<float>("f_x", probParams);
+    solverInput.calibparams.fy = getTypedParameter<float>("f_y", probParams);
 
     SolverParameters parameters;
-    parameters.weightFitting = rawSolverInput.parameters.weightFitting;
-    parameters.weightShadingStart = rawSolverInput.parameters.weightShadingStart;
-    parameters.weightShadingIncrement = rawSolverInput.parameters.weightShadingIncrement;
-    parameters.weightShading = rawSolverInput.parameters.weightShadingStart + rawSolverInput.parameters.weightShadingIncrement * rawSolverInput.parameters.nLinIterations; // default to final value
-    parameters.weightRegularizer = rawSolverInput.parameters.weightRegularizer;
-    parameters.weightBoundary = rawSolverInput.parameters.weightBoundary;
-    parameters.weightPrior = rawSolverInput.parameters.weightPrior;
-    parameters.nNonLinearIterations = rawSolverInput.parameters.nNonLinearIterations;
-    parameters.nLinIterations = rawSolverInput.parameters.nLinIterations;
-    parameters.nPatchIterations = rawSolverInput.parameters.nPatchIterations;
+    parameters.weightFitting            = getTypedParameter<float>("w_p", probParams);
+    parameters.weightShadingStart       = getTypedParameter<float>("w_g", probParams);
+    parameters.weightShadingIncrement   = 0.0f; // unused
+    parameters.weightShading            = parameters.weightShadingStart;
+    parameters.weightRegularizer        = getTypedParameter<float>("w_s", probParams); //rawSolverInput.parameters.weightRegularizer;
+    parameters.weightBoundary           = 0.0f; //unused rawSolverInput.parameters.weightBoundary;
+    parameters.weightPrior              = 0.0f;//unused rawSolverInput.parameters.weightPrior;
+    parameters.nNonLinearIterations     = getTypedParameter<unsigned int>("nonLinearIterations", solverParams);
+    parameters.nLinIterations           = getTypedParameter<unsigned int>("linearIterations", solverParams);
+    parameters.nPatchIterations         = 1; //unused rawSolverInput.parameters.nPatchIterations;
 	
-#if DEBUG_DUMP_INFO
-    std::shared_ptr<SimpleBuffer> cost = std::shared_ptr<SimpleBuffer>(new SimpleBuffer(*result, true));
-    std::shared_ptr<SimpleBuffer> jtf  = std::shared_ptr<SimpleBuffer>(new SimpleBuffer(*result, true));
-    std::shared_ptr<SimpleBuffer> pre  = std::shared_ptr<SimpleBuffer>(new SimpleBuffer(*result, true));
-    std::shared_ptr<SimpleBuffer> jtj  = std::shared_ptr<SimpleBuffer>(new SimpleBuffer(*result, true)); 
-    solveSFSEvalCurrentCostJTFPreAndJTJStub(solverInput, m_solverState, parameters, (float*)cost->data(), (float*)jtf->data(), (float*)pre->data(), (float*)jtj->data());
-    cost->save("cost_nonblock_cuda.imagedump");
-    jtf->save("JTF_nonblock_cuda.imagedump");
-    pre->save("Pre_nonblock_cuda.imagedump");
-    jtj->save("JTJ_nonblock_cuda.imagedump");
-
-#endif
     ConvergenceAnalysis<float>* ca = NULL;
-    solveSFSStub(solverInput, m_solverState, parameters, ca);
+    return solveSFSStub(solverInput, m_solverState, parameters, ca);
 }

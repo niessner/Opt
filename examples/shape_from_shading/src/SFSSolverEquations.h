@@ -25,11 +25,11 @@ __inline__ __device__ float readP(int posy, int posx, SolverState& state, int W)
 }
 
 __inline__ __device__ float rowMask(int posy, int posx, SolverInput &input) {
-    return float(input.d_maskEdgeMap[posy*input.width + posx]);
+    return float(input.d_maskEdgeMapR[posy*input.width + posx]);
 }
 
 __inline__ __device__ float colMask(int posy, int posx, SolverInput &input) {
-    return float(input.d_maskEdgeMap[posy*input.width + posx + (input.width*input.height)]);
+    return float(input.d_maskEdgeMapC[posy*input.width + posx]);
 }
 
 
@@ -102,8 +102,8 @@ __inline__ __device__ float evalFDevice(int variableIdx, SolverInput& input, Sol
                 E_g_h = (temp00.w - temp10.w);
                 E_g_v = (temp00.w - temp01.w);
 #               ifdef USE_MASK_REFINE
-                    E_g_h *= input.d_maskEdgeMap[variableIdx];
-                    E_g_v *= input.d_maskEdgeMap[variableIdx + W*H];
+                    E_g_h *= input.d_maskEdgeMapR[variableIdx];
+                    E_g_v *= input.d_maskEdgeMapC[variableIdx];
 #               endif	
 #           endif
             //////////////////////////////////////////////////////////////////

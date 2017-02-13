@@ -1,18 +1,12 @@
 ﻿<?xml version="1.0" encoding="utf-8"?>
 <Project ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
   <ItemGroup>
-    <CudaCompile Include="src\PatchSolverWarping.cu">
-      <Filter>CUDAPatchSolver</Filter>
-    </CudaCompile>
     <CudaCompile Include="src\SFSSolver.cu">
       <Filter>CUDASolver</Filter>
     </CudaCompile>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="src\main.cpp" />
-    <ClCompile Include="src\CUDAPatchSolverWarping.cpp">
-      <Filter>CUDAPatchSolver</Filter>
-    </ClCompile>
     <ClCompile Include="src\mLibSource.cpp">
       <Filter>mLib</Filter>
     </ClCompile>
@@ -23,27 +17,14 @@
       <Filter>CUDASolver</Filter>
     </ClCompile>
     <ClCompile Include="src\CeresImageSolver.cpp" />
+    <ClCompile Include="..\shared\CeresSolverBase.cpp">
+      <Filter>shared</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="src\main.h" />
-    <ClInclude Include="src\CUDAPatchSolverWarping.h">
-      <Filter>CUDAPatchSolver</Filter>
-    </ClInclude>
-    <ClInclude Include="src\ImageSolver.h" />
     <ClInclude Include="src\mLibInclude.h">
       <Filter>mLib</Filter>
-    </ClInclude>
-    <ClInclude Include="src\PatchSolverWarpingEquations.h">
-      <Filter>CUDAPatchSolver</Filter>
-    </ClInclude>
-    <ClInclude Include="src\PatchSolverWarpingParameters.h">
-      <Filter>CUDAPatchSolver</Filter>
-    </ClInclude>
-    <ClInclude Include="src\PatchSolverWarpingState.h">
-      <Filter>CUDAPatchSolver</Filter>
-    </ClInclude>
-    <ClInclude Include="src\PatchSolverWarpingUtil.h">
-      <Filter>CUDAPatchSolver</Filter>
     </ClInclude>
     <ClInclude Include="src\SolverUtil.h">
       <Filter>Util</Filter>
@@ -103,17 +84,36 @@
     <ClInclude Include="..\shared\OptUtils.h">
       <Filter>shared</Filter>
     </ClInclude>
-    <ClInclude Include="..\shared\Precision.h">
+    <ClInclude Include="..\shared\SolverIteration.h">
       <Filter>shared</Filter>
     </ClInclude>
-    <ClInclude Include="..\shared\SolverIteration.h">
+    <ClInclude Include="src\CombinedSolver.h" />
+    <ClInclude Include="..\shared\CeresSolverBase.h">
+      <Filter>shared</Filter>
+    </ClInclude>
+    <ClInclude Include="..\shared\CombinedSolverParameters.h">
+      <Filter>shared</Filter>
+    </ClInclude>
+    <ClInclude Include="..\shared\CombinedSolverBase.h">
+      <Filter>shared</Filter>
+    </ClInclude>
+    <ClInclude Include="..\shared\OptSolver.h">
+      <Filter>shared</Filter>
+    </ClInclude>
+    <ClInclude Include="..\shared\NamedParameters.h">
+      <Filter>shared</Filter>
+    </ClInclude>
+    <ClInclude Include="..\shared\OptGraph.h">
+      <Filter>shared</Filter>
+    </ClInclude>
+    <ClInclude Include="..\shared\OptImage.h">
+      <Filter>shared</Filter>
+    </ClInclude>
+    <ClInclude Include="..\shared\SolverBase.h">
       <Filter>shared</Filter>
     </ClInclude>
   </ItemGroup>
   <ItemGroup>
-    <Filter Include="CUDAPatchSolver">
-      <UniqueIdentifier>{9794ad7d-606a-46ee-ad90-3965b6a30d74}</UniqueIdentifier>
-    </Filter>
     <Filter Include="CUDASolver">
       <UniqueIdentifier>{7ce91af9-fdb3-4d66-9754-37fab70e588c}</UniqueIdentifier>
     </Filter>

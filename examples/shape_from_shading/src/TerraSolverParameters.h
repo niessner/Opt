@@ -8,12 +8,15 @@ struct TerraSolverParameters {
     float weightFitting;					// Is initialized by the solver!
 
     float weightRegularizer;				// Regularization weight
+    // Vesitgal
     float weightPrior;						// Prior weight
 
     float weightShading;					// Shading weight
+    // Vesitgal
     float weightShadingStart;				// Starting value for incremental relaxation
+    // Vesitgal
     float weightShadingIncrement;			// Update factor
-
+    // Vesitgal
     float weightBoundary;					// Boundary weight
 
     float fx;
@@ -21,12 +24,13 @@ struct TerraSolverParameters {
     float ux;
     float uy;
 
-
+    // Vesitgal
     float4x4 deltaTransform;
     float lightingCoefficients[9];
 
     unsigned int nNonLinearIterations;		// Steps of the non-linear solver	
     unsigned int nLinIterations;			// Steps of the linear solver
+    // Vesitgal
     unsigned int nPatchIterations;			// Steps on linear step on block level
 
     TerraSolverParameters() {}

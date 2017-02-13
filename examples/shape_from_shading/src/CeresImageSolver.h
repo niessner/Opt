@@ -6,64 +6,27 @@
 #include <SimpleBuffer.h>
 #include <SFSSolverInput.h>
 #include "../../shared/SolverIteration.h"
-
-class CeresImageSolver {
+#include "../../shared/CeresSolverBase.h"
+class CeresImageSolver : public CeresSolverBase {
 
 public:
-    CeresImageSolver(unsigned int _width, unsigned int _height)
-	{
-        width = (int)_width;
-        height = (int)_height;
-	}
+    CeresImageSolver(const std::vector<unsigned int>& dims) : CeresSolverBase(dims) {}
 
-	struct IterStruct {
-        unsigned int* nIter;
-        unsigned int* lIter;
-        unsigned int* pIter;
-        IterStruct(unsigned int* n, unsigned int* l, unsigned int* p) : nIter(n), lIter(l), pIter(p) {}
-    };
+    virtual double solve(const NamedParameters& solverParameters, const NamedParameters& problemParameters, bool profileSolve, std::vector<SolverIteration>& iters) override;
 
-    void solve(std::shared_ptr<SimpleBuffer> result, const SFSSolverInput& rawSolverInput, std::vector<SolverIteration>& solverIterations);
-
-    double finalCost() const {
-        return m_finalCost;
-    }
-
-    int getPixel(int x, int y) const
+    inline int getPixel(int x, int y) const
     {
-        if (x < 0 || x >= width || y < 0 || y >= height)
-        {
-            std::cout << "getPixel called: " << x << "," << y << std::endl;
-        }
-        return y * width + x;
+        return y * m_dims[0] + x;
     }
-
-    int width, height;
-    float *Xfloat;
-    float *D_i;
-    float *Im;
-    float *D_p;
-    BYTE *edgeMaskR;
-    BYTE *edgeMaskC;
-
-    float w_p;
-    float w_s;
-    float w_r;
-    float w_g;
-
-    float weightShadingStart;
-    float weightShadingIncrement;
-    float weightBoundary;
-
+    std::vector<float> Xfloat;
+    std::vector<float> D_i;
+    std::vector<float> Im;
+    std::vector<BYTE>  edgeMaskR;
+    std::vector<BYTE>  edgeMaskC;
     float f_x;
     float f_y;
     float u_x;
     float u_y;
-
-    double m_finalCost = nan(nullptr);
-
-    //float4x4 deltaTransform;
-
     float L[9];
 };
 

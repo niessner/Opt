@@ -1,28 +1,19 @@
 local DEPTH_DISCONTINUITY_THRE = 0.01
 local W,H 	= Dim("W",0), Dim("H",1)
 
-local w_p						= sqrt(Param("w_p",float,0))-- Fitting weight
-local w_s		 				= sqrt(Param("w_s",float,1))-- Regularization weight
-local w_g						= sqrt(Param("w_g",float,3))-- Shading weight
-
-local f_x						= Param("f_x",float,7)
-local f_y						= Param("f_y",float,8)
-local u_x 						= Param("u_x",float,9)
-local u_y 						= Param("u_y",float,10)
-    
-local offset = 26;
-local L = {}
-for i=1,9 do -- lighting model parameters
-	L[i] = Param("L_" .. i .. "",float,offset+i)
-end
-offset = 39
-local X 	= Unknown("X",float, {W,H},offset) -- Refined Depth
-local D_i 	= Array("D_i",float, {W,H},offset+1) -- Depth input
-
-local Im 	= Array("Im",float, {W,H},offset+2) -- Target Intensity
-
-local edgeMaskR = Array("edgeMaskR",uint8, {W,H},offset+4) -- Edge mask. 
-local edgeMaskC = Array("edgeMaskC",uint8, {W,H},offset+5) -- Edge mask. 
+local w_p	    = sqrt(Param("w_p",float,0))-- Fitting weight
+local w_s	    = sqrt(Param("w_s",float,1))-- Regularization weight
+local w_g	    = sqrt(Param("w_g",float,2))-- Shading weight
+local f_x	    = Param("f_x",float,3)
+local f_y	    = Param("f_y",float,4)
+local u_x 	    = Param("u_x",float,5)
+local u_y 	    = Param("u_y",float,6)
+local L		    = Param("L",float9,7)
+local X 	    = Unknown("X",float, {W,H},8) -- Refined Depth
+local D_i 	    = Array("D_i",float, {W,H},9) -- Depth input
+local Im 	    = Array("Im",float, {W,H},10) -- Target Intensity
+local edgeMaskR = Array("edgeMaskR",uint8, {W,H},11) -- Edge mask. 
+local edgeMaskC = Array("edgeMaskC",uint8, {W,H},12) -- Edge mask. 
 
 
 local posX,posY = Index(0),Index(1)
@@ -54,9 +45,9 @@ function B(offX, offY)
 	local n_y = normal[1]
 	local n_z = normal[2]
 
-	return           L[1] +
-					 L[2]*n_y + L[3]*n_z + L[4]*n_x  +
-					 L[5]*n_x*n_y + L[6]*n_y*n_z + L[7]*(-n_x*n_x - n_y*n_y + 2*n_z*n_z) + L[8]*n_z*n_x + L[9]*(n_x*n_x-n_y*n_y)
+	return           L[0] +
+					 L[1]*n_y       + L[2]*n_z      + L[3]*n_x  +
+					 L[4]*n_x*n_y   + L[5]*n_y*n_z  + L[6]*(-n_x*n_x - n_y*n_y + 2*n_z*n_z) + L[7]*n_z*n_x + L[8]*(n_x*n_x-n_y*n_y)
 end
 
 function I(offX, offY)

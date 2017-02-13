@@ -179,7 +179,7 @@ double CeresSolverPoissonImageEditing::solve(const NamedParameters& solverParame
         h_unknownFloat[i].w = (float)h_unknownDouble[i].w;
     }
 
-    findAndCopyToArrayFromCPU("X", h_unknownFloat, problemParameters);;
+    findAndCopyToArrayFromCPU("X", h_unknownFloat, problemParameters);
     return m_finalCost;
 }
 

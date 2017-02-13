@@ -61,7 +61,7 @@ public:
     virtual void postNonlinearSolve(int) override {}
 
     virtual void combinedSolveFinalize() override {
-        reportFinalCosts("Poisson Image Editing", m_combinedSolverParameters, getCost("Opt(GN)"), getCost("Opt(LM)"), getCost("CUDA"));
+        ceresIterationComparison("Poisson Image Editing");
     }
 
 	void resetGPUMemory()
@@ -92,79 +92,6 @@ public:
     ColorImageR32G32B32A32* result() {
         return &m_result;
     }
-	/*solve()
-	{	
-
-		
-
-		std::cout << "=======CUDA=======" << std::endl;
-		resetGPUMemory();
-		m_warpingSolver->solveGN(d_image, d_target, d_mask, nonLinearIter, linearIter, weightFit, weightReg);		
-		copyResultToCPU();
-
-		std::cout << "\n\n========OPT========" << std::endl;
-		resetGPUMemory();
-		m_optSolver->solve(d_image, d_target, d_mask, nonLinearIter, linearIter, patchIter, weightFit, weightReg);
-		copyResultToCPU();
-
-
-		{
-			std::cout << "\n\n========CERES========" << std::endl;
-			resetGPUMemory();
-
-			float4* h_image = new float4[m_image.getWidth()*m_image.getHeight()];
-			float4* h_target = new float4[m_image.getWidth()*m_image.getHeight()];
-			float*  h_mask = new float[m_image.getWidth()*m_image.getHeight()];
-
-			cutilSafeCall(cudaMemcpy(h_image, d_image, sizeof(float4)*m_image.getWidth()*m_image.getHeight(), cudaMemcpyDeviceToHost));
-			cutilSafeCall(cudaMemcpy(h_target, d_target, sizeof(float4)*m_image.getWidth()*m_image.getHeight(), cudaMemcpyDeviceToHost));
-			cutilSafeCall(cudaMemcpy(h_mask, d_mask, sizeof(float)*m_image.getWidth()*m_image.getHeight(), cudaMemcpyDeviceToHost));
-
-			m_ceresSolver->solve(h_image, h_target, h_mask, weightFit, weightReg);
-
-			cutilSafeCall(cudaMemcpy(d_image, h_image, sizeof(float4)*m_image.getWidth()*m_image.getHeight(), cudaMemcpyHostToDevice));
-			cutilSafeCall(cudaMemcpy(d_target, h_target, sizeof(float4)*m_image.getWidth()*m_image.getHeight(), cudaMemcpyHostToDevice));
-			cutilSafeCall(cudaMemcpy(d_mask, h_mask, sizeof(float)*m_image.getWidth()*m_image.getHeight(), cudaMemcpyHostToDevice));
-
-			copyResultToCPU();
-		}
-
-
-		{
-			std::cout << "\n\n========EIGEN========" << std::endl;
-			resetGPUMemory();
-
-			float4* h_image = new float4[m_image.getWidth()*m_image.getHeight()];
-			float4* h_target = new float4[m_image.getWidth()*m_image.getHeight()];
-			float*  h_mask = new float[m_image.getWidth()*m_image.getHeight()];
-
-			cutilSafeCall(cudaMemcpy(h_image, d_image, sizeof(float4)*m_image.getWidth()*m_image.getHeight(), cudaMemcpyDeviceToHost));
-			cutilSafeCall(cudaMemcpy(h_target, d_target, sizeof(float4)*m_image.getWidth()*m_image.getHeight(), cudaMemcpyDeviceToHost));
-			cutilSafeCall(cudaMemcpy(h_mask, d_mask, sizeof(float)*m_image.getWidth()*m_image.getHeight(), cudaMemcpyDeviceToHost));
-
-			m_eigenSolver->solve(h_image, h_target, h_mask, weightFit, weightReg);
-
-			cutilSafeCall(cudaMemcpy(d_image, h_image, sizeof(float4)*m_image.getWidth()*m_image.getHeight(), cudaMemcpyHostToDevice));
-			cutilSafeCall(cudaMemcpy(d_target, h_target, sizeof(float4)*m_image.getWidth()*m_image.getHeight(), cudaMemcpyHostToDevice));
-			cutilSafeCall(cudaMemcpy(d_mask, h_mask, sizeof(float)*m_image.getWidth()*m_image.getHeight(), cudaMemcpyHostToDevice));
-
-			copyResultToCPU();
-		}
-
-
-
-		std::cout << "======CUDA_BLOCK====" << std::endl;
-		resetGPUMemory();
-		m_warpingSolverPatch->solveGN(d_image, d_target, d_mask, nonLinearIter, linearIter, patchIter, weightFit, weightReg);
-		copyResultToCPU();
-
-        double optGNCost = m_params.useOpt ? m_optSolver->finalCost() : nan(nullptr);
-        double optLMCost = nan(nullptr);
-        double ceresCost = nan(nullptr);
-        m_params.useCeres = false; // TODO: thread this through properly
-        reportFinalCosts("Poisson Image Editing", m_params, optGNCost, optLMCost, ceresCost);
-		return &m_result;
-	}*/
 
 	void copyResultToCPU() {
 		m_result = ColorImageR32G32B32A32(m_image.getWidth(), m_image.getHeight());

@@ -164,7 +164,7 @@ void SimpleBuffer::savePLYPoints(std::string filename) const {
                 //std::cout << value << std::endl;
                 if (value > 0.01f && value <= 10000.0f)
                 {
-                    cloud.m_points.push_back(vec3f(p.x, p.y, value * 1000.0f));
+                    cloud.m_points.push_back(vec3f((float)p.x, (float)p.y, value * 1000.0f));
                 }
             }
         }

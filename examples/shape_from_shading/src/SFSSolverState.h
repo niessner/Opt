@@ -22,7 +22,8 @@ struct SolverInput
     float* d_depthMapRefinedLastFrameFloat; // refined result of last frame
 
     // mask edge map
-    unsigned char* d_maskEdgeMap;
+    unsigned char* d_maskEdgeMapR;
+    unsigned char* d_maskEdgeMapC;
 
     // Lighting
     float* d_litcoeff;
