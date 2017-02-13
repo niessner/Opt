@@ -61,7 +61,7 @@ __global__ void EvalResidualDevice(SolverInput input, SolverState state, SolverP
 float EvalResidual(SolverInput& input, SolverState& state, SolverParameters& parameters, CUDATimer& timer)
 {
 	float residual = 0.0f;
-
+    cutilSafeCall(cudaDeviceSynchronize());
 	const unsigned int N = input.N; // Number of block variables
 	ResetResidualDevice << < 1, 1, 1 >> >(input, state, parameters);
 	cutilSafeCall(cudaDeviceSynchronize());
@@ -322,24 +322,26 @@ __global__ void Precompute_Kernel(SolverInput input, SolverState state, SolverPa
     if (x < N) {
         int W = input.width;
         int posy; int posx; get2DIdx(x, input.width, input.height, posy, posx);
-        float4 temp = calShading2depthGradCompute(state, posx, posy, input);
-        state.B_I_dx0[x] = temp.x;
-        state.B_I_dx1[x] = temp.y;
-        state.B_I_dx2[x] = temp.z;
-        state.B_I[x]     = temp.w;
+        if (posx > 0 && posy > 0 && posx < input.width - 2 && posy < input.height - 2) {
+            float4 temp = calShading2depthGradCompute(state, posx, posy, input);
+            state.B_I_dx0[x] = temp.x;
+            state.B_I_dx1[x] = temp.y;
+            state.B_I_dx2[x] = temp.z;
+            state.B_I[x]     = temp.w;
             
-        float d  = readX(state, posy, posx, W);
-        float d0 = readX(state, posy, posx - 1, W);
-        float d1 = readX(state, posy, posx + 1, W);
-        float d2 = readX(state, posy - 1, posx, W);
-        float d3 = readX(state, posy + 1, posx, W);
+            float d  = readX(state, posy, posx, W);
+            float d0 = readX(state, posy, posx - 1, W);
+            float d1 = readX(state, posy, posx + 1, W);
+            float d2 = readX(state, posy - 1, posx, W);
+            float d3 = readX(state, posy + 1, posx, W);
 
-        state.pguard[x] = 
-           IsValidPoint(d) && IsValidPoint(d0) && IsValidPoint(d1) && IsValidPoint(d2) && IsValidPoint(d3)
-            && abs(d - d0)<DEPTH_DISCONTINUITY_THRE
-            && abs(d - d1)<DEPTH_DISCONTINUITY_THRE
-            && abs(d - d2)<DEPTH_DISCONTINUITY_THRE
-            && abs(d - d3)<DEPTH_DISCONTINUITY_THRE;
+            state.pguard[x] = 
+               IsValidPoint(d) && IsValidPoint(d0) && IsValidPoint(d1) && IsValidPoint(d2) && IsValidPoint(d3)
+                && abs(d - d0)<DEPTH_DISCONTINUITY_THRE
+                && abs(d - d1)<DEPTH_DISCONTINUITY_THRE
+                && abs(d - d2)<DEPTH_DISCONTINUITY_THRE
+                && abs(d - d3)<DEPTH_DISCONTINUITY_THRE;
+        }
     }
 }
 
@@ -358,7 +360,7 @@ void Precompute(SolverInput& input, SolverState& state, SolverParameters& parame
     timer.startEvent("Precompute_Kernel");
     Precompute_Kernel << <blocksPerGrid, THREADS_PER_BLOCK >> >(input, state, parameters);
     timer.endEvent();
-
+    cutilSafeCall(cudaDeviceSynchronize());
     #ifdef _DEBUG
         cutilSafeCall(cudaDeviceSynchronize());
         cutilCheckMsg(__FUNCTION__);

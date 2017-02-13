@@ -118,6 +118,9 @@ xcopy /Y /D "..\..\API\release\include\*.h" "."</Command>
       <MaxRegCount>62</MaxRegCount>
       <FastMath>true</FastMath>
       <Optimization>O3</Optimization>
+      <InterleaveSourceInPTX>false</InterleaveSourceInPTX>
+      <GPUDebugInfo>false</GPUDebugInfo>
+      <GenerateLineInfo>false</GenerateLineInfo>
     </CudaCompile>
     <PreBuildEvent>
       <Command>call "..\..\API\common\optMake.bat" "$(ProjectDir)\..\..\..\terra" "..\..\API" "false"

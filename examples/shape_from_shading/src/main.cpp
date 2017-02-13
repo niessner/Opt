@@ -38,10 +38,10 @@ int main(int argc, const char * argv[])
     CombinedSolverParameters params;
     performanceRun = true;
     if (performanceRun) {
-        params.useCUDA = true;
-        params.useOpt = false;
+        params.useCUDA  = true;
+        params.useOpt   = true;
         params.useOptLM = false;
-        params.useCeres = true;
+        params.useCeres = false;
     }
     else {
         //m_params.useCUDA = true;

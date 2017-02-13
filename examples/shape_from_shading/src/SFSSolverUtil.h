@@ -108,7 +108,6 @@ __inline__ __device__ float4 calShading2depthGradHelper(const float d0, const fl
         float sh_callist7 = pz * px * input.d_litcoeff[7];
         float sh_callist8 = (px * px - py * py)*input.d_litcoeff[8];
 
-
         //normal changes wrt depth
         register float gradx = 0, grady = 0, gradz = 0;
 
