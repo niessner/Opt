@@ -11,7 +11,6 @@
 
 #include "CUDAWarpingSolver.h"
 #include "CUDAPatchSolverWarping.h"
-#include "TerraSolverPoissonImageEditing.h"
 #include "CeresSolverPoissonImageEditing.h"
 #include "EigenSolverPoissonImageEditing.h"
 

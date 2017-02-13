@@ -60,14 +60,14 @@ int main(int argc, const char * argv[]) {
 	
     CombinedSolverParameters params;
 
-    params.useCUDA = true;
+    params.useCUDA = false;
     params.useOpt = true;
     params.useCeres = false;
     params.nonLinearIter = 1;
     params.linearIter = 100;
 
     // This example has a couple solvers that don't fit into the CombinedSolverParameters mold.
-    bool useCUDAPatch = true;
+    bool useCUDAPatch = false;
     bool useEigen = true;
 
     CombinedSolver solver(imageR32, image1Large, imageR32MaskLarge, params, useCUDAPatch, useEigen);
