@@ -101,14 +101,16 @@ protected:
                 preNonlinearSolve(i);
                 s.solver->solve(m_solverParams, m_problemParams, m_combinedSolverParameters.profileSolve, s.iterationInfo);
                 postNonlinearSolve(i);
-                if (m_combinedSolverParameters.earlyOut) {
+                if (m_combinedSolverParameters.earlyOut || m_endSolveEarly) {
+                    m_endSolveEarly = false;
                     break;
                 }
             }
         }
         postSingleSolve();
     }
-
+    // Set to true in preNonlinearSolve or postNonlinearSolve to finish the solve before the specified number of iterations
+    bool m_endSolveEarly = false;
     NamedParameters m_solverParams;
     NamedParameters m_problemParams;
     CombinedSolverParameters m_combinedSolverParameters;
