@@ -339,7 +339,7 @@ double CeresImageSolver::solve(const NamedParameters& solverParameters, const Na
     u_y = getTypedParameter<float>("u_y", problemParameters);
 
     NamedParameters::Parameter coeffs;
-    problemParameters.get("L", coeffs);
+    problemParameters.get("L_1", coeffs);
 
     for (int i = 0; i < 9; i++)
         L[i] = ((float*)coeffs.ptr)[i];

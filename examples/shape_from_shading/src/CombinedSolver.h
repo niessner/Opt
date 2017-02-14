@@ -7,7 +7,6 @@
 
 #include "CUDAImageSolver.h"
 
-#include "OptImageSolver.h"
 #include "CeresImageSolver.h"
 #include "SFSSolverInput.h"
 #include "../../shared/SolverIteration.h"
@@ -27,7 +26,7 @@ public:
         m_combinedSolverParameters = params;
         m_initialUnknown = std::make_shared<SimpleBuffer>(*inputGPU.initialUnknown, true);
         m_result = std::make_shared<SimpleBuffer>(*inputGPU.initialUnknown, true);
-        inputGPU.setParameters(m_problemParams, m_combinedSolverParameters, m_result);
+        inputGPU.setParameters(m_problemParams, m_result);
 
         m_dims = { (unsigned int)m_result->width(), (unsigned int)m_result->height() };
 

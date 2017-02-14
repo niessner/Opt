@@ -24,27 +24,24 @@ int main(int argc, const char * argv[])
 
     solverInputGPU.load(inputFilenamePrefix, true);
 
-    solverInputGPU.parameters.nNonLinearIterations = 34;
-    solverInputGPU.parameters.nLinIterations = 10;
-
-	if (performanceRun) {
-		solverInputGPU.parameters.nNonLinearIterations = 60;
-		solverInputGPU.parameters.nLinIterations = 10;
-	}
+    
 
     solverInputGPU.targetDepth->savePLYMesh("sfsInitDepth.ply");
     solverInputCPU.load(inputFilenamePrefix, false);
 
     CombinedSolverParameters params;
+    params.nonLinearIter = 34;
+    params.linearIter = 34;
+
     performanceRun = true;
+
     if (performanceRun) {
-        params.useCUDA  = true;
+        params.useCUDA  = false;
         params.useOpt   = true;
-        params.useOptLM = false;
-        params.useCeres = false;
-    }
-    else {
-        //m_params.useCUDA = true;
+        params.useOptLM = true;
+        params.useCeres = true;
+        params.nonLinearIter = 60;
+        params.linearIter = 10;
     }
 
     CombinedSolver solver(solverInputGPU, params);

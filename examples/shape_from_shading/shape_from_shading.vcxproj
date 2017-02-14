@@ -159,7 +159,6 @@ xcopy /Y /D "..\..\API\release\include\*.h" "."</Command>
     <ClInclude Include="src\cudaUtil.h" />
     <ClInclude Include="src\CUDAImageSolver.h" />
     <ClInclude Include="src\cuda_SimpleMatrixUtil.h" />
-    <ClInclude Include="src\OptImageSolver.h" />
     <ClInclude Include="src\SFSSolverParameters.h" />
     <ClInclude Include="src\SimpleBuffer.h" />
     <ClInclude Include="src\SFSSolverInput.h" />

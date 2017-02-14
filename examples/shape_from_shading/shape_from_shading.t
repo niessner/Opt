@@ -8,12 +8,15 @@ local f_x	    = Param("f_x",float,3)
 local f_y	    = Param("f_y",float,4)
 local u_x 	    = Param("u_x",float,5)
 local u_y 	    = Param("u_y",float,6)
-local L		    = Param("L",float9,7)
-local X 	    = Unknown("X",float, {W,H},8) -- Refined Depth
-local D_i 	    = Array("D_i",float, {W,H},9) -- Depth input
-local Im 	    = Array("Im",float, {W,H},10) -- Target Intensity
-local edgeMaskR = Array("edgeMaskR",uint8, {W,H},11) -- Edge mask. 
-local edgeMaskC = Array("edgeMaskC",uint8, {W,H},12) -- Edge mask. 
+local L = {}
+for i=1,9 do -- lighting model parameters
+	L[i] = Param("L_" .. i .. "",float,6+i)
+end
+local X 	    = Unknown("X",float, {W,H},16) -- Refined Depth
+local D_i 	    = Array("D_i",float, {W,H},17) -- Depth input
+local Im 	    = Array("Im",float, {W,H},18) -- Target Intensity
+local edgeMaskR = Array("edgeMaskR",uint8, {W,H},19) -- Edge mask. 
+local edgeMaskC = Array("edgeMaskC",uint8, {W,H},20) -- Edge mask. 
 
 
 local posX,posY = Index(0),Index(1)
@@ -45,9 +48,9 @@ function B(offX, offY)
 	local n_y = normal[1]
 	local n_z = normal[2]
 
-	return           L[0] +
-					 L[1]*n_y       + L[2]*n_z      + L[3]*n_x  +
-					 L[4]*n_x*n_y   + L[5]*n_y*n_z  + L[6]*(-n_x*n_x - n_y*n_y + 2*n_z*n_z) + L[7]*n_z*n_x + L[8]*(n_x*n_x-n_y*n_y)
+	return           L[1] +
+					 L[2]*n_y + L[3]*n_z + L[4]*n_x  +
+					 L[5]*n_x*n_y + L[6]*n_y*n_z + L[7]*(-n_x*n_x - n_y*n_y + 2*n_z*n_z) + L[8]*n_z*n_x + L[9]*(n_x*n_x-n_y*n_y)
 end
 
 function I(offX, offY)

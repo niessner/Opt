@@ -72,16 +72,9 @@ double CUDAImageSolver::solve(const NamedParameters& solverParams, const NamedPa
     solverInput.d_maskEdgeMapC = getTypedParameterImage<unsigned char>("edgeMaskC", probParams);
     
     NamedParameters::Parameter lightCoeff;
-    probParams.get("L", lightCoeff);
+    probParams.get("L_1", lightCoeff);
     cudaMalloc(&solverInput.d_litcoeff, sizeof(float)*9);
     cudaMemcpy(solverInput.d_litcoeff, lightCoeff.ptr, sizeof(float) * 9, cudaMemcpyHostToDevice);
-
-    //TODO: remove
-    std::vector<float> ones(9);
-    for (int i = 0; i < ones.size(); ++i) {
-        ones[i] = 1.0f;
-    }
-    cudaMemcpy(solverInput.d_litcoeff, ones.data(), sizeof(float) * 9, cudaMemcpyHostToDevice);
     
     //solverInput.deltaTransform = rawSolverInput.parameters.deltaTransform; // transformation to last frame, unused
     solverInput.calibparams.ux = getTypedParameter<float>("u_x", probParams);

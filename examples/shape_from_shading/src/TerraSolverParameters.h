@@ -28,10 +28,7 @@ struct TerraSolverParameters {
     float4x4 deltaTransform;
     float lightingCoefficients[9];
 
-    unsigned int nNonLinearIterations;		// Steps of the non-linear solver	
-    unsigned int nLinIterations;			// Steps of the linear solver
-    // Vesitgal
-    unsigned int nPatchIterations;			// Steps on linear step on block level
+    unsigned int unusued[3];
 
     TerraSolverParameters() {}
     void load(const std::string& filename) {

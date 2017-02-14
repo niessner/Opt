@@ -35,9 +35,6 @@
     <ClInclude Include="Opt.h">
       <Filter>Opt</Filter>
     </ClInclude>
-    <ClInclude Include="src\OptImageSolver.h">
-      <Filter>Opt</Filter>
-    </ClInclude>
     <ClInclude Include="src\SimpleBuffer.h">
       <Filter>Util</Filter>
     </ClInclude>

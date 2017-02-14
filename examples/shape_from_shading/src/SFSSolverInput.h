@@ -20,7 +20,7 @@ struct SFSSolverInput {
     std::shared_ptr<SimpleBuffer>   maskEdgeMap; //uint8s, and actually the row and column maps stuck together...
     TerraSolverParameters           parameters;
 
-    void setParameters(NamedParameters& probParams, CombinedSolverParameters& solverParams, std::shared_ptr<SimpleBuffer> unknownImage) const {
+    void setParameters(NamedParameters& probParams, std::shared_ptr<SimpleBuffer> unknownImage) const {
         probParams.set("w_p", (void*)&parameters.weightFitting);
         probParams.set("w_s", (void*)&parameters.weightRegularizer);
         probParams.set("w_g", (void*)&parameters.weightShading);
@@ -28,7 +28,12 @@ struct SFSSolverInput {
         probParams.set("f_y", (void*)&parameters.fy);
         probParams.set("u_x", (void*)&parameters.ux);
         probParams.set("u_y", (void*)&parameters.uy);
-        probParams.set("L", (void*)&(parameters.lightingCoefficients[0]));
+        for (int i = 0; i < 9; ++i) {
+            char buff[5];
+            sprintf(buff, "L_%d", i+1);
+            probParams.set(buff, (void*)&(parameters.lightingCoefficients[i]));
+        }
+        
         auto unknown = createWrapperOptImage(unknownImage);
         probParams.set("X", unknown);
         probParams.set("D_i", createWrapperOptImage(targetDepth));
@@ -40,8 +45,6 @@ struct SFSSolverInput {
         edgeMaskC->update((unsigned char*)maskEdgeMap->data() + pixCount, pixCount*sizeof(unsigned char), OptImage::Location::GPU);
         probParams.set("edgeMaskR", edgeMaskR);
         probParams.set("edgeMaskC", edgeMaskC);
-        solverParams.linearIter     = parameters.nLinIterations;
-        solverParams.nonLinearIter  = parameters.nNonLinearIterations;
     }
 
     void load(const std::string& filenamePrefix, bool onGPU) {
