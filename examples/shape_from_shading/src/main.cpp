@@ -4,7 +4,6 @@
 
 int main(int argc, const char * argv[])
 {
-
     std::string inputFilenamePrefix = "default";
     if (argc >= 2) {
         inputFilenamePrefix = std::string(argv[1]);
@@ -21,20 +20,14 @@ int main(int argc, const char * argv[])
     }
 
     SFSSolverInput solverInputCPU, solverInputGPU;
-
     solverInputGPU.load(inputFilenamePrefix, true);
-
-    
-
     solverInputGPU.targetDepth->savePLYMesh("sfsInitDepth.ply");
     solverInputCPU.load(inputFilenamePrefix, false);
 
     CombinedSolverParameters params;
-    params.nonLinearIter = 34;
-    params.linearIter = 34;
-
-    performanceRun = true;
-
+    params.nonLinearIter = 60;
+    params.linearIter = 10;
+    params.useOpt = true;
     if (performanceRun) {
         params.useCUDA  = false;
         params.useOpt   = true;

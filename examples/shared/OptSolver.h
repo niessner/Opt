@@ -40,9 +40,14 @@ static void copyUnknownsFromDoubleToFloat(const NamedParameters& floatParams, co
 class OptSolver : public SolverBase {
 
 public:
-    OptSolver(const std::vector<unsigned int>& dimensions, const std::string& terraFile, const std::string& optName) : m_optimizerState(nullptr), m_problem(nullptr), m_plan(nullptr)
+    OptSolver(const std::vector<unsigned int>& dimensions, const std::string& terraFile, const std::string& optName, bool doublePrecision = false) : m_optimizerState(nullptr), m_problem(nullptr), m_plan(nullptr)
 	{
-		m_optimizerState = Opt_NewState();
+        Opt_InitializationParameters initParams;
+        memset(&initParams, 0, sizeof(Opt_InitializationParameters));
+        initParams.verbosityLevel = 1;
+        initParams.collectPerKernelTimingInfo = 1;
+        initParams.doublePrecision = (int)doublePrecision;
+        m_optimizerState = Opt_NewState(initParams);
 		m_problem = Opt_ProblemDefine(m_optimizerState, terraFile.c_str(), optName.c_str());
         m_plan = Opt_ProblemPlan(m_optimizerState, m_problem, (unsigned int*)dimensions.data());
 

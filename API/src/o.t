@@ -27,8 +27,8 @@ if false then
 end
 
 -- constants
-local verboseSolver = true
-local verboseAD = false
+local verboseSolver = _opt_verbosity > 0
+local verboseAD 	= _opt_verbosity > 1
 
 local vprintfname = ffi.os == "Windows" and "vprintf" or "cudart:vprintf"
 local vprintf = terralib.externfunction(vprintfname, {&int8,&int8} -> int)

@@ -1,6 +1,4 @@
-local timeIndividualKernels  = true
 local pascalOrBetterGPU = false
-local printTimingInfo = true
 local S = require("std")
 require("precision")
 local util = {}
@@ -336,7 +334,7 @@ terra isprefix(pre : rawstring, str : rawstring) : bool
     return isprefix(pre+1,str+1)
 end
 terra Timer:evaluate()
-	if ([printTimingInfo]) then
+	if ([_opt_verbosity > 0]) then
 		var aggregateTimingInfo = [Array(tuple(float,int))].salloc():init()
 		var aggregateTimingNames = [Array(rawstring)].salloc():init()
 		for i = 0,self.timingInfo:size() do
@@ -675,13 +673,13 @@ local function makeGPULauncher(PlanData,kernelName,ft,compiledKernel)
                                             0, nil }
         var stream : C.cudaStream_t = nil
         var endEvent : C.cudaEvent_t 
-        if ([timeIndividualKernels]) then
+        if ([_opt_collect_kernel_timing]) then
             pd.timer:startEvent(kernelName,nil,&endEvent)
         end
 
         checkedLaunch(kernelName, compiledKernel(&launch, @pd, params))
         
-        if ([timeIndividualKernels]) then
+        if ([_opt_collect_kernel_timing]) then
             pd.timer:endEvent(nil,endEvent)
         end
 

@@ -84,6 +84,21 @@ local wrappers = {}
 
 struct LibraryState { L : &C.lua_State }
 
+-- Must match Opt.h
+struct Opt_InitializationParameters {
+    -- If true, all intermediate values and unknowns, are double-precision
+    -- On platforms without double-precision float atomics, this 
+    -- can be a drastic drag of performance.
+    doublePrecision : int
+
+    -- Valid Values: 0, no verbosity; 1, full verbosity
+    verbosityLevel : int
+
+    -- If true, a cuda timer is used to collect per-kernel timing information
+    -- while the solver is running. This adds a small amount of overhead to every kernel.
+    collectPerKernelTimingInfo : int
+}
+
 for name,type in pairs(apifunctions) do
     LibraryState.entries:insert { name, type }
 end
@@ -98,7 +113,7 @@ local terra doerror(L : &C.lua_State)
 end
 
 local sourcepath = absolutepath(sourcedirectory).."/?.t"
-local terra NewState() : &LibraryState
+local terra NewState(params : Opt_InitializationParameters) : &LibraryState
     var S = [&LibraryState](C.malloc(sizeof(LibraryState)))
     var L = C.luaL_newstate();
     S.L = L
@@ -109,9 +124,22 @@ local terra NewState() : &LibraryState
     if C.terra_initwithoptions(L,&o) ~= 0 then
         doerror(L)
     end
-    
     setupsigsegv(L)
+
+    -- Set global variables from Opt_InitializationParameters
+    C.lua_pushboolean(L,params.doublePrecision);
+    C.lua_setfield(L,LUA_GLOBALSINDEX,"_opt_double_precision")
+
+    var verbosityLevel : C.lua_Number = params.verbosityLevel
+    C.lua_pushnumber(L,verbosityLevel);
+    C.lua_setfield(L,LUA_GLOBALSINDEX,"_opt_verbosity")
+
+    C.lua_pushboolean(L,params.collectPerKernelTimingInfo);
+    C.lua_setfield(L,LUA_GLOBALSINDEX,"_opt_collect_kernel_timing")
+
     C.lua_getfield(L,LUA_GLOBALSINDEX,"package")
+
+    -- C.lua_setfield(L,LUA_GLOBALSINDEX,)
     escape 
         if embedsource then
             emit quote C.lua_getfield(L,-1,"preload") end

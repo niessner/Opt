@@ -1,4 +1,4 @@
-Documentation Maintainer: Michael Mara (mmara@stanford.edu)
+Documentation Maintainer: Michael Mara (mmara@cs.stanford.edu)
 
 
 Library Code:
