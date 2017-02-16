@@ -15,6 +15,7 @@ Please refer to the publication when you are using Opt:<br/>[arxiv.org/abs/1604.
 
 For more information, including early access to the code, contact:
 
+* mmara at cs dot stanford dot edu
 * zdevito at cs dot stanford dot edu
 * niessner at cs dot stanford dot edu
 
