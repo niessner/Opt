@@ -15,11 +15,14 @@ local GuardedInvertType = { CERES = {}, MODIFIED_CERES = {}, EPSILON_ADD = {} }
 local JacobiScalingType = { NONE = {}, ONCE_PER_SOLVE = {}, EVERY_ITERATION = {}}
 
 
-local options = {
+local initialization_parameters = {
     use_cusparse = false,
     use_fused_jtj = false,
     guardedInvertType = GuardedInvertType.CERES,
-    jacobiScaling = JacobiScalingType.ONCE_PER_SOLVE,
+    jacobiScaling = JacobiScalingType.ONCE_PER_SOLVE
+}
+
+local solver_parameter_defaults = {
     residual_reset_period = 10,
     min_relative_decrease = 1e-3,
     min_trust_region_radius = 1e-32,
@@ -29,11 +32,13 @@ local options = {
     trust_region_radius = 1e4,
     radius_decrease_factor = 2.0,
     min_lm_diagonal = 1e-6,
-    max_lm_diagonal = 1e32
+    max_lm_diagonal = 1e32,
+    nIterations = 10,
+    lIterations = 10
 }
 
 
-local multistep_alphaDenominator_compute = options.use_cusparse
+local multistep_alphaDenominator_compute = initialization_parameters.use_cusparse
 
 local cd = macro(function(apicall) 
     local apicallstr = tostring(apicall)
@@ -50,7 +55,7 @@ local cd = macro(function(apicall)
     in
         r
     end end)
-if options.use_cusparse then
+if initialization_parameters.use_cusparse then
     local cusparsepath = "/usr/local/cuda"
     local cusparselibpath = "/lib64/libcusparse.dylib"
     if ffi.os == "Windows" then
@@ -75,7 +80,7 @@ opt.BLOCK_SIZE = 16
 local BLOCK_SIZE =  opt.BLOCK_SIZE
 
 local FLOAT_EPSILON = `[opt_float](0.00000001f) 
--- GAUSS NEWTON (non-block version)
+-- GAUSS NEWTON (or LEVENBERG-MARQUADT)
 return function(problemSpec)
     local UnknownType = problemSpec:UnknownType()
     local TUnknownType = UnknownType:terratype()	
@@ -127,9 +132,29 @@ return function(problemSpec)
     
     local isGraph = problemSpec:UsesGraphs() 
     
+    local struct SolverParameters {
+        min_relative_decrease : opt_float
+        min_trust_region_radius : opt_float
+        max_trust_region_radius : opt_float
+        q_tolerance : opt_float
+        function_tolerance : opt_float
+        trust_region_radius : opt_float
+        radius_decrease_factor : opt_float
+        min_lm_diagonal : opt_float
+        max_lm_diagonal : opt_float
+
+        residual_reset_period : int
+        nIter : int             --current non-linear iter counter
+        nIterations : int       --non-linear iterations
+        lIterations : int       --linear iterations
+    }
+
+    
+
     local struct PlanData {
 		plan : opt.Plan
 		parameters : problemSpec:ParameterType()
+        solverparameters : SolverParameters
 		scratch : &opt_float
 
 		delta : TUnknownType	--current linear update to be computed -> num vars
@@ -155,9 +180,7 @@ return function(problemSpec)
 		
 		timer : Timer
 		endSolver : util.TimerEvent
-		nIter : int				--current non-linear iter counter
-		nIterations : int		--non-linear iterations
-		lIterations : int		--linear iterations
+
 	    prevCost : opt_float
 	    
 	    J_csrValA : &opt_float
@@ -176,7 +199,7 @@ return function(problemSpec)
 	    
 	    Jp : &float
 	}
-	if options.use_cusparse then
+	if initialization_parameters.use_cusparse then
 	    PlanData.entries:insert {"handle", CUsp.cusparseHandle_t }
 	    PlanData.entries:insert {"desc", CUsp.cusparseMatDescr_t }
 	end
@@ -269,7 +292,6 @@ return function(problemSpec)
 	
 	local delegate = {}
 	function delegate.CenterFunctions(UnknownIndexSpace,fmap)
-	    --print("ES",fmap.derivedfrom)
 	    local kernels = {}
 	    local unknownElement = UnknownType:VectorTypeForIndexSpace(UnknownIndexSpace)
 	    local Index = UnknownIndexSpace:indextype()
@@ -287,7 +309,7 @@ return function(problemSpec)
 
         local terra guardedInvert(p : unknownElement)
             escape 
-                if options.guardedInvertType == GuardedInvertType.CERES then
+                if initialization_parameters.guardedInvertType == GuardedInvertType.CERES then
                     emit quote
                         var invp = p
                         for i = 0, invp:size() do
@@ -295,7 +317,7 @@ return function(problemSpec)
                         end
                         return invp
                     end
-                elseif options.guardedInvertType == GuardedInvertType.MODIFIED_CERES then
+                elseif initialization_parameters.guardedInvertType == GuardedInvertType.MODIFIED_CERES then
                     emit quote
                         var invp = p
                         for i = 0, invp:size() do
@@ -303,7 +325,7 @@ return function(problemSpec)
                         end
                         return invp
                     end
-                elseif options.guardedInvertType == GuardedInvertType.EPSILON_ADD then
+                elseif initialization_parameters.guardedInvertType == GuardedInvertType.EPSILON_ADD then
                     emit quote
                         var invp = p
                         for i = 0, invp:size() do
@@ -593,11 +615,11 @@ return function(problemSpec)
                 if idx:initFromCUDAParams() and not fmap.exclude(idx,pd.parameters) then 
                     var unclampedCtC = pd.CtC(idx)
                     var invS_iiSq : unknownElement = opt_float(1.0f)
-                    if [options.jacobiScaling == JacobiScalingType.ONCE_PER_SOLVE] then
+                    if [initialization_parameters.jacobiScaling == JacobiScalingType.ONCE_PER_SOLVE] then
                         invS_iiSq = opt_float(1.0f) / pd.SSq(idx)
-                    elseif [options.jacobiScaling == JacobiScalingType.EVERY_ITERATION] then 
+                    elseif [initialization_parameters.jacobiScaling == JacobiScalingType.EVERY_ITERATION] then 
                         invS_iiSq = opt_float(1.0f) / pd.preconditioner(idx)
-                    end -- else if  [options.jacobiScaling == JacobiScalingType.NONE] then invS_iiSq == 1
+                    end -- else if  [initialization_parameters.jacobiScaling == JacobiScalingType.NONE] then invS_iiSq == 1
                     var clampMultiplier = invS_iiSq / pd.parameters.trust_region_radius
                     var minVal = pd.parameters.min_lm_diagonal * clampMultiplier
                     var maxVal = pd.parameters.max_lm_diagonal * clampMultiplier
@@ -791,7 +813,7 @@ return function(problemSpec)
         return r
     end
     local cusparseInner,cusparseOuter
-    if options.use_cusparse then
+    if initialization_parameters.use_cusparse then
         terra cusparseOuter(pd : &PlanData)
             var [parametersSym] = &pd.parameters
             --logSolver("saving J...\n")
@@ -866,7 +888,7 @@ return function(problemSpec)
             var consts = array(0.f,1.f,2.f)
             cd(C.cudaMemset(pd.Ap_X._contiguousallocation, -1, sizeof(float)*nUnknowns))
             
-            if options.use_fused_jtj then
+            if initialization_parameters.use_fused_jtj then
                 var endJTJp : util.TimerEvent
                 pd.timer:startEvent("J^TJp",nil,&endJTJp)
                 cd(CUsp.cusparseScsrmv(
@@ -917,7 +939,7 @@ return function(problemSpec)
 	   pd.timer:startEvent("overall",nil,&pd.endSolver)
        [util.initParameters(`pd.parameters,problemSpec,params_,true)]
        var [parametersSym] = &pd.parameters
-        escape if options.use_cusparse then emit quote
+        escape if initialization_parameters.use_cusparse then emit quote
             if pd.J_csrValA == nil then
                 cd(CUsp.cusparseCreateMatDescr( &pd.desc ))
                 cd(CUsp.cusparseSetMatType( pd.desc,CUsp.CUSPARSE_MATRIX_TYPE_GENERAL ))
@@ -948,16 +970,17 @@ return function(problemSpec)
                 cd(C.cudaMemcpy(&pd.J_csrRowPtrA[nResidualsExp],&nnz,sizeof(int),C.cudaMemcpyHostToDevice))
             end
         end end end
-	   pd.nIter = 0
-	   pd.nIterations = @[&int](solverparams[0])
-	   pd.lIterations = @[&int](solverparams[1])
+
+	   pd.solverparameters.nIter = 0
+	   pd.solverparameters.nIterations = @[&int](solverparams[0])
+	   pd.solverparameters.lIterations = @[&int](solverparams[1])
        escape 
             if problemSpec:UsesLambda() then
               emit quote 
-                pd.parameters.trust_region_radius       = [options.trust_region_radius]
-                pd.parameters.radius_decrease_factor    = [options.radius_decrease_factor]
-                pd.parameters.min_lm_diagonal           = [options.min_lm_diagonal]
-                pd.parameters.max_lm_diagonal           = [options.max_lm_diagonal]
+                pd.parameters.trust_region_radius       = pd.solverparameters.trust_region_radius
+                pd.parameters.radius_decrease_factor    = pd.solverparameters.radius_decrease_factor
+                pd.parameters.min_lm_diagonal           = pd.solverparameters.min_lm_diagonal
+                pd.parameters.max_lm_diagonal           = pd.solverparameters.max_lm_diagonal
               end
 	        end 
        end
@@ -973,18 +996,17 @@ return function(problemSpec)
     end
 
 	local terra step(data_ : &opaque, params_ : &&opaque, solverparams : &&opaque)
-        --TODO: make parameters
-        var residual_reset_period : int         = [options.residual_reset_period]
-        var min_relative_decrease : opt_float   = [options.min_relative_decrease]
-        var min_trust_region_radius : opt_float = [options.min_trust_region_radius]
-        var max_trust_region_radius : opt_float = [options.max_trust_region_radius]
-        var q_tolerance : opt_float             = [options.q_tolerance]
-        var function_tolerance : opt_float      = [options.function_tolerance]
+        var pd = [&PlanData](data_)
+        var residual_reset_period : int         = pd.solverparameters.residual_reset_period
+        var min_relative_decrease : opt_float   = pd.solverparameters.min_relative_decrease
+        var min_trust_region_radius : opt_float = pd.solverparameters.min_trust_region_radius
+        var max_trust_region_radius : opt_float = pd.solverparameters.max_trust_region_radius
+        var q_tolerance : opt_float             = pd.solverparameters.q_tolerance
+        var function_tolerance : opt_float      = pd.solverparameters.function_tolerance
         var Q0 : opt_float
         var Q1 : opt_float
-		var pd = [&PlanData](data_)
 		[util.initParameters(`pd.parameters,problemSpec, params_,false)]
-		if pd.nIter < pd.nIterations then
+		if pd.solverparameters.nIter < pd.solverparameters.nIterations then
 			C.cudaMemset(pd.scanAlphaNumerator, 0, sizeof(opt_float))	--scan in PCGInit1 requires reset
 			C.cudaMemset(pd.scanAlphaDenominator, 0, sizeof(opt_float))	--scan in PCGInit1 requires reset
 			C.cudaMemset(pd.scanBetaNumerator, 0, sizeof(opt_float))	--scan in PCGInit1 requires reset
@@ -1000,7 +1022,7 @@ return function(problemSpec)
                     emit quote
                         C.cudaMemset(pd.scanAlphaNumerator, 0, sizeof(opt_float))
                         C.cudaMemset(pd.q, 0, sizeof(opt_float))
-                        if [options.jacobiScaling == JacobiScalingType.ONCE_PER_SOLVE] and pd.nIter == 0 then
+                        if [initialization_parameters.jacobiScaling == JacobiScalingType.ONCE_PER_SOLVE] and pd.solverparameters.nIter == 0 then
                             gpu.PCGSaveSSq(pd)
                         end
                         gpu.PCGComputeCtC(pd)
@@ -1012,19 +1034,19 @@ return function(problemSpec)
                 end
             end
             cusparseOuter(pd)
-            for lIter = 0, pd.lIterations do				
+            for lIter = 0, pd.solverparameters.lIterations do				
 
                 C.cudaMemset(pd.scanAlphaDenominator, 0, sizeof(opt_float))
                 C.cudaMemset(pd.q, 0, sizeof(opt_float))
 
-                if not options.use_cusparse then
+                if not initialization_parameters.use_cusparse then
     				gpu.PCGStep1(pd)
     				if isGraph then
     					gpu.PCGStep1_Graph(pd)
     				end
                 end
 
-				-- only does anything if options.use_cusparse is true
+				-- only does anything if initialization_parameters.use_cusparse is true
                 cusparseInner(pd)
 
                 if multistep_alphaDenominator_compute then
@@ -1125,7 +1147,7 @@ return function(problemSpec)
             iteration_summary_.gradient_max_norm <= options_.gradient_tolerance
             ]]
 
-			pd.nIter = pd.nIter + 1
+			pd.solverparameters.nIter = pd.solverparameters.nIter + 1
 			return 1
 		else
 			cleanup(pd)
@@ -1136,6 +1158,29 @@ return function(problemSpec)
     local terra cost(data_ : &opaque) : double
         var pd = [&PlanData](data_)
         return [double](pd.prevCost)
+    end
+
+    local terra initializeSolverParameters(params : &SolverParameters)
+        escape
+            -- for each value in solver_parameter_defaults, assign to params
+            for name,value in pairs(solver_parameter_defaults) do
+                local foundVal = false
+                -- TODO, more elegant solution to this
+                for _,entry in ipairs(SolverParameters.entries) do
+                    if entry.field == name then
+                        foundVal = true
+                        emit quote params.[name] = [entry.type]([value])
+                        end
+                        break
+                    end
+                end
+                if not foundVal then
+                    print("Tried to initialize "..name.." but not found")
+                else
+                    print("Successfully initialized "..name.." to "..tostring(value))
+                end
+            end
+        end
     end
 
 	local terra makePlan() : &opt.Plan
@@ -1154,6 +1199,8 @@ return function(problemSpec)
 		pd.preconditioner:initGPU()
 		pd.g:initGPU()
         pd.prevX:initGPU()
+
+        initializeSolverParameters(&pd.solverparameters)
 		
 		[util.initPrecomputedImages(`pd.parameters,problemSpec)]	
 		C.cudaMalloc([&&opaque](&(pd.scanAlphaNumerator)), sizeof(opt_float))
