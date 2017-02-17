@@ -12,9 +12,9 @@ local L = {}
 for i=1,9 do -- lighting model parameters
 	L[i] = Param("L_" .. i .. "",float,6+i)
 end
-local X 	    = Unknown("X",float, {W,H},16) -- Refined Depth
-local D_i 	    = Array("D_i",float, {W,H},17) -- Depth input
-local Im 	    = Array("Im",float, {W,H},18) -- Target Intensity
+local X 	    = Unknown("X",opt_float, {W,H},16) -- Refined Depth
+local D_i 	    = Array("D_i",opt_float, {W,H},17) -- Depth input
+local Im 	    = Array("Im",opt_float, {W,H},18) -- Target Intensity
 local edgeMaskR = Array("edgeMaskR",uint8, {W,H},19) -- Edge mask. 
 local edgeMaskC = Array("edgeMaskC",uint8, {W,H},20) -- Edge mask. 
 

@@ -933,7 +933,7 @@ return function(problemSpec)
         terra cusparseOuter(pd : &PlanData) end
     end
 
-	local terra init(data_ : &opaque, params_ : &&opaque, solverparams : &&opaque)
+	local terra init(data_ : &opaque, params_ : &&opaque)
 	   var pd = [&PlanData](data_)
 	   pd.timer:init()
 	   pd.timer:startEvent("overall",nil,&pd.endSolver)
@@ -972,8 +972,6 @@ return function(problemSpec)
         end end end
 
 	   pd.solverparameters.nIter = 0
-	   pd.solverparameters.nIterations = @[&int](solverparams[0])
-	   pd.solverparameters.lIterations = @[&int](solverparams[1])
        escape 
             if problemSpec:UsesLambda() then
               emit quote 
@@ -995,7 +993,7 @@ return function(problemSpec)
         pd.timer:cleanup()
     end
 
-	local terra step(data_ : &opaque, params_ : &&opaque, solverparams : &&opaque)
+	local terra step(data_ : &opaque, params_ : &&opaque)
         var pd = [&PlanData](data_)
         var residual_reset_period : int         = pd.solverparameters.residual_reset_period
         var min_relative_decrease : opt_float   = pd.solverparameters.min_relative_decrease
@@ -1176,17 +1174,33 @@ return function(problemSpec)
                 end
                 if not foundVal then
                     print("Tried to initialize "..name.." but not found")
-                else
-                    print("Successfully initialized "..name.." to "..tostring(value))
                 end
             end
         end
     end
 
+    local terra setSolverParameter(data_ : &opaque, name : rawstring, value : &opaque) 
+        var pd = [&PlanData](data_)
+        var success = false
+        escape
+            -- Instead of building a table datastructure, 
+            -- explicitly emit an if-statement chain for setting the parameter
+            for _,entry in ipairs(SolverParameters.entries) do
+                emit quote
+                    if C.strcmp([entry.field],name)==0 then
+                        pd.solverparameters.[entry.field] = @[&entry.type]([value])
+                        return
+                    end
+                end
+            end
+        end
+        logSolver("Warning: tried to set nonexistent solver parameter %s\n", name)
+    end
+
 	local terra makePlan() : &opt.Plan
 		var pd = PlanData.alloc()
 		pd.plan.data = pd
-		pd.plan.init,pd.plan.step,pd.plan.cost = init,step,cost
+		pd.plan.init,pd.plan.step,pd.plan.cost,pd.plan.setsolverparameter = init,step,cost,setSolverParameter
 		pd.delta:initGPU()
 		pd.r:initGPU()
         pd.b:initGPU()

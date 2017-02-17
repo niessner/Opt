@@ -31,14 +31,13 @@ public:
         m_dims = { (unsigned int)m_result->width(), (unsigned int)m_result->height() };
 
         addSolver(std::make_shared<CUDAImageSolver>(m_dims), "CUDA", m_combinedSolverParameters.useCUDA);
-        addOptSolvers(m_dims, "shape_from_shading.t");
+        addOptSolvers(m_dims, "shape_from_shading.t", m_combinedSolverParameters.optDoublePrecision);
         addSolver(std::make_shared<CeresImageSolver>(m_dims), "Ceres", m_combinedSolverParameters.useCeres);
 	}
 
     virtual void combinedSolveInit() override {
-        m_solverParams.set("nonLinearIterations", &m_combinedSolverParameters.nonLinearIter);
-        m_solverParams.set("linearIterations", &m_combinedSolverParameters.linearIter);
-        m_solverParams.set("double_precision", &m_combinedSolverParameters.optDoublePrecision);
+        m_solverParams.set("nIterations", &m_combinedSolverParameters.nonLinearIter);
+        m_solverParams.set("lIterations", &m_combinedSolverParameters.linearIter);
     }
 
     virtual void preSingleSolve() override {

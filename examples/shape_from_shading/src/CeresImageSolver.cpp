@@ -365,9 +365,9 @@ double CeresImageSolver::solve(const NamedParameters& solverParameters, const Na
     const int borderSize = 1;
     if (useFitConstraint)
     {
-        for (int y = 0; y < m_dims[1]; y++)
+        for (int y = 0; y < (int)m_dims[1]; y++)
         {
-            for (int x = 0; x < m_dims[0]; x++)
+            for (int x = 0; x < (int)m_dims[0]; x++)
             {
                 const bool depthCheck = (D_i[getPixel(x, y)] > 0.0f);
                 if (depthCheck)
@@ -382,9 +382,9 @@ double CeresImageSolver::solve(const NamedParameters& solverParameters, const Na
 
     if (useRegConstraint)
     {
-        for (int y = borderSize; y < m_dims[1] - borderSize; y++)
+        for (int y = borderSize; y < (int)m_dims[1] - borderSize; y++)
         {
-            for (int x = borderSize; x < m_dims[0] - borderSize; x++)
+            for (int x = borderSize; x < (int)m_dims[0] - borderSize; x++)
             {
                 const bool depthCheck = (D_i[getPixel(x + 0, y + 0)] > 0.0f &&
                                          D_i[getPixel(x + 1, y + 0)] > 0.0f &&
@@ -412,9 +412,9 @@ double CeresImageSolver::solve(const NamedParameters& solverParameters, const Na
 
     if (useHorzConstraint)
     {
-        for (int y = borderSize; y < m_dims[1] - borderSize; y++)
+        for (int y = borderSize; y < (int)m_dims[1] - borderSize; y++)
         {
-            for (int x = borderSize; x < m_dims[0] - borderSize; x++)
+            for (int x = borderSize; x < (int)m_dims[0] - borderSize; x++)
             {
                 const bool depthCheck = (D_i[getPixel(x + 0, y + 0)] > 0.0f);
                 if (!depthCheck)
@@ -438,9 +438,9 @@ double CeresImageSolver::solve(const NamedParameters& solverParameters, const Na
 
     if (useVertConstraint)
     {
-        for (int y = borderSize; y < m_dims[1] - borderSize; y++)
+        for (int y = borderSize; y < (int)m_dims[1] - borderSize; y++)
         {
-            for (int x = borderSize; x < m_dims[0] - borderSize; x++)
+            for (int x = borderSize; x < (int)m_dims[0] - borderSize; x++)
             {
                 const bool depthCheck = (D_i[getPixel(x + 0, y + 0)] > 0.0f);
                 if (!depthCheck)

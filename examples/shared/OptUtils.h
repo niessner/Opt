@@ -1,6 +1,6 @@
 #pragma once
 extern "C" {
-#include <Opt.h>
+#include "Opt.h"
 }
 #include "SolverIteration.h"
 #include "NamedParameters.h"
@@ -44,18 +44,17 @@ public:
 
 
 
-static void launchProfiledSolve(Opt_State* state, Opt_Plan* plan, void** problemParams, void** solverParams, std::vector<SolverIteration>& iterationSummary) {
+static void launchProfiledSolve(Opt_State* state, Opt_Plan* plan, void** problemParams, std::vector<SolverIteration>& iterationSummary) {
     SimpleTimer t;
     t.init();
-
-    Opt_ProblemInit(state, plan, problemParams, solverParams);
+    Opt_ProblemInit(state, plan, problemParams);
     cudaDeviceSynchronize();
     double timeMS = t.tick();
     double cost = Opt_ProblemCurrentCost(state, plan);
     iterationSummary.push_back(SolverIteration(cost, timeMS));
 
     t.tick();
-    while (Opt_ProblemStep(state, plan, problemParams, solverParams)) {
+    while (Opt_ProblemStep(state, plan, problemParams)) {
         cudaDeviceSynchronize();
         timeMS = t.tick();
         cost = Opt_ProblemCurrentCost(state, plan);
@@ -98,6 +97,13 @@ template<class T> void getTypedParameterIfPresent(std::string name, const NamedP
     auto i = index_of(name, params.names());
     if (i != (size_t)-1) {
         value = *(T*)params.data()[i];
+    }
+}
+
+
+static void setAllSolverParameters(Opt_State* state, Opt_Plan* plan, const NamedParameters& params) {
+    for (auto param : params.getVector()) {
+        Opt_SetSolverParameter(state, plan, param.name.c_str(), param.ptr);
     }
 }
 

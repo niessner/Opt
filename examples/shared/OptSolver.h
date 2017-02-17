@@ -40,7 +40,7 @@ static void copyUnknownsFromDoubleToFloat(const NamedParameters& floatParams, co
 class OptSolver : public SolverBase {
 
 public:
-    OptSolver(const std::vector<unsigned int>& dimensions, const std::string& terraFile, const std::string& optName, bool doublePrecision = false) : m_optimizerState(nullptr), m_problem(nullptr), m_plan(nullptr)
+    OptSolver(const std::vector<unsigned int>& dimensions, const std::string& terraFile, const std::string& optName, bool doublePrecision = false) : m_optimizerState(nullptr), m_problem(nullptr), m_plan(nullptr), m_doublePrecision(doublePrecision)
 	{
         Opt_InitializationParameters initParams;
         memset(&initParams, 0, sizeof(Opt_InitializationParameters));
@@ -71,21 +71,19 @@ public:
 
     virtual double solve(const NamedParameters& solverParameters, const NamedParameters& problemParameters, bool profiledSolve, std::vector<SolverIteration>& iters) override {
 
-        bool doublePrecision = false;
-        getTypedParameterIfPresent<bool>("double_precision", solverParameters, doublePrecision);
         NamedParameters finalProblemParameters = problemParameters;
-        if (doublePrecision) {
+        if (m_doublePrecision) {
             finalProblemParameters = copyParametersAndConvertUnknownsToDouble(problemParameters);
         }
-        
+        setAllSolverParameters(m_optimizerState, m_plan, solverParameters);
         if (profiledSolve) {
-            launchProfiledSolve(m_optimizerState, m_plan, finalProblemParameters.data().data(), solverParameters.data().data(), iters);
+            launchProfiledSolve(m_optimizerState, m_plan, finalProblemParameters.data().data(), iters);
         } else {
-            Opt_ProblemSolve(m_optimizerState, m_plan, finalProblemParameters.data().data(), solverParameters.data().data());
+            Opt_ProblemSolve(m_optimizerState, m_plan, finalProblemParameters.data().data());
         }
         m_finalCost = Opt_ProblemCurrentCost(m_optimizerState, m_plan);
 
-        if (doublePrecision) {
+        if (m_doublePrecision) {
             copyUnknownsFromDoubleToFloat(problemParameters, finalProblemParameters);
         }
 
@@ -95,4 +93,5 @@ public:
 	Opt_State*		m_optimizerState;
 	Opt_Problem*	m_problem;
 	Opt_Plan*		m_plan;
+    bool m_doublePrecision = false;
 };

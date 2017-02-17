@@ -38,20 +38,24 @@ void Opt_ProblemDelete(Opt_State* state, Opt_Problem* problem);
 Opt_Plan* Opt_ProblemPlan(Opt_State* state, Opt_Problem* problem, unsigned int* dimensions);
 void Opt_PlanFree(Opt_State * state, Opt_Plan* plan);
 
+// Set a solver-specific variable by name. For now, these values are "locked-in" after ProblemInit()
+// Consult the solver-specific documentation for valid values and names
+void Opt_SetSolverParameter(Opt_State* state, Opt_Plan* plan, const char* name, void* value);
+
 // Run the solver until completion using the plan 'plan'. 'problemparams' are the problem-specific inputs 
 // and outputs that define the problem, including images, graphs, and problem paramaters
-// (see 'writing problem specifications'). 'solverparams' are the solver-specific parameter (e.g., 
-//  number of iterations, see 'solver parameters')
-void Opt_ProblemSolve(Opt_State* state, Opt_Plan* plan, void** problemparams, void** solverparams);
+// (see 'writing problem specifications').
+void Opt_ProblemSolve(Opt_State* state, Opt_Plan* plan, void** problemparams);
+
 
 // use these two functions to control the outer solver loop on your own. In between iterations,
 // problem parameters can be inspected and updated.
 
 // run just the initialization for a problem, but do not do any outer steps.
-void Opt_ProblemInit(Opt_State* state, Opt_Plan* plan, void** problemparams, void** solverparams);
+void Opt_ProblemInit(Opt_State* state, Opt_Plan* plan, void** problemparams);
 // perform one outer iteration of the solver loop and return to the user.
 // a zero return value indicates that the solver is finished according to its parameters
-int Opt_ProblemStep(Opt_State* state, Opt_Plan* plan, void** problemparams, void** solverparams);
+int Opt_ProblemStep(Opt_State* state, Opt_Plan* plan, void** problemparams);
 
 // Return the result of the cost function evaluated on the current unknowns
 // If the solver is initialized to not use double precision, the return value

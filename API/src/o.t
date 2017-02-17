@@ -119,8 +119,9 @@ local function compilePlan(problemSpec, kind)
 end
 
 struct opt.Plan(S.Object) {
-    init : {&opaque,&&opaque,&&opaque} -> {} -- plan.data,params,solverparams
-    step : {&opaque,&&opaque,&&opaque} -> int
+    init : {&opaque,&&opaque} -> {} -- plan.data,params
+    setsolverparameter : {&opaque,rawstring,&opaque} -> {} -- plan.data,name,param
+    step : {&opaque,&&opaque} -> int
     cost : {&opaque} -> double
     data : &opaque
 } 
@@ -2460,19 +2461,22 @@ terra opt.PlanFree(plan : &opt.Plan)
     plan:delete()
 end
 
-terra opt.ProblemInit(plan : &opt.Plan, params : &&opaque, solverparams : &&opaque) 
-    return plan.init(plan.data, params, solverparams)
+terra opt.ProblemInit(plan : &opt.Plan, params : &&opaque) 
+    return plan.init(plan.data, params)
 end
-terra opt.ProblemStep(plan : &opt.Plan, params : &&opaque, solverparams : &&opaque) : int
-    return plan.step(plan.data, params, solverparams)
+terra opt.ProblemStep(plan : &opt.Plan, params : &&opaque) : int
+    return plan.step(plan.data, params)
 end
-terra opt.ProblemSolve(plan : &opt.Plan, params : &&opaque, solverparams : &&opaque)
-   opt.ProblemInit(plan, params, solverparams)
-   while opt.ProblemStep(plan, params, solverparams) ~= 0 do end
+terra opt.ProblemSolve(plan : &opt.Plan, params : &&opaque)
+   opt.ProblemInit(plan, params)
+   while opt.ProblemStep(plan, params) ~= 0 do end
 end
-
 terra opt.ProblemCurrentCost(plan : &opt.Plan) : double
     return plan.cost(plan.data)
+end
+
+terra opt.SetSolverParameter(plan : &opt.Plan, name : rawstring, value : &opaque) 
+    return plan.setsolverparameter(plan.data, name, value)
 end
 
 return opt

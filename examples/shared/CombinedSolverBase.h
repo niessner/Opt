@@ -62,12 +62,12 @@ public:
 
     }
 
-    void addOptSolvers(std::vector<unsigned int> dims, std::string problemFilename) {
+    void addOptSolvers(std::vector<unsigned int> dims, std::string problemFilename, bool doublePrecision = false) {
         if (m_combinedSolverParameters.useOpt) {
-            addSolver(std::make_shared<OptSolver>(dims, problemFilename, "gaussNewtonGPU"), "Opt(GN)", true);
+            addSolver(std::make_shared<OptSolver>(dims, problemFilename, "gaussNewtonGPU", doublePrecision), "Opt(GN)", true);
         }
         if (m_combinedSolverParameters.useOptLM) {
-            addSolver(std::make_shared<OptSolver>(dims, problemFilename, "LMGPU"), "Opt(LM)", true);
+            addSolver(std::make_shared<OptSolver>(dims, problemFilename, "LMGPU", doublePrecision), "Opt(LM)", true);
         }
     }
 

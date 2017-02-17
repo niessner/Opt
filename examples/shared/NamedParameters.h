@@ -91,6 +91,10 @@ public:
         return d;
     }
 
+    std::vector<Parameter> getVector() const {
+        return m_parameters;
+    }
+
 protected:
     std::vector<Parameter> m_parameters;
 
