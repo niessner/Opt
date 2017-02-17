@@ -9,7 +9,6 @@ extern "C" {
 #include "CudaArray.h"
 #include "Precision.h"
 #include "SolverIteration.h"
-#include <cuda_runtime.h>
 #include "cudaUtil.h"
 #include "NamedParameters.h"
 #include "SolverBase.h"

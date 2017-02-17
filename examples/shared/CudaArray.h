@@ -8,7 +8,7 @@ class CudaArray {
 public:
     void update(const T* newData, size_t count) {
         destructiveResize(count);
-        cutilSafeCall(cudaMemcpy(m_data, newData, sizeof(T)*m_size, cudaMemcpyHostToDevice));
+        cudaSafeCall(cudaMemcpy(m_data, newData, sizeof(T)*m_size, cudaMemcpyHostToDevice));
     }
 
     void update(const std::vector<T>& newData) {
@@ -16,7 +16,7 @@ public:
     }
 
     void readBack(T* cpuBuffer, size_t count) {
-        cutilSafeCall(cudaMemcpy(cpuBuffer, m_data, sizeof(T)*min(count,m_size), cudaMemcpyDeviceToHost));
+        cudaSafeCall(cudaMemcpy(cpuBuffer, m_data, sizeof(T)*min(count,m_size), cudaMemcpyDeviceToHost));
     }
 
     void readBack(std::vector<T>& cpuBuffer) {
@@ -27,10 +27,10 @@ public:
     void destructiveResize(size_t count) {
         if (count > m_allocated) {
             if (m_data) {
-                cutilSafeCall(cudaFree(m_data));
+                cudaSafeCall(cudaFree(m_data));
             }
             m_allocated = count;
-            cutilSafeCall(cudaMalloc(&m_data, sizeof(T)*count));
+            cudaSafeCall(cudaMalloc(&m_data, sizeof(T)*count));
         }
         m_size = count;
     }
@@ -52,7 +52,7 @@ public:
 
     ~CudaArray() {
         if (m_data) {
-            cutilSafeCall(cudaFree(m_data));
+            cudaSafeCall(cudaFree(m_data));
         }
     }
 

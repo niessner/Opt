@@ -1,11 +1,8 @@
 #pragma once
 
-#ifndef _SOLVER_UTIL_
-#define _SOLVER_UTIL_
 
-#include <cutil_inline.h>
-#include <cutil_math.h>
-#include "cuda_SimpleMatrixUtil.h"
+#include "../../shared/cudaUtil.h"
+#include "../../shared/cuda_SimpleMatrixUtil.h"
 
 #define FLOAT_EPSILON 0.0001f
 
@@ -97,5 +94,3 @@ inline __device__ void blockReduce(volatile float* sdata, int threadIdx, unsigne
 
 	warpReduce(sdata, threadIdx, threadsPerBlock);
 }
-
-#endif

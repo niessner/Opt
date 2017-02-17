@@ -3,9 +3,7 @@
 #include "mLibInclude.h"
 
 #include <cuda_runtime.h>
-#include <cudaUtil.h>
 
-#include "TerraSolver.h"
 #include "OpenMesh.h"
 #include "../../shared/SolverIteration.h"
 #include "../../shared/CombinedSolverBase.h"

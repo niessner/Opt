@@ -1,13 +1,11 @@
 #pragma once
-
-#ifndef _CUDA_SIMPLE_MATRIX_UTIL_
-#define _CUDA_SIMPLE_MATRIX_UTIL_
+// Adapted from https://github.com/niessner/VoxelHashing/blob/master/DepthSensingCUDA/Source/cuda_SimpleMatrixUtil.h
 
 #define MINF __int_as_float(0xff800000)
 #define INF  __int_as_float(0x7f800000)
 
 #include <iostream>
-#include "cudaUtil.h"
+#include "../../shared/cudaUtil.h"
 
 //////////////////////////////
 // float2x2
@@ -415,11 +413,9 @@ public:
 
 	inline __device__ __host__ void normalizeRows()
 	{
-		//#pragma unroll 3
 		for(unsigned int i = 0; i<3; i++)
 		{
-			float3 r = getRow(i);
-			r/=length(r);
+			float3 r = normalize(getRow(i));
 			setRow(i, r);
 		}
 	}
@@ -1756,5 +1752,3 @@ typedef matNxM<16, 1> mat16x1;
 typedef matNxM<16, 3> mat16x3;
 typedef matNxM<3, 16> mat3x16;
 
-
-#endif

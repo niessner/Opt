@@ -80,10 +80,9 @@ int main(int argc, const char * argv[]) {
     params.nonLinearIter = 20;
     params.linearIter = 1000;
     params.useOpt = true;
-
+    params.useCUDA = true;
     if (performanceRun) {
         params.useCUDA = false;
-        params.useTerra = false;
         params.useOpt = true;
         params.useOptLM = true;
         params.useCeres = true;

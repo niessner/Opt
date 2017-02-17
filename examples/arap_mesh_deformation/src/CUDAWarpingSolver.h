@@ -2,7 +2,7 @@
 
 #include <cuda_runtime.h>
 
-#include "cudaUtil.h"
+#include "../../shared/cudaUtil.h"
 #include "WarpingSolverParameters.h"
 #include "WarpingSolverState.h"
 #include "../../shared/SolverBase.h"

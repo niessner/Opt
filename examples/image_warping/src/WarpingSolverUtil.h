@@ -1,12 +1,8 @@
 #pragma once
 
-#ifndef _SOLVER_Stereo_UTIL_
-#define _SOLVER_Stereo_UTIL_
-
 #include "SolverUtil.h"
 
-#include <cutil_inline.h>
-#include <cutil_math.h>
+#include "../../shared/cudaUtil.h"
 
 #define THREADS_PER_BLOCK 1024 // keep consistent with the CPU
 
@@ -56,5 +52,3 @@ inline __device__ void scanPart2(unsigned int threadIdx, unsigned int threadsPer
 	blockReduce(bucket, threadIdx, threadsPerBlock);
 	__syncthreads();
 }
-
-#endif

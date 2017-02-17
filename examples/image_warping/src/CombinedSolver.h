@@ -176,7 +176,7 @@ public:
         m_urshape->update(h_urshape);
         m_warpField->update(h_urshape);
         m_mask->update(h_mask);
-        cutilSafeCall(cudaMemset(m_warpAngles->data(), 0, sizeof(float)*m_image.getWidth()*m_image.getHeight()));
+        cudaSafeCall(cudaMemset(m_warpAngles->data(), 0, sizeof(float)*m_image.getWidth()*m_image.getHeight()));
 	}
 
 	void setConstraintImage(float alpha)

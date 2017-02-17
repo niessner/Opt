@@ -22,7 +22,7 @@ public:
     ~OptImage() {
         if (m_ownsData && m_data) {
             if (m_location == Location::GPU) {
-                cutilSafeCall(cudaFree(m_data));
+                cudaSafeCall(cudaFree(m_data));
             } else {
                 free(m_data);
             }
@@ -32,7 +32,7 @@ public:
     void* data() const { return m_data; }
     Location location() const { return m_location; }
     Type type() const { return m_type; }
-    std::vector<uint> dims() const { return m_dims; }
+    std::vector<unsigned int> dims() const { return m_dims; }
     bool isUnknown() const { return m_isUnknown; }
 
     size_t dataSize() const { return totalElementsFromDims(m_dims) * OptImage::typeSize(m_type) * m_channelCount; }
@@ -47,18 +47,18 @@ public:
     }
 
     void update(void* newData, size_t byteCount, Location loc) {
-        cutilSafeCall(cudaMemcpy(data(), newData, byteCount, cudaMemcpyType(location(), loc)));
+        cudaSafeCall(cudaMemcpy(data(), newData, byteCount, cudaMemcpyType(location(), loc)));
     }
 
     template<typename T>
     void update(const std::vector<T>& data) {
-        size_t byteCount = MIN(data.size()*sizeof(T), dataSize());
+        size_t byteCount = std::min(data.size()*sizeof(T), dataSize());
         update((void*)data.data(), byteCount, Location::CPU);
     }
 
     void copyTo(void* buffer, Location loc = Location::CPU, size_t maxBufferSize = std::numeric_limits<size_t>::max()) {
-        size_t byteCount = MIN(maxBufferSize, dataSize());
-        cutilSafeCall(cudaMemcpy(buffer, data(), byteCount, cudaMemcpyType(loc, location())));
+        size_t byteCount = std::min(maxBufferSize, dataSize());
+        cudaSafeCall(cudaMemcpy(buffer, data(), byteCount, cudaMemcpyType(loc, location())));
     }
 
     template<typename T>
@@ -98,7 +98,7 @@ static std::shared_ptr<OptImage> createEmptyOptImage(std::vector<unsigned int> d
     if (location == OptImage::Location::CPU) {
         data = malloc(size); 
     } else {
-        cutilSafeCall(cudaMalloc(&data, size));
+        cudaSafeCall(cudaMalloc(&data, size));
     }
     return std::shared_ptr<OptImage>(new OptImage(dims, data, type, channelCount, location, isUnknown, true));
 }
