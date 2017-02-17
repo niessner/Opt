@@ -144,7 +144,6 @@ xcopy /Y /D "..\..\API\release\include\*.h" "."</Command>
     <ClInclude Include="src\OpenMesh.h" />
     <ClInclude Include="src\main.h" />
     <ClInclude Include="src\mLibInclude.h" />
-    <ClInclude Include="src\TerraSolver.h" />
   </ItemGroup>
   <ItemGroup>
     <Reference Include="System" />

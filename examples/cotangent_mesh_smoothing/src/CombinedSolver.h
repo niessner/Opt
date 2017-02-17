@@ -6,8 +6,7 @@
 #include "../../shared/CombinedSolverBase.h"
 #include "mLibInclude.h"
 
-#include <cuda_runtime.h>
-#include <cudaUtil.h>
+#include "../../shared/cudaUtil.h"
 
 #include "OpenMesh.h"
 
@@ -84,8 +83,6 @@ public:
         for (SimpleMesh::VertexIter v_it = m_initial.vertices_begin(); v_it != m_initial.vertices_end(); ++v_it)
         {
             VertexHandle c_vh(v_it.handle());
-
-
             std::vector<unsigned int> neighborIndices;
             for (SimpleMesh::VertexVertexIter vv_it = m_initial.vv_iter(c_vh); vv_it; vv_it++) {
                 VertexHandle v_vh(vv_it.handle());

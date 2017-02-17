@@ -82,11 +82,11 @@ template<class T> T* getTypedParameterImage(std::string name, const NamedParamet
 // TODO: Error handling
 template<class T> void findAndCopyArrayToCPU(std::string name, std::vector<T>& cpuBuffer, const NamedParameters& solverParameters) {
     auto i = index_of(name, solverParameters.names());
-    cutilSafeCall(cudaMemcpy(cpuBuffer.data(), solverParameters.data()[i], sizeof(T)*cpuBuffer.size(), cudaMemcpyDeviceToHost));
+    cudaSafeCall(cudaMemcpy(cpuBuffer.data(), solverParameters.data()[i], sizeof(T)*cpuBuffer.size(), cudaMemcpyDeviceToHost));
 }
 template<class T> void findAndCopyToArrayFromCPU(std::string name, std::vector<T>& cpuBuffer, const NamedParameters& solverParameters) {
     auto i = index_of(name, solverParameters.names());
-    cutilSafeCall(cudaMemcpy(solverParameters.data()[i], cpuBuffer.data(), sizeof(T)*cpuBuffer.size(), cudaMemcpyHostToDevice));
+    cudaSafeCall(cudaMemcpy(solverParameters.data()[i], cpuBuffer.data(), sizeof(T)*cpuBuffer.size(), cudaMemcpyHostToDevice));
 }
 template<class T> T getTypedParameter(std::string name, const NamedParameters& params) {
     auto i = index_of(name, params.names());

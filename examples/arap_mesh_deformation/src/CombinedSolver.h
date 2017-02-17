@@ -3,7 +3,7 @@
 #include "mLibInclude.h"
 
 #include <cuda_runtime.h>
-#include <cudaUtil.h>
+#include "../../shared/cudaUtil.h"
 #include "Configure.h"
 #include "CUDAWarpingSolver.h"
 #include "OpenMesh.h"
@@ -103,9 +103,9 @@ class CombinedSolver : public CombinedSolverBase
         void initializeConnectivity() {
             unsigned int N = (unsigned int)m_initial.n_vertices();
             unsigned int E = (unsigned int)m_initial.n_edges();
-            cutilSafeCall(cudaMalloc(&d_numNeighbours, sizeof(int)*N));
-            cutilSafeCall(cudaMalloc(&d_neighbourIdx, sizeof(int) * 2 * E));
-            cutilSafeCall(cudaMalloc(&d_neighbourOffset, sizeof(int)*(N + 1)));
+            cudaSafeCall(cudaMalloc(&d_numNeighbours, sizeof(int)*N));
+            cudaSafeCall(cudaMalloc(&d_neighbourIdx, sizeof(int) * 2 * E));
+            cudaSafeCall(cudaMalloc(&d_neighbourOffset, sizeof(int)*(N + 1)));
 
             std::vector<int>	h_numNeighbours(N);
             std::vector<int>	h_neighbourIdx(2 * E);
@@ -136,9 +136,9 @@ class CombinedSolver : public CombinedSolverBase
 
 
 
-            cutilSafeCall(cudaMemcpy(d_numNeighbours, h_numNeighbours.data(), sizeof(int)*N, cudaMemcpyHostToDevice));
-            cutilSafeCall(cudaMemcpy(d_neighbourIdx, h_neighbourIdx.data(), sizeof(int) * 2 * E, cudaMemcpyHostToDevice));
-            cutilSafeCall(cudaMemcpy(d_neighbourOffset, h_neighbourOffset.data(), sizeof(int)*(N + 1), cudaMemcpyHostToDevice));
+            cudaSafeCall(cudaMemcpy(d_numNeighbours, h_numNeighbours.data(), sizeof(int)*N, cudaMemcpyHostToDevice));
+            cudaSafeCall(cudaMemcpy(d_neighbourIdx, h_neighbourIdx.data(), sizeof(int) * 2 * E, cudaMemcpyHostToDevice));
+            cudaSafeCall(cudaMemcpy(d_neighbourOffset, h_neighbourOffset.data(), sizeof(int)*(N + 1), cudaMemcpyHostToDevice));
         }
 
 		void resetGPUMemory()
@@ -171,9 +171,9 @@ class CombinedSolver : public CombinedSolverBase
 
         ~CombinedSolver()
 		{
-			cutilSafeCall(cudaFree(d_numNeighbours));
-			cutilSafeCall(cudaFree(d_neighbourIdx));
-			cutilSafeCall(cudaFree(d_neighbourOffset));
+			cudaSafeCall(cudaFree(d_numNeighbours));
+			cudaSafeCall(cudaFree(d_neighbourIdx));
+			cudaSafeCall(cudaFree(d_neighbourOffset));
 		}
 
         SimpleMesh* result() {

@@ -1,10 +1,6 @@
 #pragma once
 
-#ifndef _SOLVER_Stereo_EQUATIONS_
-#define _SOLVER_Stereo_EQUATIONS_
-
-#include <cutil_inline.h>
-#include <cutil_math.h>
+#include "../../shared/cudaUtil.h"
 
 #include "WarpingSolverUtil.h"
 #include "WarpingSolverState.h"
@@ -353,5 +349,3 @@ __inline__ __device__ float2 applyJTJDevice(unsigned int variableIdx, SolverInpu
 
 	return b;
 }
-
-#endif

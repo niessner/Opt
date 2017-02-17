@@ -149,7 +149,6 @@ xcopy /Y /D "..\..\API\release\include\*.h" "."</Command>
     <ClInclude Include="..\shared\CombinedSolverBase.h" />
     <ClInclude Include="..\shared\CombinedSolverParameters.h" />
     <ClInclude Include="..\shared\CudaArray.h" />
-    <ClInclude Include="..\shared\cudaUtil.h" />
     <ClInclude Include="..\shared\NamedParameters.h" />
     <ClInclude Include="..\shared\OptGraph.h" />
     <ClInclude Include="..\shared\OptImage.h" />
