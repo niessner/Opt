@@ -4,10 +4,7 @@
 
 int main(int argc, const char * argv[])
 {
-    // Bunny
-    //std::string filename = "bunny.off";
-
-    std::string filename = "serapis.stl";
+    std::string filename = "../data/head.ply";
     if (argc >= 2) {
         filename = argv[1];
     }
@@ -31,10 +28,12 @@ int main(int argc, const char * argv[])
     }
     CombinedSolverParameters params;
     params.useOpt = true;
-    params.useOptLM = true;
-    params.nonLinearIter = 8;
+    params.useOptLM = false;
+    params.nonLinearIter = 5;
     params.linearIter = 25;
-    CombinedSolver solver(mesh, performanceRun, params);
+    float weightFit = 1.0f;
+    float weightReg = 0.5f;
+    CombinedSolver solver(mesh, performanceRun, params, weightFit, weightReg);
     solver.solveAll();
     SimpleMesh* res = solver.result();
     if (!OpenMesh::IO::write_mesh(*res, "out.off"))
