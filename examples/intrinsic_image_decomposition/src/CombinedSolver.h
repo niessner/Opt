@@ -3,9 +3,7 @@
 #include "mLibInclude.h"
 
 #include <cuda_runtime.h>
-#include <cudaUtil.h>
 
-#include "CUDATimer.h"
 #include "../../shared/CombinedSolverBase.h"
 #include "../../shared/SolverIteration.h"
 
@@ -24,7 +22,7 @@ class CombinedSolver : public CombinedSolverBase
             m_imageFloatIllumination = createEmptyOptImage(dims, OptImage::Type::FLOAT, 1, OptImage::GPU, true);
 		
 			resetGPUMemory();
-            addOptSolvers(dims, "intrinsic_image_decomposition.t");
+            addOptSolvers(dims, "intrinsic_image_decomposition.t", m_combinedSolverParameters.optDoublePrecision);
 		}
 
         virtual void combinedSolveInit() override { 
@@ -46,9 +44,8 @@ class CombinedSolver : public CombinedSolverBase
             m_problemParams.set("i", m_targetFloat3);
             m_problemParams.set("s", m_imageFloatIllumination);
 
-            m_solverParams.set("nonLinearIterations", &m_combinedSolverParameters.nonLinearIter);
-            m_solverParams.set("linearIterations", &m_combinedSolverParameters.linearIter);
-            m_solverParams.set("double_precision", &m_combinedSolverParameters.optDoublePrecision);
+            m_solverParams.set("nIterations", &m_combinedSolverParameters.nonLinearIter);
+            m_solverParams.set("lIterations", &m_combinedSolverParameters.linearIter);
         }
         virtual void preSingleSolve() override {
             resetGPUMemory();
