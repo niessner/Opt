@@ -65,8 +65,8 @@ double CUDAWarpingSolver::solve(const NamedParameters& solverParams, const Named
 	SolverParameters parameters;
     parameters.weightFitting = sq(getTypedParameter<float>("w_fitSqrt", probParams));
     parameters.weightRegularizer = sq(getTypedParameter<float>("w_regSqrt", probParams));
-    parameters.nNonLinearIterations = getTypedParameter<unsigned int>("nonLinearIterations", solverParams);
-    parameters.nLinIterations = getTypedParameter<unsigned int>("linearIterations", solverParams);
+    parameters.nNonLinearIterations = getTypedParameter<unsigned int>("nIterations", solverParams);
+    parameters.nLinIterations = getTypedParameter<unsigned int>("lIterations", solverParams);
 	
 	SolverInput solverInput;
     solverInput.N = m_dims[0] * m_dims[1] * m_dims[2];
