@@ -5,14 +5,17 @@
 
 int main(int argc, const char * argv[])
 {
-	std::string filename = "raptor_simplify2k.off";
+	std::string filename = "../data/raptor_simplify2k.off";
 	if (argc >= 2) {
 		filename = argv[1];
 	}
 
+    // For now, any model must be accompanied with a identically 
+    // named (besides the extension, which must be 3 characters) mrk file
+    std::string markerFilename = filename.substr(0, filename.size() - 3) + "mrk";
 	// Load Constraints
 	LandMarkSet markersMesh;
-	markersMesh.loadFromFile("raptor_simplify2k_target.mrk");
+    markersMesh.loadFromFile(markerFilename.c_str());
 
 	std::vector<int>				constraintsIdx;
 	std::vector<std::vector<float>> constraintsTarget;
