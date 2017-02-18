@@ -27,7 +27,7 @@ public:
         m_target = createEmptyOptImage(dims, OptImage::Type::FLOAT, 3, OptImage::GPU, true);
 
         std::cout << "compiling... ";
-        addOptSolvers(dims, "cotangent_mesh_smoothing.t");
+        addOptSolvers(dims, "cotangent_mesh_smoothing.t", m_combinedSolverParameters.optDoublePrecision);
         std::cout << " done!" << std::endl;
     }
 
@@ -45,10 +45,8 @@ public:
         m_problemParams.set("A", m_target);
         m_problemParams.set("G", m_graph);
 
-
-        m_solverParams.set("nonLinearIterations", &m_combinedSolverParameters.nonLinearIter);
-        m_solverParams.set("linearIterations", &m_combinedSolverParameters.linearIter);
-        m_solverParams.set("double_precision", &m_combinedSolverParameters.optDoublePrecision);
+        m_solverParams.set("nIterations", &m_combinedSolverParameters.nonLinearIter);
+        m_solverParams.set("lIterations", &m_combinedSolverParameters.linearIter);
     }
 
     virtual void preNonlinearSolve(int) override {}

@@ -25,7 +25,7 @@ class CombinedSolver : public CombinedSolverBase
             m_vertexPositions = createEmptyOptImage(dims, OptImage::Type::FLOAT, 3, OptImage::GPU, true);
             m_vertexTargets = createEmptyOptImage(dims, OptImage::Type::FLOAT, 3, OptImage::GPU, true);
             m_urshape = createEmptyOptImage(dims, OptImage::Type::FLOAT, 3, OptImage::GPU, true);
-            addOptSolvers(dims, "embedded_mesh_deformation.t");
+            addOptSolvers(dims, "embedded_mesh_deformation.t", m_combinedSolverParameters.optDoublePrecision);
 		} 
 
         virtual void combinedSolveInit() override {
@@ -47,9 +47,8 @@ class CombinedSolver : public CombinedSolverBase
             m_problemParams.set("G", m_graph);
 
 
-            m_solverParams.set("nonLinearIterations", &m_combinedSolverParameters.nonLinearIter);
-            m_solverParams.set("linearIterations", &m_combinedSolverParameters.linearIter);
-            m_solverParams.set("double_precision", &m_combinedSolverParameters.optDoublePrecision);
+            m_solverParams.set("nIterations", &m_combinedSolverParameters.nonLinearIter);
+            m_solverParams.set("lIterations", &m_combinedSolverParameters.linearIter);
         }
 
         virtual void preNonlinearSolve(int i) override {

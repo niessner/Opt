@@ -85,7 +85,7 @@
       <Command>call "$(ProjectDir)..\..\API\common\optMake.bat" "$(ProjectDir)\..\..\..\terra" "..\..\API" "false"
 xcopy /Y /D "$(ProjectDir)..\..\API\release\bin\*.dll" "."
 xcopy /Y /D "$(ProjectDir)..\..\API\release\lib\*.lib" "."
-xcopy /Y /D "$(ProjectDir)..\..\API\release\include\*.h" "."</Command>
+xcopy /Y /D "$(ProjectDir)..\..\API\release\include\*.h" "..\shared\"</Command>
     </PreBuildEvent>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
@@ -124,7 +124,7 @@ xcopy /Y /D "$(ProjectDir)..\..\API\release\include\*.h" "."</Command>
       <Command>call "$(ProjectDir)..\..\API\common\optMake.bat" "$(ProjectDir)\..\..\..\terra" "..\..\API" "false"
 xcopy /Y /D "$(ProjectDir)..\..\API\release\bin\*.dll" "."
 xcopy /Y /D "$(ProjectDir)..\..\API\release\lib\*.lib" "."
-xcopy /Y /D "$(ProjectDir)..\..\API\release\include\*.h" "."</Command>
+xcopy /Y /D "$(ProjectDir)..\..\API\release\include\*.h" "..\shared\"</Command>
     </PreBuildEvent>
   </ItemDefinitionGroup>
   <ItemGroup>
@@ -132,7 +132,7 @@ xcopy /Y /D "$(ProjectDir)..\..\API\release\include\*.h" "."</Command>
     <ClCompile Include="src\mLibSource.cpp" />
   </ItemGroup>
   <ItemGroup>
-    <ClInclude Include="src\ImageWarping.h" />
+    <ClInclude Include="src\CombinedSolver.h" />
     <ClInclude Include="src\OpenMesh.h" />
     <ClInclude Include="src\main.h" />
     <ClInclude Include="src\mLibInclude.h" />

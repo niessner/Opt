@@ -125,6 +125,64 @@ CUDA_UTIL_FUNC void operator+=(float4& v0, float4 v1) {
 }
 
 
+CUDA_UTIL_FUNC void operator+=(float2& v0, float x) {
+    v0.x += x;
+    v0.y += x;
+}
+
+CUDA_UTIL_FUNC void operator+=(float3& v0, float x) {
+    v0.x += x;
+    v0.y += x;
+    v0.z += x;
+}
+
+CUDA_UTIL_FUNC void operator+=(float4& v0, float x) {
+    v0.x += x;
+    v0.y += x;
+    v0.z += x;
+    v0.w += x;
+}
+
+
+/////////////// -= ////////////////////
+CUDA_UTIL_FUNC void operator-=(float2& v0, float2 v1) {
+    v0.x -= v1.x;
+    v0.y -= v1.y;
+}
+
+CUDA_UTIL_FUNC void operator-=(float3& v0, float3 v1) {
+    v0.x -= v1.x;
+    v0.y -= v1.y;
+    v0.z -= v1.z;
+}
+
+CUDA_UTIL_FUNC void operator-=(float4& v0, float4 v1) {
+    v0.x -= v1.x;
+    v0.y -= v1.y;
+    v0.z -= v1.z;
+    v0.w -= v1.w;
+}
+
+
+CUDA_UTIL_FUNC void operator-=(float2& v0, float x) {
+    v0.x -= x;
+    v0.y -= x;
+}
+
+CUDA_UTIL_FUNC void operator-=(float3& v0, float x) {
+    v0.x -= x;
+    v0.y -= x;
+    v0.z -= x;
+}
+
+CUDA_UTIL_FUNC void operator-=(float4& v0, float x) {
+    v0.x -= x;
+    v0.y -= x;
+    v0.z -= x;
+    v0.w -= x;
+}
+
+
 
 /////////////// Multiply by a scalar ////////////////////
 CUDA_UTIL_FUNC float2 operator*(float x, float2 v) {
@@ -149,6 +207,31 @@ CUDA_UTIL_FUNC float3 operator*(float3 v, float x) {
 
 CUDA_UTIL_FUNC float4 operator*(float4 v, float x) {
     return make_float4(v.x*x, v.y*x, v.z*x, v.w*x);
+}
+
+/////////////// Divide with a scalar ////////////////////
+CUDA_UTIL_FUNC float2 operator/(float x, float2 v) {
+    return make_float2(x / v.x, x / v.y);
+}
+
+CUDA_UTIL_FUNC float3 operator/(float x, float3 v) {
+    return make_float3(x / v.x, x / v.y, x / v.z);
+}
+
+CUDA_UTIL_FUNC float4 operator/(float x, float4 v) {
+    return make_float4(x / v.x, x / v.y, x / v.z, x / v.w);
+}
+
+CUDA_UTIL_FUNC float2 operator/(float2 v, float x) {
+    return make_float2(v.x / x, v.y / x);
+}
+
+CUDA_UTIL_FUNC float3 operator/(float3 v, float x) {
+    return make_float3(v.x / x, v.y / x, v.z / x);
+}
+
+CUDA_UTIL_FUNC float4 operator/(float4 v, float x) {
+    return make_float4(v.x/x, v.y/x, v.z/x, v.w/x);
 }
 
 
