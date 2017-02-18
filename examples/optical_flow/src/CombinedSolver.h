@@ -3,7 +3,6 @@
 #include "mLibInclude.h"
 
 #include <cuda_runtime.h>
-#include <cudaUtil.h>
 
 #include "ImageHelper.h"
 #include "../../shared/CombinedSolverBase.h"
@@ -34,7 +33,7 @@ public:
 			m_levels[i].init(sourceFiltered, targetFiltered);
 		}		
 		resetGPU();
-        addOptSolvers(m_levels[0].m_dims, "optical_flow.t");
+        addOptSolvers(m_levels[0].m_dims, "optical_flow.t", m_combinedSolverParameters.optDoublePrecision);
 	}
 
 
@@ -77,9 +76,8 @@ public:
         m_problemParams.set("w_fit", &m_fitSqrt);
         m_problemParams.set("w_reg", &m_regSqrt);
 
-        m_solverParams.set("nonLinearIterations", &m_combinedSolverParameters.nonLinearIter);
-        m_solverParams.set("linearIterations", &m_combinedSolverParameters.linearIter);
-        m_solverParams.set("double_precision", &m_combinedSolverParameters.optDoublePrecision);
+        m_solverParams.set("nIterations", &m_combinedSolverParameters.nonLinearIter);
+        m_solverParams.set("lIterations", &m_combinedSolverParameters.linearIter);
     }
     virtual void preSingleSolve() override {
         resetGPU();
@@ -177,7 +175,7 @@ private:
 
 		BaseImage<float2> getFlowVectors() const {
             BaseImage<float2> flowVectors(m_dims[0], m_dims[1]);
-            CUDA_SAFE_CALL(cudaMemcpy(flowVectors.getData(), m_flowVectors->data(), sizeof(float2)*m_dims[0]*m_dims[1], cudaMemcpyDeviceToHost));
+            cudaSafeCall(cudaMemcpy(flowVectors.getData(), m_flowVectors->data(), sizeof(float2)*m_dims[0]*m_dims[1], cudaMemcpyDeviceToHost));
 			return flowVectors;
 		}
 

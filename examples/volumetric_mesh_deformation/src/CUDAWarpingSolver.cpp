@@ -12,43 +12,43 @@ CUDAWarpingSolver::CUDAWarpingSolver(const std::vector<unsigned int>& dims) : m_
     const unsigned int numberOfVariables = dims[0] * dims[1] * dims[2];
 
 	// State
-	cutilSafeCall(cudaMalloc(&m_solverState.d_delta,		sizeof(float3)*numberOfVariables));
-	cutilSafeCall(cudaMalloc(&m_solverState.d_deltaA,		sizeof(float3)*numberOfVariables));
-	cutilSafeCall(cudaMalloc(&m_solverState.d_r,			sizeof(float3)*numberOfVariables));
-	cutilSafeCall(cudaMalloc(&m_solverState.d_rA,			sizeof(float3)*numberOfVariables));
-	cutilSafeCall(cudaMalloc(&m_solverState.d_z,			sizeof(float3)*numberOfVariables));
-	cutilSafeCall(cudaMalloc(&m_solverState.d_zA,			sizeof(float3)*numberOfVariables));
-	cutilSafeCall(cudaMalloc(&m_solverState.d_p,			sizeof(float3)*numberOfVariables));
-	cutilSafeCall(cudaMalloc(&m_solverState.d_pA,			sizeof(float3)*numberOfVariables));
-	cutilSafeCall(cudaMalloc(&m_solverState.d_Ap_X,			sizeof(float3)*numberOfVariables));
-	cutilSafeCall(cudaMalloc(&m_solverState.d_Ap_A,			sizeof(float3)*numberOfVariables));
-	cutilSafeCall(cudaMalloc(&m_solverState.d_scanAlpha,	sizeof(float)));
-	cutilSafeCall(cudaMalloc(&m_solverState.d_scanBeta,		sizeof(float)));
-	cutilSafeCall(cudaMalloc(&m_solverState.d_rDotzOld,		sizeof(float)*numberOfVariables));
-	cutilSafeCall(cudaMalloc(&m_solverState.d_precondioner, sizeof(float3)*numberOfVariables));
-	cutilSafeCall(cudaMalloc(&m_solverState.d_precondionerA, sizeof(float3)*numberOfVariables));
-	cutilSafeCall(cudaMalloc(&m_solverState.d_sumResidual,	sizeof(float)));
+	cudaSafeCall(cudaMalloc(&m_solverState.d_delta,		sizeof(float3)*numberOfVariables));
+	cudaSafeCall(cudaMalloc(&m_solverState.d_deltaA,		sizeof(float3)*numberOfVariables));
+	cudaSafeCall(cudaMalloc(&m_solverState.d_r,			sizeof(float3)*numberOfVariables));
+	cudaSafeCall(cudaMalloc(&m_solverState.d_rA,			sizeof(float3)*numberOfVariables));
+	cudaSafeCall(cudaMalloc(&m_solverState.d_z,			sizeof(float3)*numberOfVariables));
+	cudaSafeCall(cudaMalloc(&m_solverState.d_zA,			sizeof(float3)*numberOfVariables));
+	cudaSafeCall(cudaMalloc(&m_solverState.d_p,			sizeof(float3)*numberOfVariables));
+	cudaSafeCall(cudaMalloc(&m_solverState.d_pA,			sizeof(float3)*numberOfVariables));
+	cudaSafeCall(cudaMalloc(&m_solverState.d_Ap_X,			sizeof(float3)*numberOfVariables));
+	cudaSafeCall(cudaMalloc(&m_solverState.d_Ap_A,			sizeof(float3)*numberOfVariables));
+	cudaSafeCall(cudaMalloc(&m_solverState.d_scanAlpha,	sizeof(float)));
+	cudaSafeCall(cudaMalloc(&m_solverState.d_scanBeta,		sizeof(float)));
+	cudaSafeCall(cudaMalloc(&m_solverState.d_rDotzOld,		sizeof(float)*numberOfVariables));
+	cudaSafeCall(cudaMalloc(&m_solverState.d_precondioner, sizeof(float3)*numberOfVariables));
+	cudaSafeCall(cudaMalloc(&m_solverState.d_precondionerA, sizeof(float3)*numberOfVariables));
+	cudaSafeCall(cudaMalloc(&m_solverState.d_sumResidual,	sizeof(float)));
 }
 
 CUDAWarpingSolver::~CUDAWarpingSolver()
 {
 	// State
-	cutilSafeCall(cudaFree(m_solverState.d_delta));
-	cutilSafeCall(cudaFree(m_solverState.d_deltaA));
-	cutilSafeCall(cudaFree(m_solverState.d_r));
-	cutilSafeCall(cudaFree(m_solverState.d_rA));
-	cutilSafeCall(cudaFree(m_solverState.d_z));
-	cutilSafeCall(cudaFree(m_solverState.d_zA));
-	cutilSafeCall(cudaFree(m_solverState.d_p));
-	cutilSafeCall(cudaFree(m_solverState.d_pA));
-	cutilSafeCall(cudaFree(m_solverState.d_Ap_X));
-	cutilSafeCall(cudaFree(m_solverState.d_Ap_A));
-	cutilSafeCall(cudaFree(m_solverState.d_scanAlpha));
-	cutilSafeCall(cudaFree(m_solverState.d_scanBeta));
-	cutilSafeCall(cudaFree(m_solverState.d_rDotzOld));
-	cutilSafeCall(cudaFree(m_solverState.d_precondioner));
-	cutilSafeCall(cudaFree(m_solverState.d_precondionerA));
-	cutilSafeCall(cudaFree(m_solverState.d_sumResidual));
+	cudaSafeCall(cudaFree(m_solverState.d_delta));
+	cudaSafeCall(cudaFree(m_solverState.d_deltaA));
+	cudaSafeCall(cudaFree(m_solverState.d_r));
+	cudaSafeCall(cudaFree(m_solverState.d_rA));
+	cudaSafeCall(cudaFree(m_solverState.d_z));
+	cudaSafeCall(cudaFree(m_solverState.d_zA));
+	cudaSafeCall(cudaFree(m_solverState.d_p));
+	cudaSafeCall(cudaFree(m_solverState.d_pA));
+	cudaSafeCall(cudaFree(m_solverState.d_Ap_X));
+	cudaSafeCall(cudaFree(m_solverState.d_Ap_A));
+	cudaSafeCall(cudaFree(m_solverState.d_scanAlpha));
+	cudaSafeCall(cudaFree(m_solverState.d_scanBeta));
+	cudaSafeCall(cudaFree(m_solverState.d_rDotzOld));
+	cudaSafeCall(cudaFree(m_solverState.d_precondioner));
+	cudaSafeCall(cudaFree(m_solverState.d_precondionerA));
+	cudaSafeCall(cudaFree(m_solverState.d_sumResidual));
 }
 
 float sq(float x) { return x*x; }

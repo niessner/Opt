@@ -273,6 +273,27 @@ CUDA_UTIL_FUNC float4 normalize(float4 v) {
     return v*rsqrtf(dot(v, v));
 }
 
+
+////////////// int stuff
+
+
+/////////////// Scalar-wise vector add ////////////////////
+CUDA_UTIL_FUNC int2 operator+(int2 v0, int2 v1) {
+    return make_int2(v0.x + v1.x, v0.y + v1.y);
+}
+
+CUDA_UTIL_FUNC int3 operator+(int3 v0, int3 v1) {
+    return make_int3(v0.x + v1.x, v0.y + v1.y, v0.z + v1.z);
+}
+
+CUDA_UTIL_FUNC int4 operator+(int4 v0, int4 v1) {
+    return make_int4(v0.x + v1.x, v0.y + v1.y, v0.z + v1.z, v0.w + v1.w);
+}
+
+#undef CUDA_UTIL_FUNC
+
+
+
 #if defined(__CUDA_ARCH__)
 #define __CONDITIONAL_UNROLL__ #pragma unroll
 #else

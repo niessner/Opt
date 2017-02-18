@@ -86,7 +86,7 @@
       <Command>call "..\..\API\common\optMake.bat" "$(ProjectDir)\..\..\..\terra" "..\..\API" "false"
 xcopy /Y /D "..\..\API\release\bin\*.dll" "."
 xcopy /Y /D "..\..\API\release\lib\*.lib" "."
-xcopy /Y /D "..\..\API\release\include\*.h" "."</Command>
+xcopy /Y /D "..\..\API\release\include\*.h" "..\shared\"</Command>
     </PreBuildEvent>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
@@ -125,7 +125,7 @@ xcopy /Y /D "..\..\API\release\include\*.h" "."</Command>
       <Command>call "..\..\API\common\optMake.bat" "$(ProjectDir)\..\..\..\terra" "..\..\API" "false"
 xcopy /Y /D "..\..\API\release\bin\*.dll" "."
 xcopy /Y /D "..\..\API\release\lib\*.lib" "."
-xcopy /Y /D "..\..\API\release\include\*.h" "."</Command>
+xcopy /Y /D "..\..\API\release\include\*.h" "..\shared\"</Command>
     </PreBuildEvent>
   </ItemDefinitionGroup>
   <ItemGroup>

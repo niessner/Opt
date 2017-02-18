@@ -1,7 +1,6 @@
 #pragma once
 
-#include <cutil_inline.h>
-#include <cutil_math.h>
+#include "../../shared/cudaUtil.h"
 
 #include "WarpingSolverUtil.h"
 #include "WarpingSolverState.h"

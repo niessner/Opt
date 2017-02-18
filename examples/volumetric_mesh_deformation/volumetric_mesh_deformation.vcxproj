@@ -84,10 +84,10 @@
       <PtxAsOptionV>false</PtxAsOptionV>
     </CudaCompile>
     <PreBuildEvent>
-      <Command>call "$(ProjectDir)..\..\API\common\optMake.bat" "$(ProjectDir)..\..\..\terra" "$(ProjectDir)..\..\API" "false"
-xcopy /Y /D "$(ProjectDir)..\..\API\release\bin\*.dll" "."
-xcopy /Y /D "$(ProjectDir)..\..\API\release\lib\*.lib" "."
-xcopy /Y /D "$(ProjectDir)..\..\API\release\include\*.h" "."</Command>
+      <Command>call "..\..\API\common\optMake.bat" "$(ProjectDir)\..\..\..\terra" "..\..\API" "false"
+xcopy /Y /D "..\..\API\release\bin\*.dll" "."
+xcopy /Y /D "..\..\API\release\lib\*.lib" "."
+xcopy /Y /D "..\..\API\release\include\*.h" "..\shared\"</Command>
     </PreBuildEvent>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
@@ -123,15 +123,15 @@ xcopy /Y /D "$(ProjectDir)..\..\API\release\include\*.h" "."</Command>
       <Optimization>O3</Optimization>
     </CudaCompile>
     <PreBuildEvent>
-      <Command>call "$(ProjectDir)..\..\API\common\optMake.bat" "$(ProjectDir)\..\..\..\terra" "..\..\API" "false"
-xcopy /Y /D "$(ProjectDir)..\..\API\release\bin\*.dll" "."
-xcopy /Y /D "$(ProjectDir)..\..\API\release\lib\*.lib" "."
-xcopy /Y /D "$(ProjectDir)..\..\API\release\include\*.h" "."</Command>
+      <Command>call "..\..\API\common\optMake.bat" "$(ProjectDir)\..\..\..\terra" "..\..\API" "false"
+xcopy /Y /D "..\..\API\release\bin\*.dll" "."
+xcopy /Y /D "..\..\API\release\lib\*.lib" "."
+xcopy /Y /D "..\..\API\release\include\*.h" "..\shared\"</Command>
     </PreBuildEvent>
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClCompile Include="..\shared\CeresSolverBase.cpp" />
-    <ClCompile Include="src\CERESWarpingSolver.cpp" />
+    <ClCompile Include="src\CeresSolver.cpp" />
     <ClCompile Include="src\CUDAWarpingSolver.cpp" />
     <ClCompile Include="src\main.cpp" />
     <ClCompile Include="src\mLibSource.cpp" />
@@ -139,6 +139,7 @@ xcopy /Y /D "$(ProjectDir)..\..\API\release\include\*.h" "."</Command>
   <ItemGroup>
     <ClInclude Include="..\shared\CeresSolverBase.h" />
     <ClInclude Include="..\shared\CombinedSolverBase.h" />
+    <ClInclude Include="..\shared\cudaUtil.h" />
     <ClInclude Include="..\shared\OptGraph.h" />
     <ClInclude Include="..\shared\OptImage.h" />
     <ClInclude Include="..\shared\NamedParameters.h" />
@@ -146,7 +147,7 @@ xcopy /Y /D "$(ProjectDir)..\..\API\release\include\*.h" "."</Command>
     <ClInclude Include="..\shared\OptUtils.h" />
     <ClInclude Include="..\shared\Precision.h" />
     <ClInclude Include="..\shared\SolverBase.h" />
-    <ClInclude Include="src\CERESWarpingSolver.h" />
+    <ClInclude Include="src\CeresSolver.h" />
     <ClInclude Include="src\CombinedSolver.h" />
     <ClInclude Include="src\CUDATimer.h" />
     <ClInclude Include="src\CUDAWarpingSolver.h" />

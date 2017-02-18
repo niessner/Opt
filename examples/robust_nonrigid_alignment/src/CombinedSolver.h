@@ -3,7 +3,6 @@
 #include "mLibInclude.h"
 
 #include <cuda_runtime.h>
-#include <cudaUtil.h>
 
 #include "../../shared/CombinedSolverParameters.h"
 #include "../../shared/CombinedSolverBase.h"
@@ -20,6 +19,9 @@ static bool operator!=(const float3& v0, const float3& v1) {
 }
 #define MAX_K 20
 
+static float clamp(float v, float mn, float mx) {
+    return std::max(mn,std::min(v, mx));
+}
 
 class CombinedSolver : public CombinedSolverBase
 {
@@ -85,8 +87,7 @@ class CombinedSolver : public CombinedSolverBase
             int failure = OpenMesh::IO::write_mesh(m_result, "out_noisetemplate.ply", options);
             assert(failure);
 
-
-            addOptSolvers(dims, "robust_nonrigid_alignment.t");
+            addOptSolvers(dims, "robust_nonrigid_alignment.t", m_combinedSolverParameters.optDoublePrecision);
 		} 
 
 
@@ -132,9 +133,8 @@ class CombinedSolver : public CombinedSolverBase
             m_problemParams.set("ConstraintNormals", m_vertexNormalTargetFloat3);
             m_problemParams.set("G", m_graph);
 
-            m_solverParams.set("nonLinearIterations", &m_combinedSolverParameters.nonLinearIter);
-            m_solverParams.set("linearIterations", &m_combinedSolverParameters.linearIter);
-            m_solverParams.set("double_precision", &m_combinedSolverParameters.optDoublePrecision);
+            m_solverParams.set("nIterations", &m_combinedSolverParameters.nonLinearIter);
+            m_solverParams.set("lIterations", &m_combinedSolverParameters.linearIter);
             m_solverParams.set("function_tolerance", &m_functionTolerance);
         }
         virtual void preSingleSolve() override {
@@ -408,7 +408,7 @@ class CombinedSolver : public CombinedSolverBase
 	private:
 
         std::unique_ptr<ml::NearestNeighborSearchFLANN<float>> generateAccelerationStructure(const SimpleMesh& mesh) {
-            auto nnData = std::unique_ptr<ml::NearestNeighborSearchFLANN<float>>(new ml::NearestNeighborSearchFLANN<float>(max(50, 4 * MAX_K), 1));
+            auto nnData = std::unique_ptr<ml::NearestNeighborSearchFLANN<float>>(new ml::NearestNeighborSearchFLANN<float>(std::max(50, 4 * MAX_K), 1));
             unsigned int N = (unsigned int)mesh.n_vertices();
 
             assert(m_spuriousIndices.size() == m_noisyOffsets.size());

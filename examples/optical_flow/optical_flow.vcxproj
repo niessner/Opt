@@ -85,7 +85,7 @@
       <Command>call "..\..\API\common\optMake.bat" "$(ProjectDir)\..\..\..\terra" "..\..\API" "false"
 xcopy /Y /D "..\..\API\release\bin\*.dll" "."
 xcopy /Y /D "..\..\API\release\lib\*.lib" "."
-xcopy /Y /D "..\..\API\release\include\*.h" "."</Command>
+xcopy /Y /D "..\..\API\release\include\*.h" "..\shared\"</Command>
     </PreBuildEvent>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
@@ -123,7 +123,7 @@ xcopy /Y /D "..\..\API\release\include\*.h" "."</Command>
       <Command>call "..\..\API\common\optMake.bat" "$(ProjectDir)\..\..\..\terra" "..\..\API" "false"
 xcopy /Y /D "..\..\API\release\bin\*.dll" "."
 xcopy /Y /D "..\..\API\release\lib\*.lib" "."
-xcopy /Y /D "..\..\API\release\include\*.h" "."</Command>
+xcopy /Y /D "..\..\API\release\include\*.h" "..\shared\"</Command>
     </PreBuildEvent>
   </ItemDefinitionGroup>
   <ItemGroup>
@@ -139,10 +139,8 @@ xcopy /Y /D "..\..\API\release\include\*.h" "."</Command>
     <ClInclude Include="..\shared\OptUtils.h" />
     <ClInclude Include="src\CombinedSolver.h" />
     <ClInclude Include="src\ImageHelper.h" />
-    <ClInclude Include="src\TerraSolverWarping.h" />
     <ClInclude Include="src\main.h" />
     <ClInclude Include="src\mLibInclude.h" />
-    <ClInclude Include="src\SolverUtil.h" />
   </ItemGroup>
   <ItemGroup>
     <Reference Include="System" />

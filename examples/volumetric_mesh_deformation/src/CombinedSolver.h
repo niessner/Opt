@@ -3,7 +3,6 @@
 #include "mLibInclude.h"
 
 #include <cuda_runtime.h>
-#include <cudaUtil.h>
 
 #include "CUDAWarpingSolver.h"
 #include "CeresSolver.h"
@@ -39,7 +38,7 @@ class CombinedSolver : public CombinedSolverBase
             
             addSolver(std::make_shared<CUDAWarpingSolver>(dims), "CUDA", m_combinedSolverParameters.useCUDA);
             addSolver(std::make_shared<CeresSolver>(dims), "Ceres", m_combinedSolverParameters.useCeres);
-            addOptSolvers(dims, "volumetric_mesh_deformation.t");
+            addOptSolvers(dims, "volumetric_mesh_deformation.t", m_combinedSolverParameters.optDoublePrecision);
 		}
 
         virtual void combinedSolveInit() override {
@@ -57,9 +56,8 @@ class CombinedSolver : public CombinedSolverBase
             m_problemParams.set("w_regSqrt", &m_weightRegSqrt);
 
             
-            m_solverParams.set("nonLinearIterations", &m_combinedSolverParameters.nonLinearIter);
-            m_solverParams.set("linearIterations", &m_combinedSolverParameters.linearIter);
-            m_solverParams.set("double_precision", &m_combinedSolverParameters.optDoublePrecision);
+            m_solverParams.set("nIterations", &m_combinedSolverParameters.nonLinearIter);
+            m_solverParams.set("lIterations", &m_combinedSolverParameters.linearIter);
         }
         virtual void preSingleSolve() override {
             m_result = m_initial;
@@ -226,7 +224,7 @@ class CombinedSolver : public CombinedSolverBase
 
             m_gridPosFloat3->update(h_gridVertexPosFloat3);
             m_gridPosFloat3Urshape->update(h_gridVertexPosFloat3);
-			cutilSafeCall(cudaMemset(m_gridAnglesFloat3->data(), 0, sizeof(float3)*m_nNodes));
+			cudaSafeCall(cudaMemset(m_gridAnglesFloat3->data(), 0, sizeof(float3)*m_nNodes));
 		}
 
 		void resetGPUMemory()
