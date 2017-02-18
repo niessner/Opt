@@ -5,12 +5,12 @@ extern "C" double patchSolveStereoStub(PatchSolverInput& input, PatchSolverState
 
 CUDAPatchSolverWarping::CUDAPatchSolverWarping(const std::vector<unsigned int>& dims) : m_dims(dims)
 {
-	cutilSafeCall(cudaMalloc(&m_solverState.d_sumResidual, sizeof(float)));
+	cudaSafeCall(cudaMalloc(&m_solverState.d_sumResidual, sizeof(float)));
 }
 
 CUDAPatchSolverWarping::~CUDAPatchSolverWarping()
 {
-	cutilSafeCall(cudaFree(m_solverState.d_sumResidual));
+	cudaSafeCall(cudaFree(m_solverState.d_sumResidual));
 }
 
 double CUDAPatchSolverWarping::solve(const NamedParameters& solverParams, const NamedParameters& probParams, bool profileSolve, std::vector<SolverIteration>& iters)

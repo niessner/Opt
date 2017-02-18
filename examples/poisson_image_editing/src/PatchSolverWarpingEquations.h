@@ -1,10 +1,6 @@
 #pragma once
 
-#ifndef _PATCH_SOLVER_Stereo_EQUATIONS_
-#define _PATCH_SOLVER_Stereo_EQUATIONS_
-
-#include <cutil_inline.h>
-#include <cutil_math.h>
+#include "../../shared/cudaUtil.h"
 
 #include "PatchSolverWarpingUtil.h"
 #include "PatchSolverWarpingState.h"
@@ -74,7 +70,7 @@ __inline__ __device__ float4 evalMinusJTFDevice(int tId_i, int tId_j, int gId_i,
 	if (validN1){ float4 q = X_CP; float4 tq = T_CP; e_reg += (p - q) - (t - tq); pre += make_float4(1.0f, 1.0f, 1.0f, 1.0f); }
 	if (validN2){ float4 q = X_MC; float4 tq = T_MC; e_reg += (p - q) - (t - tq); pre += make_float4(1.0f, 1.0f, 1.0f, 1.0f); }
 	if (validN3){ float4 q = X_PC; float4 tq = T_PC; e_reg += (p - q) - (t - tq); pre += make_float4(1.0f, 1.0f, 1.0f, 1.0f); }
-	b += -e_reg;
+	b -= e_reg;
 
 	// Preconditioner
 	if (pre.x > FLOAT_EPSILON) pre = 1.0f / pre;
@@ -114,4 +110,3 @@ __inline__ __device__ float4 applyJTJDevice(int tId_i, int tId_j, int gId_i, int
 	return b;
 }
 
-#endif

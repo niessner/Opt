@@ -1,10 +1,6 @@
 #pragma once
 
-#ifndef _SOLVER_Stereo_EQUATIONS_
-#define _SOLVER_Stereo_EQUATIONS_
-
-#include <cutil_inline.h>
-#include <cutil_math.h>
+#include "../../shared/cudaUtil.h"
 
 #include "WarpingSolverUtil.h"
 #include "WarpingSolverState.h"
@@ -67,7 +63,7 @@ __inline__ __device__ float4 evalMinusJTFDevice(unsigned int variableIdx, Solver
 	if (validN1){ float4 q = state.d_x[get1DIdx(n1_i, n1_j, input.width, input.height)]; float4 tq = state.d_target[get1DIdx(n1_i, n1_j, input.width, input.height)]; e_reg += (p - q) - (t - tq); pre += make_float4(1.0f, 1.0f, 1.0f, 1.0f); }
 	if (validN2){ float4 q = state.d_x[get1DIdx(n2_i, n2_j, input.width, input.height)]; float4 tq = state.d_target[get1DIdx(n2_i, n2_j, input.width, input.height)]; e_reg += (p - q) - (t - tq); pre += make_float4(1.0f, 1.0f, 1.0f, 1.0f); }
 	if (validN3){ float4 q = state.d_x[get1DIdx(n3_i, n3_j, input.width, input.height)]; float4 tq = state.d_target[get1DIdx(n3_i, n3_j, input.width, input.height)]; e_reg += (p - q) - (t - tq); pre += make_float4(1.0f, 1.0f, 1.0f, 1.0f); }
-	b += -e_reg;
+	b -= e_reg;
 
 	pre = make_float4(1.0f, 1.0f, 1.0f, 1.0f);
 
@@ -106,4 +102,3 @@ __inline__ __device__ float4 applyJTJDevice(unsigned int variableIdx, SolverInpu
 	return b;
 }
 
-#endif

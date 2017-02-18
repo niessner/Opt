@@ -3,7 +3,7 @@
 #include "mLibInclude.h"
 
 #include <cuda_runtime.h>
-#include <cudaUtil.h>
+#include "../../shared/cudaUtil.h"
 
 #include "../../shared/CombinedSolverParameters.h"
 #include "../../shared/CombinedSolverBase.h"
@@ -37,7 +37,7 @@ public:
         addSolver(std::make_shared<CeresSolverPoissonImageEditing>(m_dims), "Ceres", m_combinedSolverParameters.useCeres);
         addSolver(std::make_shared<EigenSolverPoissonImageEditing>(m_dims), "Eigen", m_useEigen);
         addSolver(std::make_shared<CUDAPatchSolverWarping>(m_dims), "CUDA Patch", m_useCUDAPatch);
-        addOptSolvers(m_dims, "poisson_image_editing.t");
+        addOptSolvers(m_dims, "poisson_image_editing.t", m_combinedSolverParameters.optDoublePrecision);
 		
 	}
 
@@ -46,9 +46,8 @@ public:
         m_problemParams.set("T", d_target);
         m_problemParams.set("M", d_mask);
 
-        m_solverParams.set("nonLinearIterations", &m_combinedSolverParameters.nonLinearIter);
-        m_solverParams.set("linearIterations", &m_combinedSolverParameters.linearIter);
-        m_solverParams.set("double_precision", &m_combinedSolverParameters.optDoublePrecision);
+        m_solverParams.set("nIterations", &m_combinedSolverParameters.nonLinearIter);
+        m_solverParams.set("lIterations", &m_combinedSolverParameters.linearIter);
     }
     virtual void preSingleSolve() override {
         resetGPUMemory();
@@ -95,7 +94,7 @@ public:
 
 	void copyResultToCPU() {
 		m_result = ColorImageR32G32B32A32(m_image.getWidth(), m_image.getHeight());
-        cutilSafeCall(cudaMemcpy(m_result.getData(), d_image->data(), sizeof(float4)*m_image.getWidth()*m_image.getHeight(), cudaMemcpyDeviceToHost));
+        cudaSafeCall(cudaMemcpy(m_result.getData(), d_image->data(), sizeof(float4)*m_image.getWidth()*m_image.getHeight(), cudaMemcpyDeviceToHost));
 	}
 
 private:

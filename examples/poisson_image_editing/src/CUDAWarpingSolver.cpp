@@ -11,31 +11,31 @@ CUDAWarpingSolver::CUDAWarpingSolver(const std::vector<unsigned int>& dims) : m_
 	const unsigned int numberOfVariables = N;
 
 	// State
-	cutilSafeCall(cudaMalloc(&m_solverState.d_delta,		sizeof(float4)*numberOfVariables));
-	cutilSafeCall(cudaMalloc(&m_solverState.d_r,			sizeof(float4)*numberOfVariables));
-	cutilSafeCall(cudaMalloc(&m_solverState.d_z,			sizeof(float4)*numberOfVariables));
-	cutilSafeCall(cudaMalloc(&m_solverState.d_p,			sizeof(float4)*numberOfVariables));
-	cutilSafeCall(cudaMalloc(&m_solverState.d_Ap_X,			sizeof(float4)*numberOfVariables));
-	cutilSafeCall(cudaMalloc(&m_solverState.d_scanAlpha,	sizeof(float)*tmpBufferSize));
-	cutilSafeCall(cudaMalloc(&m_solverState.d_scanBeta,		sizeof(float)*tmpBufferSize));
-	cutilSafeCall(cudaMalloc(&m_solverState.d_rDotzOld,		sizeof(float)*numberOfVariables));
-	cutilSafeCall(cudaMalloc(&m_solverState.d_precondioner, sizeof(float4)*numberOfVariables));
-	cutilSafeCall(cudaMalloc(&m_solverState.d_sumResidual,	sizeof(float)));
+	cudaSafeCall(cudaMalloc(&m_solverState.d_delta,		sizeof(float4)*numberOfVariables));
+	cudaSafeCall(cudaMalloc(&m_solverState.d_r,			sizeof(float4)*numberOfVariables));
+	cudaSafeCall(cudaMalloc(&m_solverState.d_z,			sizeof(float4)*numberOfVariables));
+	cudaSafeCall(cudaMalloc(&m_solverState.d_p,			sizeof(float4)*numberOfVariables));
+	cudaSafeCall(cudaMalloc(&m_solverState.d_Ap_X,			sizeof(float4)*numberOfVariables));
+	cudaSafeCall(cudaMalloc(&m_solverState.d_scanAlpha,	sizeof(float)*tmpBufferSize));
+	cudaSafeCall(cudaMalloc(&m_solverState.d_scanBeta,		sizeof(float)*tmpBufferSize));
+	cudaSafeCall(cudaMalloc(&m_solverState.d_rDotzOld,		sizeof(float)*numberOfVariables));
+	cudaSafeCall(cudaMalloc(&m_solverState.d_precondioner, sizeof(float4)*numberOfVariables));
+	cudaSafeCall(cudaMalloc(&m_solverState.d_sumResidual,	sizeof(float)));
 }
 
 CUDAWarpingSolver::~CUDAWarpingSolver()
 {
 	// State
-	cutilSafeCall(cudaFree(m_solverState.d_delta));
-	cutilSafeCall(cudaFree(m_solverState.d_r));
-	cutilSafeCall(cudaFree(m_solverState.d_z));
-	cutilSafeCall(cudaFree(m_solverState.d_p));
-	cutilSafeCall(cudaFree(m_solverState.d_Ap_X));
-	cutilSafeCall(cudaFree(m_solverState.d_scanAlpha));
-	cutilSafeCall(cudaFree(m_solverState.d_scanBeta));
-	cutilSafeCall(cudaFree(m_solverState.d_rDotzOld));
-	cutilSafeCall(cudaFree(m_solverState.d_precondioner));
-	cutilSafeCall(cudaFree(m_solverState.d_sumResidual));
+	cudaSafeCall(cudaFree(m_solverState.d_delta));
+	cudaSafeCall(cudaFree(m_solverState.d_r));
+	cudaSafeCall(cudaFree(m_solverState.d_z));
+	cudaSafeCall(cudaFree(m_solverState.d_p));
+	cudaSafeCall(cudaFree(m_solverState.d_Ap_X));
+	cudaSafeCall(cudaFree(m_solverState.d_scanAlpha));
+	cudaSafeCall(cudaFree(m_solverState.d_scanBeta));
+	cudaSafeCall(cudaFree(m_solverState.d_rDotzOld));
+	cudaSafeCall(cudaFree(m_solverState.d_precondioner));
+	cudaSafeCall(cudaFree(m_solverState.d_sumResidual));
 }
 
 double CUDAWarpingSolver::solve(const NamedParameters& solverParams, const NamedParameters& probParams, bool profileSolve, std::vector<SolverIteration>& iters)

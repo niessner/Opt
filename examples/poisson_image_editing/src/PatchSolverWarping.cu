@@ -49,17 +49,16 @@ float EvalResidual(PatchSolverInput& input, PatchSolverState& state, PatchSolver
 
 	const unsigned int N = input.N; // Number of block variables
 	ResetResidualDevice << < 1, 1, 1 >> >(input, state, parameters);
-	cutilSafeCall(cudaDeviceSynchronize());
+	cudaSafeCall(cudaDeviceSynchronize());
 	timer.startEvent("EvalResidual");
 	EvalResidualDevice << <(N + THREADS_PER_BLOCK - 1) / THREADS_PER_BLOCK, THREADS_PER_BLOCK >> >(input, state, parameters);
 	timer.endEvent();
-	cutilSafeCall(cudaDeviceSynchronize());
+	cudaSafeCall(cudaDeviceSynchronize());
 
 	residual = state.getSumResidual();
 
 #ifdef _DEBUG
-	cutilSafeCall(cudaDeviceSynchronize());
-	cutilCheckMsg(__FUNCTION__);
+	cudaSafeCall(cudaDeviceSynchronize());
 #endif
 
 	return residual;
@@ -201,14 +200,13 @@ void PCGIterationPatch(PatchSolverInput& input, PatchSolverState& state, PatchSo
 	dim3 blockSize(PATCH_SIZE, PATCH_SIZE);
 	dim3 gridSize((input.width + blockSize.x - 1) / blockSize.x + 1, (input.height + blockSize.y - 1) / blockSize.y + 1); // one more for block shift!
 
-	cutilSafeCall(cudaDeviceSynchronize());
+	cudaSafeCall(cudaDeviceSynchronize());
 	timer.startEvent("PCGIterationPatch");
 	PCGStepPatch_Kernel<<<gridSize, blockSize>>>(input, state, parameters, ox, oy);
 	timer.endEvent();
 
 	#ifdef _DEBUG
-		cutilSafeCall(cudaDeviceSynchronize());
-		cutilCheckMsg(__FUNCTION__);
+		cudaSafeCall(cudaDeviceSynchronize());
 	#endif
 }
 
