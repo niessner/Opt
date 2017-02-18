@@ -73,7 +73,6 @@ float EvalResidual(SolverInput& input, SolverState& state, SolverParameters& par
 
 	#ifdef _DEBUG
 		cudaSafeCall(cudaDeviceSynchronize());
-		cutilCheckMsg(__FUNCTION__);
 	#endif
 
 	return residual;
@@ -140,7 +139,6 @@ void Initialization(SolverInput& input, SolverState& state, SolverParameters& pa
     timer.endEvent();
 	#ifdef _DEBUG
 		cudaSafeCall(cudaDeviceSynchronize());
-		cutilCheckMsg(__FUNCTION__);
 	#endif
 
 	timer.startEvent("PCGInit_Kernel2");
@@ -148,7 +146,6 @@ void Initialization(SolverInput& input, SolverState& state, SolverParameters& pa
 	timer.endEvent();
 	#ifdef _DEBUG
 		cudaSafeCall(cudaDeviceSynchronize());
-		cutilCheckMsg(__FUNCTION__);
 	#endif
 
 	#if DEBUG_PRINT_SOLVER_INFO 
@@ -261,7 +258,6 @@ void PCGIteration(SolverInput& input, SolverState& state, SolverParameters& para
     timer.endEvent();
 	#ifdef _DEBUG
 		cudaSafeCall(cudaDeviceSynchronize());
-		cutilCheckMsg(__FUNCTION__);
 	#endif
 
 	cudaSafeCall(cudaMemset(state.d_scanBeta, 0, sizeof(float)));
@@ -270,7 +266,6 @@ void PCGIteration(SolverInput& input, SolverState& state, SolverParameters& para
 	timer.endEvent();
 	#ifdef _DEBUG
 		cudaSafeCall(cudaDeviceSynchronize());
-		cutilCheckMsg(__FUNCTION__);
 	#endif
 
 	timer.startEvent("PCGStep_Kernel3");
@@ -278,7 +273,6 @@ void PCGIteration(SolverInput& input, SolverState& state, SolverParameters& para
 	timer.endEvent();
 	#ifdef _DEBUG
 		cudaSafeCall(cudaDeviceSynchronize());
-		cutilCheckMsg(__FUNCTION__);
 	#endif
 	#if DEBUG_PRINT_SOLVER_INFO 
 	    float temp;
@@ -314,7 +308,6 @@ void ApplyLinearUpdate(SolverInput& input, SolverState& state, SolverParameters&
 
 	#ifdef _DEBUG
 		cudaSafeCall(cudaDeviceSynchronize());
-		cutilCheckMsg(__FUNCTION__);
 	#endif
 }
 

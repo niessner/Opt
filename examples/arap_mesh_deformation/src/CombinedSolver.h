@@ -18,9 +18,11 @@
 class CombinedSolver : public CombinedSolverBase
 {
 	public:
-        CombinedSolver(const SimpleMesh* mesh, std::vector<int> constraintsIdx, std::vector<std::vector<float>> constraintsTarget, CombinedSolverParameters params) :
+        CombinedSolver(const SimpleMesh* mesh, std::vector<int> constraintsIdx, std::vector<std::vector<float>> constraintsTarget, CombinedSolverParameters params, float weightFit, float weightReg) :
             m_constraintsIdx(constraintsIdx), m_constraintsTarget(constraintsTarget)
 		{
+            m_weightFitSqrt = sqrtf(weightFit);
+            m_weightRegSqrt = sqrtf(weightReg);
 			m_result = *mesh;
 			m_initial = m_result;
             m_combinedSolverParameters = params;
@@ -42,12 +44,6 @@ class CombinedSolver : public CombinedSolverBase
 		} 
 
         virtual void combinedSolveInit() override {
-
-            float weightFit = 3.0f;
-            float weightReg = 4.0f;
-
-            m_weightFitSqrt = sqrtf(weightFit);
-            m_weightRegSqrt = sqrtf(weightReg);
 
             m_problemParams.set("w_fitSqrt", &m_weightFitSqrt);
             m_problemParams.set("w_regSqrt", &m_weightRegSqrt);

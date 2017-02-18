@@ -2,6 +2,7 @@
 #include "CombinedSolver.h"
 #include "OpenMesh.h"
 #include "LandMarkSet.h"
+#include <string>
 #include <OpenMesh/Tools/Subdivider/Uniform/SubdividerT.hh>
 #include <OpenMesh/Tools/Subdivider/Uniform/LongestEdgeT.hh>
 #include <OpenMesh/Tools/Subdivider/Uniform/LoopT.hh>
@@ -9,13 +10,14 @@
 #include <OpenMesh/Tools/Subdivider/Uniform/Sqrt3T.hh>
 int main(int argc, const char * argv[]) {
 
-	std::string filename = "small_armadillo.ply";
-	const char* markerFilename = "small_armadillo.mrk";
-
+	std::string filename = "../data/small_armadillo.ply";
 
 	if (argc >= 2) {
 		filename = argv[1];
 	}
+    // For now, any model must be accompanied with a identically 
+    // named (besides the extension, which must be 3 characters) mrk file
+    std::string markerFilename = filename.substr(0, filename.size() - 3) + "mrk";
     bool performanceRun = false;
     if (argc >= 3) {
         if (std::string(argv[2]) == "perf") {
@@ -30,12 +32,11 @@ int main(int argc, const char * argv[]) {
 	if (argc > 3) {
 		lmOnlyFullSolve = true;
 		subdivisionFactor = atoi(argv[3]);
-		markerFilename = "small_armadillo.mrk";
 	}
 
 	// Load Constraints
 	LandMarkSet markersMesh;
-    markersMesh.loadFromFile(markerFilename);
+    markersMesh.loadFromFile(markerFilename.c_str());
 
 	std::vector<int>				constraintsIdx;
 	std::vector<std::vector<float>> constraintsTarget;
@@ -102,7 +103,10 @@ int main(int argc, const char * argv[]) {
     }
 
     params.optDoublePrecision = false;
-    CombinedSolver solver(mesh, constraintsIdx, constraintsTarget, params);
+
+    float weightFit = 4.0f;
+    float weightReg = 1.0f;
+    CombinedSolver solver(mesh, constraintsIdx, constraintsTarget, params, weightFit, weightReg);
     solver.solveAll();
     SimpleMesh* res = solver.result();
 	if (!OpenMesh::IO::write_mesh(*res, "out.ply"))
