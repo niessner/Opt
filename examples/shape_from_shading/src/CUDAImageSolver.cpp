@@ -15,44 +15,44 @@ CUDAImageSolver::CUDAImageSolver(const std::vector<unsigned int>& dims) : m_dims
     const size_t unknownStorageSize = sizeof(float)*N;
 
 	// State
-	cutilSafeCall(cudaMalloc(&m_solverState.d_delta,		unknownStorageSize));
-    cutilSafeCall(cudaMalloc(&m_solverState.d_r,            unknownStorageSize));
-    cutilSafeCall(cudaMalloc(&m_solverState.d_z,            unknownStorageSize));
-    cutilSafeCall(cudaMalloc(&m_solverState.d_p,            unknownStorageSize));
-    cutilSafeCall(cudaMalloc(&m_solverState.d_Ap_X,         unknownStorageSize));
-	cutilSafeCall(cudaMalloc(&m_solverState.d_scanAlpha,	sizeof(float)));
-	cutilSafeCall(cudaMalloc(&m_solverState.d_scanBeta,		sizeof(float)));
-	cutilSafeCall(cudaMalloc(&m_solverState.d_rDotzOld,		sizeof(float)*N));
-    cutilSafeCall(cudaMalloc(&m_solverState.d_preconditioner, unknownStorageSize));
-	cutilSafeCall(cudaMalloc(&m_solverState.d_sumResidual,	sizeof(float)));
+	cudaSafeCall(cudaMalloc(&m_solverState.d_delta,		unknownStorageSize));
+    cudaSafeCall(cudaMalloc(&m_solverState.d_r,            unknownStorageSize));
+    cudaSafeCall(cudaMalloc(&m_solverState.d_z,            unknownStorageSize));
+    cudaSafeCall(cudaMalloc(&m_solverState.d_p,            unknownStorageSize));
+    cudaSafeCall(cudaMalloc(&m_solverState.d_Ap_X,         unknownStorageSize));
+	cudaSafeCall(cudaMalloc(&m_solverState.d_scanAlpha,	sizeof(float)));
+	cudaSafeCall(cudaMalloc(&m_solverState.d_scanBeta,		sizeof(float)));
+	cudaSafeCall(cudaMalloc(&m_solverState.d_rDotzOld,		sizeof(float)*N));
+    cudaSafeCall(cudaMalloc(&m_solverState.d_preconditioner, unknownStorageSize));
+	cudaSafeCall(cudaMalloc(&m_solverState.d_sumResidual,	sizeof(float)));
 
     // Solver-specific intermediates
-    cutilSafeCall(cudaMalloc(&m_solverState.B_I    , sizeof(float)*N));
-    cutilSafeCall(cudaMalloc(&m_solverState.B_I_dx0, sizeof(float)*N));
-    cutilSafeCall(cudaMalloc(&m_solverState.B_I_dx1, sizeof(float)*N));
-    cutilSafeCall(cudaMalloc(&m_solverState.B_I_dx2, sizeof(float)*N));
-    cutilSafeCall(cudaMalloc(&m_solverState.pguard, sizeof(bool)*N));
+    cudaSafeCall(cudaMalloc(&m_solverState.B_I    , sizeof(float)*N));
+    cudaSafeCall(cudaMalloc(&m_solverState.B_I_dx0, sizeof(float)*N));
+    cudaSafeCall(cudaMalloc(&m_solverState.B_I_dx1, sizeof(float)*N));
+    cudaSafeCall(cudaMalloc(&m_solverState.B_I_dx2, sizeof(float)*N));
+    cudaSafeCall(cudaMalloc(&m_solverState.pguard, sizeof(bool)*N));
 }
 
 CUDAImageSolver::~CUDAImageSolver()
 {
 	// State
-	cutilSafeCall(cudaFree(m_solverState.d_delta));
-	cutilSafeCall(cudaFree(m_solverState.d_r));
-	cutilSafeCall(cudaFree(m_solverState.d_z));
-	cutilSafeCall(cudaFree(m_solverState.d_p));
-	cutilSafeCall(cudaFree(m_solverState.d_Ap_X));
-	cutilSafeCall(cudaFree(m_solverState.d_scanAlpha));
-	cutilSafeCall(cudaFree(m_solverState.d_scanBeta));
-	cutilSafeCall(cudaFree(m_solverState.d_rDotzOld));
-    cutilSafeCall(cudaFree(m_solverState.d_preconditioner));
-	cutilSafeCall(cudaFree(m_solverState.d_sumResidual));
+	cudaSafeCall(cudaFree(m_solverState.d_delta));
+	cudaSafeCall(cudaFree(m_solverState.d_r));
+	cudaSafeCall(cudaFree(m_solverState.d_z));
+	cudaSafeCall(cudaFree(m_solverState.d_p));
+	cudaSafeCall(cudaFree(m_solverState.d_Ap_X));
+	cudaSafeCall(cudaFree(m_solverState.d_scanAlpha));
+	cudaSafeCall(cudaFree(m_solverState.d_scanBeta));
+	cudaSafeCall(cudaFree(m_solverState.d_rDotzOld));
+    cudaSafeCall(cudaFree(m_solverState.d_preconditioner));
+	cudaSafeCall(cudaFree(m_solverState.d_sumResidual));
 
     // Solver-specific intermediates
-    cutilSafeCall(cudaFree(m_solverState.B_I    ));
-    cutilSafeCall(cudaFree(m_solverState.B_I_dx0));
-    cutilSafeCall(cudaFree(m_solverState.B_I_dx1));
-    cutilSafeCall(cudaFree(m_solverState.B_I_dx2));
+    cudaSafeCall(cudaFree(m_solverState.B_I    ));
+    cudaSafeCall(cudaFree(m_solverState.B_I_dx0));
+    cudaSafeCall(cudaFree(m_solverState.B_I_dx1));
+    cudaSafeCall(cudaFree(m_solverState.B_I_dx2));
 }
 
 double CUDAImageSolver::solve(const NamedParameters& solverParams, const NamedParameters& probParams, bool profileSolve, std::vector<SolverIteration>& iters)

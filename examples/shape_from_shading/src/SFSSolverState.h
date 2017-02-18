@@ -1,11 +1,8 @@
 #pragma once
 
-#ifndef _SOLVER_STATE_
-#define _SOLVER_STATE_
-
 #include <cuda_runtime.h> 
 #include "CameraParams.h"
-#include "cuda_SimpleMatrixUtil.h"
+#include "../../shared/cuda_SimpleMatrixUtil.h"
 
 struct SolverInput
 {
@@ -65,5 +62,3 @@ struct SolverState
     bool* pguard;
 
 };
-
-#endif

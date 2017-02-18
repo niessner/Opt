@@ -42,9 +42,6 @@
     <ClInclude Include="src\cuda_SimpleMatrixUtil.h">
       <Filter>Util</Filter>
     </ClInclude>
-    <ClInclude Include="src\cudaUtil.h">
-      <Filter>Util</Filter>
-    </ClInclude>
     <ClInclude Include="src\SFSSolverInput.h" />
     <ClInclude Include="src\CUDAImageSolver.h">
       <Filter>CUDASolver</Filter>

@@ -2,7 +2,6 @@
 
 #include <cassert>
 
-#include "cutil.h"
 #include <SimpleBuffer.h>
 #include <SFSSolverInput.h>
 #include "../../shared/SolverIteration.h"

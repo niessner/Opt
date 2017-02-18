@@ -1,6 +1,6 @@
 #pragma once
 #include <string>
-#include "cuda_SimpleMatrixUtil.h" 
+#include "../../shared/cuda_SimpleMatrixUtil.h" 
 #include <stdio.h>
 #include <vector>
 

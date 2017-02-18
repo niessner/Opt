@@ -1,13 +1,9 @@
 #pragma once
 
-#ifndef SolverSFSUtil_h
-#define SolverSFSUtil_h
 
 #include "SolverUtil.h"
 #include "SFSSolverState.h"
-
-#include <cutil_inline.h>
-#include <cutil_math.h>
+#include "../../shared/cudaUtil.h"
 
 #define THREADS_PER_BLOCK 1024 // keep consistent with the CPU
 
@@ -197,5 +193,3 @@ __inline__ __device__ float4 calShading2depthGradHelper(const float d0, const fl
         return retval;
     }
 }
-
-#endif

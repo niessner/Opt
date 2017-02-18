@@ -61,21 +61,21 @@ __global__ void EvalResidualDevice(SolverInput input, SolverState state, SolverP
 float EvalResidual(SolverInput& input, SolverState& state, SolverParameters& parameters, CUDATimer& timer)
 {
 	float residual = 0.0f;
-    cutilSafeCall(cudaDeviceSynchronize());
+    cudaSafeCall(cudaDeviceSynchronize());
 	const unsigned int N = input.N; // Number of block variables
 	ResetResidualDevice << < 1, 1, 1 >> >(input, state, parameters);
-	cutilSafeCall(cudaDeviceSynchronize());
+	cudaSafeCall(cudaDeviceSynchronize());
 	timer.startEvent("EvalResidual");
 	EvalResidualDevice << <(N + THREADS_PER_BLOCK - 1) / THREADS_PER_BLOCK, THREADS_PER_BLOCK >> >(input, state, parameters);
 	timer.endEvent();
-	cutilSafeCall(cudaDeviceSynchronize());
+	cudaSafeCall(cudaDeviceSynchronize());
 
 #ifdef _DEBUG
-	cutilSafeCall(cudaDeviceSynchronize());
+	cudaSafeCall(cudaDeviceSynchronize());
 	cutilCheckMsg(__FUNCTION__);
 #endif
 
-    cutilSafeCall(cudaMemcpy(&residual, &state.d_sumResidual[0], sizeof(float), cudaMemcpyDeviceToHost));
+    cudaSafeCall(cudaMemcpy(&residual, &state.d_sumResidual[0], sizeof(float), cudaMemcpyDeviceToHost));
 
 	return residual;
 }
@@ -133,17 +133,17 @@ void Initialization(SolverInput& input, SolverState& state, SolverParameters& pa
 		std::cout << "Too many variables for this block size. Maximum number of variables for two kernel scan: " << THREADS_PER_BLOCK*THREADS_PER_BLOCK << std::endl;
 		while (1);
 	}
-    cutilSafeCall(cudaMemset(state.d_scanAlpha, 0, sizeof(float)));
+    cudaSafeCall(cudaMemset(state.d_scanAlpha, 0, sizeof(float)));
     timer.startEvent("PCGInit_Kernel1");
 	PCGInit_Kernel1 << <blocksPerGrid, THREADS_PER_BLOCK >> >(input, state, parameters);
     timer.endEvent();
 	#ifdef _DEBUG
-		cutilSafeCall(cudaDeviceSynchronize());
+		cudaSafeCall(cudaDeviceSynchronize());
 		cutilCheckMsg(__FUNCTION__);
 	#endif
     #if DEBUG_PRINT_INFO
         float scanAlpha = 0.0f;
-        cutilSafeCall(cudaMemcpy(&scanAlpha, state.d_scanAlpha, sizeof(float), cudaMemcpyDeviceToHost));
+        cudaSafeCall(cudaMemcpy(&scanAlpha, state.d_scanAlpha, sizeof(float), cudaMemcpyDeviceToHost));
         printf("ScanAlpha: %f\n", scanAlpha);
     #endif
 
@@ -153,7 +153,7 @@ void Initialization(SolverInput& input, SolverState& state, SolverParameters& pa
 	PCGInit_Kernel2 << <blocksPerGrid, THREADS_PER_BLOCK >> >(N, state);
 	timer.endEvent();
 	#ifdef _DEBUG
-		cutilSafeCall(cudaDeviceSynchronize());
+		cudaSafeCall(cudaDeviceSynchronize());
 		cutilCheckMsg(__FUNCTION__);
 	#endif
 }
@@ -249,31 +249,31 @@ void PCGIteration(SolverInput& input, SolverState& state, SolverParameters& para
 		std::cout << "Too many variables for this block size. Maximum number of variables for two kernel scan: " << THREADS_PER_BLOCK*THREADS_PER_BLOCK << std::endl;
 		while (1);
 	}
-    cutilSafeCall(cudaMemset(state.d_scanAlpha, 0, sizeof(float)));
+    cudaSafeCall(cudaMemset(state.d_scanAlpha, 0, sizeof(float)));
     timer.startEvent("PCGStep_Kernel1");
     PCGStep_Kernel1 << <blocksPerGrid, THREADS_PER_BLOCK>> >(input, state, parameters);
     timer.endEvent();
 	#ifdef _DEBUG
-		cutilSafeCall(cudaDeviceSynchronize());
+		cudaSafeCall(cudaDeviceSynchronize());
 		cutilCheckMsg(__FUNCTION__);
 	#endif
     #if DEBUG_PRINT_INFO
         float scanAlpha = 0.0f;
-        cutilSafeCall(cudaMemcpy(&scanAlpha, state.d_scanAlpha, sizeof(float), cudaMemcpyDeviceToHost));
+        cudaSafeCall(cudaMemcpy(&scanAlpha, state.d_scanAlpha, sizeof(float), cudaMemcpyDeviceToHost));
         printf("ScanAlpha: %f\n", scanAlpha);
     #endif
     
-    cutilSafeCall(cudaMemset(state.d_scanBeta, 0, sizeof(float)));
+    cudaSafeCall(cudaMemset(state.d_scanBeta, 0, sizeof(float)));
 	timer.startEvent("PCGStep_Kernel2");
 	PCGStep_Kernel2 << <blocksPerGrid, THREADS_PER_BLOCK>> >(input, state);
 	timer.endEvent();
 	#ifdef _DEBUG
-		cutilSafeCall(cudaDeviceSynchronize());
+		cudaSafeCall(cudaDeviceSynchronize());
 		cutilCheckMsg(__FUNCTION__);
 	#endif
     #if DEBUG_PRINT_INFO
         float scanBeta = 0.0f;
-        cutilSafeCall(cudaMemcpy(&scanBeta, state.d_scanBeta, sizeof(float), cudaMemcpyDeviceToHost));
+        cudaSafeCall(cudaMemcpy(&scanBeta, state.d_scanBeta, sizeof(float), cudaMemcpyDeviceToHost));
         printf("ScanBeta: %f\n", scanBeta);
     #endif
 
@@ -282,7 +282,7 @@ void PCGIteration(SolverInput& input, SolverState& state, SolverParameters& para
 	PCGStep_Kernel3 << <blocksPerGrid, THREADS_PER_BLOCK>> >(input, state);
 	timer.endEvent();
 	#ifdef _DEBUG
-		cutilSafeCall(cudaDeviceSynchronize());
+		cudaSafeCall(cudaDeviceSynchronize());
 		cutilCheckMsg(__FUNCTION__);
 	#endif
 }
@@ -307,10 +307,10 @@ void ApplyLinearUpdate(SolverInput& input, SolverState& state, SolverParameters&
     timer.startEvent("ApplyLinearUpdateDevice");
 	ApplyLinearUpdateDevice << <(N + THREADS_PER_BLOCK - 1) / THREADS_PER_BLOCK, THREADS_PER_BLOCK >> >(input, state, parameters);
     timer.endEvent();
-	cutilSafeCall(cudaDeviceSynchronize()); // Hm
+	cudaSafeCall(cudaDeviceSynchronize()); // Hm
 
 	#ifdef _DEBUG
-		cutilSafeCall(cudaDeviceSynchronize());
+		cudaSafeCall(cudaDeviceSynchronize());
 		cutilCheckMsg(__FUNCTION__);
 	#endif
 }
@@ -351,7 +351,7 @@ void Precompute(SolverInput& input, SolverState& state, SolverParameters& parame
     const unsigned int N = input.N;
 
     const int blocksPerGrid = (N + THREADS_PER_BLOCK - 1) / THREADS_PER_BLOCK;
-    cutilSafeCall(cudaDeviceSynchronize());
+    cudaSafeCall(cudaDeviceSynchronize());
     if (blocksPerGrid > THREADS_PER_BLOCK)
     {
         std::cout << "Too many variables for this block size. Maximum number of variables for two kernel scan: " << THREADS_PER_BLOCK*THREADS_PER_BLOCK << std::endl;
@@ -360,9 +360,9 @@ void Precompute(SolverInput& input, SolverState& state, SolverParameters& parame
     timer.startEvent("Precompute_Kernel");
     Precompute_Kernel << <blocksPerGrid, THREADS_PER_BLOCK >> >(input, state, parameters);
     timer.endEvent();
-    cutilSafeCall(cudaDeviceSynchronize());
+    cudaSafeCall(cudaDeviceSynchronize());
     #ifdef _DEBUG
-        cutilSafeCall(cudaDeviceSynchronize());
+        cudaSafeCall(cudaDeviceSynchronize());
         cutilCheckMsg(__FUNCTION__);
     #endif
 }
@@ -442,11 +442,10 @@ void NonPatchSaveInitialCostJTFAndPreAndJTJ(SolverInput& input, SolverState& sta
     CUDATimer timer;
     Precompute(input, state, parameters, timer);
 
-    cutilSafeCall(cudaDeviceSynchronize());
+    cudaSafeCall(cudaDeviceSynchronize());
     PCGStep_Kernel_SaveInitialCostJTFAndPre<< <(N + THREADS_PER_BLOCK - 1) / THREADS_PER_BLOCK, THREADS_PER_BLOCK >> >(input, state, parameters, costResult, jtfResult, preResult);
 
-    cutilSafeCall(cudaDeviceSynchronize());
-    cutilCheckMsg(__FUNCTION__);
+    cudaSafeCall(cudaDeviceSynchronize());
 
     
     Initialization(input, state, parameters, timer);

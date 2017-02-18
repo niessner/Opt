@@ -1,10 +1,6 @@
 #pragma once
 
-#ifndef _SOLVER_Stereo_EQUATIONS_
-#define _SOLVER_Stereo_EQUATIONS_
-
-#include <cutil_inline.h>
-#include <cutil_math.h>
+#include "../../shared/cudaUtil.h"
 
 #include "SFSSolverState.h"
 #include "SFSSolverParameters.h"
@@ -718,4 +714,3 @@ __inline__ __device__ float applyJTJDevice(unsigned int variableIdx, SolverInput
     return b;
 }
 
-#endif
