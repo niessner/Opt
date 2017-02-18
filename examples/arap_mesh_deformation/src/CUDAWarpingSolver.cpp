@@ -67,8 +67,8 @@ double CUDAWarpingSolver::solve(const NamedParameters& solverParams, const Named
     SolverParameters parameters;
     parameters.weightFitting        = sq(getTypedParameter<float>("w_fitSqrt", probParams));
     parameters.weightRegularizer    = sq(getTypedParameter<float>("w_regSqrt", probParams));
-    parameters.nNonLinearIterations = getTypedParameter<unsigned int>("nonLinearIterations", solverParams);
-    parameters.nLinIterations       = getTypedParameter<unsigned int>("linearIterations", solverParams);
+    parameters.nNonLinearIterations = getTypedParameter<unsigned int>("nIterations", solverParams);
+    parameters.nLinIterations       = getTypedParameter<unsigned int>("lIterations", solverParams);
     
     return ImageWarpingSolveGNStub(m_solverInput, m_solverState, parameters);
 }

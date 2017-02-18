@@ -1,7 +1,7 @@
 #pragma once
 
 #include "../../shared/cudaUtil.h"
-#include "cuda_SimpleMatrixUtil.h"
+#include "../../shared/cuda_SimpleMatrixUtil.h"
 
 #define FLOAT_EPSILON 0.0f
 

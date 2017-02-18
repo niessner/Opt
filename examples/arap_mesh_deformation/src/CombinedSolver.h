@@ -38,7 +38,7 @@ class CombinedSolver : public CombinedSolverBase
             
             addSolver(std::make_shared<CUDAWarpingSolver>(N, d_numNeighbours, d_neighbourIdx, d_neighbourOffset), "CUDA", m_combinedSolverParameters.useCUDA);
             addSolver(std::make_shared<CeresSolver>(m_dims, &m_initial), "Ceres", m_combinedSolverParameters.useCeres);
-            addOptSolvers(m_dims, "arap_mesh_deformation.t");
+            addOptSolvers(m_dims, "arap_mesh_deformation.t", m_combinedSolverParameters.optDoublePrecision);
 		} 
 
         virtual void combinedSolveInit() override {
@@ -57,9 +57,8 @@ class CombinedSolver : public CombinedSolverBase
             m_problemParams.set("Constraints", m_vertexPosTargetFloat3);
             m_problemParams.set("G", m_graph);
 
-            m_solverParams.set("nonLinearIterations", &m_combinedSolverParameters.nonLinearIter);
-            m_solverParams.set("linearIterations", &m_combinedSolverParameters.linearIter);
-            m_solverParams.set("double_precision", &m_combinedSolverParameters.optDoublePrecision);
+            m_solverParams.set("nIterations", &m_combinedSolverParameters.nonLinearIter);
+            m_solverParams.set("lIterations", &m_combinedSolverParameters.linearIter);
         }
 
         virtual void preNonlinearSolve(int i) override {

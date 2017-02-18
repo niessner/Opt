@@ -1,8 +1,6 @@
 #pragma once
-#ifndef _ROTATION_HELPER_
-#define _ROTATION_HELPER_
 
-#include "cuda_SimpleMatrixUtil.h"
+#include "../../shared/cuda_SimpleMatrixUtil.h"
 
 // Rotation times vector
 inline __device__ mat3x3 evalDerivativeRotationTimesVector(const float3x3& dRAlpha, const float3x3& dRBeta, const float3x3& dRGamma, const float3& d)
@@ -161,5 +159,3 @@ inline __device__ void evalDerivativeRotationMatrix(const float3& angles, mat3x3
 	dRBeta = evalRMat_dBeta(cosAlpha, cosBeta, cosGamma, sinAlpha, sinBeta, sinGamma);
 	dRGamma = evalRMat_dGamma(cosAlpha, cosBeta, cosGamma, sinAlpha, sinBeta, sinGamma);
 }
-
-#endif
