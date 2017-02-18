@@ -15,7 +15,7 @@ public:
 
     inline int getPixel(int x, int y) const
     {
-        return y * m_dims[0] + x;
+        return y * (int)m_dims[0] + x;
     }
     std::vector<float> Xfloat;
     std::vector<float> D_i;
@@ -31,9 +31,6 @@ public:
 
 #ifndef USE_CERES
 
-inline void CeresImageSolver::solve(std::shared_ptr<SimpleBuffer> result, const SFSSolverInput& rawSolverInput, std::vector<SolverIteration>& solverIterations)
-{
-
-}
+double solve(const NamedParameters& solverParameters, const NamedParameters& problemParameters, bool profileSolve, std::vector<SolverIteration>& iters) { return nan(nullptr); }
 
 #endif
