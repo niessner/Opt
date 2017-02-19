@@ -28,70 +28,38 @@ static void loadConstraints(std::vector<std::vector<int> >& constraints, std::st
 
 
 int main(int argc, const char * argv[]) {
-
-	//// DOG
-	//const std::string inputImage = "smoothingExampleD.png";
-	//const std::string inputImageMask = "smoothingExampleDMask.png";
-	//std::vector<std::vector<int>> constraints; constraints.resize(4);
-	//constraints[0].push_back(95);  constraints[0].push_back(118); constraints[0].push_back(80);  constraints[0].push_back(118);
-	//constraints[1].push_back(120); constraints[1].push_back(118); constraints[1].push_back(130); constraints[1].push_back(118);
-	//constraints[2].push_back(163); constraints[2].push_back(111); constraints[2].push_back(153); constraints[2].push_back(111);
-	//constraints[3].push_back(183); constraints[3].push_back(111); constraints[3].push_back(193); constraints[3].push_back(111);
-
-
-	// PILLAR
-    /*
-	const std::string inputImage = "bend2.png";
-	const std::string inputImageMask = "bendMask.png";
-	std::vector<std::vector<int>> constraints; constraints.resize(3);
-	constraints[0].push_back(48); constraints[0].push_back(61); constraints[0].push_back(144); constraints[0].push_back(69);
-	constraints[1].push_back(64); constraints[1].push_back(61); constraints[1].push_back(154); constraints[1].push_back(82);
-	constraints[2].push_back(80); constraints[2].push_back(61); constraints[2].push_back(165); constraints[2].push_back(92);
-	*/
-
-
 	// CAT 
+    std::string filename = "../data/cat512.png";
 
-	std::string inputImage = "cartooncat.png";
-	std::string inputImageMask = "catmask.png";
-	std::vector<std::vector<int>> constraints;
-	loadConstraints(constraints, "cat.constraints");
     int downsampleFactor = 1;
-
 	bool lmOnlyFullSolve = false;
     if (argc > 1) {
-        downsampleFactor = atoi(argv[1]);
-        if (downsampleFactor > 0) {
-            inputImage = "cartooncat4096.png";
-            inputImageMask = "catmask4096_black.png";
-            constraints.clear();
-            loadConstraints(constraints, "cat4096.constraints");
-			//lmOnlyFullSolve = true;
-        } else {
-            downsampleFactor = 1;
-        }
-        
+        filename = argv[1];
+    }
+    if (argc > 2) {
+        downsampleFactor = std::max(0,atoi(argv[2])); 
     }
     bool performanceRun = false;
-    if (argc > 2) {
-        if (std::string(argv[2]) == "perf") {
+    if (argc > 3) {
+        if (std::string(argv[3]) == "perf") {
             performanceRun = true;
-            if (atoi(argv[1]) > 0) {
+            if (atoi(argv[2]) > 0) {
                 lmOnlyFullSolve = true;
             }
         } else {
-            printf("Invalid second parameter: %s\n", argv[2]);
+            printf("Invalid third parameter: %s\n", argv[3]);
         }
     }
 
-    
+    // Must have a mask and constraints file in the same directory as the input image
+    std::string maskFilename = filename.substr(0, filename.size() - 4) + "_mask.png";
+    std::string constraintsFilename = filename.substr(0, filename.size() - 3) + "constraints";
+    std::vector<std::vector<int>> constraints;
+    loadConstraints(constraints, constraintsFilename);
 
+    ColorImageR8G8B8A8 image = LodePNG::load(filename);
+    const ColorImageR8G8B8A8 imageMask = LodePNG::load(maskFilename);
 
-	ColorImageR8G8B8A8 image = LodePNG::load(inputImage);
-    const ColorImageR8G8B8A8 imageMask = LodePNG::load(inputImageMask);
-
-
-    
     ColorImageR32G32B32 imageColor(image.getWidth() / downsampleFactor, image.getHeight() / downsampleFactor);
     for (unsigned int y = 0; y < image.getHeight() / downsampleFactor; y++) {
         for (unsigned int x = 0; x < image.getWidth() / downsampleFactor; x++) {

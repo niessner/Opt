@@ -182,9 +182,9 @@ double CeresSolverWarping::solve(const NamedParameters& solverParameters, const 
     // add all fit constraints
     //if (mask(i, j) == 0 && constaints(i, j).u >= 0 && constaints(i, j).v >= 0)
     //    fit = (x(i, j) - constraints(i, j)) * w_fitSqrt
-    for (int y = 0; y < m_dims[1]; y++)
+    for (int y = 0; y < (int)m_dims[1]; y++)
     {
-        for (int x = 0; x < m_dims[0]; x++)
+        for (int x = 0; x < (int)m_dims[0]; x++)
         {
             float mask = h_mask[getPixel(x, y)];
             const vec2f constraint = toVec(h_constraints[getPixel(x, y)]);
@@ -200,9 +200,9 @@ double CeresSolverWarping::solve(const NamedParameters& solverParameters, const 
     //add all reg constraints
     //if(mask(i, j) == 0 && offset-in-bounds)
     //  cost = (x(i, j) - x(i + ox, j + oy)) - mul(R, urshape(i, j) - urshape(i + ox, j + oy)) * w_regSqrt
-    for (int y = 0; y < m_dims[1]; y++)
+    for (int y = 0; y < (int)m_dims[1]; y++)
     {
-        for (int x = 0; x < m_dims[0]; x++)
+        for (int x = 0; x < (int)m_dims[0]; x++)
         {
             float mask = h_mask[getPixel(x, y)];
             if (mask == 0.0f) {
@@ -210,7 +210,7 @@ double CeresSolverWarping::solve(const NamedParameters& solverParameters, const 
                 for (vec2i offset : offsets)
                 {
                     const vec2i oPos = offset + vec2i(x, y);
-                    if (oPos.x >= 0 && oPos.x < m_dims[0] && oPos.y >= 0 && oPos.y < m_dims[1] && h_mask[getPixel(oPos.x, oPos.y)] == 0.0f)
+                    if (oPos.x >= 0 && oPos.x < (int)m_dims[0] && oPos.y >= 0 && oPos.y < (int)m_dims[1] && h_mask[getPixel(oPos.x, oPos.y)] == 0.0f)
                     {
                         vec2f deltaUr = toVec(h_urshape[getPixel(x, y)]) - toVec(h_urshape[getPixel(oPos.x, oPos.y)]);
                         ceres::CostFunction* costFunction = RegTerm::Create(deltaUr, weightRegSqrt);

@@ -21,8 +21,6 @@ __inline__ __device__ float evalFDevice(unsigned int variableIdx, SolverInput& i
 	if (validConstraint) { 
 		float2 e_fit = (state.d_x[variableIdx] - constraintUV); 
 		e += parameters.weightFitting*e_fit*e_fit; 
-		//printf("e=%f | %f (%d|%d)\n", e.x, e.y, i, j);
-		//printf("x=%f | %f\n", state.d_x[variableIdx].x, state.d_x[variableIdx].y);
 	}
 
 	// E_reg
