@@ -27,13 +27,12 @@ class CombinedSolver : public CombinedSolverBase
 {
 
 	public:
-        CombinedSolver(const SimpleMesh* sourceMesh, const std::vector<SimpleMesh*>& targetMeshes, const std::vector<int4>& sourceTetIndices, int startIndex, CombinedSolverParameters params)
+        CombinedSolver(const SimpleMesh* sourceMesh, const std::vector<SimpleMesh*>& targetMeshes, const std::vector<int4>& sourceTetIndices, CombinedSolverParameters params)
 		{
             m_combinedSolverParameters = params;
             m_result = *sourceMesh;
 			m_initial = m_result;
             m_sourceTetIndices = sourceTetIndices;
-            m_startIndex = startIndex;
 
             for (SimpleMesh* mesh : targetMeshes) {
                 m_targets.push_back(*mesh);
@@ -117,7 +116,7 @@ class CombinedSolver : public CombinedSolverBase
 
             m_weightReg = m_weightRegMax;
 
-            m_functionTolerance = 0.00001f;
+            m_functionTolerance = 0.0000001f;
 
             m_fitSqrt = sqrt(m_weightFit);
             m_regSqrt = sqrt(m_weightReg);
@@ -151,7 +150,7 @@ class CombinedSolver : public CombinedSolverBase
         }
         virtual void postSingleSolve() override { 
             char buff[100];
-            sprintf(buff, "out_%04d.ply", m_targetIndex + m_startIndex + 1);
+            sprintf(buff, "out_%04d.ply", m_targetIndex);
             saveCurrentMesh(buff);
         }
 
@@ -412,13 +411,6 @@ class CombinedSolver : public CombinedSolverBase
             unsigned int N = (unsigned int)mesh.n_vertices();
 
             assert(m_spuriousIndices.size() == m_noisyOffsets.size());
-            /*
-            for (int i = 0; i < m_spuriousIndices.size(); ++i) {
-                float3 before = *((float3*)mesh.point(VertexHandle(i)).data());
-                *((float3*)mesh.point(VertexHandle(i)).data()) += m_noisyOffsets[i];
-                float3 after = *((float3*)mesh.point(VertexHandle(i)).data());
-            }*/
-
             std::vector<const float*> flannPoints(N);
             for (unsigned int i = 0; i < N; i++)
             {   
@@ -431,8 +423,6 @@ class CombinedSolver : public CombinedSolverBase
 
         ml::Timer m_timer;
         std::unique_ptr<ml::NearestNeighborSearchFLANN<float>> m_targetAccelerationStructure;
-
-        int m_startIndex;
 
         std::mt19937 m_rnd;
         std::vector<int> m_spuriousIndices;;

@@ -31,33 +31,38 @@ static std::vector<int4> getSourceTetIndices(std::string filename) {
 
 int main(int argc, const char * argv[])
 {
-    int startIndex = 41;
-    std::string sourceDirectory = "squat";
-    std::vector<std::string> allFiles = ml::Directory::enumerateFiles(sourceDirectory);
-    std::string source_filename = sourceDirectory + "/" + allFiles[startIndex];
+    std::string targetSourceDirectory = "../data/squat_target";
+    std::string sourceFilename = "../data/squat_source.obj";
+    std::string tetmeshFilename = "../data/squat_tetmesh.ele";
 
+    if (argc > 1) {
+        assert(argc > 3);
+        targetSourceDirectory = argv[1];
+        sourceFilename = argv[2];
+        tetmeshFilename = argv[3];
+    }
 
-    std::vector<int4> sourceTetIndices = getSourceTetIndices(sourceDirectory + "_tet/" + "mesh_0000.1.ele");
+    std::vector<std::string> targetFiles = ml::Directory::enumerateFiles(targetSourceDirectory);
+    
 
-    SimpleMesh* sourceMesh = createMesh(source_filename);
+    std::vector<int4> sourceTetIndices = getSourceTetIndices(tetmeshFilename);
+
+    SimpleMesh* sourceMesh = createMesh(sourceFilename);
 
     std::vector<SimpleMesh*> targetMeshes;
-    for (int i = startIndex + 1; i < allFiles.size(); i += 1) {
-        targetMeshes.push_back(createMesh(sourceDirectory + "/" + allFiles[i]));
-		if (targetMeshes.size() > 4) {
-			break;
-		}
+    for (auto target : targetFiles) {
+        targetMeshes.push_back(createMesh(targetSourceDirectory + "/" + target));
     }
     std::cout << "All meshes now in memory" << std::endl;
 
     CombinedSolverParameters params;
     params.numIter = 15;
-    params.nonLinearIter = 8;
+    params.nonLinearIter = 10;
     params.linearIter = 250;
     params.useOpt = false;
     params.useOptLM = true;
 
-    CombinedSolver solver(sourceMesh, targetMeshes, sourceTetIndices, startIndex, params);
+    CombinedSolver solver(sourceMesh, targetMeshes, sourceTetIndices, params);
     solver.solveAll();
     SimpleMesh* res = solver.result();
     
