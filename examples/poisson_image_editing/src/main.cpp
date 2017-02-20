@@ -2,15 +2,20 @@
 #include "CombinedSolver.h"
 
 int main(int argc, const char * argv[]) {
-	//// Women
-	const std::string inputImage = "womenSource2_2.png";
-	const std::string inputImage1 = "womenSource1_2.png";
-	const std::string inputImageMask = "womenMask_2.png";
+	std::string inputImage0 = "../data/poisson0.png";
+	std::string inputImage1 = "../data/poisson1.png";
+	std::string inputImageMask = "../data/poisson_mask.png";
+    if (argc > 1) {
+        assert(argc > 3);
+        inputImage0 = argv[1];
+        inputImage1 = argv[2];
+        inputImageMask = argv[3];
+    }
 	const unsigned int offsetX = 0;
 	const unsigned int offsetY = 0;
 	const bool invertMask = false;
 
-	ColorImageR8G8B8A8	   image = LodePNG::load(inputImage);
+    ColorImageR8G8B8A8	   image = LodePNG::load(inputImage0);
 	ColorImageR32G32B32A32 imageR32(image.getWidth(), image.getHeight());
 	for (unsigned int y = 0; y < image.getHeight(); y++) {
 		for (unsigned int x = 0; x < image.getWidth(); x++) {
