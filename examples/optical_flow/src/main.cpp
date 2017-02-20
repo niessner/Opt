@@ -24,9 +24,13 @@ void renderFlowVecotors(ColorImageR8G8B8A8& image, const BaseImage<float2>& flow
 
 int main(int argc, const char * argv[]) {
 
-    const std::string srcFile = "other-data/DogDance/frame10.png";
-    const std::string tarFile = "other-data/DogDance/frame11.png";
-
+    std::string srcFile = "../data/dogdance0.png";
+    std::string tarFile = "../data/dogdance1.png";
+    if (argc > 1) {
+        assert(argc > 2);
+        srcFile = argv[1];
+        tarFile = argv[2];
+    }
 
 	ColorImageR8G8B8A8 imageSrc = LodePNG::load(srcFile);
 	ColorImageR8G8B8A8 imageTar = LodePNG::load(tarFile);
