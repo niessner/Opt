@@ -1,3 +1,10 @@
+cat512.constraints - Constraints for cat512.png, created by Michael Mara.
+    This marker file is released into the public domain.
+cat512.png - Public Domain clip art, uploaded to oprnclipart.org by Gerald_G,
+    resized to be 512x512 by Michael Mara (mmara@cs.stanford.edu).
+    Downloaded from (https://openclipart.org/detail/316/cartoon-cat-walking)
+cat512_mask.png - Warping mask for cat512.png, created by Michael Mara
+    This marker file is released into the public domain.
 head.ply - This file contains data from a 3D model that commonly appears in
     scientific publications, and has entered the public domain through this
     unrestricted use and may be freely distributed. Originally distributed by
@@ -27,14 +34,6 @@ raptor_simplify2k.off - The original raptor.off (not included here) was
     retaining the general shape.
 raptor_simplify2k.mrk - Marker file for raptor_simplify2k.off, created by 
     Michael Mara. This marker file is released into the public domain.
-cat512.png - Public Domain clip art, uploaded to oprnclipart.org by Gerald_G,
-    resized to be 512x512 by Michael Mara (mmara@cs.stanford.edu).
-    Downloaded from (https://openclipart.org/detail/316/cartoon-cat-walking)
-cat512_mask.png - Warping mask for cat512.png, created by Michael Mara
-    This marker file is released into the public domain.
-cat512.constraints - Constraints for cat512.png, created by Michael Mara.
-    This marker file is released into the public domain.
-
 
 
 -----------------------------------------------------------------------------------------

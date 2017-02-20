@@ -183,7 +183,6 @@ xcopy /Y /D "..\..\API\release\include\*.h" "..\shared\"</Command>
   </ItemGroup>
   <ItemGroup>
     <None Include="..\..\API\src\precision.t" />
-    <None Include="default.SFSSolverParameters" />
     <None Include="shape_from_shading.t" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
