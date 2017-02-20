@@ -3,9 +3,12 @@
 #include "../../shared/CombinedSolverParameters.h"
 int main(int argc, const char * argv[])
 {
-	const std::string inputImage = "ye_high2.png";
-	
-	ColorImageR8G8B8A8	   image = LodePNG::load(inputImage);
+    std::string filename = "../data/ye_high2.png";
+    if (argc > 1) {
+        filename = argv[1];
+    }
+
+    ColorImageR8G8B8A8	   image = LodePNG::load(filename);
 	ColorImageR32G32B32A32 imageR32(image.getWidth(), image.getHeight());
 	for (unsigned int y = 0; y < image.getHeight(); y++) {
 		for (unsigned int x = 0; x < image.getWidth(); x++) {
