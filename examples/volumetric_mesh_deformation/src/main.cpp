@@ -4,8 +4,7 @@
 
 int main(int argc, const char * argv[])
 {
-	std::string filename = "meshes/neptune.ply";
-    //std::string filename = "meshes/long.ply";
+	std::string filename = "../data/head.ply";
 	if (argc >= 2) {
 		filename = argv[1];
 	}
@@ -23,13 +22,14 @@ int main(int argc, const char * argv[])
     CombinedSolverParameters params;
     params.optDoublePrecision = true;
     params.profileSolve = true;
-    params.useCUDA = true;
-    params.useOptLM = true;
-    params.useCeres = true;
+    params.useCUDA = false;
+    params.useOptLM = false;
+    params.useCeres = false;
     params.nonLinearIter = 20;
     params.linearIter = 60;
 
-    CombinedSolver solver(mesh, params);
+    int3 voxelGridSize = make_int3(5, 20, 5);
+    CombinedSolver solver(mesh, voxelGridSize, params);
     solver.solveAll();
     SimpleMesh* res = solver.result();
     solver.saveGraphResults();

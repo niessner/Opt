@@ -4,7 +4,7 @@
 
 int main(int argc, const char * argv[])
 {
-    std::string inputFilenamePrefix = "default";
+    std::string inputFilenamePrefix = "../data/shape_from_shading/default";
     if (argc >= 2) {
         inputFilenamePrefix = std::string(argv[1]);
     }

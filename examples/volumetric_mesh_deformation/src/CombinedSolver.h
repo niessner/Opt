@@ -13,15 +13,15 @@
 class CombinedSolver : public CombinedSolverBase
 {
 	public:
-        CombinedSolver(const SimpleMesh* mesh, CombinedSolverParameters params)
+        CombinedSolver(const SimpleMesh* mesh, int3 voxelGridSize, CombinedSolverParameters params)
 		{
             m_combinedSolverParameters = params;
 
 			m_result = *mesh;
 			m_initial = m_result;
 
-			m_dims = make_int3(10, 40, 10);
-			m_nNodes = (m_dims.x + 1)*(m_dims.y + 1)*(m_dims.z + 1);
+            m_dims      = voxelGridSize;
+			m_nNodes    = (m_dims.x + 1)*(m_dims.y + 1)*(m_dims.z + 1);
 			
 			unsigned int N = (unsigned int)mesh->n_vertices();
 		
@@ -271,14 +271,14 @@ class CombinedSolver : public CombinedSolverBase
 		void saveGraphResults()
 		{
 			SimpleMesh meshSphere;
-			if (!OpenMesh::IO::read_mesh(meshSphere, "meshes/sphere.ply"))
+			if (!OpenMesh::IO::read_mesh(meshSphere, "../data/sphere.ply"))
 			{
 				std::cerr << "Error -> File: " << __FILE__ << " Line: " << __LINE__ << " Function: " << __FUNCTION__ << std::endl;
 				exit(1);
 			}
 
 			SimpleMesh meshCone;
-			if (!OpenMesh::IO::read_mesh(meshCone, "meshes/cone.ply"))
+			if (!OpenMesh::IO::read_mesh(meshCone, "../data/cone.ply"))
 			{
 				std::cerr << "Error -> File: " << __FILE__ << " Line: " << __LINE__ << " Function: " << __FUNCTION__ << std::endl;
 				exit(1);
