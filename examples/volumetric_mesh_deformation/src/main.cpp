@@ -20,11 +20,6 @@ int main(int argc, const char * argv[])
     printf("Faces: %d\nVertices: %d\n", mesh->n_faces(), mesh->n_vertices());
 
     CombinedSolverParameters params;
-    params.optDoublePrecision = true;
-    params.profileSolve = true;
-    params.useCUDA = false;
-    params.useOptLM = false;
-    params.useCeres = false;
     params.nonLinearIter = 20;
     params.linearIter = 60;
 
