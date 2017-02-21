@@ -1,5 +1,5 @@
 #pragma once
-
+#include "../../external/nanoflann/include/nanoflann.hpp"
 #include "mLibInclude.h"
 
 #include <cuda_runtime.h>
@@ -9,6 +9,48 @@
 #include "../../shared/SolverIteration.h"
 
 #include "OpenMesh.h"
+
+using namespace nanoflann;
+// For nanoflann computation
+struct PointCloud_nanoflann
+{
+    std::vector<float3>  pts;
+
+    // Must return the number of data points
+    inline size_t kdtree_get_point_count() const { return pts.size(); }
+
+    // Returns the distance between the vector "p1[0:size-1]" and the data point with index "idx_p2" stored in the class:
+    inline float kdtree_distance(const float *p1, const size_t idx_p2, size_t /*size*/) const
+    {
+        const float d0 = p1[0] - pts[idx_p2].x;
+        const float d1 = p1[1] - pts[idx_p2].y;
+        const float d2 = p1[2] - pts[idx_p2].z;
+        return d0*d0 + d1*d1 + d2*d2;
+    }
+
+    // Returns the dim'th component of the idx'th point in the class:
+    // Since this is inlined and the "dim" argument is typically an immediate value, the
+    //  "if/else's" are actually solved at compile time.
+    inline float kdtree_get_pt(const size_t idx, int dim) const
+    {
+        if (dim == 0) return pts[idx].x;
+        else if (dim == 1) return pts[idx].y;
+        else return pts[idx].z;
+    }
+
+    // Optional bounding-box computation: return false to default to a standard bbox computation loop.
+    //   Return true if the BBOX was already computed by the class and returned in "bb" so it can be avoided to redo it again.
+    //   Look at bb.size() to find out the expected dimensionality (e.g. 2 or 3 for point clouds)
+    template <class BBOX>
+    bool kdtree_get_bbox(BBOX& /* bb */) const { return false; }
+
+};
+
+typedef KDTreeSingleIndexAdaptor<
+    L2_Simple_Adaptor<float, PointCloud_nanoflann>,
+    PointCloud_nanoflann,
+    3 /* dim */
+> NanoKDTree;
 
 
 static bool operator==(const float3& v0, const float3& v1) {
@@ -243,15 +285,16 @@ class CombinedSolver : public CombinedSolverBase
 
 //#pragma omp parallel for // TODO: check why it makes everything wrongs
             for (int i = 0; i < (int)N; i++) {
-                std::vector<uint> neighbors(MAX_K);
+                std::vector<size_t> neighbors(MAX_K);
+                std::vector<float> out_dist_sqr(MAX_K);
                 auto currentPt = m_result.point(VertexHandle(i));
                 auto sNormal = m_result.normal(VertexHandle(i));
                 auto sourceNormal = make_float3(sNormal[0], sNormal[1], sNormal[2]);
-                m_targetAccelerationStructure->kNearest(currentPt.data(), MAX_K, 0.0f, neighbors);
+                m_targetAccelerationStructure->knnSearch(currentPt.data(), MAX_K, &neighbors[0], &out_dist_sqr[0]);
                 bool validTargetFound = false;
-                for (uint indexOfNearest : neighbors) {
-                    const Vec3f target = m_targets[targetIndex].point(VertexHandle(indexOfNearest));
-                    auto tNormal = m_targets[targetIndex].normal(VertexHandle(indexOfNearest));
+                for (size_t indexOfNearest : neighbors) {
+                    const Vec3f target = m_targets[targetIndex].point(VertexHandle((int)indexOfNearest));
+                    auto tNormal = m_targets[targetIndex].normal(VertexHandle((int)indexOfNearest));
                     auto targetNormal = make_float3(tNormal[0], tNormal[1], tNormal[2]);
                     float dist = (target - currentPt).length();
                     if (dist > positionThreshold) {
@@ -406,23 +449,25 @@ class CombinedSolver : public CombinedSolverBase
 
 	private:
 
-        std::unique_ptr<ml::NearestNeighborSearchFLANN<float>> generateAccelerationStructure(const SimpleMesh& mesh) {
-            auto nnData = std::unique_ptr<ml::NearestNeighborSearchFLANN<float>>(new ml::NearestNeighborSearchFLANN<float>(std::max(50, 4 * MAX_K), 1));
+        std::unique_ptr<NanoKDTree> generateAccelerationStructure(const SimpleMesh& mesh) {
             unsigned int N = (unsigned int)mesh.n_vertices();
 
             assert(m_spuriousIndices.size() == m_noisyOffsets.size());
-            std::vector<const float*> flannPoints(N);
+            m_pointCloud.pts.resize(N);
             for (unsigned int i = 0; i < N; i++)
             {   
-                flannPoints[i] = mesh.point(VertexHandle(i)).data();
+                auto p = mesh.point(VertexHandle(i));
+                m_pointCloud.pts[i] = { p[0], p[1], p[2] };
             }
-            nnData->init(flannPoints, 3, MAX_K);
-            return nnData;
+            std::unique_ptr<NanoKDTree> tree = std::unique_ptr<NanoKDTree>(new NanoKDTree(3 /*dim*/, m_pointCloud, KDTreeSingleIndexAdaptorParams(10 /* max leaf */)));
+            tree->buildIndex();
+            return tree;
         }
 
 
         ml::Timer m_timer;
-        std::unique_ptr<ml::NearestNeighborSearchFLANN<float>> m_targetAccelerationStructure;
+        PointCloud_nanoflann m_pointCloud;
+        std::unique_ptr<NanoKDTree> m_targetAccelerationStructure;
 
         std::mt19937 m_rnd;
         std::vector<int> m_spuriousIndices;;

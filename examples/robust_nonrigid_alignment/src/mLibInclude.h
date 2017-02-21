@@ -15,7 +15,5 @@
 
 #include <mLibCore.h>
 #include <mLibLodePNG.h>
-#include <mLibFLANN.h>
-
 
 using namespace ml;
