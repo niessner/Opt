@@ -47,10 +47,7 @@ int main(int argc, const char * argv[]) {
 		constraintsTarget.push_back(markersMesh[i].getPosition());
 	}
 
-
-
 	SimpleMesh* mesh = new SimpleMesh();
-
 	if (!OpenMesh::IO::read_mesh(*mesh, filename)) 
 	{
 	        std::cerr << "Error -> File: " << __FILE__ << " Line: " << __LINE__ << " Function: " << __FUNCTION__ << std::endl;
@@ -78,7 +75,6 @@ int main(int argc, const char * argv[]) {
     CombinedSolverParameters params;
 
     params.numIter = 10;
-    //params.useCUDA = true;
     params.nonLinearIter = 20;
     params.linearIter = 100;
     params.useOpt = true;
