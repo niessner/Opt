@@ -2,8 +2,8 @@
 
 #include <cassert>
 
-#include <SimpleBuffer.h>
-#include <SFSSolverInput.h>
+#include "SimpleBuffer.h"
+#include "SFSSolverInput.h"
 #include "../../shared/SolverIteration.h"
 #include "../../shared/CeresSolverBase.h"
 class CeresImageSolver : public CeresSolverBase {

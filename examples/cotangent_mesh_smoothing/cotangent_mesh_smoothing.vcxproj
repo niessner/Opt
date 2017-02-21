@@ -13,121 +13,96 @@
   <PropertyGroup Label="Globals">
     <ProjectGuid>{399E76FB-C648-4BA1-AA99-4B870D19A1F4}</ProjectGuid>
     <Keyword>Win32Proj</Keyword>
-    <RootNamespace>DepthWithColor.D3D</RootNamespace>
+    <RootNamespace>cotangent_mesh_smoothing</RootNamespace>
     <ProjectName>cotangent_mesh_smoothing</ProjectName>
   </PropertyGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />
-  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'" Label="Configuration">
+  <PropertyGroup Label="Configuration">
     <ConfigurationType>Application</ConfigurationType>
-    <UseDebugLibraries>true</UseDebugLibraries>
     <CharacterSet>Unicode</CharacterSet>
     <PlatformToolset>v120</PlatformToolset>
   </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'" Label="Configuration">
+    <UseDebugLibraries>true</UseDebugLibraries>
+  </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'" Label="Configuration">
-    <ConfigurationType>Application</ConfigurationType>
     <UseDebugLibraries>false</UseDebugLibraries>
     <WholeProgramOptimization>true</WholeProgramOptimization>
-    <CharacterSet>Unicode</CharacterSet>
-    <PlatformToolset>v120</PlatformToolset>
   </PropertyGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.props" />
   <ImportGroup Label="ExtensionSettings">
     <Import Project="$(VCTargetsPath)\BuildCustomizations\CUDA 7.5.props" />
   </ImportGroup>
-  <ImportGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'" Label="PropertySheets">
-    <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
-  </ImportGroup>
-  <ImportGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'" Label="PropertySheets">
+  <ImportGroup Label="PropertySheets">
     <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
   </ImportGroup>
   <PropertyGroup Label="UserMacros" />
-  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
+  <PropertyGroup>
     <LinkIncremental>true</LinkIncremental>
-    <ExecutablePath>$(DXSDK_DIR)Utilities\bin\x64;$(DXSDK_DIR)Utilities\bin\x86;$(ExecutablePath)</ExecutablePath>
-    <IncludePath>./;C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA\v7.5\include;$(IncludePath);$(DXSDK_DIR)Include;$(KINECTSDK10_DIR)\inc;$(CUDA_INC_PATH);..\..\mLib\include;..\..\..\..\mLib\include;..\..\cusp-v0.5.1\cusp;..\..\..\..\mLibExternal\include\</IncludePath>
-    <LibraryPath>C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA\v7.5\lib\x64;$(LibraryPath);$(DXSDK_DIR)Lib\x64;$(KINECTSDK10_DIR)\lib\amd64;..\..\..\..\mLibExternal\libsWindows\lib64</LibraryPath>
+    <ExecutablePath>$(ExecutablePath)</ExecutablePath>
+    <IncludePath>$(CUDA_INC_PATH);$(IncludePath);..\external\mLib\include;..\..\..\..\mLibExternal\include\;./;../../../../mLibExternal/libsWindows/ceres-windows\ceres-solver\include\;../../../../mLibExternal/libsWindows/ceres-windows\glog\src\windows;../../../../mLibExternal/libsWindows/ceres-windows\win\include</IncludePath>
+    <LibraryPath>$(CUDA_LIB_PATH);$(LibraryPath);..\..\..\..\mLibExternal\libsWindows\lib64\</LibraryPath>
     <OutDir>$(ProjectDir)$(Platform)\$(Configuration)\</OutDir>
   </PropertyGroup>
-  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
-    <LinkIncremental>false</LinkIncremental>
-    <ExecutablePath>$(DXSDK_DIR)Utilities\bin\x64;$(DXSDK_DIR)Utilities\bin\x86;$(ExecutablePath)</ExecutablePath>
-    <IncludePath>./;C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA\v7.5\include;$(IncludePath);$(DXSDK_DIR)Include;$(KINECTSDK10_DIR)\inc;$(CUDA_INC_PATH);..\..\mLib\include;..\..\..\..\mLib\include;..\..\cusp-v0.5.1\cusp;..\..\..\..\mLibExternal\include\</IncludePath>
-    <LibraryPath>C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA\v7.5\lib\x64;$(LibraryPath);$(DXSDK_DIR)Lib\x64;$(KINECTSDK10_DIR)\lib\amd64;$(CUDA_LIB_PATH);..\..\..\..\mLibExternal\libsWindows\lib64</LibraryPath>
-    <OutDir>$(ProjectDir)$(Platform)\$(Configuration)\</OutDir>
-  </PropertyGroup>
+  <ItemDefinitionGroup>
+    <ClCompile>
+      <WarningLevel>Level3</WarningLevel>
+      <OpenMPSupport>false</OpenMPSupport>
+      <IntrinsicFunctions>true</IntrinsicFunctions>
+      <FloatingPointModel>Fast</FloatingPointModel>
+      <ExceptionHandling>Sync</ExceptionHandling>
+    </ClCompile>
+    <Link>
+      <SubSystem>Console</SubSystem>
+      <GenerateDebugInformation>true</GenerateDebugInformation>
+    </Link>
+    <CudaCompile>
+      <Include>$(ProjectDir)</Include>
+      <TargetMachinePlatform>64</TargetMachinePlatform>
+      <CodeGeneration>compute_30,sm_30;compute_35,sm_35</CodeGeneration>
+      <MaxRegCount>62</MaxRegCount>
+    </CudaCompile>
+    <PreBuildEvent>
+      <Command>call "..\..\API\common\optMake.bat" "$(ProjectDir)\..\..\..\terra" "..\..\API" "false"
+xcopy /Y /D "..\..\API\release\bin\*.dll" "."
+xcopy /Y /D "..\..\API\release\lib\*.lib" "."
+xcopy /Y /D "..\..\API\release\include\*.h" "..\shared\"</Command>
+    </PreBuildEvent>
+  </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
     <ClCompile>
       <WarningLevel>Level3</WarningLevel>
       <Optimization>Disabled</Optimization>
       <RuntimeLibrary>MultiThreadedDebugDLL</RuntimeLibrary>
-      <OpenMPSupport>false</OpenMPSupport>
-      <IntrinsicFunctions>true</IntrinsicFunctions>
-      <FloatingPointModel>Fast</FloatingPointModel>
-      <ExceptionHandling>Sync</ExceptionHandling>
       <PreprocessorDefinitions>NOMINMAX;WIN32;_DEBUG;DEBUG;PROFILE;_CONSOLE;D3DXFX_LARGEADDRESS_HANDLE;_CRT_SECURE_NO_WARNINGS;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <BasicRuntimeChecks>EnableFastChecks</BasicRuntimeChecks>
-      <AdditionalIncludeDirectories>$(ProjectDir)\src\cutil\inc;$(ProjectDir)\src\;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
     </ClCompile>
     <Link>
-      <AdditionalDependencies>Opt.lib;winmm.lib;comctl32.lib;Shlwapi.lib;cudart.lib;cublas.lib;OpenMeshCoreD.lib;%(AdditionalDependencies)</AdditionalDependencies>
-      <SubSystem>Console</SubSystem>
-      <GenerateDebugInformation>true</GenerateDebugInformation>
+      <AdditionalDependencies>Opt.lib;winmm.lib;comctl32.lib;Shlwapi.lib;cudart.lib;OpenMeshCored.lib;%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
-    <Manifest>
-      <EnableDPIAwareness>true</EnableDPIAwareness>
-    </Manifest>
     <CudaCompile>
-      <Include>$(ProjectDir)\src\cutil\inc;$(ProjectDir);..\..\cusp-v0.5.1\cusp</Include>
-      <TargetMachinePlatform>64</TargetMachinePlatform>
-      <CodeGeneration>compute_30,sm_30;compute_35,sm_35</CodeGeneration>
-      <MaxRegCount>62</MaxRegCount>
       <PtxAsOptionV>false</PtxAsOptionV>
     </CudaCompile>
-    <PreBuildEvent>
-      <Command>call "$(ProjectDir)..\..\API\common\optMake.bat" "$(ProjectDir)\..\..\..\terra" "..\..\API" "false"
-xcopy /Y /D "$(ProjectDir)..\..\API\release\bin\*.dll" "."
-xcopy /Y /D "$(ProjectDir)..\..\API\release\lib\*.lib" "."
-xcopy /Y /D "$(ProjectDir)..\..\API\release\include\*.h" "..\shared\"</Command>
-    </PreBuildEvent>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
     <ClCompile>
-      <WarningLevel>Level3</WarningLevel>
       <Optimization>MaxSpeed</Optimization>
       <RuntimeLibrary>MultiThreadedDLL</RuntimeLibrary>
-      <OpenMPSupport>false</OpenMPSupport>
       <FunctionLevelLinking>true</FunctionLevelLinking>
-      <IntrinsicFunctions>true</IntrinsicFunctions>
-      <FloatingPointModel>Fast</FloatingPointModel>
-      <ExceptionHandling>Sync</ExceptionHandling>
-      <PreprocessorDefinitions>NOMINMAX;WIN32;NDEBUG;_WINDOWS;D3DXFX_LARGEADDRESS_HANDLE;_CRT_SECURE_NO_WARNINGS;%(PreprocessorDefinitions)</PreprocessorDefinitions>
-      <AdditionalIncludeDirectories>$(ProjectDir)\src\cutil\inc;$(ProjectDir)\src\;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <PreprocessorDefinitions>NOMINMAX;WIN32;NDEBUG;_WINDOWS;D3DXFX_LARGEADDRESS_HANDLE;_CRT_SECURE_NO_WARNINGS;GOOGLE_GLOG_DLL_DECL=;USE_CERES;%(PreprocessorDefinitions)</PreprocessorDefinitions>
     </ClCompile>
     <Link>
-      <AdditionalDependencies>Opt.lib;cublas.lib;cusparse.lib;winmm.lib;comctl32.lib;Shlwapi.lib;cudart.lib;OpenMeshCore.lib;%(AdditionalDependencies)</AdditionalDependencies>
-      <GenerateDebugInformation>true</GenerateDebugInformation>
+      <AdditionalDependencies>libglog_static.lib;ceres.lib;Opt.lib;cublas.lib;winmm.lib;comctl32.lib;Shlwapi.lib;cudart.lib;OpenMeshCore.lib;%(AdditionalDependencies)</AdditionalDependencies>
       <EnableCOMDATFolding>true</EnableCOMDATFolding>
-      <SubSystem>Console</SubSystem>
       <OptimizeReferences>true</OptimizeReferences>
-      <AdditionalLibraryDirectories>%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
     </Link>
     <Manifest>
       <EnableDPIAwareness>true</EnableDPIAwareness>
     </Manifest>
     <CudaCompile>
-      <TargetMachinePlatform>64</TargetMachinePlatform>
-      <Include>$(ProjectDir)\src\cutil\inc;$(ProjectDir)</Include>
-      <CodeGeneration>compute_35,sm_35</CodeGeneration>
-      <MaxRegCount>62</MaxRegCount>
       <FastMath>true</FastMath>
       <Optimization>O3</Optimization>
     </CudaCompile>
-    <PreBuildEvent>
-      <Command>call "$(ProjectDir)..\..\API\common\optMake.bat" "$(ProjectDir)\..\..\..\terra" "..\..\API" "false"
-xcopy /Y /D "$(ProjectDir)..\..\API\release\bin\*.dll" "."
-xcopy /Y /D "$(ProjectDir)..\..\API\release\lib\*.lib" "."
-xcopy /Y /D "$(ProjectDir)..\..\API\release\include\*.h" "..\shared\"</Command>
-    </PreBuildEvent>
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClCompile Include="src\main.cpp" />

@@ -3,7 +3,7 @@
 #include "mLibInclude.h"
 
 #include <cuda_runtime.h>
-#include <../../shared/cudaUtil.h>
+#include "../../shared/cudaUtil.h"
 
 #include "CUDAImageSolver.h"
 
