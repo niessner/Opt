@@ -2,8 +2,8 @@
 
 #include "main.h"
 #include "../../shared/OptUtils.h"
-#ifdef USE_CERES
-
+#include "../../shared/Config.h"
+#if USE_CERES
 #include <cuda_runtime.h>
 
 #include "CeresSolverPoissonImageEditing.h"

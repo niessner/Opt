@@ -7,7 +7,6 @@ extern "C" {
 }
 #include "OptUtils.h"
 #include "CudaArray.h"
-#include "Precision.h"
 #include "SolverIteration.h"
 #include "cudaUtil.h"
 #include "NamedParameters.h"

@@ -209,7 +209,7 @@ void SimpleBuffer::savePLYMesh(std::string filename) const {
             value = 0.0f;
         }
         // Always put in vertices (even if invalid)... this is due to laziness of not wanting to rewrite code
-        vertices.push_back(vec3f(p.x, p.y, value * 1000.0f));
+        vertices.push_back(vec3f((float)p.x, (float)p.y, value * 1000.0f));
         
         
         if (valid && p.x < image.getDimX() - 1 && p.y < image.getDimY() - 1)

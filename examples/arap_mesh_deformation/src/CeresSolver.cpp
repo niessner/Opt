@@ -2,8 +2,8 @@
 #pragma once
 
 #include "main.h"
-
-#ifdef USE_CERES
+#include "../../shared/Config.h"
+#if USE_CERES
 
 
 #include "Configure.h"

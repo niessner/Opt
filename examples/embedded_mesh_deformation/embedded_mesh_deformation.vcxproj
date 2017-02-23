@@ -38,9 +38,8 @@
   </ImportGroup>
   <PropertyGroup Label="UserMacros" />
   <PropertyGroup>
-    <LinkIncremental>true</LinkIncremental>
     <ExecutablePath>$(ExecutablePath)</ExecutablePath>
-    <IncludePath>$(CUDA_INC_PATH);$(IncludePath);..\external\mLib\include;..\..\..\..\mLibExternal\include\;./;../../../../mLibExternal/libsWindows/ceres-windows\ceres-solver\include\;../../../../mLibExternal/libsWindows/ceres-windows\glog\src\windows;../../../../mLibExternal/libsWindows/ceres-windows\win\include</IncludePath>
+    <IncludePath>$(CUDA_INC_PATH);$(IncludePath);..\external\mLib\include;..\..\..\..\mLibExternal\include\</IncludePath>
     <LibraryPath>$(CUDA_LIB_PATH);$(LibraryPath);..\..\..\..\mLibExternal\libsWindows\lib64\</LibraryPath>
     <OutDir>$(ProjectDir)$(Platform)\$(Configuration)\</OutDir>
   </PropertyGroup>
@@ -74,11 +73,11 @@ xcopy /Y /D "..\..\API\release\include\*.h" "..\shared\"</Command>
       <WarningLevel>Level3</WarningLevel>
       <Optimization>Disabled</Optimization>
       <RuntimeLibrary>MultiThreadedDebugDLL</RuntimeLibrary>
-      <PreprocessorDefinitions>NOMINMAX;WIN32;_DEBUG;DEBUG;PROFILE;_CONSOLE;D3DXFX_LARGEADDRESS_HANDLE;_CRT_SECURE_NO_WARNINGS;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <PreprocessorDefinitions>NOMINMAX;WIN32;_DEBUG;DEBUG;PROFILE;_CONSOLE;_CRT_SECURE_NO_WARNINGS;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <BasicRuntimeChecks>EnableFastChecks</BasicRuntimeChecks>
     </ClCompile>
     <Link>
-      <AdditionalDependencies>Opt.lib;winmm.lib;comctl32.lib;Shlwapi.lib;cudart.lib;OpenMeshCored.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalDependencies>Opt.lib;cudart.lib;OpenMeshCored.lib;%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
     <CudaCompile>
       <PtxAsOptionV>false</PtxAsOptionV>
@@ -89,10 +88,10 @@ xcopy /Y /D "..\..\API\release\include\*.h" "..\shared\"</Command>
       <Optimization>MaxSpeed</Optimization>
       <RuntimeLibrary>MultiThreadedDLL</RuntimeLibrary>
       <FunctionLevelLinking>true</FunctionLevelLinking>
-      <PreprocessorDefinitions>NOMINMAX;WIN32;NDEBUG;_WINDOWS;D3DXFX_LARGEADDRESS_HANDLE;_CRT_SECURE_NO_WARNINGS;GOOGLE_GLOG_DLL_DECL=;USE_CERES;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <PreprocessorDefinitions>NOMINMAX;WIN32;NDEBUG;_WINDOWS;_CRT_SECURE_NO_WARNINGS;%(PreprocessorDefinitions)</PreprocessorDefinitions>
     </ClCompile>
     <Link>
-      <AdditionalDependencies>libglog_static.lib;ceres.lib;Opt.lib;cublas.lib;winmm.lib;comctl32.lib;Shlwapi.lib;cudart.lib;OpenMeshCore.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalDependencies>Opt.lib;cudart.lib;OpenMeshCore.lib;%(AdditionalDependencies)</AdditionalDependencies>
       <EnableCOMDATFolding>true</EnableCOMDATFolding>
       <OptimizeReferences>true</OptimizeReferences>
     </Link>
@@ -129,7 +128,6 @@ xcopy /Y /D "..\..\API\release\include\*.h" "..\shared\"</Command>
     <Reference Include="System.Xml" />
   </ItemGroup>
   <ItemGroup>
-    <None Include="..\..\API\src\precision.t" />
     <None Include="embedded_mesh_deformation.t" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />

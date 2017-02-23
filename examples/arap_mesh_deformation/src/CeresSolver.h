@@ -14,10 +14,9 @@ private:
     SimpleMesh *m_mesh;
 };
 
-#ifndef USE_CERES
-inline double solve(const NamedParameters& solverParameters, const NamedParameters& problemParameters, bool profileSolve, std::vector<SolverIteration>& iter)
+#if !USE_CERES
+inline double CeresSolver::solve(const NamedParameters& solverParameters, const NamedParameters& problemParameters, bool profileSolve, std::vector<SolverIteration>& iter)
 {
-    return 0.0f;
+    return nan(nullptr);
 }
-
 #endif

@@ -9,7 +9,6 @@
 #include "OpenMesh.h"
 #include "CeresSolver.h"
 #include "../../shared/SolverIteration.h"
-#include "../../shared/Precision.h"
 #include "../../shared/CombinedSolverParameters.h"
 #include "../../shared/CombinedSolverBase.h"
 #include "../../shared/OptGraph.h"
@@ -71,7 +70,7 @@ class CombinedSolver : public CombinedSolverBase
         }
         virtual void combinedSolveFinalize() override {
             if (m_combinedSolverParameters.profileSolve) {
-                ceresIterationComparison("ARAP Mesh Deformation");
+                ceresIterationComparison("ARAP Mesh Deformation", m_combinedSolverParameters.optDoublePrecision);
             }
         }
 
@@ -111,13 +110,13 @@ class CombinedSolver : public CombinedSolverBase
             h_neighbourOffset[0] = 0;
             for (SimpleMesh::VertexIter v_it = m_initial.vertices_begin(); v_it != m_initial.vertices_end(); ++v_it)
             {
-                VertexHandle c_vh(v_it.handle());
+                VertexHandle c_vh(*v_it);
                 unsigned int valance = m_initial.valence(c_vh);
                 h_numNeighbours[count] = valance;
 
-                for (SimpleMesh::VertexVertexIter vv_it = m_initial.vv_iter(c_vh); vv_it; vv_it++)
+                for (SimpleMesh::VertexVertexIter vv_it = m_initial.vv_iter(c_vh); vv_it.is_valid(); vv_it++)
                 {
-                    VertexHandle v_vh(vv_it.handle());
+                    VertexHandle v_vh(*vv_it);
 
                     h_neighbourIdx[offset] = v_vh.idx();
                     offset++;

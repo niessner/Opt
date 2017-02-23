@@ -3,12 +3,9 @@
 #include "main.h"
 #include "Configure.h"
 #include "../../shared/OptUtils.h"
-
-#ifdef USE_CERES
-
-
+#include "../../shared/Config.h"
+#if USE_CERES
 #include <cuda_runtime.h>
-#include "../../shared/Precision.h"
 #include "../../shared/SolverIteration.h"
 #include "CeresSolverImageWarping.h"
 

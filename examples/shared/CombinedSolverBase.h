@@ -4,7 +4,7 @@
 #include "OptSolver.h"
 #include "CombinedSolverParameters.h"
 #include "SolverIteration.h"
-
+#include "Config.h"
 
 /** We want to run several solvers in an identical manner, with some initalization
 and finish code for each of the examples. The structure is the same for every
@@ -40,6 +40,14 @@ public:
         return nan(nullptr);
     }
 
+    void setParameters(const CombinedSolverParameters& params) {
+        m_combinedSolverParameters = params;
+        if (params.useCeres && !USE_CERES) {
+            printf("Ceres not enabled in this build, turning off Ceres as an active solver.\n");
+            m_combinedSolverParameters.useCeres = false;
+        }
+    }
+
     std::vector<SolverIteration> getIterationInfo(std::string name) {
         for (auto& s : m_solverInfo) {
             if (s.name == name) {
@@ -51,8 +59,8 @@ public:
         return std::vector<SolverIteration>();
     }
 
-    void ceresIterationComparison(std::string name) {
-        saveSolverResults("results/", OPT_DOUBLE_PRECISION ? "_double" : "_float", getIterationInfo("Ceres"), getIterationInfo("Opt(GN)"), getIterationInfo("Opt(LM)"));
+    void ceresIterationComparison(std::string name, bool optDoublePrecision) {
+        saveSolverResults("results/", optDoublePrecision ? "_double" : "_float", getIterationInfo("Ceres"), getIterationInfo("Opt(GN)"), getIterationInfo("Opt(LM)"), optDoublePrecision);
         reportFinalCosts(name, m_combinedSolverParameters, getCost("Opt(GN)"), getCost("Opt(LM)"), getCost("Ceres"));
     }
 

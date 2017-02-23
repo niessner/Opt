@@ -66,8 +66,8 @@ double EigenSolverPoissonImageEditing::solve(const NamedParameters& solverParame
     findAndCopyArrayToCPU("T", h_target, problemParameters);
     findAndCopyArrayToCPU("M", h_mask, problemParameters);
 
-    for (int y = 0; y < m_dims[1]; ++y) {
-        for (int x = 0; x < m_dims[0]; ++x) {
+    for (int y = 0; y < (int)m_dims[1]; ++y) {
+        for (int x = 0; x < (int)m_dims[0]; ++x) {
             if (h_mask[y*m_dims[0] + x] == 0.0f) {
                 ++numUnknowns;
                 vec2i p(x, y);
@@ -77,7 +77,7 @@ double EigenSolverPoissonImageEditing::solve(const NamedParameters& solverParame
         }
     }
     printf("# Unknowns: %d\n", numUnknowns);
-    int numResiduals = pixelLocations.size() * 4;
+    int numResiduals = (int)pixelLocations.size() * 4;
 
     Eigen::VectorXf x_r(numUnknowns), b_r(numResiduals);
     Eigen::VectorXf x_g(numUnknowns), b_g(numResiduals);
@@ -117,7 +117,7 @@ double EigenSolverPoissonImageEditing::solve(const NamedParameters& solverParame
 
         for (vec2i off : offsets) {
             vec2i q = p + off;
-            if (q.x >= 0 && q.y >= 0 && q.x < m_dims[0] && q.y < m_dims[1]) {
+            if (q.x >= 0 && q.y >= 0 && q.x < (int)m_dims[0] && q.y < (int)m_dims[1]) {
                 auto it = pixelLocationsToIndex.find(q);
                 int row = 4 * i + j;
                 if (it == pixelLocationsToIndex.end()) {

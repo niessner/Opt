@@ -1,6 +1,5 @@
 #pragma once
 
-#include "../../shared/Precision.h"
 #include "../../shared/OptUtils.h"
 #include "../../shared/CombinedSolverParameters.h"
 #include "../../shared/CombinedSolverBase.h"
@@ -76,10 +75,10 @@ public:
         h_neighbourOffset[0] = 0;
         for (SimpleMesh::VertexIter v_it = m_initial.vertices_begin(); v_it != m_initial.vertices_end(); ++v_it)
         {
-            VertexHandle c_vh(v_it.handle());
+            VertexHandle c_vh(*v_it);
             std::vector<unsigned int> neighborIndices;
-            for (SimpleMesh::VertexVertexIter vv_it = m_initial.vv_iter(c_vh); vv_it; vv_it++) {
-                VertexHandle v_vh(vv_it.handle());
+            for (SimpleMesh::VertexVertexIter vv_it = m_initial.vv_iter(c_vh); vv_it.is_valid(); vv_it++) {
+                VertexHandle v_vh(*vv_it);
                 neighborIndices.push_back(v_vh.idx());
             }
 
@@ -104,7 +103,7 @@ public:
         std::vector<int> tail;
         std::vector<int> prev;
         std::vector<int> next;
-        for (int headX = 0; headX < N; ++headX) {
+        for (int headX = 0; headX < (int)N; ++headX) {
             for (int j = h_neighbourOffset[headX]; j < h_neighbourOffset[headX + 1]; ++j) {
                 head.push_back(headX);
                 tail.push_back(h_neighbourIdx[3 * j + 0]);

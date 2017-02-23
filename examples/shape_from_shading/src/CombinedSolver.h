@@ -49,7 +49,7 @@ public:
     virtual void postNonlinearSolve(int) override {}
 
     virtual void combinedSolveFinalize() override {
-        ceresIterationComparison("Shape From Shading");
+        ceresIterationComparison("Shape From Shading", m_combinedSolverParameters.optDoublePrecision);
     }
 
     std::shared_ptr<SimpleBuffer> result() {

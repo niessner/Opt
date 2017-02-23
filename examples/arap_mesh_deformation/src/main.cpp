@@ -94,7 +94,7 @@ int main(int argc, const char * argv[]) {
         params.earlyOut = true;
         params.linearIter = 1000;// m_image.getWidth()*m_image.getHeight();
         if (mesh->n_vertices() > 100000) {
-            params.nonLinearIter = mesh->n_vertices() / 5000;
+            params.nonLinearIter = (unsigned int)mesh->n_vertices() / 5000;
         }
     }
 

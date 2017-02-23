@@ -1,6 +1,9 @@
 #pragma once
 
 #include "SolverBase.h"
+#include "Config.h"
+
+#if USE_CERES
 #define GLOG_NO_ABBREVIATED_SEVERITIES
 #include "ceres/ceres.h"
 #include "glog/logging.h"
@@ -9,6 +12,7 @@ using ceres::AutoDiffCostFunction;
 using ceres::CostFunction;
 using ceres::Problem;
 using ceres::Solver;
+#endif
 #include <memory>
 class CeresSolverBase : public SolverBase {
 public:
@@ -20,7 +24,9 @@ public:
     }
 
 protected:
+#if USE_CERES
     double launchProfiledSolveAndSummary(const std::unique_ptr<Solver::Options>& options, Problem* problem, bool profileSolve, std::vector<SolverIteration>& iter);
     std::unique_ptr<Solver::Options> initializeOptions(const NamedParameters& solverParameters) const;
+#endif
     std::vector<unsigned int> m_dims;
 };

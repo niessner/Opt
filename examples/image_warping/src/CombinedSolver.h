@@ -154,7 +154,7 @@ public:
 
     virtual void combinedSolveFinalize() override {
         if (m_combinedSolverParameters.profileSolve) {
-            ceresIterationComparison("Image Warping");
+            ceresIterationComparison("Image Warping", m_combinedSolverParameters.optDoublePrecision);
         }
     }
 
@@ -185,7 +185,7 @@ public:
 		{
 			for (unsigned int x = 0; x < m_image.getWidth(); x++)
 			{
-                h_constraints[y*m_image.getWidth() + x] = { (OPT_FLOAT)-1.0, (OPT_FLOAT)-1.0 };
+                h_constraints[y*m_image.getWidth() + x] = { -1.0f, -1.0f };
 			}
 		}
 
@@ -196,8 +196,8 @@ public:
 
 			if (m_imageMask(x, y) == 0)
 			{
-                OPT_FLOAT newX = (1.0f - alpha)*(float)x + alpha*(float)m_constraints[k][2];
-                OPT_FLOAT newY = (1.0f - alpha)*(float)y + alpha*(float)m_constraints[k][3];
+                float newX = (1.0f - alpha)*(float)x + alpha*(float)m_constraints[k][2];
+                float newY = (1.0f - alpha)*(float)y + alpha*(float)m_constraints[k][3];
 
 
                 h_constraints[y*m_image.getWidth() + x] = { newX, newY };
@@ -207,11 +207,11 @@ public:
 	}
 
 	
-    vec2f toVec2(OPT_FLOAT2 p) {
+    vec2f toVec2(float2 p) {
 		return vec2f(p.x, p.y);
 	}
 
-    void rasterizeTriangle(OPT_FLOAT2 p0, OPT_FLOAT2 p1, OPT_FLOAT2 p2, vec3f c0, vec3f c1, vec3f c2) {
+    void rasterizeTriangle(float2 p0, float2 p1, float2 p2, vec3f c0, vec3f c1, vec3f c2) {
 		vec2f t0 = toVec2(p0)*m_scale;
 		vec2f t1 = toVec2(p1)*m_scale;
 		vec2f t2 = toVec2(p2)*m_scale;
@@ -261,10 +261,10 @@ public:
 				{
 					if (m_imageMask(x, y) == 0)
 					{
-                        OPT_FLOAT2 pos00 = h_warpField[y*m_image.getWidth() + x];
-                        OPT_FLOAT2 pos01 = h_warpField[y*m_image.getWidth() + (x + 1)];
-                        OPT_FLOAT2 pos10 = h_warpField[(y + 1)*m_image.getWidth() + x];
-                        OPT_FLOAT2 pos11 = h_warpField[(y + 1)*m_image.getWidth() + (x + 1)];
+                        float2 pos00 = h_warpField[y*m_image.getWidth() + x];
+                        float2 pos01 = h_warpField[y*m_image.getWidth() + (x + 1)];
+                        float2 pos10 = h_warpField[(y + 1)*m_image.getWidth() + x];
+                        float2 pos11 = h_warpField[(y + 1)*m_image.getWidth() + (x + 1)];
 
 						vec3f v00 = m_imageColor(x, y);
 						vec3f v01 = m_imageColor(x + 1, y);

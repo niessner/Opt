@@ -2,6 +2,7 @@
 #include "CeresSolverBase.h"
 #include <core-util/timer.h>
 using namespace std;
+#if USE_CERES
 std::unique_ptr<ceres::Solver::Options> CeresSolverBase::initializeOptions(const NamedParameters& solverParameters) const {
     std::unique_ptr<ceres::Solver::Options> options = std::unique_ptr<ceres::Solver::Options>(new ceres::Solver::Options());
     options->num_threads = 8;
@@ -50,3 +51,4 @@ double CeresSolverBase::launchProfiledSolveAndSummary(const std::unique_ptr<cere
     cout << summary.FullReport() << endl;
     return cost;
 }
+#endif

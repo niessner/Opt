@@ -1,4 +1,4 @@
-﻿#include "main.h"
+﻿#include "mLibInclude.h"
 #include "CombinedSolver.h"
 #include "ImageHelper.h"
 

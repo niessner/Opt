@@ -7,7 +7,6 @@
 #include <fstream>
 #include <algorithm>
 #include <string>
-#include "Precision.h"
 #include "CombinedSolverParameters.h"
 
 struct SolverIteration
@@ -27,15 +26,11 @@ const T& clampedRead(const std::vector<T> &v, int index)
 }
 
 static void saveSolverResults(std::string directory, std::string suffix,
-    std::vector<SolverIteration>& ceresIters, std::vector<SolverIteration>& optGNIters, std::vector<SolverIteration>& optLMIters) {
+    std::vector<SolverIteration>& ceresIters, std::vector<SolverIteration>& optGNIters, std::vector<SolverIteration>& optLMIters, bool optDoublePrecision) {
     std::ofstream resultFile(directory + "results" + suffix + ".csv");
     resultFile << std::scientific;
     resultFile << std::setprecision(20);
-#if OPT_DOUBLE_PRECISION
-	std::string colSuffix = " (double)";
-#else
-	std::string colSuffix = " (float)";
-#endif
+    std::string colSuffix = optDoublePrecision ? " (double)" : " (float)";
 	resultFile << "Iter, Ceres Error, ";
 	resultFile << "Opt(GN) Error" << colSuffix << ",  Opt(LM) Error" << colSuffix << ", Ceres Iter Time(ms), ";
 	resultFile << "Opt(GN) Iter Time(ms)" << colSuffix << ", Opt(LM) Iter Time(ms)" << colSuffix << ", Total Ceres Time(ms), ";

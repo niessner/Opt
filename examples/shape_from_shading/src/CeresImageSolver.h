@@ -6,6 +6,7 @@
 #include "SFSSolverInput.h"
 #include "../../shared/SolverIteration.h"
 #include "../../shared/CeresSolverBase.h"
+#include "../../shared/Config.h"
 class CeresImageSolver : public CeresSolverBase {
 
 public:
@@ -29,8 +30,6 @@ public:
     float L[9];
 };
 
-#ifndef USE_CERES
-
-double solve(const NamedParameters& solverParameters, const NamedParameters& problemParameters, bool profileSolve, std::vector<SolverIteration>& iters) { return nan(nullptr); }
-
+#if !USE_CERES
+double CeresImageSolver::solve(const NamedParameters& solverParameters, const NamedParameters& problemParameters, bool profileSolve, std::vector<SolverIteration>& iters) { return nan(nullptr); }
 #endif

@@ -1,7 +1,7 @@
 
 #include "mLibInclude.h"
-
-#ifdef USE_CERES
+#include "../../shared/Config.h"
+#if USE_CERES
 #include "../../shared/OptUtils.h"
 #include "CeresImageSolver.h"
 #include "SFSSolverInput.h"

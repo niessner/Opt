@@ -72,7 +72,7 @@ class CombinedSolver : public CombinedSolverBase
 
         virtual void combinedSolveFinalize() override {
             if (m_combinedSolverParameters.profileSolve) {
-                ceresIterationComparison("Volumetric Mesh Deformation");
+                ceresIterationComparison("Volumetric Mesh Deformation", m_combinedSolverParameters.optDoublePrecision);
             }
         }
 
@@ -111,7 +111,7 @@ class CombinedSolver : public CombinedSolverBase
 			m_max = make_float3(-std::numeric_limits<float>::max(), -std::numeric_limits<float>::max(), -std::numeric_limits<float>::max());
 			for (SimpleMesh::VertexIter v_it = m_initial.vertices_begin(); v_it != m_initial.vertices_end(); ++v_it)
 			{
-				SimpleMesh::Point p = m_initial.point(VertexHandle(v_it.handle()));
+				SimpleMesh::Point p = m_initial.point(VertexHandle(*v_it));
 				m_min.x = fmin(m_min.x, p[0]); m_min.y = fmin(m_min.y, p[1]); m_min.z = fmin(m_min.z, p[2]);
 				m_max.x = fmax(m_max.x, p[0]); m_max.y = fmax(m_max.y, p[1]); m_max.z = fmax(m_max.z, p[2]);
 			}
@@ -240,7 +240,7 @@ class CombinedSolver : public CombinedSolverBase
 
 			for (SimpleMesh::VertexIter v_it = m_initial.vertices_begin(); v_it != m_initial.vertices_end(); ++v_it)
 			{
-			    VertexHandle c_vh(v_it.handle());
+			    VertexHandle c_vh(*v_it);
 				SimpleMesh::Point p = m_initial.point(c_vh);
 				float3 pp = make_float3(p[0], p[1], p[2]);
 
@@ -299,7 +299,7 @@ class CombinedSolver : public CombinedSolverBase
 
 			for (SimpleMesh::VertexIter v_it = m_result.vertices_begin(); v_it != m_result.vertices_end(); ++v_it)
 			{
-				VertexHandle vh(v_it);
+				VertexHandle vh(*v_it);
 
 				int3   voxelId = m_vertexToVoxels[vh.idx()];
 				float3 relativeCoords = m_relativeCoords[vh.idx()];

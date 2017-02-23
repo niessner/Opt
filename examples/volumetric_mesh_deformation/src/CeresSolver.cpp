@@ -1,11 +1,10 @@
 #include "CeresSolver.h"
-
-#ifdef USE_CERES
+#include "../../shared/Config.h"
+#if USE_CERES
 
 #include "mLibInclude.h"
 
 #include <cuda_runtime.h>
-#include "../../shared/Precision.h"
 #include "../../shared/SolverIteration.h"
 #include "../../shared/OptUtils.h"
 using ceres::Solve;

@@ -105,13 +105,13 @@ class CombinedSolver : public CombinedSolverBase
 
             float spuriousProbability = 0.05f;
 
-            std::uniform_int_distribution<> targetDistribution(0, m_targets[0].n_vertices() - 1);
+            std::uniform_int_distribution<> targetDistribution(0, (int)m_targets[0].n_vertices() - 1);
             float noiseModifier = 30.0f;
             std::normal_distribution<> normalDistribution(0.0f, m_averageEdgeLength * noiseModifier);
             int spuriousCount = int(N*spuriousProbability);
             for (int i = 0; i < spuriousCount; ++i) {
                 m_spuriousIndices.push_back(targetDistribution(m_rnd));
-                m_noisyOffsets.push_back(make_float3(normalDistribution(m_rnd), normalDistribution(m_rnd), normalDistribution(m_rnd)));
+                m_noisyOffsets.push_back(make_float3((float)normalDistribution(m_rnd), (float)normalDistribution(m_rnd), (float)normalDistribution(m_rnd)));
             }
 
             if (!m_result.has_vertex_colors()) {
@@ -184,7 +184,7 @@ class CombinedSolver : public CombinedSolverBase
             m_targetAccelerationStructure = generateAccelerationStructure(m_targets[m_targetIndex]);
             m_timer.stop();
             m_previousConstraints.resize(N);
-            for (int i = 0; i < N; ++i) {
+            for (int i = 0; i < (int)N; ++i) {
                 m_previousConstraints[i] = make_float3(0, 0, -90901283092183);
             }
             std::cout << "---- Acceleration Structure Build: " << m_timer.getElapsedTime() << "s" << std::endl;
@@ -198,7 +198,7 @@ class CombinedSolver : public CombinedSolverBase
 
         virtual void preNonlinearSolve(int) override {
             m_timer.start();
-            int newConstraintCount = setConstraints(m_targetIndex, m_averageEdgeLength*5.0f);
+            int newConstraintCount = setConstraints(m_targetIndex, (float)m_averageEdgeLength*5.0f);
             m_timer.stop();
             double setConstraintsTime = m_timer.getElapsedTime();
             std::cout << "-- Set Constraints: " << setConstraintsTime << "s";
@@ -244,7 +244,7 @@ class CombinedSolver : public CombinedSolverBase
                 {
                     vec3f color = convertDepthToRGB(1.0f-clamp(h_vertexWeightFloat[i], 0.0f, 1.0f));
 
-                    m_result.set_color(VertexHandle(i), Vec3uc(color.r * 255, color.g * 255, color.b * 255));
+                    m_result.set_color(VertexHandle(i), Vec3uc((uchar)(color.r * 255), (uchar)(color.g * 255), (uchar)(color.b * 255)));
 
                     if (h_vertexWeightFloat[i] < 0.9f || h_vertexWeightFloat[i] > 1.0f) {
                         printf("Interesting robustWeight[%d]: %f\n", i, h_vertexWeightFloat[i]);
@@ -264,8 +264,6 @@ class CombinedSolver : public CombinedSolverBase
 			unsigned int N = (unsigned int)m_result.n_vertices();
 			std::vector<float3> h_vertexPosTargetFloat3(N);
             std::vector<float3> h_vertexNormalTargetFloat3(N);
-
-            uint N_target = m_targets[targetIndex].n_vertices();
 
             if (!(m_targets[targetIndex].has_face_normals() && m_targets[targetIndex].has_vertex_normals())) { 
                 m_targets[targetIndex].request_face_normals();
@@ -326,7 +324,7 @@ class CombinedSolver : public CombinedSolverBase
             m_robustWeights->copyTo(h_robustWeights);
 
             int constraintsUpdated = 0;
-            for (int i = 0; i < N; ++i) {
+            for (int i = 0; i < (int)N; ++i) {
                 if (m_previousConstraints[i] != h_vertexPosTargetFloat3[i]) {
                     m_previousConstraints[i] = h_vertexPosTargetFloat3[i];
                     ++constraintsUpdated;
@@ -361,12 +359,12 @@ class CombinedSolver : public CombinedSolverBase
                 h_neighbourOffset[0] = 0;
                 for (SimpleMesh::VertexIter v_it = m_initial.vertices_begin(); v_it != m_initial.vertices_end(); ++v_it)
                 {
-                    VertexHandle c_vh(v_it.handle());
+                    VertexHandle c_vh(*v_it);
                     unsigned int valence = m_initial.valence(c_vh);
                     h_numNeighbours[count] = valence;
-                    for (SimpleMesh::VertexVertexIter vv_it = m_initial.vv_iter(c_vh); vv_it; vv_it++)
+                    for (SimpleMesh::VertexVertexIter vv_it = m_initial.vv_iter(c_vh); vv_it.is_valid(); vv_it++)
                     {
-                        VertexHandle v_vh(vv_it.handle());
+                        VertexHandle v_vh(*vv_it);
                         h_neighbourIdx[offset] = v_vh.idx();
                         offset++;
                     }
@@ -388,8 +386,8 @@ class CombinedSolver : public CombinedSolverBase
                 }
                 uint offset = 0;
                 h_neighbourOffset[0] = 0;
-                for (int i = 0; i < N; ++i) {
-                    int valence = neighbors[i].size();
+                for (int i = 0; i < (int)N; ++i) {
+                    int valence = (int)neighbors[i].size();
                     h_numNeighbours[i] = valence;
                     for (auto n : neighbors[i]) {
                         h_neighbourIdx.push_back(n);

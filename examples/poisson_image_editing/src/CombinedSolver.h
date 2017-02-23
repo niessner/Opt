@@ -60,7 +60,7 @@ public:
     virtual void postNonlinearSolve(int) override {}
 
     virtual void combinedSolveFinalize() override {
-        ceresIterationComparison("Poisson Image Editing");
+        ceresIterationComparison("Poisson Image Editing", m_combinedSolverParameters.optDoublePrecision);
     }
 
 	void resetGPUMemory()
