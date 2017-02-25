@@ -26,7 +26,7 @@ const T& clampedRead(const std::vector<T> &v, int index)
 }
 
 static void saveSolverResults(std::string directory, std::string suffix,
-    std::vector<SolverIteration>& ceresIters, std::vector<SolverIteration>& optGNIters, std::vector<SolverIteration>& optLMIters, bool optDoublePrecision) {
+    const std::vector<SolverIteration>& ceresIters, const std::vector<SolverIteration>& optGNIters, const std::vector<SolverIteration>& optLMIters, bool optDoublePrecision) {
     std::ofstream resultFile(directory + "results" + suffix + ".csv");
     resultFile << std::scientific;
     resultFile << std::setprecision(20);
@@ -38,24 +38,29 @@ static void saveSolverResults(std::string directory, std::string suffix,
     double sumOptGNTime = 0.0;
     double sumOptLMTime = 0.0;
     double sumCeresTime = 0.0;
-    if (ceresIters.size() == 0) {
-        ceresIters.push_back(SolverIteration(0, 0));
+
+    auto _ceresIters = ceresIters;
+    auto _optLMIters = optLMIters;
+    auto _optGNIters = optGNIters;
+    
+    if (_ceresIters.size() == 0) {
+        _ceresIters.push_back(SolverIteration(0, 0));
     }
-    if (optLMIters.size() == 0) {
-        optLMIters.push_back(SolverIteration(0, 0));
+    if (_optLMIters.size() == 0) {
+        _optLMIters.push_back(SolverIteration(0, 0));
     }
-    if (optGNIters.size() == 0) {
-        optGNIters.push_back(SolverIteration(0, 0));
+    if (_optGNIters.size() == 0) {
+        _optGNIters.push_back(SolverIteration(0, 0));
     }
-    for (int i = 0; i < (int)std::max((int)ceresIters.size(), std::max((int)optLMIters.size(), (int)optGNIters.size())); i++)
+    for (int i = 0; i < (int)std::max((int)_ceresIters.size(), std::max((int)_optLMIters.size(), (int)_optGNIters.size())); i++)
     {
-        double ceresTime = ((ceresIters.size() > i) ? ceresIters[i].timeInMS : 0.0);
-        double optGNTime = ((optGNIters.size() > i) ? optGNIters[i].timeInMS : 0.0);
-        double optLMTime = ((optLMIters.size() > i) ? optLMIters[i].timeInMS : 0.0);
+        double ceresTime = ((_ceresIters.size() > i) ? _ceresIters[i].timeInMS : 0.0);
+        double optGNTime = ((_optGNIters.size() > i) ? _optGNIters[i].timeInMS : 0.0);
+        double optLMTime = ((_optLMIters.size() > i) ? _optLMIters[i].timeInMS : 0.0);
         sumCeresTime += ceresTime;
         sumOptGNTime += optGNTime;
         sumOptLMTime += optLMTime;
-        resultFile << i << ", " << clampedRead(ceresIters, i).cost << ", " << clampedRead(optGNIters, i).cost << ", " << clampedRead(optLMIters, i).cost << ", " << ceresTime << ", " << optGNTime << ", " << optLMTime << ", " << sumCeresTime << ", " << sumOptGNTime << ", " << sumOptLMTime << std::endl;
+        resultFile << i << ", " << clampedRead(_ceresIters, i).cost << ", " << clampedRead(_optGNIters, i).cost << ", " << clampedRead(_optLMIters, i).cost << ", " << ceresTime << ", " << optGNTime << ", " << optLMTime << ", " << sumCeresTime << ", " << sumOptGNTime << ", " << sumOptLMTime << std::endl;
     }
 }
 

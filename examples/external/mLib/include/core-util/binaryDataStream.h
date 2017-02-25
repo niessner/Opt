@@ -21,7 +21,7 @@ public:
 
 	//! only required for file streams: clear means write-only and delete file; otherwise it's read only
 	void open(const std::string& filename, bool clearStream) {
-		BinaryDataBuffer::Mode mode = BinaryDataBuffer::Mode::no_flag;
+		typename BinaryDataBuffer::Mode mode = BinaryDataBuffer::Mode::no_flag;
 		if (clearStream) {
 			mode |= BinaryDataBuffer::Mode::clear_flag | BinaryDataBuffer::Mode::write_flag;
 		}
@@ -361,7 +361,7 @@ namespace util
     {
         BinaryDataStreamFile in(filename, false);
         in >> o;
-        in.closeStream();
+        in.close();
     }
 
     template<class T, class U>
@@ -369,7 +369,7 @@ namespace util
     {
         BinaryDataStreamFile in(filename, false);
         in >> o0 >> o1;
-        in.closeStream();
+        in.close();
     }
 	//
 	// TODO: these cannot be forward declared without zlib, and should be moved into the mlib-zlib header.

@@ -5,6 +5,7 @@
 #include <cuda_runtime.h>
 #include <math.h>
 #include <cstdio>
+#include <cstdlib>
 // Enable run time assertion checking in kernel code
 #define cudaAssert(condition) if (!(condition)) { printf("ASSERT: %s %s\n", #condition, __FILE__); }
 

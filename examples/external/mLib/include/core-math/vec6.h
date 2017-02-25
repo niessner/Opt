@@ -294,7 +294,7 @@ public:
 	}
 
 	inline std::string toString(const std::string &separator) const {
-		return std::to_string(x) + separator + std::to_string(y) + separator + std::to_string(z) + separator + std::to_string(w) + separator + 
+		return std::to_string(x) + separator + std::to_string(y) + separator + std::to_string(z) + separator + 
 			std::to_string(xx) + separator + std::to_string(yy) + separator + std::to_string(zz);
 	}
 

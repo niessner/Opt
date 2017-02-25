@@ -90,7 +90,7 @@ template<class T>
 void BlockedPCA<T>::save(const std::string &baseFilename) const
 {
     BinaryDataStreamFile file(baseFilename + ".dat", true);
-	size_t subsetCount = _subsets.size();
+	int subsetCount = (int)_subsets.size();
     file << subsetCount << _totalDimensions;
 	for (int i = 0; i < subsetCount; i++)
 	{
@@ -106,7 +106,7 @@ template<class T>
 void BlockedPCA<T>::load(const std::string &baseFilename)
 {
     BinaryDataStreamFile file(baseFilename + ".dat", false);
-	size_t subsetCount;
+	int subsetCount;
 	file >> subsetCount >> _totalDimensions;
 	_subsets.resize(subsetCount);
 	for (int i = 0; i < subsetCount; i++)

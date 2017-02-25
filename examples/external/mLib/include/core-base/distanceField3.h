@@ -186,9 +186,9 @@ namespace ml {
 		void setTruncation(float truncation, bool updateValues = true) {
 			m_truncation = truncation;
 			if (updateValues) {
-				for (unsigned int z = 0; z < m_dimZ; z++) {
-					for (unsigned int y = 0; y < m_dimY; y++) {
-						for (unsigned int x = 0; x < m_dimX; x++) {
+				for (unsigned int z = 0; z < this->getDimZ(); z++) {
+					for (unsigned int y = 0; y < this->getDimY(); y++) {
+						for (unsigned int x = 0; x < this->getDimX(); x++) {
 							float v = (*this)(x, y, z);
 							if (v > truncation) (*this)(x, y, z) = truncation;
 						} //x
