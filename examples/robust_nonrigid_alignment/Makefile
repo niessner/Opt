@@ -1,4 +1,4 @@
-EXECUTABLE = meshdeformation
+EXECUTABLE = robust_nonrigid_alignment
 OBJS = build/mLibSource.o build/main.o
 
 UNAME := $(shell uname)
@@ -8,4 +8,4 @@ endif
 
 LFLAGS += -lOpenMeshCore -lOpenMeshTools
 
-include ../maketemplate.inc
+include ../shared/make_template.inc

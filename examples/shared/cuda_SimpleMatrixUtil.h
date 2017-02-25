@@ -1192,7 +1192,7 @@ class matNxM
 		{
 			setZero();
 			__CONDITIONAL_UNROLL__
-			for(unsigned int i = 0; i<min(N, M); i++) entries2D[i][i] = 1.0f;
+			  for(unsigned int i = 0; i<std::min(N, M); i++) entries2D[i][i] = 1.0f;
 		}
 
 		static inline __device__ __host__ matNxM<N, M> getIdentity()
@@ -1294,6 +1294,7 @@ class matNxM
 
 		inline __device__ bool checkMINF() const
 		{
+		  #ifdef __CUDACC__
 			__CONDITIONAL_UNROLL__
 			for(unsigned int i = 0; i<N; i++)
 			{
@@ -1303,12 +1304,13 @@ class matNxM
 					if((*this)(i, j) == MINF) return true;
 				}
 			}
-
+		  #endif
 			return false;
 		}
 
 		inline __device__ bool checkINF() const
 		{
+#ifdef __CUDACC__
 			__CONDITIONAL_UNROLL__
 			for(unsigned int i = 0; i<N; i++)
 			{
@@ -1318,7 +1320,7 @@ class matNxM
 					if((*this)(i, j) == INF) return true;
 				}
 			}
-
+#endif
 			return false;
 		}
 
@@ -1497,7 +1499,7 @@ class matNxM
 			cudaAssert(M==1 || N==1);
 
 			float sum = 0.0f;
-			for(unsigned int i = 0; i<(unsigned int)max(N, M); i++) sum += entries[i]*entries[i];
+			for(unsigned int i = 0; i<(unsigned int)std::max(N, M); i++) sum += entries[i]*entries[i];
 
 			return sum;
 		}

@@ -12,7 +12,7 @@ endif
 
 FLAGS += -O3 -g -std=c++11 -Isrc -Isrc/cutil/inc -I../../API/release/include -I$(TERRAHOME)/include -I$(CUDAHOME)/include -I../external/mLib/include -I$(MLIB_EXTERNAL)/include  
 NVCCFLAGS += -arch sm_30 $(FLAGS)
-LFLAGS += -std=c++11 -L../../API/release/lib -L$(CUDAHOME)/lib$(S4) -lcudart -L$(TERRAHOME)/lib -lterra -ldl -pthread
+LFLAGS += -std=c++11 -L../../API/release/lib -L$(CUDAHOME)/lib$(S4) -lcudart -L$(TERRAHOME)/lib -lterra -ldl
 MLIB_EXTERNAL ?= $(HOME)/mLibExternal
 UNAME := $(shell uname)
 
@@ -21,7 +21,7 @@ ifeq ($(UNAME), Darwin)
 endif
 
 ifeq ($(UNAME), Linux)
-  LFLAGS += -Wl,-path,$(CUDAHOME)/lib$(S4)
+  LFLAGS += -Wl,-path,$(CUDAHOME)/lib$(S4) -pthread
   S4 = 64
 endif
 

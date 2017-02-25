@@ -70,7 +70,7 @@ int main(int argc, const char * argv[]) {
 		subdivider(1);
 		subdivider.detach();
 	}
-    printf("Faces: %d\nVertices: %d\n", mesh->n_faces(), mesh->n_vertices());
+	printf("Faces: %d\nVertices: %d\n", (int)mesh->n_faces(), (int)mesh->n_vertices());
 
     CombinedSolverParameters params;
 

@@ -397,7 +397,7 @@ class CombinedSolver : public CombinedSolverBase
 
                 }
             }
-            printf("Total Edge count = %d\n", h_neighbourIdx.size());
+            printf("Total Edge count = %d\n", (int)h_neighbourIdx.size());
         }
 
 		void resetGPUMemory()

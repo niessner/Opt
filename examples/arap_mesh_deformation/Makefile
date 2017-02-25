@@ -1,4 +1,4 @@
-EXECUTABLE = meshdeformation
+EXECUTABLE = arap_mesh_deformation
 OBJS = build/LandMark.o build/LandMarkSet.o build/CUDAWarpingSolver.o build/mLibSource.o build/main.o build/WarpingSolver.o
 
 UNAME := $(shell uname)
@@ -8,4 +8,4 @@ endif
 
 LFLAGS += -lOpenMeshCore -lOpenMeshTools
 
-include ../maketemplate.inc
+include ../shared/make_template.inc

@@ -1,6 +1,4 @@
-#pragma once
-
-#include "main.h"
+#include "mLibInclude.h"
 #include "../../shared/OptUtils.h"
 #define GLOG_NO_ABBREVIATED_SEVERITIES
 #include <Eigen33b1/Eigen>

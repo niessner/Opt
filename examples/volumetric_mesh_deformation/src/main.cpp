@@ -17,7 +17,7 @@ int main(int argc, const char * argv[])
 		std::cout << filename << std::endl;
 		exit(1);
 	}
-    printf("Faces: %d\nVertices: %d\n", mesh->n_faces(), mesh->n_vertices());
+	printf("Faces: %d\nVertices: %d\n", (int)mesh->n_faces(), (int)mesh->n_vertices());
 
     CombinedSolverParameters params;
     params.nonLinearIter = 20;

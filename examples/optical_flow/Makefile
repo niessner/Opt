@@ -1,4 +1,4 @@
-EXECUTABLE = imagewarping
-OBJS = build/mLibSource.o build/main.o build/TerraSolverWarping.o 
-include ../maketemplate.inc
+EXECUTABLE = optical_flow
+OBJS = build/mLibSource.o build/main.o
+include ../shared/make_template.inc
 

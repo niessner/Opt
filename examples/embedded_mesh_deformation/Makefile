@@ -1,5 +1,5 @@
-EXECUTABLE = meshdeformation
-OBJS = build/LandMark.o build/LandMarkSet.o build/TerraSolver.o build/mLibSource.o build/main.o
+EXECUTABLE = embedded_mesh_deformation
+OBJS = build/mLibSource.o build/main.o
 
 UNAME := $(shell uname)
 ifeq ($(UNAME), Darwin)
@@ -8,4 +8,4 @@ endif
 
 LFLAGS += -lOpenMeshCore -lOpenMeshTools
 
-include ../maketemplate.inc
+include ../shared/make_template.inc

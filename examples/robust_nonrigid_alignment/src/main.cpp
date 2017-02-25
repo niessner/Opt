@@ -10,7 +10,7 @@ static SimpleMesh* createMesh(std::string filename) {
         std::cout << filename << std::endl;
         exit(1);
     }
-    printf("Faces: %d\nVertices: %d\n", mesh->n_faces(), mesh->n_vertices());
+    printf("Faces: %d\nVertices: %d\n", (int)mesh->n_faces(), (int)mesh->n_vertices());
     return mesh;
 }
 

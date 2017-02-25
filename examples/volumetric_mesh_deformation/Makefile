@@ -1,5 +1,5 @@
-EXECUTABLE = meshdeformation
-OBJS = build/CUDAWarpingSolver.o build/WarpingSolver.o build/TerraSolverWarping.o build/mLibSource.o build/main.o 
+EXECUTABLE = volumetric_mesh_deformation
+OBJS = build/CUDAWarpingSolver.o build/WarpingSolver.o build/mLibSource.o build/main.o 
 
 UNAME := $(shell uname)
 ifeq ($(UNAME), Darwin)
@@ -8,4 +8,4 @@ endif
 
 LFLAGS += -lOpenMeshCore -lOpenMeshTools
 
-include ../maketemplate.inc
+include ../shared/make_template.inc
