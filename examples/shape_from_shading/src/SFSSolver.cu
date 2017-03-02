@@ -72,7 +72,7 @@ float EvalResidual(SolverInput& input, SolverState& state, SolverParameters& par
 
 #ifdef _DEBUG
 	cudaSafeCall(cudaDeviceSynchronize());
-	cutilCheckMsg(__FUNCTION__);
+	//cutilCheckMsg(__FUNCTION__);
 #endif
 
     cudaSafeCall(cudaMemcpy(&residual, &state.d_sumResidual[0], sizeof(float), cudaMemcpyDeviceToHost));
@@ -139,7 +139,7 @@ void Initialization(SolverInput& input, SolverState& state, SolverParameters& pa
     timer.endEvent();
 	#ifdef _DEBUG
 		cudaSafeCall(cudaDeviceSynchronize());
-		cutilCheckMsg(__FUNCTION__);
+		//cutilCheckMsg(__FUNCTION__);
 	#endif
     #if DEBUG_PRINT_INFO
         float scanAlpha = 0.0f;
@@ -154,7 +154,7 @@ void Initialization(SolverInput& input, SolverState& state, SolverParameters& pa
 	timer.endEvent();
 	#ifdef _DEBUG
 		cudaSafeCall(cudaDeviceSynchronize());
-		cutilCheckMsg(__FUNCTION__);
+		//cutilCheckMsg(__FUNCTION__);
 	#endif
 }
 
@@ -255,7 +255,7 @@ void PCGIteration(SolverInput& input, SolverState& state, SolverParameters& para
     timer.endEvent();
 	#ifdef _DEBUG
 		cudaSafeCall(cudaDeviceSynchronize());
-		cutilCheckMsg(__FUNCTION__);
+		//cutilCheckMsg(__FUNCTION__);
 	#endif
     #if DEBUG_PRINT_INFO
         float scanAlpha = 0.0f;
@@ -269,7 +269,7 @@ void PCGIteration(SolverInput& input, SolverState& state, SolverParameters& para
 	timer.endEvent();
 	#ifdef _DEBUG
 		cudaSafeCall(cudaDeviceSynchronize());
-		cutilCheckMsg(__FUNCTION__);
+		//cutilCheckMsg(__FUNCTION__);
 	#endif
     #if DEBUG_PRINT_INFO
         float scanBeta = 0.0f;
@@ -283,7 +283,7 @@ void PCGIteration(SolverInput& input, SolverState& state, SolverParameters& para
 	timer.endEvent();
 	#ifdef _DEBUG
 		cudaSafeCall(cudaDeviceSynchronize());
-		cutilCheckMsg(__FUNCTION__);
+		//cutilCheckMsg(__FUNCTION__);
 	#endif
 }
 
@@ -311,7 +311,7 @@ void ApplyLinearUpdate(SolverInput& input, SolverState& state, SolverParameters&
 
 	#ifdef _DEBUG
 		cudaSafeCall(cudaDeviceSynchronize());
-		cutilCheckMsg(__FUNCTION__);
+		//cutilCheckMsg(__FUNCTION__);
 	#endif
 }
 __global__ void Precompute_Kernel(SolverInput input, SolverState state, SolverParameters parameters)
@@ -363,7 +363,7 @@ void Precompute(SolverInput& input, SolverState& state, SolverParameters& parame
     cudaSafeCall(cudaDeviceSynchronize());
     #ifdef _DEBUG
         cudaSafeCall(cudaDeviceSynchronize());
-        cutilCheckMsg(__FUNCTION__);
+        //cutilCheckMsg(__FUNCTION__);
     #endif
 }
 

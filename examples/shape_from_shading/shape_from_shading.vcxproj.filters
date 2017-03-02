@@ -131,8 +131,5 @@
     <None Include="shape_from_shading.t">
       <Filter>Terra</Filter>
     </None>
-    <None Include="..\..\API\src\precision.t">
-      <Filter>Terra</Filter>
-    </None>
   </ItemGroup>
 </Project>

@@ -5,7 +5,7 @@ Opt (optlang.org) is a new language in which a user simply writes energy functio
 
 This is an alpha release of the software to get feedback on the expressiveness of the language. We are interested in seeing what problems can be expressed and what features will be necessary to support more problems.
 
-As an alpha release there are some things that are not complete that will be improved over time.
+As an alpha release, there are some things that are not complete that will be improved over time.
 
 * Error reporting is limited and may be difficult to understand at times. Please report any confusing error message either as github issues or through e-mail.
 * Somewhat sparse documentation. This file provides a good overview of the Opt system, and detailed comments can be found in Opt.h, but rigorous documentation is under active development. If you report particular places where the documentation is sparse we can focus there first!
@@ -22,7 +22,7 @@ or open an issue on github (https://github.com/niessner/Opt); or if you feel lik
 
 Opt and all of its examples require a recent version of [Terra](https://github.com/zdevito/terra)/, and [CUDA 7.5](https://developer.nvidia.com/cuda-75-downloads-archive). On Windows we use Visual Studio 2013 for development/compilation, though other versions may also work. 
 
-Download and unzip the [terra binary release for windows, release-2016-03-25](https://github.com/zdevito/terra/releases). Add terra/bin to your $PATH environment variable (if you want to run the examples)
+Download and unzip the [terra binary release for windows, release-2016-03-25](https://github.com/zdevito/terra/releases). Add terra/bin to your $PATH environment variable (if you want to run the examples).
 
 Our recommended directory structure for development is:
 
