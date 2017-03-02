@@ -1,5 +1,5 @@
 #pragma once
-#include "../../shared/CeresSolverBase.h"
+#include "../../shared/SolverBase.h"
 class EigenSolverPoissonImageEditing : public SolverBase {
 
 public:
