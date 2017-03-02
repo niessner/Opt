@@ -327,7 +327,7 @@ namespace util
 	inline std::string getTimeString() {
 		auto t = std::time(nullptr);
 		auto tm = *std::localtime(&t);
-#if !defined(__clang__) && __GNUC__ && __GNUC__ < 5
+#if !defined(__clang__) && __GNUC__ && __GNUC__ < 5 || defined(__linux__ )
         #pragma message ("std::put_time not available in gcc version < 5")
         return std::string();
 #else

@@ -192,7 +192,13 @@ private:
 		if (m_mode & Mode::read_flag) m |= std::ios::in;
 		if (m_mode & Mode::write_flag) m |= std::ios::out;
 
+#if defined(__linux__)
+		#pragma message ("flags in fstream.open() are for some reason unspported in clang++/c++")
+		m_fileStream.open(m_filename);	//if the file does not exist, it will fail with the ::in flag
+#else
 		m_fileStream.open(m_filename, m);	//if the file does not exist, it will fail with the ::in flag
+#endif
+
 		if (!m_fileStream.is_open() || !m_fileStream.good()) throw MLIB_EXCEPTION("could not open file: " + m_filename);
 	}
 

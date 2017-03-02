@@ -3,8 +3,8 @@ LINK = clang++
 NVCC = /usr/local/cuda/bin/nvcc
 SRC ?= src
 CUDAHOME += /usr/local/cuda
-TERRAHOME ?= $(HOME)/terra/release
-TERRA ?= $(HOME)/terra/terra
+TERRAHOME ?= ../../../terra
+TERRA ?= ../../../terra/release/terra
 
 ifeq ($(UNAME), Linux)
   S4 = 64
@@ -20,7 +20,7 @@ ifeq ($(UNAME), Darwin)
 endif
 
 ifeq ($(UNAME), Linux)
-  LFLAGS += -Wl,-path,$(CUDAHOME)/lib$(S4) -pthread
+  LFLAGS += -Wl,-rpath,$(CUDAHOME)/lib$(S4) -pthread
   S4 = 64
 endif
 
