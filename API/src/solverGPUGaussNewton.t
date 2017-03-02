@@ -133,15 +133,15 @@ return function(problemSpec)
     local isGraph = problemSpec:UsesGraphs() 
     
     local struct SolverParameters {
-        min_relative_decrease : opt_float
-        min_trust_region_radius : opt_float
-        max_trust_region_radius : opt_float
-        q_tolerance : opt_float
-        function_tolerance : opt_float
-        trust_region_radius : opt_float
-        radius_decrease_factor : opt_float
-        min_lm_diagonal : opt_float
-        max_lm_diagonal : opt_float
+        min_relative_decrease : float
+        min_trust_region_radius : float
+        max_trust_region_radius : float
+        q_tolerance : float
+        function_tolerance : float
+        trust_region_radius : float
+        radius_decrease_factor : float
+        min_lm_diagonal : float
+        max_lm_diagonal : float
 
         residual_reset_period : int
         nIter : int             --current non-linear iter counter
