@@ -39,8 +39,8 @@
   <PropertyGroup Label="UserMacros" />
   <PropertyGroup>
     <ExecutablePath>$(ExecutablePath)</ExecutablePath>
-    <IncludePath>$(CUDA_INC_PATH);$(IncludePath);..\external\mLib\include;..\..\..\..\mLibExternal\include\</IncludePath>
-    <LibraryPath>$(CUDA_LIB_PATH);$(LibraryPath);..\..\..\..\mLibExternal\libsWindows\lib64\</LibraryPath>
+    <IncludePath>$(CUDA_INC_PATH);$(IncludePath);..\external\mLib\include;..\external\OpenMesh\include</IncludePath>
+    <LibraryPath>$(CUDA_LIB_PATH);$(LibraryPath);..\external\OpenMesh\lib\VS2013\</LibraryPath>
     <OutDir>$(ProjectDir)$(Platform)\$(Configuration)\</OutDir>
   </PropertyGroup>
   <ItemDefinitionGroup>
@@ -77,7 +77,7 @@ xcopy /Y /D "..\..\API\release\include\*.h" "..\shared\"</Command>
       <BasicRuntimeChecks>EnableFastChecks</BasicRuntimeChecks>
     </ClCompile>
     <Link>
-      <AdditionalDependencies>Opt.lib;cudart.lib;OpenMeshCored.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalDependencies>Opt.lib;cudart.lib;OpenMeshCore.lib;%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
     <CudaCompile>
       <PtxAsOptionV>false</PtxAsOptionV>

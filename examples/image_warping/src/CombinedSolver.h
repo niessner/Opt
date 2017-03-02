@@ -245,7 +245,7 @@ public:
 
 	void copyResultToCPU() {
 		m_scale = 1.0f;
-		m_resultColor = ColorImageR32G32B32(m_image.getWidth()*m_scale, m_image.getHeight()*m_scale);
+        m_resultColor = ColorImageR32G32B32((unsigned int)(m_image.getWidth()*m_scale), (unsigned int)(m_image.getHeight()*m_scale));
 		m_resultColor.setPixels(vec3f(255.0f, 255.0f, 255.0f));
 
         std::vector<float2> h_warpField(m_image.getWidth()*m_image.getHeight());

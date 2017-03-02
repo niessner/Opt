@@ -1,5 +1,5 @@
 #pragma once
-#include "../../external/nanoflann/include/nanoflann.hpp"
+#include <nanoflann/include/nanoflann.hpp>
 #include "mLibInclude.h"
 
 #include <cuda_runtime.h>
