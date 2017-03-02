@@ -3,7 +3,11 @@ OBJS = build/CUDAWarpingSolver.o build/WarpingSolver.o build/mLibSource.o build/
 
 UNAME := $(shell uname)
 ifeq ($(UNAME), Darwin)
-  LFLAGS += -L$(MLIB_EXTERNAL)/libsOSX -Wl,-rpath,$(MLIB_EXTERNAL)/libsOSX
+  LFLAGS += -L../external/OpenMesh/lib/osx -Wl,-rpath,../external/OpenMesh/lib/osx
+endif
+
+ifeq ($(UNAME), Linux)
+  LFLAGS += -L../external/OpenMesh/lib/linux
 endif
 
 LFLAGS += -lOpenMeshCore -lOpenMeshTools

@@ -3,9 +3,11 @@ OBJS = build/mLibSource.o build/main.o
 
 UNAME := $(shell uname)
 ifeq ($(UNAME), Darwin)
-  LFLAGS += -L$(MLIB_EXTERNAL)/libsOSX -Wl,-rpath,$(MLIB_EXTERNAL)/libsOSX
+  LFLAGS += -L../external/OpenMesh/lib/osx -Wl,-rpath,../external/OpenMesh/lib/osx
 endif
 
-LFLAGS += -lOpenMeshCore -lOpenMeshTools
+ifeq ($(UNAME), Linux)
+  LFLAGS += -L../external/OpenMesh/lib/linux
+endif
 
 include ../shared/make_template.inc
