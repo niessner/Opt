@@ -13,7 +13,9 @@ The end result is a system in which real-world energy functions in graphics and 
 
 Please refer to the publication when you are using Opt:<br/>[arxiv.org/abs/1604.06525](http://arxiv.org/abs/1604.06525)   ([bibtex](http://www.graphics.stanford.edu/~niessner/papers/2016/z4opt/devito2016opt.bib))
 
-For more information, including early access to the code, contact:
+We have just recently released an [early version of the code on Github](https://github.com/niessner/Opt).
+
+For more information, contact:
 
 * mmara at cs dot stanford dot edu
 * zdevito at cs dot stanford dot edu
