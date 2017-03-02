@@ -6,7 +6,7 @@
 
 #include <iostream>
 #include "../../shared/cudaUtil.h"
-
+#include <algorithm>
 //////////////////////////////
 // float2x2
 //////////////////////////////
