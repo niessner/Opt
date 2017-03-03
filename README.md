@@ -22,20 +22,44 @@ or open an issue on github (https://github.com/niessner/Opt); or if you feel lik
 
 Opt and all of its examples require a recent version of [Terra](https://github.com/zdevito/terra)/, and [CUDA 7.5](https://developer.nvidia.com/cuda-75-downloads-archive). On Windows we use Visual Studio 2013 for development/compilation, though other versions may also work. 
 
-Download and unzip the [terra binary release for windows, release-2016-03-25](https://github.com/zdevito/terra/releases). Add terra/bin to your $PATH environment variable (if you want to run the examples).
+Download and unzip the [terra binary release for your platform, release-2016-03-25](https://github.com/zdevito/terra/releases). Add terra/bin to your $PATH environment variable (if you want to run the examples).
 
 Our recommended directory structure for development is:
 
-- /DSL/Opt (this repo)
-- /DSL/terra (renamed from the fully qualified directory name from the release download)
+- /Optlang/Opt (this repo)
+- /Optlang/terra (renamed from the fully qualified directory name from the release download)
 
 If you change this repo structure, you must update Opt/API/buildOpt.bat's second argument on line 2 to point to the terra repo. If you compiled terra from scratch, its internal directory structure might also be different from the release, and you will need to update Opt/API/optMake.bat's line 3 to point to the terra binary.
 
-The examples should run on all platforms. Use the included Visual Studio .sln files on Windows. On OS X and linux, use the included Makefiles. On OS X and linux, before running examples, you will need to build Opt itself:
+The examples should run on all platforms. Use the included Visual Studio .sln files on Windows. On OS X and linux, use the included Makefiles. On OS X and linux, before running examples, you will need to build Opt itself. Make sure to download and install CUDA 7.5 before starting ([Linux](http://developer.download.nvidia.com/compute/cuda/7.5/Prod/docs/sidebar/CUDA_Installation_Guide_Linux.pdf),[OS X](http://developer.download.nvidia.com/compute/cuda/7.5/Prod/docs/sidebar/CUDA_Installation_Guide_Mac.pdf))
 
-    cd API/
-    make
+Example script to get Opt (and terra) on a fresh Ubuntu install:
+    
+    # Get Opt
+    git clone https://github.com/niessner/Opt.git
+    # Get the prerequisite utilities to download and unzip and compile if you don't already have them
+    sudo apt-get install wget zip clang
+    # Get terra
+    wget https://github.com/zdevito/terra/releases/download/release-2016-03-25/terra-Linux-x86_64-332a506.zip
+    unzip terra-Linux-x86_64-332a506.zip 
+    mv terra-Linux-x86_64-332a506 terra
+    
+Example script to get and compile Opt on OS X:
+    
 
+    # Get Opt
+    git clone https://github.com/niessner/Opt.git
+    # Get terra
+    wget https://github.com/zdevito/terra/releases/download/release-2016-03-25/terra-OSX-x86_64-332a506.zip
+    unzip terra-OSX-x86_64-332a506.zip 
+    mv terra-OSX-x86_64-332a506 terra
+
+Build and run an example on either platform
+
+    # Build Opt itself
+    cd Opt/API/;make
+    # Compile and run the image_warping example
+    cd ../examples/image_warping/;make;./image_warping
 
 Overview
 ========
@@ -54,7 +78,9 @@ Using the Opt C/C++ API
 
     OptState* Opt_NewState(Opt_InitializationParameters params);
     
-Allocate a new independant context for Opt. This takes a small parameter struct as input that can 
+Allocate a new independant context for Opt. This takes a small parameter struct as input that can effect global Opt state, such as the precision it uses internally and for unknowns (float or double), amount of timing information gathered, and verbosity level.
+
+*Note:* The default implementation of Opt uses a slow double-precision atomicAdd() implementation that is guaranteed to work on all hardware that Opt runs on. If you have a Maxwell-class GPU (or later), and wish to have significantly higher performance, Opt has an internal implementation of double-precision atomicAdd that is significantly faster; open a github issue or contact the developers if this is a high-priority want; it is straightforward to change, but is not considered a priority at the moment.
     
 ---
     
