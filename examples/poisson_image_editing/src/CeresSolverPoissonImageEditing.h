@@ -10,7 +10,7 @@ public:
 #if !USE_CERES
 double CeresSolverPoissonImageEditing::solve(const NamedParameters& solverParameters, const NamedParameters& problemParameters, bool profileSolve, std::vector<SolverIteration>& iters) 
 {
-    return nan(nullptr);
+    return nan("");
 }
 
 #endif

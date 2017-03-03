@@ -31,5 +31,5 @@ public:
 };
 
 #if !USE_CERES
-double CeresImageSolver::solve(const NamedParameters& solverParameters, const NamedParameters& problemParameters, bool profileSolve, std::vector<SolverIteration>& iters) { return nan(nullptr); }
+double CeresImageSolver::solve(const NamedParameters& solverParameters, const NamedParameters& problemParameters, bool profileSolve, std::vector<SolverIteration>& iters) { return nan(""); }
 #endif

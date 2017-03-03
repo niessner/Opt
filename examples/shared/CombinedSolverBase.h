@@ -37,7 +37,7 @@ public:
                 }
             }
         }
-        return nan(nullptr);
+        return nan("");
     }
 
     void setParameters(const CombinedSolverParameters& params) {

@@ -66,7 +66,7 @@ class CombinedSolver : public CombinedSolverBase
             copyResultToCPUFromFloat3();
         }
         virtual void combinedSolveFinalize() override {
-            reportFinalCosts("Embedded Mesh Deformation", m_combinedSolverParameters, getCost("Opt(GN)"), getCost("Opt(LM)"), nan(nullptr));
+            reportFinalCosts("Embedded Mesh Deformation", m_combinedSolverParameters, getCost("Opt(GN)"), getCost("Opt(LM)"), nan(""));
         }
 
 		void setConstraints(float alpha)

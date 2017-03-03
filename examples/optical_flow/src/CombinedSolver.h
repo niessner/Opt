@@ -91,7 +91,7 @@ public:
     virtual void postNonlinearSolve(int) override {}
 
     virtual void combinedSolveFinalize() override {
-        reportFinalCosts("Optical Flow", m_combinedSolverParameters, getCost("Opt(GN)"), getCost("Opt(LM)"), nan(nullptr));
+        reportFinalCosts("Optical Flow", m_combinedSolverParameters, getCost("Opt(GN)"), getCost("Opt(LM)"), nan(""));
     }
 
 	void resetGPU()

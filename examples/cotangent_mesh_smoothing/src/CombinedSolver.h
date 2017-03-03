@@ -55,7 +55,7 @@ public:
         copyResultToCPUFromFloat3();
     }
     virtual void combinedSolveFinalize() override {
-        reportFinalCosts("Cotangent Mesh Smoothing", m_combinedSolverParameters, getCost("Opt(GN)"), getCost("Opt(LM)"), nan(nullptr));
+        reportFinalCosts("Cotangent Mesh Smoothing", m_combinedSolverParameters, getCost("Opt(GN)"), getCost("Opt(LM)"), nan(""));
     }
 
     void initializeConnectivity() {

@@ -58,7 +58,7 @@ class CombinedSolver : public CombinedSolverBase
         virtual void postNonlinearSolve(int) override {}
 
         virtual void combinedSolveFinalize() override {
-            reportFinalCosts("Intrinsic Image Decomposition", m_combinedSolverParameters, getCost("Opt(GN)"), getCost("Opt(LM)"), nan(nullptr));
+            reportFinalCosts("Intrinsic Image Decomposition", m_combinedSolverParameters, getCost("Opt(GN)"), getCost("Opt(LM)"), nan(""));
         }
 
 		void resetGPUMemory()

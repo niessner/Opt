@@ -17,6 +17,6 @@ private:
 #if !USE_CERES
 inline double CeresSolver::solve(const NamedParameters& solverParameters, const NamedParameters& problemParameters, bool profileSolve, std::vector<SolverIteration>& iter)
 {
-    return nan(nullptr);
+    return nan("");
 }
 #endif

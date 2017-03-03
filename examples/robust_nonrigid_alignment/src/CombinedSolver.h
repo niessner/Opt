@@ -223,7 +223,7 @@ class CombinedSolver : public CombinedSolverBase
         }
 
         virtual void combinedSolveFinalize() override {
-            reportFinalCosts("Robust Mesh Deformation", m_combinedSolverParameters, getCost("Opt(GN)"), getCost("Opt(LM)"), nan(nullptr));
+            reportFinalCosts("Robust Mesh Deformation", m_combinedSolverParameters, getCost("Opt(GN)"), getCost("Opt(LM)"), nan(""));
         }
 
 

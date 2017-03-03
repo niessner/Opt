@@ -12,5 +12,5 @@ public:
         return m_finalCost;
     }
 protected:
-    double m_finalCost = nan(nullptr);
+    double m_finalCost = nan("");
 };
