@@ -76,7 +76,7 @@ See the Makefiles in the examples for instructions on how to link Opt into your 
 Using the Opt C/C++ API
 =======================
 
-    OptState* Opt_NewState(Opt_InitializationParameters params);
+    Opt_State* Opt_NewState(Opt_InitializationParameters params);
     
 Allocate a new independant context for Opt. This takes a small parameter struct as input that can effect global Opt state, such as the precision it uses internally and for unknowns (float or double), amount of timing information gathered, and verbosity level.
 
