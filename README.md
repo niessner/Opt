@@ -76,7 +76,7 @@ See the Makefiles in the examples for instructions on how to link Opt into your 
 Using the Opt C/C++ API
 =======================
 
-    OptState* Opt_NewState(Opt_InitializationParameters params);
+    Opt_State* Opt_NewState(Opt_InitializationParameters params);
     
 Allocate a new independant context for Opt. This takes a small parameter struct as input that can effect global Opt state, such as the precision it uses internally and for unknowns (float or double), amount of timing information gathered, and verbosity level.
 
@@ -366,7 +366,9 @@ Energy Specification:
     
 API Example:
 
-	void* solverParams[] = { &nNonLinearIterations, &nLinearIterations };
+	int   nLinearIterations = 8;
+	int   nNonLinearIterations = 8;
+    
 	float weightFitSqrt = sqrt(weightFit);
 	float weightRegSqrt = sqrt(weightReg);
 	
@@ -378,7 +380,9 @@ API Example:
 	
 	void* problemParams[] = { d_x, d_a, d_urshape, d_constraints, d_mask, &weightFitSqrt, &weightRegSqrt };
 		
-	Opt_ProblemSolve(m_optimizerState, m_plan, problemParams, solverParams);
+	Opt_SetSolverParameter(m_optimizerState, m_plan, "nIterations", (void*)&nNonLinearIterations);
+	Opt_SetSolverParameter(m_optimizerState, m_plan, "lIterations", (void*)&nLinearIterations);
+	Opt_ProblemSolve(m_optimizerState, m_plan, problemParams);
     
 Energy Specification:
     
