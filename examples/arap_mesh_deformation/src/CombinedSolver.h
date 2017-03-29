@@ -19,14 +19,14 @@ class CombinedSolver : public CombinedSolverBase
 	public:
         CombinedSolver(const SimpleMesh* mesh, std::vector<int> constraintsIdx, std::vector<std::vector<float>> constraintsTarget, CombinedSolverParameters params, float weightFit, float weightReg) :
             m_constraintsIdx(constraintsIdx), m_constraintsTarget(constraintsTarget)
-		{
+        {
             m_weightFitSqrt = sqrtf(weightFit);
             m_weightRegSqrt = sqrtf(weightReg);
-			m_result = *mesh;
-			m_initial = m_result;
+            m_result = *mesh;
+            m_initial = m_result;
             m_combinedSolverParameters = params;
 
-			unsigned int N = (unsigned int)mesh->n_vertices();
+            unsigned int N = (unsigned int)mesh->n_vertices();
 
             m_dims = { N };
             m_vertexPosFloat3           = createEmptyOptImage(m_dims, OptImage::Type::FLOAT, 3, OptImage::GPU, true);
@@ -35,12 +35,12 @@ class CombinedSolver : public CombinedSolverBase
             m_vertexPosTargetFloat3     = createEmptyOptImage(m_dims, OptImage::Type::FLOAT, 3, OptImage::GPU, true);
 
             initializeConnectivity();
-			resetGPUMemory();
+            resetGPUMemory();
             
             addSolver(std::make_shared<CUDAWarpingSolver>(N, d_numNeighbours, d_neighbourIdx, d_neighbourOffset), "CUDA", m_combinedSolverParameters.useCUDA);
             addSolver(std::make_shared<CeresSolver>(m_dims, &m_initial), "Ceres", m_combinedSolverParameters.useCeres);
             addOptSolvers(m_dims, "arap_mesh_deformation.t", m_combinedSolverParameters.optDoublePrecision);
-		} 
+        } 
 
         virtual void combinedSolveInit() override {
 

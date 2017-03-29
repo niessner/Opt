@@ -61,6 +61,39 @@ private:
     int m_edgeCount = 0;
 };
 
+static std::shared_ptr<OptGraph> create2DGraphFromImage(const int width, const int height) {
+    std::vector<int> h_headX, h_headY, h_tailX, h_tailY;
+    for (int y = 0; y < height; ++y) {
+        for (int x = 0; x < width; ++x) {
+            if (x > 0) {
+                h_headX.push_back(x);
+                h_headY.push_back(y);
+                h_tailX.push_back(x-1);
+                h_tailY.push_back(y);
+            }
+            if (x < width - 1) {
+                h_headX.push_back(x);
+                h_headY.push_back(y);
+                h_tailX.push_back(x+1);
+                h_tailY.push_back(y);
+            }
+            if (y > 0) {
+                h_headX.push_back(x);
+                h_headY.push_back(y);
+                h_tailX.push_back(x);
+                h_tailY.push_back(y-1);
+            }
+            if (y < height - 1) {
+                h_headX.push_back(x);
+                h_headY.push_back(y);
+                h_tailX.push_back(x);
+                h_tailY.push_back(y+1);
+            }
+        }
+    }
+    return std::make_shared<OptGraph>(std::vector<std::vector<int> >({ h_headX, h_headY, h_tailX, h_tailY }));
+}
+
 static std::shared_ptr<OptGraph> createGraphFromNeighborLists(const std::vector<int>& neighborIdx, const std::vector<int>& neighborOffset) {
     // Convert to our edge format
     std::vector<int> h_head;

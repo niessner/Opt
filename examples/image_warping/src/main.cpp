@@ -28,11 +28,11 @@ static void loadConstraints(std::vector<std::vector<int> >& constraints, std::st
 
 
 int main(int argc, const char * argv[]) {
-	// CAT 
+    // CAT 
     std::string filename = "../data/cat512.png";
 
     int downsampleFactor = 1;
-	bool lmOnlyFullSolve = false;
+    bool lmOnlyFullSolve = false;
     if (argc > 1) {
         filename = argv[1];
     }
@@ -74,8 +74,8 @@ int main(int argc, const char * argv[]) {
     for (unsigned int y = 0; y < imageColor.getHeight(); y++) {
         for (unsigned int x = 0; x < imageColor.getWidth(); x++) {
             imageR32(x, y) = imageColor(x, y).x;
-		}
-	}
+        }
+    }
     int activePixels = 0;
 
     ColorImageR32 imageR32Mask(imageMask.getWidth() / downsampleFactor, imageMask.getHeight() / downsampleFactor);
@@ -85,10 +85,10 @@ int main(int argc, const char * argv[]) {
             if (imageMask(x*downsampleFactor, y*downsampleFactor).x == 0.0f) {
                 ++activePixels;
             }
-		}
-	}
+        }
+    }
     printf("numActivePixels: %d\n", activePixels);
-	
+
     for (auto& constraint : constraints) {
         for (auto& c : constraint) {
             c /= downsampleFactor;
@@ -96,16 +96,16 @@ int main(int argc, const char * argv[]) {
     }
 
     for (unsigned int y = 0; y < imageColor.getHeight(); y++)
-	{
+    {
         for (unsigned int x = 0; x < imageColor.getWidth(); x++)
-		{
+        {
             if (y == 0 || x == 0 || y == (imageColor.getHeight() - 1) || x == (imageColor.getWidth() - 1))
-			{
-				std::vector<int> v; v.push_back(x); v.push_back(y); v.push_back(x); v.push_back(y);
-				constraints.push_back(v);
-			}
-		}
-	}
+            {
+                std::vector<int> v; v.push_back(x); v.push_back(y); v.push_back(x); v.push_back(y);
+                constraints.push_back(v);
+            }
+        }
+    }
 
     CombinedSolverParameters params;
     params.numIter = 19;
@@ -132,10 +132,10 @@ int main(int argc, const char * argv[]) {
         //m_params.useCeres = false;
 #endif
     }
-   
+    bool useGraphVariants = true;
 
 
-	CombinedSolver solver(imageR32, imageColor, imageR32Mask, constraints, params);
+	CombinedSolver solver(imageR32, imageColor, imageR32Mask, constraints, params, useGraphVariants);
     solver.solveAll();
     ColorImageR32G32B32* res = solver.result();
 	ColorImageR8G8B8A8 out(res->getWidth(), res->getHeight());

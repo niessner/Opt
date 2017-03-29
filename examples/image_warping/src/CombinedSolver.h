@@ -101,10 +101,10 @@ float *wt0, float *wt1, float *wt2) {
 
 class CombinedSolver : public CombinedSolverBase {
 public:
-    CombinedSolver(const ColorImageR32& image, const ColorImageR32G32B32& imageColor, const ColorImageR32& imageMask, std::vector<std::vector<int>>& constraints, CombinedSolverParameters params) : m_constraints(constraints){
-		m_image = image;
-		m_imageColor = imageColor;
-		m_imageMask = imageMask;
+    CombinedSolver(const ColorImageR32& image, const ColorImageR32G32B32& imageColor, const ColorImageR32& imageMask, std::vector<std::vector<int>>& constraints, CombinedSolverParameters params, bool compareWithGraph) : m_constraints(constraints) {
+        m_image = image;
+        m_imageColor = imageColor;
+        m_imageMask = imageMask;
         m_combinedSolverParameters = params;
 
         m_dims = { m_image.getWidth(), m_image.getHeight() };
@@ -114,12 +114,25 @@ public:
         m_constraintImage = createEmptyOptImage(m_dims, OptImage::Type::FLOAT, 2, OptImage::GPU, true);
         m_mask          = createEmptyOptImage(m_dims, OptImage::Type::FLOAT, 1, OptImage::GPU, true);
 
-		resetGPU();
+        if (compareWithGraph) {
+            m_graph = create2DGraphFromImage((int)m_image.getWidth(), (int)m_image.getHeight());
+        }
+        resetGPU();
+
+        m_useOptGraphGN = m_combinedSolverParameters.useOpt   && compareWithGraph;
+        m_useOptGraphLM = m_combinedSolverParameters.useOptLM && compareWithGraph;
+        
+        if (m_useOptGraphGN) {
+            addSolver(std::make_shared<OptSolver>(m_dims, "image_warping_graph.t", "gaussNewtonGPU", m_combinedSolverParameters.optDoublePrecision), "Opt(GN)", true);
+        }
+        if (m_useOptGraphLM) {
+            addSolver(std::make_shared<OptSolver>(m_dims, "image_warping_graph.t", "LMGPU", m_combinedSolverParameters.optDoublePrecision), "Opt(LM)", true);
+        }
         
         addSolver(std::make_shared<CUDAWarpingSolver>(m_dims), "CUDA", m_combinedSolverParameters.useCUDA);
         addSolver(std::make_shared<CeresSolverWarping>(m_dims), "Ceres", m_combinedSolverParameters.useCeres);
         addOptSolvers(m_dims, "image_warping.t", m_combinedSolverParameters.optDoublePrecision);
-	}
+    }
 
 
     virtual void combinedSolveInit() override {
@@ -136,6 +149,9 @@ public:
         m_problemParams.set("Mask",         m_mask);
         m_problemParams.set("w_fitSqrt",    &m_weightFitSqrt);
         m_problemParams.set("w_regSqrt",    &m_weightRegSqrt);
+        if (m_graph) {
+            m_problemParams.set("G", m_graph);
+        }
 
         m_solverParams.set("nIterations", &m_combinedSolverParameters.nonLinearIter);
         m_solverParams.set("lIterations", &m_combinedSolverParameters.linearIter);
@@ -293,27 +309,30 @@ public:
     }
 
 private:
-	ColorImageR32 m_image;
-	ColorImageR32G32B32 m_imageColor;
-	ColorImageR32 m_imageMask;
+    ColorImageR32 m_image;
+    ColorImageR32G32B32 m_imageColor;
+    ColorImageR32 m_imageMask;
 
     float m_weightFitSqrt;
     float m_weightRegSqrt;
+    bool m_useOptGraphGN = false;
+    bool m_useOptGraphLM = false;
 
-	ColorImageR32 m_result;
-	ColorImageR32G32B32 m_resultColor;
+    ColorImageR32 m_result;
+    ColorImageR32G32B32 m_resultColor;
 
-	float m_scale;
+    float m_scale;
 
     std::vector<unsigned int> m_dims;
 
-	std::shared_ptr<OptImage> m_urshape;
+    std::shared_ptr<OptImage> m_urshape;
     std::shared_ptr<OptImage> m_warpField;
     std::shared_ptr<OptImage> m_constraintImage;
-	std::shared_ptr<OptImage> m_warpAngles;
+    std::shared_ptr<OptImage> m_warpAngles;
     std::shared_ptr<OptImage> m_mask;
+    std::shared_ptr<OptGraph> m_graph;
 
 
-	std::vector<std::vector<int>>& m_constraints;
+    std::vector<std::vector<int>>& m_constraints;
 
 };
