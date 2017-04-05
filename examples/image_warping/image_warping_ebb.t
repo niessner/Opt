@@ -31,11 +31,24 @@ grid.cells:NewField('mask', L.float):Load(CSV.Load, "mask.csv")
 grid.cells:NewField('constraint', L.vec2f):Load(CSV.Load, "constraints.csv")
 grid.cells:NewField('urshape', L.vec2f):Load(CSV.Load, "urshape.csv")
 
+
+grid.cells:NewField('delta', L.vec2f):Load({0,0})
+grid.cells:NewField('pre', L.vec2f):Load({0,0})
+grid.cells:NewField('r', L.vec2f):Load({0,0})
+grid.cells:NewField('p', L.vec2f):Load({0,0})
+
+
+grid.cells:NewField('deltaA', L.float):Load(0.0)
+grid.cells:NewField('preA', L.float):Load(0.0)
+grid.cells:NewField('rA', L.float):Load(0.0)
+grid.cells:NewField('pA', L.float):Load(0.0)
+
+
 local ebb mul(M : L.mat2f,v : L.vec2f)
   return {M[0,0]*v[0] + M[1,0]*v[1], M[0,1]*v[0] + M[1,1]*v[1]}
 end
-local ebb dot(v0 : L.vec2f,v1 : L.vec2f)
-  return {v0[0]*v1[0], v0[1]*v1[1]}
+local ebb dot(v0 : L.vec2f, v1 : L.vec2f)
+  return v0[0]*v1[0] + v0[1]*v1[1]
 end
 local ebb evalR(angle : L.float)
     var cosA : L.float = L.float(L.cos(angle))
@@ -222,14 +235,14 @@ __inline__ __device__ float2 evalMinusJTFDevice(unsigned int variableIdx, Solver
 --]]
 local ebb applyJTF( c : grid.cells )
 
-  c.delta = {0.0, 0.0}
-  c.deltaA = 0.0
+  c.delta = {0.0f, 0.0f}
+  c.deltaA = 0.0f
 
-  var b  : L.vec2f = {0.0, 0.0}
-  var bA : L.float = 0.0
+  var b  : L.vec2f = {0.0f, 0.0f}
+  var bA : L.float = 0.0f
 
-  var pre : L.vec2f = {0.0, 0.0}
-  var preA : L.float = 0.0
+  var pre : L.vec2f = {0.0f, 0.0f}
+  var preA : L.float = 0.0f
 
   var b0 = (c.yneg_depth == 0)
   var b1 = (c.ypos_depth == 0)
@@ -245,54 +258,54 @@ local ebb applyJTF( c : grid.cells )
   end
   -- reg/pos
   var R_i = evalR(c.A)
-  var e_reg : L.vec2f = {0.0, 0.0}
-
+  var e_reg : L.vec2f = {0.0f, 0.0f}
+  var wReg : L.vec2f = {weightRegularizer, weightRegularizer}
   if b0 then 
     var c_n = c(0,-1)
     if c_n.mask == 0 then
       e_reg += (c.X - c_n.X) - mul(R_i,(c.urshape - c_n.urshape))
-      pre += 2.0f*weightRegularizer
+      pre += 2.0f*wReg
     end
     if c.mask == 0 then
       var R_j = evalR(c_n.A)
       e_reg += (c.X - c_n.X) - mul(R_j,(c.urshape - c_n.urshape))
-      pre += 2.0f*weightRegularizer
+      pre += 2.0f*wReg
     end
   end
   if b1 then 
     var c_n = c(0,1)
     if c_n.mask == 0 then
       e_reg += (c.X - c_n.X) - mul(R_i,(c.urshape - c_n.urshape))
-      pre += 2.0f*weightRegularizer
+      pre += 2.0f*wReg
     end
     if c.mask == 0 then
       var R_j = evalR(c_n.A)
       e_reg += (c.X - c_n.X) - mul(R_j,(c.urshape - c_n.urshape))
-      pre += 2.0f*weightRegularizer
+      pre += 2.0f*wReg
     end
   end
   if b2 then 
     var c_n = c(-1,0)
     if c_n.mask == 0 then
       e_reg += (c.X - c_n.X) - mul(R_i,(c.urshape - c_n.urshape))
-      pre += 2.0f*weightRegularizer
+      pre += 2.0f*wReg
     end
     if c.mask == 0 then
       var R_j = evalR(c_n.A)
       e_reg += (c.X - c_n.X) - mul(R_j,(c.urshape - c_n.urshape))
-      pre += 2.0f*weightRegularizer
+      pre += 2.0f*wReg
     end
   end
   if b3 then 
     var c_n = c(1,0)
     if c_n.mask == 0 then
       e_reg += (c.X - c_n.X) - mul(R_i,(c.urshape - c_n.urshape))
-      pre += 2.0f*weightRegularizer
+      pre += 2.0f*wReg
     end
     if c.mask == 0 then
       var R_j = evalR(c_n.A)
       e_reg += (c.X - c_n.X) - mul(R_j,(c.urshape - c_n.urshape))
-      pre += 2.0f*weightRegularizer
+      pre += 2.0f*wReg
     end
   end
   b += -2.0f*weightRegularizer*e_reg
@@ -331,7 +344,7 @@ local ebb applyJTF( c : grid.cells )
   bA += -2.0f*weightRegularizer*e_reg_angle
 
   -- Preconditioner
-  if (pre.x > FLOAT_EPSILON) then 
+  if (pre[0] > FLOAT_EPSILON) then 
     pre[0] = 1.0f / pre[0]
     pre[1] = 1.0f / pre[1]
   else 
@@ -384,8 +397,7 @@ __global__ void PCGInit_Kernel1(SolverInput input, SolverState state, SolverPara
 }
 --]]
 local ebb PCGInit1(c : grid.cells)
-  var d : L.float = 0.0 -- init for out of bounds lanes
-  var residuum : L.vec3f = 0.0f
+  var d : L.float = 0.0f -- init for out of bounds lanes
 
   var residuumFull = applyJTF(c)-- residuum = J^T x -F - A x delta_0  => J^T x -F, since A x x_0 == 0 
   c.r  = {residuumFull[0],residuumFull[1]}  -- store for next iteration
@@ -395,9 +407,9 @@ local ebb PCGInit1(c : grid.cells)
   c.p = p
 
   var pA = c.preA * c.rA -- apply preconditioner M^-1
-  c.d_pA = pA
+  c.pA = pA
 
-  scanAlphaNumerator += dot(residuum, p) + residuumA * pA
+  scanAlphaNumerator += dot(c.r, p) + c.rA * pA
 
 end
 
