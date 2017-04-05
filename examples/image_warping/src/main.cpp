@@ -132,8 +132,11 @@ int main(int argc, const char * argv[]) {
         //m_params.useCeres = false;
 #endif
     }
-    bool useGraphVariants = true;
+    bool useGraphVariants = false;
 
+    // For ebb/simit comparison
+    params.useOpt = true;
+    params.useOptLM = true;
 
 	CombinedSolver solver(imageR32, imageColor, imageR32Mask, constraints, params, useGraphVariants);
     solver.solveAll();

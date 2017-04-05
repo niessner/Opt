@@ -186,6 +186,28 @@ public:
                 h_mask[y*m_image.getWidth() + x] = (float)m_imageMask(x, y);
 			}
 		}
+        //OPEN CSV FILE HERE
+        FILE* urshapeCSV = fopen("urshape.csv","w");
+        for (unsigned int y = 0; y < m_image.getHeight(); y++)
+        {
+            for (unsigned int x = 0; x < m_image.getWidth(); x++)
+            {
+                auto v = h_urshape[y*m_image.getWidth() + x];
+                fprintf(urshapeCSV, "%.17g,%.17g\n", v.x,v.y);
+            }
+        }
+        fclose(urshapeCSV);
+
+        FILE* maskCSV = fopen("mask.csv","w");
+        for (unsigned int y = 0; y < m_image.getHeight(); y++)
+        {
+            for (unsigned int x = 0; x < m_image.getWidth(); x++)
+            {
+                auto v = h_mask[y*m_image.getWidth() + x];
+                fprintf(maskCSV, "%.17g\n", v);
+            }
+        }
+        fclose(maskCSV);
 
 		setConstraintImage(1.0f);
         m_urshape->update(h_urshape);
@@ -219,6 +241,18 @@ public:
                 h_constraints[y*m_image.getWidth() + x] = { newX, newY };
 			}
 		}
+
+        //OPEN CSV FILE HERE
+        FILE* out = fopen("constraints.csv","w");
+        for (unsigned int y = 0; y < m_image.getHeight(); y++)
+        {
+            for (unsigned int x = 0; x < m_image.getWidth(); x++)
+            {
+                auto v = h_constraints[y*m_image.getWidth() + x];
+                fprintf(out, "%.17g,%.17g\n", v.x,v.y);
+            }
+        }
+        fclose(out);
         m_constraintImage->update(h_constraints);
 	}
 

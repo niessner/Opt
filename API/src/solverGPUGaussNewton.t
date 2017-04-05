@@ -984,6 +984,7 @@ return function(problemSpec)
        end
 	   gpu.precompute(pd)
 	   pd.prevCost = computeCost(pd)
+       logSolver("initial cost=%f\n", pd.prevCost)
 	end
 
 	local terra cleanup(pd : &PlanData)
