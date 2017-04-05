@@ -6,7 +6,7 @@ local Constraints = Array("Constraints", opt_float2,{W,H},3) -- user constraints
 local Mask = Array("Mask", opt_float, {W,H},4) -- validity mask for mesh
 local w_fitSqrt = Param("w_fitSqrt", float, 5)
 local w_regSqrt = Param("w_regSqrt", float, 6)
-local G = Graph("G", 7, "v0", {W,H}, 8, "v1", {W,H}, 10)
+local G = Graph("G", 7, "v0", {W,H}, 8, "v1", {W,H}, 9)
 
 UsePreconditioner(true)
 --Exclude(Not(eq(Mask(0,0),0)))

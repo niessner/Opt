@@ -121,7 +121,7 @@ public:
 
         m_useOptGraphGN = m_combinedSolverParameters.useOpt   && compareWithGraph;
         m_useOptGraphLM = m_combinedSolverParameters.useOptLM && compareWithGraph;
-        
+        addOptSolvers(m_dims, "image_warping.t", m_combinedSolverParameters.optDoublePrecision);
         if (m_useOptGraphGN) {
             addSolver(std::make_shared<OptSolver>(m_dims, "image_warping_graph.t", "gaussNewtonGPU", m_combinedSolverParameters.optDoublePrecision), "Opt(GN)", true);
         }
@@ -131,7 +131,7 @@ public:
         
         addSolver(std::make_shared<CUDAWarpingSolver>(m_dims), "CUDA", m_combinedSolverParameters.useCUDA);
         addSolver(std::make_shared<CeresSolverWarping>(m_dims), "Ceres", m_combinedSolverParameters.useCeres);
-        addOptSolvers(m_dims, "image_warping.t", m_combinedSolverParameters.optDoublePrecision);
+        
     }
 
 

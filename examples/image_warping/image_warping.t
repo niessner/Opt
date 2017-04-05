@@ -8,7 +8,7 @@ local w_fitSqrt = Param("w_fitSqrt", float, 5)
 local w_regSqrt = Param("w_regSqrt", float, 6)
 
 UsePreconditioner(true)
-Exclude(Not(eq(Mask(0,0),0)))
+--Exclude(Not(eq(Mask(0,0),0)))
 
 --regularization
 for x,y in Stencil { {1,0}, {-1,0}, {0,1}, {0, -1} } do
@@ -20,4 +20,4 @@ end
 --fitting
 local e_fit = (Offset(0,0)- Constraints(0,0))
 local valid = All(greatereq(Constraints(0,0),0))
-Energy(w_fitSqrt*Select(valid, e_fit , 0.0))
+Energy(w_fitSqrt*Select(valid, e_fit, 0.0))

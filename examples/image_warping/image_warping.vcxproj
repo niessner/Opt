@@ -128,7 +128,6 @@ xcopy /Y /D "..\..\API\release\include\*.h" "..\shared\"</Command>
     <ClInclude Include="src\Configure.h" />
     <ClInclude Include="src\CUDATimer.h" />
     <ClInclude Include="src\CUDAWarpingSolver.h" />
-    <ClInclude Include="src\ImageWarping.h" />
     <ClInclude Include="src\WarpingSolverEquations.h" />
     <ClInclude Include="src\WarpingSolverParameters.h" />
     <ClInclude Include="src\WarpingSolverState.h" />
@@ -149,6 +148,7 @@ xcopy /Y /D "..\..\API\release\include\*.h" "..\shared\"</Command>
   </ItemGroup>
   <ItemGroup>
     <None Include="image_warping.t" />
+    <None Include="image_warping_graph.t" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">
