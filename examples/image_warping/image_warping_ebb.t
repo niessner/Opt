@@ -36,20 +36,26 @@ grid.cells:NewField('delta', L.vec2f):Load({0,0})
 grid.cells:NewField('pre', L.vec2f):Load({0,0})
 grid.cells:NewField('r', L.vec2f):Load({0,0})
 grid.cells:NewField('p', L.vec2f):Load({0,0})
-
+grid.cells:NewField('z', L.vec2f):Load({0,0})
+grid.cells:NewField('Ap_X', L.vec2f):Load({0,0})
 
 grid.cells:NewField('deltaA', L.float):Load(0.0)
 grid.cells:NewField('preA', L.float):Load(0.0)
 grid.cells:NewField('rA', L.float):Load(0.0)
 grid.cells:NewField('pA', L.float):Load(0.0)
-
+grid.cells:NewField('zA', L.float):Load(0.0)
+grid.cells:NewField('Ap_XA', L.float):Load(0.0)
 
 local ebb mul(M : L.mat2f,v : L.vec2f)
   return {M[0,0]*v[0] + M[1,0]*v[1], M[0,1]*v[0] + M[1,1]*v[1]}
 end
+local ebb mulV2(v0 : L.vec2f, v1 : L.vec2f)
+  return {v0[0]*v1[0] , v0[1]*v1[1]}
+end
 local ebb dot(v0 : L.vec2f, v1 : L.vec2f)
   return v0[0]*v1[0] + v0[1]*v1[1]
 end
+
 local ebb evalR(angle : L.float)
     var cosA : L.float = L.float(L.cos(angle))
     var sinA : L.float = L.float(L.sin(angle))
@@ -57,15 +63,7 @@ local ebb evalR(angle : L.float)
     { sinA, cosA }}
     return R
 end
---[[ Rotation Matrix dAlpha
-inline __device__ float2x2 eval_dR(float CosAlpha, float SinAlpha)
-{
-  float2x2 R;
-  R.m11 = -SinAlpha; R.m12 = -CosAlpha;
-  R.m21 = CosAlpha;  R.m22 = -SinAlpha;
-  return R;
-}
---]]
+
 local ebb evalR_dR(angle : L.float)
     var cosA : L.float = L.float(L.cos(angle))
     var sinA : L.float = L.float(L.sin(angle))
@@ -74,165 +72,6 @@ local ebb evalR_dR(angle : L.float)
     return R
 end
 
---[[
-__inline__ __device__ float2 evalMinusJTFDevice(unsigned int variableIdx, SolverInput& input, SolverState& state, SolverParameters& parameters, float& bA)
-{
-  state.d_delta[variableIdx] = make_float2(0.0f, 0.0f);
-  state.d_deltaA[variableIdx] = 0.0f;
-
-  float2 b = make_float2(0.0f, 0.0f);
-  bA = 0.0f;
-
-  float2 pre = make_float2(0.0f, 0.0f);
-  float preA = 0.0f;
-
-  int i; int j; get2DIdx(variableIdx, input.width, input.height, i, j);
-  const int n0_i = i;   const int n0_j = j - 1; 
-  const int n1_i = i;   const int n1_j = j + 1; 
-  const int n2_i = i - 1; const int n2_j = j;   
-  const int n3_i = i + 1; const int n3_j = j;   
-
-
-  const bool validN0 = isInsideImage(n0_i, n0_j, input.width, input.height) && state.d_mask[get1DIdx(n0_i, n0_j, input.width, input.height)] == 0;
-  const bool validN1 = isInsideImage(n1_i, n1_j, input.width, input.height) && state.d_mask[get1DIdx(n1_i, n1_j, input.width, input.height)] == 0;
-  const bool validN2 = isInsideImage(n2_i, n2_j, input.width, input.height) && state.d_mask[get1DIdx(n2_i, n2_j, input.width, input.height)] == 0;
-  const bool validN3 = isInsideImage(n3_i, n3_j, input.width, input.height) && state.d_mask[get1DIdx(n3_i, n3_j, input.width, input.height)] == 0;
-
-  const bool b_ = isInsideImage(i   , j   , input.width, input.height);
-  const bool b0 = isInsideImage(n0_i, n0_j, input.width, input.height) && b_;
-  const bool b1 = isInsideImage(n1_i, n1_j, input.width, input.height) && b_;
-  const bool b2 = isInsideImage(n2_i, n2_j, input.width, input.height) && b_;
-  const bool b3 = isInsideImage(n3_i, n3_j, input.width, input.height) && b_;
-
-  const bool m  = state.d_mask[get1DIdx(i   , j   , input.width, input.height)] == 0;
-  const bool m0 = validN0;
-  const bool m1 = validN1;
-  const bool m2 = validN2;
-  const bool m3 = validN3;
-
-
-  // fit/pos
-  float2 constraintUV = input.d_constraints[variableIdx]; bool validConstraint = (constraintUV.x >= 0 && constraintUV.y >= 0) && state.d_mask[get1DIdx(i, j, input.width, input.height)] == 0;
-  if (validConstraint) { b += -2.0f*parameters.weightFitting*(state.d_x[variableIdx] - constraintUV); pre += 2.0f*parameters.weightFitting*make_float2(1.0f, 1.0f); }
-
-  // reg/pos
-  float2   p = state.d_x[get1DIdx(i, j, input.width, input.height)];
-  float2   pHat = state.d_urshape[get1DIdx(i, j, input.width, input.height)];
-  float2x2 R_i = evalR(state.d_A[get1DIdx(i, j, input.width, input.height)]);
-  float2 e_reg = make_float2(0.0f, 0.0f);
-
-  if (b0) { 
-    float2 q = state.d_x[get1DIdx(n0_i, n0_j, input.width, input.height)]; 
-    float2 qHat = state.d_urshape[get1DIdx(n0_i, n0_j, input.width, input.height)]; 
-    float2x2 R_j = evalR(state.d_A[get1DIdx(n0_i, n0_j, input.width, input.height)]); 
-    if (m0) {
-      e_reg += (p - q) - float2(mat2x2(R_i)*mat2x1(pHat - qHat)); 
-      pre += 2.0f*parameters.weightRegularizer; 
-    }
-    if (m) {
-      e_reg += (p - q) - float2(mat2x2(R_j)*mat2x1(pHat - qHat));
-      pre += 2.0f*parameters.weightRegularizer;
-    }
-  }
-  if (b1) { 
-    float2 q = state.d_x[get1DIdx(n1_i, n1_j, input.width, input.height)]; 
-    float2 qHat = state.d_urshape[get1DIdx(n1_i, n1_j, input.width, input.height)]; 
-    float2x2 R_j = evalR(state.d_A[get1DIdx(n1_i, n1_j, input.width, input.height)]); 
-    if (m1) {
-      e_reg += (p - q) - float2(mat2x2(R_i)*mat2x1(pHat - qHat));
-      pre += 2.0f*parameters.weightRegularizer;
-    }
-    if (m) {
-      e_reg += (p - q) - float2(mat2x2(R_j)*mat2x1(pHat - qHat));
-      pre += 2.0f*parameters.weightRegularizer;
-    }
-  }
-  if (b2) { 
-    float2 q = state.d_x[get1DIdx(n2_i, n2_j, input.width, input.height)]; 
-    float2 qHat = state.d_urshape[get1DIdx(n2_i, n2_j, input.width, input.height)]; 
-    float2x2 R_j = evalR(state.d_A[get1DIdx(n2_i, n2_j, input.width, input.height)]); 
-    if (m2) {
-      e_reg += (p - q) - float2(mat2x2(R_i)*mat2x1(pHat - qHat));
-      pre += 2.0f*parameters.weightRegularizer;
-    }
-    if (m) {
-      e_reg += (p - q) - float2(mat2x2(R_j)*mat2x1(pHat - qHat));
-      pre += 2.0f*parameters.weightRegularizer;
-    }
-  }
-  if (b3) { 
-    float2 q = state.d_x[get1DIdx(n3_i, n3_j, input.width, input.height)]; 
-    float2 qHat = state.d_urshape[get1DIdx(n3_i, n3_j, input.width, input.height)]; 
-    float2x2 R_j = evalR(state.d_A[get1DIdx(n3_i, n3_j, input.width, input.height)]); 
-    if (m3) {
-      e_reg += (p - q) - float2(mat2x2(R_i)*mat2x1(pHat - qHat));
-      pre += 2.0f*parameters.weightRegularizer;
-    }
-    if (m) {
-      e_reg += (p - q) - float2(mat2x2(R_j)*mat2x1(pHat - qHat));
-      pre += 2.0f*parameters.weightRegularizer;
-    }
-  }
-  b += -2.0f*parameters.weightRegularizer*e_reg;
-
-  // reg/angle
-  float2x2 R = evalR(state.d_A[get1DIdx(i, j, input.width, input.height)]);
-  float2x2 dR = evalR_dR(state.d_A[get1DIdx(i, j, input.width, input.height)]);
-  float e_reg_angle = 0.0f;
-
-  if (validN0) { 
-    float2 q = state.d_x[get1DIdx(n0_i, n0_j, input.width, input.height)]; 
-    float2 qHat = state.d_urshape[get1DIdx(n0_i, n0_j, input.width, input.height)];
-    mat2x1 D = -mat2x1(dR*(pHat - qHat)); 
-    e_reg_angle += D.getTranspose()*mat2x1((p - q) - R*(pHat - qHat)); 
-    preA += D.getTranspose()*D*parameters.weightRegularizer; 
-  }
-
-  if (validN1) { 
-    float2 q = state.d_x[get1DIdx(n1_i, n1_j, input.width, input.height)]; 
-    float2 qHat = state.d_urshape[get1DIdx(n1_i, n1_j, input.width, input.height)]; 
-    mat2x1 D = -mat2x1(dR*(pHat - qHat)); 
-    e_reg_angle += D.getTranspose()*mat2x1((p - q) - R*(pHat - qHat)); 
-    preA += D.getTranspose()*D*parameters.weightRegularizer; 
-  }
-  
-  if (validN2) { 
-    float2 q = state.d_x[get1DIdx(n2_i, n2_j, input.width, input.height)]; 
-    float2 qHat = state.d_urshape[get1DIdx(n2_i, n2_j, input.width, input.height)]; 
-    mat2x1 D = -mat2x1(dR*(pHat - qHat)); 
-    e_reg_angle += D.getTranspose()*mat2x1((p - q) - R*(pHat - qHat)); 
-    preA += D.getTranspose()*D*parameters.weightRegularizer; 
-  }
-  
-  if (validN3) { 
-    float2 q = state.d_x[get1DIdx(n3_i, n3_j, input.width, input.height)]; 
-    float2 qHat = state.d_urshape[get1DIdx(n3_i, n3_j, input.width, input.height)]; 
-    mat2x1 D = -mat2x1(dR*(pHat - qHat)); 
-    e_reg_angle += D.getTranspose()*mat2x1((p - q) - R*(pHat - qHat)); 
-    preA += D.getTranspose()*D*parameters.weightRegularizer; 
-  }
-
-  preA = 2.0f*preA;
-  bA += -2.0f*parameters.weightRegularizer*e_reg_angle;
-
-
-  //pre = make_float2(1.0f, 1.0f);
-  //preA = 1.0f;
-
-  // Preconditioner
-  if (pre.x > FLOAT_EPSILON) pre = 1.0f / pre;
-  else               pre = make_float2(1.0f, 1.0f);
-  state.d_precondioner[variableIdx] = pre;
-
-  // Preconditioner
-  if (preA > FLOAT_EPSILON) preA = 1.0f / preA;
-  else            preA = 1.0f;
-  state.d_precondionerA[variableIdx] = preA;
-  
-
-  return b;
-}
---]]
 local ebb applyJTF( c : grid.cells )
 
   c.delta = {0.0f, 0.0f}
@@ -365,40 +204,134 @@ local ebb applyJTF( c : grid.cells )
   return result
 end
 
+local ebb applyJTJ( c : grid.cells )
+  var b  : L.vec2f = {0.0f, 0.0f}
+  var bA : L.float = 0.0f
+
+  var b0 = (c.yneg_depth == 0)
+  var b1 = (c.ypos_depth == 0)
+  var b2 = (c.xneg_depth == 0)
+  var b3 = (c.xpos_depth == 0)
 
 
---[[
-__global__ void PCGInit_Kernel1(SolverInput input, SolverState state, SolverParameters parameters)
-{
-  const unsigned int N = input.N;
-  const int x = blockIdx.x * blockDim.x + threadIdx.x;
+  -- pos/constraint
+  var validConstraint = (c.constraint[0] >= 0 and c.constraint[1] >= 0) and c.mask == 0
+  if validConstraint then
+    b += -2.0f*weightFitting*c.p
+  end
+  -- pos/reg
+  var e_reg : L.vec2f = {0.0f, 0.0f}
+  if b0 then
+    var c_n = c(0,-1)
+    if c.mask == 0    then e_reg += (c.p - c_n.p) end
+    if c_n.mask == 0  then e_reg += (c.p - c_n.p) end
+  end
+  if b1 then
+    var c_n = c(0,1)
+    if c.mask == 0    then e_reg += (c.p - c_n.p) end
+    if c_n.mask == 0  then e_reg += (c.p - c_n.p) end
+  end
+  if b2 then
+    var c_n = c(-1,0)
+    if c.mask == 0    then e_reg += (c.p - c_n.p) end
+    if c_n.mask == 0  then e_reg += (c.p - c_n.p) end
+  end
+  if b3 then
+    var c_n = c(1,0)
+    if c.mask == 0    then e_reg += (c.p - c_n.p) end
+    if c_n.mask == 0  then e_reg += (c.p - c_n.p) end
+  end
+  
+  b += 2.0f*weightRegularizer*e_reg
 
-  float d = 0.0f;
-  if (x < N)
-  {
-    float residuumA;
-    const float2 residuum = evalMinusJTFDevice(x, input, state, parameters, residuumA); // residuum = J^T x -F - A x delta_0  => J^T x -F, since A x x_0 == 0 
-    state.d_r[x]  = residuum;                        // store for next iteration
-    state.d_rA[x] = residuumA;                         // store for next iteration
+  -- angle/reg
+  var e_reg_angle : L.float = 0.0f
+  var dR : L.mat2f = evalR_dR(c.A)
+  if b0 and (c(0,-1).mask == 0) then 
+    var D = mul(dR,(c.urshape - c(0,-1).urshape))
+    e_reg_angle += dot(D,D)*c.pA
+  end
+  if b1 and (c(0,1).mask == 0) then 
+    var D = mul(dR,(c.urshape - c(0,1).urshape))
+    e_reg_angle += dot(D,D)*c.pA
+  end
+  if b2 and (c(-1,0).mask == 0) then 
+    var D = mul(dR,(c.urshape - c(-1,0).urshape))
+    e_reg_angle += dot(D,D)*c.pA
+  end
+  if b3 and (c(1,0).mask == 0) then 
+    var D = mul(dR,(c.urshape - c(1,0).urshape))
+    e_reg_angle += dot(D,D)*c.pA
+  end
+  bA += 2.0f*weightRegularizer*e_reg_angle
 
-    const float2 p  = state.d_precondioner[x]  * residuum;           // apply preconditioner M^-1
-    state.d_p[x] = p;
 
-    const float pA = state.d_precondionerA[x] * residuumA;           // apply preconditioner M^-1
-    state.d_pA[x] = pA;
+  -- upper right block
+  e_reg = {0.0f, 0.0f}
+  if b0 then
+    var c_n = c(0,-1) 
+    var dR_j = evalR_dR(c_n.A)
+    var D    = -mul(dR,(c.urshape - c_n.urshape))
+    var  D_j = mul(dR_j,(c.urshape - c_n.urshape))
+    if c_n.mask == 0 then e_reg += D*c.pA end
+    if c.mask == 0 then e_reg -= D_j*c_n.pA end
+  end
+  if b1 then
+    var c_n = c(0,1) 
+    var dR_j = evalR_dR(c_n.A)
+    var D    = -mul(dR,(c.urshape - c_n.urshape))
+    var  D_j = mul(dR_j,(c.urshape - c_n.urshape))
+    if c_n.mask == 0 then e_reg += D*c.pA end
+    if c.mask == 0 then e_reg -= D_j*c_n.pA end
+  end
+  if b2 then
+    var c_n = c(-1,0) 
+    var dR_j = evalR_dR(c_n.A)
+    var D    = -mul(dR,(c.urshape - c_n.urshape))
+    var  D_j = mul(dR_j,(c.urshape - c_n.urshape))
+    if c_n.mask == 0 then e_reg += D*c.pA end
+    if c.mask == 0 then e_reg -= D_j*c_n.pA end
+  end
+  if b3 then
+    var c_n = c(1,0) 
+    var dR_j = evalR_dR(c_n.A)
+    var D    = -mul(dR,(c.urshape - c_n.urshape))
+    var  D_j = mul(dR_j,(c.urshape - c_n.urshape))
+    if c_n.mask == 0 then e_reg += D*c.pA end
+    if c.mask == 0 then e_reg -= D_j*c_n.pA end
+  end
 
-    d = dot(residuum, p) + residuumA * pA;                 // x-th term of nomimator for computing alpha and denominator for computing beta
-  }
+  b += 2.0f*weightRegularizer*e_reg
 
-    d = warpReduce(d);
-    if ((threadIdx.x & WARP_MASK) == 0) {
-        atomicAdd(state.d_scanAlpha, d);
-    }
-}
---]]
+  -- lower left block
+  e_reg_angle = 0.0f
+  if b0 and (c(0,-1).mask == 0) then
+    var c_n = c(0,-1)
+    var D = mul(dR,(c.urshape - c_n.urshape))
+    e_reg_angle += dot(D,c.p-c_n.p)
+  end
+  if b1 and (c(0,1).mask == 0) then
+    var c_n = c(0,1)
+    var D = mul(dR,(c.urshape - c_n.urshape))
+    e_reg_angle += dot(D,c.p-c_n.p)
+  end
+  if b2 and (c(-1,0).mask == 0) then
+    var c_n = c(-1,0)
+    var D = mul(dR,(c.urshape - c_n.urshape))
+    e_reg_angle += dot(D,c.p-c_n.p)
+  end
+  if b3 and (c(1,0).mask == 0) then
+    var c_n = c(1,0)
+    var D = mul(dR,(c.urshape - c_n.urshape))
+    e_reg_angle += dot(D,c.p-c_n.p)
+  end
+  bA += 2.0f*weightRegularizer*e_reg_angle
+
+  var result : L.vec3f = {b[0],b[1],bA}
+  return result
+end  
+
 local ebb PCGInit1(c : grid.cells)
-  var d : L.float = 0.0f -- init for out of bounds lanes
-
   var residuumFull = applyJTF(c)-- residuum = J^T x -F - A x delta_0  => J^T x -F, since A x x_0 == 0 
   c.r  = {residuumFull[0],residuumFull[1]}  -- store for next iteration
   c.rA = residuumFull[2] -- store for next iteration
@@ -410,72 +343,48 @@ local ebb PCGInit1(c : grid.cells)
   c.pA = pA
 
   scanAlphaNumerator += dot(c.r, p) + c.rA * pA
-
 end
 
-local function PCGStep1()
-
+local ebb PCGStep1(c : grid.cells)
+  var tmp : L.vec3f = applyJTJ(c) -- A x p_k  => J^T x J x p_k 
+  c.Ap_X  = {tmp[0], tmp[1]}  -- store for next kernel call
+  c.Ap_XA  = tmp[2] -- store for next kernel call
+  scanAlphaDenominator += dot(c.p, {tmp[0], tmp[1]} ) + c.pA * tmp[2]  -- x-th term of denominator of alpha
 end
 
-local function PCGStep2()
+local ebb PCGStep2(c : grid.cells)
+  var alpha = scanAlphaNumerator/scanAlphaDenominator 
+  c.delta = c.delta+alpha*c.p -- do a descent step
+  c.deltaA = c.deltaA+alpha*c.pA
+  
+  var r = c.r-alpha*c.Ap_X -- update residuum
+  c.r = r  -- store for next kernel call
+  
+  var rA = c.rA-alpha*c.Ap_XA -- update residuum
+  c.rA = rA  -- store for next kernel call
 
+  var z = mulV2(c.pre,r)  -- apply pre-conditioner M^-1
+  c.z = z  -- save for next kernel call
+
+  var zA = c.preA*rA  -- apply pre-conditioner M^-1
+  c.zA = zA  -- save for next kernel call
+
+  scanBetaNumerator += dot(z,r) +  zA * rA -- compute x-th term of the numerator of beta
 end
 
-local function PCGStep3()
-
+local ebb PCGStep3(c : grid.cells)
+  var beta = scanBetaNumerator/scanAlphaNumerator
+  c.p  = c.z+beta*c.p  -- update descent direction
+  c.pA = c.zA+beta*c.pA
 end
 
-local function PCGLinearUpdate()
-
+local ebb PCGLinearUpdate(c : grid.cells)
+  c.X = c.X + c.delta
+  c.A = c.A + c.deltaA
 end
 
---[[
-// Rotation Matrix
-inline __device__ float2x2 evalR(float CosAlpha, float SinAlpha)
-{
-  float2x2 R;
-  R.m11 = CosAlpha; R.m12 = -SinAlpha;
-  R.m21 = SinAlpha; R.m22 =  CosAlpha;
-  return R;
-}
-
-inline __device__ float2x2 evalR(float& angle)
-{
-  return evalR(cos(angle), sin(angle));
-}
---]]
 
 local ebb measure_cost( c : grid.cells )
---[[
-  float2 e = make_float2(0.0f, 0.0f);
-
-  int i; int j; get2DIdx(variableIdx, input.width, input.height, i, j);
-  const int n0_i = i;   const int n0_j = j - 1; bool validN0 = isInsideImage(n0_i, n0_j, input.width, input.height); if(validN0) { validN0 = (state.d_mask[get1DIdx(n0_i, n0_j, input.width, input.height)] == 0); };
-  const int n1_i = i;   const int n1_j = j + 1; bool validN1 = isInsideImage(n1_i, n1_j, input.width, input.height); if(validN1) { validN1 = (state.d_mask[get1DIdx(n1_i, n1_j, input.width, input.height)] == 0); };
-  const int n2_i = i - 1; const int n2_j = j;   bool validN2 = isInsideImage(n2_i, n2_j, input.width, input.height); if(validN2) { validN2 = (state.d_mask[get1DIdx(n2_i, n2_j, input.width, input.height)] == 0); };
-  const int n3_i = i + 1; const int n3_j = j;   bool validN3 = isInsideImage(n3_i, n3_j, input.width, input.height); if(validN3) { validN3 = (state.d_mask[get1DIdx(n3_i, n3_j, input.width, input.height)] == 0); };
-
-  // E_fit
-  float2 constraintUV = input.d_constraints[variableIdx]; bool validConstraint = (constraintUV.x >= 0 && constraintUV.y >= 0) && state.d_mask[get1DIdx(i, j, input.width, input.height)] == 0;
-  if (validConstraint) { 
-    float2 e_fit = (state.d_x[variableIdx] - constraintUV); 
-    e += parameters.weightFitting*e_fit*e_fit; 
-  }
-
-  // E_reg
-  float2x2 R = evalR(state.d_A[get1DIdx(i, j, input.width, input.height)]);
-  float2   p = state.d_x[get1DIdx(i, j, input.width, input.height)];
-  float2   pHat = state.d_urshape[get1DIdx(i, j, input.width, input.height)];
-  float2 e_reg = make_float2(0.0f, 0.0f);
-  if (validN0) { float2 q = state.d_x[get1DIdx(n0_i, n0_j, input.width, input.height)]; float2 qHat = state.d_urshape[get1DIdx(n0_i, n0_j, input.width, input.height)]; float2 d = (p - q) - R*(pHat - qHat); e_reg += d*d; }
-  if (validN1) { float2 q = state.d_x[get1DIdx(n1_i, n1_j, input.width, input.height)]; float2 qHat = state.d_urshape[get1DIdx(n1_i, n1_j, input.width, input.height)]; float2 d = (p - q) - R*(pHat - qHat); e_reg += d*d; }
-  if (validN2) { float2 q = state.d_x[get1DIdx(n2_i, n2_j, input.width, input.height)]; float2 qHat = state.d_urshape[get1DIdx(n2_i, n2_j, input.width, input.height)]; float2 d = (p - q) - R*(pHat - qHat); e_reg += d*d; }
-  if (validN3) { float2 q = state.d_x[get1DIdx(n3_i, n3_j, input.width, input.height)]; float2 qHat = state.d_urshape[get1DIdx(n3_i, n3_j, input.width, input.height)]; float2 d = (p - q) - R*(pHat - qHat); e_reg += d*d; }
-  e += parameters.weightRegularizer*e_reg;
-
-  float res = e.x + e.y;
-  return res;
---]]
   var e : L.vec2f = {0,0}
   -- E_fit
   var validConstraint = (c.constraint[0] >= 0 and c.constraint[1] >= 0) and c.mask == 0
@@ -532,6 +441,9 @@ end
 --grid.cells.X:Dump(CSV.Dump, "dump.csv")
 local nIterations = 500
 local lIterations = 500
+computeCost()
+print( 'initial cost: ', tostring(cost:get()*0.5) )
+
 for nIter=0, nIterations do
   scanAlphaNumerator:set(0)
   scanAlphaDenominator:set(0)
@@ -539,77 +451,16 @@ for nIter=0, nIterations do
   grid.cells:foreach(PCGInit1)
   for lIter = 0, lIterations do       
     scanAlphaDenominator:set(0)           
-    PCGStep1()
+    grid.cells:foreach(PCGStep1)
     scanBetaNumerator:set(0)
-    PCGStep2()
-    PCGStep3()
+    grid.cells:foreach(PCGStep2)
+    grid.cells:foreach(PCGStep3)
     -- save new rDotz for next iteration
     scanAlphaNumerator:set(scanBetaNumerator:get())
   end
-  PCGLinearUpdate()
+  grid.cells:foreach(PCGLinearUpdate)
   computeCost()
   print( 'iteration #'..tostring(nIter), 'cost: ', tostring(cost:get()*0.5) )
 end
-
-
---[[ GN-solver
-  for  nIter=0, pd.solverparameters.nIterations do
-    C.cudaMemset(pd.scanAlphaNumerator, 0, sizeof(opt_float)) --scan in PCGInit1 requires reset
-    C.cudaMemset(pd.scanAlphaDenominator, 0, sizeof(opt_float)) --scan in PCGInit1 requires reset
-    C.cudaMemset(pd.scanBetaNumerator, 0, sizeof(opt_float))  --scan in PCGInit1 requires reset
-    gpu.PCGInit1(pd)
-    if isGraph then
-      gpu.PCGInit1_Graph(pd)  
-      gpu.PCGInit1_Finish(pd) 
-    end
-    for lIter = 0, pd.solverparameters.lIterations do       
-      C.cudaMemset(pd.scanAlphaDenominator, 0, sizeof(opt_float))              
-      gpu.PCGStep1(pd)
-      if isGraph then
-          gpu.PCGStep1_Graph(pd)
-      end
-      C.cudaMemset(pd.scanBetaNumerator, 0, sizeof(opt_float))
-      gpu.PCGStep2(pd)
-      gpu.PCGStep3(pd)
-
-      -- save new rDotz for next iteration
-      C.cudaMemcpy(pd.scanAlphaNumerator, pd.scanBetaNumerator, sizeof(opt_float), C.cudaMemcpyDeviceToDevice)  
-    end
-  
-
-    gpu.PCGLinearUpdate(pd)    
-    var newCost = computeCost(pd)
-
-    pd.prevCost = newCost 
-    pd.solverparameters.nIter = pd.solverparameters.nIter + 1
-  end
-end
---]]
-
-
---[[
-for i=1,360 do
-  grid.cells.interior:foreach(update_temperature)
-  grid.cells.boundary:foreach(update_temp_boundaries)
-  grid.cells:Swap('t', 'new_t')
-
-  vdb.vbegin()
-  vdb.frame()
-    grid.cells:foreach(visualize)
-  vdb.vend()
-
-  if i % 10 == 0 then -- measure statistics every 10 steps
-    max_diff:set(0)
-    grid.cells.interior:foreach(measure_max_diff)
-    print( 'iteration #'..tostring(i), 'max gradient: ', max_diff:get() )
-  end
-end
--]]
--- Our simulation loop is mostly the same, but with one major difference.
--- Rather than run `update_temperature` for each cell, we only run it for
--- each `interior` cell.  Likewise, we then execute the boundary computation
--- only for each boundary cell.  Though we still visualize all the cells
--- with a single call.  (Note that if we ran `update_temperature` on all of
--- the cells, then we would produce array out of bound errors.)
 
 
