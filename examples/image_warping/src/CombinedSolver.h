@@ -123,10 +123,10 @@ public:
         m_useOptGraphLM = m_combinedSolverParameters.useOptLM && compareWithGraph;
         addOptSolvers(m_dims, "image_warping.t", m_combinedSolverParameters.optDoublePrecision);
         if (m_useOptGraphGN) {
-            addSolver(std::make_shared<OptSolver>(m_dims, "image_warping_graph.t", "gaussNewtonGPU", m_combinedSolverParameters.optDoublePrecision), "Opt(GN)", true);
+            addSolver(std::make_shared<OptSolver>(m_dims, "image_warping_graph.t", "gaussNewtonGPU", m_combinedSolverParameters.optDoublePrecision), "Opt(GN) graph", true);
         }
         if (m_useOptGraphLM) {
-            addSolver(std::make_shared<OptSolver>(m_dims, "image_warping_graph.t", "LMGPU", m_combinedSolverParameters.optDoublePrecision), "Opt(LM)", true);
+            addSolver(std::make_shared<OptSolver>(m_dims, "image_warping_graph.t", "LMGPU", m_combinedSolverParameters.optDoublePrecision), "Opt(LM) graph", true);
         }
         
         addSolver(std::make_shared<CUDAWarpingSolver>(m_dims), "CUDA", m_combinedSolverParameters.useCUDA);
@@ -170,7 +170,13 @@ public:
 
     virtual void combinedSolveFinalize() override {
         if (m_combinedSolverParameters.profileSolve) {
-            ceresIterationComparison("Image Warping", m_combinedSolverParameters.optDoublePrecision);
+
+            if (m_useOptGraphLM) {
+                saveSolverResults("../../results/", m_combinedSolverParameters.optDoublePrecision ? "IWGraph_double" : "IWGraph_float" + std::to_string(m_dims[0]), getIterationInfo("Ceres"), getIterationInfo("Opt(LM) graph"), getIterationInfo("Opt(LM)"), m_combinedSolverParameters.optDoublePrecision);
+            } else {
+                ceresIterationComparison("Image Warping", m_combinedSolverParameters.optDoublePrecision);
+            }
+            
         }
     }
 

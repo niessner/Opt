@@ -21,7 +21,7 @@ public:
 
     virtual void solveAll() {
         combinedSolveInit();
-        for (auto s : m_solverInfo) {
+        for (auto& s : m_solverInfo) {
             if (s.enabled) {
                 singleSolve(s);
             }
@@ -52,22 +52,23 @@ public:
         for (auto& s : m_solverInfo) {
             if (s.name == name) {
                 if (s.solver && s.enabled) {
+                    printf("Found iteration info: %s, with %d entries\n", name.c_str(), s.iterationInfo.size());
                     return s.iterationInfo;
                 }
             }
         }
+        printf("Did not find iteration info: %s\n", name.c_str());
         return std::vector<SolverIteration>();
     }
 
     void ceresIterationComparison(std::string name, bool optDoublePrecision) {
-        saveSolverResults("results/", optDoublePrecision ? "_double" : "_float", getIterationInfo("Ceres"), getIterationInfo("Opt(GN)"), getIterationInfo("Opt(LM)"), optDoublePrecision);
+        saveSolverResults("../../results/", optDoublePrecision ? "_double" : "_float", getIterationInfo("Ceres"), getIterationInfo("Opt(GN)"), getIterationInfo("Opt(LM)"), optDoublePrecision);
         reportFinalCosts(name, m_combinedSolverParameters, getCost("Opt(GN)"), getCost("Opt(LM)"), getCost("Ceres"));
     }
 
     void addSolver(std::shared_ptr<SolverBase> solver, std::string name, bool enabled = true) {
         m_solverInfo.resize(m_solverInfo.size() + 1);
         m_solverInfo[m_solverInfo.size() - 1].set(solver, name, enabled);
-
     }
 
     void addOptSolvers(std::vector<unsigned int> dims, std::string problemFilename, bool doublePrecision = false) {
@@ -95,7 +96,7 @@ protected:
     };
     std::vector<SolverInfo> m_solverInfo;
 
-    virtual void singleSolve(SolverInfo s) {
+    virtual void singleSolve(SolverInfo& s) {
         preSingleSolve();
         if (m_combinedSolverParameters.numIter == 1) {
             preNonlinearSolve(0);
@@ -108,6 +109,7 @@ protected:
                 std::cout << "//////////// ITERATION" << i << "  (" << s.name << ") ///////////////" << std::endl;
                 preNonlinearSolve(i);
                 s.solver->solve(m_solverParams, m_problemParams, m_combinedSolverParameters.profileSolve, s.iterationInfo);
+                printf("s.iterationInfo.size() = %d\n", s.iterationInfo.size());
                 postNonlinearSolve(i);
                 if (m_combinedSolverParameters.earlyOut || m_endSolveEarly) {
                     m_endSolveEarly = false;

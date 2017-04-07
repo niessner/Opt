@@ -63,7 +63,7 @@ if(mask(i, j) == 0 && offset-in-bounds)
     cost = (x(i, j) - x(i + ox, j + oy)) - mul(R, urshape(i, j) - urshape(i + ox, j + oy)) * w_regSqrt
 */
 
-vec2f toVec(const OPT_FLOAT2 &v)
+vec2f toVec(const float2 &v)
 {
     return vec2f(v.x, v.y);
 }

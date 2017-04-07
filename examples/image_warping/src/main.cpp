@@ -50,6 +50,14 @@ int main(int argc, const char * argv[]) {
             printf("Invalid third parameter: %s\n", argv[3]);
         }
     }
+    bool useGraphVariants = false;
+    if (argc > 4) {
+        if (std::string(argv[4]) == "graph") {
+            useGraphVariants = true;
+        }  else {
+            printf("Invalid fourth parameter: %s\n", argv[4]);
+        }
+    }
 
     // Must have a mask and constraints file in the same directory as the input image
     std::string maskFilename = filename.substr(0, filename.size() - 4) + "_mask.png";
@@ -112,12 +120,14 @@ int main(int argc, const char * argv[]) {
     params.useCUDA = false;
     params.nonLinearIter = 8;
     params.linearIter = 400;
+
     if (performanceRun) {
         params.useCUDA = false;
         params.useOpt = true;
         params.useOptLM = true;
         params.useCeres = true;
         params.earlyOut = true;
+        params.profileSolve = true;
     }
     if (lmOnlyFullSolve) {
         params.useCUDA = false;
@@ -132,7 +142,7 @@ int main(int argc, const char * argv[]) {
         //m_params.useCeres = false;
 #endif
     }
-    bool useGraphVariants = true;
+
 
 
 	CombinedSolver solver(imageR32, imageColor, imageR32Mask, constraints, params, useGraphVariants);
