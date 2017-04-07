@@ -57,7 +57,7 @@ float sq(float x) { return x*x; }
 
 double CUDAWarpingSolver::solve(const NamedParameters& solverParams, const NamedParameters& probParams, bool profileSolve, std::vector<SolverIteration>& iters)
 {
-	
+	printf("CUDAWarpingSolver::solve\n")
     m_solverState.d_urshape = getTypedParameterImage<float3>("UrShape", probParams);
     m_solverState.d_a       = getTypedParameterImage<float3>("Angle", probParams);
     m_solverState.d_target  = getTypedParameterImage<float3>("Constraints", probParams);
@@ -69,6 +69,6 @@ double CUDAWarpingSolver::solve(const NamedParameters& solverParams, const Named
     parameters.weightRegularizer    = sq(getTypedParameter<float>("w_regSqrt", probParams));
     parameters.nNonLinearIterations = getTypedParameter<unsigned int>("nIterations", solverParams);
     parameters.nLinIterations       = getTypedParameter<unsigned int>("lIterations", solverParams);
-    
+    printf("CUDAWarpingSolver::solve befor stub\n")
     return ImageWarpingSolveGNStub(m_solverInput, m_solverState, parameters);
 }

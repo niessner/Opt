@@ -95,6 +95,7 @@ local ebb applyJTF( c : grid.cells )
     b += -2.0f*weightFitting*(c.X - c.constraint)
     pre += 2.0f*weightFitting*{1.0f, 1.0f}
   end
+  
   -- reg/pos
   var R_i = evalR(c.A)
   var e_reg : L.vec2f = {0.0f, 0.0f}
@@ -153,7 +154,6 @@ local ebb applyJTF( c : grid.cells )
   var R : L.mat2f = evalR(c.A)
   var dR : L.mat2f  = evalR_dR(c.A)
   var e_reg_angle : L.float = 0.0f
-  var preA : L.float = 0.0f
   if b0 and (c(0,-1).mask == 0) then 
     var c_n = c(0,-1)
     var D = -mul(dR,(c.urshape - c_n.urshape))
@@ -200,7 +200,7 @@ local ebb applyJTF( c : grid.cells )
   end
   c.preA = preA
   
-  var result : L.vec3f = {b[0],b[1],bA}
+  var result : L.vector(L.float,6) = {b[0],b[1],bA, pre[0], pre[1], preA}
   return result
 end
 
@@ -332,17 +332,21 @@ local ebb applyJTJ( c : grid.cells )
 end  
 
 local ebb PCGInit1(c : grid.cells)
-  var residuumFull = applyJTF(c)-- residuum = J^T x -F - A x delta_0  => J^T x -F, since A x x_0 == 0 
-  c.r  = {residuumFull[0],residuumFull[1]}  -- store for next iteration
-  c.rA = residuumFull[2] -- store for next iteration
+  var temp = applyJTF(c)-- residuum = J^T x -F - A x delta_0  => J^T x -F, since A x x_0 == 0 
+  c.r  = {temp[0],temp[1]}  -- store for next iteration
+  c.rA = temp[2] -- store for next iteration
 
-  var p  = {c.pre[0] * c.r[0], c.pre[1] * c.r[1]} -- apply preconditioner M^-1
+  --var p  = {c.pre[0] * residuumFull[0], c.pre[1] * residuumFull[1]} -- apply preconditioner M^-1
+  var p  = {temp[3] * temp[0], temp[4] * temp[1]}
   c.p = p
 
-  var pA = c.preA * c.rA -- apply preconditioner M^-1
+  --var pA = c.preA * residuumFull[2] -- apply preconditioner M^-1
+  var pA = temp[5] * temp[2]
   c.pA = pA
 
-  scanAlphaNumerator += dot(c.r, p) + c.rA * pA
+  --scanAlphaNumerator += (residuumFull[0]*residuumFull[0]+residuumFull[1]*residuumFull[1])
+  --scanAlphaNumerator += temp[0]*p[0]+residuumFull[1]*p[1]--dot({residuumFull[0],residuumFull[1]}, p) --+ residuumFull[2] * pA
+  scanAlphaNumerator += dot({temp[0],temp[1]}, p) + temp[2] * pA
 end
 
 local ebb PCGStep1(c : grid.cells)
@@ -439,8 +443,8 @@ end
 
 
 --grid.cells.X:Dump(CSV.Dump, "dump.csv")
-local nIterations = 500
-local lIterations = 500
+local nIterations = 8
+local lIterations = 400
 computeCost()
 print( 'initial cost: ', tostring(cost:get()*0.5) )
 
@@ -449,12 +453,15 @@ for nIter=0, nIterations do
   scanAlphaDenominator:set(0)
   scanBetaNumerator:set(0)
   grid.cells:foreach(PCGInit1)
+  print( 'iteration #'..tostring(nIter), 'scanAlphaNumerator: ', tostring(scanAlphaNumerator:get()) )
   for lIter = 0, lIterations do       
     scanAlphaDenominator:set(0)           
     grid.cells:foreach(PCGStep1)
+    --print('scanAlphaDenominator: ', tostring(scanAlphaDenominator:get()) )
     scanBetaNumerator:set(0)
     grid.cells:foreach(PCGStep2)
     grid.cells:foreach(PCGStep3)
+    --print('scanBetaNumerator: ', tostring(scanBetaNumerator:get()) )
     -- save new rDotz for next iteration
     scanAlphaNumerator:set(scanBetaNumerator:get())
   end

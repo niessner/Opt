@@ -133,10 +133,11 @@ int main(int argc, const char * argv[]) {
 #endif
     }
     bool useGraphVariants = false;
+    params.useCUDA = true;
 
     // For ebb/simit comparison
-    params.useOpt = true;
-    params.useOptLM = true;
+    params.useOpt = false;
+    params.useOptLM = false;
 
 	CombinedSolver solver(imageR32, imageColor, imageR32Mask, constraints, params, useGraphVariants);
     solver.solveAll();

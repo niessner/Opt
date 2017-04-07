@@ -152,10 +152,10 @@ return function(problemSpec)
     
 
     local struct PlanData {
-		plan : opt.Plan
-		parameters : problemSpec:ParameterType()
+        plan : opt.Plan
+        parameters : problemSpec:ParameterType()
         solverparameters : SolverParameters
-		scratch : &opt_float
+        scratch : &opt_float
 
 		delta : TUnknownType	--current linear update to be computed -> num vars
 		r : TUnknownType		--residuals -> num vars	--TODO this needs to be a 'residual type'
@@ -165,9 +165,8 @@ return function(problemSpec)
 		p : TUnknownType		--descent direction -> num vars
 		Ap_X : TUnknownType	--cache values for next kernel call after A = J^T x J x p -> num vars
         CtC : TUnknownType -- The diagonal matrix C'C for the inner linear solve (J'J+C'C)x = J'F Used only by LM
-		preconditioner : TUnknownType --pre-conditioner for linear system -> num vars
-        SSq : TUnknownType -- Square of jacobi scaling diagonal
-		g : TUnknownType		--gradient of F(x): g = -2J'F -> num vars
+		preconditioner : TUnknownType --pre-conditioner for linear system -> num vars 
+        SSq : TUnknownType -- Square of jacobi scaling diagonal Used only by LM
 		
         prevX : TUnknownType -- Place to copy unknowns to before speculatively updating. Avoids hassle when (X + delta) - delta != X 
 
@@ -368,9 +367,9 @@ return function(problemSpec)
                     end
                 end        
             
-                if (not fmap.exclude(idx,pd.parameters)) and (not isGraph) then		
+                if (not fmap.exclude(idx,pd.parameters)) and (not isGraph) then
                     pre = guardedInvert(pre)
-                    var p = pre*residuum	-- apply pre-conditioner M^-1			   
+                    var p = pre*residuum -- apply pre-conditioner M^-1			   
                     pd.p(idx) = p
                 
                     d = residuum:dot(p) 
@@ -387,7 +386,7 @@ return function(problemSpec)
             var d : opt_float = opt_float(0.0f) -- init for out of bounds lanes
             var idx : Index
             if idx:initFromCUDAParams() then
-                var residuum = pd.r(idx)			
+                var residuum = pd.r(idx)
                 var pre = pd.preconditioner(idx)
             
                 pre = guardedInvert(pre)
@@ -396,7 +395,7 @@ return function(problemSpec)
                     pre = opt_float(1.0f)
                 end
             
-                var p = pre*residuum	-- apply pre-conditioner M^-1
+                var p = pre*residuum    -- apply pre-conditioner M^-1
                 pd.preconditioner(idx) = pre
                 pd.p(idx) = p
                 d = residuum:dot(p)
@@ -412,8 +411,8 @@ return function(problemSpec)
                 var tmp : unknownElement = 0.0f
                  -- A x p_k  => J^T x J x p_k 
                 tmp = fmap.applyJTJ(idx, pd.parameters, pd.p, pd.CtC)
-                pd.Ap_X(idx) = tmp					 -- store for next kernel call
-                d = pd.p(idx):dot(tmp)			 -- x-th term of denominator of alpha
+                pd.Ap_X(idx) = tmp -- store for next kernel call
+                d = pd.p(idx):dot(tmp) -- x-th term of denominator of alpha
             end
             if not [multistep_alphaDenominator_compute] then
                 unknownWideReduction(idx,d,pd.scanAlphaDenominator)
@@ -736,10 +735,10 @@ return function(problemSpec)
             end
         end
 
-	    return kernels
-	end
-	
-	local gpu = util.makeGPUFunctions(problemSpec, PlanData, delegate, {"PCGInit1",
+        return kernels
+    end
+
+    local gpu = util.makeGPUFunctions(problemSpec, PlanData, delegate, {"PCGInit1",
                                                                         "PCGInit1_Finish",
                                                                         "PCGComputeCtC",
                                                                         "PCGFinalizeDiagonal",
@@ -971,7 +970,7 @@ return function(problemSpec)
             end
         end end end
 
-	   pd.solverparameters.nIter = 0
+       pd.solverparameters.nIter = 0
        escape 
             if problemSpec:UsesLambda() then
               emit quote 
@@ -980,21 +979,21 @@ return function(problemSpec)
                 pd.parameters.min_lm_diagonal           = pd.solverparameters.min_lm_diagonal
                 pd.parameters.max_lm_diagonal           = pd.solverparameters.max_lm_diagonal
               end
-	        end 
+            end 
        end
-	   gpu.precompute(pd)
-	   pd.prevCost = computeCost(pd)
+       gpu.precompute(pd)
+       pd.prevCost = computeCost(pd)
        logSolver("initial cost=%f\n", pd.prevCost)
-	end
+    end
 
-	local terra cleanup(pd : &PlanData)
+    local terra cleanup(pd : &PlanData)
         logSolver("final cost=%f\n", pd.prevCost)
         pd.timer:endEvent(nil,pd.endSolver)
         pd.timer:evaluate()
         pd.timer:cleanup()
     end
 
-	local terra step(data_ : &opaque, params_ : &&opaque)
+    local terra step(data_ : &opaque, params_ : &&opaque)
         var pd = [&PlanData](data_)
         var residual_reset_period : int         = pd.solverparameters.residual_reset_period
         var min_relative_decrease : opt_float   = pd.solverparameters.min_relative_decrease
@@ -1004,18 +1003,20 @@ return function(problemSpec)
         var function_tolerance : opt_float      = pd.solverparameters.function_tolerance
         var Q0 : opt_float
         var Q1 : opt_float
-		[util.initParameters(`pd.parameters,problemSpec, params_,false)]
-		if pd.solverparameters.nIter < pd.solverparameters.nIterations then
-			C.cudaMemset(pd.scanAlphaNumerator, 0, sizeof(opt_float))	--scan in PCGInit1 requires reset
-			C.cudaMemset(pd.scanAlphaDenominator, 0, sizeof(opt_float))	--scan in PCGInit1 requires reset
-			C.cudaMemset(pd.scanBetaNumerator, 0, sizeof(opt_float))	--scan in PCGInit1 requires reset
+        [util.initParameters(`pd.parameters,problemSpec, params_,false)]
+        if pd.solverparameters.nIter < pd.solverparameters.nIterations then
+            C.cudaMemset(pd.scanAlphaNumerator, 0, sizeof(opt_float))	--scan in PCGInit1 requires reset
+            C.cudaMemset(pd.scanAlphaDenominator, 0, sizeof(opt_float))	--scan in PCGInit1 requires reset
+            C.cudaMemset(pd.scanBetaNumerator, 0, sizeof(opt_float))	--scan in PCGInit1 requires reset
 
-			gpu.PCGInit1(pd)
-			if isGraph then
-				gpu.PCGInit1_Graph(pd)	
-				gpu.PCGInit1_Finish(pd)	
-			end
-
+            gpu.PCGInit1(pd)
+            if isGraph then
+                gpu.PCGInit1_Graph(pd)
+                gpu.PCGInit1_Finish(pd)
+            end
+            var temp : opt_float
+            C.cudaMemcpy(&temp, pd.scanAlphaNumerator, sizeof(opt_float), C.cudaMemcpyDeviceToHost)
+            logSolver("scanAlphaNumerator: %f\n", temp)
             escape 
                 if problemSpec:UsesLambda() then
                     emit quote
@@ -1033,25 +1034,28 @@ return function(problemSpec)
                 end
             end
             cusparseOuter(pd)
-            for lIter = 0, pd.solverparameters.lIterations do				
+            for lIter = 0, pd.solverparameters.lIterations do
 
                 C.cudaMemset(pd.scanAlphaDenominator, 0, sizeof(opt_float))
                 C.cudaMemset(pd.q, 0, sizeof(opt_float))
 
                 if not initialization_parameters.use_cusparse then
-    				gpu.PCGStep1(pd)
-    				if isGraph then
-    					gpu.PCGStep1_Graph(pd)
-    				end
+                    gpu.PCGStep1(pd)
+                    if isGraph then
+                        gpu.PCGStep1_Graph(pd)
+                    end
                 end
 
-				-- only does anything if initialization_parameters.use_cusparse is true
+                -- only does anything if initialization_parameters.use_cusparse is true
                 cusparseInner(pd)
 
                 if multistep_alphaDenominator_compute then
                     gpu.PCGStep1_Finish(pd)
                 end
 				
+                C.cudaMemcpy(&temp, pd.scanAlphaDenominator, sizeof(opt_float), C.cudaMemcpyDeviceToHost)
+                logSolver("scanAlphaDenominator: %f\n", temp)
+
 				C.cudaMemset(pd.scanBetaNumerator, 0, sizeof(opt_float))
 				
 				if [problemSpec:UsesLambda()] and ((lIter + 1) % residual_reset_period) == 0 then
@@ -1065,9 +1069,11 @@ return function(problemSpec)
                     gpu.PCGStep2(pd)
                 end
                 gpu.PCGStep3(pd)
+                C.cudaMemcpy(&temp, pd.scanBetaNumerator, sizeof(opt_float), C.cudaMemcpyDeviceToHost)
+                logSolver("scanBetaNumerator: %f\n", temp)
 
 				-- save new rDotz for next iteration
-				C.cudaMemcpy(pd.scanAlphaNumerator, pd.scanBetaNumerator, sizeof(opt_float), C.cudaMemcpyDeviceToDevice)	
+				C.cudaMemcpy(pd.scanAlphaNumerator, pd.scanBetaNumerator, sizeof(opt_float), C.cudaMemcpyDeviceToDevice)
 				
 				if [problemSpec:UsesLambda()] then
 	                Q1 = fetchQ(pd)
@@ -1209,10 +1215,11 @@ return function(problemSpec)
 		pd.z:initGPU()
 		pd.p:initGPU()
 		pd.Ap_X:initGPU()
-        pd.CtC:initGPU()
-        pd.SSq:initGPU()
+        if [problemSpec:UsesLambda()] then
+            pd.CtC:initGPU()
+            pd.SSq:initGPU()
+        end
 		pd.preconditioner:initGPU()
-		pd.g:initGPU()
         pd.prevX:initGPU()
 
         initializeSolverParameters(&pd.solverparameters)

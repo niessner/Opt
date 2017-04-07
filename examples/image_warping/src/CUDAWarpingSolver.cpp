@@ -9,7 +9,7 @@ CUDAWarpingSolver::CUDAWarpingSolver(const std::vector<unsigned int>& dims) : m_
 
     const unsigned int N = m_dims[0] * m_dims[1];
 	const unsigned int numberOfVariables = N;
-
+	printf("CUDAWarpingSolver::CUDAWarpingSolver()");
 	// State
 	cudaSafeCall(cudaMalloc(&m_solverState.d_delta,		sizeof(float2)*numberOfVariables));
 	cudaSafeCall(cudaMalloc(&m_solverState.d_deltaA,		sizeof(float)*numberOfVariables));

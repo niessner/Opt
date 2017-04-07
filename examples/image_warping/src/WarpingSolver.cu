@@ -24,7 +24,7 @@
 #define WARP_SIZE 32u
 #define WARP_MASK (WARP_SIZE-1u)
 
-#define DEBUG_PRINT_INFO 0
+#define DEBUG_PRINT_INFO 1
 
 
 // For the naming scheme of the variables see:
@@ -315,6 +315,7 @@ void ApplyLinearUpdate(SolverInput& input, SolverState& state, SolverParameters&
 
 extern "C" double ImageWarpingSolveGNStub(SolverInput& input, SolverState& state, SolverParameters& parameters)
 {
+	printf("ImageWarpingSolveGNStub\n");
     CUDATimer timer;
 
 	for (unsigned int nIter = 0; nIter < parameters.nNonLinearIterations; nIter++)

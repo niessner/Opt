@@ -21,7 +21,7 @@ public:
 
     virtual void solveAll() {
         combinedSolveInit();
-        for (auto s : m_solverInfo) {
+        for (auto& s : m_solverInfo) {
             if (s.enabled) {
                 singleSolve(s);
             }
@@ -88,14 +88,14 @@ protected:
         std::string name;
         bool enabled;
         void set(std::shared_ptr<SolverBase> _solver, std::string _name, bool _enabled) {
-            solver = std::move(_solver);
+            solver = _solver;//std::move(_solver);
             name = _name;
             enabled = _enabled;
         }
     };
     std::vector<SolverInfo> m_solverInfo;
 
-    virtual void singleSolve(SolverInfo s) {
+    virtual void singleSolve(SolverInfo& s) {
         preSingleSolve();
         if (m_combinedSolverParameters.numIter == 1) {
             preNonlinearSolve(0);
