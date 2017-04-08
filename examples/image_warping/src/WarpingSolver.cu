@@ -24,7 +24,7 @@
 #define WARP_SIZE 32u
 #define WARP_MASK (WARP_SIZE-1u)
 
-#define DEBUG_PRINT_INFO 1
+#define DEBUG_PRINT_INFO 0
 
 
 // For the naming scheme of the variables see:
@@ -139,7 +139,7 @@ void Initialization(SolverInput& input, SolverState& state, SolverParameters& pa
 #   if DEBUG_PRINT_INFO
         float scanAlpha = 0.0f;
         cudaSafeCall(cudaMemcpy(&scanAlpha, state.d_scanAlpha, sizeof(float), cudaMemcpyDeviceToHost));
-        printf("ScanAlpha: %f\n", scanAlpha);
+        printf("ScanAlphaNum: %.9g\n", scanAlpha);
 #   endif
 
 	timer.startEvent("PCGInit_Kernel2");
@@ -254,7 +254,7 @@ void PCGIteration(SolverInput& input, SolverState& state, SolverParameters& para
 #   if DEBUG_PRINT_INFO
         float scanAlpha = 0.0f;
         cudaSafeCall(cudaMemcpy(&scanAlpha, state.d_scanAlpha, sizeof(float), cudaMemcpyDeviceToHost));
-        printf("ScanAlpha: %f\n", scanAlpha);
+        printf("ScanAlphaDenom: %.9g\n", scanAlpha);
 #   endif
 
     cudaSafeCall(cudaMemset(state.d_scanBeta, 0, sizeof(float)));
@@ -268,7 +268,7 @@ void PCGIteration(SolverInput& input, SolverState& state, SolverParameters& para
 #   if DEBUG_PRINT_INFO
         float scanBeta = 0.0f;
         cudaSafeCall(cudaMemcpy(&scanBeta, state.d_scanBeta, sizeof(float), cudaMemcpyDeviceToHost));
-        printf("ScanBeta: %f\n", scanBeta);
+        printf("ScanBeta: %.9g\n", scanBeta);
 #   endif
 
 	timer.startEvent("PCGStep_Kernel3");
