@@ -27,7 +27,7 @@ typedef struct Opt_InitializationParameters 	Opt_InitializationParameters;
 Opt_State* Opt_NewState(Opt_InitializationParameters params);
 
 // load the problem specification including the energy function from 'filename' and
-// initializer a solver of type 'solverkind' (currently only 'solverGaussNewtonGPU' 
+// initializer a solver of type 'solverkind' (currently only 'gaussNewtonGPU' 
 // and 'LMGPU' are supported)
 Opt_Problem* Opt_ProblemDefine(Opt_State* state, const char* filename, const char* solverkind);
 void Opt_ProblemDelete(Opt_State* state, Opt_Problem* problem);
