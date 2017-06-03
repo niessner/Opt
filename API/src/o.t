@@ -121,10 +121,11 @@ end
 struct opt.Plan(S.Object) {
     init : {&opaque,&&opaque} -> {} -- plan.data,params
     setsolverparameter : {&opaque,rawstring,&opaque} -> {} -- plan.data,name,param
+    free : {&opaque} -> {} -- plan.data
     step : {&opaque,&&opaque} -> int
     cost : {&opaque} -> double
     data : &opaque
-} 
+}
 
 struct opt.Problem {} -- just used as an opaque type, pointers are actually just the ID
 local function problemDefine(filename, kind, pid)
@@ -133,6 +134,13 @@ local function problemDefine(filename, kind, pid)
     pid[0] = problemmetadata.id
 end
 problemDefine = terralib.cast({rawstring, rawstring, &int} -> {}, problemDefine)
+
+
+local function problemDelete(pid)
+    -- TODO: Some other value?
+    problems[pid] = "DELETED"
+end
+problemDelete = terralib.cast({int} -> {}, problemDelete)
 
 local List = terralib.newlist
 A:Extern("ExpLike",function(x) return ad.Exp:isclassof(x) or ad.ExpVector:isclassof(x) end)
@@ -196,16 +204,16 @@ function opt.ProblemSpec()
     ps.parameters = terralib.newlist() -- ProblemParam*
     ps.names = {} -- name -> index in parameters list
     ps.functions = List() -- ProblemFunctions*
-	ps.maxStencil = 0
-	ps.stage = "inputs"
-	ps.usepreconditioner = false
-	ps.problemkind = opt.problemkind
-	return ps
+    ps.maxStencil = 0
+    ps.stage = "inputs"
+    ps.usepreconditioner = false
+    ps.problemkind = opt.problemkind
+    return ps
 end
 
 function ProblemSpec:UsePreconditioner(v)
-	self:Stage "inputs"
-	self.usepreconditioner = v
+    self:Stage "inputs"
+    self.usepreconditioner = v
 end
 function ProblemSpec:Stage(name)
     assert(PROBLEM_STAGES[self.stage] <= PROBLEM_STAGES[name], "all inputs must be specified before functions are added")
@@ -223,12 +231,12 @@ function ImageParam:terratype() return self.imagetype:terratype() end
 
 function ProblemSpec:MaxStencil()
     self:Stage "functions"
-	return self.maxStencil
+    return self.maxStencil
 end
 
 function ProblemSpec:Stencil(stencil) 
     self:Stage "inputs"
-	self.maxStencil = math.max(stencil, self.maxStencil)
+    self.maxStencil = math.max(stencil, self.maxStencil)
 end
 
 function ProblemSpec:newparameter(p)
@@ -502,8 +510,8 @@ function ImageType:terratype()
     local textured,pitched = self:usestexture()
     local Index = self.ispace:indextype()
     function Image.metamethods.__typename()
-	  return string.format("Image(%s,%s,%d)",tostring(self.scalartype),tostring(self.ispace),channelcount)
-	end
+      return string.format("Image(%s,%s,%d)",tostring(self.scalartype),tostring(self.ispace),channelcount)
+    end
 
     local VT = &vector(scalartype,channelcount)    
     -- reads
@@ -577,10 +585,6 @@ function ImageType:terratype()
     end
     local cardinality = self.ispace:cardinality()
     terra Image:totalbytes() return sizeof(vectortype)*cardinality end
-	terra Image:initCPU()
-		self.data = [&vectortype](C.malloc(self:totalbytes()))
-		C.memset(self.data,0,self:totalbytes())
-	end
     if textured then
         local W,H = cardinality,0
         if pitched then
@@ -595,14 +599,27 @@ function ImageType:terratype()
             end
             self.data = [&vectortype](ptr)
         end
+        terra Image:freeData()
+            if self.data ~= nil then
+                cd(C.cudaDestroyTextureObject(self.tex))
+                cd(C.cudaFree([&opaque](self.data)))
+                self.data = nil
+            end
+        end
     else
         terra Image:setGPUptr(ptr : &uint8) self.data = [&vectortype](ptr) end
+        terra Image:freeData()
+            if self.data ~= nil then
+                cd(C.cudaFree([&opaque](self.data)))
+                self.data = nil
+            end
+        end
     end
-	terra Image:initFromGPUptr( ptr : &uint8 )
+    terra Image:initFromGPUptr( ptr : &uint8 )
         self.data = nil
         self:setGPUptr(ptr)
     end
-	terra Image:initGPU()
+    terra Image:initGPU()
         var data : &uint8
         cd(C.cudaMalloc([&&opaque](&data), self:totalbytes()))
         cd(C.cudaMemset([&opaque](data), 0, self:totalbytes()))
@@ -692,11 +709,21 @@ function UnknownType:terratype()
                 end
             end
         end
+        terra T:freeData()
+            cd(C.cudaFree(self._contiguousallocation))
+        end
     else
         terra T:initGPU()
             escape
                 for i,ip in ipairs(images) do
                     emit quote self.[ip.name]:initGPU() end
+                end
+            end
+        end
+        terra T:freeData()
+            escape
+                for i,ip in ipairs(images) do
+                    emit quote self.[ip.name]:freeData() end
                 end
             end
         end
@@ -817,18 +844,18 @@ end
 
 local function problemPlan(id, dimensions, pplan)
     local success,p = xpcall(function()  
-		local problemmetadata = assert(problems[id])
+        local problemmetadata = assert(problems[id])
         opt.dimensions = dimensions
         opt.math = problemmetadata.kind:match("GPU") and util.gpuMath or util.cpuMath
         opt.problemkind = problemmetadata.kind
-		local b = terralib.currenttimeinseconds()
+        local b = terralib.currenttimeinseconds()
         local tbl = opt.problemSpecFromFile(problemmetadata.filename)
         assert(ProblemSpec:isclassof(tbl))
-		local result = compilePlan(tbl,problemmetadata.kind)
-		local e = terralib.currenttimeinseconds()
-		print("compile time: ",e - b)
-		allPlans:insert(result)
-		pplan[0] = result()
+        local result = compilePlan(tbl,problemmetadata.kind)
+        local e = terralib.currenttimeinseconds()
+        print("compile time: ",e - b)
+        allPlans:insert(result)
+        pplan[0] = result()
         print("problem plan complete")
     end,function(err) errorPrint(debug.traceback(err,2)) end)
 end
@@ -883,7 +910,7 @@ function ad.ProblemSpec()
 end
 function ProblemSpecAD:UsesLambda() return self.P:UsesLambda() end
 function ProblemSpecAD:UsePreconditioner(v)
-	self.P:UsePreconditioner(v)
+    self.P:UsePreconditioner(v)
 end
 
 function ProblemSpecAD:Image(name,typ,dims,idx,isunknown)
@@ -2447,17 +2474,17 @@ terra opt.ProblemDefine(filename : rawstring, kind : rawstring)
     return [&opt.Problem](id)
 end 
 terra opt.ProblemDelete(p : &opt.Problem)
-    var id = int64(p)
-    --TODO: remove from problem table
+    var id = int(int64(p))
+    problemDelete(id)
 end
 terra opt.ProblemPlan(problem : &opt.Problem, dimensions : &uint32) : &opt.Plan
-	var p : &opt.Plan = nil 
-	problemPlan(int(int64(problem)),dimensions,&p)
-	return p
-end 
+    var p : &opt.Plan = nil 
+    problemPlan(int(int64(problem)),dimensions,&p)
+    return p
+end
 
 terra opt.PlanFree(plan : &opt.Plan)
-    -- TODO: plan should also have a free implementation
+    plan.free(plan.data)
     plan:delete()
 end
 

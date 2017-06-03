@@ -152,53 +152,53 @@ return function(problemSpec)
     
 
     local struct PlanData {
-		plan : opt.Plan
-		parameters : problemSpec:ParameterType()
+        plan : opt.Plan
+        parameters : problemSpec:ParameterType()
         solverparameters : SolverParameters
-		scratch : &opt_float
+        scratch : &opt_float
 
-		delta : TUnknownType	--current linear update to be computed -> num vars
-		r : TUnknownType		--residuals -> num vars	--TODO this needs to be a 'residual type'
+        delta : TUnknownType	--current linear update to be computed -> num vars
+        r : TUnknownType		--residuals -> num vars	--TODO this needs to be a 'residual type'
         b : TUnknownType        --J^TF. Constant during inner iterations, only used to recompute r to counteract drift -> num vars --TODO this needs to be a 'residual type'
         Adelta : TUnknownType       -- (A'A+D'D)delta TODO this needs to be a 'residual type'
-		z : TUnknownType		--preconditioned residuals -> num vars	--TODO this needs to be a 'residual type'
-		p : TUnknownType		--descent direction -> num vars
-		Ap_X : TUnknownType	--cache values for next kernel call after A = J^T x J x p -> num vars
+        z : TUnknownType		--preconditioned residuals -> num vars	--TODO this needs to be a 'residual type'
+        p : TUnknownType		--descent direction -> num vars
+        Ap_X : TUnknownType	--cache values for next kernel call after A = J^T x J x p -> num vars
         CtC : TUnknownType -- The diagonal matrix C'C for the inner linear solve (J'J+C'C)x = J'F Used only by LM
-		preconditioner : TUnknownType --pre-conditioner for linear system -> num vars
+        preconditioner : TUnknownType --pre-conditioner for linear system -> num vars
         SSq : TUnknownType -- Square of jacobi scaling diagonal
-		g : TUnknownType		--gradient of F(x): g = -2J'F -> num vars
-		
+        g : TUnknownType		--gradient of F(x): g = -2J'F -> num vars
+
         prevX : TUnknownType -- Place to copy unknowns to before speculatively updating. Avoids hassle when (X + delta) - delta != X 
 
-		scanAlphaNumerator : &opt_float
-		scanAlphaDenominator : &opt_float
-		scanBetaNumerator : &opt_float
+        scanAlphaNumerator : &opt_float
+        scanAlphaDenominator : &opt_float
+        scanBetaNumerator : &opt_float
 
         modelCost : &opt_float    -- modelCost = L(delta) where L(h) = F' F + 2 h' J' F + h' J' J h
         q : &opt_float -- Q value for zeta calculation (see CERES)
-		
-		timer : Timer
-		endSolver : util.TimerEvent
 
-	    prevCost : opt_float
-	    
-	    J_csrValA : &opt_float
-	    J_csrColIndA : &int
-	    J_csrRowPtrA : &int
-	    
-	    JT_csrValA : &float
-		JT_csrRowPtrA : &int
-		JT_csrColIndA : &int
-		
-		JTJ_csrValA : &float
-		JTJ_csrRowPtrA : &int
-		JTJ_csrColIndA : &int
-		
-		JTJ_nnz : int
-	    
-	    Jp : &float
-	}
+        timer : Timer
+        endSolver : util.TimerEvent
+
+        prevCost : opt_float
+        
+        J_csrValA : &opt_float
+        J_csrColIndA : &int
+        J_csrRowPtrA : &int
+        
+        JT_csrValA : &float
+        JT_csrRowPtrA : &int
+        JT_csrColIndA : &int
+
+        JTJ_csrValA : &float
+        JTJ_csrRowPtrA : &int
+        JTJ_csrColIndA : &int
+
+        JTJ_nnz : int
+        
+        Jp : &float
+    }
 	if initialization_parameters.use_cusparse then
 	    PlanData.entries:insert {"handle", CUsp.cusparseHandle_t }
 	    PlanData.entries:insert {"desc", CUsp.cusparseMatDescr_t }
@@ -220,7 +220,7 @@ return function(problemSpec)
             end
             swapCol(pd,i,minidx)
         end
-	end
+    end
     local terra wrap(c : int, v : float)
         if c < 0 then
             if v ~= 0.f then
@@ -1145,13 +1145,13 @@ return function(problemSpec)
             iteration_summary_.gradient_max_norm <= options_.gradient_tolerance
             ]]
 
-			pd.solverparameters.nIter = pd.solverparameters.nIter + 1
-			return 1
-		else
-			cleanup(pd)
-		    return 0
-		end
-	end
+            pd.solverparameters.nIter = pd.solverparameters.nIter + 1
+            return 1
+        else
+            cleanup(pd)
+            return 0
+        end
+    end
 
     local terra cost(data_ : &opaque) : double
         var pd = [&PlanData](data_)
@@ -1197,10 +1197,41 @@ return function(problemSpec)
         logSolver("Warning: tried to set nonexistent solver parameter %s\n", name)
     end
 
+    local terra free(data_ : &opaque)
+        var pd = [&PlanData](data_)
+        pd.delta:freeData()
+        pd.r:freeData()
+        pd.b:freeData()
+        pd.Adelta:freeData()
+        pd.z:freeData()
+        pd.p:freeData()
+        pd.Ap_X:freeData()
+        pd.CtC:freeData()
+        pd.SSq:freeData()
+        pd.preconditioner:freeData()
+        pd.g:freeData()
+        pd.prevX:freeData()
+
+        [util.freePrecomputedImages(`pd.parameters,problemSpec)]
+
+        cd(C.cudaFree([&opaque](pd.scanAlphaNumerator)))
+        cd(C.cudaFree([&opaque](pd.scanBetaNumerator)))
+        cd(C.cudaFree([&opaque](pd.scanAlphaDenominator)))
+        cd(C.cudaFree([&opaque](pd.modelCost)))
+
+        cd(C.cudaFree([&opaque](pd.scratch)))
+        cd(C.cudaFree([&opaque](pd.q)))
+        
+        -- TODO: correctly deallocate when using cusparse
+        pd.J_csrValA = nil
+        pd.JTJ_csrRowPtrA = nil
+        -- TODO: Rearchitect to enable deleting of the plan data
+    end
+
 	local terra makePlan() : &opt.Plan
 		var pd = PlanData.alloc()
 		pd.plan.data = pd
-		pd.plan.init,pd.plan.step,pd.plan.cost,pd.plan.setsolverparameter = init,step,cost,setSolverParameter
+		pd.plan.init,pd.plan.step,pd.plan.cost,pd.plan.setsolverparameter,pd.plan.free = init,step,cost,setSolverParameter,free
 		pd.delta:initGPU()
 		pd.r:initGPU()
         pd.b:initGPU()
@@ -1228,5 +1259,6 @@ return function(problemSpec)
 		pd.JTJ_csrRowPtrA = nil
 		return &pd.plan
 	end
+
 	return makePlan
 end

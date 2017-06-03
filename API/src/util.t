@@ -311,7 +311,7 @@ terra Timer:cleanup()
         C.cudaEventDestroy(eventInfo.startEvent);
         C.cudaEventDestroy(eventInfo.endEvent);
     end
-	self.timingInfo:delete()
+    self.timingInfo:delete()
 end 
 
 
@@ -584,6 +584,18 @@ util.initPrecomputedImages = function(self, ProblemSpec)
     		    self.[entry.name]:initGPU()
     		end
     	end
+    end
+    return stmts
+end
+
+util.freePrecomputedImages = function(self, ProblemSpec)
+    local stmts = terralib.newlist()
+    for _, entry in ipairs(ProblemSpec.parameters) do
+        if entry.kind == "ImageParam" and entry.idx == "alloc" then
+            stmts:insert quote
+                self.[entry.name]:freeData()
+            end
+        end
     end
     return stmts
 end
