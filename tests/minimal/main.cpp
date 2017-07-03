@@ -5,7 +5,7 @@
 #include <iostream>
 #include <cuda_runtime.h>
 #define STB_IMAGE_WRITE_IMPLEMENTATION
-#include "stb_image_write.h"
+#include "../shared/stb_image_write.h"
 
 void solveLaplacian(int width, int height, float* unknown, float* target) {
     Opt_InitializationParameters param;
@@ -21,6 +21,8 @@ void solveLaplacian(int width, int height, float* unknown, float* target) {
     // run the solver
     void* problem_data[] = { unknown, target };
     Opt_ProblemSolve(state, plan, problem_data);
+    Opt_PlanFree(state, plan);
+    Opt_ProblemDelete(state, problem);
 }
 
 void saveMonochromeImage(char const * filename, const int width, const int height, float* d_data) {
@@ -42,7 +44,7 @@ int main(){
     const int dim = 512;
     float* scratch = new float[dim*dim];
     for (int i = 0; i < dim*dim; ++i) {
-        scratch[i] = (double)rand() / (double)RAND_MAX;
+        scratch[i] = (float)((double)rand() / (double)RAND_MAX);
     }
     float *target, *unknown;
     size_t fSize = dim*dim*sizeof(float);

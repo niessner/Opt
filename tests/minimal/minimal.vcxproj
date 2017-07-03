@@ -111,10 +111,10 @@ xcopy /Y /D "..\..\API\release\include\*.h" "."</Command>
     <None Include="laplacian.t" />
   </ItemGroup>
   <ItemGroup>
-    <ClInclude Include="stb_image_write.h" />
+    <ClCompile Include="main.cpp" />
   </ItemGroup>
   <ItemGroup>
-    <ClCompile Include="main.cpp" />
+    <ClInclude Include="..\shared\stb_image_write.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">
