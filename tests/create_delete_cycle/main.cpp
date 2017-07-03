@@ -22,11 +22,12 @@ void solveLaplacian(int width, int height, float* unknown, float* target) {
     for (int i = 0; i < 1000; ++i) {
         std::cout << "Iteration: " << i << std::endl;
         Opt_Plan* plan = Opt_ProblemPlan(state, problem, dims);
-        // run the solver
-        void* problem_data[] = { unknown, target };
-        Opt_ProblemSolve(state, plan, problem_data);
         Opt_PlanFree(state, plan);
     }
+    Opt_Plan* plan = Opt_ProblemPlan(state, problem, dims);
+    // run the solver
+    void* problem_data[] = { unknown, target };
+    Opt_ProblemSolve(state, plan, problem_data);
     Opt_ProblemDelete(state, problem);
 }
 
