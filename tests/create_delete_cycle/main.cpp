@@ -13,15 +13,20 @@ void solveLaplacian(int width, int height, float* unknown, float* target) {
     param.verbosityLevel = 1;
     param.collectPerKernelTimingInfo = 1;
     Opt_State* state = Opt_NewState(param);
+
+
     // load the Opt DSL file containing the cost description
     Opt_Problem* problem = Opt_ProblemDefine(state, "laplacian.t", "gaussNewtonGPU");
     // describe the dimensions of the instance of the problem
     unsigned int dims[] = { width, height };
-    Opt_Plan* plan = Opt_ProblemPlan(state, problem, dims);
-    // run the solver
-    void* problem_data[] = { unknown, target };
-    Opt_ProblemSolve(state, plan, problem_data);
-    Opt_PlanFree(state, plan);
+    for (int i = 0; i < 1000; ++i) {
+        std::cout << "Iteration: " << i << std::endl;
+        Opt_Plan* plan = Opt_ProblemPlan(state, problem, dims);
+        // run the solver
+        void* problem_data[] = { unknown, target };
+        Opt_ProblemSolve(state, plan, problem_data);
+        Opt_PlanFree(state, plan);
+    }
     Opt_ProblemDelete(state, problem);
 }
 
