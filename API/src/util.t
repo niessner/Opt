@@ -652,8 +652,8 @@ local checkedLaunch = macro(function(kernelName, apicall)
         r
     end end)
 
-local GRID_SIZES = { {256,1,1}, {16,16,1}, {8,8,4} }
 
+local BLOCK_DIMS = { {256,1,1}, {16,16,1}, {8,8,4} }
 
 local function makeGPULauncher(PlanData,kernelName,ft,compiledKernel)
     kernelName = kernelName.."_"..tostring(ft)
@@ -668,13 +668,13 @@ local function makeGPULauncher(PlanData,kernelName,ft,compiledKernel)
             local exps = terralib.newlist()
             for i = 1,3 do
                local dim = #ispace.dims >= i and ispace.dims[i].size or 1
-                local bs = GRID_SIZES[#ispace.dims][i]
+                local bs = BLOCK_DIMS[#ispace.dims][i]
                 exps:insert(dim)
                 exps:insert(bs)
             end
             return exps
         else
-            return {`pd.parameters.[ft.graphname].N,256,1,1,1,1}
+            return {`pd.parameters.[ft.graphname].N,BLOCK_DIMS[1][1],1,1,1,1}
         end
     end
     local terra GPULauncher(pd : &PlanData, [params])
@@ -715,13 +715,13 @@ function util.makeGPUFunctions(problemSpec, PlanData, delegate, names)
 	       assert(dimcount <= 3, "cannot launch over images with more than 3 dims")
            local ks = delegate.CenterFunctions(ispace,problemfunction.functionmap)
            for name,func in pairs(ks) do
-                kernelFunctions[getkname(name,problemfunction.typ)] = { kernel = func , annotations = { {"maxntidx", GRID_SIZES[dimcount][1]}, {"maxntidy", GRID_SIZES[dimcount][2]}, {"maxntidz", GRID_SIZES[dimcount][3]}, {"minctasm",1} } }
+                kernelFunctions[getkname(name,problemfunction.typ)] = { kernel = func , annotations = { {"maxntidx", BLOCK_DIMS[dimcount][1]}, {"maxntidy", BLOCK_DIMS[dimcount][2]}, {"maxntidz", BLOCK_DIMS[dimcount][3]}, {"minctasm",1} } }
            end
         else
             local graphname = problemfunction.typ.graphname
             local ks = delegate.GraphFunctions(graphname,problemfunction.functionmap)
             for name,func in pairs(ks) do            
-                kernelFunctions[getkname(name,problemfunction.typ)] = { kernel = func , annotations = { {"maxntidx", 256}, {"minctasm",1} } }
+                kernelFunctions[getkname(name,problemfunction.typ)] = { kernel = func , annotations = { {"maxntidx", BLOCK_DIMS[1][1]}, {"minctasm",1} } }
             end
         end
     end
