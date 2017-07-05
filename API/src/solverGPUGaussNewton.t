@@ -76,9 +76,6 @@ end
 
 local gpuMath = util.gpuMath
 
-opt.BLOCK_SIZE = 16
-local BLOCK_SIZE =  opt.BLOCK_SIZE
-
 local FLOAT_EPSILON = `[opt_float](0.00000001f) 
 -- GAUSS NEWTON (or LEVENBERG-MARQUADT)
 return function(problemSpec)
