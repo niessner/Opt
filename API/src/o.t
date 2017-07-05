@@ -823,7 +823,7 @@ function ProblemSpec:Graph(name, idx, ...)
     self:newparameter(GraphParam(GraphType,name,idx))
 end
 
-local allPlans = terralib.newlist()
+local activePlans = terralib.newlist()
 
 errorPrint = rawget(_G,"errorPrint") or print
 
@@ -854,12 +854,24 @@ local function problemPlan(id, dimensions, pplan)
         local result = compilePlan(tbl,problemmetadata.kind)
         local e = terralib.currenttimeinseconds()
         print("compile time: ",e - b)
-        allPlans:insert(result)
         pplan[0] = result()
+        activePlans[tostring(pplan[0])] = result
         print("problem plan complete")
+        collectgarbage()
+        print(collectgarbage("count"))
     end,function(err) errorPrint(debug.traceback(err,2)) end)
 end
 problemPlan = terralib.cast({int,&uint32,&&opt.Plan} -> {}, problemPlan)
+
+local function planFree(pplan)
+    local success,p = xpcall(function()
+        activePlans[tostring(pplan)] = nil
+        print("plan free complete")
+        collectgarbage()
+        print(collectgarbage("count"))
+    end,function(err) errorPrint(debug.traceback(err,2)) end)
+end
+planFree = terralib.cast({&opt.Plan} -> {}, planFree)
 
 function Offset:__tostring() return string.format("(%s)",self.data:map(tostring):concat(",")) end
 function GraphElement:__tostring() return ("%s_%s"):format(tostring(self.graph), self.element) end
@@ -2485,6 +2497,7 @@ end
 
 terra opt.PlanFree(plan : &opt.Plan)
     plan.free(plan.data)
+    planFree(plan)
     plan:delete()
 end
 
