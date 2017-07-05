@@ -643,7 +643,12 @@ end
 
 function UnknownType:init()
     self.ispaces,self.ispacetoimages = MapAndGroupBy(self.images, function(ip)
-        assert(ip.imagetype.scalartype == opt_float, "unknowns must be floating point numbers")
+        if opt_float == float then
+            assert(ip.imagetype.scalartype == float, "Unknowns must be floats when doublePrecision = false, but "..ip.name.." was declared as "..tostring(ip.imagetype.scalartype))
+        else
+            assert(opt_float == double, "Invalid unknown type "..opt_float)
+            assert(ip.imagetype.scalartype == double, "Unknowns must be doubles when doublePrecision = true, but "..ip.name.." was declared as "..tostring(ip.imagetype.scalartype))
+        end
         return ip.imagetype.ispace, ip
     end)
     self.ispacesizes = {}
@@ -899,7 +904,7 @@ function ImageAccess:shape() return self._shape end -- implementing AD's API for
 local emptygradient = {}
 function ImageAccess:gradient()
     if self.image.gradientimages then
-        assert(Offset:isclassof(self.index),"NYI - support for graphs")
+        assert(Offset:isclassof(self.index),"NYI - support for gradient images of graphs")
         local gt = {}
         for i,im in ipairs(self.image.gradientimages) do
             local k = im.unknown:shift(self.index)
@@ -1004,7 +1009,7 @@ function ProblemSpecAD:ComputedImage(name,dims,exp)
     local seen = {}
     exp:visit(function(a)
         if ImageAccess:isclassof(a) and a.image.location == A.UnknownLocation then
-            assert(Offset:isclassof(a.index),"NYI - support for graphs")
+            assert(Offset:isclassof(a.index),"NYI - support for precomputed graphs")
             if not seen[a] then
                 seen[a] = true
                 unknowns:insert(a)
@@ -1059,10 +1064,10 @@ function Image:__call(first,...)
         c = select(self:DimCount(), ...)
     end
     if GraphElement:isclassof(index) then    
-        assert(index.ispace == self.type.ispace,"graph element is in a different index space from image")
+        assert(index.ispace == self.type.ispace,"Graph element is in a different index space from image")
     end
     c = tonumber(c)
-    assert(not c or c < self.type.channelcount, "channel outside of range")
+    assert(not c or c < self.type.channelcount, "Channel outside of range")
     if self.scalar or c then
         return ImageAccess(self,ad.scalar,index,c or 0):asvar()
     else
@@ -1079,7 +1084,7 @@ function ImageVector:__call(...)
     local channelindex = self.images[1]:DimCount() + 1
     if #args == channelindex then
         local c = args[channelindex]
-        assert(c < #self.images, "channel outside of range")
+        assert(c < #self.images, "Channel outside of range")
         return self.images[c+1](unpack(args,1,channelindex-1))
     end
     local result = self.images:map(function(im) return im(unpack(args)) end)
@@ -1108,7 +1113,7 @@ function BoundsAccess:shift(o)
     return BoundsAccess(self.min:shift(o),self.max:shift(o))
 end
 function ImageAccess:shift(o)
-    assert(Offset:isclassof(self.index), "cannot shift graph accesses!")
+    assert(Offset:isclassof(self.index), "Cannot shift graph accesses!")
     return ImageAccess(self.image,self:shape(),self.index:shift(o),self.channel)
 end
 function IndexValue:shift(o)
@@ -1671,7 +1676,7 @@ local function createfunction(problemspec,name,Index,arguments,results,scatters)
         elseif image.location == A.UnknownLocation then
             return `P.X.[image.name]
         else
-            local sym = assert(extraarguments[image.location.idx],"unknown extra image")
+            local sym = assert(extraarguments[image.location.idx],"Unknown extra image")
             return `sym.[image.name]
         end
     end
@@ -1768,7 +1773,7 @@ local function createfunction(problemspec,name,Index,arguments,results,scatters)
     
     function emit(ir)
         assert(ir)
-        return assert(emitted[ir],"use before def")
+        return assert(emitted[ir],"Use before def")
     end
 
     local basecondition = Condition:create(List{})
