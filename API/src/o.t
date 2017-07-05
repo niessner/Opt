@@ -842,6 +842,12 @@ function opt.problemSpecFromFile(filename)
     return libinstance.Result()
 end
 
+local function printCurrentBytes()
+    collectgarbage()
+    collectgarbage()
+    print(collectgarbage("count"))
+end
+
 local function problemPlan(id, dimensions, pplan)
     local success,p = xpcall(function()  
         local problemmetadata = assert(problems[id])
@@ -857,8 +863,7 @@ local function problemPlan(id, dimensions, pplan)
         pplan[0] = result()
         activePlans[tostring(pplan[0])] = result
         print("problem plan complete")
-        collectgarbage()
-        print(collectgarbage("count"))
+        --printCurrentBytes()
     end,function(err) errorPrint(debug.traceback(err,2)) end)
 end
 problemPlan = terralib.cast({int,&uint32,&&opt.Plan} -> {}, problemPlan)
@@ -868,7 +873,7 @@ local function planFree(pplan)
         activePlans[tostring(pplan)] = nil
         print("plan free complete")
         collectgarbage()
-        print(collectgarbage("count"))
+        collectgarbage()
     end,function(err) errorPrint(debug.traceback(err,2)) end)
 end
 planFree = terralib.cast({&opt.Plan} -> {}, planFree)
