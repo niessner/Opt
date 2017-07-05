@@ -8,7 +8,7 @@
 #include "../shared/stb_image_write.h"
 
 void solveLaplacian(int width, int height, float* unknown, float* target) {
-    Opt_InitializationParameters param;
+    Opt_InitializationParameters param = {};
     param.doublePrecision = 0;
     param.verbosityLevel = 1;
     param.collectPerKernelTimingInfo = 1;

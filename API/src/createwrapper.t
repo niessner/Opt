@@ -97,6 +97,10 @@ struct Opt_InitializationParameters {
     -- If true, a cuda timer is used to collect per-kernel timing information
     -- while the solver is running. This adds a small amount of overhead to every kernel.
     collectPerKernelTimingInfo : int
+
+    -- Default block size for kernels (in threads). 
+    -- Must be a positive multiple of 32; if not, will default to 256.
+    threadsPerBlock : int
 }
 
 for name,type in pairs(apifunctions) do
@@ -136,6 +140,14 @@ local terra NewState(params : Opt_InitializationParameters) : &LibraryState
 
     C.lua_pushboolean(L,params.collectPerKernelTimingInfo);
     C.lua_setfield(L,LUA_GLOBALSINDEX,"_opt_collect_kernel_timing")
+
+    var threadsPerBlock = params.threadsPerBlock
+    if threadsPerBlock <= 0 or threadsPerBlock % 32 ~= 0 then
+        threadsPerBlock = 256
+    end
+
+    C.lua_pushnumber(L,threadsPerBlock);
+    C.lua_setfield(L,LUA_GLOBALSINDEX,"_opt_threads_per_block")
 
     C.lua_getfield(L,LUA_GLOBALSINDEX,"package")
 

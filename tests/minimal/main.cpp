@@ -8,10 +8,11 @@
 #include "../shared/stb_image_write.h"
 
 void solveLaplacian(int width, int height, float* unknown, float* target) {
-    Opt_InitializationParameters param;
+    Opt_InitializationParameters param = {};
     param.doublePrecision = 0;
     param.verbosityLevel = 1;
     param.collectPerKernelTimingInfo = 1;
+    //param.threadsPerBlock = 512;
     Opt_State* state = Opt_NewState(param);
     // load the Opt DSL file containing the cost description
     Opt_Problem* problem = Opt_ProblemDefine(state, "laplacian.t", "gaussNewtonGPU");

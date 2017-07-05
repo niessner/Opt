@@ -676,7 +676,7 @@ local function getBlockDims(blockSize)
     return { {blockSize,1,1}, {math.pow(2,dim2x),math.pow(2,dim2y),1}, {math.pow(2,dim3x),math.pow(2,dim3y),math.pow(2,dim3z)} }
 end
 
-local BLOCK_SIZE = 256
+local BLOCK_SIZE = _opt_threads_per_block
 assert(BLOCK_SIZE % 32 == 0, "BLOCK_SIZE should be a multiple of the warp size (32), but is "..tostring(BLOCK_SIZE))
 
 local BLOCK_DIMS = getBlockDims(BLOCK_SIZE)

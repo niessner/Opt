@@ -19,6 +19,10 @@ struct Opt_InitializationParameters {
 	// If true (nonzero), a cuda timer is used to collect per-kernel timing information
 	// while the solver is running. This adds a small amount of overhead to every kernel.
 	int collectPerKernelTimingInfo;
+
+	// Default block size for kernels (in threads). 
+	// Must be a positive multiple of 32; if not, will default to 256.
+	int threadsPerBlock;
 };
 
 typedef struct Opt_InitializationParameters 	Opt_InitializationParameters;
