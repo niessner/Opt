@@ -662,7 +662,8 @@ local function iLog2(x)
     return result
 end
 
-
+-- Get the block dimensions that best approximate a square/cube 
+-- in 2 or 3 dimensions while only using power of 2 side lengths.
 local function getBlockDims(blockSize)
     local LOG_BLOCK_SIZE = iLog2(blockSize)
     local dim2x = math.ceil(LOG_BLOCK_SIZE/2)
