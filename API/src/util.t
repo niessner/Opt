@@ -652,8 +652,34 @@ local checkedLaunch = macro(function(kernelName, apicall)
         r
     end end)
 
+-- Assumes x is (nonnegative) power of 2
+local function iLog2(x)
+    local result = 0
+    while x > 1 do
+        result = result + 1
+        x = x / 2
+    end
+    return result
+end
 
-local BLOCK_DIMS = { {256,1,1}, {16,16,1}, {8,8,4} }
+
+local function getBlockDims(blockSize)
+    local LOG_BLOCK_SIZE = iLog2(blockSize)
+    local dim2x = math.ceil(LOG_BLOCK_SIZE/2)
+    local dim2y = LOG_BLOCK_SIZE - dim2x
+
+    local dim3x = math.ceil(LOG_BLOCK_SIZE/3)
+    local dim3y = math.ceil((LOG_BLOCK_SIZE - dim3x)/2)
+    local dim3z = LOG_BLOCK_SIZE - dim3x - dim3y
+
+    return { {blockSize,1,1}, {math.pow(2,dim2x),math.pow(2,dim2y),1}, {math.pow(2,dim3x),math.pow(2,dim3y),math.pow(2,dim3z)} }
+end
+
+local BLOCK_SIZE = 256
+assert(BLOCK_SIZE % 32 == 0, "BLOCK_SIZE should be a multiple of the warp size (32), but is "..tostring(BLOCK_SIZE))
+
+local BLOCK_DIMS = getBlockDims(BLOCK_SIZE)
+
 
 local function makeGPULauncher(PlanData,kernelName,ft,compiledKernel)
     kernelName = kernelName.."_"..tostring(ft)
