@@ -657,22 +657,22 @@ return function(problemSpec)
         end -- :UsesLambda()
 	    return kernels
 	end
-	
+
 	function delegate.GraphFunctions(graphname,fmap,ES)
+        local startEdge, edgeCount, edgeStride = util.startEdge,util.edgeCount,util.edgeStride
+
 	    --print("ES-graph",fmap.derivedfrom)
 	    local kernels = {}
         terra kernels.PCGInit1_Graph(pd : PlanData)
-            var tIdx = 0
-            if util.getValidGraphElement(pd,[graphname],&tIdx) then
-                fmap.evalJTF(tIdx, pd.parameters, pd.r, pd.preconditioner)
+            for ind = startEdge(),edgeCount(pd,[graphname]),edgeStride() do
+                fmap.evalJTF(ind, pd.parameters, pd.r, pd.preconditioner)
             end
         end    
         
     	terra kernels.PCGStep1_Graph(pd : PlanData)
             var d = opt_float(0.0f)
-            var tIdx = 0 
-            if util.getValidGraphElement(pd,[graphname],&tIdx) then
-               d = d + fmap.applyJTJ(tIdx, pd.parameters, pd.p, pd.Ap_X)
+            for ind = startEdge(),edgeCount(pd,[graphname]),edgeStride() do
+               d = d + fmap.applyJTJ(ind, pd.parameters, pd.p, pd.Ap_X)
             end 
             if not [multistep_alphaDenominator_compute] then
                 d = util.warpReduce(d)
@@ -683,17 +683,15 @@ return function(problemSpec)
         end
 
         terra kernels.computeAdelta_Graph(pd : PlanData)
-            var tIdx = 0 
-            if util.getValidGraphElement(pd,[graphname],&tIdx) then
-                fmap.applyJTJ(tIdx, pd.parameters, pd.delta, pd.Adelta)
+            for ind = startEdge(),edgeCount(pd,[graphname]),edgeStride() do
+                fmap.applyJTJ(ind, pd.parameters, pd.delta, pd.Adelta)
             end
         end
 
         terra kernels.computeCost_Graph(pd : PlanData)
             var cost : opt_float = opt_float(0.0f)
-            var tIdx = 0
-            if util.getValidGraphElement(pd,[graphname],&tIdx) then
-                cost = fmap.cost(tIdx, pd.parameters)
+            for ind = startEdge(),edgeCount(pd,[graphname]),edgeStride() do
+                cost = cost + fmap.cost(ind, pd.parameters)
             end 
             cost = util.warpReduce(cost)
             if (util.laneid() == 0) then
@@ -705,26 +703,23 @@ return function(problemSpec)
             end
         else
             terra kernels.saveJToCRS_Graph(pd : PlanData)
-                var tIdx = 0
                 var [parametersSym] = &pd.parameters
-                if util.getValidGraphElement(pd,[graphname],&tIdx) then
-                    [generateDumpJ(fmap.derivedfrom,fmap.dumpJ,tIdx,pd)]
+                for ind = startEdge(),edgeCount(pd,[graphname]),edgeStride() do
+                    [generateDumpJ(fmap.derivedfrom,fmap.dumpJ,ind,pd)]
                 end
             end
         end
         if problemSpec:UsesLambda() then
             terra kernels.PCGComputeCtC_Graph(pd : PlanData)
-                var tIdx = 0
-                if util.getValidGraphElement(pd,[graphname],&tIdx) then
-                    fmap.computeCtC(tIdx, pd.parameters, pd.CtC)
+                for ind = startEdge(),edgeCount(pd,[graphname]),edgeStride() do
+                    fmap.computeCtC(ind, pd.parameters, pd.CtC)
                 end
             end    
 
             terra kernels.computeModelCost_Graph(pd : PlanData)          
                 var cost : opt_float = opt_float(0.0f)
-                var tIdx = 0
-                if util.getValidGraphElement(pd,[graphname],&tIdx) then
-                    cost = fmap.modelcost(tIdx, pd.parameters, pd.delta)
+                for ind = startEdge(),edgeCount(pd,[graphname]),edgeStride() do
+                    cost = cost + fmap.modelcost(ind, pd.parameters, pd.delta)
                 end 
                 cost = util.warpReduce(cost)
                 if (util.laneid() == 0) then

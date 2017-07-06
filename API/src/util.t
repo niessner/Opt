@@ -601,8 +601,6 @@ util.freePrecomputedImages = function(self, ProblemSpec)
 end
 
 
-
-
 util.getValidUnknown = macro(function(pd,pw,ph)
 	return quote
 		@pw,@ph = blockDim.x * blockIdx.x + threadIdx.x, blockDim.y * blockIdx.y + threadIdx.y
@@ -610,16 +608,13 @@ util.getValidUnknown = macro(function(pd,pw,ph)
 		 @pw < pd.parameters.X:W() and @ph < pd.parameters.X:H() 
 	end
 end)
-util.getValidGraphElement = macro(function(pd,graphname,idx)
-	graphname = graphname:asvalue()
-	return quote
-		@idx = blockDim.x * blockIdx.x + threadIdx.x
-	in
-		 @idx < pd.parameters.[graphname].N 
-	end
-end)
 
-local positionForValidLane = util.positionForValidLane
+util.startEdge = macro(function() return `blockDim.x * blockIdx.x + threadIdx.x end)
+util.edgeCount = macro(function(pd,graphname)
+    graphname = graphname:asvalue()
+    return `pd.parameters.[graphname].N
+end)
+util.edgeStride = macro(function() return `blockDim.x * gridDim.x end)
 
 local cd = macro(function(apicall) 
     local apicallstr = tostring(apicall)
@@ -682,6 +677,21 @@ assert(BLOCK_SIZE % 32 == 0, "BLOCK_SIZE should be a multiple of the warp size (
 local BLOCK_DIMS = getBlockDims(BLOCK_SIZE)
 
 
+local terra terraMaximumResidentThreadsPerGrid()
+    var device : int = 0
+    cd(C.cudaGetDevice(&device))
+    var deviceProp : C.cudaDeviceProp
+    cd(C.cudaGetDeviceProperties(&deviceProp, device))
+    var maxResidentThreadsPerSM = 2048
+    if deviceProp.major == 2 then
+        maxResidentThreadsPerSM = 1536
+    end
+    return deviceProp.multiProcessorCount * maxResidentThreadsPerSM
+end
+
+
+local maximumResidentThreadsPerGrid = terraMaximumResidentThreadsPerGrid()
+
 local function makeGPULauncher(PlanData,kernelName,ft,compiledKernel)
     kernelName = kernelName.."_"..tostring(ft)
     local kernelparams = compiledKernel:gettype().parameters
@@ -701,7 +711,7 @@ local function makeGPULauncher(PlanData,kernelName,ft,compiledKernel)
             end
             return exps
         else
-            return {`pd.parameters.[ft.graphname].N,BLOCK_DIMS[1][1],1,1,1,1}
+            return {maximumResidentThreadsPerGrid,BLOCK_DIMS[1][1],1,1,1,1}
         end
     end
     local terra GPULauncher(pd : &PlanData, [params])
