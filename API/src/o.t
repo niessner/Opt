@@ -426,7 +426,7 @@ function IndexSpace:indextype()
         end
         
         terra Index:initFromCUDAParams(iteration : int) : bool
-            var linBlockID = util.linearBlockID(iteration)
+            var linBlockID = util.linearBlockID(iteration-1)
             var blocksInX = (([dims[1].size]+blockDim.x-1)/blockDim.x)
             var xBlockID:int,yBlockID:int,zBlockID:int
             escape
