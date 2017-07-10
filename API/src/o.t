@@ -340,6 +340,8 @@ function IndexSpace:ZeroOffset()
     return self._zerooffset
 end
 
+
+
 function IndexSpace:indextype()
     if self._terratype then return self._terratype end
     local dims = self.dims
@@ -403,17 +405,58 @@ function IndexSpace:indextype()
     terra Index:InBounds() return [ genbounds(self) ] end
     
     terra Index:InBoundsExpanded([params],[params2]) return [ genbounds(self,params,params2) ] end
-    
+
     if #dims <= 3 then
         local dimnames = "xyz"
-        terra Index:initFromCUDAParams() : bool
+
+        terra Index:validBlock(iteration : &int) : bool
+            var blocksInX = (([dims[1].size]+blockDim.x-1)/blockDim.x)
+            var blocksInY = 1
+            var blocksInZ = 1
+            @iteration = @iteration + 1
+            escape
+                if #dims > 1 then
+                    emit quote blocksInY = (([dims[2].size]+blockDim.y-1)/blockDim.y) end
+                    if #dims == 3 then
+                        emit quote blocksInZ = (([dims[2].size]+blockDim.z-1)/blockDim.z) end
+                    end
+                end
+                emit quote return util.linearBlockID(@iteration-1) < (blocksInX*blocksInY*blocksInZ) end
+            end 
+        end
+        
+        terra Index:initFromCUDAParams(iteration : int) : bool
+            var linBlockID = util.linearBlockID(iteration)
+            var blocksInX = (([dims[1].size]+blockDim.x-1)/blockDim.x)
+            var xBlockID:int,yBlockID:int,zBlockID:int
             escape
                 local lhs,rhs = terralib.newlist(),terralib.newlist()
+                if #dims == 1 then
+                    emit quote
+                        xBlockID = linBlockID
+                        yBlockID = 1
+                        zBlockID = 1
+                    end
+                elseif #dims == 2 then
+                    emit quote
+                        xBlockID = linBlockID % blocksInX
+                        yBlockID = linBlockID / blocksInX
+                        zBlockID = 1
+                    end
+                else --dims == 3
+                    emit quote
+                        var blocksInY = ((dims[2].size+blockDim.y-1)/blockDim.y)
+                        xBlockID = linBlockID % blocksInX
+                        yBlockID = (linBlockID / blocksInX) % blocksInY
+                        zBlockID = linBlockID / (blocksInX*blocksInY)
+                    end
+                end
+                local blockIDs = {xBlockID, yBlockID, zBlockID}
                 local valid = `true
                 for i = 1,#dims do
                     local name = dimnames:sub(i,i)
                     local l = `self.[fieldnames[i]]
-                    local r = `blockDim.[name] * blockIdx.[name] + threadIdx.[name]
+                    local r = `blockDim.[name] * [blockIDs[i]] + threadIdx.[name]
                     lhs:insert(l)
                     rhs:insert(r)
                     valid = `valid and l < [dims[i].size]

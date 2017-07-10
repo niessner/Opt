@@ -7,8 +7,6 @@ local ffi = require("ffi")
 local C = util.C
 local Timer = util.Timer
 
-local getValidUnknown = util.getValidUnknown
-
 local GuardedInvertType = { CERES = {}, MODIFIED_CERES = {}, EPSILON_ADD = {} }
 
 -- CERES default, ONCE_PER_SOLVE
@@ -293,7 +291,7 @@ return function(problemSpec)
 	    local unknownElement = UnknownType:VectorTypeForIndexSpace(UnknownIndexSpace)
 	    local Index = UnknownIndexSpace:indextype()
 
-        local unknownWideReduction = macro(function(idx,val,reductionTarget) return quote
+        local unknownWideReduction = macro(function(val,reductionTarget) return quote
             val = util.warpReduce(val)
             if (util.laneid() == 0) then                
                 util.atomicAdd(reductionTarget, val)
@@ -346,84 +344,97 @@ return function(problemSpec)
             var d : opt_float = opt_float(0.0f) -- init for out of bounds lanes
         
             var idx : Index
-            if idx:initFromCUDAParams() then
-        
-                -- residuum = J^T x -F - A x delta_0  => J^T x -F, since A x x_0 == 0                            
-                var residuum : unknownElement = 0.0f
-                var pre : unknownElement = 0.0f	
-            
-                if not fmap.exclude(idx,pd.parameters) then 
+            var iter = 0
+            while idx:validBlock(&iter) do
+                if idx:initFromCUDAParams(iter) then
+                    -- residuum = J^T x -F - A x delta_0  => J^T x -F, since A x x_0 == 0                            
+                    var residuum : unknownElement = 0.0f
+                    var pre : unknownElement = 0.0f	
                 
-                    pd.delta(idx) = opt_float(0.0f)   
+                    if not fmap.exclude(idx,pd.parameters) then 
+                    
+                        pd.delta(idx) = opt_float(0.0f)   
+                    
+                        residuum, pre = fmap.evalJTF(idx, pd.parameters)
+                        residuum = -residuum
+                        pd.r(idx) = residuum
+                    
+                        if not problemSpec.usepreconditioner then
+                            pre = opt_float(1.0f)
+                        end
+                    end        
                 
-                    residuum, pre = fmap.evalJTF(idx, pd.parameters)
-                    residuum = -residuum
-                    pd.r(idx) = residuum
-                
-                    if not problemSpec.usepreconditioner then
-                        pre = opt_float(1.0f)
+                    if (not fmap.exclude(idx,pd.parameters)) and (not isGraph) then		
+                        pre = guardedInvert(pre)
+                        var p = pre*residuum	-- apply pre-conditioner M^-1			   
+                        pd.p(idx) = p
+                    
+                        d = d + residuum:dot(p) 
                     end
-                end        
-            
-                if (not fmap.exclude(idx,pd.parameters)) and (not isGraph) then		
-                    pre = guardedInvert(pre)
-                    var p = pre*residuum	-- apply pre-conditioner M^-1			   
-                    pd.p(idx) = p
                 
-                    d = residuum:dot(p) 
+                    pd.preconditioner(idx) = pre
                 end
-            
-                pd.preconditioner(idx) = pre
-            end 
+                iter = iter + 1
+            end
             if not isGraph then
-                unknownWideReduction(idx,d,pd.scanAlphaNumerator)
+                unknownWideReduction(d,pd.scanAlphaNumerator)
             end
         end
     
         terra kernels.PCGInit1_Finish(pd : PlanData)	--only called for graphs
             var d : opt_float = opt_float(0.0f) -- init for out of bounds lanes
             var idx : Index
-            if idx:initFromCUDAParams() then
-                var residuum = pd.r(idx)			
-                var pre = pd.preconditioner(idx)
-            
-                pre = guardedInvert(pre)
-            
-                if not problemSpec.usepreconditioner then
-                    pre = opt_float(1.0f)
+            var iter = 0
+            while idx:validBlock(&iter) do
+                if idx:initFromCUDAParams(iter) then
+                    var residuum = pd.r(idx)			
+                    var pre = pd.preconditioner(idx)
+                
+                    pre = guardedInvert(pre)
+                
+                    if not problemSpec.usepreconditioner then
+                        pre = opt_float(1.0f)
+                    end
+                
+                    var p = pre*residuum	-- apply pre-conditioner M^-1
+                    pd.preconditioner(idx) = pre
+                    pd.p(idx) = p
+                    d = d + residuum:dot(p)
                 end
-            
-                var p = pre*residuum	-- apply pre-conditioner M^-1
-                pd.preconditioner(idx) = pre
-                pd.p(idx) = p
-                d = residuum:dot(p)
+                iter = iter + 1
             end
 
-            unknownWideReduction(idx,d,pd.scanAlphaNumerator)
+            unknownWideReduction(d,pd.scanAlphaNumerator)
         end
 
         terra kernels.PCGStep1(pd : PlanData)
             var d : opt_float = opt_float(0.0f)
             var idx : Index
-            if idx:initFromCUDAParams() and not fmap.exclude(idx,pd.parameters) then
-                var tmp : unknownElement = 0.0f
-                 -- A x p_k  => J^T x J x p_k 
-                tmp = fmap.applyJTJ(idx, pd.parameters, pd.p, pd.CtC)
-                pd.Ap_X(idx) = tmp					 -- store for next kernel call
-                d = pd.p(idx):dot(tmp)			 -- x-th term of denominator of alpha
+            var iter = 0
+            while idx:validBlock(&iter) do
+                if idx:initFromCUDAParams(iter) and not fmap.exclude(idx,pd.parameters) then
+                    var tmp : unknownElement = 0.0f
+                     -- A x p_k  => J^T x J x p_k 
+                    tmp = fmap.applyJTJ(idx, pd.parameters, pd.p, pd.CtC)
+                    pd.Ap_X(idx) = tmp					 -- store for next kernel call
+                    d = d + pd.p(idx):dot(tmp)			 -- x-th term of denominator of alpha
+                end
             end
             if not [multistep_alphaDenominator_compute] then
-                unknownWideReduction(idx,d,pd.scanAlphaDenominator)
+                unknownWideReduction(d,pd.scanAlphaDenominator)
             end
         end
         if multistep_alphaDenominator_compute then
             terra kernels.PCGStep1_Finish(pd : PlanData)
                 var d : opt_float = opt_float(0.0f)
                 var idx : Index
-                if idx:initFromCUDAParams() and not fmap.exclude(idx,pd.parameters) then
-                    d = pd.p(idx):dot(pd.Ap_X(idx))           -- x-th term of denominator of alpha
+                var iter = 0
+                while idx:validBlock(&iter) do
+                    if idx:initFromCUDAParams(iter) and not fmap.exclude(idx,pd.parameters) then
+                        d = d + pd.p(idx):dot(pd.Ap_X(idx))           -- x-th term of denominator of alpha
+                    end
                 end
-                unknownWideReduction(idx,d,pd.scanAlphaDenominator)
+                unknownWideReduction(d,pd.scanAlphaDenominator)
             end
         end
 
@@ -431,53 +442,59 @@ return function(problemSpec)
             var betaNum = opt_float(0.0f) 
             var q = opt_float(0.0f) -- Only used if LM
             var idx : Index
-            if idx:initFromCUDAParams() and not fmap.exclude(idx,pd.parameters) then
-                -- sum over block results to compute denominator of alpha
-                var alphaDenominator : opt_float = pd.scanAlphaDenominator[0]
-                var alphaNumerator : opt_float = pd.scanAlphaNumerator[0]
+            var iter = 0
+            while idx:validBlock(&iter) do
+                if idx:initFromCUDAParams(iter) and not fmap.exclude(idx,pd.parameters) then
+                    -- sum over block results to compute denominator of alpha
+                    var alphaDenominator : opt_float = pd.scanAlphaDenominator[0]
+                    var alphaNumerator : opt_float = pd.scanAlphaNumerator[0]
 
-                -- update step size alpha
-                var alpha = opt_float(0.0f)
-                alpha = alphaNumerator/alphaDenominator 
-    
-                var delta = pd.delta(idx)+alpha*pd.p(idx)       -- do a descent step
-                pd.delta(idx) = delta
-
-                var r = pd.r(idx)-alpha*pd.Ap_X(idx)				-- update residuum
-                pd.r(idx) = r										-- store for next kernel call
-
-                var pre = pd.preconditioner(idx)
-                if not problemSpec.usepreconditioner then
-                    pre = opt_float(1.0f)
-                end
+                    -- update step size alpha
+                    var alpha = opt_float(0.0f)
+                    alpha = alphaNumerator/alphaDenominator 
         
-                var z = pre*r										-- apply pre-conditioner M^-1
-                pd.z(idx) = z;										-- save for next kernel call
+                    var delta = pd.delta(idx)+alpha*pd.p(idx) -- do a descent step
+                    pd.delta(idx) = delta
 
-                betaNum = z:dot(r)									-- compute x-th term of the numerator of beta
+                    var r = pd.r(idx)-alpha*pd.Ap_X(idx)	-- update residuum
+                    pd.r(idx) = r							-- store for next kernel call
 
-                if [problemSpec:UsesLambda()] then
-                    -- computeQ    
-                    -- Right side is -2 of CERES versions, left is just negative version, 
-                    --  so after the dot product, just need to multiply by 2 to recover value identical to CERES  
-                    q = 0.5*(delta:dot(r + pd.b(idx))) 
+                    var pre = pd.preconditioner(idx)
+                    if not problemSpec.usepreconditioner then
+                        pre = opt_float(1.0f)
+                    end
+            
+                    var z = pre*r						-- apply pre-conditioner M^-1
+                    pd.z(idx) = z;						-- save for next kernel call
+
+                    betaNum = betaNum + z:dot(r)		-- compute x-th term of the numerator of beta
+
+                    if [problemSpec:UsesLambda()] then
+                        -- computeQ    
+                        -- Right side is -2 of CERES versions, left is just negative version, 
+                        --  so after the dot product, just need to multiply by 2 to recover value identical to CERES  
+                        q = q + 0.5*(delta:dot(r + pd.b(idx))) 
+                    end
                 end
             end
             
-            unknownWideReduction(idx,betaNum,pd.scanBetaNumerator)
+            unknownWideReduction(betaNum,pd.scanBetaNumerator)
             if [problemSpec:UsesLambda()] then
-                unknownWideReduction(idx,q,pd.q)
+                unknownWideReduction(q,pd.q)
             end
         end
 
         terra kernels.PCGStep2_1stHalf(pd : PlanData)
             var idx : Index
-            if idx:initFromCUDAParams() and not fmap.exclude(idx,pd.parameters) then
-                var alphaDenominator : opt_float = pd.scanAlphaDenominator[0]
-                var alphaNumerator : opt_float = pd.scanAlphaNumerator[0]
-                -- update step size alpha
-                var alpha = alphaNumerator/alphaDenominator 
-                pd.delta(idx) = pd.delta(idx)+alpha*pd.p(idx)       -- do a descent step
+            var iter = 0
+            while idx:validBlock(&iter) do
+                if idx:initFromCUDAParams(iter) and not fmap.exclude(idx,pd.parameters) then
+                    var alphaDenominator : opt_float = pd.scanAlphaDenominator[0]
+                    var alphaNumerator : opt_float = pd.scanAlphaNumerator[0]
+                    -- update step size alpha
+                    var alpha = alphaNumerator/alphaDenominator 
+                    pd.delta(idx) = pd.delta(idx)+alpha*pd.p(idx)       -- do a descent step
+                end
             end
         end
 
@@ -485,81 +502,101 @@ return function(problemSpec)
             var betaNum = opt_float(0.0f) 
             var q = opt_float(0.0f) 
             var idx : Index
-            if idx:initFromCUDAParams() and not fmap.exclude(idx,pd.parameters) then
-                -- Recompute residual
-                var Ax = pd.Adelta(idx)
-                var b = pd.b(idx)
-                var r = b - Ax
-                pd.r(idx) = r
+            var iter = 0
+            while idx:validBlock(&iter) do
+                if idx:initFromCUDAParams(iter) and not fmap.exclude(idx,pd.parameters) then
+                    -- Recompute residual
+                    var Ax = pd.Adelta(idx)
+                    var b = pd.b(idx)
+                    var r = b - Ax
+                    pd.r(idx) = r
 
-                var pre = pd.preconditioner(idx)
-                if not problemSpec.usepreconditioner then
-                    pre = opt_float(1.0f)
-                end
-                var z = pre*r       -- apply pre-conditioner M^-1
-                pd.z(idx) = z;      -- save for next kernel call
-                betaNum = z:dot(r)        -- compute x-th term of the numerator of beta
-                if [problemSpec:UsesLambda()] then
-                    -- computeQ    
-                    -- Right side is -2 of CERES versions, left is just negative version, 
-                    --  so after the dot product, just need to multiply by 2 to recover value identical to CERES  
-                    q = 0.5*(pd.delta(idx):dot(r + b)) 
+                    var pre = pd.preconditioner(idx)
+                    if not problemSpec.usepreconditioner then
+                        pre = opt_float(1.0f)
+                    end
+                    var z = pre*r       -- apply pre-conditioner M^-1
+                    pd.z(idx) = z;      -- save for next kernel call
+                    betaNum = betaNum + z:dot(r)        -- compute x-th term of the numerator of beta
+                    if [problemSpec:UsesLambda()] then
+                        -- computeQ    
+                        -- Right side is -2 of CERES versions, left is just negative version, 
+                        --  so after the dot product, just need to multiply by 2 to recover value identical to CERES  
+                        q = q + 0.5*(pd.delta(idx):dot(r + b)) 
+                    end
                 end
             end
-            unknownWideReduction(idx,betaNum,pd.scanBetaNumerator) 
+            unknownWideReduction(betaNum,pd.scanBetaNumerator) 
             if [problemSpec:UsesLambda()] then
-                unknownWideReduction(idx,q,pd.q)
+                unknownWideReduction(q,pd.q)
             end
         end
 
 
         terra kernels.PCGStep3(pd : PlanData)			
             var idx : Index
-            if idx:initFromCUDAParams() and not fmap.exclude(idx,pd.parameters) then
-            
-                var rDotzNew : opt_float = pd.scanBetaNumerator[0]	-- get new numerator
-                var rDotzOld : opt_float = pd.scanAlphaNumerator[0]	-- get old denominator
+            var iter = 0
+            while idx:validBlock(&iter) do
+                if idx:initFromCUDAParams(iter) and not fmap.exclude(idx,pd.parameters) then
+                    var rDotzNew : opt_float = pd.scanBetaNumerator[0]	-- get new numerator
+                    var rDotzOld : opt_float = pd.scanAlphaNumerator[0]	-- get old denominator
 
-                var beta : opt_float = opt_float(0.0f)
-                beta = rDotzNew/rDotzOld
-                pd.p(idx) = pd.z(idx)+beta*pd.p(idx)			    -- update decent direction
+                    var beta : opt_float = opt_float(0.0f)
+                    beta = rDotzNew/rDotzOld
+                    pd.p(idx) = pd.z(idx)+beta*pd.p(idx)			    -- update decent direction
+                end
             end
         end
     
         terra kernels.PCGLinearUpdate(pd : PlanData)
             var idx : Index
-            if idx:initFromCUDAParams() and not fmap.exclude(idx,pd.parameters) then
-                pd.parameters.X(idx) = pd.parameters.X(idx) + pd.delta(idx)
+            var iter = 0
+            while idx:validBlock(&iter) do
+                if idx:initFromCUDAParams(iter) and not fmap.exclude(idx,pd.parameters) then
+                    pd.parameters.X(idx) = pd.parameters.X(idx) + pd.delta(idx)
+                end
             end
         end	
         
         terra kernels.revertUpdate(pd : PlanData)
             var idx : Index
-            if idx:initFromCUDAParams() and not fmap.exclude(idx,pd.parameters) then
-                pd.parameters.X(idx) = pd.prevX(idx)
+            var iter = 0
+            while idx:validBlock(&iter) do
+                if idx:initFromCUDAParams(iter) and not fmap.exclude(idx,pd.parameters) then
+                    pd.parameters.X(idx) = pd.prevX(idx)
+                end
             end
         end	
 
         terra kernels.computeAdelta(pd : PlanData)
             var idx : Index
-            if idx:initFromCUDAParams() and not fmap.exclude(idx,pd.parameters) then
-                pd.Adelta(idx) = fmap.applyJTJ(idx, pd.parameters, pd.delta, pd.CtC)
+            var iter = 0
+            while idx:validBlock(&iter) do
+                if idx:initFromCUDAParams(iter) and not fmap.exclude(idx,pd.parameters) then
+                    pd.Adelta(idx) = fmap.applyJTJ(idx, pd.parameters, pd.delta, pd.CtC)
+                end
             end
         end
 
         terra kernels.savePreviousUnknowns(pd : PlanData)
             var idx : Index
-            if idx:initFromCUDAParams() and not fmap.exclude(idx,pd.parameters) then
-                pd.prevX(idx) = pd.parameters.X(idx)
+            var iter = 0
+            while idx:validBlock(&iter) do
+                if idx:initFromCUDAParams(iter) and not fmap.exclude(idx,pd.parameters) then
+                    pd.prevX(idx) = pd.parameters.X(idx)
+                end
             end
         end 
 
         terra kernels.computeCost(pd : PlanData)
             var cost : opt_float = opt_float(0.0f)
             var idx : Index
-            if idx:initFromCUDAParams() and not fmap.exclude(idx,pd.parameters) then
-                var params = pd.parameters
-                cost = fmap.cost(idx, params)
+            var iter = 0
+            while idx:validBlock(&iter) do
+                if idx:initFromCUDAParams(iter) and not fmap.exclude(idx,pd.parameters) then
+                    var params = pd.parameters
+                    cost = cost + fmap.cost(idx, params)
+                end
             end
 
             cost = util.warpReduce(cost)
@@ -573,9 +610,12 @@ return function(problemSpec)
         else
             terra kernels.saveJToCRS(pd : PlanData)
                 var idx : Index
+                var iter = 0
                 var [parametersSym] = &pd.parameters
-                if idx:initFromCUDAParams() and not fmap.exclude(idx,pd.parameters) then
-                    [generateDumpJ(fmap.derivedfrom,fmap.dumpJ,idx,pd)]
+                while idx:validBlock(&iter) do
+                    if idx:initFromCUDAParams(iter) and not fmap.exclude(idx,pd.parameters) then
+                        [generateDumpJ(fmap.derivedfrom,fmap.dumpJ,idx,pd)]
+                    end
                 end
             end
         end
@@ -584,68 +624,83 @@ return function(problemSpec)
         if fmap.precompute then
             terra kernels.precompute(pd : PlanData)
                 var idx : Index
-                if idx:initFromCUDAParams() then
-                   fmap.precompute(idx,pd.parameters)
+                var iter = 0
+                while idx:validBlock(&iter) do
+                    if idx:initFromCUDAParams(iter)  then
+                       fmap.precompute(idx,pd.parameters)
+                    end
                 end
             end
         end
         if problemSpec:UsesLambda() then
             terra kernels.PCGComputeCtC(pd : PlanData)
                 var idx : Index
-                if idx:initFromCUDAParams() and not fmap.exclude(idx,pd.parameters) then 
-                    var CtC = fmap.computeCtC(idx, pd.parameters)
-                    pd.CtC(idx) = CtC    
-                end 
+                var iter = 0
+                while idx:validBlock(&iter) do
+                    if idx:initFromCUDAParams(iter) and not fmap.exclude(idx,pd.parameters) then
+                        var CtC = fmap.computeCtC(idx, pd.parameters)
+                        pd.CtC(idx) = CtC    
+                    end 
+                end
             end
 
             terra kernels.PCGSaveSSq(pd : PlanData)
                 var idx : Index
-                if idx:initFromCUDAParams() and not fmap.exclude(idx,pd.parameters) then 
-                    pd.SSq(idx) = pd.preconditioner(idx)       
-                end 
+                var iter = 0
+                while idx:validBlock(&iter) do
+                    if idx:initFromCUDAParams(iter) and not fmap.exclude(idx,pd.parameters) then
+                        pd.SSq(idx) = pd.preconditioner(idx)       
+                    end 
+                end
             end
 
             terra kernels.PCGFinalizeDiagonal(pd : PlanData)
                 var idx : Index
                 var d = opt_float(0.0f)
                 var q = opt_float(0.0f)
-                if idx:initFromCUDAParams() and not fmap.exclude(idx,pd.parameters) then 
-                    var unclampedCtC = pd.CtC(idx)
-                    var invS_iiSq : unknownElement = opt_float(1.0f)
-                    if [initialization_parameters.jacobiScaling == JacobiScalingType.ONCE_PER_SOLVE] then
-                        invS_iiSq = opt_float(1.0f) / pd.SSq(idx)
-                    elseif [initialization_parameters.jacobiScaling == JacobiScalingType.EVERY_ITERATION] then 
-                        invS_iiSq = opt_float(1.0f) / pd.preconditioner(idx)
-                    end -- else if  [initialization_parameters.jacobiScaling == JacobiScalingType.NONE] then invS_iiSq == 1
-                    var clampMultiplier = invS_iiSq / pd.parameters.trust_region_radius
-                    var minVal = pd.parameters.min_lm_diagonal * clampMultiplier
-                    var maxVal = pd.parameters.max_lm_diagonal * clampMultiplier
-                    var CtC = clamp(unclampedCtC, minVal, maxVal)
-                    pd.CtC(idx) = CtC
-                    
-                    -- Calculate true preconditioner, taking into account the diagonal
-                    var pre = opt_float(1.0f) / (CtC+pd.parameters.trust_region_radius*unclampedCtC) 
-                    pd.preconditioner(idx) = pre
-                    var residuum = pd.r(idx)
-                    pd.b(idx) = residuum -- copy over to b
-                    var p = pre*residuum    -- apply pre-conditioner M^-1
-                    pd.p(idx) = p
-                    d = residuum:dot(p)
-                    -- computeQ    
-                    -- Right side is -2 of CERES versions, left is just negative version, 
-                    --  so after the dot product, just need to multiply by 2 to recover value identical to CERES  
-                    q = 0.5*(pd.delta(idx):dot(residuum + residuum)) 
+                var iter = 0
+                while idx:validBlock(&iter) do
+                    if idx:initFromCUDAParams(iter) and not fmap.exclude(idx,pd.parameters) then 
+                        var unclampedCtC = pd.CtC(idx)
+                        var invS_iiSq : unknownElement = opt_float(1.0f)
+                        if [initialization_parameters.jacobiScaling == JacobiScalingType.ONCE_PER_SOLVE] then
+                            invS_iiSq = opt_float(1.0f) / pd.SSq(idx)
+                        elseif [initialization_parameters.jacobiScaling == JacobiScalingType.EVERY_ITERATION] then 
+                            invS_iiSq = opt_float(1.0f) / pd.preconditioner(idx)
+                        end -- else if  [initialization_parameters.jacobiScaling == JacobiScalingType.NONE] then invS_iiSq == 1
+                        var clampMultiplier = invS_iiSq / pd.parameters.trust_region_radius
+                        var minVal = pd.parameters.min_lm_diagonal * clampMultiplier
+                        var maxVal = pd.parameters.max_lm_diagonal * clampMultiplier
+                        var CtC = clamp(unclampedCtC, minVal, maxVal)
+                        pd.CtC(idx) = CtC
+                        
+                        -- Calculate true preconditioner, taking into account the diagonal
+                        var pre = opt_float(1.0f) / (CtC+pd.parameters.trust_region_radius*unclampedCtC) 
+                        pd.preconditioner(idx) = pre
+                        var residuum = pd.r(idx)
+                        pd.b(idx) = residuum -- copy over to b
+                        var p = pre*residuum    -- apply pre-conditioner M^-1
+                        pd.p(idx) = p
+                        d = d + residuum:dot(p)
+                        -- computeQ    
+                        -- Right side is -2 of CERES versions, left is just negative version, 
+                        --  so after the dot product, just need to multiply by 2 to recover value identical to CERES  
+                        q = q + 0.5*(pd.delta(idx):dot(residuum + residuum)) 
+                    end
                 end    
-                unknownWideReduction(idx,q,pd.q)
-                unknownWideReduction(idx,d,pd.scanAlphaNumerator)
+                unknownWideReduction(q,pd.q)
+                unknownWideReduction(d,pd.scanAlphaNumerator)
             end
 
             terra kernels.computeModelCost(pd : PlanData)            
                 var cost : opt_float = opt_float(0.0f)
                 var idx : Index
-                if idx:initFromCUDAParams() and not fmap.exclude(idx,pd.parameters) then
-                    var params = pd.parameters              
-                    cost = fmap.modelcost(idx, params, pd.delta)
+                var iter = 0
+                while idx:validBlock(&iter) do
+                    if idx:initFromCUDAParams(iter) and not fmap.exclude(idx,pd.parameters) then 
+                        var params = pd.parameters              
+                        cost = cost + fmap.modelcost(idx, params, pd.delta)
+                    end
                 end
 
                 cost = util.warpReduce(cost)

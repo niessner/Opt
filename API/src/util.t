@@ -600,21 +600,15 @@ util.freePrecomputedImages = function(self, ProblemSpec)
     return stmts
 end
 
-
-util.getValidUnknown = macro(function(pd,pw,ph)
-	return quote
-		@pw,@ph = blockDim.x * blockIdx.x + threadIdx.x, blockDim.y * blockIdx.y + threadIdx.y
-	in
-		 @pw < pd.parameters.X:W() and @ph < pd.parameters.X:H() 
-	end
-end)
-
 util.startEdge = macro(function() return `blockDim.x * blockIdx.x + threadIdx.x end)
 util.edgeCount = macro(function(pd,graphname)
     graphname = graphname:asvalue()
     return `pd.parameters.[graphname].N
 end)
 util.edgeStride = macro(function() return `blockDim.x * gridDim.x end)
+
+-- Assumes all grids are 1 dimensional (though their blocks can be multidimensional)
+util.linearBlockID = macro(function(iteration) return `[iteration]*gridDim.x+blockIdx.x end)
 
 local cd = macro(function(apicall) 
     local apicallstr = tostring(apicall)
@@ -701,23 +695,16 @@ local function makeGPULauncher(PlanData,kernelName,ft,compiledKernel)
     end
     local function createLaunchParameters(pd)
         if ft.kind == "CenteredFunction" then
-            local ispace = ft.ispace
-            local exps = terralib.newlist()
-            for i = 1,3 do
-               local dim = #ispace.dims >= i and ispace.dims[i].size or 1
-                local bs = BLOCK_DIMS[#ispace.dims][i]
-                exps:insert(dim)
-                exps:insert(bs)
-            end
-            return exps
+            local D = #ft.ispace.dims
+            return {maximumResidentThreadsPerGrid,BLOCK_DIMS[D][1],BLOCK_DIMS[D][2],BLOCK_DIMS[D][3]}
         else
-            return {maximumResidentThreadsPerGrid,BLOCK_DIMS[1][1],1,1,1,1}
+            return {maximumResidentThreadsPerGrid,BLOCK_DIMS[1][1],1,1}
         end
     end
     local terra GPULauncher(pd : &PlanData, [params])
-        var xdim,xblock,ydim,yblock,zdim,zblock = [ createLaunchParameters(pd) ]
-            
-        var launch = terralib.CUDAParams { (xdim - 1) / xblock + 1, (ydim - 1) / yblock + 1, (zdim - 1) / zblock + 1, 
+        var threadCount,xblock,yblock,zblock = [ createLaunchParameters(pd) ]
+        -- Use 1D array of blocks so that boundaries are relatively evenly spread out
+        var launch = terralib.CUDAParams { (threadCount - 1) / (xblock*yblock*zblock + 1), 1, 1, 
                                             xblock, yblock, zblock, 
                                             0, nil }
         var stream : C.cudaStream_t = nil
