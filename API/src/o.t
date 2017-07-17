@@ -550,7 +550,7 @@ function ImageType:terratype()
         end
     end
 
-    if scalartype == float or scalartype == double then    
+    if scalartype == opt_float then    
         terra Image:atomicAddChannel(idx : Index, c : int32, v : scalartype)
             var addr : &scalartype = &self.data[idx:tooffset()].data[c]
             util.atomicAdd(addr,v)
@@ -646,7 +646,7 @@ function UnknownType:init()
         if opt_float == float then
             assert(ip.imagetype.scalartype == float, "Unknowns must be floats when doublePrecision = false, but "..ip.name.." was declared as "..tostring(ip.imagetype.scalartype))
         else
-            assert(opt_float == double, "Invalid unknown type "..opt_float)
+            assert(opt_float == double, "Invalid unknown type "..tostring(opt_float))
             assert(ip.imagetype.scalartype == double, "Unknowns must be doubles when doublePrecision = true, but "..ip.name.." was declared as "..tostring(ip.imagetype.scalartype))
         end
         return ip.imagetype.ispace, ip
