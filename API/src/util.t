@@ -1,4 +1,3 @@
-local pascalOrBetterGPU = false
 local S = require("std")
 require("precision")
 local util = {}
@@ -17,6 +16,23 @@ local C = util.C
 
 local cuda_compute_version = 30
 local libdevice = terralib.cudahome..string.format("/nvvm/libdevice/libdevice.compute_%d.10.bc",cuda_compute_version)
+
+local pascalOrBetterGPU = false 
+
+terra deviceMajorComputeCapability()
+    var deviceID : int32
+    C.cudaGetDevice(&deviceID)
+    var majorComputeCapability : int32
+    C.cudaDeviceGetAttribute(&majorComputeCapability, C.cudaDevAttrComputeCapabilityMajor, deviceID)
+    return majorComputeCapability
+end
+local computeC = deviceMajorComputeCapability()
+if computeC >= 6 then
+    pascalOrBetterGPU = true
+end
+if opt_float == double and (not pascalOrBetterGPU) then
+    print("Warning: double precision on GPUs with compute capability < 6.0 (before Pascal) have no native double precision atomics, so we must use slow software emulation instead. This has a large performance impact on graph energies.")
+end
 
 local extern = terralib.externfunction
 if terralib.linkllvm then
