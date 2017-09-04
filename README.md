@@ -22,7 +22,7 @@ or open an issue on github (https://github.com/niessner/Opt); or if you feel lik
 
 Opt and all of its examples require a recent version of [Terra](https://github.com/zdevito/terra)/, and [CUDA 7.5](https://developer.nvidia.com/cuda-75-downloads-archive). On Windows we use Visual Studio 2013 for development/compilation, though other versions may also work. 
 
-Download and unzip the [terra binary release for your platform, release-2016-03-25](https://github.com/zdevito/terra/releases). Add terra/bin to your $PATH environment variable (if you want to run the examples).
+Download and unzip the [terra binary release for your platform, release-2016-03-25](https://github.com/zdevito/terra/releases). Add terra/bin to your $PATH environment variable (if you want to run the examples). *On windows, this binary release searches for the CUDA compiler binaries using the CUDA_PATH environment variable. The default installation of the CUDA 7.5 Toolkit sets these paths, but if you did a nonstandard installation or subsequently installed a different version of CUDA, you will need to (re)set the path yourself.* 
 
 Our recommended directory structure for development is:
 
