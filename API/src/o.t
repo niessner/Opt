@@ -1425,8 +1425,12 @@ local function createfunction(problemspec,name,Index,arguments,results,scatters)
         
         for i,r in ipairs(roots) do
             if not state[r] then -- roots may appear in list more than once
-                state[r] = "ready"
-                readylists[#readylists]:insert(r)
+                -- It is possible for a member of the irroots list to
+                -- not actually be a root of the DAG; prune those out
+                if #uses[r] == 0 then
+                    state[r] = "ready"
+                    readylists[#readylists]:insert(r)
+                end
             end
         end
         
