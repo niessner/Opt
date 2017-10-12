@@ -409,6 +409,16 @@ Energy Specification:
     
 The function `Stencil` is a Lua iterator that makes it easy to define similar energy functions for a set of neighboring offsets.
 
+There currently is no equivalent iterator for nodes in a graph hyperedge, but for the time being you can roll your own using standard Lua functionality. For example:
+
+	G = Graph("G", 3, "v0", 4, "v1", 5, "v2", 6, "v3", 7)
+	nodes = {"v0","v1","v2","v3"}
+	local result = 1.0
+	for _,n in nodes do
+		result = result * X(G[n])
+	end
+	Energy(result)
+
 
 Solver Parameters
 =================
