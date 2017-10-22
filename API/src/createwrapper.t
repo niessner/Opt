@@ -1,6 +1,8 @@
 local libraryname, sourcedirectory, main, headerfile, outputname, embedsource = ...
 embedsource = "true" == embedsource or false
 
+require("version")
+
 local ffi = require("ffi")
 
 terralib.includepath = terralib.terrahome.."/include;."
@@ -137,6 +139,10 @@ local terra NewState(params : Opt_InitializationParameters) : &LibraryState
     var verbosityLevel : C.lua_Number = params.verbosityLevel
     C.lua_pushnumber(L,verbosityLevel);
     C.lua_setfield(L,LUA_GLOBALSINDEX,"_opt_verbosity")
+
+    if params.verbosityLevel > 0 then
+        C.printf("Opt Version: %s\n", [opt_version_string])
+    end
 
     C.lua_pushboolean(L,params.collectPerKernelTimingInfo);
     C.lua_setfield(L,LUA_GLOBALSINDEX,"_opt_collect_kernel_timing")
