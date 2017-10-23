@@ -802,4 +802,26 @@ function util.makeGPUFunctions(problemSpec, PlanData, delegate, names)
     return grouplaunchers
 end
 
+
+function util.reportGPUMemoryUse()
+    local terra reportMem()
+        var free_byte : C.size_t
+        var total_byte : C.size_t
+
+        cd(C.cudaMemGetInfo( &free_byte, &total_byte ))
+
+
+        var free_db = [double](free_byte)
+
+        var total_db = [double](total_byte)
+
+        var used_db = total_db - free_db ;
+
+        C.printf("GPU memory usage: used = %f, free = %f MB, total = %f MB\n",
+
+            used_db/1024.0/1024.0, free_db/1024.0/1024.0, total_db/1024.0/1024.0);
+    end
+    reportMem()
+end
+
 return util

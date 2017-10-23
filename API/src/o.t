@@ -868,7 +868,10 @@ local function problemPlan(id, dimensions, pplan)
         pplan[0] = result()
         activePlans[tostring(pplan[0])] = result
         print("problem plan complete")
-        --printCurrentBytes()
+		if _opt_verbosity > 0 then
+	        util.reportGPUMemoryUse()
+	        printCurrentBytes()
+		end
     end,function(err) errorPrint(debug.traceback(err,2)) end)
 end
 problemPlan = terralib.cast({int,&uint32,&&opt.Plan} -> {}, problemPlan)
@@ -876,9 +879,15 @@ problemPlan = terralib.cast({int,&uint32,&&opt.Plan} -> {}, problemPlan)
 local function planFree(pplan)
     local success,p = xpcall(function()
         activePlans[tostring(pplan)] = nil
+        if _opt_verbosity > 0 then
+			util.reportGPUMemoryUse()
+		end
         print("plan free complete")
         collectgarbage()
         collectgarbage()
+		if _opt_verbosity > 0 then
+        	util.reportGPUMemoryUse()
+		end
     end,function(err) errorPrint(debug.traceback(err,2)) end)
 end
 planFree = terralib.cast({&opt.Plan} -> {}, planFree)
