@@ -4,6 +4,7 @@ local ffi = require("ffi")
 local util = require("util")
 local optlib = require("lib")
 ad = require("ad")
+require("version")
 require("precision")
 local A = ad.classes
 
@@ -32,6 +33,10 @@ local verboseAD 	= _opt_verbosity > 1
 
 local vprintfname = ffi.os == "Windows" and "vprintf" or "cudart:vprintf"
 local vprintf = terralib.externfunction(vprintfname, {&int8,&int8} -> int)
+
+if verboseSolver then
+    print("Using Opt "..opt_version_string)
+end
 
 local function createbuffer(args)
     local Buf = terralib.types.newstruct()
