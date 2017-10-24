@@ -18,6 +18,10 @@ mmara at cs dot stanford dot edu
 
 or open an issue on github (https://github.com/niessner/Opt); or if you feel like getting your hands dirty, submit a pull request with some changes!
 
+See the [roadmap](https://github.com/niessner/Opt/blob/master/ROADMAP.md) for near-future changes.
+
+See the [changelog](https://github.com/niessner/Opt/blob/master/CHANGELOG.md) for changes since the initial release.
+
 ### Prerequisites ###
 
 Opt and all of its examples require a recent version of [Terra](https://github.com/zdevito/terra)/, and [CUDA 7.5](https://developer.nvidia.com/cuda-75-downloads-archive). On Windows we use Visual Studio 2013 for development/compilation, though other versions may also work. 
