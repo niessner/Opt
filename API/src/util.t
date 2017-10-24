@@ -14,6 +14,22 @@ util.C = terralib.includecstring [[
 ]]
 local C = util.C
 
+--[[ rPrint(struct, [limit], [indent])   Recursively print arbitrary data. 
+    Set limit (default 100) to stanch infinite loops.
+    Indents tables as [KEY] VALUE, nested tables as [KEY] [KEY]...[KEY] VALUE
+    Set indent ("") to prefix each line:    Mytable [KEY] [KEY]...[KEY] VALUE
+--]]
+function util.rPrint(s, l, i) -- recursive Print (structure, limit, indent)
+    l = (l) or 100; i = i or "";    -- default item limit, indent string
+    local ts = type(s);
+    if (l<1) then print (i,ts," *snip* "); return end;
+    if (ts ~= "table") then print (i,ts,s); return end
+    print (i,ts);           -- print "table"
+    for k,v in pairs(s) do  -- print "[KEY] VALUE"
+        util.rPrint(v, l-1, i.."\t["..tostring(k).."]");
+    end
+end 
+
 local cuda_compute_version = 30
 local libdevice = terralib.cudahome..string.format("/nvvm/libdevice/libdevice.compute_%d.10.bc",cuda_compute_version)
 
@@ -562,7 +578,7 @@ local function noFooter(pd)
 	return quote end
 end
 
-util.initParameters = function(self, ProblemSpec, params, isInit)
+util.initParameters = function(self, ProblemSpec, dims, params, isInit)
     local stmts = terralib.newlist()
 	for _, entry in ipairs(ProblemSpec.parameters) do
 		if entry.kind == "ImageParam" then
@@ -570,7 +586,7 @@ util.initParameters = function(self, ProblemSpec, params, isInit)
                 local function_name = isInit and "initFromGPUptr" or "setGPUptr"
                 local loc = entry.isunknown and (`self.X.[entry.name]) or `self.[entry.name]
                 stmts:insert quote
-                    loc:[function_name]([&uint8](params[entry.idx]))
+                    loc:[function_name]([&uint8](params[entry.idx]),dims)
                 end
             end
 		else
@@ -592,12 +608,12 @@ util.initParameters = function(self, ProblemSpec, params, isInit)
 	return stmts
 end
 
-util.initPrecomputedImages = function(self, ProblemSpec)
+util.initPrecomputedImages = function(self, ProblemSpec, dims)
     local stmts = terralib.newlist()
 	for _, entry in ipairs(ProblemSpec.parameters) do
 		if entry.kind == "ImageParam" and entry.idx == "alloc" then
             stmts:insert quote
-    		    self.[entry.name]:initGPU()
+    		    self.[entry.name]:initGPU(dims)
     		end
     	end
     end
@@ -615,8 +631,6 @@ util.freePrecomputedImages = function(self, ProblemSpec)
     end
     return stmts
 end
-
-
 
 
 util.getValidUnknown = macro(function(pd,pw,ph)
@@ -710,7 +724,10 @@ local function makeGPULauncher(PlanData,kernelName,ft,compiledKernel)
             local ispace = ft.ispace
             local exps = terralib.newlist()
             for i = 1,3 do
-               local dim = #ispace.dims >= i and ispace.dims[i].size or 1
+                local dim = 1
+                if #ispace.dims >= i and ispace.dims[i].index then -- not unity
+                    dim = `pd.dims[ [ispace.dims[i].index] ]
+                end
                 local bs = BLOCK_DIMS[#ispace.dims][i]
                 exps:insert(dim)
                 exps:insert(bs)

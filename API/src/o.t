@@ -150,7 +150,7 @@ problemDelete = terralib.cast({int} -> {}, problemDelete)
 local List = terralib.newlist
 A:Extern("ExpLike",function(x) return ad.Exp:isclassof(x) or ad.ExpVector:isclassof(x) end)
 A:Define [[
-Dim = (string name, number size, number? _index) unique
+Dim = (string name, number? _index) unique
 IndexSpace = (Dim* dims) unique
 Index = Offset(number* data) unique
       | GraphElement(any graph, string element) unique
@@ -202,7 +202,6 @@ ProblemFunctions = (FunctionKind typ, table functionmap)
 local Dim,IndexSpace,Index,Offset,GraphElement,ImageType,Image,ImageVector,ProblemParam,ImageParam,ScalarParam,GraphParam,VarDef,ImageAccess,BoundsAccess,IndexValue,ParamValue,Graph,GraphFunctionSpec,Scatter,Condition,IRNode,ProblemSpec,ProblemSpecAD,SampledImage, GradientImage,UnknownType = 
       A.Dim,A.IndexSpace,A.Index,A.Offset,A.GraphElement,A.ImageType,A.Image,A.ImageVector,A.ProblemParam,A.ImageParam,A.ScalarParam,A.GraphParam,A.VarDef,A.ImageAccess,A.BoundsAccess,A.IndexValue,A.ParamValue,A.Graph,A.GraphFunctionSpec,A.Scatter,A.Condition,A.IRNode,A.ProblemSpec,A.ProblemSpecAD,A.SampledImage,A.GradientImage,A.UnknownType
 
-opt.PSpec = ProblemSpec
 local PROBLEM_STAGES  = { inputs = 0, functions = 1 }
 function opt.ProblemSpec()
     local ps = ProblemSpec()
@@ -318,17 +317,21 @@ function ProblemSpec:UsesLambda() return self.problemkind:match("LM") ~= nil end
 function Dim:__tostring() return "Dim("..self.name..")" end
 
 function opt.Dim(name, idx)
+    opt.maxDimIndex = math.max(opt.maxDimIndex,idx)
     idx = assert(tonumber(idx), "expected an index for this dimension")
-    local size = tonumber(opt.dimensions[idx])
-    return Dim(name,size,idx)
+    return Dim(name,idx)
 end
 
-function IndexSpace:cardinality()
-    local c = 1
-    for i,d in ipairs(self.dims) do
-        c = c * d.size
+function IndexSpace:cardinality_fn()
+    return terra (dimSizes : &uint32)
+        var c = dimSizes[ [self.dims[1]._index] ]
+        escape
+            for i=2,#self.dims do
+                emit quote c = c * dimSizes[ [self.dims[i]._index] ] end
+            end
+        end
+        return c
     end
-    return c
 end
 function IndexSpace:init()
     self._string = self.dims:map(function(x) return x.name end):concat("_")
@@ -374,44 +377,51 @@ function IndexSpace:indextype()
         return rhs
     end
     local function genoffset(self)
-        local s = 1
-        local offset = `self.d0
-        for i = 2,#dims do
-            s = s * dims[i-1].size
-            offset = `s*self.[fieldnames[i]] + offset
-        end
-        return offset
+        return macro(function(dimSizes)
+            local s = 1
+            local offset = `self.d0
+            for i = 2,#dims do
+                local dimIdx = dims[i-1]._index
+                s = `s * dimSizes[ [dimIdx] ]
+                offset = `s*self.[fieldnames[i]] + offset
+            end
+            return offset
+        end)
+        
     end
-    terra Index:tooffset()
-        return [genoffset(self)]
+    terra Index:tooffset(dimSizes : &uint32)
+        return [genoffset(self)](dimSizes)
     end
     local function genbounds(self,bmins,bmaxs)
-        local valid
-        for i = 1, #dims do
-            local n = fieldnames[i]
-            local bmin,bmax = 0,0
-            if bmins then
-                bmin = assert(bmins[i])
+        return macro(function(dimSizes)
+            local valid
+            for i = 1, #dims do
+                local n = fieldnames[i]
+                local bmin,bmax = 0,0
+                if bmins then
+                    bmin = assert(bmins[i])
+                end
+                if bmaxs then
+                    bmax = assert(bmaxs[i])
+                end
+                local dimIdx = dims[i]._index
+                local v = `self.[n] >= -[bmin] and self.[n] < dimSizes[ [dimIdx] ] - [bmax]
+                if valid then
+                    valid = `valid and v
+                else
+                    valid = v
+                end
             end
-            if bmaxs then
-                bmax = assert(bmaxs[i])
-            end
-            local v = `self.[n] >= -[bmin] and self.[n] < [dims[i].size] - [bmax]
-            if valid then
-                valid = `valid and v
-            else
-                valid = v
-            end
-        end
-        return valid
+            return valid
+        end)
     end
-    terra Index:InBounds() return [ genbounds(self) ] end
+    terra Index:InBounds(dimSizes : &uint32) return [ genbounds(self) ](dimSizes) end
     
-    terra Index:InBoundsExpanded([params],[params2]) return [ genbounds(self,params,params2) ] end
+    terra Index:InBoundsExpanded(dimSizes : &uint32, [params],[params2]) return [ genbounds(self,params,params2) ](dimSizes) end
     
     if #dims <= 3 then
         local dimnames = "xyz"
-        terra Index:initFromCUDAParams() : bool
+        terra Index:initFromCUDAParams(dimSizes : &uint32) : bool
             escape
                 local lhs,rhs = terralib.newlist(),terralib.newlist()
                 local valid = `true
@@ -421,7 +431,8 @@ function IndexSpace:indextype()
                     local r = `blockDim.[name] * blockIdx.[name] + threadIdx.[name]
                     lhs:insert(l)
                     rhs:insert(r)
-                    valid = `valid and l < [dims[i].size]
+                    local dimIdx = dims[i]._index
+                    valid = `valid and l < dimSizes[ [dimIdx] ]
                 end
                 emit quote
                     [lhs] = [rhs]
@@ -436,16 +447,17 @@ end
 function ImageType:usestexture() -- texture, 2D texture
     local c = self.channelcount
     if use_bindless_texture and self.scalartype == float and 
-       (c == 1 or c == 2 or c == 4) then
-       if use_pitched_memory and #self.ispace.dims == 2 then
+            (c == 1 or c == 2 or c == 4) then
+        -- TODO: reenable pitched memory optimizations
+        --[[if use_pitched_memory and #self.ispace.dims == 2 then
             local floatstride = self.ispace.dims[1].size*c
             local m = floatstride % 32
             if m ~= 0 then
                 print(string.format("***** falling back to linear texture (width in floats %d %% 32 == %d)", floatstride , m))
             end
             return true,m == 0
-       end
-       return true, false 
+        end--]]
+        return true, false 
     end
     return false, false 
 end
@@ -521,56 +533,56 @@ function ImageType:terratype()
     local VT = &vector(scalartype,channelcount)    
     -- reads
     if pitched then
-        terra Image.metamethods.__apply(self : &Image, idx : Index) : vectortype
+        terra Image.metamethods.__apply(self : &Image, idx : Index, dimSizes : &uint32) : vectortype
             var read = terralib.asm([tuple(float,float,float,float)],
                 "tex.2d.v4.f32.s32  {$0,$1,$2,$3}, [$4,{$5,$6}];",
                 "=f,=f,=f,=f,l,r,r",false, self.tex, idx.d0,idx.d1)
             return @[&vectortype](&read)
         end
     elseif textured then         
-        terra Image.metamethods.__apply(self : &Image, idx : Index) : vectortype
+        terra Image.metamethods.__apply(self : &Image, idx : Index, dimSizes : &uint32) : vectortype
             var read = terralib.asm([tuple(float,float,float,float)],
                 "tex.1d.v4.f32.s32  {$0,$1,$2,$3}, [$4,{$5}];",
-                "=f,=f,=f,=f,l,r",false, self.tex,idx:tooffset())
+                "=f,=f,=f,=f,l,r",false, self.tex,idx:tooffset(dimSizes))
             return @[&vectortype](&read)
         end
     elseif self:LoadAsVector() then
-        terra Image.metamethods.__apply(self : &Image, idx : Index) : vectortype
-            var a = VT(self.data)[idx:tooffset()]
+        terra Image.metamethods.__apply(self : &Image, idx : Index, dimSizes : &uint32) : vectortype
+            var a = VT(self.data)[idx:tooffset(dimSizes)]
             return @[&vectortype](&a)
         end
     else    
-        terra Image.metamethods.__apply(self : &Image, idx : Index) : vectortype
-            return self.data[idx:tooffset()]
+        terra Image.metamethods.__apply(self : &Image, idx : Index, dimSizes : &uint32) : vectortype
+            return self.data[idx:tooffset(dimSizes)]
         end
     end
     -- writes
     if self:LoadAsVector() then
-        terra Image.metamethods.__update(self : &Image, idx : Index, v : vectortype)
-            VT(self.data)[idx:tooffset()] = @VT(&v)
+        terra Image.metamethods.__update(self : &Image, idx : Index, dimSizes : &uint32, v : vectortype)
+            VT(self.data)[idx:tooffset(dimSizes)] = @VT(&v)
         end
     else
-        terra Image.metamethods.__update(self : &Image, idx : Index, v : vectortype)
-            self.data[idx:tooffset()] = v
+        terra Image.metamethods.__update(self : &Image, idx : Index, dimSizes : &uint32, v : vectortype)
+            self.data[idx:tooffset(dimSizes)] = v
         end
     end
 
     if scalartype == opt_float then    
-        terra Image:atomicAddChannel(idx : Index, c : int32, v : scalartype)
-            var addr : &scalartype = &self.data[idx:tooffset()].data[c]
+        terra Image:atomicAddChannel(idx : Index, c : int32, dimSizes : &uint32, v : scalartype)
+            var addr : &scalartype = &self.data[idx:tooffset(dimSizes)].data[c]
             util.atomicAdd(addr,v)
         end
-        terra Image:atomicAdd(idx : Index, v : vectortype) -- only for hand written stuff
+        terra Image:atomicAdd(idx : Index, dimSizes : &uint32, v : vectortype) -- only for hand written stuff
             for i = 0,channelcount do
-                self:atomicAddChannel(idx,i,v(i))
+                self:atomicAddChannel(idx,i,dimSizes,v(i))
             end
         end
     end
 
-    terra Image:get(idx : Index)
+    terra Image:get(idx : Index, dimSizes : &uint32)
         var v : vectortype = 0.f
-        if idx:InBounds() then
-            v = self(idx)
+        if idx:InBounds(dimSizes) then
+            v = self(idx, dimSizes)
         end
         return v
     end
@@ -579,28 +591,31 @@ function ImageType:terratype()
         local terra lerp(v0 : vectortype, v1 : vectortype, t : opt_float)
             return (opt_float(1.) - t)*v0 + t*v1
         end
-        terra Image:sample(x : opt_float, y : opt_float)
+        terra Image:sample(x : opt_float, y : opt_float, dimSizes : &uint32)
             var x0 : int, x1 : int = opt.math.floor(x),opt.math.ceil(x)
             var y0 : int, y1 : int = opt.math.floor(y),opt.math.ceil(y)
             var xn,yn = x - x0,y - y0
-            var u = lerp(self:get( Index {x0,y0} ),self:get( Index {x1,y0} ),xn)
-            var b = lerp(self:get( Index {x0,y1} ),self:get( Index {x1,y1} ),xn)
+            var u = lerp(self:get( Index {x0,y0}, dimSizes ),self:get( Index {x1,y0}, dimSizes ),xn)
+            var b = lerp(self:get( Index {x0,y1}, dimSizes ),self:get( Index {x1,y1}, dimSizes ),xn)
             return lerp(u,b,yn)
         end
     end
-    local cardinality = self.ispace:cardinality()
-    terra Image:totalbytes() return sizeof(vectortype)*cardinality end
+    local ispace_card = self.ispace:cardinality_fn()
+    terra Image:cardinality(dimSizes : &uint32) return ispace_card(dimSizes) end
+    terra Image:totalbytes(dimSizes : &uint32) return sizeof(vectortype)*self:cardinality(dimSizes) end
     if textured then
-        local W,H = cardinality,0
-        if pitched then
-            W,H = self.ispace.dims[1].size,self.ispace.dims[2].size
-        end
-        terra Image:setGPUptr(ptr : &uint8)
+        terra Image:setGPUptr(ptr : &uint8, dimSizes : &uint32)
             if [&uint8](self.data) ~= ptr then
                 if self.data ~= nil then
                     cd(C.cudaDestroyTextureObject(self.tex))
                 end
-                self.tex = wrapBindlessTexture(ptr, channelcount, W, H)
+                escape
+                    local W,H = `self:cardinality(dimSizes),0
+                    if pitched then
+                        W,H = `dimSizes[ [self.ispace.dims[1]._index] ], `dimSizes[ [self.ispace.dims[2]._index] ]
+                    end
+                    emit quote self.tex = wrapBindlessTexture(ptr, channelcount, W, H) end
+                end
             end
             self.data = [&vectortype](ptr)
         end
@@ -612,7 +627,7 @@ function ImageType:terratype()
             end
         end
     else
-        terra Image:setGPUptr(ptr : &uint8) self.data = [&vectortype](ptr) end
+        terra Image:setGPUptr(ptr : &uint8, dimSizes : &uint32) self.data = [&vectortype](ptr) end
         terra Image:freeData()
             if self.data ~= nil then
                 cd(C.cudaFree([&opaque](self.data)))
@@ -620,15 +635,15 @@ function ImageType:terratype()
             end
         end
     end
-    terra Image:initFromGPUptr( ptr : &uint8 )
+    terra Image:initFromGPUptr( ptr : &uint8, dimSizes : &uint32 )
         self.data = nil
-        self:setGPUptr(ptr)
+        self:setGPUptr(ptr,dimSizes)
     end
-    terra Image:initGPU()
+    terra Image:initGPU(dimSizes : &uint32)
         var data : &uint8
-        cd(C.cudaMalloc([&&opaque](&data), self:totalbytes()))
-        cd(C.cudaMemset([&opaque](data), 0, self:totalbytes()))
-        self:initFromGPUptr(data)
+        cd(C.cudaMalloc([&&opaque](&data), self:totalbytes(dimSizes)))
+        cd(C.cudaMemset([&opaque](data), 0, self:totalbytes(dimSizes)))
+        self:initFromGPUptr(data, dimSizes)
     end
     return Image
 end
@@ -696,12 +711,12 @@ function UnknownType:terratype()
     end
     if use_contiguous_allocation then
         T.entries:insert { "_contiguousallocation", &opaque }
-        terra T:initGPU()
+        terra T:initGPU( dimSizes : &uint32)
             var size = 0
             escape
                 for i,ip in ipairs(images) do
                     emit quote 
-                        size = size + self.[ip.name]:totalbytes()
+                        size = size + self.[ip.name]:totalbytes(dimSizes)
                     end
                 end
             end
@@ -714,7 +729,7 @@ function UnknownType:terratype()
                 for i,ip in ipairs(images) do
                     emit quote 
                         self.[ip.name]:initFromGPUptr(data+size)
-                        size = size + self.[ip.name]:totalbytes() 
+                        size = size + self.[ip.name]:totalbytes(dimSizes) 
                     end
                 end
             end
@@ -723,10 +738,10 @@ function UnknownType:terratype()
             cd(C.cudaFree(self._contiguousallocation))
         end
     else
-        terra T:initGPU()
+        terra T:initGPU(dimSizes : &uint32)
             escape
                 for i,ip in ipairs(images) do
-                    emit quote self.[ip.name]:initGPU() end
+                    emit quote self.[ip.name]:initGPU(dimSizes) end
                 end
             end
         end
@@ -742,13 +757,13 @@ function UnknownType:terratype()
         local Index = ispace:indextype()
         local ispaceimages = self.ispacetoimages[ispace]
         local VT = self:VectorTypeForIndexSpace(ispace)
-        terra T.metamethods.__apply(self : &T, idx : Index) : VT
+        terra T.metamethods.__apply(self : &T, idx : Index, dimSizes : &uint32) : VT
             var r : VT
             escape
                 local off = 0
                 for _,im in ipairs(ispaceimages) do
                     emit quote
-                        var d = self.[im.name](idx)
+                        var d = self.[im.name](idx,dimSizes)
                         for i = 0,im.imagetype.channelcount do
                             r.data[off+i] = d.data[i]
                         end
@@ -758,7 +773,7 @@ function UnknownType:terratype()
             end
             return r
         end
-        terra T.metamethods.__update(self : &T, idx : Index, v : VT)
+        terra T.metamethods.__update(self : &T, idx : Index, dimSizes : &uint32, v : VT)
             escape
                 local off = 0
                 for _,im in ipairs(ispaceimages) do
@@ -767,7 +782,7 @@ function UnknownType:terratype()
                         for i = 0,im.imagetype.channelcount do
                             d.data[i] = v.data[off+i]
                         end
-                        self.[im.name](idx) = d
+                        self.[im.name](idx,dimSizes) = d
                     end
                     off = off + im.imagetype.channelcount
                 end
@@ -778,7 +793,7 @@ function UnknownType:terratype()
     return self._terratype
 end
 
-local unity = Dim("1",1)
+local unity = Dim("1")
 local function todim(d)
     return Dim:isclassof(d) and d or d == 1 and unity
 end
@@ -861,16 +876,17 @@ end
 local function problemPlan(id, dimensions, pplan)
     local success,p = xpcall(function()  
         local problemmetadata = assert(problems[id])
-        opt.dimensions = dimensions
         opt.math = problemmetadata.kind:match("GPU") and util.gpuMath or util.cpuMath
         opt.problemkind = problemmetadata.kind
         local b = terralib.currenttimeinseconds()
+        opt.maxDimIndex = 0
         local tbl = opt.problemSpecFromFile(problemmetadata.filename)
         assert(ProblemSpec:isclassof(tbl))
         local result = compilePlan(tbl,problemmetadata.kind)
         local e = terralib.currenttimeinseconds()
         print("compile time: ",e - b)
-        pplan[0] = result()
+        pplan[0] = result(dimensions,opt.maxDimIndex)
+        opt.dims = pplan[0].dims
         activePlans[tostring(pplan[0])] = result
         print("problem plan complete")
 		if _opt_verbosity > 0 then
@@ -1640,6 +1656,7 @@ local function createfunction(problemspec,name,Index,arguments,results,scatters)
     local P = symbol(problemspec.P:ParameterType(),"P")
     local idx = symbol(Index,"idx")
     local midx = symbol(Index,"midx")
+    local dimSizes = symbol(&uint32,"dimSizes")
     
     local statementstack = terralib.newlist { terralib.newlist() } 
     local statements = statementstack[1]
@@ -1707,7 +1724,7 @@ local function createfunction(problemspec,name,Index,arguments,results,scatters)
         elseif "intrinsic" == ir.kind then
             local a = ir.value
             if "BoundsAccess" == a.kind then--bounds calculation
-                return `midx:InBoundsExpanded([a.min.data],[a.max.data])
+                return `midx:InBoundsExpanded(dimSizes,[a.min.data],[a.max.data])
             elseif "IndexValue" == a.kind then
                 local n = "d"..tostring(a.dim)
                 return `idx.[n] + a.shift_ 
@@ -1719,13 +1736,13 @@ local function createfunction(problemspec,name,Index,arguments,results,scatters)
             local im = imageref(a.image)
             if Offset:isclassof(a.index) then
                 if conditioncoversload(ir.condition,a.index) then
-                   return `im(midx(a.index.data))(0) 
+                   return `im(midx(a.index.data),dimSizes)(0) 
                 else
-                   return `im:get(midx(a.index.data))(0)
+                   return `im:get(midx(a.index.data),dimSizes)(0)
                 end
             else
                 local gr = graphref(a.index)
-                return `im(gr)(0)
+                return `im(gr,dimSizes)(0)
             end
         elseif "vectorload" == ir.kind then
             local a = ir.value
@@ -1734,20 +1751,20 @@ local function createfunction(problemspec,name,Index,arguments,results,scatters)
             if Offset:isclassof(a.index) then
                 if conditioncoversload(ir.condition,a.index) then
                     statements:insert(quote
-                        var [s] = im(midx(a.index.data))
+                        var [s] = im(midx(a.index.data),dimSizes)
                     end)
                 else 
                     statements:insert(quote
                         var [s] = 0.f
-                        if midx(a.index.data):InBounds() then
-                            [s] = im(midx(a.index.data))
+                        if midx(a.index.data):InBounds(dimSizes) then
+                            [s] = im(midx(a.index.data),dimSizes)
                         end
                     end)
                 end
             else
                 local gr = graphref(a.index)
                 statements:insert(quote
-                    var [s] = im(gr)
+                    var [s] = im(gr,dimSizes)
                 end)
             end
             return s
@@ -1760,7 +1777,7 @@ local function createfunction(problemspec,name,Index,arguments,results,scatters)
         elseif "sampleimage" == ir.kind then
             local im = imageref(ir.image)
             local exps = ir.children:map(emit)
-            local r = `im:sample(exps)
+            local r = `im:sample(exps,dimSizes)
             if ir.image.scalar then
                 r = `r(0)
             end
@@ -1874,17 +1891,17 @@ local function createfunction(problemspec,name,Index,arguments,results,scatters)
         local stmt
         if s.kind == "add" then
             assert(s.channel, "no channel on scatter?")
-            stmt = `image:atomicAddChannel(index, s.channel, exp)
+            stmt = `image:atomicAddChannel(index, s.channel, dimSizes, exp)
         else
             assert(s.kind == "set" and s.channel == 0, "set only works for single channel images")
             stmt = quote 
-                image(index) = exp
+                image(index,dimSizes) = exp
             end
         end
         scatterstatements:insert(stmt)
     end
 
-    local terra generatedfn([idx], [P], [extraarguments])
+    local terra generatedfn([idx], [P], [dimSizes], [extraarguments])
         var [midx] = idx
         [declarations]
         [statements]
