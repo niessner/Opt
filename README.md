@@ -418,7 +418,7 @@ There currently is no equivalent iterator for nodes in a graph hyperedge, but fo
 	G = Graph("G", 3, "v0", 4, "v1", 5, "v2", 6, "v3", 7)
 	nodes = {"v0","v1","v2","v3"}
 	local result = 1.0
-	for _,n in nodes do
+	for _,n in ipairs(nodes) do
 		result = result * X(G[n])
 	end
 	Energy(result)
