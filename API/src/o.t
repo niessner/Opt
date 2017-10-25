@@ -1973,8 +1973,58 @@ local function classifyexpression(exp) -- what index space, or graph is this thi
     return classification,template
 end
 
+local function extract_unused_unknowns(kinds,kind_to_templates)
+    local used_nongraph_unknown_images = {}
+    local all_unknowns = {}
+    for _,k in ipairs(kinds) do
+        for _,template in ipairs(kind_to_templates[k]) do
+            for _,u in ipairs(template.unknowns) do
+                if k.kind == "CenteredFunction" then
+                    used_nongraph_unknown_images[u.image] = true
+                end
+                all_unknowns[u.image] = true
+            end
+        end
+    end
+    local unused_unknowns = terralib.newlist()
+    for _,k in ipairs(table.keys(all_unknowns)) do
+        if not used_nongraph_unknown_images[k] then
+            unused_unknowns:insert(k)
+        end
+    end
+    return unused_unknowns
+end
+
+local function insert_dummy_energies_for_unused_unknowns(kinds,kind_to_templates,unused_unknowns)
+    for _,u in ipairs(unused_unknowns) do
+        local ispace = u.type.ispace
+        local unknownaccesses = terralib.newlist()
+        for i = 1,u.type.channelcount do
+            local imacc = ImageAccess(u,ad.scalar,ispace:ZeroOffset(),i-1)
+            unknownaccesses:insert(imacc)
+        end
+        local kind = A.CenteredFunction(ispace)
+        if not kind_to_templates[kind] then
+            kinds:insert(kind)
+            kind_to_templates[kind] = terralib.newlist()
+        end
+        local exp = ad.toexp(0)
+        local template = A.ResidualTemplate(exp,unknownaccesses)
+        kind_to_templates[kind]:insert(template)
+    end
+end
+
 local function toenergyspecs(Rs)    
     local kinds,kind_to_templates = MapAndGroupBy(Rs,classifyexpression)
+    local unused_unknowns = extract_unused_unknowns(kinds,kind_to_templates)
+    if #unused_unknowns > 0 then
+        local message = "No unknownwise residuals for unknown(s) "..tostring(unused_unknowns[1])
+        for i=2,#unused_unknowns do
+            message = message..", "..tostring(unused_unknowns[i])
+        end
+        print(message..". Creating zero-valued stand-ins.")
+    end
+    insert_dummy_energies_for_unused_unknowns(kinds,kind_to_templates,unused_unknowns)
     return kinds:map(function(k) return A.EnergySpec(k,kind_to_templates[k]) end)
 end
 
@@ -2413,7 +2463,6 @@ local function extractresidualterms(...)
 end
 function ProblemSpecAD:Cost(...)
     local terms = extractresidualterms(...)
-    
     local functionspecs = List()
     local energyspecs = toenergyspecs(terms)
     for _,energyspec in ipairs(energyspecs) do

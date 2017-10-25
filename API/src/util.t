@@ -14,6 +14,30 @@ util.C = terralib.includecstring [[
 ]]
 local C = util.C
 
+--[[ rPrint(struct, [limit], [indent])   Recursively print arbitrary data. 
+    Set limit (default 100) to stanch infinite loops.
+    Indents tables as [KEY] VALUE, nested tables as [KEY] [KEY]...[KEY] VALUE
+    Set indent ("") to prefix each line:    Mytable [KEY] [KEY]...[KEY] VALUE
+--]]
+function util.rPrint(s, l, i) -- recursive Print (structure, limit, indent)
+    l = (l) or 100; i = i or "";    -- default item limit, indent string
+    local ts = type(s);
+    if (l<1) then print (i,ts," *snip* "); return end;
+    if (ts ~= "table") then print (i,ts,s); return end
+    print (i,ts);           -- print "table"
+    for k,v in pairs(s) do  -- print "[KEY] VALUE"
+        util.rPrint(v, l-1, i.."\t["..tostring(k).."]");
+    end
+end 
+
+function table.keys(tab)
+    local result = terralib.newlist()
+    for k,_ in pairs(tab) do
+        result:insert(k)
+    end
+    return result
+end
+
 local cuda_compute_version = 30
 local libdevice = terralib.cudahome..string.format("/nvvm/libdevice/libdevice.compute_%d.10.bc",cuda_compute_version)
 
