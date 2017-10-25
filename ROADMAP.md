@@ -6,14 +6,6 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 
 See the [roadmap](https://github.com/niessner/Opt/blob/master/ROADMAP.md) for near-future changes.
 
-## [0.2.1] - Estimated 2017-11-01
-### Adding
-- Improved documentation 
-- Improved error messages
-
-### Fixing 
-- [#91](https://github.com/niessner/Opt/issues/91): Graph energies with no unknown energies produce erroneous results
-
 ## [0.3.0] - Estimated 2017-11-07
 ### Adding
 - Automated performance testing

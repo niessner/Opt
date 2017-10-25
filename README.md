@@ -344,6 +344,21 @@ If you do not want the default behavior, you can use the `InBounds(x,y)` functio
 
 It is also possible to exclude arbitrary pixels from the solve using the `Exclude(exp)` method. When `exp` is true, unknowns defined at these pixels will not be updated and residuals at these pixels will not be evaluated.
 
+
+### ComputedArray ###
+
+Energy functions for neighboring pixels can share expensive-to-compute expressions. For instance,
+our [shape-from-shading example](https://github.com/niessner/Opt/blob/master/examples/shape_from_shading/shape_from_shading.t#L67) uses an expensive lighting calculation that is shared by neighboring pixels. We allow the user to turn these calculations into computed arrays, which behave
+like arrays when used in energy functions, but are defined as an expression of other arrays:
+
+    -- B_I is previously defined as a function that uses 
+    -- a large number of images. After this line, B_I can
+    -- be accessed like a regular Array or Image
+    B_I = ComputedArray("B_I", {W,H}, B_I(0,0))
+
+Computed arrays can include computations using unknowns, and are recalculated as necessary during the optimization. Similar to scheduling annotations in Halide, they allow the user to balance recompute with locality at a high-level.
+
+
 ### Vectors ###
 
     vector = Vector(a,b,c)

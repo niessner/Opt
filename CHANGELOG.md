@@ -7,12 +7,16 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 See the [roadmap](https://github.com/niessner/Opt/blob/master/ROADMAP.md) for near-future changes.
 
 ## [Unreleased]
+
+## [0.2.1] - 2017-10-25
 ### Added
 - Roadmap
 - Partially-automated regression test script.
 - Verbose-mode GPU memory usage reporting
+- Improved documentation 
+- Improved error messages
 
-### Fixed
+### Fixed 
 - [#91](https://github.com/niessner/Opt/issues/91): Graph energies with no unknown energies produce erroneous results
 
 ## [0.2.0] - 2017-10-22
@@ -32,6 +36,7 @@ See the [roadmap](https://github.com/niessner/Opt/blob/master/ROADMAP.md) for ne
 ### Fixed 
 - Memory leaks
 
-[Unreleased]: https://github.com/niessner/Opt/compare/v0.2.0...HEAD
+[Unreleased]: https://github.com/niessner/Opt/compare/v0.2.1...HEAD
+[0.2.1]: https://github.com/niessner/Opt/compare/v0.2.0...v0.2.1
 [0.2.0]: https://github.com/niessner/Opt/compare/v0.1.1...v0.2.0
 [0.1.1]: https://github.com/niessner/Opt/v0.1.0...v0.1.1
