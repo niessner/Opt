@@ -315,7 +315,12 @@ function ExpVector:__index(key)
         return self.data[key+1]
     else return ExpVector[key] end
 end
-ExpVector.__call = ExpVector.__index
+function ExpVector:__call(key)
+    if type(key) == "number" then
+        assert(key >= 0 and key < #self.data, "index out of bounds")
+        return self.data[key+1]
+    else assert(false, "Indices into vectors must be numbers. Index "..tostring(key).." is of type "..type(key)) return ExpVector[key] end
+end
 local function toexpvectorentry(v)
     return ExpVector:isclassof(v) and v or toexp(v)
 end
