@@ -12,6 +12,9 @@ See the [roadmap](https://github.com/niessner/Opt/blob/master/ROADMAP.md) for ne
 - Partially-automated regression test script.
 - Verbose-mode GPU memory usage reporting
 
+### Fixed
+- [#91](https://github.com/niessner/Opt/issues/91): Graph energies with no unknown energies produce erroneous results
+
 ## [0.2.0] - 2017-10-22
 ### Added
 - Changelog
