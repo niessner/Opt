@@ -461,12 +461,9 @@ Opt uses the values of the unknown array you pass into it as the initial guess f
 
 1. All examples/tests immediately quit with an error message about cudalib being nil: 
 	- Your Terra installation likely does not have CUDA enabled. You can double check by running the Terra tests, and seeing if the cuda tests fail. Remember to install CUDA 7.5 before running Opt. On windows, the binary release searches for the CUDA compiler binaries using the CUDA_PATH environment variable. The default installation of the CUDA 7.5 Toolkit sets these paths, but if you did a nonstandard installation or subsequently installed a different version of CUDA, you will need to (re)set the path yourself.
-
 2. "The program can't start because cudart64_75.dll is missing from your computer. Try reinstalling the program to fix this problem.": 
-- CUDA 7.5 is not on your path. Perhaps you didn't install it, or haven't closed Visual Studio since installing it. If you have done both, you'll need to manually add it to your path environment variable. By default, the path will be "C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA\v7.5\bin"
-
+	- CUDA 7.5 is not on your path. Perhaps you didn't install it, or haven't closed Visual Studio since installing it. If you have done both, you'll need to manually add it to your path environment variable. By default, the path will be "C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA\v7.5\bin"
 3. "The program can't start because terra.dll is missing from your computer. Try reinstalling the program to fix this problem." 
-- Terra is not on your path. Perhaps you didn't add it to your $PATH environment variable, or haven't closed Visual Studio since adding it.
-
+	- Terra is not on your path. Perhaps you didn't add it to your $PATH environment variable, or haven't closed Visual Studio since adding it.
 4. My initial cost is NaN (or infinity) and Opt doesn't improve it.
-- You may have provided garbage initialization to Opt, see the "Initial Guess" section above.
+	- You may have provided garbage initialization to Opt, see the "Initial Guess" section above.
