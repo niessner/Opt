@@ -7,6 +7,3 @@ UsePreconditioner(true)
 x,y = data(G.d)(0),data(G.d)(1)
 a,b = funcParams(G.p)(0),funcParams(G.p)(1)
 Energy(y - (a*cos(b*x) + b*sin(a*x))) 
-
---local zeroIm = ComputedImage("zero",{U}, 0.0)
---Energy(zeroIm(0) * funcParams(0)(0)*funcParams(0)(1))

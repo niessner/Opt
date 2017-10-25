@@ -1973,58 +1973,57 @@ local function classifyexpression(exp) -- what index space, or graph is this thi
     return classification,template
 end
 
-local function extract_unused_unknowns(kinds,kind_to_templates)
-    local used_nongraph_unknown_images = {}
-    local all_unknowns = {}
+local function extract_unused_unknown_ispaces(kinds,kind_to_templates)
+    local used_nongraph_unknown_ispaces = {}
+    local all_unknown_ispaces = {}
     for _,k in ipairs(kinds) do
         for _,template in ipairs(kind_to_templates[k]) do
             for _,u in ipairs(template.unknowns) do
                 if k.kind == "CenteredFunction" then
-                    used_nongraph_unknown_images[u.image] = true
+                    used_nongraph_unknown_ispaces[u.image.type.ispace] = true
                 end
-                all_unknowns[u.image] = true
+                all_unknown_ispaces[u.image.type.ispace] = true
             end
         end
     end
-    local unused_unknowns = terralib.newlist()
-    for _,k in ipairs(table.keys(all_unknowns)) do
-        if not used_nongraph_unknown_images[k] then
-            unused_unknowns:insert(k)
+    local unused_unknown_ispaces = terralib.newlist()
+    for _,k in ipairs(table.keys(all_unknown_ispaces)) do
+        if not used_nongraph_unknown_ispaces[k] then
+            unused_unknown_ispaces:insert(k)
         end
     end
-    return unused_unknowns
+    return unused_unknown_ispaces
 end
 
-local function insert_dummy_energies_for_unused_unknowns(kinds,kind_to_templates,unused_unknowns)
-    for _,u in ipairs(unused_unknowns) do
-        local ispace = u.type.ispace
-        local unknownaccesses = terralib.newlist()
-        for i = 1,u.type.channelcount do
-            local imacc = ImageAccess(u,ad.scalar,ispace:ZeroOffset(),i-1)
-            unknownaccesses:insert(imacc)
-        end
+local function insert_dummy_energies_for_unused_unknown_ispaces(kinds,kind_to_templates,unused_unknown_ispaces)
+    for _,ispace in ipairs(unused_unknown_ispaces) do
         local kind = A.CenteredFunction(ispace)
         if not kind_to_templates[kind] then
             kinds:insert(kind)
             kind_to_templates[kind] = terralib.newlist()
         end
-        local exp = ad.toexp(0)
-        local template = A.ResidualTemplate(exp,unknownaccesses)
+        local template = A.ResidualTemplate(ad.toexp(0),terralib.newlist())
         kind_to_templates[kind]:insert(template)
     end
 end
 
-local function toenergyspecs(Rs)    
-    local kinds,kind_to_templates = MapAndGroupBy(Rs,classifyexpression)
-    local unused_unknowns = extract_unused_unknowns(kinds,kind_to_templates)
-    if #unused_unknowns > 0 then
-        local message = "No unknownwise residuals for unknown(s) "..tostring(unused_unknowns[1])
-        for i=2,#unused_unknowns do
-            message = message..", "..tostring(unused_unknowns[i])
+local function handle_unused_unknown_ispaces(kinds,kind_to_templates)
+    local unused_unknown_ispaces = extract_unused_unknown_ispaces(kinds,kind_to_templates)
+    if #unused_unknown_ispaces > 0 then
+        local message = "No unknownwise residuals for ispaces(s) "..tostring(unused_unknown_ispaces[1])
+        for i=2,#unused_unknown_ispaces do
+            message = message..", "..tostring(unused_unknown_ispaces[i])
         end
         print(message..". Creating zero-valued stand-ins.")
     end
-    insert_dummy_energies_for_unused_unknowns(kinds,kind_to_templates,unused_unknowns)
+    insert_dummy_energies_for_unused_unknown_ispaces(kinds,kind_to_templates,unused_unknown_ispaces)
+end
+
+local function toenergyspecs(Rs)    
+    local kinds,kind_to_templates = MapAndGroupBy(Rs,classifyexpression)
+    -- We need to execute kernels for unknowns even if they have no unknownwise residuals,
+    -- to initialize values for graph residuals and to generally just do PCG/GN bookkeeping
+    handle_unused_unknown_ispaces(kinds,kind_to_templates)
     return kinds:map(function(k) return A.EnergySpec(k,kind_to_templates[k]) end)
 end
 
