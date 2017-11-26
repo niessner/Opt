@@ -482,3 +482,7 @@ Opt uses the values of the unknown array you pass into it as the initial guess f
 	- Terra is not on your path. Perhaps you didn't add it to your $PATH environment variable, or haven't closed Visual Studio since adding it.
 4. My initial cost is NaN (or infinity) and Opt doesn't improve it.
 	- You may have provided garbage initialization to Opt, see the "Initial Guess" section above.
+5. When trying to compile the graph-examples, I get an 'undefined reference' error for some functions in the OpenMesh library.
+	- There may be some incompatibility with the distributed OpenMesh binary and your architecture ([this has been reported on some variant of linux](https://github.com/niessner/Opt/issues/105)). While we will try and find a more suitable fix, you should be able to work around it for now by compiling your own version of [OpenMesh](https://www.openmesh.org/).
+6. My problem size changes at runtime, and recompiling every solve is too slow for my application.
+	- We are working on a change for this (see the roadmap), but cannot guarantee it will be available by the time you need it. In the meantime, consider compiling once for a "maximum" edge size, making a dummy node in your graph that indexes into a small image that encodes whether the edge is valid or not, and multiplying your energy term with 0 when the edge is invalid.
