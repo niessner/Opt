@@ -14,6 +14,7 @@ local GuardedInvertType = { CERES = {}, MODIFIED_CERES = {}, EPSILON_ADD = {} }
 -- CERES default, ONCE_PER_SOLVE
 local JacobiScalingType = { NONE = {}, ONCE_PER_SOLVE = {}, EVERY_ITERATION = {}}
 
+local guardDivisionByZero = true
 
 local initialization_parameters = {
     use_cusparse = false,
@@ -37,6 +38,21 @@ local solver_parameter_defaults = {
     lIterations = 10
 }
 
+
+local logDebugCudaOptFloat
+if _opt_verbosity > 2 then 
+    logDebugCudaOptFloat = macro(function(name,val)
+        return quote
+            var h_val : opt_float
+            C.cudaMemcpy(&h_val, val, sizeof(opt_float), C.cudaMemcpyDeviceToHost)
+            C.printf("%s: %f\n", name, h_val)
+        end
+    end)
+else
+    logDebugCudaOptFloat = macro(function(name,val)
+        return 0
+    end)
+end
 
 local multistep_alphaDenominator_compute = initialization_parameters.use_cusparse
 
@@ -438,7 +454,9 @@ return function(problemSpec)
 
                 -- update step size alpha
                 var alpha = opt_float(0.0f)
-                alpha = alphaNumerator/alphaDenominator 
+                if (not [guardDivisionByZero]) or alphaDenominator > opt_float(0.0f) then
+                    alpha = alphaNumerator/alphaDenominator 
+                end
     
                 var delta = pd.delta(idx)+alpha*pd.p(idx)       -- do a descent step
                 pd.delta(idx) = delta
@@ -476,7 +494,10 @@ return function(problemSpec)
                 var alphaDenominator : opt_float = pd.scanAlphaDenominator[0]
                 var alphaNumerator : opt_float = pd.scanAlphaNumerator[0]
                 -- update step size alpha
-                var alpha = alphaNumerator/alphaDenominator 
+                var alpha = opt_float(0.0f)
+                if (not [guardDivisionByZero]) or alphaDenominator > opt_float(0.0f) then
+                    alpha = alphaNumerator/alphaDenominator 
+                end
                 pd.delta(idx) = pd.delta(idx)+alpha*pd.p(idx)       -- do a descent step
             end
         end
@@ -521,7 +542,9 @@ return function(problemSpec)
                 var rDotzOld : opt_float = pd.scanAlphaNumerator[0]	-- get old denominator
 
                 var beta : opt_float = opt_float(0.0f)
-                beta = rDotzNew/rDotzOld
+                if (not [guardDivisionByZero]) or rDotzOld > opt_float(0.0f) then
+                    beta = rDotzNew/rDotzOld
+                end
                 pd.p(idx) = pd.z(idx)+beta*pd.p(idx)			    -- update decent direction
             end
         end
@@ -1028,6 +1051,7 @@ return function(problemSpec)
                     end
                 end
             end
+            logDebugCudaOptFloat("init scanAlphaNumerator", pd.scanAlphaNumerator)
             cusparseOuter(pd)
             for lIter = 0, pd.solverparameters.lIterations do				
 
@@ -1047,7 +1071,7 @@ return function(problemSpec)
                 if multistep_alphaDenominator_compute then
                     gpu.PCGStep1_Finish(pd)
                 end
-				
+				logDebugCudaOptFloat("scanAlphaDenominator", pd.scanAlphaDenominator)
 				C.cudaMemset(pd.scanBetaNumerator, 0, sizeof(opt_float))
 				
 				if [problemSpec:UsesLambda()] and ((lIter + 1) % residual_reset_period) == 0 then
@@ -1060,6 +1084,7 @@ return function(problemSpec)
                 else
                     gpu.PCGStep2(pd)
                 end
+                logDebugCudaOptFloat("scanBetaNumerator", pd.scanBetaNumerator)
                 gpu.PCGStep3(pd)
 
 				-- save new rDotz for next iteration
@@ -1132,6 +1157,7 @@ return function(problemSpec)
                     end
                 else
                     emit quote
+                        logSolver("cost: %f -> %f\n", pd.prevCost, newCost)
                         pd.prevCost = newCost 
                     end
                 end 

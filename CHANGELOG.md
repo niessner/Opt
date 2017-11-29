@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 See the [roadmap](https://github.com/niessner/Opt/blob/master/ROADMAP.md) for near-future changes.
 
 ## [Unreleased]
+### Added
+- Higher verbosity levels, along with documentation
+
+### Fixed 
+- Robustness to divide-by-zero in pure GN solver.
 
 ## [0.2.1] - 2017-10-25
 ### Added
