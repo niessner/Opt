@@ -27,7 +27,6 @@ See the [roadmap](https://github.com/niessner/Opt/blob/master/ROADMAP.md) for ne
 - Improved Linux support
 - Save compiled plans
 
-[0.2.1]: https://github.com/niessner/Opt/milestone/2
 [0.3.0]: https://github.com/niessner/Opt/milestone/3
 [0.3.1]: https://github.com/niessner/Opt/milestone/4
 [0.4.0]: https://github.com/niessner/Opt/milestone/5
