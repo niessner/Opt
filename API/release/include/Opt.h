@@ -13,7 +13,11 @@ struct Opt_InitializationParameters {
 	// can be a drastic drag of performance.
 	int doublePrecision;
 
-	// Valid Values: 0, no verbosity; 1, full verbosity
+	// Valid Values: 
+    //  0. no verbosity 
+    //  1. verbose solve 
+    //  2. verbose initialization, autodiff and solve
+    //  3. full verbosity (includes ptx dump)
 	int verbosityLevel;
 
 	// If true (nonzero), a cuda timer is used to collect per-kernel timing information
