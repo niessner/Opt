@@ -1,6 +1,7 @@
 local S = require("std")
 require("precision")
 local util = {}
+local verbosePTX = _opt_verbosity > 2
 
 util.C = terralib.includecstring [[
 #include <stdio.h>
@@ -792,8 +793,10 @@ function util.makeGPUFunctions(problemSpec, PlanData, delegate, names)
             end
         end
     end
-    
-    local kernels = terralib.cudacompile(kernelFunctions, false)
+    if verbosePTX then
+        print("Compiling kernels!")
+    end
+    local kernels = terralib.cudacompile(kernelFunctions, verbosePTX)
     
     -- step 2: generate wrapper functions around each named thing
     local grouplaunchers = {}
