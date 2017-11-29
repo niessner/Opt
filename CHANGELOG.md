@@ -44,7 +44,7 @@ See the [roadmap](https://github.com/niessner/Opt/blob/master/ROADMAP.md) for ne
 - Memory leaks
 
 [Unreleased]: https://github.com/niessner/Opt/compare/v0.2.2...HEAD
-[0.2.1]: https://github.com/niessner/Opt/compare/v0.2.1...v0.2.2
+[0.2.2]: https://github.com/niessner/Opt/compare/v0.2.1...v0.2.2
 [0.2.1]: https://github.com/niessner/Opt/compare/v0.2.0...v0.2.1
 [0.2.0]: https://github.com/niessner/Opt/compare/v0.1.1...v0.2.0
 [0.1.1]: https://github.com/niessner/Opt/v0.1.0...v0.1.1
