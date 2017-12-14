@@ -6,7 +6,7 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 
 See the [roadmap](https://github.com/niessner/Opt/blob/master/ROADMAP.md) for near-future changes.
 
-## [0.3.0] - Estimated 2017-12-15
+## [0.3.0] - Estimated 2017-12-28
 ### Adding
 - Automated performance testing
 
