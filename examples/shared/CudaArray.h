@@ -16,7 +16,7 @@ public:
     }
 
     void readBack(T* cpuBuffer, size_t count) {
-        cudaSafeCall(cudaMemcpy(cpuBuffer, m_data, sizeof(T)*min(count,m_size), cudaMemcpyDeviceToHost));
+        cudaSafeCall(cudaMemcpy(cpuBuffer, m_data, sizeof(T)*std::min(count,m_size), cudaMemcpyDeviceToHost));
     }
 
     void readBack(std::vector<T>& cpuBuffer) {
