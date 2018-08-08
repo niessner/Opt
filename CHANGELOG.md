@@ -8,6 +8,14 @@ See the [roadmap](https://github.com/niessner/Opt/blob/master/ROADMAP.md) for ne
 
 ## [Unreleased]
 
+### Changed
+- Renamed isUnknown parameter in C++ wrapper class OptImage to usesOptFloat
+- Removed internal Opt compiler cruft.
+
+### Fixed
+- Small robustness changes for compilers. (mihaibujanca)
+
+
 ## [0.2.2] - 2017-11-29
 ### Added
 - Higher verbosity levels, along with documentation

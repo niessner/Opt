@@ -8,8 +8,8 @@
 static  std::shared_ptr<OptImage> createWrapperOptImage(std::shared_ptr<SimpleBuffer> simpleBuffer) {
     std::vector<unsigned int> dims = { (unsigned int)simpleBuffer->width(), (unsigned int)simpleBuffer->height() };
     OptImage::Type t = (simpleBuffer->type() == SimpleBuffer::DataType::FLOAT) ? OptImage::Type::FLOAT : OptImage::Type::UCHAR;
-    bool isUnknown = (t == OptImage::Type::FLOAT);
-    return std::shared_ptr<OptImage>(new OptImage(dims, simpleBuffer->data(), t, 1, OptImage::Location::GPU, isUnknown, false));
+    bool usesOptFloat = (t == OptImage::Type::FLOAT);
+    return std::shared_ptr<OptImage>(new OptImage(dims, simpleBuffer->data(), t, 1, OptImage::Location::GPU, usesOptFloat, false));
 }
 
 struct SFSSolverInput {
