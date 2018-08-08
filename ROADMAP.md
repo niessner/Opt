@@ -6,7 +6,7 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 
 See the [roadmap](https://github.com/niessner/Opt/blob/master/ROADMAP.md) for near-future changes.
 
-## [0.3.0] - Estimated 2017-12-28
+## [0.3.0]
 ### Adding
 - Automated performance testing
 
@@ -15,10 +15,10 @@ See the [roadmap](https://github.com/niessner/Opt/blob/master/ROADMAP.md) for ne
 - CUDA and Terra dependencies (CUDA 8, currently unreleased terra)
 - Name changes [#95](https://github.com/niessner/Opt/issues/95)
 
-## [0.3.1] - Estimated 2018-01-01
+## [0.3.1]
 - Quality-of-life issues
 
-## [0.4.0] - Estimated 2018-01-31
+## [0.4.0]
 ### Adding
 - [#78](https://github.com/niessner/Opt/issues/78) Mutable arrays for intermediary variables
 
