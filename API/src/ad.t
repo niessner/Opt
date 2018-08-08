@@ -11,49 +11,14 @@ local List = terralib.newlist
 A:Extern("TerraType",terralib.types.istype)
 A:Define [[
     Op = (string name)
-    Shape = (table* keys) unique
     ExpVector = (table* data)
     Exp = Var(any key_) unique
         | Apply(Op op, number? const, Exp* args) unique
-        | Reduce(Exp v) unique
         | Const(number v) unique
 ]]
-local Op,Shape,ExpVector,Exp,Var,Apply,Reduce,Const = A.Op,A.Shape,A.ExpVector,A.Exp,A.Var,A.Apply,A.Reduce,A.Const
+local Op,ExpVector,Exp,Var,Apply,Const = A.Op,A.ExpVector,A.Exp,A.Var,A.Apply,A.Const
 
 ad.classes = A
-ad.scalar = Shape(List{})
- 
-function Shape:isprefixof(rhs)
-    if #self.keys > #rhs.keys then return false end
-    for i,k in ipairs(self.keys) do
-        if k ~= rhs.keys[i] then return false end
-    end
-    return true
-end
-local function joinshapes(shapes)
-    local longest = ad.scalar
-    for i,s in ipairs(shapes) do
-        assert(Shape:isclassof(s),"not a shape")
-        if #s.keys > #longest.keys then
-            longest = s
-        end
-    end
-    for i = 1,#longest.keys do
-        local lk = longest.keys[i]
-        for _,s in ipairs(shapes) do
-            local k = s.keys[i]
-            if k and k ~= lk then return nil end 
-        end
-    end
-    return longest
-end
-function Shape:fromreduction()
-    if #self.keys == 0 then return nil end
-    return Shape(List{unpack(self.keys,1,#self.keys-1)})
-end
-function Shape:__tostring()
-    return "{"..table.concat(self.keys:map(tostring),",").."}"
-end
 
 local nextid = 0
 local function allocid()
@@ -72,16 +37,12 @@ end
 local empty = terralib.newlist {}
 function Exp:children() return empty end
 function Apply:children() return self.args end 
-function Reduce:children() return self.args end
 
 function Exp:type() 
     assert(self.type_ == bool or self.type_ == opt_float) 
     return self.type_ 
 end
-function Exp:shape()
-    assert(Shape:isclassof(self.shape_),"not a shape?")
-    return self.shape_
-end
+
 function Const:__tostring() return tostring(self.v) end
 
 function Var:init()
@@ -92,23 +53,17 @@ function Var:init()
         self.type_ = key:type()
     end 
     assert(self.type_ == opt_float or self.type_ == bool, "variable with key exists with a different type")
-    self.shape_ = ad.scalar
-    if type(key) == "table" and type(key.shape) == "function" then
-        self.shape_ = key:shape()
-    end
 end
 
 function Apply:init()
     assert(not self.op.nparams or #self.args == self.op.nparams)
     self.type_ = self.op:propagatetype(self.args)
-    self.shape_ = joinshapes(self.args:map("shape"))
     self.id = allocid()
 end
 
 function Const:init()
     self.id = allocid()
     self.type_ = opt_float
-    self.shape_ = ad.scalar
 end
 
 local function toexp(n)
@@ -123,11 +78,6 @@ local function toexp(n)
         end
     end
     return nil
-end
-function Reduce:init()
-    self.args = List { self.v }
-    self.type_, self.shape_ = self.v:type(), assert(self.v:shape():fromreduction(),"attempting to reduce a scalar value") 
-    self.id = allocid()
 end
 local zero,one,negone = toexp(0),toexp(1),toexp(-1)
 local function allconst(args)
@@ -356,7 +306,6 @@ local x,y,z = v[1],v[2],v[3]
 
 ad.v = v
 ad.toexp = toexp
-ad.Shape = Shape
 
 function ad.Vector(...)
     local data = terralib.newlist()
@@ -486,8 +435,6 @@ function Exp:rename(vars)
             local nv = toexp(varsf(self:key()))
             return assert(nv,
                           ("rename: unknown invalid mapping for variable %s which maps to %s"):format(tostring(self:key()),tostring(nv)))
-        elseif self.kind == "Reduce" then
-            return Reduce(visitcached(self.v))
         end
     end
     local cached = {} 
@@ -636,19 +583,14 @@ local function expstostring(es)
     local tbl = terralib.newlist()
     for i = #linearized,1,-1 do
         local e = linearized[i]
-        if e.kind == "Apply" or e.kind == "Reduce" then
+        if e.kind == "Apply" then
             releaseregister(registerforexp(e))
             for i,c in ipairs(e:children()) do
                 registerforexp(c)
             end
             if shouldprint[e] then
-                local rhs
-                if e.kind == "Reduce" then
-                    rhs = ("Reduce(%s)"):format(stringforuse(e.v))
-                else
-                    rhs = emitapp(e)
-                end
-                tbl:insert(("[%2d,%d]  r%d : %s %s = %s\n"):format(registerforexp(e),e.id,i,e:type(),e:shape(),rhs))
+                local rhs = emitapp(e)
+                tbl:insert(("[%2d,%d]  r%d : %s = %s\n"):format(registerforexp(e),e.id,i,e:type(),rhs))
             end
         end
     end
@@ -717,49 +659,9 @@ function Apply:calcd(v)
     return r
 end
 
-function Reduce:calcd(v) return self.args[1]:d(v) end
-local reducepartials = terralib.newlist { one }
-function Reduce:partials() return reducepartials end
 --calc d(thisexpress)/d(exps[1]) ... d(thisexpress)/d(exps[#exps]) (i.e. the gradient of this expression with relation to the inputs) 
-
-if use_backward_ad then
-    function Exp:gradient(exps)
-        exps = terralib.islist(exps) and exps or terralib.newlist(exps)
-        -- reverse mode ad, work backward from this expression, accumulate stuff.
-        local tape = {} -- mapping from exp -> current accumulated derivative
-        local postorder = terralib.newlist()
-        local function visit(e)
-            if tape[e] then return end
-            tape[e] = zero
-            for i,c in ipairs(e:children()) do visit(c) end
-            postorder:insert(e)
-        end
-        visit(self)
-        tape[self] = one -- the reverse ad 'seed'
-        for i = #postorder,1,-1 do --reverse post order traversal from self to equation roots, all uses come before defs
-            local e = postorder[i]
-            if Var:isclassof(e) then
-                local k = e:key()
-                if type(k) == "table" and type(k.gradient) == "function" then -- handle optional black-box relationship to other variables
-                    local gradtable = k:gradient()
-                    for k,dv in pairs(gradtable) do
-                        local v = ad.v[k]
-                        tape[v] = (tape[v] or zero) + tape[e]*dv
-                    end
-                end
-            else
-                local p = e:partials()
-                for j,c in ipairs(e:children()) do
-                    tape[c] = tape[c] + tape[e]*p[j]
-                end
-            end
-        end
-        return exps:map(function(e) return tape[e] or zero end)
-    end
-else
-    function Exp:gradient(exps)
-        return exps:map(function(v) return self:d(v) end)
-    end
+function Exp:gradient(exps)
+    return exps:map(function(v) return self:d(v) end)
 end
 
 function ad.sum:generate(exp,args)
@@ -897,13 +799,7 @@ ad.identity:define(function(x) return x end,1) -- preserved across math optimiza
 
 setmetatable(ad,nil) -- remove special metatable that generates new blank ops
 
-ad.Var,ad.Apply,ad.Const,ad.Exp,ad.Reduce = Var, Apply, Const, Exp, Reduce
-function ad.reduce(x)
-    if ExpVector:isclassof(x) then
-        return x:map(Reduce)
-    end
-    return Reduce(x)
-end
+ad.Var,ad.Apply,ad.Const,ad.Exp = Var, Apply, Const, Exp
 function ad.polysimplify(exps)
     if not use_polysimplify then return exps end
     local function sumtoterms(sum)
