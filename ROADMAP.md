@@ -7,16 +7,24 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 See the [roadmap](https://github.com/niessner/Opt/blob/master/ROADMAP.md) for near-future changes.
 
 ## [0.3.0]
-### Adding
-- Automated performance testing
-
 ### Changing
 - Dynamically change the dimensions of unknowns without re-compiling
 - CUDA and Terra dependencies (CUDA 8, currently unreleased terra)
 - Name changes [#95](https://github.com/niessner/Opt/issues/95)
 
 ## [0.3.1]
+### Adding
+- Automated performance testing
+- Parameter Validation
+- Stencil-like iterator for edge nodes
+- Warnings for bad kernels
+
+### Changing
 - Quality-of-life issues
+
+### Fixing
+- Memory Leaks
+- Compilation Time
 
 ## [0.4.0]
 ### Adding
