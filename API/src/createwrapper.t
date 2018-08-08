@@ -167,9 +167,10 @@ local terra NewState(params : Opt_InitializationParameters) : &LibraryState
 				command = "ls "
 			end 
 
-			print(command..sourcedirectory)
+			command = command..'"'..sourcedirectory..'"'
+			print(command)
 			
-            for line in io.popen(command..sourcedirectory):lines() do
+            for line in io.popen(command):lines() do
                 local name = line:match("(.*)%.t")
                 if name then
                     local content = io.open(sourcedirectory.."/"..line,"r"):read("*all")
