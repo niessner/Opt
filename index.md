@@ -11,7 +11,7 @@ The mathematical descriptions of these functions are extremely concise, but thei
 **Opt** is a new language in which a user simply writes energy functions over image- or graph-structured unknowns, and a compiler automatically generates state-of-the-art GPU optimization kernels.
 The end result is a system in which real-world energy functions in graphics and vision applications are expressible in tens of lines of code. They compile directly into highly optimized GPU solver implementations with performance competitive with the best published hand-tuned, application-specific GPU solvers, and 1--2 orders of magnitude beyond a general-purpose auto-generated solver.
 
-Please refer to the publication when you are using Opt:<br/>[https://dl.acm.org/citation.cfm?id=3132188](https://dl.acm.org/citation.cfm?id=3132188)   ([bibtex](http://www.niessnerlab.org/papers/2017/6opt/devito2017opt.bib))
+Please refer to the publication when you are using Opt:<br/>[ACM Link](https://dl.acm.org/citation.cfm?id=3132188),[arXiv Link](https://arxiv.org/abs/1604.06525)   ([bibtex](http://www.niessnerlab.org/papers/2017/6opt/devito2017opt.bib))
 
 We have recently released an [early version of the code on Github](https://github.com/niessner/Opt).
 
