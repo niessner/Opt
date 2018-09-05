@@ -16,7 +16,7 @@ Opt was presented at SIGGRAPH 2018. The talk itself was not recorded, but the Fa
 [![Opt Fast Forward](fastforward_thumbnail.png)](https://www.youtube.com/watch?v=CV_14aUBxsI&t=831 "Technical Papers Fast Forward")
 
 Slides for the presentation are a good introduction to Opt and are available:
-* Keynote (coming soon)
+* [Keynote](https://cs.stanford.edu/people/mmara/Opt_SIGGRAPH2018.key)
 * [PDF](https://cs.stanford.edu/people/mmara/Opt_SIGGRAPH2018.pdf)
 
 Please refer to the publication when you are using Opt:<br/>[ACM Link](https://dl.acm.org/citation.cfm?id=3132188),[arXiv Link](https://arxiv.org/abs/1604.06525)   ([bibtex](http://www.niessnerlab.org/papers/2017/6opt/devito2017opt.bib))
