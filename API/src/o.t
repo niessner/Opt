@@ -1607,7 +1607,7 @@ local function createfunction(problemspec,name,Index,arguments,results,scatters)
         end
         for i,ir in ipairs(instructions) do
             emittedpos[ir] = i
-            W:write(("[%d]%sr%d : %s%s = %s\n"):format(regcounts[i],formatcondition(ir.condition),i,tostring(ir.type),formatinst(ir)))
+            W:write(("[%d]%sr%d : %s = %s\n"):format(regcounts[i],formatcondition(ir.condition),i,tostring(ir.type),formatinst(ir)))
             if instructions[i+1] and conditioncost(ir.condition,instructions[i+1].condition) ~= 0 then
                 W:write("---------------------\n")
             end
