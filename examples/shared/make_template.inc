@@ -2,7 +2,7 @@ CXX = clang++
 LINK = clang++
 NVCC = $(shell which nvcc)
 SRC ?= src
-CUDAHOME += /usr/local/cuda
+CUDAHOME ?= /usr/local/cuda
 TERRAHOME ?= ../../../terra
 TERRA ?= ../../../terra/release/terra
 
