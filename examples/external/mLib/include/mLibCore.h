@@ -147,6 +147,7 @@ namespace ml
 #include "core-util/nearestNeighborSearch.h"
 #include "core-util/commandLineReader.h"
 #include "core-util/parameterFile.h"
+#include "core-util/keycodes.h"
 #include "core-util/pipe.h"
 #include "core-util/UIConnection.h"
 #include "core-util/eventMap.h"

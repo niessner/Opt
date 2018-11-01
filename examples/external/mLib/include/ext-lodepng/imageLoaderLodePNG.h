@@ -7,7 +7,7 @@ class LodePNG
 {
 public:
   static ColorImageR8G8B8A8 load(const std::string &filename);
-	static void save(const ColorImageR8G8B8A8 &image, const std::string &filename, bool saveTransparency = false);
+  static void save(const ColorImageR8G8B8A8 &image, const std::string &filename, bool saveTransparency = false);
 };
 
 }  // namespace ml
