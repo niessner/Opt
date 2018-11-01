@@ -14,6 +14,7 @@ class CombinedSolver : public CombinedSolverBase
 {
 	public:
         CombinedSolver(const SimpleMesh* mesh, int3 voxelGridSize, CombinedSolverParameters params)
+            : CombinedSolverBase("Volumetric Mesh Deformation")
 		{
             m_combinedSolverParameters = params;
 
@@ -72,7 +73,7 @@ class CombinedSolver : public CombinedSolverBase
 
         virtual void combinedSolveFinalize() override {
             if (m_combinedSolverParameters.profileSolve) {
-                ceresIterationComparison("Volumetric Mesh Deformation", m_combinedSolverParameters.optDoublePrecision);
+                ceresIterationComparison(m_name, m_combinedSolverParameters.optDoublePrecision);
             }
         }
 

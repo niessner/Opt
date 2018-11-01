@@ -11,7 +11,7 @@ void solveLaplacian(int width, int height, float* unknown, float* target) {
     Opt_InitializationParameters param = {};
     param.doublePrecision = 0;
     param.verbosityLevel = 1;
-    param.collectPerKernelTimingInfo = 1;
+    param.timingLevel = 2;
     Opt_State* state = Opt_NewState(param);
 
 

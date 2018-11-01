@@ -17,7 +17,7 @@
 class CombinedSolver : public CombinedSolverBase {
 public:
     CombinedSolver(const ColorImageR32G32B32A32& image, const ColorImageR32G32B32A32& image1, const ColorImageR32& imageMask, CombinedSolverParameters params, bool useCUDAPatch, bool useEigen)
-	{
+            : CombinedSolverBase("Poisson Image Editing") {
         m_combinedSolverParameters = params;
         m_useCUDAPatch = useCUDAPatch;
         m_useEigen = useEigen;
@@ -60,7 +60,7 @@ public:
     virtual void postNonlinearSolve(int) override {}
 
     virtual void combinedSolveFinalize() override {
-        ceresIterationComparison("Poisson Image Editing", m_combinedSolverParameters.optDoublePrecision);
+        ceresIterationComparison(m_name, m_combinedSolverParameters.optDoublePrecision);
     }
 
 	void resetGPUMemory()

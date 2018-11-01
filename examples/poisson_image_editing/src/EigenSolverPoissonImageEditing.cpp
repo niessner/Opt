@@ -50,7 +50,7 @@ void solveAxEqb(AxEqBSolver& solver, const Eigen::VectorXf& b, Eigen::VectorXf& 
     x = solver.solve(b);
 #endif
 }
-double EigenSolverPoissonImageEditing::solve(const NamedParameters& solverParameters, const NamedParameters& problemParameters, bool profileSolve, std::vector<SolverIteration>& iters)
+double EigenSolverPoissonImageEditing::solve(const NamedParameters& solverParameters, const NamedParameters& problemParameters, SolverPerformanceSummary& perfStats, bool profileSolve, std::vector<SolverIteration>& iters)
 {
     int numUnknowns = 0;
     std::unordered_map<vec2i, int, vec2iHash> pixelLocationsToIndex;

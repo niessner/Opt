@@ -18,7 +18,7 @@ class CombinedSolver : public CombinedSolverBase
 {
 	public:
         CombinedSolver(const SimpleMesh* mesh, std::vector<int> constraintsIdx, std::vector<std::vector<float>> constraintsTarget, CombinedSolverParameters params, float weightFit, float weightReg) :
-            m_constraintsIdx(constraintsIdx), m_constraintsTarget(constraintsTarget)
+            CombinedSolverBase("ARAP Mesh Deformation"), m_constraintsIdx(constraintsIdx), m_constraintsTarget(constraintsTarget)
 		{
             m_weightFitSqrt = sqrtf(weightFit);
             m_weightRegSqrt = sqrtf(weightReg);
@@ -68,11 +68,7 @@ class CombinedSolver : public CombinedSolverBase
         virtual void postSingleSolve() override {
             copyResultToCPUFromFloat3();
         }
-        virtual void combinedSolveFinalize() override {
-            if (m_combinedSolverParameters.profileSolve) {
-                ceresIterationComparison("ARAP Mesh Deformation", m_combinedSolverParameters.optDoublePrecision);
-            }
-        }
+        virtual void combinedSolveFinalize() override {}
 
 		void setConstraints(float alpha)
 		{

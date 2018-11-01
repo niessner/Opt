@@ -13,7 +13,7 @@
 class CombinedSolver : public CombinedSolverBase
 {
 public:
-    CombinedSolver(const SimpleMesh* mesh, bool performanceRun, CombinedSolverParameters params, float weightFit, float weightReg)
+    CombinedSolver(const SimpleMesh* mesh, bool performanceRun, CombinedSolverParameters params, float weightFit, float weightReg) : CombinedSolverBase("Cotangent Mesh Smoothing")
     {
         m_weightFitSqrt = sqrtf(weightFit);
         m_weightRegSqrt = sqrtf(weightReg);
@@ -54,9 +54,7 @@ public:
     virtual void postSingleSolve() override {
         copyResultToCPUFromFloat3();
     }
-    virtual void combinedSolveFinalize() override {
-        reportFinalCosts("Cotangent Mesh Smoothing", m_combinedSolverParameters, getCost("Opt(GN)"), getCost("Opt(LM)"), nan(""));
-    }
+    virtual void combinedSolveFinalize() override {}
 
     void initializeConnectivity() {
         bool isTri = m_initial.is_triangles();

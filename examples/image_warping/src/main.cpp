@@ -37,7 +37,7 @@ int main(int argc, const char * argv[]) {
         filename = argv[1];
     }
     if (argc > 2) {
-        downsampleFactor = std::max(0,atoi(argv[2])); 
+        downsampleFactor = std::max(1,atoi(argv[2])); 
     }
     bool performanceRun = false;
     if (argc > 3) {
@@ -109,14 +109,14 @@ int main(int argc, const char * argv[]) {
 
     CombinedSolverParameters params;
     params.numIter = 19;
-    params.useCUDA = false;
+    params.useOpt = true;
     params.nonLinearIter = 8;
     params.linearIter = 400;
     if (performanceRun) {
-        params.useCUDA = false;
+        params.useCUDA = true;
         params.useOpt = true;
-        params.useOptLM = true;
-        params.useCeres = true;
+        params.useOptLM = false;
+        params.useCeres = false;
         params.earlyOut = true;
     }
     if (lmOnlyFullSolve) {
@@ -132,7 +132,6 @@ int main(int argc, const char * argv[]) {
         //m_params.useCeres = false;
 #endif
     }
-   
 
 
 	CombinedSolver solver(imageR32, imageColor, imageR32Mask, constraints, params);

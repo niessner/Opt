@@ -171,8 +171,7 @@ These objects can be used to create residuals functions defined per-pixel in an 
 A simple laplacian smoothing energy in this system would have the form:
 
 
-    W = Dim("W",0) 
-    H = Dim("H",1)
+    W,H = Dim("W",0), Dim("H",1)
     X = Array("X",float,{W,H},0) 
     A = Array("A",float,{W,H},1)
     
@@ -198,8 +197,7 @@ The functions are described in more details below.
     
 Create a new dimension used to describe the size of Arrays. `dimensions_position` is the 0-based offset into the `dimensions` argument to `Opt_ProblemPlan` that will be bound to this value. See 'Binding Values'.
 
-    local W =
-    H = Dim("W",0), Dim("H",1)
+    local W, H = Dim("W",0), Dim("H",1)
     
 ---
 
@@ -318,6 +316,7 @@ Generic math operators are usable on any value or vector:
     Rotate2D(angle, vector2)
     Rotate3D(angle3, vector3)
 
+More undocumented functions can be found in `/API/lib.t`
 
 All operators apply elementwise to `Vector` objects.
 

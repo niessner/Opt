@@ -15,6 +15,26 @@ util.C = terralib.includecstring [[
 ]]
 local C = util.C
 
+-- Must match Opt.h
+struct Opt_PerformanceEntry {
+    count : uint32 
+    minMS : double
+    maxMS : double
+    meanMS : double
+    stddevMS : double
+}
+
+struct Opt_PerformanceSummary {
+    -- Performance Statistics for full solves
+    total               : Opt_PerformanceEntry
+    -- Performance Statistics for individual nonlinear iterations,
+    -- This is broken up into three rough categories below
+    nonlinearIteration  : Opt_PerformanceEntry
+    nonlinearSetup      : Opt_PerformanceEntry
+    linearSolve         : Opt_PerformanceEntry
+    nonlinearResolve    : Opt_PerformanceEntry
+}
+util.Opt_PerformanceEntry,util.Opt_PerformanceSummary = Opt_PerformanceEntry,Opt_PerformanceSummary
 --[[ rPrint(struct, [limit], [indent])   Recursively print arbitrary data. 
     Set limit (default 100) to stanch infinite loops.
     Indents tables as [KEY] VALUE, nested tables as [KEY] [KEY]...[KEY] VALUE
@@ -49,6 +69,22 @@ end
 local terra toEnDisabled(pred : int32)
     if pred ~= 0 then return "Enabled" else return  "Disabled" end
 end
+
+local cd = macro(function(apicall) 
+    local loc = apicall.tree.filename..":"..apicall.tree.linenumber
+    local apicallstr = tostring(apicall)
+    return quote
+        var str = [apicallstr]
+        var r = apicall
+        if r ~= 0 then  
+            C.printf("Cuda reported error %d: %s\n",r, C.cudaGetErrorString(r))
+            C.printf("In call: %s", str)
+            C.printf("From: %s\n", loc)
+            C.exit(r)
+        end
+    in
+        r
+    end end)
 
 local terra printCudaDeviceProperties()
     var dev : int32
@@ -401,23 +437,45 @@ util.ceilingDivide = terra(a : int32, b : int32)
 	return (a + b - 1) / b
 end
 
+struct RunningStats {
+    count : uint32
+    sum : double
+    sqSum : double
+    min : double
+    max : double
+}
+terra RunningStats:init(newVal : float)
+    self.count = 1
+    self.sum   = [double](newVal)
+    self.sqSum = [double](newVal*newVal)
+    self.min   = self.sum
+    self.max   = self.sum
+end
+terra RunningStats:update(newVal : float)
+    self.count = self.count + 1
+    self.sum   = self.sum   + [double](newVal)
+    self.sqSum = self.sqSum + [double](newVal*newVal)
+    self.min   = C.fmin(self.min,[double](newVal))
+    self.max   = C.fmax(self.max,[double](newVal))
+end
+
 struct util.TimingInfo {
-	startEvent : C.cudaEvent_t
-	endEvent : C.cudaEvent_t
-	duration : float
-	eventName : rawstring
+    startEvent : C.cudaEvent_t
+    endEvent : C.cudaEvent_t
+    duration : float
+    eventName : rawstring
 }
 local TimingInfo = util.TimingInfo
 
 util.TimerEvent = C.cudaEvent_t
 
 struct util.Timer {
-	timingInfo : &Array(TimingInfo)
+    timingInfo : &Array(TimingInfo)
 }
 local Timer = util.Timer
 
 terra Timer:init() 
-	self.timingInfo = [Array(TimingInfo)].alloc():init()
+    self.timingInfo = [Array(TimingInfo)].alloc():init()
 end
 
 terra Timer:cleanup()
@@ -433,6 +491,7 @@ end
 terra Timer:startEvent(name : rawstring,  stream : C.cudaStream_t, endEvent : &C.cudaEvent_t)
     var timingInfo : TimingInfo
     timingInfo.eventName = name
+    if [_opt_timing_level > 2] then cd(C.cudaDeviceSynchronize()) end
     C.cudaEventCreate(&timingInfo.startEvent)
     C.cudaEventCreate(&timingInfo.endEvent)
     C.cudaEventRecord(timingInfo.startEvent, stream)
@@ -440,6 +499,7 @@ terra Timer:startEvent(name : rawstring,  stream : C.cudaStream_t, endEvent : &C
     @endEvent = timingInfo.endEvent
 end
 terra Timer:endEvent(stream : C.cudaStream_t, endEvent : C.cudaEvent_t)
+    if [_opt_timing_level > 2] then cd(C.cudaDeviceSynchronize()) end
     C.cudaEventRecord(endEvent, stream)
 end
 
@@ -448,37 +508,77 @@ terra isprefix(pre : rawstring, str : rawstring) : bool
     if @str ~= @pre then return false end
     return isprefix(pre+1,str+1)
 end
-terra Timer:evaluate()
-	if ([_opt_verbosity > 0]) then
-		var aggregateTimingInfo = [Array(tuple(float,int))].salloc():init()
-		var aggregateTimingNames = [Array(rawstring)].salloc():init()
-		for i = 0,self.timingInfo:size() do
-			var eventInfo = self.timingInfo(i);
-			C.cudaEventSynchronize(eventInfo.endEvent)
-	    	C.cudaEventElapsedTime(&eventInfo.duration, eventInfo.startEvent, eventInfo.endEvent);
-	    	var index =  aggregateTimingNames:indexof(eventInfo.eventName)
-	    	if index < 0 then
-	    		aggregateTimingNames:insert(eventInfo.eventName)
-	    		aggregateTimingInfo:insert({eventInfo.duration, 1})
-	    	else
-	    		aggregateTimingInfo(index)._0 = aggregateTimingInfo(index)._0 + eventInfo.duration
-	    		aggregateTimingInfo(index)._1 = aggregateTimingInfo(index)._1 + 1
-	    	end
-	    end
+terra computeSummary(stats : RunningStats) : Opt_PerformanceEntry
+    var summary : Opt_PerformanceEntry
+    var N = stats.count
+    var mean = stats.sum/N
+    var moment2 = stats.sqSum/N
+    var variance = moment2 - (mean*mean)
+    var stddev = C.sqrt(C.fabs(variance))
+    summary.count = N
+    summary.meanMS = mean
+    summary.minMS = stats.min
+    summary.maxMS = stats.max
+    summary.stddevMS = stddev
+    return summary
+end
 
-		C.printf(		"--------------------------------------------------------\n")
-	    C.printf(		"        Kernel        |   Count  |   Total   | Average \n")
-		C.printf(		"----------------------+----------+-----------+----------\n")
+local terra setSummaryEntry(name : rawstring, entry : &Opt_PerformanceEntry, names : &Array(rawstring), stats : &Array(RunningStats))
+    var idx : int32
+    idx =  names:indexof(name)
+    if idx >= 0 then @entry = computeSummary((@stats)(idx)) end
+end
+
+terra Timer:evaluate(perfSummary : &Opt_PerformanceSummary)
+    cd(C.cudaDeviceSynchronize())
+	var runningStats = [Array(RunningStats)].salloc():init()
+	var aggregateTimingNames = [Array(rawstring)].salloc():init()
+	for i = 0,self.timingInfo:size() do
+		var eventInfo = self.timingInfo(i);
+		C.cudaEventSynchronize(eventInfo.endEvent)
+    	C.cudaEventElapsedTime(&eventInfo.duration, eventInfo.startEvent, eventInfo.endEvent);
+    	var index =  aggregateTimingNames:indexof(eventInfo.eventName)
+        if isprefix("Linear It",eventInfo.eventName) then
+            C.printf("Linear Iter %7.4f\n", eventInfo.duration)
+        end
+    	if index < 0 then
+            aggregateTimingNames:insert(eventInfo.eventName)
+            var s : RunningStats
+            s:init(eventInfo.duration)
+            runningStats:insert(s)
+        else
+    		runningStats(index):update(eventInfo.duration)
+    	end
+    end
+    setSummaryEntry("Total", &perfSummary.total, aggregateTimingNames, runningStats)
+    setSummaryEntry("Nonlinear Iteration", &perfSummary.nonlinearIteration, aggregateTimingNames, runningStats)
+    setSummaryEntry("Nonlinear Setup", &perfSummary.nonlinearSetup, aggregateTimingNames, runningStats)
+    setSummaryEntry("Linear Solve", &perfSummary.linearSolve, aggregateTimingNames, runningStats)
+    setSummaryEntry("Nonlinear Finish", &perfSummary.nonlinearResolve, aggregateTimingNames, runningStats)
+
+    if ([_opt_verbosity > 0]) then
+        -- Markdown-style table
+        C.printf("\n")
+	    C.printf(		"|        Kernel        |   Count  | Total(ms) | Average(ms) | Std. Dev(ms) |\n")
+		C.printf(		"|----------------------|----------|-----------|-------------|--------------|\n")
 	    for i = 0, aggregateTimingNames:size() do
-	    	C.printf(	"----------------------+----------+-----------+----------\n")
-			C.printf(" %-20s |   %4d   | %8.3fms| %7.4fms\n", aggregateTimingNames(i), aggregateTimingInfo(i)._1, aggregateTimingInfo(i)._0, aggregateTimingInfo(i)._0/aggregateTimingInfo(i)._1)
-	    end
-        C.printf(		"--------------------------------------------------------\n")
+            var sum =   runningStats(i).sum
+            var sqSum = runningStats(i).sqSum
+            var N =     runningStats(i).count
+            var mean = sum/N
+            var moment2 = sqSum/N
+            var variance = moment2 - (mean*mean)
+            var stddev = C.sqrtf(C.fabsf(variance))
+            C.printf("| %-20s |   %4u   | %8.3f  |   %8.4f  |   %8.4f   |\n", aggregateTimingNames(i), 
+                N, sum, mean, stddev) --(sqSum-(sum*sum))/N)
+            
+        end
+        C.printf(       "|--------------------------------------------------------------------------|\n")
         C.printf("TIMING ")
         for i = 0, aggregateTimingNames:size() do
-	        var n = aggregateTimingNames(i)
-            if isprefix("PCGInit1",n) or isprefix("PCGStep1",n) or isprefix("overall",n) then
-                C.printf("%f ",aggregateTimingInfo(i)._0)
+            var n = aggregateTimingNames(i)
+            if isprefix("PCGInit1",n) or isprefix("PCGStep1",n) or isprefix("Total",n) then
+                C.printf("%f ",runningStats(i).sum)
             end
         end
         C.printf("\n")
@@ -488,25 +588,25 @@ terra Timer:evaluate()
         for i = 0, aggregateTimingNames:size() do
             var n = aggregateTimingNames(i)
             if isprefix("PCGInit1",n) then
-                linIters = aggregateTimingInfo(i)._1
+                linIters = runningStats(i).count
             end
             if isprefix("PCGStep1",n) then
-                nonLinIters = aggregateTimingInfo(i)._1
+                nonLinIters = runningStats(i).count
             end
         end
         var linAggregate : float = 0.0f
         var nonLinAggregate : float = 0.0f
         for i = 0, aggregateTimingNames:size() do
-            var n = aggregateTimingInfo(i)._1
+            var n = runningStats(i).count
             if n == linIters then
-                linAggregate = linAggregate + aggregateTimingInfo(i)._0
+                linAggregate = linAggregate + runningStats(i).sum 
             end
             if n == nonLinIters then
-                nonLinAggregate = nonLinAggregate + aggregateTimingInfo(i)._0
+                nonLinAggregate = nonLinAggregate + runningStats(i).sum 
             end
         end
         C.printf("Per-iter times ms (nonlinear,linear): %7.4f\t%7.4f\n", linAggregate, nonLinAggregate)
-	end
+    end
     
 end
 
@@ -827,13 +927,13 @@ local function makeGPULauncher(PlanData,kernelName,ft,compiledKernel)
                                             0, nil }
         var stream : C.cudaStream_t = nil
         var endEvent : C.cudaEvent_t 
-        if ([_opt_collect_kernel_timing]) then
+        if ([_opt_timing_level] > 1) then
             pd.timer:startEvent(kernelName,nil,&endEvent)
         end
 
         checkedLaunch(kernelName, compiledKernel(&launch, @pd, params))
         
-        if ([_opt_collect_kernel_timing]) then
+        if ([_opt_timing_level] > 1) then
             pd.timer:endEvent(nil,endEvent)
         end
 

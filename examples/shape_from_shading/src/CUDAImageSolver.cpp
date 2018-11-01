@@ -2,7 +2,7 @@
 #include "../../shared/OptUtils.h"
 #include "ConvergenceAnalysis.h"
 
-extern "C" double solveSFSStub(SolverInput& input, SolverState& state, SolverParameters& parameters, ConvergenceAnalysis<float>* ca);
+extern "C" double solveSFSStub(SolverInput& input, SolverState& state, SolverParameters& parameters, SolverPerformanceSummary& perfStats, ConvergenceAnalysis<float>* ca);
 extern "C" void solveSFSEvalCurrentCostJTFPreAndJTJStub(SolverInput& input, SolverState& state, SolverParameters& parameters, float* costResult, float* jtfResult, float* preResult, float* jtjResult);
 
 
@@ -55,7 +55,7 @@ CUDAImageSolver::~CUDAImageSolver()
     cudaSafeCall(cudaFree(m_solverState.B_I_dx2));
 }
 
-double CUDAImageSolver::solve(const NamedParameters& solverParams, const NamedParameters& probParams, bool profileSolve, std::vector<SolverIteration>& iters)
+double CUDAImageSolver::solve(const NamedParameters& solverParams, const NamedParameters& probParams, SolverPerformanceSummary& perfStats, bool profileSolve, std::vector<SolverIteration>& iters)
 {
 
     m_solverState.d_x = getTypedParameterImage<float>("X", probParams);
@@ -90,10 +90,12 @@ double CUDAImageSolver::solve(const NamedParameters& solverParams, const NamedPa
     parameters.weightRegularizer        = getTypedParameter<float>("w_s", probParams); //rawSolverInput.parameters.weightRegularizer;
     parameters.weightBoundary           = 0.0f; //unused rawSolverInput.parameters.weightBoundary;
     parameters.weightPrior              = 0.0f;//unused rawSolverInput.parameters.weightPrior;
-    parameters.nNonLinearIterations     = getTypedParameter<unsigned int>("nonLinearIterations", solverParams);
-    parameters.nLinIterations           = getTypedParameter<unsigned int>("linearIterations", solverParams);
+    parameters.nNonLinearIterations     = getTypedParameter<unsigned int>("nIterations", solverParams);
+    parameters.nLinIterations           = getTypedParameter<unsigned int>("lIterations", solverParams);
     parameters.nPatchIterations         = 1; //unused rawSolverInput.parameters.nPatchIterations;
 	
     ConvergenceAnalysis<float>* ca = NULL;
-    return solveSFSStub(solverInput, m_solverState, parameters, ca);
+    double finalCost = solveSFSStub(solverInput, m_solverState, parameters, perfStats, ca);
+    m_summaryStats = perfStats;
+    return finalCost;
 }

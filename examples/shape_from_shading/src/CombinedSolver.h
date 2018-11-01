@@ -21,7 +21,7 @@ private:
     std::shared_ptr<SimpleBuffer>   m_result;
     std::vector<unsigned int> m_dims;
 public:
-    CombinedSolver(const SFSSolverInput& inputGPU, CombinedSolverParameters params)
+    CombinedSolver(const SFSSolverInput& inputGPU, CombinedSolverParameters params) : CombinedSolverBase("Shape From Shading")
 	{
         m_combinedSolverParameters = params;
         m_initialUnknown = std::make_shared<SimpleBuffer>(*inputGPU.initialUnknown, true);
@@ -48,9 +48,7 @@ public:
     virtual void preNonlinearSolve(int) override {}
     virtual void postNonlinearSolve(int) override {}
 
-    virtual void combinedSolveFinalize() override {
-        ceresIterationComparison("Shape From Shading", m_combinedSolverParameters.optDoublePrecision);
-    }
+    virtual void combinedSolveFinalize() override {}
 
     std::shared_ptr<SimpleBuffer> result() {
         return m_result;

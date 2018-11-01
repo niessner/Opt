@@ -1,6 +1,6 @@
 #include "CUDAWarpingSolver.h"
 #include "../../shared/OptUtils.h"
-extern "C" double ImageWarpingSolveGNStub(SolverInput& input, SolverState& state, SolverParameters& parameters);	// gauss newton
+extern "C" double ARAPSolveGNStub(SolverInput& input, SolverState& state, SolverParameters& parameters, SolverPerformanceSummary& stats);	// gauss newton
 
 CUDAWarpingSolver::CUDAWarpingSolver(unsigned int N, int* d_numNeighbours, int* d_neighbourIdx, int* d_neighbourOffset) : m_N(N)
 {
@@ -14,20 +14,20 @@ CUDAWarpingSolver::CUDAWarpingSolver(unsigned int N, int* d_numNeighbours, int* 
     m_solverInput.d_neighbourOffset = d_neighbourOffset;
 
 	// State
-	cudaSafeCall(cudaMalloc(&m_solverState.d_delta,		sizeof(float3)*numberOfVariables));
+	cudaSafeCall(cudaMalloc(&m_solverState.d_delta,		    sizeof(float3)*numberOfVariables));
 	cudaSafeCall(cudaMalloc(&m_solverState.d_deltaA,		sizeof(float3)*numberOfVariables));
-	cudaSafeCall(cudaMalloc(&m_solverState.d_r,			sizeof(float3)*numberOfVariables));
+	cudaSafeCall(cudaMalloc(&m_solverState.d_r,			    sizeof(float3)*numberOfVariables));
 	cudaSafeCall(cudaMalloc(&m_solverState.d_rA,			sizeof(float3)*numberOfVariables));
-	cudaSafeCall(cudaMalloc(&m_solverState.d_z,			sizeof(float3)*numberOfVariables));
+	cudaSafeCall(cudaMalloc(&m_solverState.d_z,			    sizeof(float3)*numberOfVariables));
 	cudaSafeCall(cudaMalloc(&m_solverState.d_zA,			sizeof(float3)*numberOfVariables));
-	cudaSafeCall(cudaMalloc(&m_solverState.d_p,			sizeof(float3)*numberOfVariables));
+	cudaSafeCall(cudaMalloc(&m_solverState.d_p,			    sizeof(float3)*numberOfVariables));
 	cudaSafeCall(cudaMalloc(&m_solverState.d_pA,			sizeof(float3)*numberOfVariables));
 	cudaSafeCall(cudaMalloc(&m_solverState.d_Ap_X,			sizeof(float3)*numberOfVariables));
 	cudaSafeCall(cudaMalloc(&m_solverState.d_Ap_A,			sizeof(float3)*numberOfVariables));
-	cudaSafeCall(cudaMalloc(&m_solverState.d_scanAlpha,	sizeof(float)*tmpBufferSize));
+	cudaSafeCall(cudaMalloc(&m_solverState.d_scanAlpha,	    sizeof(float)*tmpBufferSize));
 	cudaSafeCall(cudaMalloc(&m_solverState.d_scanBeta,		sizeof(float)*tmpBufferSize));
 	cudaSafeCall(cudaMalloc(&m_solverState.d_rDotzOld,		sizeof(float)*numberOfVariables));
-	cudaSafeCall(cudaMalloc(&m_solverState.d_precondioner, sizeof(float3)*numberOfVariables));
+	cudaSafeCall(cudaMalloc(&m_solverState.d_precondioner,  sizeof(float3)*numberOfVariables));
 	cudaSafeCall(cudaMalloc(&m_solverState.d_precondionerA, sizeof(float3)*numberOfVariables));
 	cudaSafeCall(cudaMalloc(&m_solverState.d_sumResidual,	sizeof(float)));
 }
@@ -55,7 +55,7 @@ CUDAWarpingSolver::~CUDAWarpingSolver()
 
 float sq(float x) { return x*x; }
 
-double CUDAWarpingSolver::solve(const NamedParameters& solverParams, const NamedParameters& probParams, bool profileSolve, std::vector<SolverIteration>& iters)
+double CUDAWarpingSolver::solve(const NamedParameters& solverParams, const NamedParameters& probParams, SolverPerformanceSummary& stats, bool profileSolve, std::vector<SolverIteration>& iters)
 {
 	
     m_solverState.d_urshape = getTypedParameterImage<float3>("UrShape", probParams);
@@ -70,5 +70,7 @@ double CUDAWarpingSolver::solve(const NamedParameters& solverParams, const Named
     parameters.nNonLinearIterations = getTypedParameter<unsigned int>("nIterations", solverParams);
     parameters.nLinIterations       = getTypedParameter<unsigned int>("lIterations", solverParams);
     
-    return ImageWarpingSolveGNStub(m_solverInput, m_solverState, parameters);
+    double finalCost = ARAPSolveGNStub(m_solverInput, m_solverState, parameters, stats);
+    m_summaryStats = stats;
+    return finalCost;
 }

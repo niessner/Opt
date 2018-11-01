@@ -8,6 +8,15 @@ extern "C" {
 #include "cudaUtil.h"
 #include <cmath>
 
+
+inline void _assertM(const char* expression, std::string message, const char* file, int line)
+{
+    fprintf(stderr, "Assertion '%s' failed '%s:%d\n%s\n", expression, file, line, message.c_str());
+    abort();
+}
+
+#define alwaysAssertM(EXPRESSION, MESSAGE) ((EXPRESSION) ? (void)0 : _assertM(#EXPRESSION, MESSAGE, __FILE__, __LINE__))
+
 #ifdef _WIN32
 #include <Windows.h>
 class SimpleTimer {
@@ -82,14 +91,17 @@ template<class T> T* getTypedParameterImage(std::string name, const NamedParamet
 // TODO: Error handling
 template<class T> void findAndCopyArrayToCPU(std::string name, std::vector<T>& cpuBuffer, const NamedParameters& solverParameters) {
     auto i = index_of(name, solverParameters.names());
+    alwaysAssertM(i != (size_t)-1, "Couldn't find parameter " + name);
     cudaSafeCall(cudaMemcpy(cpuBuffer.data(), solverParameters.data()[i], sizeof(T)*cpuBuffer.size(), cudaMemcpyDeviceToHost));
 }
 template<class T> void findAndCopyToArrayFromCPU(std::string name, std::vector<T>& cpuBuffer, const NamedParameters& solverParameters) {
     auto i = index_of(name, solverParameters.names());
+    alwaysAssertM(i != (size_t)-1, "Couldn't find parameter " + name);
     cudaSafeCall(cudaMemcpy(solverParameters.data()[i], cpuBuffer.data(), sizeof(T)*cpuBuffer.size(), cudaMemcpyHostToDevice));
 }
 template<class T> T getTypedParameter(std::string name, const NamedParameters& params) {
     auto i = index_of(name, params.names());
+    alwaysAssertM(i != (size_t)-1, "Couldn't find parameter " + name);
     return *(T*)params.data()[i];
 }
 

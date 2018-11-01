@@ -116,13 +116,14 @@ xcopy /Y /D "..\..\API\release\include\*.h" "..\shared\"</Command>
     <ClInclude Include="..\shared\CombinedSolverParameters.h" />
     <ClInclude Include="..\shared\Config.h" />
     <ClInclude Include="..\shared\CudaArray.h" />
+    <ClInclude Include="..\shared\CUDATimer.h" />
     <ClInclude Include="..\shared\cudaUtil.h" />
     <ClInclude Include="..\shared\OptUtils.h" />
     <ClInclude Include="..\shared\SolverIteration.h" />
+    <ClInclude Include="..\shared\SolverPerformanceSummary.h" />
     <ClInclude Include="src\CeresSolver.h" />
     <ClInclude Include="src\CombinedSolver.h" />
     <ClInclude Include="src\Configure.h" />
-    <ClInclude Include="src\CUDATimer.h" />
     <ClInclude Include="src\CUDAWarpingSolver.h" />
     <ClInclude Include="src\OpenMesh.h" />
     <ClInclude Include="src\RotationHelper.h" />
@@ -133,13 +134,6 @@ xcopy /Y /D "..\..\API\release\include\*.h" "..\shared\"</Command>
     <ClInclude Include="src\main.h" />
     <ClInclude Include="src\mLibInclude.h" />
     <ClInclude Include="src\SolverUtil.h" />
-  </ItemGroup>
-  <ItemGroup>
-    <Reference Include="System" />
-    <Reference Include="System.Data" />
-    <Reference Include="System.Drawing" />
-    <Reference Include="System.Windows.Forms" />
-    <Reference Include="System.Xml" />
   </ItemGroup>
   <ItemGroup>
     <CudaCompile Include="src\WarpingSolver.cu" />

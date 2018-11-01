@@ -12,7 +12,7 @@
 #include <stdio.h>
 #include <stdint.h>
 
-#include "CUDATimer.h"
+#include "../../shared/CUDATimer.h"
 
 #ifdef _WIN32
 #include <conio.h>
@@ -63,11 +63,11 @@ float EvalResidual(SolverInput& input, SolverState& state, SolverParameters& par
 
 	const unsigned int N = input.N; // Number of block variables
 	ResetResidualDevice << < 1, 1, 1 >> >(input, state, parameters);
-	cudaSafeCall(cudaDeviceSynchronize());
-	timer.startEvent("EvalResidual");
+	
+	//timer.startEvent("EvalResidual");
 	EvalResidualDevice << <(N + THREADS_PER_BLOCK - 1) / THREADS_PER_BLOCK, THREADS_PER_BLOCK >> >(input, state, parameters);
-	timer.endEvent();
-	cudaSafeCall(cudaDeviceSynchronize());
+	//timer.endEvent();
+	
 
 	residual = state.getSumResidual();
 
@@ -134,16 +134,16 @@ void Initialization(SolverInput& input, SolverState& state, SolverParameters& pa
 		while (1);
 	}
 	cudaSafeCall(cudaMemset(state.d_scanAlpha, 0, sizeof(float)));
-    timer.startEvent("PCGInit_Kernel1");
+    //timer.startEvent("PCGInit_Kernel1");
 	PCGInit_Kernel1 << <blocksPerGrid, THREADS_PER_BLOCK, shmem_size >> >(input, state, parameters);
-    timer.endEvent();
+    //timer.endEvent();
 	#ifdef _DEBUG
 		cudaSafeCall(cudaDeviceSynchronize());
 	#endif
 
-	timer.startEvent("PCGInit_Kernel2");
+	//timer.startEvent("PCGInit_Kernel2");
 	PCGInit_Kernel2 << <blocksPerGrid, THREADS_PER_BLOCK, shmem_size >> >(N, state);
-	timer.endEvent();
+	//timer.endEvent();
 	#ifdef _DEBUG
 		cudaSafeCall(cudaDeviceSynchronize());
 	#endif
@@ -253,24 +253,24 @@ void PCGIteration(SolverInput& input, SolverState& state, SolverParameters& para
 	}
 
 	cudaSafeCall(cudaMemset(state.d_scanAlpha, 0, sizeof(float)));
-    timer.startEvent("PCGStep_Kernel1");
+    //timer.startEvent("PCGStep_Kernel1");
     PCGStep_Kernel1 << <blocksPerGrid, THREADS_PER_BLOCK, shmem_size >> >(input, state, parameters);
-    timer.endEvent();
+    //timer.endEvent();
 	#ifdef _DEBUG
 		cudaSafeCall(cudaDeviceSynchronize());
 	#endif
 
 	cudaSafeCall(cudaMemset(state.d_scanBeta, 0, sizeof(float)));
-	timer.startEvent("PCGStep_Kernel2");
+	//timer.startEvent("PCGStep_Kernel2");
 	PCGStep_Kernel2 << <blocksPerGrid, THREADS_PER_BLOCK, shmem_size >> >(input, state);
-	timer.endEvent();
+	//timer.endEvent();
 	#ifdef _DEBUG
 		cudaSafeCall(cudaDeviceSynchronize());
 	#endif
 
-	timer.startEvent("PCGStep_Kernel3");
+	//timer.startEvent("PCGStep_Kernel3");
 	PCGStep_Kernel3 << <blocksPerGrid, THREADS_PER_BLOCK, shmem_size >> >(input, state);
-	timer.endEvent();
+	//timer.endEvent();
 	#ifdef _DEBUG
 		cudaSafeCall(cudaDeviceSynchronize());
 	#endif
@@ -315,27 +315,37 @@ void ApplyLinearUpdate(SolverInput& input, SolverState& state, SolverParameters&
 // Main GN Solver Loop
 ////////////////////////////////////////////////////////////////////
 
-extern "C" double ImageWarpingSolveGNStub(SolverInput& input, SolverState& state, SolverParameters& parameters)
+extern "C" double ARAPSolveGNStub(SolverInput& input, SolverState& state, SolverParameters& parameters, SolverPerformanceSummary& stats)
 {
     CUDATimer timer;
+    timer.startEvent("Total");
 	for (unsigned int nIter = 0; nIter < parameters.nNonLinearIterations; nIter++)
 	{
+        timer.startEvent("Nonlinear Iteration");
+
+        timer.startEvent("Nonlinear Setup");
 		float residual = EvalResidual(input, state, parameters, timer);
 		printf("%i: cost: %f\n", nIter, residual);
-
 		Initialization(input, state, parameters, timer);
+        timer.endEvent();
 
+        timer.startEvent("Linear Solve");
 		for (unsigned int linIter = 0; linIter < parameters.nLinIterations; linIter++) {
 			PCGIteration(input, state, parameters, timer);
 		}
+        timer.endEvent();
 
+        timer.startEvent("Nonlinear Finish");
 		ApplyLinearUpdate(input, state, parameters, timer);
+        timer.endEvent();
 
         timer.nextIteration();
+        timer.endEvent();
 	}
+    timer.endEvent();
 
 	float residual = EvalResidual(input, state, parameters, timer);
 	printf("final cost: %f\n", residual);
-    timer.evaluate();
+    timer.evaluate(stats);
     return (double)residual;
 }

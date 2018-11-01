@@ -2,6 +2,8 @@ local S = require("std")
 local util = require("util")
 require("precision")
 
+local Opt_PerformanceSummary    = util.Opt_PerformanceSummary
+local Opt_PerformanceEntry      = util.Opt_PerformanceEntry
 local ffi = require("ffi")
 
 local C = util.C
@@ -193,6 +195,12 @@ return function(problemSpec)
 
         timer : Timer
         endSolver : util.TimerEvent
+        nonlinearIterationEvent : util.TimerEvent
+        nonlinearSetupEvent : util.TimerEvent
+        linearIterationsEvent : util.TimerEvent
+        nonlinearResultsEvent : util.TimerEvent
+
+        perfSummary : Opt_PerformanceSummary
 
         prevCost : opt_float
         
@@ -956,7 +964,7 @@ return function(problemSpec)
 	local terra init(data_ : &opaque, params_ : &&opaque)
 	   var pd = [&PlanData](data_)
 	   pd.timer:init()
-	   pd.timer:startEvent("overall",nil,&pd.endSolver)
+	   pd.timer:startEvent("Total",nil,&pd.endSolver)
        [util.initParameters(`pd.parameters,problemSpec,params_,true)]
        var [parametersSym] = &pd.parameters
         escape if initialization_parameters.use_cusparse then emit quote
@@ -1009,7 +1017,7 @@ return function(problemSpec)
 	local terra cleanup(pd : &PlanData)
         logSolver("final cost=%f\n", pd.prevCost)
         pd.timer:endEvent(nil,pd.endSolver)
-        pd.timer:evaluate()
+        pd.timer:evaluate(&pd.perfSummary)
         pd.timer:cleanup()
     end
 
@@ -1028,6 +1036,8 @@ return function(problemSpec)
 			C.cudaMemset(pd.scanAlphaNumerator, 0, sizeof(opt_float))	--scan in PCGInit1 requires reset
 			C.cudaMemset(pd.scanAlphaDenominator, 0, sizeof(opt_float))	--scan in PCGInit1 requires reset
 			C.cudaMemset(pd.scanBetaNumerator, 0, sizeof(opt_float))	--scan in PCGInit1 requires reset
+            pd.timer:startEvent("Nonlinear Iteration",nil,&pd.nonlinearIterationEvent)
+            pd.timer:startEvent("Nonlinear Setup",nil,&pd.nonlinearSetupEvent)
 
 			gpu.PCGInit1(pd)
 			if isGraph then
@@ -1051,7 +1061,8 @@ return function(problemSpec)
                     end
                 end
             end
-            logDebugCudaOptFloat("init scanAlphaNumerator", pd.scanAlphaNumerator)
+            pd.timer:endEvent(nil,pd.nonlinearSetupEvent)
+            pd.timer:startEvent("Linear Solve",nil,&pd.linearIterationsEvent)
             cusparseOuter(pd)
             for lIter = 0, pd.solverparameters.lIterations do				
 
@@ -1111,7 +1122,8 @@ return function(problemSpec)
                     gpu.savePreviousUnknowns(pd)
                 end
             end end
-
+            pd.timer:endEvent(nil,pd.linearIterationsEvent)
+            pd.timer:startEvent("Nonlinear Finish",nil,&pd.nonlinearResultsEvent)
 			gpu.PCGLinearUpdate(pd)    
 			gpu.precompute(pd)
 			var newCost = computeCost(pd)
@@ -1120,7 +1132,6 @@ return function(problemSpec)
                 if problemSpec:UsesLambda() then
                     emit quote
                         var cost_change = pd.prevCost - newCost
-                        
                         
                         -- See CERES's TrustRegionStepEvaluator::StepAccepted() for a more complicated version of this
                         var relative_decrease = cost_change / model_cost_change
@@ -1148,6 +1159,8 @@ return function(problemSpec)
                             pd.parameters.radius_decrease_factor = 2.0 * pd.parameters.radius_decrease_factor
                             if pd.parameters.trust_region_radius <= min_trust_region_radius then
                                 logSolver("\nTrust_region_radius is less than the min, exiting\n")
+                                pd.timer:endEvent(nil,pd.nonlinearResultsEvent)
+                                pd.timer:endEvent(nil,pd.nonlinearIterationEvent)
                                 cleanup(pd)
                                 return 0
                             end
@@ -1169,6 +1182,8 @@ return function(problemSpec)
             ]]
 
             pd.solverparameters.nIter = pd.solverparameters.nIter + 1
+            pd.timer:endEvent(nil,pd.nonlinearResultsEvent)
+            pd.timer:endEvent(nil,pd.nonlinearIterationEvent)
             return 1
         else
             cleanup(pd)
@@ -1179,6 +1194,11 @@ return function(problemSpec)
     local terra cost(data_ : &opaque) : double
         var pd = [&PlanData](data_)
         return [double](pd.prevCost)
+    end
+
+    local terra get_summary(data_ : &opaque, summary : &Opt_PerformanceSummary)
+        var pd = [&PlanData](data_)
+        C.memcpy(summary, &pd.perfSummary, sizeof(Opt_PerformanceSummary))
     end
 
     local terra initializeSolverParameters(params : &SolverParameters)
@@ -1254,7 +1274,7 @@ return function(problemSpec)
 	local terra makePlan() : &opt.Plan
 		var pd = PlanData.alloc()
 		pd.plan.data = pd
-		pd.plan.init,pd.plan.step,pd.plan.cost,pd.plan.setsolverparameter,pd.plan.free = init,step,cost,setSolverParameter,free
+		pd.plan.init,pd.plan.step,pd.plan.cost,pd.plan.get_summary,pd.plan.setsolverparameter,pd.plan.free = init,step,cost,get_summary,setSolverParameter,free
 		pd.delta:initGPU()
 		pd.r:initGPU()
         pd.b:initGPU()

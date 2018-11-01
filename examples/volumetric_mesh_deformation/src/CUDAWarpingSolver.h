@@ -13,7 +13,7 @@ class CUDAWarpingSolver : public SolverBase
 		CUDAWarpingSolver(const std::vector<unsigned int>& dims);
 		~CUDAWarpingSolver();
 
-        virtual double solve(const NamedParameters& solverParameters, const NamedParameters& problemParameters, bool profileSolve, std::vector<SolverIteration>& iters) override;
+        virtual double solve(const NamedParameters& solverParameters, const NamedParameters& problemParameters, SolverPerformanceSummary& perfStats, bool profileSolve, std::vector<SolverIteration>& iters) override;
 		
 	private:
 

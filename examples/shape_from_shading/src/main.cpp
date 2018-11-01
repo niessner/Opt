@@ -29,10 +29,10 @@ int main(int argc, const char * argv[])
     params.linearIter = 10;
     params.useOpt = true;
     if (performanceRun) {
-        params.useCUDA  = false;
+        params.useCUDA  = true;
         params.useOpt   = true;
-        params.useOptLM = true;
-        params.useCeres = true;
+        params.useOptLM = false;
+        params.useCeres = false;
         params.nonLinearIter = 60;
         params.linearIter = 10;
     }

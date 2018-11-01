@@ -13,7 +13,7 @@ int main(int argc, const char * argv[])
 
 	if (!OpenMesh::IO::read_mesh(*mesh, filename)) 
 	{
-	        std::cerr << "Error -> File: " << __FILE__ << " Line: " << __LINE__ << " Function: " << __FUNCTION__ << std::endl;
+        std::cerr << "Error -> File: " << __FILE__ << " Line: " << __LINE__ << " Function: " << __FUNCTION__ << std::endl;
 		std::cout << filename << std::endl;
 		exit(1);
 	}
@@ -22,6 +22,9 @@ int main(int argc, const char * argv[])
     CombinedSolverParameters params;
     params.nonLinearIter = 20;
     params.linearIter = 60;
+
+    params.useOpt = true;
+    params.useCUDA = (argc > 2) && (argv[2] == std::string("perf"));
 
     int3 voxelGridSize = make_int3(5, 20, 5);
     CombinedSolver solver(mesh, voxelGridSize, params);

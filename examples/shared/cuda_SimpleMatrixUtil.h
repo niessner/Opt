@@ -5,7 +5,7 @@
 #define INF  __int_as_float(0x7f800000)
 
 #include <iostream>
-#include "../../shared/cudaUtil.h"
+#include "cudaUtil.h"
 #include <algorithm>
 //////////////////////////////
 // float2x2
@@ -311,6 +311,11 @@ public:
 	inline __device__ __host__ float3x3() {
 
 	}
+    inline __device__ __host__ float3x3(float a11, float a12, float a13, float a21, float a22, float a23, float a31, float a32, float a33) {
+        m11 = a11;	m12 = a12;	m13 = a13;
+        m21 = a21;	m22 = a22;	m23 = a23;
+        m31 = a31;	m32 = a32;	m33 = a33;
+    }
 	inline __device__ __host__ float3x3(const float values[9]) {
 		m11 = values[0];	m12 = values[1];	m13 = values[2];
 		m21 = values[3];	m22 = values[4];	m23 = values[5];
@@ -400,6 +405,10 @@ public:
 			- m32*m23*m11
 			- m33*m21*m12;
 	}
+
+    inline __device__ __host__ float trace() const {
+        return m11 + m22 + m33;
+    }
 
 	inline __device__ __host__ float3 getRow(unsigned int i) {
 		return make_float3(entries[3*i+0], entries[3*i+1], entries[3*i+2]);
@@ -1069,13 +1078,18 @@ public:
 
 
 	//! returns the 3x3 part of the matrix
-	inline __device__ __host__ float3x3 getFloat3x3() {
+	inline __device__ __host__ float3x3 getFloat3x3() const {
 		float3x3 ret;
 		ret.m11 = m11;	ret.m12 = m12;	ret.m13 = m13;
 		ret.m21 = m21;	ret.m22 = m22;	ret.m23 = m23;
 		ret.m31 = m31;	ret.m32 = m32;	ret.m33 = m33;
 		return ret;
 	}
+
+    //! returns the translation part of the matrix
+    inline __device__ __host__ float3 getTranslation() const {
+        return make_float3(m14, m24, m34);
+    }
 
 	//! sets the 3x3 part of the matrix (other values remain unchanged)
 	inline __device__ __host__ void setFloat3x3(const float3x3 &other) {
@@ -1685,6 +1699,14 @@ inline __device__ __host__ matNxM<4, 1>::matNxM(const float4& other)
 	entries[1] = other.y;
 	entries[2] = other.z;
 	entries[3] = other.w;
+}
+
+template<>
+template<>
+inline __device__ __host__ matNxM<1, 2>::matNxM(const float2& other)
+{
+    entries[0] = other.x;
+    entries[1] = other.y;
 }
 
 // To floatN from Matrix

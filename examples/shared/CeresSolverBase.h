@@ -18,7 +18,7 @@ class CeresSolverBase : public SolverBase {
 public:
     CeresSolverBase(const std::vector<unsigned int>& dims) : m_dims(dims) {}
 
-    virtual double solve(const NamedParameters& solverParameters, const NamedParameters& problemParameters, bool profileSolve, std::vector<SolverIteration>& iter) override {
+    virtual double solve(const NamedParameters& solverParameters, const NamedParameters& problemParameters, SolverPerformanceSummary& perfStats, bool profileSolve, std::vector<SolverIteration>& iter) override {
         fprintf(stderr, "No Ceres solve implemented\n");
         return m_finalCost;
     }

@@ -122,7 +122,6 @@ xcopy /Y /D "..\..\API\release\include\*.h" "..\shared\"</Command>
     <ClInclude Include="..\shared\SolverBase.h" />
     <ClInclude Include="src\CeresSolver.h" />
     <ClInclude Include="src\CombinedSolver.h" />
-    <ClInclude Include="src\CUDATimer.h" />
     <ClInclude Include="src\CUDAWarpingSolver.h" />
     <ClInclude Include="src\OpenMesh.h" />
     <ClInclude Include="src\RotationHelper.h" />

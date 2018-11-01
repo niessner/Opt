@@ -44,8 +44,8 @@ public:
 	{
         Opt_InitializationParameters initParams;
         memset(&initParams, 0, sizeof(Opt_InitializationParameters));
-        initParams.verbosityLevel = 1;
-        initParams.collectPerKernelTimingInfo = 1;
+        initParams.verbosityLevel = 2;
+        initParams.timingLevel = 1;
         initParams.doublePrecision = (int)doublePrecision;
         m_optimizerState = Opt_NewState(initParams);
 		m_problem = Opt_ProblemDefine(m_optimizerState, terraFile.c_str(), optName.c_str());
@@ -69,8 +69,7 @@ public:
 
 
 
-    virtual double solve(const NamedParameters& solverParameters, const NamedParameters& problemParameters, bool profiledSolve, std::vector<SolverIteration>& iters) override {
-
+    virtual double solve(const NamedParameters& solverParameters, const NamedParameters& problemParameters, SolverPerformanceSummary& perfStats, bool profiledSolve, std::vector<SolverIteration>& iters) override {
         NamedParameters finalProblemParameters = problemParameters;
         if (m_doublePrecision) {
             finalProblemParameters = copyParametersAndConvertUnknownsToDouble(problemParameters);
@@ -82,7 +81,8 @@ public:
             Opt_ProblemSolve(m_optimizerState, m_plan, finalProblemParameters.data().data());
         }
         m_finalCost = Opt_ProblemCurrentCost(m_optimizerState, m_plan);
-
+        // TODO: Accumulate statistics over multiple solves
+        Opt_GetPerformanceSummary(m_optimizerState, m_plan, (Opt_PerformanceSummary*)&m_summaryStats);
         if (m_doublePrecision) {
             copyUnknownsFromDoubleToFloat(problemParameters, finalProblemParameters);
         }

@@ -13,16 +13,16 @@ struct Opt_InitializationParameters {
 	// can be a drastic drag of performance.
 	int doublePrecision;
 
-	// Valid Values: 
-    //  0. no verbosity 
-    //  1. verbose solve 
-    //  2. verbose initialization, autodiff and solve
-    //  3. full verbosity (includes ptx dump)
+	// Valid Values: 0, no verbosity; 1, full verbosity
 	int verbosityLevel;
 
-	// If true (nonzero), a cuda timer is used to collect per-kernel timing information
-	// while the solver is running. This adds a small amount of overhead to every kernel.
-	int collectPerKernelTimingInfo;
+	// Valid Values:
+	//    0: No timing recorded
+	//    1: Coarse-grained timing results
+	//    2: Kernel-level timing info, using cuda events
+	//    3: Invasive but accurate kernel-level timing by synchronizing before and after each call
+	//           This will slow down the solver, but hopefully provide more accurate timing information
+	int timingLevel;
 
 	// Default block size for kernels (in threads). 
 	// Must be a positive multiple of 32; if not, will default to 256.
@@ -69,3 +69,28 @@ int Opt_ProblemStep(Opt_State* state, Opt_Plan* plan, void** problemparams);
 // If the solver is initialized to not use double precision, the return value
 // will be upconverted from a float before being returned
 double Opt_ProblemCurrentCost(Opt_State* state, Opt_Plan* plan);
+
+
+// Total time can be obtained by multiplying count*meanMS
+struct Opt_PerformanceEntry {
+    unsigned int count;
+    double minMS;
+    double maxMS;
+    double meanMS;
+    double stddevMS;
+};
+typedef struct Opt_PerformanceEntry 	Opt_PerformanceEntry;
+
+struct Opt_PerformanceSummary {
+	// Performance Statistics for full solves
+	Opt_PerformanceEntry total;
+	// Performance Statistics for individual nonlinear iterations,
+	// This is broken up into three rough categories below
+	Opt_PerformanceEntry nonlinearIteration;
+	Opt_PerformanceEntry nonlinearSetup;
+	Opt_PerformanceEntry linearSolve;
+	Opt_PerformanceEntry nonlinearResolve;
+};
+typedef struct Opt_PerformanceSummary 	Opt_PerformanceSummary;
+
+void Opt_GetPerformanceSummary(Opt_State* state, Opt_Plan* plan, Opt_PerformanceSummary* summary);

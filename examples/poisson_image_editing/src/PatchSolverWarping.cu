@@ -5,7 +5,7 @@
 #include "PatchSolverWarpingUtil.h"
 #include "PatchSolverWarpingEquations.h"
 
-#include "CUDATimer.h"
+#include "../../shared/CUDATimer.h"
 
 // For the naming scheme of the variables see:
 // http://en.wikipedia.org/wiki/Conjugate_gradient_method
@@ -233,7 +233,8 @@ extern "C" double patchSolveStereoStub(PatchSolverInput& input, PatchSolverState
 		}
 		timer.nextIteration();
 	}
-	timer.evaluate();
+    SolverPerformanceSummary stats;
+    timer.evaluate(stats);
 
 	float residual = EvalResidual(input, state, parameters, timer);
 	printf("final cost: %f\n", residual);

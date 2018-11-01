@@ -7,6 +7,7 @@
 #include <fstream>
 #include <algorithm>
 #include <string>
+#include <ostream>
 #include "CombinedSolverParameters.h"
 
 struct SolverIteration
@@ -65,22 +66,22 @@ static void saveSolverResults(std::string directory, std::string suffix,
 }
 
 
-static void reportFinalCosts(std::string name, const CombinedSolverParameters& params, double gnCost, double lmCost, double ceresCost) {
-    std::cout << "===" << name << "===" << std::endl;
-    std::cout << "**Final Costs**" << std::endl;
-    std::cout << "Opt GN,Opt LM,CERES" << std::endl;
-    std::cout << std::scientific;
-    std::cout << std::setprecision(20);
-    if (params.useOpt) {
-        std::cout << gnCost;
+static void reportFinalCosts(std::string name, const CombinedSolverParameters& params, double gnCost, double lmCost, double ceresCost, std::ostream& output = std::cout) {
+    output << "{  \"name\" : \"" << name << "\"," << std::endl;
+    output << "  \"costs\" : {" << std::endl;
+
+    output << std::scientific;
+    output << std::setprecision(20);
+
+    std::vector<std::pair<std::string, double>> costs;
+
+    if (params.useOpt) costs.push_back({"OptGN", gnCost});
+    if (params.useOptLM) costs.push_back({ "OptLM", lmCost });
+    if (params.useCeres) costs.push_back({ "Ceres", ceresCost });
+    
+    for (int i = 0; i < costs.size(); ++i) {
+        auto delim = (i != costs.size()-1) ? "," : "";
+        output << "    \"" << costs[i].first << "\" : " << costs[i].second << delim << std::endl;
     }
-    std::cout << ",";
-    if (params.useOptLM) {
-        std::cout << lmCost;
-    }
-    std::cout << ",";
-    if (params.useCeres) {
-        std::cout << ceresCost;
-    }
-    std::cout << std::endl;
+    output << "  }" << std::endl << "}" << std::endl;
 }

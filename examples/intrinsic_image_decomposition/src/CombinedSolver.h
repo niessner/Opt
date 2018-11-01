@@ -11,7 +11,8 @@ class CombinedSolver : public CombinedSolverBase
 {
 	public:
 	
-        CombinedSolver(const ColorImageR32G32B32A32& image, const CombinedSolverParameters& params) {
+        CombinedSolver(const ColorImageR32G32B32A32& image, const CombinedSolverParameters& params) : 
+                CombinedSolverBase("Intrinsic Image Decomposition") {
 			m_image = image;
             m_combinedSolverParameters = params;
 
@@ -57,9 +58,7 @@ class CombinedSolver : public CombinedSolverBase
         virtual void preNonlinearSolve(int) override {}
         virtual void postNonlinearSolve(int) override {}
 
-        virtual void combinedSolveFinalize() override {
-            reportFinalCosts("Intrinsic Image Decomposition", m_combinedSolverParameters, getCost("Opt(GN)"), getCost("Opt(LM)"), nan(""));
-        }
+        virtual void combinedSolveFinalize() override {}
 
 		void resetGPUMemory()
 		{

@@ -7,11 +7,11 @@
 #define STB_IMAGE_WRITE_IMPLEMENTATION
 #include "../shared/stb_image_write.h"
 
-void solveLaplacian(int width, int height, float* unknown, float* target) {
+double solveLaplacian(unsigned int width, unsigned int height, float* unknown, float* target) {
     Opt_InitializationParameters param = {};
     param.doublePrecision = 0;
-    param.verbosityLevel = 1;
-    param.collectPerKernelTimingInfo = 1;
+    param.verbosityLevel = 2;
+    param.timingLevel = 2;
     //param.threadsPerBlock = 512;
     Opt_State* state = Opt_NewState(param);
     // load the Opt DSL file containing the cost description
@@ -22,8 +22,10 @@ void solveLaplacian(int width, int height, float* unknown, float* target) {
     // run the solver
     void* problem_data[] = { unknown, target };
     Opt_ProblemSolve(state, plan, problem_data);
+    double cost = Opt_ProblemCurrentCost(state, plan);
     Opt_PlanFree(state, plan);
     Opt_ProblemDelete(state, problem);
+    return cost;
 }
 
 void saveMonochromeImage(char const * filename, const int width, const int height, float* d_data) {
@@ -55,10 +57,11 @@ int main(){
     cudaMemcpy(unknown, target, fSize, cudaMemcpyDeviceToDevice);
     delete[] scratch;
 
-    solveLaplacian(dim, dim, unknown, target);
+    double cost = solveLaplacian(dim, dim, unknown, target);
+    
     saveMonochromeImage("target.png", dim, dim, target);
     saveMonochromeImage("result.png", dim, dim, unknown);
-
+    printf("\nminimal %g\n", cost);
     cudaFree(target);
     cudaFree(unknown);
     return 0;

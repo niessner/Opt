@@ -29,9 +29,6 @@
     <ClInclude Include="src\SolverUtil.h">
       <Filter>Util</Filter>
     </ClInclude>
-    <ClInclude Include="src\CUDATimer.h">
-      <Filter>Util</Filter>
-    </ClInclude>
     <ClInclude Include="Opt.h">
       <Filter>Opt</Filter>
     </ClInclude>

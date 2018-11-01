@@ -70,6 +70,7 @@ class CombinedSolver : public CombinedSolverBase
 
 	public:
         CombinedSolver(const SimpleMesh* sourceMesh, const std::vector<SimpleMesh*>& targetMeshes, const std::vector<int4>& sourceTetIndices, CombinedSolverParameters params)
+            : CombinedSolverBase("Robust Mesh Deformation")
 		{
             m_combinedSolverParameters = params;
             m_result = *sourceMesh;
@@ -128,7 +129,8 @@ class CombinedSolver : public CombinedSolverBase
             int failure = OpenMesh::IO::write_mesh(m_result, "out_noisetemplate.ply", options);
             assert(failure);
 
-            addOptSolvers(dims, "robust_nonrigid_alignment.t", m_combinedSolverParameters.optDoublePrecision);
+            std::vector<unsigned int> optdims = { N,m_edgeCount };
+            addOptSolvers(optdims, "robust_nonrigid_alignment.t", m_combinedSolverParameters.optDoublePrecision);
 		} 
 
 
@@ -222,9 +224,7 @@ class CombinedSolver : public CombinedSolverBase
             m_weightReg = fmaxf(m_weightRegMin, m_weightReg*m_weightRegFactor);
         }
 
-        virtual void combinedSolveFinalize() override {
-            reportFinalCosts("Robust Mesh Deformation", m_combinedSolverParameters, getCost("Opt(GN)"), getCost("Opt(LM)"), nan(""));
-        }
+        virtual void combinedSolveFinalize() override {}
 
 
         inline vec3f convertDepthToRGB(float depth, float depthMin = 0.0f, float depthMax = 1.0f) {
@@ -426,6 +426,8 @@ class CombinedSolver : public CombinedSolverBase
             m_vertexPosFloat3->update(h_vertexPosFloat3);
             m_vertexPosFloat3Urshape->update(h_vertexPosFloat3);
 
+            m_edgeCount = (uint)h_neighbourIdx.size();
+
 		}
 
         SimpleMesh* result()
@@ -500,5 +502,5 @@ class CombinedSolver : public CombinedSolverBase
         float m_fitSqrt;
         float m_regSqrt;
 
-
+        uint m_edgeCount;
 };

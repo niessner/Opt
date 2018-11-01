@@ -9,7 +9,7 @@
 #include <stdio.h>
 #include <stdint.h>
 
-#include "CUDATimer.h"
+#include "../../shared/CUDATimer.h"
 
 #ifdef _WIN32
 #include <conio.h>
@@ -282,30 +282,38 @@ void ApplyLinearUpdate(SolverInput& input, SolverState& state, SolverParameters&
 // Main GN Solver Loop
 ////////////////////////////////////////////////////////////////////
 
-extern "C" double ImageWarpingSolveGNStub(SolverInput& input, SolverState& state, SolverParameters& parameters)
+extern "C" double ImageWarpingSolveGNStub(SolverInput& input, SolverState& state, SolverParameters& parameters, SolverPerformanceSummary& stats)
 {
     CUDATimer timer;
-
+    timer.startEvent("Total");
 	for (unsigned int nIter = 0; nIter < parameters.nNonLinearIterations; nIter++)
 	{
+        timer.startEvent("Nonlinear Iteration");
+
+        timer.startEvent("Nonlinear Setup");
 		float residual = EvalResidual(input, state, parameters, timer);
 		printf("%i: cost: %f\n", nIter, residual);
-
 		Initialization(input, state, parameters, timer);
+        timer.endEvent();
 
+        timer.startEvent("Linear Solve");
 		for (unsigned int linIter = 0; linIter < parameters.nLinIterations; linIter++) {
 			PCGIteration(input, state, parameters, timer);
 		}
+        timer.endEvent();
 
+        timer.startEvent("Nonlinear Finish");
 		ApplyLinearUpdate(input, state, parameters, timer);	//this should be also done in the last PCGIteration
-
         timer.nextIteration();
+        timer.endEvent();
+
+        timer.endEvent();
 	}
 
 	float residual = EvalResidual(input, state, parameters, timer);
 	printf("final cost: %f\n", residual);
-
-    timer.evaluate();
+    timer.endEvent();
+    timer.evaluate(stats);
     return (double)residual;
 
 }

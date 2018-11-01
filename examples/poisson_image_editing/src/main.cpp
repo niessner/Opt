@@ -5,12 +5,14 @@ int main(int argc, const char * argv[]) {
 	std::string inputImage0 = "../data/poisson0.png";
 	std::string inputImage1 = "../data/poisson1.png";
 	std::string inputImageMask = "../data/poisson_mask.png";
+
     if (argc > 1) {
         assert(argc > 3);
-        inputImage0 = argv[1];
-        inputImage1 = argv[2];
-        inputImageMask = argv[3];
+        inputImage0     = argv[1];
+        inputImage1     = argv[2];
+        inputImageMask  = argv[3];
     }
+    bool perf = (argc > 4 && argv[4] == std::string("perf"));
 	const unsigned int offsetX = 0;
 	const unsigned int offsetY = 0;
 	const bool invertMask = false;
@@ -64,7 +66,7 @@ int main(int argc, const char * argv[]) {
 	}
 	
     CombinedSolverParameters params;
-
+    params.useCUDA = perf;
     params.useOpt = true;
     params.nonLinearIter = 1;
     params.linearIter = 100;

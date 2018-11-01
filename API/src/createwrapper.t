@@ -98,9 +98,13 @@ struct Opt_InitializationParameters {
     --  3. full verbosity (includes ptx dump)
     verbosityLevel : int
 
-    -- If true, a cuda timer is used to collect per-kernel timing information
-    -- while the solver is running. This adds a small amount of overhead to every kernel.
-    collectPerKernelTimingInfo : int
+    -- Valid Values:
+    --    0: No timing recorded
+    --    1: Coarse-grained timing results
+    --    2: Kernel-level timing info, using cuda events
+    --    3: Invasive but accurate kernel-level timing by synchronizing before and after each call
+    --           This will slow down the solver, but hopefully provide more accurate timing information
+    timingLevel : int
 
     -- Default block size for kernels (in threads). 
     -- Must be a positive multiple of 32; if not, will default to 256.
@@ -142,8 +146,9 @@ local terra NewState(params : Opt_InitializationParameters) : &LibraryState
     C.lua_pushnumber(L,verbosityLevel);
     C.lua_setfield(L,LUA_GLOBALSINDEX,"_opt_verbosity")
 
-    C.lua_pushboolean(L,params.collectPerKernelTimingInfo);
-    C.lua_setfield(L,LUA_GLOBALSINDEX,"_opt_collect_kernel_timing")
+    var timingLevel : C.lua_Number = params.timingLevel
+    C.lua_pushnumber(L,timingLevel);
+    C.lua_setfield(L,LUA_GLOBALSINDEX,"_opt_timing_level")
 
     var threadsPerBlock = params.threadsPerBlock
     if threadsPerBlock <= 0 or threadsPerBlock % 32 ~= 0 then

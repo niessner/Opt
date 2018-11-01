@@ -32,12 +32,12 @@ inline void _internal_cudaSafeCall(cudaError err, const char *file, const int li
 
 // Cuda defines this for device only, provide missing host version.
 
+#ifndef HAS_CUTIL
 #if !defined(__CUDACC__)
 __inline__ __host__ float rsqrtf(float x) {
     return 1.0f / sqrtf(x);
 }
 #endif
-
 
 #define CUDA_UTIL_FUNC __inline__ __host__ __device__
 
@@ -292,7 +292,7 @@ CUDA_UTIL_FUNC int4 operator+(int4 v0, int4 v1) {
 }
 
 #undef CUDA_UTIL_FUNC
-
+#endif //HAS_CUTIL
 
 
 #if defined(__CUDA_ARCH__)

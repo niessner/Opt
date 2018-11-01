@@ -11,7 +11,7 @@
 #include <stdint.h>
 
 #include "ConvergenceAnalysis.h"
-#include "CUDATimer.h"
+#include "../../shared/CUDATimer.h"
 
 #ifdef _WIN32
 #include <conio.h>
@@ -65,9 +65,9 @@ float EvalResidual(SolverInput& input, SolverState& state, SolverParameters& par
 	const unsigned int N = input.N; // Number of block variables
 	ResetResidualDevice << < 1, 1, 1 >> >(input, state, parameters);
 	cudaSafeCall(cudaDeviceSynchronize());
-	timer.startEvent("EvalResidual");
+	//timer.startEvent("EvalResidual");
 	EvalResidualDevice << <(N + THREADS_PER_BLOCK - 1) / THREADS_PER_BLOCK, THREADS_PER_BLOCK >> >(input, state, parameters);
-	timer.endEvent();
+	//timer.endEvent();
 	cudaSafeCall(cudaDeviceSynchronize());
 
 #ifdef _DEBUG
@@ -134,9 +134,9 @@ void Initialization(SolverInput& input, SolverState& state, SolverParameters& pa
 		while (1);
 	}
     cudaSafeCall(cudaMemset(state.d_scanAlpha, 0, sizeof(float)));
-    timer.startEvent("PCGInit_Kernel1");
+    //timer.startEvent("PCGInit_Kernel1");
 	PCGInit_Kernel1 << <blocksPerGrid, THREADS_PER_BLOCK >> >(input, state, parameters);
-    timer.endEvent();
+    //timer.endEvent();
 	#ifdef _DEBUG
 		cudaSafeCall(cudaDeviceSynchronize());
 		//cutilCheckMsg(__FUNCTION__);
@@ -149,9 +149,9 @@ void Initialization(SolverInput& input, SolverState& state, SolverParameters& pa
 
 
 
-	timer.startEvent("PCGInit_Kernel2");
+	//timer.startEvent("PCGInit_Kernel2");
 	PCGInit_Kernel2 << <blocksPerGrid, THREADS_PER_BLOCK >> >(N, state);
-	timer.endEvent();
+	//timer.endEvent();
 	#ifdef _DEBUG
 		cudaSafeCall(cudaDeviceSynchronize());
 		//cutilCheckMsg(__FUNCTION__);
@@ -250,9 +250,9 @@ void PCGIteration(SolverInput& input, SolverState& state, SolverParameters& para
 		while (1);
 	}
     cudaSafeCall(cudaMemset(state.d_scanAlpha, 0, sizeof(float)));
-    timer.startEvent("PCGStep_Kernel1");
+    //timer.startEvent("PCGStep_Kernel1");
     PCGStep_Kernel1 << <blocksPerGrid, THREADS_PER_BLOCK>> >(input, state, parameters);
-    timer.endEvent();
+    //timer.endEvent();
 	#ifdef _DEBUG
 		cudaSafeCall(cudaDeviceSynchronize());
 		//cutilCheckMsg(__FUNCTION__);
@@ -264,9 +264,9 @@ void PCGIteration(SolverInput& input, SolverState& state, SolverParameters& para
     #endif
     
     cudaSafeCall(cudaMemset(state.d_scanBeta, 0, sizeof(float)));
-	timer.startEvent("PCGStep_Kernel2");
+	//timer.startEvent("PCGStep_Kernel2");
 	PCGStep_Kernel2 << <blocksPerGrid, THREADS_PER_BLOCK>> >(input, state);
-	timer.endEvent();
+	//timer.endEvent();
 	#ifdef _DEBUG
 		cudaSafeCall(cudaDeviceSynchronize());
 		//cutilCheckMsg(__FUNCTION__);
@@ -278,9 +278,9 @@ void PCGIteration(SolverInput& input, SolverState& state, SolverParameters& para
     #endif
 
 
-	timer.startEvent("PCGStep_Kernel3");
+	//timer.startEvent("PCGStep_Kernel3");
 	PCGStep_Kernel3 << <blocksPerGrid, THREADS_PER_BLOCK>> >(input, state);
-	timer.endEvent();
+	//timer.endEvent();
 	#ifdef _DEBUG
 		cudaSafeCall(cudaDeviceSynchronize());
 		//cutilCheckMsg(__FUNCTION__);
@@ -304,9 +304,9 @@ __global__ void ApplyLinearUpdateDevice(SolverInput input, SolverState state, So
 void ApplyLinearUpdate(SolverInput& input, SolverState& state, SolverParameters& parameters, CUDATimer& timer)
 {
 	const unsigned int N = input.N; // Number of block variables
-    timer.startEvent("ApplyLinearUpdateDevice");
+    //timer.startEvent("ApplyLinearUpdateDevice");
 	ApplyLinearUpdateDevice << <(N + THREADS_PER_BLOCK - 1) / THREADS_PER_BLOCK, THREADS_PER_BLOCK >> >(input, state, parameters);
-    timer.endEvent();
+    //timer.endEvent();
 	cudaSafeCall(cudaDeviceSynchronize()); // Hm
 
 	#ifdef _DEBUG
@@ -357,9 +357,9 @@ void Precompute(SolverInput& input, SolverState& state, SolverParameters& parame
         std::cout << "Too many variables for this block size. Maximum number of variables for two kernel scan: " << THREADS_PER_BLOCK*THREADS_PER_BLOCK << std::endl;
         while (1);
     }
-    timer.startEvent("Precompute_Kernel");
+    //timer.startEvent("Precompute_Kernel");
     Precompute_Kernel << <blocksPerGrid, THREADS_PER_BLOCK >> >(input, state, parameters);
-    timer.endEvent();
+    //timer.endEvent();
     cudaSafeCall(cudaDeviceSynchronize());
     #ifdef _DEBUG
         cudaSafeCall(cudaDeviceSynchronize());
@@ -372,37 +372,48 @@ void Precompute(SolverInput& input, SolverState& state, SolverParameters& parame
 // Main GN Solver Loop
 ////////////////////////////////////////////////////////////////////
 
-extern "C" double solveSFSStub(SolverInput& input, SolverState& state, SolverParameters& parameters, ConvergenceAnalysis<float>* ca)
+extern "C" double solveSFSStub(SolverInput& input, SolverState& state, SolverParameters& parameters, SolverPerformanceSummary& perfStats, ConvergenceAnalysis<float>* ca)
 {
     CUDATimer timer;
-
+    timer.startEvent("Total");
     parameters.weightShading = parameters.weightShadingStart;
 
 	for (unsigned int nIter = 0; nIter < parameters.nNonLinearIterations; nIter++)
 	{
+        timer.startEvent("Nonlinear Iteration");
+
+        timer.startEvent("Nonlinear Setup");
         Precompute(input, state, parameters, timer);
 
 		float residual = EvalResidual(input, state, parameters, timer);
 		printf("%i: cost: %f\n", nIter, residual);
 
 		Initialization(input, state, parameters, timer);
+        timer.endEvent();
 
+        timer.startEvent("Linear Solve");
 		for (unsigned int linIter = 0; linIter < parameters.nLinIterations; linIter++) {
 			PCGIteration(input, state, parameters, timer);
             parameters.weightShading += parameters.weightShadingIncrement;
             if (ca != NULL) 
                 ca->addSample(FunctionValue<float>(EvalResidual(input, state, parameters, timer)));
 		}
+        timer.endEvent();
 
+        timer.startEvent("Nonlinear Finish");
 		ApplyLinearUpdate(input, state, parameters, timer);	//this should be also done in the last PCGIteration
 
         timer.nextIteration();
+        timer.endEvent();
+
+        timer.endEvent();
 
 	}
     Precompute(input, state, parameters, timer);
 	float residual = EvalResidual(input, state, parameters, timer);
 	printf("final cost: %f\n", residual);
-    timer.evaluate();
+    timer.endEvent();
+    timer.evaluate(perfStats);
     return (double)residual;
 }
 

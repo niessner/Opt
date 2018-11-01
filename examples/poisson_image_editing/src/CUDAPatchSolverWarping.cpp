@@ -13,7 +13,7 @@ CUDAPatchSolverWarping::~CUDAPatchSolverWarping()
 	cudaSafeCall(cudaFree(m_solverState.d_sumResidual));
 }
 
-double CUDAPatchSolverWarping::solve(const NamedParameters& solverParams, const NamedParameters& probParams, bool profileSolve, std::vector<SolverIteration>& iters)
+double CUDAPatchSolverWarping::solve(const NamedParameters& solverParams, const NamedParameters& probParams, SolverPerformanceSummary& perfStats, bool profileSolve, std::vector<SolverIteration>& iters)
 {
     // TOOD: move this to a more visible place
     unsigned int patchIter = 16;

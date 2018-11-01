@@ -11,7 +11,7 @@ class CUDAPatchSolverWarping : public SolverBase
         CUDAPatchSolverWarping(const std::vector<unsigned int>& dims);
         ~CUDAPatchSolverWarping();
 
-        virtual double solve(const NamedParameters& solverParameters, const NamedParameters& problemParameters, bool profileSolve, std::vector<SolverIteration>& iters) override;
+        virtual double solve(const NamedParameters& solverParameters, const NamedParameters& problemParameters, SolverPerformanceSummary& perfStats, bool profileSolve, std::vector<SolverIteration>& iters) override;
 
 	private:
 

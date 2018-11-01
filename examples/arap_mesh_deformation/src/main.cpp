@@ -22,8 +22,7 @@ int main(int argc, const char * argv[]) {
     if (argc >= 3) {
         if (std::string(argv[2]) == "perf") {
             performanceRun = true;
-        }
-        else {
+        } else {
             printf("Invalid second parameter: %s\n", argv[2]);
         }
     }
@@ -50,7 +49,7 @@ int main(int argc, const char * argv[]) {
 	SimpleMesh* mesh = new SimpleMesh();
 	if (!OpenMesh::IO::read_mesh(*mesh, filename)) 
 	{
-	        std::cerr << "Error -> File: " << __FILE__ << " Line: " << __LINE__ << " Function: " << __FUNCTION__ << std::endl;
+	    std::cerr << "Error -> File: " << __FILE__ << " Line: " << __LINE__ << " Function: " << __FUNCTION__ << std::endl;
 		std::cout << filename << std::endl;
 		exit(1);
 	}
@@ -79,10 +78,10 @@ int main(int argc, const char * argv[]) {
     params.linearIter = 100;
     params.useOpt = true;
     if (performanceRun) {
-        params.useCUDA = false;
-        params.useOpt = true;
-        params.useOptLM = true;
-        params.useCeres = true;
+        params.useCUDA  = true;
+        params.useOpt   = true;
+        params.useOptLM = false;
+        params.useCeres = false;
         params.earlyOut = true;
         params.nonLinearIter = 20;
         params.linearIter = 1000;

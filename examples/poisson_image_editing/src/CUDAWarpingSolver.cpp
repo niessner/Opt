@@ -1,6 +1,6 @@
 #include "CUDAWarpingSolver.h"
 #include "../../shared/OptUtils.h"
-extern "C" double ImageWarpingSolveGNStub(SolverInput& input, SolverState& state, SolverParameters& parameters);	// gauss newton
+extern "C" double ImageWarpingSolveGNStub(SolverInput& input, SolverState& state, SolverParameters& parameters, SolverPerformanceSummary& perfStats);	// gauss newton
 
 CUDAWarpingSolver::CUDAWarpingSolver(const std::vector<unsigned int>& dims) : m_dims(dims)
 {
@@ -38,20 +38,22 @@ CUDAWarpingSolver::~CUDAWarpingSolver()
 	cudaSafeCall(cudaFree(m_solverState.d_sumResidual));
 }
 
-double CUDAWarpingSolver::solve(const NamedParameters& solverParams, const NamedParameters& probParams, bool profileSolve, std::vector<SolverIteration>& iters)
+double CUDAWarpingSolver::solve(const NamedParameters& solverParams, const NamedParameters& probParams, SolverPerformanceSummary& perfStats, bool profileSolve, std::vector<SolverIteration>& iters)
 {
     m_solverState.d_target  = getTypedParameterImage<float4>("T", probParams);
     m_solverState.d_mask    = getTypedParameterImage<float>("M", probParams);
     m_solverState.d_x       = getTypedParameterImage<float4>("X", probParams);
 
 	SolverParameters parameters;
-    parameters.nNonLinearIterations = getTypedParameter<unsigned int>("nonLinearIterations", solverParams);
-    parameters.nLinIterations = getTypedParameter<unsigned int>("linearIterations", solverParams);
+    parameters.nNonLinearIterations = getTypedParameter<unsigned int>("nIterations", solverParams);
+    parameters.nLinIterations = getTypedParameter<unsigned int>("lIterations", solverParams);
 	
 	SolverInput solverInput;
     solverInput.N = m_dims[0] * m_dims[1];
     solverInput.width = m_dims[0];
     solverInput.height = m_dims[1];
 
-	return ImageWarpingSolveGNStub(solverInput, m_solverState, parameters);
+    double finalCost = ImageWarpingSolveGNStub(solverInput, m_solverState, parameters, perfStats);
+    m_summaryStats = perfStats;
+    return finalCost;
 }

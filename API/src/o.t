@@ -9,6 +9,8 @@ require("precision")
 local A = ad.classes
 
 local C = util.C
+local Opt_PerformanceSummary    = util.Opt_PerformanceSummary
+local Opt_PerformanceEntry      = util.Opt_PerformanceEntry
 
 local use_pitched_memory = true
 local use_split_sums = true
@@ -129,6 +131,7 @@ struct opt.Plan(S.Object) {
     free : {&opaque} -> {} -- plan.data
     step : {&opaque,&&opaque} -> int
     cost : {&opaque} -> double
+    get_summary : {&opaque,&Opt_PerformanceSummary} -> {}
     data : &opaque
 }
 
@@ -2555,6 +2558,11 @@ end
 
 terra opt.SetSolverParameter(plan : &opt.Plan, name : rawstring, value : &opaque) 
     return plan.setsolverparameter(plan.data, name, value)
+end
+
+terra opt.GetPerformanceSummary(plan : &opt.Plan, summary : &Opt_PerformanceSummary)
+    C.memset(summary, 0, sizeof(Opt_PerformanceSummary))
+    plan.get_summary(plan.data,summary)
 end
 
 return opt

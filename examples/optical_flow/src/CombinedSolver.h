@@ -17,7 +17,8 @@ static void updateOptImage(std::shared_ptr<OptImage> dst, BaseImage<T> src) {
 
 class CombinedSolver : public CombinedSolverBase {
 public:
-    CombinedSolver(const ColorImageR32& sourceImage, const ColorImageR32& targetImage, const CombinedSolverParameters& params) {
+    CombinedSolver(const ColorImageR32& sourceImage, const ColorImageR32& targetImage, const CombinedSolverParameters& params) :
+        CombinedSolverBase("Optical Flow") {
         m_combinedSolverParameters = params;
         const unsigned int numLevels = 2;
         const float sigmas[2] = { 1.0f, 5.0f };
@@ -59,6 +60,7 @@ public:
             }
         }
         combinedSolveFinalize();
+	    saveFinalCosts(m_name);
     }
 
     virtual void combinedSolveInit() override {
@@ -90,10 +92,8 @@ public:
     }
     virtual void postNonlinearSolve(int) override {}
 
-    virtual void combinedSolveFinalize() override {
-        reportFinalCosts("Optical Flow", m_combinedSolverParameters, getCost("Opt(GN)"), getCost("Opt(LM)"), nan(""));
-    }
-
+    virtual void combinedSolveFinalize() override {}
+    
 	void resetGPU()
 	{
 		for (size_t i = 0; i < m_levels.size(); i++) {

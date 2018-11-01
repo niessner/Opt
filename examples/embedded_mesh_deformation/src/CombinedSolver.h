@@ -12,7 +12,8 @@
 class CombinedSolver : public CombinedSolverBase
 {
 	public:
-        CombinedSolver(const SimpleMesh* mesh, std::vector<int> constraintsIdx, std::vector<std::vector<float>> constraintsTarget, CombinedSolverParameters params) : m_constraintsIdx(constraintsIdx), m_constraintsTarget(constraintsTarget)
+        CombinedSolver(const SimpleMesh* mesh, std::vector<int> constraintsIdx, std::vector<std::vector<float>> constraintsTarget, CombinedSolverParameters params) : 
+            CombinedSolverBase("Embedded Mesh Deformation"), m_constraintsIdx(constraintsIdx), m_constraintsTarget(constraintsTarget)
 		{
             m_combinedSolverParameters = params;
 			m_result = *mesh;
@@ -65,9 +66,7 @@ class CombinedSolver : public CombinedSolverBase
         virtual void postSingleSolve() override {
             copyResultToCPUFromFloat3();
         }
-        virtual void combinedSolveFinalize() override {
-            reportFinalCosts("Embedded Mesh Deformation", m_combinedSolverParameters, getCost("Opt(GN)"), getCost("Opt(LM)"), nan(""));
-        }
+        virtual void combinedSolveFinalize() override {}
 
 		void setConstraints(float alpha)
 		{

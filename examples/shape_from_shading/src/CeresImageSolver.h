@@ -12,7 +12,7 @@ class CeresImageSolver : public CeresSolverBase {
 public:
     CeresImageSolver(const std::vector<unsigned int>& dims) : CeresSolverBase(dims) {}
 
-    virtual double solve(const NamedParameters& solverParameters, const NamedParameters& problemParameters, bool profileSolve, std::vector<SolverIteration>& iters) override;
+    virtual double solve(const NamedParameters& solverParameters, const NamedParameters& problemParameters, SolverPerformanceSummary& perfStats, bool profileSolve, std::vector<SolverIteration>& iters) override;
 
     inline int getPixel(int x, int y) const
     {
@@ -31,5 +31,5 @@ public:
 };
 
 #if !USE_CERES
-double CeresImageSolver::solve(const NamedParameters& solverParameters, const NamedParameters& problemParameters, bool profileSolve, std::vector<SolverIteration>& iters) { return nan(""); }
+double CeresImageSolver::solve(const NamedParameters& solverParameters, const NamedParameters& problemParameters, SolverPerformanceSummary& perfStats, bool profileSolve, std::vector<SolverIteration>& iters) { return nan(""); }
 #endif

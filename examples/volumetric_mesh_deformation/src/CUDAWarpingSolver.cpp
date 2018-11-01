@@ -2,7 +2,7 @@
 #include "../../shared/OptUtils.h"
 #include "../../shared/OptSolver.h"
 
-extern "C" double ImageWarpingSolveGNStub(SolverInput& input, SolverState& state, SolverParameters& parameters);	// gauss newton
+extern "C" double VolumetricWarpingSolveGNStub(SolverInput& input, SolverState& state, SolverParameters& parameters, SolverPerformanceSummary& stats);	// gauss newton
 
 
 
@@ -53,7 +53,7 @@ CUDAWarpingSolver::~CUDAWarpingSolver()
 
 float sq(float x) { return x*x; }
 
-double CUDAWarpingSolver::solve(const NamedParameters& solverParams, const NamedParameters& probParams, bool profileSolve, std::vector<SolverIteration>& iters)
+double CUDAWarpingSolver::solve(const NamedParameters& solverParams, const NamedParameters& probParams, SolverPerformanceSummary& perfStats, bool profileSolve, std::vector<SolverIteration>& iters)
 {
 
     m_solverState.d_urshape = getTypedParameterImage<float3>("UrShape", probParams);
@@ -72,5 +72,7 @@ double CUDAWarpingSolver::solve(const NamedParameters& solverParams, const Named
     solverInput.N = m_dims[0] * m_dims[1] * m_dims[2];
     solverInput.dims = make_int3(m_dims[0] - 1, m_dims[1] - 1, m_dims[2] - 1);
 
-	return ImageWarpingSolveGNStub(solverInput, m_solverState, parameters);
+    double cost = VolumetricWarpingSolveGNStub(solverInput, m_solverState, parameters, perfStats);
+    m_summaryStats = perfStats;
+    return cost;
 }

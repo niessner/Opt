@@ -24,7 +24,7 @@ public:
     std::vector<Parameter> unknownParameters() const {
         std::vector<Parameter> params;
         for (auto p : m_parameters) {
-            if (p.im && p.im->usesOptFloat()) {
+            if (p.im && p.im->isUnknown()) {
                 params.push_back(p);
             }
         }
