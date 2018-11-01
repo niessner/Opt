@@ -442,11 +442,12 @@ def msdev(filename, configs):
 """Runs DEVENV (visual studio IDE) on the given sld filename and builds the 
 specified configs.  configs is a list of strings
 """
-def devenv(filename, configs):
+def devenv(filename, configs, targets):
     binary = 'devenv'
 
     for config in configs:
-        for target in ['debug', 'release']:
+        for target in targets:
+            target = target.lower()
             logfile = tempfile.mktemp()
             args = [filename]
 
@@ -476,19 +477,20 @@ def devenv(filename, configs):
 """Runs VCExpress (VC10) on the given sln filename and builds the 
 specified configs.  configs is a list of strings
 """
-def VCExpress(filename, configs):
+def VCExpress(filename, configs, targets):
     binary = 'VCExpress'
 
     for config in configs:
-        for target in ['debug', 'release']:
+        for target in targets:
+            target = target.lower()
             logfile = tempfile.mktemp()
             args = [toLocalPath(filename)]
 
             args.append('/build')
             args.append(target)
 
-			# Strip any leading path from config because VC12 doesn't use the
-			# same syntax as msbuild
+            # Strip any leading path from config because VC12 doesn't use the
+            # same syntax as msbuild
             i = config.rfind('\\')
             if i >= 0: config = config[(i+1):]
 
@@ -510,10 +512,10 @@ def VCExpress(filename, configs):
     return 0
 
 
-def MSBuild(filename, configs):
+def MSBuild(filename, configs, targets = ['Debug', 'Release']):
     binary = 'MSBuild'
     for config in configs:
-        for target in ['Debug', 'Release']:
+        for target in targets:
             args = [toLocalPath(filename)]
 
             args.append('/p:Configuration=' + target)
@@ -536,11 +538,11 @@ def MSBuild(filename, configs):
 """ 
  Visual Studio dispatcher
 """
-def VisualStudio(filename, configs):
+def VisualStudio(filename, configs, targets = ['Debug', 'Release']):
      # Determine which version of MSVC is available
 
      if _findWindowsBinary('MSBuild'):
-         return MSBuild(filename, configs)
+         return MSBuild(filename, configs, targets)
       
      elif _findWindowsBinary('devenv'):
          # found Visual C++ Standard/Pro

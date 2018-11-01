@@ -50,7 +50,7 @@ def ensure_result_dirs():
 def compile_opt_example(example_name):
 	os.chdir(examples_dir + example_name)
 	if windows:
-		VisualStudio(example_name + ".sln", [example_name])
+		VisualStudio(example_name + ".sln", [example_name], ['Release'])
 	else:
 		call(["make"])
 	os.chdir(script_dir)
