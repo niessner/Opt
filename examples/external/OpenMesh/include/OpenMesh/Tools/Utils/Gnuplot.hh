@@ -74,7 +74,7 @@ using namespace std;
 class GnuplotException : public runtime_error
 {
 public:
-  GnuplotException(const string &msg) : runtime_error(msg){}
+  explicit GnuplotException(const string &msg) : runtime_error(msg){}
 };
 
 // ----------------------------------------------------------------------------
@@ -113,7 +113,7 @@ public:
   Gnuplot();
   
   /// Set a style during construction.
-  Gnuplot(const string & _style);
+  explicit Gnuplot(const string & _style);
 
   /// Constructor calling plot_xy().
   Gnuplot(const string & _title,

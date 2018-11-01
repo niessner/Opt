@@ -82,7 +82,7 @@ namespace Uniform    { // BEGIN_NS_UNIFORM
 
 //== CLASS DEFINITION =========================================================
 
-template <typename MeshType, typename RealType = float>
+template <typename MeshType, typename RealType = double>
 class CompareLengthFunction {
   public:
 

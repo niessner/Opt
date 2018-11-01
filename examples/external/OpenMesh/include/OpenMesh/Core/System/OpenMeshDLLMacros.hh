@@ -47,7 +47,7 @@
 \*===========================================================================*/
 
 // Disable the warnings about needs to have DLL interface as we have tons of vector templates
-#ifdef WIN32
+#ifdef _MSC_VER
   #pragma warning( disable: 4251 )
 #endif
 

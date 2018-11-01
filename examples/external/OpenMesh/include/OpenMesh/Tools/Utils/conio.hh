@@ -49,6 +49,8 @@
 #ifndef OPENMESH_UTILS_CONIO_HH
 #define OPENMESH_UTILS_CONIO_HH
 // ----------------------------------------------------------------------------
+#include <OpenMesh/Core/System/OpenMeshDLLMacros.hh>
+
 namespace OpenMesh {
 namespace Utils {
 // ----------------------------------------------------------------------------

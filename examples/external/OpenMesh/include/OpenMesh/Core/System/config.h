@@ -64,15 +64,12 @@
 
 // ----------------------------------------------------------------------------
 
-#define OM_VERSION 0x50000
-//#define OM_VERSION 0x40200
 
-// only defined, if it is a beta version
-//#define OM_VERSION_BETA 4
+#define OM_VERSION 0x70100
 
-#define OM_GET_VER ((OM_VERSION && 0xf0000) >> 16)
-#define OM_GET_MAJ ((OM_VERSION && 0x0ff00) >> 8)
-#define OM_GET_MIN  (OM_VERSION && 0x000ff)
+#define OM_GET_VER ((OM_VERSION & 0xf0000) >> 16)
+#define OM_GET_MAJ ((OM_VERSION & 0x0ff00) >> 8)
+#define OM_GET_MIN  (OM_VERSION & 0x000ff)
 
 #ifdef WIN32
 #  ifdef min
@@ -100,6 +97,11 @@
 #endif
 
 typedef unsigned int uint;
+
+#if ((defined(_MSC_VER) && (_MSC_VER >= 1800)) || __cplusplus > 199711L || defined(__GXX_EXPERIMENTAL_CXX0X__))
+#define OM_HAS_HASH
+#endif
+
 //=============================================================================
 #endif // OPENMESH_CONFIG_H defined
 //=============================================================================

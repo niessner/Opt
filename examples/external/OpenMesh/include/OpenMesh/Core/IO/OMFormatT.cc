@@ -145,7 +145,7 @@ namespace IO {
   }
 
 
-  // helper to store a an integer
+  // helper to restore a an integer
   template< typename T > 
   size_t 
   restore( std::istream& _is, 
@@ -171,25 +171,28 @@ namespace IO {
 	OMFormat::int16 v;
 	bytes = restore( _is, v, _swap );
 	_val = static_cast<T>(v);
+	break;
       }
       case OMFormat::Chunk::Integer_32:
       { 
 	OMFormat::int32 v;
 	bytes = restore( _is, v, _swap );
 	_val = static_cast<T>(v);
+	break;
       }      
       case OMFormat::Chunk::Integer_64:
       { 
 	OMFormat::int64 v;
 	bytes = restore( _is, v, _swap );
 	_val = static_cast<T>(v);
+	break;
       }
     }
     return bytes;
   }
 
 
-  // helper to store a an unsigned integer
+  // helper to restore a an unsigned integer
   template< typename T > 
   size_t 
   restore( std::istream& _is, 

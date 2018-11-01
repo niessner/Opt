@@ -94,7 +94,7 @@ class ModEdgeLengthT: public ModBaseT<MeshT> {
     }
 
     /// set edge_length
-    void set_edge_length(float _f) {
+    void set_edge_length(typename Mesh::Scalar _f) {
       edge_length_ = _f;
       sqr_edge_length_ = _f * _f;
     }

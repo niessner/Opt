@@ -46,8 +46,8 @@
 #endif
 
 #ifndef WIN32
-  #include <stdlib.h>
-  #include <string.h>
+
+#include <string.h>
 #else
   #ifdef __MINGW32__
     #include <stdlib.h>

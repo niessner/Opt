@@ -200,17 +200,83 @@ public:
 
   //---------------------------------------------------- synchronize properties
 
+/*
+ * In C++11 an beyond we can introduce more efficient and more legible
+ * implementations of the following methods.
+ */
+#if ((defined(_MSC_VER) && (_MSC_VER >= 1800)) || __cplusplus > 199711L || defined(__GXX_EXPERIMENTAL_CXX0X__)) && !defined(OPENMESH_VECTOR_LEGACY)
+  /**
+   * Reserves space for \p _n elements in all property vectors.
+   */
+  void reserve(size_t _n) const {
+    std::for_each(properties_.begin(), properties_.end(),
+            [_n](BaseProperty* p) { if (p) p->reserve(_n); });
+  }
+
+  /**
+   * Resizes all property vectors to the specified size.
+   */
+  void resize(size_t _n) const {
+    std::for_each(properties_.begin(), properties_.end(),
+            [_n](BaseProperty* p) { if (p) p->resize(_n); });
+  }
+
+  /**
+   * Same as resize() but ignores property vectors that have a size larger
+   * than \p _n.
+   *
+   * Use this method instead of resize() if you plan to frequently reduce
+   * and enlarge the property container and you don't want to waste time
+   * reallocating the property vectors every time.
+   */
+  void resize_if_smaller(size_t _n) const {
+    std::for_each(properties_.begin(), properties_.end(),
+            [_n](BaseProperty* p) { if (p && p->n_elements() < _n) p->resize(_n); });
+  }
+
+  /**
+   * Swaps the items with index \p _i0 and index \p _i1 in all property
+   * vectors.
+   */
+  void swap(size_t _i0, size_t _i1) const {
+    std::for_each(properties_.begin(), properties_.end(),
+            [_i0, _i1](BaseProperty* p) { if (p) p->swap(_i0, _i1); });
+  }
+#else
+  /**
+   * Reserves space for \p _n elements in all property vectors.
+   */
   void reserve(size_t _n) const {
     std::for_each(properties_.begin(), properties_.end(), Reserve(_n));
   }
 
+  /**
+   * Resizes all property vectors to the specified size.
+   */
   void resize(size_t _n) const {
     std::for_each(properties_.begin(), properties_.end(), Resize(_n));
   }
 
+  /**
+   * Same as \sa resize() but ignores property vectors that have a size
+   * larger than \p _n.
+   *
+   * Use this method instead of \sa resize() if you plan to frequently reduce
+   * and enlarge the property container and you don't want to waste time
+   * reallocating the property vectors every time.
+   */
+  void resize_if_smaller(size_t _n) const {
+    std::for_each(properties_.begin(), properties_.end(), ResizeIfSmaller(_n));
+  }
+
+  /**
+   * Swaps the items with index \p _i0 and index \p _i1 in all property
+   * vectors.
+   */
   void swap(size_t _i0, size_t _i1) const {
     std::for_each(properties_.begin(), properties_.end(), Swap(_i0, _i1));
   }
+#endif
 
 
 
@@ -270,6 +336,13 @@ private:
   {
     Resize(size_t _n) : n_(_n) {}
     void operator()(BaseProperty* _p) const { if (_p) _p->resize(n_); }
+    size_t n_;
+  };
+
+  struct ResizeIfSmaller
+  {
+    ResizeIfSmaller(size_t _n) : n_(_n) {}
+    void operator()(BaseProperty* _p) const { if (_p && _p->n_elements() < n_) _p->resize(n_); }
     size_t n_;
   };
 

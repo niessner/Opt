@@ -56,8 +56,6 @@
 //== INCLUDES =================================================================
 
 #include <OpenMesh/Core/IO/OMFormat.hh>
-#include <algorithm>
-#include <iomanip>
 
 //== NAMESPACES ===============================================================
 

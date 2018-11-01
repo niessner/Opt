@@ -314,13 +314,15 @@ class GenericCirculatorT : protected GenericCirculatorBaseT<Mesh> {
 
         /// Standard dereferencing operator.
         value_type operator*() const {
+            // We can't use this due to a GCC6 compiler bug
+            const GenericCirculatorBaseT<Mesh>* self = this;
 #ifndef NDEBUG
             assert(this->heh_.is_valid());
-            value_type res = (this->*Handle2Value)();
+            value_type res = (self->*Handle2Value)();
             assert(res.is_valid());
             return res;
 #else
-            return (this->*Handle2Value)();
+            return (self->*Handle2Value)();
 #endif
         }
 
@@ -498,13 +500,15 @@ class GenericCirculatorT_DEPRECATED : protected GenericCirculatorBaseT<Mesh> {
 
         /// Standard dereferencing operator.
         value_type operator*() const {
+            // We can't use this due to a GCC6 compiler bug
+            const GenericCirculatorBaseT<Mesh>* self = this;
 #ifndef NDEBUG
             assert(this->heh_.is_valid());
-            value_type res = (this->*Handle2Value)();
+            value_type res = (self->*Handle2Value)();
             assert(res.is_valid());
             return res;
 #else
-            return (this->*Handle2Value)();
+            return (self->*Handle2Value)();
 #endif
         }
 

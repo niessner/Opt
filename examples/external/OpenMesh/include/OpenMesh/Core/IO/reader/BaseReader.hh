@@ -156,7 +156,16 @@ protected:
  * @return trimmed string
  */
 static inline std::string &left_trim(std::string &_string) {
-  _string.erase(_string.begin(), std::find_if(_string.begin(), _string.end(), std::not1(std::ptr_fun<int, int>(std::isspace))));
+
+  // Find out if the compiler supports CXX11
+  #if ( __cplusplus >= 201103L || _MSVC_LANG >= 201103L )
+    // as with CXX11 we can use lambda expressions
+    _string.erase(_string.begin(), std::find_if(_string.begin(), _string.end(), [](int i)->int { return ! std::isspace(i); }));
+  #else
+    // we do what we did before
+    _string.erase(_string.begin(), std::find_if(_string.begin(), _string.end(), std::not1(std::ptr_fun<int, int>(std::isspace))));
+  #endif
+  
   return _string;
 }
 
@@ -168,7 +177,18 @@ static inline std::string &left_trim(std::string &_string) {
  * @return trimmed string
  */
 static inline std::string &right_trim(std::string &_string) {
-  _string.erase(std::find_if(_string.rbegin(), _string.rend(), std::not1(std::ptr_fun<int, int>(std::isspace))).base(), _string.end());
+
+  // Find out if the compiler supports CXX11
+  #if ( __cplusplus >= 201103L || _MSVC_LANG >= 201103L )
+    // as with CXX11 we can use lambda expressions
+    _string.erase(std::find_if(_string.rbegin(), _string.rend(), [](int i)->int { return ! std::isspace(i); } ).base(), _string.end());
+  #else
+    // we do what we did before
+    _string.erase(std::find_if(_string.rbegin(), _string.rend(), std::not1(std::ptr_fun<int, int>(std::isspace))).base(), _string.end());
+  #endif
+
+
+
   return _string;
 }
 

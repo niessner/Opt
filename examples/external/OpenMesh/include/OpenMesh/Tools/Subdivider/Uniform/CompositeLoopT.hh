@@ -77,7 +77,7 @@ namespace Uniform    { // BEGIN_NS_DECIMATER
 
 /** Uniform composite Loop subdivision algorithm
  */
-template <class MeshType, class RealType=float>
+template <class MeshType, class RealType = double>
 class CompositeLoopT : public CompositeT<MeshType, RealType>
 {
 public:

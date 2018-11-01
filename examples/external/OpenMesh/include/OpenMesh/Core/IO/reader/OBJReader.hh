@@ -170,7 +170,16 @@ private:
 
   bool read_material( std::fstream& _in );
 
+
 private:
+
+  bool read_vertices(std::istream& _in, BaseImporter& _bi, Options& _opt,
+                     std::vector<Vec3f> & normals,
+                     std::vector<Vec3f> & colors,
+                     std::vector<Vec3f> & texcoords3d,
+                     std::vector<Vec2f> & texcoords,
+                     std::vector<VertexHandle> & vertexHandles,
+                     Options & fileOptions);
 
   std::string path_;
 

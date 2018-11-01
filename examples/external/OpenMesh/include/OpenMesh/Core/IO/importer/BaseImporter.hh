@@ -106,6 +106,9 @@ public:
   // add texture coordinates per face, _vh references the first texcoord
   virtual void add_face_texcoords( FaceHandle _fh, VertexHandle _vh, const std::vector<Vec2f>& _face_texcoords) = 0;
 
+  // add texture 3d coordinates per face, _vh references the first texcoord
+  virtual void add_face_texcoords( FaceHandle _fh, VertexHandle _vh, const std::vector<Vec3f>& _face_texcoords) = 0;
+
   // Set the texture index for a face
   virtual void set_face_texindex( FaceHandle _fh, int _texId ) = 0;
 
@@ -132,6 +135,12 @@ public:
 
   // set vertex texture coordinate
   virtual void set_texcoord(HalfedgeHandle _heh, const Vec2f& _texcoord) = 0;
+
+  // set 3d vertex texture coordinate
+  virtual void set_texcoord(VertexHandle _vh, const Vec3f& _texcoord) = 0;
+
+  // set 3d vertex texture coordinate
+  virtual void set_texcoord(HalfedgeHandle _heh, const Vec3f& _texcoord) = 0;
 
   // set edge color
   virtual void set_color(EdgeHandle _eh, const Vec3uc& _color) = 0;

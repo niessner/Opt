@@ -4,7 +4,7 @@
 #include <OpenMesh/Core/System/compiler.hh>
 #include <OpenMesh/Core/System/OpenMeshDLLMacros.hh>
 
-#if defined(WIN32)
+#if defined(_MSC_VER)
  #if   defined(__cplusplus)
  
   extern "C" {

@@ -91,7 +91,7 @@ void ModEdgeLengthT<MeshT>::set_error_tolerance_factor(double _factor) {
     // the smaller the factor, the smaller edge_length_ gets
     // thus creating a stricter constraint
     // division by error_tolerance_factor_ is for normalization
-    float edge_length = edge_length_ * _factor / this->error_tolerance_factor_;
+    typename Mesh::Scalar edge_length = edge_length_ * static_cast<typename Mesh::Scalar>(_factor / this->error_tolerance_factor_);
     set_edge_length(edge_length);
     this->error_tolerance_factor_ = _factor;
   }

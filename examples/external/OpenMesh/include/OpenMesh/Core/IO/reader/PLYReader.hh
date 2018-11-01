@@ -165,7 +165,6 @@ private:
   mutable unsigned int vertexCount_;
   mutable unsigned int faceCount_;
 
-  mutable ValueType vertexType_;
   mutable uint vertexDimension_;
 
   enum Property {
@@ -190,8 +189,23 @@ private:
     PropertyInfo(Property _p, ValueType _v):property(_p),value(_v),name(""),listIndexType(Unsupported){}
     PropertyInfo(Property _p, ValueType _v, const std::string& _n):property(_p),value(_v),name(_n),listIndexType(Unsupported){}
   };
-  mutable std::vector< PropertyInfo > vertexProperties_;
-  mutable std::vector< PropertyInfo > faceProperties_;
+
+  enum Element {
+	  VERTEX,
+	  FACE,
+	  UNKNOWN
+  };
+
+  // Information on the elements
+  struct ElementInfo
+  {
+    Element element_;
+    std::string name_;
+    unsigned int count_;
+    std::vector< PropertyInfo > properties_;
+  };
+
+  mutable std::vector< ElementInfo > elements_;
 
   template<typename T>
   inline void read(_PLYReader_::ValueType _type, std::istream& _in, T& _value, OpenMesh::GenProg::TrueType /*_binary*/) const

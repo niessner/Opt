@@ -55,11 +55,24 @@
 
 // -------------------- system settings
 #include <OpenMesh/Core/System/config.h>
+
 // -------------------- check include order
 #if defined (OPENMESH_TRIMESH_ARRAY_KERNEL_HH) || \
     defined (OPENMESH_POLYMESH_ARRAY_KERNEL_HH)
-#  error "Include MeshIO.hh before including a mesh type!"
+
+    // Issue warning if MeshIO was not included before Mesh Type
+    // Nobody knows why this order was enforced.
+    // If somebody encounters an error resulting from a wrong order, please report it to the OpenMesh developers.
+    // If we don't here about any errors, this check will be removed
+    // @TODO: Remove after reasonable time
+    #ifdef WIN32
+      #pragma message("MeshIO.hh was included after Mesh Type. You may ignore this warning. Please report errors resulting ifrom this order to the developers!")
+    #else
+      #warning "MeshIO.hh was included after Mesh Type. You may ignore this warning. Please report errors resulting from this order to the developers!"
+    #endif
+
 #endif
+
 // -------------------- OpenMesh
 #include <OpenMesh/Core/IO/SR_store.hh>
 #include <OpenMesh/Core/IO/IOManager.hh>

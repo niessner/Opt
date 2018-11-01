@@ -83,10 +83,10 @@ public:
   */
   //@{
   /// Linear iterator
-  typedef Iterators::GenericIteratorT<This, This::VertexHandle, ArrayKernel, &This::has_vertex_status, &This::n_vertices> VertexIter;
-  typedef Iterators::GenericIteratorT<This, This::HalfedgeHandle, ArrayKernel, &This::has_halfedge_status, &This::n_halfedges> HalfedgeIter;
-  typedef Iterators::GenericIteratorT<This, This::EdgeHandle, ArrayKernel, &This::has_edge_status, &This::n_edges> EdgeIter;
-  typedef Iterators::GenericIteratorT<This, This::FaceHandle, ArrayKernel, &This::has_face_status, &This::n_faces> FaceIter;
+  typedef Iterators::GenericIteratorT<This, This::VertexHandle, ArrayKernel , &ArrayKernel::has_vertex_status, &ArrayKernel::n_vertices> VertexIter;
+  typedef Iterators::GenericIteratorT<This, This::HalfedgeHandle, ArrayKernel , &ArrayKernel::has_halfedge_status, &ArrayKernel::n_halfedges> HalfedgeIter;
+  typedef Iterators::GenericIteratorT<This, This::EdgeHandle, ArrayKernel , &ArrayKernel::has_edge_status, &ArrayKernel::n_edges> EdgeIter;
+  typedef Iterators::GenericIteratorT<This, This::FaceHandle, ArrayKernel , &ArrayKernel::has_face_status, &ArrayKernel::n_faces> FaceIter;
 
   typedef VertexIter ConstVertexIter;
   typedef HalfedgeIter ConstHalfedgeIter;
@@ -192,12 +192,12 @@ public:
       &Iterators::GenericCirculatorBaseT<This>::toHalfedgeHandle>
   HalfedgeLoopIter;
   typedef Iterators::GenericCirculatorT<This, This::FaceHandle, This::HalfedgeHandle,
-      &Iterators::GenericCirculatorBaseT<This>::toHalfedgeHandle> HalfedgeLoopCWIter;
+      &Iterators::GenericCirculatorBaseT<This>::toHalfedgeHandle, false> HalfedgeLoopCWIter;
   /**
    * Identical to #FaceHalfedgeIter. God knows why this typedef exists.
    */
   typedef Iterators::GenericCirculatorT<This, This::FaceHandle, This::HalfedgeHandle,
-      &Iterators::GenericCirculatorBaseT<This>::toHalfedgeHandle, false>
+      &Iterators::GenericCirculatorBaseT<This>::toHalfedgeHandle>
   HalfedgeLoopCCWIter;
 
   typedef VertexVertexIter        ConstVertexVertexIter;
@@ -1123,6 +1123,9 @@ public:
       ITER_TYPE (CONTAINER_TYPE::*end_fn)() const>
   class EntityRange {
       public:
+          typedef ITER_TYPE iterator;
+          typedef ITER_TYPE const_iterator;
+
           EntityRange(CONTAINER_TYPE &container) : container_(container) {}
           ITER_TYPE begin() const { return (container_.*begin_fn)(); }
           ITER_TYPE end() const { return (container_.*end_fn)(); }
@@ -1137,9 +1140,19 @@ public:
           &PolyConnectivity::vertices_end> ConstVertexRange;
   typedef EntityRange<
           const PolyConnectivity,
+          PolyConnectivity::ConstVertexIter,
+          &PolyConnectivity::vertices_sbegin,
+          &PolyConnectivity::vertices_end> ConstVertexRangeSkipping;
+  typedef EntityRange<
+          const PolyConnectivity,
           PolyConnectivity::ConstHalfedgeIter,
           &PolyConnectivity::halfedges_begin,
           &PolyConnectivity::halfedges_end> ConstHalfedgeRange;
+  typedef EntityRange<
+          const PolyConnectivity,
+          PolyConnectivity::ConstHalfedgeIter,
+          &PolyConnectivity::halfedges_sbegin,
+          &PolyConnectivity::halfedges_end> ConstHalfedgeRangeSkipping;
   typedef EntityRange<
           const PolyConnectivity,
           PolyConnectivity::ConstEdgeIter,
@@ -1147,33 +1160,67 @@ public:
           &PolyConnectivity::edges_end> ConstEdgeRange;
   typedef EntityRange<
           const PolyConnectivity,
+          PolyConnectivity::ConstEdgeIter,
+          &PolyConnectivity::edges_sbegin,
+          &PolyConnectivity::edges_end> ConstEdgeRangeSkipping;
+  typedef EntityRange<
+          const PolyConnectivity,
           PolyConnectivity::ConstFaceIter,
           &PolyConnectivity::faces_begin,
           &PolyConnectivity::faces_end> ConstFaceRange;
+  typedef EntityRange<
+          const PolyConnectivity,
+          PolyConnectivity::ConstFaceIter,
+          &PolyConnectivity::faces_sbegin,
+          &PolyConnectivity::faces_end> ConstFaceRangeSkipping;
 
   /**
    * @return The vertices as a range object suitable
-   * for C++11 range based for loops.
+   * for C++11 range based for loops. Will skip deleted vertices.
    */
-  ConstVertexRange vertices() const { return ConstVertexRange(*this); }
+  ConstVertexRangeSkipping vertices() const { return ConstVertexRangeSkipping(*this); }
+
+  /**
+   * @return The vertices as a range object suitable
+   * for C++11 range based for loops. Will include deleted vertices.
+   */
+  ConstVertexRange all_vertices() const { return ConstVertexRange(*this); }
 
   /**
    * @return The halfedges as a range object suitable
-   * for C++11 range based for loops.
+   * for C++11 range based for loops. Will skip deleted halfedges.
    */
-  ConstHalfedgeRange halfedges() const { return ConstHalfedgeRange(*this); }
+  ConstHalfedgeRangeSkipping halfedges() const { return ConstHalfedgeRangeSkipping(*this); }
 
   /**
-   * @return The edges as a range object suitabl
-   * for C++11 range based for loops.
+   * @return The halfedges as a range object suitable
+   * for C++11 range based for loops. Will include deleted halfedges.
    */
-  ConstEdgeRange edges() const { return ConstEdgeRange(*this); }
+  ConstHalfedgeRange all_halfedges() const { return ConstHalfedgeRange(*this); }
+
+  /**
+   * @return The edges as a range object suitable
+   * for C++11 range based for loops. Will skip deleted edges.
+   */
+  ConstEdgeRangeSkipping edges() const { return ConstEdgeRangeSkipping(*this); }
+
+  /**
+   * @return The edges as a range object suitable
+   * for C++11 range based for loops. Will include deleted edges.
+   */
+  ConstEdgeRange all_edges() const { return ConstEdgeRange(*this); }
 
   /**
    * @return The faces as a range object suitable
-   * for C++11 range based for loops.
+   * for C++11 range based for loops. Will skip deleted faces.
    */
-  ConstFaceRange faces() const { return ConstFaceRange(*this); }
+  ConstFaceRangeSkipping faces() const { return ConstFaceRangeSkipping(*this); }
+
+  /**
+   * @return The faces as a range object suitable
+   * for C++11 range based for loops. Will include deleted faces.
+   */
+  ConstFaceRange all_faces() const { return ConstFaceRange(*this); }
 
   /// Generic class for iterator ranges.
   template<
@@ -1184,67 +1231,70 @@ public:
       ITER_TYPE (CONTAINER_TYPE::*end_fn)(CENTER_ENTITY_TYPE) const>
   class CirculatorRange {
       public:
+          typedef ITER_TYPE iterator;
+          typedef ITER_TYPE const_iterator;
+
           CirculatorRange(
-                  CONTAINER_TYPE &container,
+                  const CONTAINER_TYPE &container,
                   CENTER_ENTITY_TYPE center) :
               container_(container), center_(center) {}
-          ITER_TYPE begin() { return (container_.*begin_fn)(center_); }
-          ITER_TYPE end() { return (container_.*end_fn)(center_); }
+          ITER_TYPE begin() const { return (container_.*begin_fn)(center_); }
+          ITER_TYPE end() const { return (container_.*end_fn)(center_); }
 
       private:
-          CONTAINER_TYPE &container_;
+          const CONTAINER_TYPE &container_;
           CENTER_ENTITY_TYPE center_;
   };
 
   typedef CirculatorRange<
-          const PolyConnectivity,
+          PolyConnectivity,
           ConstVertexVertexCWIter,
           VertexHandle,
           &PolyConnectivity::cvv_cwbegin,
           &PolyConnectivity::cvv_cwend> ConstVertexVertexRange;
   typedef CirculatorRange<
-          const PolyConnectivity,
+          PolyConnectivity,
           ConstVertexIHalfedgeIter,
           VertexHandle,
           &PolyConnectivity::cvih_begin,
           &PolyConnectivity::cvih_end> ConstVertexIHalfedgeRange;
   typedef CirculatorRange<
-          const PolyConnectivity,
+          PolyConnectivity,
           ConstVertexOHalfedgeIter, VertexHandle,
           &PolyConnectivity::cvoh_begin,
           &PolyConnectivity::cvoh_end> ConstVertexOHalfedgeRange;
   typedef CirculatorRange<
-          const PolyConnectivity,
+          PolyConnectivity,
           ConstVertexEdgeIter,
           VertexHandle,
           &PolyConnectivity::cve_begin,
           &PolyConnectivity::cve_end> ConstVertexEdgeRange;
   typedef CirculatorRange<
-          const PolyConnectivity,
+          PolyConnectivity,
           ConstVertexFaceIter,
           VertexHandle,
           &PolyConnectivity::cvf_begin,
           &PolyConnectivity::cvf_end> ConstVertexFaceRange;
   typedef CirculatorRange<
-          const PolyConnectivity,
+          PolyConnectivity,
           ConstFaceVertexIter,
           FaceHandle,
           &PolyConnectivity::cfv_begin,
           &PolyConnectivity::cfv_end> ConstFaceVertexRange;
   typedef CirculatorRange<
-          const PolyConnectivity,
+          PolyConnectivity,
           ConstFaceHalfedgeIter,
           FaceHandle,
           &PolyConnectivity::cfh_begin,
           &PolyConnectivity::cfh_end> ConstFaceHalfedgeRange;
   typedef CirculatorRange<
-          const PolyConnectivity,
+          PolyConnectivity,
           ConstFaceEdgeIter,
           FaceHandle,
           &PolyConnectivity::cfe_begin,
           &PolyConnectivity::cfe_end> ConstFaceEdgeRange;
   typedef CirculatorRange<
-          const PolyConnectivity,
+          PolyConnectivity,
           ConstFaceFaceIter,
           FaceHandle,
           &PolyConnectivity::cff_begin,
@@ -1577,7 +1627,6 @@ private: // Working storage for add_face()
        };
        std::vector<AddFaceEdgeInfo> edgeData_; //
        std::vector<std::pair<HalfedgeHandle, HalfedgeHandle> > next_cache_; // cache for set_next_halfedge and vertex' set_halfedge
-       uint next_cache_count_;
 
 };
 

@@ -87,7 +87,7 @@ public:
    *
    * @param _notificationInterval Interval of decimation steps between notifications.
    */
-  Observer(size_t _notificationInterval);
+  explicit Observer(size_t _notificationInterval);
   
   /// Destructor
   virtual ~Observer();

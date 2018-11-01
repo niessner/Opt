@@ -238,8 +238,6 @@ template <> struct binary< std::string > {
     {
       length_t len = length_t(_v.size());
 
-      if (_swap) reverse_byte_order(len);
-
       size_t bytes = binary<length_t>::store( _os, len, _swap );
       _os.write( _v.data(), len );
       return _os.good() ? len+bytes : 0;
@@ -252,8 +250,6 @@ template <> struct binary< std::string > {
   {
     length_t len;
     size_t   bytes = binary<length_t>::restore( _is, len, _swap );
-    if (_swap)
-      reverse_byte_order(len);
     _val.resize(len);
     _is.read( const_cast<char*>(_val.data()), len );
 

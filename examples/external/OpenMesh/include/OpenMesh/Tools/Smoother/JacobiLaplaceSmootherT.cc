@@ -123,7 +123,7 @@ compute_new_positions_C0()
       u -= vector_cast<typename Mesh::Normal>(Base::mesh_.point(*v_it));
 
       // damping
-      u *= 0.5;
+      u *= static_cast< typename Mesh::Scalar >(0.5);
     
       // store new position
       p  = vector_cast<typename Mesh::Normal>(Base::mesh_.point(*v_it));
@@ -181,7 +181,7 @@ compute_new_positions_C1()
       if (diag) uu *= static_cast<typename Mesh::Scalar>(1.0) / diag;
 
       // damping
-      uu *= 0.25;
+      uu *= static_cast<typename vector_traits<typename Mesh::Normal>::value_type>(0.25);
     
       // store new position
       p  = vector_cast<typename Mesh::Normal>(Base::mesh_.point(*v_it));

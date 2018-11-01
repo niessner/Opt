@@ -104,7 +104,7 @@ public:
 
   typedef RuleInterfaceT<M> Inherited;
 
-  Tvv3(M& _mesh) : Inherited(_mesh) { Base::set_subdiv_type(3); };
+  explicit Tvv3(M& _mesh) : Inherited(_mesh) { Base::set_subdiv_type(3); };
 
   void raise(typename M::FaceHandle&   _fh, state_t _target_state);
   void raise(typename M::VertexHandle& _vh, state_t _target_state);
@@ -129,7 +129,7 @@ public:
    
   typedef RuleInterfaceT<M> Inherited;
 
-  Tvv4(M& _mesh) : Inherited(_mesh) { Base::set_subdiv_type(4); };
+  explicit Tvv4(M& _mesh) : Inherited(_mesh) { Base::set_subdiv_type(4); };
 
   void raise(typename M::FaceHandle&   _fh, state_t _target_state); 
   void raise(typename M::VertexHandle& _vh, state_t _target_state);
@@ -157,7 +157,7 @@ private:
 public:
   typedef RuleInterfaceT<M> Inherited;
 
-  VF(M& _mesh) : Inherited(_mesh) {}
+  explicit VF(M& _mesh) : Inherited(_mesh) {}
 
   void raise(typename M::FaceHandle& _fh, state_t _target_state);
   MIPS_WARN_WA(Edge)
@@ -179,7 +179,7 @@ private:
 public:
   typedef RuleInterfaceT<M> Inherited;
 
-  FF(M& _mesh) : Inherited(_mesh) {}
+  explicit FF(M& _mesh) : Inherited(_mesh) {}
 
   void raise(typename M::FaceHandle& _fh, state_t _target_state);
   MIPS_WARN_WA(Vertex) // avoid warning
@@ -201,7 +201,7 @@ private:
 public:
   typedef RuleInterfaceT<M> Inherited;
 
-  FFc(M& _mesh) : Inherited(_mesh) {}
+  explicit FFc(M& _mesh) : Inherited(_mesh) {}
 
   void raise(typename M::FaceHandle& _fh, state_t _target_state);
   MIPS_WARN_WA(Vertex) // avoid warning
@@ -223,7 +223,7 @@ private:
 public:
   typedef RuleInterfaceT<M> Inherited;
 
-  FV(M& _mesh) : Inherited(_mesh) {}
+  explicit FV(M& _mesh) : Inherited(_mesh) {}
 
   void raise(typename M::VertexHandle& _vh, state_t _target_state);
   MIPS_WARN_WA(Face) // avoid warning
@@ -245,7 +245,7 @@ private:
 public:
   typedef RuleInterfaceT<M> Inherited;
 
-  FVc(M& _mesh) : Inherited(_mesh) { init_coeffs(50); }
+  explicit FVc(M& _mesh) : Inherited(_mesh) { init_coeffs(50); }
 
   void raise(typename M::VertexHandle& _vh, state_t _target_state);
   MIPS_WARN_WA(Face) // avoid warning
@@ -282,7 +282,7 @@ public:
 
   typedef RuleInterfaceT<M> Inherited;
 
-  VV(M& _mesh) : Inherited(_mesh) {}
+  explicit VV(M& _mesh) : Inherited(_mesh) {}
 
   void raise(typename M::VertexHandle& _vh, state_t _target_state);
   MIPS_WARN_WA(Face) // avoid warning
@@ -304,7 +304,7 @@ private:
 public:
   typedef RuleInterfaceT<M> Inherited;
 
-  VVc(M& _mesh) : Inherited(_mesh) {}
+  explicit VVc(M& _mesh) : Inherited(_mesh) {}
 
   void raise(typename M::VertexHandle& _vh, state_t _target_state);
   MIPS_WARN_WA(Face) // avoid warning
@@ -326,7 +326,7 @@ private:
 public:
   typedef RuleInterfaceT<M> Inherited;
 
-  VE(M& _mesh) : Inherited(_mesh) {}
+  explicit VE(M& _mesh) : Inherited(_mesh) {}
 
   void raise(typename M::EdgeHandle& _eh, state_t _target_state);
   MIPS_WARN_WA(Face  ) // avoid warning
@@ -348,7 +348,7 @@ private:
 public:
   typedef RuleInterfaceT<M> Inherited;
 
-  VdE(M& _mesh) : Inherited(_mesh) {}
+  explicit VdE(M& _mesh) : Inherited(_mesh) {}
 
   void raise(typename M::EdgeHandle& _eh, state_t _target_state);
   MIPS_WARN_WA(Face  ) // avoid warning
@@ -370,7 +370,7 @@ private:
 public:
   typedef RuleInterfaceT<M> Inherited;
 
-  VdEc(M& _mesh) : Inherited(_mesh) {}
+  explicit VdEc(M& _mesh) : Inherited(_mesh) {}
 
   void raise(typename M::EdgeHandle& _eh, state_t _target_state);
   MIPS_WARN_WA(Face  ) // avoid warning
@@ -392,7 +392,7 @@ private:
 public:
   typedef RuleInterfaceT<M> Inherited;
 
-  EV(M& _mesh) : Inherited(_mesh) {}
+  explicit EV(M& _mesh) : Inherited(_mesh) {}
 
   void raise(typename M::VertexHandle& _vh, state_t _target_state);
   MIPS_WARN_WA(Face) // avoid warning
@@ -415,7 +415,7 @@ public:
 
   typedef RuleInterfaceT<M> Inherited;
 
-  EVc(M& _mesh) : Inherited(_mesh) { init_coeffs(50); }
+  explicit EVc(M& _mesh) : Inherited(_mesh) { init_coeffs(50); }
 
   void raise(typename M::VertexHandle& _vh, state_t _target_state);
   MIPS_WARN_WA(Face) // avoid warning
@@ -451,7 +451,7 @@ private:
 public:
   typedef RuleInterfaceT<M> Inherited;
 
-  EF(M& _mesh) : Inherited(_mesh) {}
+  explicit EF(M& _mesh) : Inherited(_mesh) {}
 
   void raise(typename M::FaceHandle& _fh, state_t _target_state);
   MIPS_WARN_WA(Edge  ) // avoid warning
@@ -473,7 +473,7 @@ private:
 public:
   typedef RuleInterfaceT<M> Inherited;
 
-  FE(M& _mesh) : Inherited(_mesh) {}
+  explicit FE(M& _mesh) : Inherited(_mesh) {}
 
   void raise(typename M::EdgeHandle& _eh, state_t _target_state);
   MIPS_WARN_WA(Face  ) // avoid warning
@@ -495,7 +495,7 @@ private:
 public:
   typedef RuleInterfaceT<M> Inherited;
 
-  EdE(M& _mesh) : Inherited(_mesh) {}
+  explicit EdE(M& _mesh) : Inherited(_mesh) {}
 
   void raise(typename M::EdgeHandle& _eh, state_t _target_state);
   MIPS_WARN_WA(Face  ) // avoid warning
@@ -517,7 +517,7 @@ private:
 public:
   typedef RuleInterfaceT<M> Inherited;
 
-  EdEc(M& _mesh) : Inherited(_mesh) {}
+  explicit EdEc(M& _mesh) : Inherited(_mesh) {}
 
   void raise(typename M::EdgeHandle& _eh, state_t _target_state);
   MIPS_WARN_WA(Face  ) // avoid warning

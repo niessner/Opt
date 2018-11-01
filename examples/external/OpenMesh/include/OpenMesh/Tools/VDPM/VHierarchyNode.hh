@@ -96,7 +96,7 @@ class VHierarchyNode
 {
 public:
 
-  VHierarchyNode() { }
+  VHierarchyNode() :radius_(0.0f), sin_square_(0.0f),mue_square_(0.0f), sigma_square_(0.0f) { }
 
   /// Returns true, if node is root else false.
   bool is_root() const

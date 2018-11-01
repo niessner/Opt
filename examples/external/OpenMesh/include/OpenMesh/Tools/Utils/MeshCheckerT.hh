@@ -80,7 +80,7 @@ class MeshCheckerT
 public:
    
   /// constructor
-  MeshCheckerT(const Mesh& _mesh) : mesh_(_mesh) {}
+  explicit MeshCheckerT(const Mesh& _mesh) : mesh_(_mesh) {}
  
   /// destructor
   ~MeshCheckerT() {}

@@ -77,7 +77,7 @@ namespace Uniform    { // BEGIN_NS_UNIFORM
 
 /** Uniform composite sqrt(3) subdivision algorithm
  */
-template <typename MeshType, typename RealType=float>
+template <typename MeshType, typename RealType = double>
 class CompositeSqrt3T : public CompositeT<MeshType, RealType>
 {
 public:

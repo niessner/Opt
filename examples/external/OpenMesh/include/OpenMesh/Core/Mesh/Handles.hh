@@ -73,8 +73,8 @@ public:
   /// Get the underlying index of this handle
   int idx() const { return idx_; }
 
-  /// The handle is valid iff the index is not equal to -1.
-  bool is_valid() const { return idx_ != -1; }
+  /// The handle is valid iff the index is not negative.
+  bool is_valid() const { return idx_ >= 0; }
 
   /// reset handle to be invalid
   void reset() { idx_=-1; }
@@ -98,12 +98,16 @@ public:
   void __increment() { ++idx_; }
   void __decrement() { --idx_; }
 
+  void __increment(int amount) { idx_ += amount; }
+  void __decrement(int amount) { idx_ -= amount; }
 
 private:
 
   int idx_; 
 };
 
+// this is used by boost::unordered_set/map
+inline size_t hash_value(const BaseHandle&  h)   { return h.idx(); }
 
 //-----------------------------------------------------------------------------
 
@@ -148,5 +152,87 @@ struct FaceHandle : public BaseHandle
 //=============================================================================
 } // namespace OpenMesh
 //=============================================================================
+
+#ifdef OM_HAS_HASH
+#include <functional>
+namespace std {
+
+#if defined(_MSVC_VER)
+#  pragma warning(push)
+#  pragma warning(disable:4099) // For VC++ it is class hash
+#endif
+
+
+template <>
+struct hash<OpenMesh::BaseHandle >
+{
+  typedef OpenMesh::BaseHandle argument_type;
+  typedef std::size_t result_type;
+
+  std::size_t operator()(const OpenMesh::BaseHandle& h) const
+  {
+    return h.idx();
+  }
+};
+
+template <>
+struct hash<OpenMesh::VertexHandle >
+{
+  typedef OpenMesh::VertexHandle argument_type;
+  typedef std::size_t result_type;
+
+  std::size_t operator()(const OpenMesh::VertexHandle& h) const
+  {
+    return h.idx();
+  }
+};
+
+template <>
+struct hash<OpenMesh::HalfedgeHandle >
+{
+
+  typedef OpenMesh::HalfedgeHandle argument_type;
+  typedef std::size_t result_type;
+  
+  std::size_t operator()(const OpenMesh::HalfedgeHandle& h) const
+  {
+    return h.idx();
+  }
+};
+
+template <>
+struct hash<OpenMesh::EdgeHandle >
+{
+
+  typedef OpenMesh::EdgeHandle argument_type;
+  typedef std::size_t result_type;
+  
+  std::size_t operator()(const OpenMesh::EdgeHandle& h) const
+  {
+    return h.idx();
+  }
+};
+
+template <>
+struct hash<OpenMesh::FaceHandle >
+{
+
+  typedef OpenMesh::FaceHandle argument_type;
+  typedef std::size_t result_type;
+  
+  std::size_t operator()(const OpenMesh::FaceHandle& h) const
+  {
+    return h.idx();
+  }
+};
+
+#if defined(_MSVC_VER)
+#  pragma warning(pop)
+#endif
+
+}
+#endif  // OM_HAS_HASH
+
+
 #endif // OPENMESH_HANDLES_HH
 //=============================================================================

@@ -164,6 +164,13 @@ public:
 #endif
   }
 
+  Vec2f  texcoord(HalfedgeHandle _heh) const
+  {
+    return (mesh_.has_halfedge_texcoords2D()
+        ? vector_cast<Vec2f>(mesh_.texcoord2D(_heh))
+        : Vec2f(0.0f, 0.0f));
+  }
+
   // get edge data
 
   Vec3uc color(EdgeHandle _eh)    const
@@ -221,6 +228,31 @@ public:
       ++count;
     }
     return count;
+  }
+
+  unsigned int get_face_texcoords(std::vector<Vec2f>& _hehandles) const
+  {
+    unsigned int count(0);
+    _hehandles.clear();
+    for(typename Mesh::CHIter he_it=mesh_.halfedges_begin();
+        he_it != mesh_.halfedges_end(); ++he_it)
+    {
+      _hehandles.push_back(vector_cast<Vec2f>(mesh_.texcoord2D( *he_it)));
+      ++count;
+    }
+
+    return count;
+  }
+
+  HalfedgeHandle getHeh(FaceHandle _fh, VertexHandle _vh) const
+  {
+    typename Mesh::ConstFaceHalfedgeIter fh_it;
+    for(fh_it = mesh_.cfh_iter(_fh); fh_it.is_valid();++fh_it)
+    {
+      if(mesh_.to_vertex_handle(*fh_it) == _vh)
+        return *fh_it;
+    }
+    return *fh_it;
   }
 
   Vec3f  normal(FaceHandle _fh)   const

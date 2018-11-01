@@ -102,6 +102,9 @@ public:
   };
 
   Timer(void);
+
+  Timer(const Timer& _other) = delete;
+
   ~Timer(void);
 
   /// Returns true if self is in a valid state!

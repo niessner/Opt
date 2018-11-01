@@ -116,7 +116,7 @@ void CompositeT<MeshType,RealType>::Tvv3()
   // set new positions for vertices
   v_it = mesh_.vertices_begin();
   for (j = 0; j < n_vertices; ++j) {
-    mesh_.data(*v_it).set_position(mesh_.data(*v_it).position() * 3.0);
+    mesh_.data(*v_it).set_position(mesh_.data(*v_it).position() * static_cast<typename MeshType::Point::value_type>(3.0) );
     ++v_it;
   }
 
@@ -180,7 +180,7 @@ void CompositeT<MeshType,RealType>::Tvv4()
   // set new positions for vertices
   v_it = mesh_.vertices_begin();
   for (j = 0; j < n_vertices; ++j) {
-    mesh_.data(*v_it).set_position(mesh_.data(*v_it).position() * 4.0);
+    mesh_.data(*v_it).set_position(mesh_.data(*v_it).position() * static_cast<typename MeshType::Point::value_type>(4.0) );
     ++v_it;
   }
 
@@ -581,7 +581,7 @@ void CompositeT<MeshType,RealType>::FVc(Coeff& _coeff)
       ++valence;
     }
 
-    c = _coeff(valence);
+    c = static_cast<real_t>(_coeff(valence));
 
     for (voh_it = mesh_.voh_iter(*v_it); voh_it.is_valid(); ++voh_it) {
 
@@ -589,7 +589,7 @@ void CompositeT<MeshType,RealType>::FVc(Coeff& _coeff)
 
         if (mesh_.face_handle(mesh_.opposite_halfedge_handle(mesh_.next_halfedge_handle(*voh_it))).is_valid()) {
           cog += mesh_.data(mesh_.face_handle(*voh_it)).position() * c;
-          cog += mesh_.data(mesh_.face_handle(mesh_.opposite_halfedge_handle(mesh_.next_halfedge_handle(*voh_it)))).position() * (1.0 - c);
+          cog += mesh_.data(mesh_.face_handle(mesh_.opposite_halfedge_handle(mesh_.next_halfedge_handle(*voh_it)))).position() * (static_cast<typename MeshType::Point::value_type>(1.0) - c);
         } else {
           cog += mesh_.data(mesh_.face_handle(*voh_it)).position();
         }
@@ -882,7 +882,8 @@ void CompositeT<MeshType,RealType>::EVc(Coeff& _coeff)
       ++valence;
     }
 
-    c = _coeff(valence);
+    // Coefficients always work on double so we cast them to the correct scalar here
+    c = static_cast<scalar_t>(_coeff(valence));
 
     for (voh_it = mesh_.voh_iter(*v_it); voh_it.is_valid(); ++voh_it) {
       cog += mesh_.data(mesh_.edge_handle(*voh_it)).position() * c;
@@ -1249,7 +1250,7 @@ CompositeT<MeshType,RealType>::split_edge(HalfedgeHandle _heh)
     vh2(mesh_.from_vertex_handle(_heh));
 
   // Calculate and Insert Midpoint of Edge
-  vh = mesh_.add_vertex((mesh_.point(vh2) + mesh_.point(vh1)) / 2.0);
+  vh = mesh_.add_vertex((mesh_.point(vh2) + mesh_.point(vh1)) / static_cast<typename MeshType::Point::value_type>(2.0) );
   // Re-Set Handles
   heh2 = mesh_.opposite_halfedge_handle(_heh);
 

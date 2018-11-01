@@ -214,7 +214,8 @@ public:
       // the smaller the factor, the smaller normal_deviation_ gets
       // thus creating a stricter constraint
       // division by error_tolerance_factor_ is for normalization
-      Scalar normal_deviation = (normal_deviation_ * static_cast<Scalar>(180.0)/static_cast<Scalar>(M_PI) ) * _factor / this->error_tolerance_factor_;
+      Scalar normal_deviation = normal_deviation_ *  static_cast<Scalar>(  180.0 / M_PI * _factor / this->error_tolerance_factor_);
+
       set_normal_deviation(normal_deviation);
       this->error_tolerance_factor_ = _factor;
     }

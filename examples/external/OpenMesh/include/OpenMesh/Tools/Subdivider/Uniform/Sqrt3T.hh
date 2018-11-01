@@ -99,7 +99,7 @@ namespace Uniform    { // BEGIN_NS_DECIMATER
  *
  *  L. Kobbelt, <a href="http://www-i8.informatik.rwth-aachen.de/publications/downloads/sqrt3.pdf">"Sqrt(3) subdivision"</a>, Proceedings of SIGGRAPH 2000.
  */
-template <typename MeshType, typename RealType = float>
+template <typename MeshType, typename RealType = double>
 class Sqrt3T : public SubdividerT< MeshType, RealType >
 {
 public:

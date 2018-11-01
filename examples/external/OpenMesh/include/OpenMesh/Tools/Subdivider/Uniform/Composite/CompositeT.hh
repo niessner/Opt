@@ -102,7 +102,7 @@ public:
 public:
 
   CompositeT(void) : parent_t(), p_mesh_(NULL) {}
-  CompositeT(MeshType& _mesh) : parent_t(_mesh), p_mesh_(NULL) {};
+  explicit CompositeT(MeshType& _mesh) : parent_t(_mesh), p_mesh_(NULL) {};
   virtual ~CompositeT() { }
 
 public: // inherited interface

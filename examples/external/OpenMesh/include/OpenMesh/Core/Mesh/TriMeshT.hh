@@ -169,6 +169,10 @@ public:
 
   /// Default constructor
   TriMeshT() : PolyMesh() {}
+  explicit TriMeshT(PolyMesh rhs) : PolyMesh((rhs.triangulate(), rhs))
+  {
+  }
+
   /// Destructor
   virtual ~TriMeshT() {}
 
@@ -332,6 +336,64 @@ public:
    */
   inline VertexHandle split_copy(FaceHandle _fh, const Point& _p)
   { const VertexHandle vh = this->add_vertex(_p);  PolyMesh::split_copy(_fh, vh); return vh; }
+
+
+  /** \brief Face split (= 1-to-4) split, splits edges at midpoints and adds 4 new faces in the interior).
+   *
+   * @param _fh Face handle that should be splitted
+   */
+  inline void split(FaceHandle _fh)
+  {
+    // Collect halfedges of face
+    HalfedgeHandle he0 = this->halfedge_handle(_fh);
+    HalfedgeHandle he1 = this->next_halfedge_handle(he0);
+    HalfedgeHandle he2 = this->next_halfedge_handle(he1);
+
+    EdgeHandle eh0 = this->edge_handle(he0);
+    EdgeHandle eh1 = this->edge_handle(he1);
+    EdgeHandle eh2 = this->edge_handle(he2);
+
+    // Collect points of face
+    VertexHandle p0 = this->to_vertex_handle(he0);
+    VertexHandle p1 = this->to_vertex_handle(he1);
+    VertexHandle p2 = this->to_vertex_handle(he2);
+
+    // Calculate midpoint coordinates
+    const Point new0 = (this->point(p0) + this->point(p2)) * static_cast<typename vector_traits<Point>::value_type >(0.5);
+    const Point new1 = (this->point(p0) + this->point(p1)) * static_cast<typename vector_traits<Point>::value_type >(0.5);
+    const Point new2 = (this->point(p1) + this->point(p2)) * static_cast<typename vector_traits<Point>::value_type >(0.5);
+
+    // Add vertices at midpoint coordinates
+    VertexHandle v0 = this->add_vertex(new0);
+    VertexHandle v1 = this->add_vertex(new1);
+    VertexHandle v2 = this->add_vertex(new2);
+
+    const bool split0 = !this->is_boundary(eh0);
+    const bool split1 = !this->is_boundary(eh1);
+    const bool split2 = !this->is_boundary(eh2);
+
+    // delete original face
+    this->delete_face(_fh);
+
+    // split boundary edges of deleted face ( if not boundary )
+    if ( split0 ) {
+      this->split(eh0,v0);
+    }
+
+    if ( split1 ) {
+      this->split(eh1,v1);
+    }
+
+    if ( split2 ) {
+      this->split(eh2,v2);
+    }
+
+    // Retriangulate
+    this->add_face(v0 , p0, v1);
+    this->add_face(p2, v0 , v2);
+    this->add_face(v2,v1,p1);
+    this->add_face(v2 , v0, v1);
+  }
 
   /** \brief Face split (= 1-to-3 split, calls corresponding PolyMeshT function).
    *

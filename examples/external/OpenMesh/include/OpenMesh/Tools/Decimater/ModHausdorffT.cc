@@ -82,28 +82,28 @@ distPointTriangleSquared( const Point& _p,
   const Point v0v1 = _v1 - _v0;
   const Point v0v2 = _v2 - _v0;
   const Point n = v0v1 % v0v2; // not normalized !
-  const double d = n.sqrnorm();
+  const Scalar d = n.sqrnorm();
 
 
   // Check if the triangle is degenerated
   if (d < FLT_MIN && d > -FLT_MIN) {
     return -1.0;
   }
-  const double invD = 1.0 / d;
+  const Scalar invD = static_cast<Scalar>(1.0) / d;
 
   // these are not needed for every point, should still perform
   // better with many points against one triangle
   const Point v1v2 = _v2 - _v1;
-  const double inv_v0v2_2 = 1.0 / v0v2.sqrnorm();
-  const double inv_v0v1_2 = 1.0 / v0v1.sqrnorm();
-  const double inv_v1v2_2 = 1.0 / v1v2.sqrnorm();
+  const Scalar inv_v0v2_2 = static_cast<Scalar>(1.0) / v0v2.sqrnorm();
+  const Scalar inv_v0v1_2 = static_cast<Scalar>(1.0) / v0v1.sqrnorm();
+  const Scalar inv_v1v2_2 = static_cast<Scalar>(1.0) / v1v2.sqrnorm();
 
 
   Point v0p = _p - _v0;
   Point t = v0p % n;
   typename Point::value_type  s01, s02, s12;
-  const double a = (t | v0v2) * -invD;
-  const double b = (t | v0v1) * invD;
+  const Scalar a = (t | v0v2) * -invD;
+  const Scalar b = (t | v0v1) * invD;
 
   if (a < 0)
   {

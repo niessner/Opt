@@ -88,7 +88,7 @@ namespace Uniform    { // BEGIN_NS_UNIFORM
 
   \note Needs a PolyMesh to work on!
 */
-template <typename MeshType, typename RealType = float>
+template <typename MeshType, typename RealType = double>
 class CatmullClarkT : public SubdividerT< MeshType, RealType >
 {
 public:
@@ -115,7 +115,7 @@ public:
   CatmullClarkT(  ) : parent_t() {  }
 
   /// Constructor
-  CatmullClarkT(MeshType &_m) : parent_t(_m) {  }
+  explicit CatmullClarkT(MeshType &_m) : parent_t(_m) {  }
 
   virtual ~CatmullClarkT() {}
 

@@ -101,21 +101,43 @@ public: //------------------------------------------------------ public methods
 
 public:
 
-  /** Decimate (perform _n_collapses collapses). Return number of
-      performed collapses. If _n_collapses is not given reduce as
-      much as possible */
+  /**
+   * @brief Perform a number of collapses on the mesh.
+   * @param _n_collapses Desired number of collapses. If zero (default), attempt
+   *                     to do as many collapses as possible.
+   * @return Number of collapses that were actually performed.
+   * @note This operation only marks the removed mesh elements for deletion. In
+   *       order to actually remove the decimated elements from the mesh, a
+   *       subsequent call to ArrayKernel::garbage_collection() is required.
+   */
   size_t decimate( size_t _n_collapses = 0 );
 
-  /// Decimate to target complexity, returns number of collapses
+  /**
+   * @brief Decimate the mesh to a desired target vertex complexity.
+   * @param _n_vertices Target complexity, i.e. desired number of remaining
+   *                    vertices after decimation.
+   * @return Number of collapses that were actually performed.
+   * @note This operation only marks the removed mesh elements for deletion. In
+   *       order to actually remove the decimated elements from the mesh, a
+   *       subsequent call to ArrayKernel::garbage_collection() is required.
+   */
   size_t decimate_to( size_t  _n_vertices )
   {
     return ( (_n_vertices < this->mesh().n_vertices()) ?
 	     decimate( this->mesh().n_vertices() - _n_vertices ) : 0 );
   }
 
-  /** Decimate to target complexity (vertices and faces).
-   *  Stops when the number of vertices or the number of faces is reached.
-   *  Returns number of performed collapses.
+  /**
+   * @brief Attempts to decimate the mesh until a desired vertex or face
+   *        complexity is achieved.
+   * @param _n_vertices Target vertex complexity.
+   * @param _n_faces Target face complexity.
+   * @return Number of collapses that were actually performed.
+   * @note Decimation stops as soon as either one of the two complexity bounds
+   *       is satisfied.
+   * @note This operation only marks the removed mesh elements for deletion. In
+   *       order to actually remove the decimated elements from the mesh, a
+   *       subsequent call to ArrayKernel::garbage_collection() is required.
    */
   size_t decimate_to_faces( size_t  _n_vertices=0, size_t _n_faces=0 );
 
@@ -173,7 +195,7 @@ private: //------------------------------------------------------- private data
   Mesh&      mesh_;
 
   // heap
-  #if __cplusplus > 199711L || defined( __GXX_EXPERIMENTAL_CXX0X__ )
+  #if (defined(_MSC_VER) && (_MSC_VER >= 1800)) || __cplusplus > 199711L || defined( __GXX_EXPERIMENTAL_CXX0X__ )
     std::unique_ptr<DeciHeap> heap_;
   #else
     std::auto_ptr<DeciHeap> heap_;

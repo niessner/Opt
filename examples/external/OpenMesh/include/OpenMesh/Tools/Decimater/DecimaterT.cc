@@ -78,7 +78,7 @@ template<class Mesh>
 DecimaterT<Mesh>::DecimaterT(Mesh& _mesh) :
   BaseDecimaterT<Mesh>(_mesh),
     mesh_(_mesh),
-#if __cplusplus > 199711L || defined( __GXX_EXPERIMENTAL_CXX0X__ )
+#if (defined(_MSC_VER) && (_MSC_VER >= 1800)) || __cplusplus > 199711L || defined( __GXX_EXPERIMENTAL_CXX0X__ )
   heap_(nullptr)
 #else
   heap_(NULL)
@@ -178,7 +178,7 @@ size_t DecimaterT<Mesh>::decimate(size_t _n_collapses) {
   // initialize heap
   HeapInterface HI(mesh_, priority_, heap_position_);
 
-#if __cplusplus > 199711L || defined( __GXX_EXPERIMENTAL_CXX0X__ )
+#if (defined(_MSC_VER) && (_MSC_VER >= 1800)) || __cplusplus > 199711L || defined( __GXX_EXPERIMENTAL_CXX0X__ )
   heap_ = std::unique_ptr<DeciHeap>(new DeciHeap(HI));
 #else
   heap_ = std::auto_ptr<DeciHeap>(new DeciHeap(HI));
@@ -214,6 +214,9 @@ size_t DecimaterT<Mesh>::decimate(size_t _n_collapses) {
     support.clear();
     for (; vv_it.is_valid(); ++vv_it)
       support.push_back(*vv_it);
+
+    // pre-processing
+    this->preprocess_collapse(ci);
 
     // perform collapse
     mesh_.collapse(v0v1);
@@ -279,7 +282,7 @@ size_t DecimaterT<Mesh>::decimate_to_faces(size_t _nv, size_t _nf) {
 
   // initialize heap
   HeapInterface HI(mesh_, priority_, heap_position_);
-  #if __cplusplus > 199711L || defined( __GXX_EXPERIMENTAL_CXX0X__ )
+  #if (defined(_MSC_VER) && (_MSC_VER >= 1800)) || __cplusplus > 199711L || defined( __GXX_EXPERIMENTAL_CXX0X__ )
     heap_ = std::unique_ptr<DeciHeap>(new DeciHeap(HI));
   #else
     heap_ = std::auto_ptr<DeciHeap>(new DeciHeap(HI));

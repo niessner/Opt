@@ -103,12 +103,23 @@ public:
   virtual Vec3f colorf(VertexHandle _vh)    const = 0;
   virtual Vec4f colorAf(VertexHandle _vh)   const = 0;
   virtual Vec2f  texcoord(VertexHandle _vh) const = 0;
+  virtual Vec2f  texcoord(HalfedgeHandle _heh) const = 0;
 
 
   // get face data
   virtual unsigned int
   get_vhandles(FaceHandle _fh,
 	       std::vector<VertexHandle>& _vhandles) const=0;
+  ///
+  /// \brief getHeh returns the HalfEdgeHandle that belongs to the face
+  ///  specified by _fh and has a toVertexHandle that corresponds to _vh.
+  /// \param _fh FaceHandle that is used to search for the half edge handle
+  /// \param _vh to_vertex_handle of the searched heh
+  /// \return HalfEdgeHandle or invalid HalfEdgeHandle if none is found.
+  ///
+  virtual HalfedgeHandle getHeh(FaceHandle _fh, VertexHandle _vh) const = 0;
+  virtual unsigned int
+  get_face_texcoords(std::vector<Vec2f>& _hehandles) const = 0;
   virtual Vec3f  normal(FaceHandle _fh)      const = 0;
   virtual Vec3uc color (FaceHandle _fh)      const = 0;
   virtual Vec4uc colorA(FaceHandle _fh)      const = 0;

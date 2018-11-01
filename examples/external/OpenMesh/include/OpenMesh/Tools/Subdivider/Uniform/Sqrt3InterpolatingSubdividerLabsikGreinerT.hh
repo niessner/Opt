@@ -109,7 +109,7 @@ namespace Uniform    { // BEGIN_NS_UNIFORM
  * Clement Courbet - clement.courbet@ecp.fr
 */
 
-template <typename MeshType, typename RealType = float>
+template <typename MeshType, typename RealType = double>
 class InterpolatingSqrt3LGT : public SubdividerT< MeshType, RealType >
 {
 public:
@@ -158,11 +158,13 @@ public:
     for(unsigned int K=5; K<_max_valence; ++K)
     {
         weights_[K].resize(K+1);
-        real_t aH = 2.0*cos(M_PI/K)/3.0;
-        weights_[K][K] = 1.0 - aH*aH;
+        double aH = 2.0*cos(M_PI/static_cast<double>(K))/3.0;
+        weights_[K][K] = static_cast<real_t>(1.0 - aH*aH);
         for(unsigned int i=0; i<K; ++i)
         {
-            weights_[K][i] = (aH*aH + 2.0*aH*cos(2.0*i*M_PI/K + M_PI/K) + 2.0*aH*aH*cos(4.0*i*M_PI/K + 2.0*M_PI/K))/K;
+
+            weights_[K][i] = static_cast<real_t>((aH*aH + 2.0*aH*cos(2.0*static_cast<double>(i)*M_PI/static_cast<double>(K) + M_PI/static_cast<double>(K)) +
+                                      2.0*aH*aH*cos(4.0*static_cast<double>(i)*M_PI/static_cast<double>(K) + 2.0*M_PI/static_cast<double>(K)))/static_cast<double>(K));
         }
     }
 

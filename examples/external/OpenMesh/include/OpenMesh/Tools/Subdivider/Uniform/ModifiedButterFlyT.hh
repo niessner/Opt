@@ -95,7 +95,7 @@ namespace Uniform    { // BEGIN_NS_UNIFORM
  *
  * Clement Courbet - clement.courbet@ecp.fr
  */
-template <typename MeshType, typename RealType = float>
+template <typename MeshType, typename RealType = double>
 class ModifiedButterflyT : public SubdividerT<MeshType, RealType>
 {
 public:
@@ -150,14 +150,14 @@ public:
     {
         weights[K].resize(K+1);
         // s(j) = ( 1/4 + cos(2*pi*j/K) + 1/2 * cos(4*pi*j/K) )/K
-        real_t   invK  = 1.0/real_t(K);
+        double invK  = 1.0/static_cast<double>(K);
         real_t sum = 0;
         for(unsigned int j=0; j<K; ++j)
         {
-            weights[K][j] = (0.25 + cos(2.0*M_PI*j*invK) + 0.5*cos(4.0*M_PI*j*invK))*invK;
+            weights[K][j] = static_cast<real_t>((0.25 + cos(2.0*M_PI*static_cast<double>(j)*invK) + 0.5*cos(4.0*M_PI*static_cast<double>(j)*invK))*invK);
             sum += weights[K][j];
         }
-        weights[K][K] = (real_t)1.0 - sum;
+        weights[K][K] = static_cast<real_t>(1.0) - sum;
     }
   }
 
@@ -390,7 +390,7 @@ private: // geometry helper
     {
         pos = _m.point(a_0);
         pos += _m.point(a_1);
-        pos *= 9.0/16;
+        pos *= static_cast<typename mesh_t::Point::value_type>(9.0/16.0);
         typename mesh_t::Point tpos;
         if(_m.is_boundary(heh))
         {
@@ -403,7 +403,7 @@ private: // geometry helper
             tpos = _m.point(_m.to_vertex_handle(_m.next_halfedge_handle(opp_heh)));
             tpos += _m.point(_m.to_vertex_handle(_m.opposite_halfedge_handle(_m.prev_halfedge_handle(opp_heh))));
         }
-        tpos *= -1.0/16;
+        tpos *= static_cast<typename mesh_t::Point::value_type>(-1.0/16.0);
         pos += tpos;
     }
     else
@@ -506,7 +506,7 @@ private: // geometry helper
         }
         else //at least one endpoint is [irregular and not in boundary]
         {
-            double normFactor = 0.0;
+            typename mesh_t::Point::value_type normFactor = static_cast<typename mesh_t::Point::value_type>(0.0);
 
             if(valence_a_0!=6 && !_m.is_boundary(a_0))
             {

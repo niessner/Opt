@@ -185,7 +185,7 @@ class ModRoundnessT : public ModBaseT<MeshT>
         // the smaller the factor, the smaller min_r_ gets
         // thus creating a stricter constraint
         // division by error_tolerance_factor_ is for normalization
-        value_type min_roundness = min_r_ * _factor / this->error_tolerance_factor_;
+        value_type min_roundness = min_r_ * static_cast<value_type>(_factor / this->error_tolerance_factor_);
         set_min_roundness(min_roundness);
         this->error_tolerance_factor_ = _factor;
       }

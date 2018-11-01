@@ -79,18 +79,17 @@ namespace OpenMesh   {
 namespace Subdivider {
 namespace Uniform    {
 
-
 //== CLASS DEFINITION =========================================================
 
 /** Abstract base class for uniform subdivision algorithms.
  *
  *  A derived class must overload the following functions:
- *  -# name()
- *  -# prepare()
- *  -# subdivide()
- *  -# cleanup()
+ *  -# const char* name() const
+ *  -# void prepare(MeshType&)
+ *  -# void subdivide(MeshType&, size_t, bool)
+ *  -# void cleanup(MeshType&)
  */
-template <typename MeshType, typename RealType=float>
+template <typename MeshType, typename RealType = double>
 class SubdividerT : private Utils::Noncopyable
 {
 public:
@@ -104,15 +103,15 @@ public:
   //@{
   /// Constructor to be used with interface 2
   /// \see attach(), operator()(size_t), detach()
-  SubdividerT(void) : attached_(NULL) { }
+  SubdividerT(void) : attached_() { }
 
   /// Constructor to be used with interface 1 (calls attach())
   /// \see operator()( MeshType&, size_t )
-  SubdividerT( MeshType &_m ) : attached_(NULL) {  attach(_m); }
+  explicit SubdividerT( MeshType &_m ) : attached_(NULL) {  attach(_m); }
 
   //@}
 
-  /// Descructor (calls detach())
+  /// Destructor (calls detach())
   virtual ~SubdividerT() 
   { detach(); }
 

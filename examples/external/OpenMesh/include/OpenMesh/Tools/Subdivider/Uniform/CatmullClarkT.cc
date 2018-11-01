@@ -309,7 +309,7 @@ CatmullClarkT<MeshType,RealType>::compute_midpoint( MeshType& _m, const EdgeHand
   // this yields the [1/2 1/2] mask
   if (_m.is_boundary(_eh) || !_update_points)
   {
-    pos *= 0.5;
+    pos *= static_cast<RealType>(0.5);
   }
 //  else if (_m.status(_eh).selected() )
 //  {
@@ -321,7 +321,7 @@ CatmullClarkT<MeshType,RealType>::compute_midpoint( MeshType& _m, const EdgeHand
   {
     pos += _m.property(fp_pos_, _m.face_handle(heh));
     pos += _m.property(fp_pos_, _m.face_handle(opp_heh));
-    pos *= 0.25;
+    pos *= static_cast<RealType>(0.25);
   }
   _m.property( ep_pos_, _eh ) = pos;
 }
@@ -346,7 +346,7 @@ CatmullClarkT<MeshType,RealType>::update_vertex( MeshType& _m, const VertexHandl
     for ( ve_itr = _m.ve_iter( _vh); ve_itr.is_valid(); ++ve_itr)
       if ( _m.is_boundary( *ve_itr))
         pos += _m.property( ep_pos_, *ve_itr);
-    pos /= 3.0;
+    pos /= static_cast<typename vector_traits<typename MeshType::Point>::value_type>(3.0);
   }
   else // inner vertex
   {

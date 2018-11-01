@@ -89,7 +89,7 @@ public:
   VHierarchyNodeIndex()
   { value_ = 0; }
   
-  VHierarchyNodeIndex(unsigned int _value)
+  explicit VHierarchyNodeIndex(unsigned int _value)
   { value_ = _value; }
 
   VHierarchyNodeIndex(const VHierarchyNodeIndex &_other)

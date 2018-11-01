@@ -92,7 +92,7 @@ namespace Uniform    { // BEGIN_NS_DECIMATER
  *  M.S. Thesis, Department of Mathematics, University of Utah, August 1987.
  *
  */
-template <typename MeshType, typename RealType = float>
+template <typename MeshType, typename RealType = double>
 class LoopT : public SubdividerT<MeshType, RealType>
 {
 public:
@@ -231,9 +231,9 @@ private:
         double   t      = (3.0 + 2.0 * cos( 2.0 * M_PI * inv_v) );
         double   alpha  = (40.0 - t * t)/64.0;
 
-        return weight_t( 1.0-alpha, inv_v*alpha);
+        return weight_t( static_cast<real_t>(1.0-alpha), static_cast<real_t>(inv_v*alpha) );
       }
-      return weight_t(0.0, 0.0);
+      return weight_t(static_cast<real_t>(0.0), static_cast<real_t>(0.0));
     }
     int valence;
   };
@@ -326,7 +326,7 @@ private: // topological modifiers
     typename mesh_t::VertexHandle   vh1(_m.to_vertex_handle(heh));
     typename mesh_t::Point          midP(_m.point(_m.to_vertex_handle(heh)));
     midP += _m.point(_m.to_vertex_handle(opp_heh));
-    midP *= 0.5;
+    midP *= static_cast<typename mesh_t::Point::value_type>(0.5);
 
     // new vertex
     vh                = _m.new_vertex( midP );
@@ -394,7 +394,7 @@ private: // geometry helper
     // boundary edge: just average vertex positions
     if (_m.is_boundary(_eh) )
     {
-      pos *= 0.5;
+      pos *= static_cast<typename MeshType::Point::value_type>(0.5);
     }
     else // inner edge: add neighbouring Vertices to sum
     {

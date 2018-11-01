@@ -79,8 +79,11 @@ namespace OpenMesh {
 
 //== CLASS DEFINITION =========================================================
 
-/// This class provides the basic property management like adding/removing
-/// properties and access to properties.
+/// This class provides low-level property management like adding/removing
+/// properties and access to properties. Under most circumstances, it is
+/// advisable to use the high-level property management provided by
+/// PropertyManager, instead.
+///
 /// All operations provided by %BaseKernel need at least a property handle
 /// (VPropHandleT, EPropHandleT, HPropHandleT, FPropHandleT, MPropHandleT).
 /// which keeps the data type of the property, too.
@@ -115,7 +118,12 @@ public: //-------------------------------------------------- add new properties
 
   //@{
 
-  /** Adds a property
+  /** You should not use this function directly. Instead, use the convenient
+   *  PropertyManager wrapper and/or one of its helper functions such as
+   *  makePropertyManagerFromNew, makePropertyManagerFromExisting, or
+   *  makePropertyManagerFromExistingOrNew.
+   *
+   *  Adds a property
    *
    *  Depending on the property handle type a vertex, (half-)edge, face or
    *  mesh property is added to the mesh. If the action fails the handle
@@ -177,7 +185,10 @@ public: //--------------------------------------------------- remove properties
   /// \name Removing a property from a mesh tiem
   //@{
 
-  /** Remove a property.
+  /** You should not use this function directly. Instead, use the convenient
+   *  PropertyManager wrapper to manage (and remove) properties.
+   *
+   *  Remove a property.
    *
    *  Removes the property represented by the handle from the apropriate
    *  mesh item.
@@ -231,7 +242,12 @@ public: //------------------------------------------------ get handle from name
   /// \name Get property handle by name
   //@{
 
-  /** Retrieves the handle to a named property by it's name.
+  /** You should not use this function directly. Instead, use the convenient
+   *  PropertyManager wrapper (e.g. PropertyManager::propertyExists) or one of
+   *  its higher level helper functions such as
+   *  makePropertyManagerFromExisting, or makePropertyManagerFromExistingOrNew.
+   *
+   *  Retrieves the handle to a named property by it's name.
    *
    *  \param _ph    A property handle. On success the handle is valid else
    *                invalid.
@@ -281,7 +297,12 @@ public: //--------------------------------------------------- access properties
   /// \name Access a property
   //@{
 
-  /** Access a property
+  /** In most cases you should use the convenient PropertyManager wrapper
+   *  and use of this function should not be necessary. Under some
+   *  circumstances, however (i.e. making a property persistent), it might be
+   *  necessary to use this function.
+   *
+   *  Access a property
    *
    *  This method returns a reference to property. The property handle
    *  must be valid! The result is unpredictable if the handle is invalid!
@@ -342,7 +363,10 @@ public: //-------------------------------------------- access property elements
   /// \name Access a property element using a handle to a mesh item
   //@{
 
-  /** Return value of property for an item
+  /** You should not use this function directly. Instead, use the convenient
+   *  PropertyManager wrapper.
+   *
+   *  Return value of property for an item
    */
 
   template <class T>
@@ -414,7 +438,11 @@ public: //-------------------------------------------- access property elements
 
 public: //------------------------------------------------ copy property
 
-  /** Copies a single property from one mesh element to another (of the same type)
+  /** You should not use this function directly. Instead, use the convenient
+   *  PropertyManager wrapper (e.g. PropertyManager::copy_to or
+   *  PropertyManager::copy).
+   *
+   * Copies a single property from one mesh element to another (of the same type)
    *
    * @param _ph       A vertex property handle
    * @param _vh_from  From vertex handle
@@ -426,7 +454,11 @@ public: //------------------------------------------------ copy property
       vprops_.property(_ph)[_vh_to.idx()] = vprops_.property(_ph)[_vh_from.idx()];
   }
 
-  /** Copies a single property from one mesh element to another (of the same type)
+  /** You should not use this function directly. Instead, use the convenient
+    * PropertyManager wrapper (e.g. PropertyManager::copy_to or
+    * PropertyManager::copy).
+    *
+    * Copies a single property from one mesh element to another (of the same type)
     *
     * @param _ph       A halfedge property handle
     * @param _hh_from  From halfedge handle
@@ -438,7 +470,11 @@ public: //------------------------------------------------ copy property
       hprops_.property(_ph)[_hh_to.idx()] = hprops_.property(_ph)[_hh_from.idx()];
   }
 
-  /** Copies a single property from one mesh element to another (of the same type)
+  /** You should not use this function directly. Instead, use the convenient
+    * PropertyManager wrapper (e.g. PropertyManager::copy_to or
+    * PropertyManager::copy).
+    *
+    * Copies a single property from one mesh element to another (of the same type)
     *
     * @param _ph       An edge property handle
     * @param _eh_from  From edge handle
@@ -450,7 +486,11 @@ public: //------------------------------------------------ copy property
       eprops_.property(_ph)[_eh_to.idx()] = eprops_.property(_ph)[_eh_from.idx()];
   }
 
-  /** Copies a single property from one mesh element to another (of the same type)
+  /** You should not use this function directly. Instead, use the convenient
+    * PropertyManager wrapper (e.g. PropertyManager::copy_to or
+    * PropertyManager::copy).
+    *
+    * Copies a single property from one mesh element to another (of the same type)
     *
     * @param _ph       A face property handle
     * @param _fh_from  From face handle
@@ -541,6 +581,18 @@ public:
         (*p_it)->copy(_fh_from.idx(), _fh_to.idx());
     }
 
+  }
+
+  /**
+   * @brief copy_all_kernel_properties uses the = operator to copy all properties from a given other BaseKernel.
+   * @param _other Another BaseKernel, to copy the properties from.
+   */
+  void copy_all_kernel_properties(const BaseKernel & _other)
+  {
+    this->vprops_ = _other.vprops_;
+    this->eprops_ = _other.eprops_;
+    this->hprops_ = _other.hprops_;
+    this->fprops_ = _other.fprops_;
   }
 
 protected: //------------------------------------------------- low-level access
@@ -646,11 +698,26 @@ public: //----------------------------------------------------- element numbers
 
 protected: //------------------------------------------- synchronize properties
 
+  /// Reserves space for \p _n elements in all vertex property vectors.
   void vprops_reserve(size_t _n) const { vprops_.reserve(_n); }
+
+  /// Resizes all vertex property vectors to the specified size.
   void vprops_resize(size_t _n) const { vprops_.resize(_n); }
+
+  /**
+   * Same as vprops_resize() but ignores vertex property vectors that have
+   * a size larger than \p _n.
+   *
+   * Use this method instead of vprops_resize() if you plan to frequently reduce
+   * and enlarge the property container and you don't want to waste time
+   * reallocating the property vectors every time.
+   */
+  void vprops_resize_if_smaller(size_t _n) const { vprops_.resize_if_smaller(_n); }
+
   void vprops_clear() {
     vprops_.clear();
   }
+
   void vprops_swap(unsigned int _i0, unsigned int _i1) const {
     vprops_.swap(_i0, _i1);
   }

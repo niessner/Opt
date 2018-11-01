@@ -94,7 +94,7 @@ public:
   virtual ~_STLWriter_() {};
 
   std::string get_description() const { return "Stereolithography Format"; }
-  std::string get_extensions()  const { return "stla stlb"; }
+  std::string get_extensions()  const { return "stl stla stlb"; }
 
   bool write(const std::string&, BaseExporter&, Options, std::streamsize _precision = 6) const;
 
