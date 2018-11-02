@@ -22,9 +22,9 @@ class CombinedSolver : public CombinedSolverBase
             unsigned int N = (unsigned int)mesh->n_vertices();
             initializeConnectivity();
             std::vector<unsigned int> dims = { N };
-            m_rotationMatrices = createEmptyOptImage(dims, OptImage::Type::FLOAT, 9, OptImage::GPU, true);
-            m_vertexPositions = createEmptyOptImage(dims, OptImage::Type::FLOAT, 3, OptImage::GPU, true);
-            m_vertexTargets = createEmptyOptImage(dims, OptImage::Type::FLOAT, 3, OptImage::GPU, true);
+            m_rotationMatrices  = createEmptyOptImage(dims, OptImage::Type::FLOAT, 9, OptImage::GPU, true);
+            m_vertexPositions   = createEmptyOptImage(dims, OptImage::Type::FLOAT, 3, OptImage::GPU, true);
+            m_vertexTargets     = createEmptyOptImage(dims, OptImage::Type::FLOAT, 3, OptImage::GPU, true);
             m_urshape = createEmptyOptImage(dims, OptImage::Type::FLOAT, 3, OptImage::GPU, true);
             addOptSolvers(dims, "embedded_mesh_deformation.t", m_combinedSolverParameters.optDoublePrecision);
 		} 

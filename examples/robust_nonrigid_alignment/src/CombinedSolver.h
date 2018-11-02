@@ -149,6 +149,11 @@ class CombinedSolver : public CombinedSolverBase
                 }
             }
             combinedSolveFinalize();
+            if (m_combinedSolverParameters.profileSolve) {
+                ceresIterationComparison(m_name, m_combinedSolverParameters.optDoublePrecision);
+            }
+            saveFinalCosts(m_name);
+            savePerformanceStatistics(m_name);
         }
 
         virtual void combinedSolveInit() override {
