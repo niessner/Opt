@@ -173,7 +173,7 @@ A simple laplacian smoothing energy in this system would have the form:
 
     W = Dim("W",0) 
     H = Dim("H",1)
-    X = Array("X",float,{W,H},0) 
+    X = Unknown("X",float,{W,H},0) 
     A = Array("A",float,{W,H},1)
     
     w_fit,w_reg = .1,.9
