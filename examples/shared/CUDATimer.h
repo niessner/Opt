@@ -94,7 +94,9 @@ struct CUDATimer {
     }
 
     void evaluate(SolverPerformanceSummary& stats) {
-        printf("WARNING: Evaluating Timing Results, but some events still active!\n");
+        if (activeIndices.size() > 0) {
+            printf("WARNING: Evaluating Timing Results, but some events still active!\n");
+        }
         while (activeIndices.size() > 0) {
             endEvent();
         }
