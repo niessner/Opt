@@ -105,7 +105,7 @@ __inline__ __device__ void loadPatchToCache(volatile float* cache, float* data, 
 __inline__ __device__ float warpReduce(float val) {
 	int offset = 32 >> 1;
 	while (offset > 0) {
-		val = val + __shfl_down(val, offset, 32);
+		val = val + __shfl_down_sync(0xffffffff, val, offset, 32);
 		offset = offset >> 1;
 	}
 	return val;

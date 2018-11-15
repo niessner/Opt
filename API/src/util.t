@@ -522,6 +522,7 @@ __syncthreads = cudalib.nvvm_barrier0
 
 
 local __shfl_down 
+local __shfl_down_sync
 
 if opt_float == float then
 
@@ -535,6 +536,14 @@ if opt_float == float then
         var c : int;
     	c = ((warpSize-width) << 8) or 0x1F;
     	ret = terralib.asm(float,"shfl.down.b32 $0, $1, $2, $3;","=f,f,r,r", true, v, delta, c)
+    	return ret;
+    end
+
+    terra __shfl_down_sync(mask : uint, v : float, delta : uint, width : int)
+        var ret : float;
+        var c : int;
+    	c = ((warpSize-width) << 8) or 0x1F;
+    	ret = terralib.asm(float,"shfl.sync.down.b32 $0, $1, $2, $3, $4;","=f,f,r,r,r", true, v, delta, c, mask)
     	return ret;
     end
 else
@@ -604,6 +613,17 @@ else
         c = ((warpSize-width) << 8) or 0x1F;
         ret.u2.x = terralib.asm(uint32,"shfl.down.b32 $0, $1, $2, $3;","=f,f,r,r", true, init.u2.x, delta, c)
         ret.u2.y = terralib.asm(uint32,"shfl.down.b32 $0, $1, $2, $3;","=f,f,r,r", true, init.u2.y, delta, c)
+        return ret.d;
+    end
+
+    terra __shfl_down_sync(mask: uint, v : double, delta : uint, width : int)
+        var ret : uint2Double;
+        var init : uint2Double;
+        init.d = v
+        var c : int;
+        c = ((warpSize-width) << 8) or 0x1F;
+        ret.u2.x = terralib.asm(uint32,"shfl.sync.down.b32 $0, $1, $2, $3, $4;","=f,f,r,r,r", true, init.u2.x, delta, c, mask)
+        ret.u2.y = terralib.asm(uint32,"shfl.sync.down.b32 $0, $1, $2, $3, $4;","=f,f,r,r,r", true, init.u2.y, delta, c, mask)
         return ret.d;
     end
 end
