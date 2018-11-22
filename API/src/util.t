@@ -2,6 +2,7 @@ local S = require("std")
 require("precision")
 local util = {}
 local verbosePTX = _opt_verbosity > 2
+local verboseTrace  = _opt_verbosity > 2
 
 util.C = terralib.includecstring [[
 #include <stdio.h>
@@ -771,6 +772,11 @@ util.initParameters = function(self, ProblemSpec, params, isInit)
                 stmts:insert quote
                     loc:[function_name]([&uint8](params[entry.idx]))
                 end
+                if verboseTrace then
+                    stmts:insert quote
+                        C.printf([entry.name..":"..function_name.."params("..tostring(entry.idx)..")\n"])
+                    end
+                end
             end
 		else
             local rhs
@@ -931,7 +937,17 @@ local function makeGPULauncher(PlanData,kernelName,ft,compiledKernel)
             pd.timer:startEvent(kernelName,nil,&endEvent)
         end
 
+        if [verboseTrace] then
+            C.printf("Kernel %s called with params: {gridDim(%u,%u,%u), blockDim(%u,%u,%u)}\n",
+                kernelName, launch.gridDimX, launch.gridDimY, launch.gridDimZ, launch.blockDimX, launch.blockDimY, launch.blockDimZ)
+            C.printf("sizeof(pd)=%u\n", sizeof(PlanData))
+        end
         checkedLaunch(kernelName, compiledKernel(&launch, @pd, params))
+        if [verboseTrace] then
+            C.printf("Kernel called with params: {gridDim(%u,%u,%u), blockDim(%u,%u,%u)}\n",
+                launch.gridDimX, launch.gridDimY, launch.gridDimZ, launch.blockDimX, launch.blockDimY, launch.blockDimZ)
+            cd(C.cudaDeviceSynchronize())
+        end
         
         if ([_opt_timing_level] > 1) then
             pd.timer:endEvent(nil,endEvent)
