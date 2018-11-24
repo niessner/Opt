@@ -1839,7 +1839,7 @@ local function createfunction(problemspec,name,Index,arguments,results,scatters)
         local stmt
         if s.kind == "add" then
             assert(s.channel, "no channel on scatter?")
-            stmt = `image:atomicAddChannel(index, s.channel, exp)
+            stmt = `image:atomicAddChannel(index, s.channel, [opt_float](exp))
         else
             assert(s.kind == "set" and s.channel == 0, "set only works for single channel images")
             stmt = quote 
