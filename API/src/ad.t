@@ -787,6 +787,7 @@ for i,c in ipairs(comparisons) do
 end 
 
 ad.eq:define(function(x,y) return `x == y end, 0,0)
+ad.neq:define(function(x,y) return `x ~= y end, 0,0)
 ad.less:define(function(x,y) return `x < y end, 0,0)
 ad.greater:define(function(x,y) return `x > y end, 0,0)
 ad.lesseq:define(function(x,y) return `x <= y end,0,0)

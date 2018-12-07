@@ -577,11 +577,11 @@ function ImageType:terratype()
         end
         return v
     end
-    -- lerps for 2D images only
+    local terra lerp(v0 : vectortype, v1 : vectortype, t : opt_float)
+        return (opt_float(1.) - t)*v0 + t*v1
+    end
+    -- lerps for 2D images only (for 3D, treat as array of 2D images)
     if 2 == #self.ispace.dims then
-        local terra lerp(v0 : vectortype, v1 : vectortype, t : opt_float)
-            return (opt_float(1.) - t)*v0 + t*v1
-        end
         terra Image:sample(x : opt_float, y : opt_float)
             var x0 : int, x1 : int = opt.math.floor(x),opt.math.ceil(x)
             var y0 : int, y1 : int = opt.math.floor(y),opt.math.ceil(y)
@@ -589,6 +589,17 @@ function ImageType:terratype()
             var u = lerp(self:get( Index {x0,y0} ),self:get( Index {x1,y0} ),xn)
             var b = lerp(self:get( Index {x0,y1} ),self:get( Index {x1,y1} ),xn)
             return lerp(u,b,yn)
+        end
+    else if 3 == #self.ispace.dims then
+            terra Image:sample(x : opt_float, y : opt_float, z : opt_float)
+                var x0 : int, x1 : int = opt.math.floor(x),opt.math.ceil(x)
+                var y0 : int, y1 : int = opt.math.floor(y),opt.math.ceil(y)
+                var xn,yn = x - x0,y - y0
+                var z0 = opt.math.floor(z)
+                var u = lerp(self:get( Index {x0,y0,z0} ),self:get( Index {x1,y0,z0} ),xn)
+                var b = lerp(self:get( Index {x0,y1,z0} ),self:get( Index {x1,y1,z0} ),xn)
+                return lerp(u,b,yn)
+            end
         end
     end
     local cardinality = self.ispace:cardinality()
@@ -1240,8 +1251,10 @@ local function createfunction(problemspec,name,Index,arguments,results,scatters)
     local imageload = terralib.memoize(function(imageaccess)
         return A.vectorload(imageaccess,0,imageaccess.image.type:ElementType())
     end)
-    local imagesample = terralib.memoize(function(image, x, y)
-        return A.sampleimage(image,0,List{x,y},image.scalar and image.type.scalartype or image.type:ElementType())
+    local imagesample = terralib.memoize(function(image, x, y, z)
+        local args = List{x,y}
+        if z then args:insert(z) end
+        return A.sampleimage(image,0,args,image.scalar and image.type.scalartype or image.type:ElementType())
     end)
     local irmap
     
@@ -1299,7 +1312,14 @@ local function createfunction(problemspec,name,Index,arguments,results,scatters)
             end
             local children = e:children():map(irmap)
             if e.op.name:match("^sampleimage") then
-                local sm = imagesample(e.op.imagebeingsampled,children[1],children[2])
+                local sm = nil
+                if #children == 2 then
+                    sm = imagesample(e.op.imagebeingsampled,children[1],children[2])
+                elseif #children == 3 then
+                    sm = imagesample(e.op.imagebeingsampled,children[1],children[2],children[3])
+                else
+                    assert(false, "sampleimage can only have 2 or three coordinates")
+                end
                 sm.count = sm.count + 1
                 if not util.isvectortype(sm.image.type) then
                     return sm
@@ -2467,21 +2487,35 @@ function ProblemSpecAD:Exclude(exp)
     self.excludeexps:insert(exp)
 end
 
-function SampledImage:__call(x,y,c)
-    if c or self.op.imagebeingsampled.type.channelcount == 1 then
-        assert(not c or c < self.op.imagebeingsampled.type.channelcount, "index out of bounds")
-        return self.op(c or 0,x,y)
-    else
-        local r = {}
-        for i = 0,self.op.imagebeingsampled.type.channelcount - 1 do
-            r[i+1] = self.op(i,x,y)
+function SampledImage:__call(x,y,z,c)
+    if #self.op.imagebeingsampled.type.ispace.dims == 3 then
+        if c or self.op.imagebeingsampled.type.channelcount == 1 then
+            assert(not c or c < self.op.imagebeingsampled.type.channelcount, "index out of bounds")
+            return self.op(c or 0,x,y,z)
+        else
+            local r = {}
+            for i = 0,self.op.imagebeingsampled.type.channelcount - 1 do
+                r[i+1] = self.op(i,x,y,z)
+            end
+            return ad.Vector(unpack(r))
         end
-        return ad.Vector(unpack(r))
+    else
+        c = z
+        if c or self.op.imagebeingsampled.type.channelcount == 1 then
+            assert(not c or c < self.op.imagebeingsampled.type.channelcount, "index out of bounds")
+            return self.op(c or 0,x,y)
+        else
+            local r = {}
+            for i = 0,self.op.imagebeingsampled.type.channelcount - 1 do
+                r[i+1] = self.op(i,x,y)
+            end
+            return ad.Vector(unpack(r))
+        end
     end
 end
 local function tosampledimage(im)
     if Image:isclassof(im) then
-        assert(im:DimCount() == 2, "sampled images must be 2D")
+        assert(im:DimCount() == 2 or im:DimCount() == 3, "sampled images must be 2D (or 2D array)")
         return ad.sampledimage(im)
     end
     return SampledImage:isclassof(im) and im or nil
@@ -2496,7 +2530,12 @@ function ad.sampledimage(image,imagedx,imagedy)
     op.hasconst = true
     function op:generate(exp,args) error("sample image is not implemented directly") end
     function op:getpartials(exp)
-        assert(imagedx and imagedy, "image derivatives are not defined for this image and cannot be used in autodiff")
+        if not (imagedx and imagedy) then
+            print("WARNING: image derivatives are not defined for this image and cannot be used in autodiff")
+            local zVec = ad.Vector(0.0,0.0,0.0,0.0)
+
+            return terralib.newlist { zVec, zVec }
+        end
         local x,y = unpack(exp:children())
         return terralib.newlist { imagedx(x,y,exp.const), imagedy(x,y,exp.const) }
     end
