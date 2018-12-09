@@ -213,14 +213,19 @@ local function simplify(self)
     local x,y,z = unpack(args)
     
     if op.name == "pow" then
+        -- TODO: specialize for non-integral powers
         if Const:isclassof(y) then
-            if y.v == 1.0 then
-                return x
-            elseif y.v == 0.0 then
-                return one
+            if (y.v == math.floor(y.v)) then
+                if y.v == 1.0 then
+                    return x
+                elseif y.v == 0.0 then
+                    return one
+                else
+                    local c,xx = aspowc(x)
+                    return ad.powc(y.v*c,xx)
+                end
             else
-                local c,xx = aspowc(x)
-                return ad.powc(y.v*c,xx)
+                print("non-integral pow "..tostring(y.v)..". Not specializing.")
             end
         end
     elseif op.name == "powc" then
@@ -781,7 +786,7 @@ function ad.and_(x,y) return x*y end
 function ad.or_:propagatetype(args) return bool,{bool,bool} end
 ad.or_:define(function(x,y) return `x or y end, 0, 0)
 
-local comparisons = { "less", "greater", "lesseq", "greatereq", "eq" }
+local comparisons = { "less", "greater", "lesseq", "greatereq", "eq", "neq" }
 for i,c in ipairs(comparisons) do
     ad[c].propagatetype = function(self,args) return bool, {opt_float,opt_float} end
 end 

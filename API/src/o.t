@@ -2532,8 +2532,7 @@ function ad.sampledimage(image,imagedx,imagedy)
     function op:getpartials(exp)
         if not (imagedx and imagedy) then
             print("WARNING: image derivatives are not defined for this image and cannot be used in autodiff")
-            local zVec = ad.Vector(0.0,0.0,0.0,0.0)
-
+            local zVec = 0.0
             return terralib.newlist { zVec, zVec }
         end
         local x,y = unpack(exp:children())
