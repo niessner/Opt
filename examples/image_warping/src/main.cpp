@@ -111,7 +111,7 @@ int main(int argc, const char * argv[]) {
     params.numIter = 19;
     params.useOpt = true;
     params.nonLinearIter = 8;
-    params.linearIter = 400;
+    params.linearIter = 100;
     if (performanceRun) {
         params.useCUDA = true;
         params.useOpt = true;
