@@ -47,7 +47,7 @@ if _opt_verbosity > 2 then
         return quote
             var h_val : opt_float
             C.cudaMemcpy(&h_val, val, sizeof(opt_float), C.cudaMemcpyDeviceToHost)
-            C.printf("%s: %f\n", name, h_val)
+            C.printf("%s: %g\n", name, h_val)
         end
     end)
 else
@@ -1015,7 +1015,7 @@ return function(problemSpec)
 	end
 
 	local terra cleanup(pd : &PlanData)
-        logSolver("final cost=%f\n", pd.prevCost)
+        logSolver("final cost=%g\n", pd.prevCost)
         pd.timer:endEvent(nil,pd.endSolver)
         pd.timer:evaluate(&pd.perfSummary)
         pd.timer:cleanup()
@@ -1150,12 +1150,13 @@ return function(problemSpec)
                             pd.parameters.trust_region_radius = util.cpuMath.fmin(pd.parameters.trust_region_radius, max_trust_region_radius)
                             pd.parameters.radius_decrease_factor = 2.0
 
+                            logSolver("cost: %g -> %g\n", pd.prevCost, newCost)
                             pd.prevCost = newCost
                         else 
                             gpu.revertUpdate(pd)
 
                             pd.parameters.trust_region_radius = pd.parameters.trust_region_radius / pd.parameters.radius_decrease_factor
-                            logSolver(" trust_region_radius=%f \n", pd.parameters.trust_region_radius)
+                            logSolver(" trust_region_radius=%g \n", pd.parameters.trust_region_radius)
                             pd.parameters.radius_decrease_factor = 2.0 * pd.parameters.radius_decrease_factor
                             if pd.parameters.trust_region_radius <= min_trust_region_radius then
                                 logSolver("\nTrust_region_radius is less than the min, exiting\n")
@@ -1170,7 +1171,7 @@ return function(problemSpec)
                     end
                 else
                     emit quote
-                        logSolver("cost: %f -> %f\n", pd.prevCost, newCost)
+                        logSolver("cost: %g -> %g\n", pd.prevCost, newCost)
                         pd.prevCost = newCost 
                     end
                 end 
