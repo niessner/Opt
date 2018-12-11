@@ -46,8 +46,8 @@ int main(int argc, const char * argv[])
     */
 
     /* LM is good here */
-    params.useOpt = false;
-    params.useOptLM = true;
+    params.useOpt = true;
+    params.useOptLM = false;
     params.numIter = 31;
     params.nonLinearIter = 5;
     params.linearIter = 125;
