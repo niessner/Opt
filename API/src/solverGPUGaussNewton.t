@@ -1139,7 +1139,9 @@ return function(problemSpec)
                             var absolute_function_tolerance = pd.prevCost * function_tolerance
                             if cost_change <= absolute_function_tolerance then
                                 logSolver("\nFunction tolerance reached, exiting\n")
-                                cleanup(pd)
+                                pd.hd.timer:endEvent(nil,pd.hd.nonlinearResultsEvent)
+                                pd.hd.timer:endEvent(nil,pd.hd.nonlinearIterationEvent)
+				cleanup(pd)
                                 return 0
                             end
 
