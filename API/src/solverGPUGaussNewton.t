@@ -75,8 +75,8 @@ if initialization_parameters.use_cusparse then
     local cusparsepath = "/usr/local/cuda"
     local cusparselibpath = "/lib64/libcusparse.dylib"
     if ffi.os == "Windows" then
-        cusparsepath = "C:\\Program Files\\NVIDIA GPU Computing Toolkit\\CUDA\\v7.5"
-        cusparselibpath = "\\bin\\cusparse64_75.dll"
+        cusparsepath = "C:\\Program Files\\NVIDIA GPU Computing Toolkit\\CUDA\\v9.2"
+        cusparselibpath = "\\bin\\cusparse64_92.dll"
     end
     if ffi.os == "Linux" then
         local cusparselibpath = "/lib/libcusparse.so"
@@ -303,18 +303,20 @@ return function(problemSpec)
         end
 	end
 	
+    local FullReduce = macro(function(val,reductionTarget) return quote
+        val = util.warpReduce(val)
+        if (util.laneid() == 0) then
+            util.atomicAdd(reductionTarget, val)
+        end
+    end end)
+
 	local delegate = {}
 	function delegate.CenterFunctions(UnknownIndexSpace,fmap)
 	    local kernels = {}
 	    local unknownElement = UnknownType:VectorTypeForIndexSpace(UnknownIndexSpace)
 	    local Index = UnknownIndexSpace:indextype()
 
-        local unknownWideReduction = macro(function(idx,val,reductionTarget) return quote
-            val = util.warpReduce(val)
-            if (util.laneid() == 0) then                
-                util.atomicAdd(reductionTarget, val)
-            end
-        end end)
+
 
         local terra square(x : opt_float) : opt_float
             return x*x
@@ -379,7 +381,7 @@ return function(problemSpec)
                     if not problemSpec.usepreconditioner then
                         pre = opt_float(1.0f)
                     end
-                end        
+                end
             
                 if (not fmap.exclude(idx,pd.parameters)) and (not isGraph) then		
                     pre = guardedInvert(pre)
@@ -392,7 +394,7 @@ return function(problemSpec)
                 pd.preconditioner(idx) = pre
             end 
             if not isGraph then
-                unknownWideReduction(idx,d,pd.scanAlphaNumerator)
+                FullReduce(d,pd.scanAlphaNumerator)
             end
         end
     
@@ -415,7 +417,7 @@ return function(problemSpec)
                 d = residuum:dot(p)
             end
 
-            unknownWideReduction(idx,d,pd.scanAlphaNumerator)
+            FullReduce(d,pd.scanAlphaNumerator)
         end
 
         terra kernels.PCGStep1(pd : PlanData)
@@ -429,7 +431,7 @@ return function(problemSpec)
                 d = pd.p(idx):dot(tmp)			 -- x-th term of denominator of alpha
             end
             if not [multistep_alphaDenominator_compute] then
-                unknownWideReduction(idx,d,pd.scanAlphaDenominator)
+                FullReduce(d,pd.scanAlphaDenominator)
             end
         end
         if multistep_alphaDenominator_compute then
@@ -439,7 +441,7 @@ return function(problemSpec)
                 if idx:initFromCUDAParams() and not fmap.exclude(idx,pd.parameters) then
                     d = pd.p(idx):dot(pd.Ap_X(idx))           -- x-th term of denominator of alpha
                 end
-                unknownWideReduction(idx,d,pd.scanAlphaDenominator)
+                FullReduce(d,pd.scanAlphaDenominator)
             end
         end
 
@@ -482,9 +484,9 @@ return function(problemSpec)
                 end
             end
             
-            unknownWideReduction(idx,betaNum,pd.scanBetaNumerator)
+            FullReduce(betaNum,pd.scanBetaNumerator)
             if [problemSpec:UsesLambda()] then
-                unknownWideReduction(idx,q,pd.q)
+                FullReduce(q,pd.q)
             end
         end
 
@@ -527,9 +529,9 @@ return function(problemSpec)
                     q = 0.5*(pd.delta(idx):dot(r + b)) 
                 end
             end
-            unknownWideReduction(idx,betaNum,pd.scanBetaNumerator) 
+            FullReduce(betaNum,pd.scanBetaNumerator) 
             if [problemSpec:UsesLambda()] then
-                unknownWideReduction(idx,q,pd.q)
+                FullReduce(q,pd.q)
             end
         end
 
@@ -584,11 +586,7 @@ return function(problemSpec)
                 var params = pd.parameters
                 cost = fmap.cost(idx, params)
             end
-
-            cost = util.warpReduce(cost)
-            if (util.laneid() == 0) then
-                util.atomicAdd(pd.scratch, cost)
-            end
+            FullReduce(cost,pd.scratch)
         end
         if not fmap.dumpJ then
             terra kernels.saveJToCRS(pd : PlanData)
@@ -659,8 +657,8 @@ return function(problemSpec)
                     --  so after the dot product, just need to multiply by 2 to recover value identical to CERES  
                     q = 0.5*(pd.delta(idx):dot(residuum + residuum)) 
                 end    
-                unknownWideReduction(idx,q,pd.q)
-                unknownWideReduction(idx,d,pd.scanAlphaNumerator)
+                FullReduce(q,pd.q)
+                FullReduce(d,pd.scanAlphaNumerator)
             end
 
             terra kernels.computeModelCost(pd : PlanData)            
@@ -670,11 +668,7 @@ return function(problemSpec)
                     var params = pd.parameters              
                     cost = fmap.modelcost(idx, params, pd.delta)
                 end
-
-                cost = util.warpReduce(cost)
-                if (util.laneid() == 0) then
-                    util.atomicAdd(pd.modelCost, cost)
-                end
+                FullReduce(cost,pd.modelCost)
             end
 
         end -- :UsesLambda()
@@ -698,10 +692,7 @@ return function(problemSpec)
                d = d + fmap.applyJTJ(tIdx, pd.parameters, pd.p, pd.Ap_X)
             end 
             if not [multistep_alphaDenominator_compute] then
-                d = util.warpReduce(d)
-                if (util.laneid() == 0) then
-                    util.atomicAdd(pd.scanAlphaDenominator, d)
-                end
+                FullReduce(d,pd.scanAlphaDenominator)
             end
         end
 
@@ -717,11 +708,8 @@ return function(problemSpec)
             var tIdx = 0
             if util.getValidGraphElement(pd,[graphname],&tIdx) then
                 cost = fmap.cost(tIdx, pd.parameters)
-            end 
-            cost = util.warpReduce(cost)
-            if (util.laneid() == 0) then
-                util.atomicAdd(pd.scratch, cost)
             end
+            FullReduce(cost,pd.scratch)
         end
         if not fmap.dumpJ then
             terra kernels.saveJToCRS_Graph(pd : PlanData)
@@ -749,10 +737,7 @@ return function(problemSpec)
                 if util.getValidGraphElement(pd,[graphname],&tIdx) then
                     cost = fmap.modelcost(tIdx, pd.parameters, pd.delta)
                 end 
-                cost = util.warpReduce(cost)
-                if (util.laneid() == 0) then
-                    util.atomicAdd(pd.modelCost, cost)
-                end
+                FullReduce(cost,pd.modelCost)
             end
         end
 

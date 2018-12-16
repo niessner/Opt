@@ -3,6 +3,9 @@ require("precision")
 local util = {}
 local verbosePTX = _opt_verbosity > 2
 
+-- Turn on for consistent kernel names for debugging
+local fixed_key = true
+
 util.C = terralib.includecstring [[
 #include <stdio.h>
 #include <string.h>
@@ -39,8 +42,7 @@ function table.keys(tab)
     return result
 end
 
-local cuda_compute_version = 30
-local libdevice = terralib.cudahome..string.format("/nvvm/libdevice/libdevice.compute_%d.10.bc",cuda_compute_version)
+local libdevice = terralib.cudahome.."/nvvm/libdevice/libdevice.10.bc"
 
 local terra toYesNo(pred : int32)
     if pred ~= 0 then return "Yes" else return  "No" end
@@ -140,6 +142,7 @@ if terralib.linkllvm then
 else
     terralib.linklibrary(libdevice)
 end
+
 local mathParamCount = {sqrt = 1,
 cos  = 1,
 acos = 1,
@@ -845,7 +848,7 @@ end
 function util.makeGPUFunctions(problemSpec, PlanData, delegate, names)
     -- step 1: compile the actual cuda kernels
     local kernelFunctions = {}
-    local key = tostring(os.time())
+    local key = fixed_key and "" or tostring(os.time())
     local function getkname(name,ft)
         return string.format("%s_%s_%s",name,tostring(ft),key)
     end
