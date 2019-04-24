@@ -274,59 +274,60 @@ __inline__ __device__ float evalMinusJTFDevice(unsigned int variableIdx, SolverI
             //row edge constraint
             sum = 0.0f;
             tmpval = 0.0f;
+            float pretmp = 0.0f;
             tmpval = -(calShading2depthGrad(state, posx - 1, posy, input).w - calShading2depthGrad(state, posx, posy, input).w);// edge 0				
             maskval = rowMask(posy, posx - 1, input);
             sum += tmpval*(-val0) * maskval;//(posy, posx-1)*val0,(posy,posx)*(-val0)			
-            tmpval += val0*val0*maskval;
+            pretmp += val0*val0*maskval;
 
             tmpval = -(calShading2depthGrad(state, posx, posy, input).w - calShading2depthGrad(state, posx + 1, posy, input).w);//edge 2				
             maskval = rowMask(posy, posx, input);
             sum += tmpval*(val0 - val1) * maskval;// (posy,posx)*(val1-val0), (posy,posx+1)*(val0-val1)			
-            tmpval += (val0 - val1)*(val0 - val1)* maskval;
+            pretmp += (val0 - val1)*(val0 - val1)* maskval;
 
             tmpval = -(calShading2depthGrad(state, posx + 1, posy, input).w - calShading2depthGrad(state, posx + 2, posy, input).w);//edge 4				
             maskval = rowMask(posy, posx + 1, input);
             sum += tmpval*(val1)* maskval;//(posy,posx+1)*(-val1), (posy,posx+2)*(val1)			
-            tmpval += val1*val1* maskval;
+            pretmp += val1*val1* maskval;
 
             tmpval = -(calShading2depthGrad(state, posx - 1, posy + 1, input).w - calShading2depthGrad(state, posx, posy + 1, input).w);//edge 5				
             maskval = rowMask(posy + 1, posx - 1, input);
             sum += tmpval*(-val2) * maskval;//(posy+1,posx-1)*(val2),(posy+1,pox)*(-val2)			
-            tmpval += val2*val2* maskval;
+            pretmp += val2*val2* maskval;
 
             tmpval = -(calShading2depthGrad(state, posx, posy + 1, input).w - calShading2depthGrad(state, posx + 1, posy + 1, input).w);//edge 7				
             maskval = rowMask(posy + 1, posx, input);
             sum += tmpval*val2 * maskval;//(posy+1,posx)*(-val2),(posy+1,posx+1)*(val2)
-            tmpval += val2*val2 * maskval;
+            pretmp += val2*val2 * maskval;
 
             //column edge constraint			
             tmpval = -(calShading2depthGrad(state, posx, posy - 1, input).w - calShading2depthGrad(state, posx, posy, input).w);//edge 1
             maskval = colMask(posy - 1, posx, input);
             sum += tmpval*(-val0) * maskval;//(posy-1,posx)*(val0),(posy,posx)*(-val0)			
-            tmpval += val0*val0* maskval;
+            pretmp += val0*val0* maskval;
 
             tmpval = -(calShading2depthGrad(state, posx + 1, posy - 1, input).w - calShading2depthGrad(state, posx + 1, posy, input).w);//edge 3
             maskval = colMask(posy - 1, posx + 1, input);
             sum += tmpval*(-val1) * maskval;//(posy-1,posx+1)*(val1),(posy,posx+1)*(-val1)			
-            tmpval += val1*val1* maskval;
+            pretmp += val1*val1* maskval;
 
             tmpval = -(calShading2depthGrad(state, posx, posy, input).w - calShading2depthGrad(state, posx, posy + 1, input).w);//edge 6
             maskval = colMask(posy, posx, input);
             sum += tmpval*(val0 - val2) * maskval;//(posy,posx)*(val2-val0),(posy+1,posx)*(val0-val2)			
-            tmpval += (val0 - val2)*(val0 - val2)* maskval;
+            pretmp += (val0 - val2)*(val0 - val2)* maskval;
 
             tmpval = -(calShading2depthGrad(state, posx + 1, posy, input).w - calShading2depthGrad(state, posx + 1, posy + 1, input).w);//edge 8
             maskval = colMask(posy, posx + 1, input);
             sum += tmpval*val1 * maskval;//(posy,posx+1)*(-val1),(posy+1,posx+1)*(val1)
-            tmpval += val1*val1* maskval;
+            pretmp += val1*val1* maskval;
 
             tmpval = -(calShading2depthGrad(state, posx, posy + 1, input).w - calShading2depthGrad(state, posx, posy + 2, input).w);//edge 9
             maskval = colMask(posy + 1, posx, input);
             sum += tmpval*val2 * maskval;//(posy+1,posx)*(-val2),(posy+2,posx)*(val2)
-            tmpval += val2*val2* maskval;
+            pretmp += val2*val2* maskval;
 
             b += sum * parameters.weightShading;
-            p += tmpval * parameters.weightShading;//shading constraint
+            p += pretmp * parameters.weightShading;//shading constraint
 #               else
                     tmpval = 0.0f;
                     tmpval = val0 * val0 * 2;
