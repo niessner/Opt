@@ -36,6 +36,7 @@ local solver_parameter_defaults = {
     radius_decrease_factor = 2.0,
     min_lm_diagonal = 1e-6,
     max_lm_diagonal = 1e32,
+    max_solver_time_in_seconds = 0, -- 0 Indicates no maximum
     nIterations = 10,
     lIterations = 10
 }
@@ -157,6 +158,7 @@ return function(problemSpec)
         radius_decrease_factor : float
         min_lm_diagonal : float
         max_lm_diagonal : float
+        max_solver_time_in_seconds : float
 
         residual_reset_period : int
         nIter : int             --current non-linear iter counter
@@ -202,6 +204,7 @@ return function(problemSpec)
 
         perfSummary : Opt_PerformanceSummary
 
+        queryEvent : C.cudaEvent_t
         prevCost : opt_float
         
         J_csrValA : &opt_float
@@ -965,6 +968,7 @@ return function(problemSpec)
 	   var pd = [&PlanData](data_)
 	   pd.timer:init()
 	   pd.timer:startEvent("Total",nil,&pd.endSolver)
+       C.cudaEventCreate(&pd.queryEvent)
        [util.initParameters(`pd.parameters,problemSpec,params_,true)]
        var [parametersSym] = &pd.parameters
         escape if initialization_parameters.use_cusparse then emit quote
@@ -1029,6 +1033,7 @@ return function(problemSpec)
         var max_trust_region_radius : opt_float = pd.solverparameters.max_trust_region_radius
         var q_tolerance : opt_float             = pd.solverparameters.q_tolerance
         var function_tolerance : opt_float      = pd.solverparameters.function_tolerance
+        var max_solver_time_in_seconds : opt_float = pd.solverparameters.max_solver_time_in_seconds
         var Q0 : opt_float
         var Q1 : opt_float
 		[util.initParameters(`pd.parameters,problemSpec, params_,false)]
@@ -1128,6 +1133,7 @@ return function(problemSpec)
             end end
             pd.timer:endEvent(nil,pd.linearIterationsEvent)
             pd.timer:startEvent("Nonlinear Finish",nil,&pd.nonlinearResultsEvent)
+            C.cudaEventRecord(pd.queryEvent, nil)
 			gpu.PCGLinearUpdate(pd)    
 			gpu.precompute(pd)
 			var newCost = computeCost(pd)
@@ -1189,6 +1195,19 @@ return function(problemSpec)
             pd.solverparameters.nIter = pd.solverparameters.nIter + 1
             pd.timer:endEvent(nil,pd.nonlinearResultsEvent)
             pd.timer:endEvent(nil,pd.nonlinearIterationEvent)
+
+            if max_solver_time_in_seconds > 0.0 then
+                var solverElapsed : float = 0.0
+                -- Check if this stalls us; TODO: don't rely on the first timer event being beginning of solve
+                C.cudaEventElapsedTime(&solverElapsed, pd.timer.timingInfo:get(0).startEvent, pd.queryEvent)
+                if solverElapsed/1000.0 > max_solver_time_in_seconds then
+                    logSolver("\nTime exceeded max (%g > %g), exiting\n", solverElapsed/1000.0, max_solver_time_in_seconds)
+                    cleanup(pd)
+                    return 0
+                else
+                    --logSolver("time elapsed %g\n", solverElapsed/1000.0)
+                end
+            end
             return 1
         else
             cleanup(pd)
