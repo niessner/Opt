@@ -14,6 +14,22 @@ util.C = terralib.includecstring [[
 	#include <io.h>
 #endif
 ]]
+
+local temp = terralib.includecstring [[
+typedef union uf32
+{
+    unsigned u;
+    float f;
+} uf32;
+
+int isfinite( float value )
+{
+    uf32 ieee754;
+    ieee754.f = value;
+    return (ieee754.u & 0x7fffffff) < 0x7f800000;
+}
+]]
+util.C.isfinite = temp.isfinite
 local C = util.C
 
 -- Must match Opt.h

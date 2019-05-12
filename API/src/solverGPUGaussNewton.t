@@ -1105,6 +1105,10 @@ return function(problemSpec)
 	                Q1 = fetchQ(pd)
 	                var zeta = [opt_float](lIter+1)*(Q1 - Q0) / Q1 
                     --logSolver("%d: Q0(%g) Q1(%g), zeta(%g)\n", lIter, Q0, Q1, zeta)
+                    if C.isfinite(zeta) == 0 then
+                        logSolver("non-finite zeta at iteration: %d\n", lIter+1)
+                        break
+                    end
 	                if zeta < q_tolerance then
                         logSolver("zeta=%.18g, breaking at iteration: %d\n", zeta, (lIter+1))
 	                    break
