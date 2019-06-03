@@ -198,8 +198,7 @@ The functions are described in more details below.
     
 Create a new dimension used to describe the size of Arrays. `dimensions_position` is the 0-based offset into the `dimensions` argument to `Opt_ProblemPlan` that will be bound to this value. See 'Binding Values'.
 
-    local W =
-    H = Dim("W",0), Dim("H",1)
+    local W, H = Dim("W",0), Dim("H",1)
     
 ---
 
