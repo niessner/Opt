@@ -6,8 +6,10 @@ UsePreconditioner(false)
 
 -- do not include unmasked pixels in the solve
 Exclude(Not(eq(M(0,0),0)))
+--Exclude(eq(M(0,0),0))
 
+w_t = 1.5	--weighting test
 for x,y in Stencil { {1,0},{-1,0},{0,1},{0,-1} } do
-    local e = (X(0,0) - X(x,y)) - (T(0,0) - T(x,y))
+    local e = (X(0,0) - X(x,y)) - w_t * (T(0,0) - T(x,y))
     Energy(Select(InBounds(x,y),e,0))
 end
