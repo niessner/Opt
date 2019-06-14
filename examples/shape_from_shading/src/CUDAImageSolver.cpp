@@ -90,8 +90,8 @@ double CUDAImageSolver::solve(const NamedParameters& solverParams, const NamedPa
     parameters.weightRegularizer        = getTypedParameter<float>("w_s", probParams); //rawSolverInput.parameters.weightRegularizer;
     parameters.weightBoundary           = 0.0f; //unused rawSolverInput.parameters.weightBoundary;
     parameters.weightPrior              = 0.0f;//unused rawSolverInput.parameters.weightPrior;
-    parameters.nNonLinearIterations     = getTypedParameter<unsigned int>("nonLinearIterations", solverParams);
-    parameters.nLinIterations           = getTypedParameter<unsigned int>("linearIterations", solverParams);
+    parameters.nNonLinearIterations     = getTypedParameter<unsigned int>("nIterations", solverParams);
+    parameters.nLinIterations           = getTypedParameter<unsigned int>("lIterations", solverParams);
     parameters.nPatchIterations         = 1; //unused rawSolverInput.parameters.nPatchIterations;
 	
     ConvergenceAnalysis<float>* ca = NULL;

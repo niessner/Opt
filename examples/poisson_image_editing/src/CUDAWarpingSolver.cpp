@@ -45,8 +45,8 @@ double CUDAWarpingSolver::solve(const NamedParameters& solverParams, const Named
     m_solverState.d_x       = getTypedParameterImage<float4>("X", probParams);
 
 	SolverParameters parameters;
-    parameters.nNonLinearIterations = getTypedParameter<unsigned int>("nonLinearIterations", solverParams);
-    parameters.nLinIterations = getTypedParameter<unsigned int>("linearIterations", solverParams);
+    parameters.nNonLinearIterations = getTypedParameter<unsigned int>("nIterations", solverParams);
+    parameters.nLinIterations = getTypedParameter<unsigned int>("lIterations", solverParams);
 	
 	SolverInput solverInput;
     solverInput.N = m_dims[0] * m_dims[1];

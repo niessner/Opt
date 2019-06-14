@@ -30,13 +30,14 @@ SimpleBuffer::SimpleBuffer(std::string filename, bool onGPU, bool clampInfinity)
     if (m_dataType == 0 && clampInfinity) {
       float* fPtr = (float*)ptr;
       for (int i = 0; i < m_width*m_height; ++i) {
-	if (std::isinf(fPtr[i])) {
-	  if (fPtr[i] > 0) {
-	    fPtr[i] = std::numeric_limits<float>::max();
-	  } else {
-	    fPtr[i] = -10000.0f;
-	  }
-	}
+          if (std::isinf(fPtr[i])) {
+              if (fPtr[i] > 0) {
+                  fPtr[i] = std::numeric_limits<float>::max();
+              }
+              else {
+                  fPtr[i] = -10000.0f;
+              }
+          }
       }
     }
 

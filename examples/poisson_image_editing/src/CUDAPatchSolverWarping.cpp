@@ -23,8 +23,8 @@ double CUDAPatchSolverWarping::solve(const NamedParameters& solverParams, const 
     m_solverState.d_x = getTypedParameterImage<float4>("X", probParams);
 
     PatchSolverParameters parameters;
-    parameters.nNonLinearIterations = getTypedParameter<unsigned int>("nonLinearIterations", solverParams);
-    parameters.nLinearIterations    = getTypedParameter<unsigned int>("linearIterations", solverParams);
+    parameters.nNonLinearIterations = getTypedParameter<unsigned int>("nIterations", solverParams);
+    parameters.nLinearIterations    = getTypedParameter<unsigned int>("lIterations", solverParams);
     parameters.nPatchIterations     = patchIter;
 
 	PatchSolverInput solverInput;
