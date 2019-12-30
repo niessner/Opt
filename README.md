@@ -9,7 +9,7 @@ As an alpha release, there are some things that are not complete that will be im
 
 * Error reporting is limited and may be difficult to understand at times. Please report any confusing error message either as github issues or through e-mail.
 * Somewhat sparse documentation. This file provides a good overview of the Opt system, and detailed comments can be found in Opt.h, but rigorous documentation is under active development. If you report particular places where the documentation is sparse we can focus there first!
-* Code can only run on NVIDIA GPUs with a relatively modern version of CUDA (9.2)
+* Code can only run on NVIDIA GPUs with a modern version of CUDA (10)
 * The library of built-in math functions is somewhat limited. For instance, it include vectors and mat3xvec3 multplication but doesn't include 4x4 matrix operations.
 
 These issues will improve over time, but if you run into issues, just send us an email:
@@ -24,9 +24,9 @@ See the [changelog](https://github.com/niessner/Opt/blob/master/CHANGELOG.md) fo
 
 ### Prerequisites ###
 
-Opt and all of its examples require a recent version of [Terra](https://github.com/zdevito/terra)/, and [CUDA 9.2](https://developer.nvidia.com/cuda-92-download-archive). On Windows we use Visual Studio 2015 for development/compilation, though other versions may also work. 
+Opt and all of its examples require a recent version of [Terra](https://github.com/zdevito/terra)/, and [CUDA 10](https://developer.nvidia.com/cuda-downloads). On Windows we use Visual Studio 2017 for development/compilation, though other versions may also work. 
 
-Download and unzip the [terra binary release for your platform, release-2016-03-25](https://github.com/zdevito/terra/releases). Add terra/bin to your $PATH environment variable (if you want to run the examples). *On windows, this binary release searches for the CUDA compiler binaries using the CUDA_PATH environment variable. The default installation of the CUDA 9.2 Toolkit sets these paths, but if you did a nonstandard installation or subsequently installed a different version of CUDA, you will need to (re)set the path yourself.* 
+Download and unzip the [terra binary release for your platform, 1.0.0 beta 1](https://developer.nvidia.com/cuda-downloads). Add terra/bin to your $PATH environment variable (if you want to run the examples). *On windows, this binary release searches for the CUDA compiler binaries using the CUDA_PATH environment variable. The default installation of the CUDA 10.0 Toolkit sets these paths, but if you did a nonstandard installation or subsequently installed a different version of CUDA, you will need to (re)set the path yourself.* 
 
 Our recommended directory structure for development is:
 
@@ -35,7 +35,7 @@ Our recommended directory structure for development is:
 
 If you change this repo structure, you must update Opt/API/buildOpt.bat's second argument on line 2 to point to the terra repo. If you compiled terra from scratch, its internal directory structure might also be different from the release, and you will need to update Opt/API/optMake.bat's line 3 to point to the terra binary.
 
-The examples should run on all platforms. Use the included Visual Studio .sln files on Windows. On OS X and linux, use the included Makefiles. On OS X and linux, before running examples, you will need to build Opt itself. Make sure to download and install CUDA 9.2 before starting ([Linux](http://developer.download.nvidia.com/compute/cuda/9.2/Prod/docs/sidebar/CUDA_Installation_Guide_Linux.pdf),[OS X](http://developer.download.nvidia.com/compute/cuda/9.2/Prod/docs/sidebar/CUDA_Installation_Guide_Mac.pdf))
+The examples should run on all platforms. Use the included Visual Studio .sln files on Windows. On OS X and linux, use the included Makefiles. On OS X and linux, before running examples, you will need to build Opt itself. Make sure to download and install CUDA 10.1 before starting ([Linux](http://developer.download.nvidia.com/compute/cuda/10.1/Prod/docs/sidebar/CUDA_Installation_Guide_Linux.pdf),[OS X](http://developer.download.nvidia.com/compute/cuda/10.1/Prod/docs/sidebar/CUDA_Installation_Guide_Mac.pdf))
 
 Example script to get Opt (and terra) on a fresh Ubuntu install:
     
@@ -44,19 +44,18 @@ Example script to get Opt (and terra) on a fresh Ubuntu install:
     # Get the prerequisite utilities to download and unzip and compile if you don't already have them
     sudo apt-get install wget zip clang
     # Get terra
-    wget https://github.com/zdevito/terra/releases/download/release-2016-03-25/terra-Linux-x86_64-332a506.zip
-    unzip terra-Linux-x86_64-332a506.zip 
-    mv terra-Linux-x86_64-332a506 terra
+    wget https://github.com/terralang/terra/releases/download/release-1.0.0-beta1/terra-Linux-x86_64-2e2032e.zip
+    unzip terra-Linux-x86_64-2e2032e.zip 
+    mv terra-Linux-x86_64-2e2032e terra
     
 Example script to get and compile Opt on OS X:
-    
 
     # Get Opt
     git clone https://github.com/niessner/Opt.git
     # Get terra
-    wget https://github.com/zdevito/terra/releases/download/release-2016-03-25/terra-OSX-x86_64-332a506.zip
-    unzip terra-OSX-x86_64-332a506.zip 
-    mv terra-OSX-x86_64-332a506 terra
+    wget https://github.com/terralang/terra/releases/download/release-1.0.0-beta1/terra-OSX-x86_64-2e2032e.zip
+    unzip terra-OSX-x86_64-2e2032e.zip
+    mv terra-OSX-x86_64-332a506  terra
 
 Build and run an example on either platform
 
@@ -475,9 +474,9 @@ Opt uses the values of the unknown array you pass into it as the initial guess f
 ### Common Problems ###
 
 1. All examples/tests immediately quit with an error message about cudalib being nil: 
-	- Your Terra installation likely does not have CUDA enabled. You can double check by running the Terra tests, and seeing if the cuda tests fail. Remember to install CUDA 9.2 before running Opt. On windows, the binary release searches for the CUDA compiler binaries using the CUDA_PATH environment variable. The default installation of the CUDA 9.2 Toolkit sets these paths, but if you did a nonstandard installation or subsequently installed a different version of CUDA, you will need to (re)set the path yourself.
-2. "The program can't start because cudart64_75.dll is missing from your computer. Try reinstalling the program to fix this problem.": 
-	- CUDA 9.2 is not on your path. Perhaps you didn't install it, or haven't closed Visual Studio since installing it. If you have done both, you'll need to manually add it to your path environment variable. By default, the path will be "C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA\v9.2\bin"
+	- Your Terra installation likely does not have CUDA enabled. You can double check by running the Terra tests, and seeing if the cuda tests fail. Remember to install CUDA 10.1 before running Opt. On windows, the binary release searches for the CUDA compiler binaries using the CUDA_PATH environment variable. The default installation of the CUDA 10.1 Toolkit sets these paths, but if you did a nonstandard installation or subsequently installed a different version of CUDA, you will need to (re)set the path yourself.
+2. "The program can't start because cudart64_101.dll is missing from your computer. Try reinstalling the program to fix this problem.": 
+	- CUDA 10.1 is not on your path. Perhaps you didn't install it, or haven't closed Visual Studio since installing it. If you have done both, you'll need to manually add it to your path environment variable. By default, the path will be "C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA\v10.1\bin"
 3. "The program can't start because terra.dll is missing from your computer. Try reinstalling the program to fix this problem." 
 	- Terra is not on your path. Perhaps you didn't add it to your $PATH environment variable, or haven't closed Visual Studio since adding it.
 4. My initial cost is NaN (or infinity) and Opt doesn't improve it.
